@@ -1,0 +1,167 @@
+/* =====================================================================
+   Design Tokens — Sivels Finance
+   Single source of truth for color, type, spacing, radius, shadow, motion.
+   UI layer only. No component references anything hard-coded outside here.
+   ===================================================================== */
+:root {
+  /* ---------------------------------------------------------------
+     Brand palette — one cohesive indigo/blue finance identity
+     (previously split across #1E3A8A / #335b7a / #4F46E5)
+     --------------------------------------------------------------- */
+  --brand-50:  #eef2ff;
+  --brand-100: #e0e7ff;
+  --brand-200: #c7d2fe;
+  --brand-300: #a5b4fc;
+  --brand-400: #818cf8;
+  --brand-500: #6366f1;
+  --brand-600: #4f46e5;
+  --brand-700: #4338ca;
+  --brand-800: #3730a3;
+  --brand-900: #312e81;
+
+  --primary:        var(--brand-600);
+  --primary-hover:  var(--brand-700);
+  --primary-active: var(--brand-800);
+  --primary-light:  var(--brand-50);
+  --primary-dark:   var(--brand-800);
+  --secondary:      #2563eb;
+  --accent:         #0d9488;   /* teal accent for highlights / success-ish chips */
+  --accent-light:   #ccfbf1;
+
+  /* Brand gradient — used on headers, primary buttons, hero panels */
+  --gradient-brand: linear-gradient(135deg, #4f46e5 0%, #4338ca 55%, #3730a3 100%);
+  --gradient-brand-soft: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  --gradient-header: linear-gradient(135deg, #312e81 0%, #3730a3 45%, #4338ca 100%);
+
+  /* ---------------------------------------------------------------
+     Neutral (slate) scale — text, borders, surfaces
+     --------------------------------------------------------------- */
+  --slate-50:  #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-300: #cbd5e1;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1e293b;
+  --slate-900: #0f172a;
+
+  /* Text */
+  --text-heading: var(--slate-900);
+  --text-main:    var(--slate-600);
+  --text-muted:   var(--slate-400);
+  --text-light:   var(--slate-300);
+  --text-invert:  #ffffff;
+
+  /* Surfaces */
+  --bg-main:   var(--slate-50);
+  --bg-card:   #ffffff;
+  --bg-subtle: var(--slate-100);
+  --bg-hover:  var(--slate-100);
+  --bg-inset:  var(--slate-50);
+
+  /* Borders */
+  --border:        var(--slate-200);
+  --border-strong: var(--slate-300);
+  --border-focus:  var(--brand-500);
+
+  /* ---------------------------------------------------------------
+     Semantic states
+     --------------------------------------------------------------- */
+  --error:      #dc2626;
+  --error-bg:   #fef2f2;
+  --error-border:#fecaca;
+  --success:    #16a34a;
+  --success-bg: #f0fdf4;
+  --success-border:#bbf7d0;
+  --warning:    #d97706;
+  --warning-bg: #fffbeb;
+  --warning-border:#fde68a;
+  --info:       #2563eb;
+  --info-bg:    #eff6ff;
+
+  /* ---------------------------------------------------------------
+     Typography
+     --------------------------------------------------------------- */
+  --font-family: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+
+  --text-xs:   0.75rem;    /* 12 */
+  --text-sm:   0.8125rem;  /* 13 */
+  --text-base: 0.875rem;   /* 14 */
+  --text-md:   0.9375rem;  /* 15 */
+  --text-lg:   1.0625rem;  /* 17 */
+  --text-xl:   1.25rem;    /* 20 */
+  --text-2xl:  1.5rem;     /* 24 */
+  --text-3xl:  1.875rem;   /* 30 */
+
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semibold:600;
+  --fw-bold:    700;
+
+  /* ---------------------------------------------------------------
+     Spacing scale (4pt grid)
+     --------------------------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* ---------------------------------------------------------------
+     Radius
+     --------------------------------------------------------------- */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+
+  /* ---------------------------------------------------------------
+     Shadows — soft, layered, "premium" depth
+     --------------------------------------------------------------- */
+  --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -2px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 12px 28px -6px rgba(15, 23, 42, 0.12), 0 6px 12px -6px rgba(15, 23, 42, 0.08);
+  --shadow-xl: 0 24px 48px -12px rgba(15, 23, 42, 0.18), 0 12px 24px -8px rgba(15, 23, 42, 0.10);
+  --shadow-brand: 0 8px 24px -6px rgba(79, 70, 229, 0.45);
+
+  /* Focus ring */
+  --ring: 0 0 0 4px rgba(99, 102, 241, 0.18);
+  --ring-error: 0 0 0 4px rgba(220, 38, 38, 0.15);
+
+  /* ---------------------------------------------------------------
+     Motion
+     --------------------------------------------------------------- */
+  --transition-fast: 140ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 220ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 360ms cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Layering */
+  --z-sticky: 50;
+  --z-dropdown: 100;
+  --z-modal: 1000;
+  --z-toast: 1100;
+
+  /* ---------------------------------------------------------------
+     Legacy aliases — kept so older stylesheets (Groups.css, Footer.css)
+     that reference the previous token names keep working & on-brand.
+     Do not introduce new usages of these; use the tokens above.
+     --------------------------------------------------------------- */
+  --text-h: var(--text-heading);
+  --text: var(--text-main);
+  --bg: var(--bg-card);
+  --accent-bg: var(--brand-50);
+  --accent-border: var(--brand-200);
+  --shadow: var(--shadow-lg);
+}

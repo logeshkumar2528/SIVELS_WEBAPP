@@ -1,0 +1,228 @@
+.ekyc-ribbon {
+  background: #fdfdfd;
+}
+
+.step.completed .step-circle {
+  background: var(--sivels-green-dark);
+  color: #fff;
+  border: none;
+}
+.step-line.filled {
+  background: var(--sivels-green-dark);
+}
+
+.form-panel {
+  padding: 24px;
+}
+.panel-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.form-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.input-with-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.input-with-icon .form-input {
+  width: 100%;
+  padding: 12px 36px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+.input-icon {
+  position: absolute;
+  color: var(--text-muted);
+}
+.input-icon.left {
+  left: 12px;
+}
+.input-icon.right {
+  right: 12px;
+}
+
+.input-success-msg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: #16a34a;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.inline-badge.right {
+  position: absolute;
+  right: 12px;
+  background: #eaf5ef;
+  color: #16a34a;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.flex-align-center {
+  display: flex;
+  align-items: center;
+}
+
+.otp-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.otp-lock {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  background: #fafbfc;
+}
+.otp-boxes {
+  display: flex;
+  gap: 8px;
+}
+.otp-box {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+.resend-btn {
+  background: none;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.text-sm { font-size: 12px; }
+.inline-icon { vertical-align: middle; margin-left: 2px; }
+
+/* Aadhaar Mock Card */
+.mock-aadhaar-card {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+.mock-aadhaar-header {
+  background: linear-gradient(90deg, #ff9933 0%, #ffffff 50%, #138808 100%);
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.govt-text {
+  font-size: 9px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  background: rgba(0,0,0,0.2);
+  padding: 1px 8px;
+  border-radius: 4px;
+}
+.mock-aadhaar-body {
+  padding: 16px;
+  display: flex;
+  gap: 16px;
+  background: #fff;
+}
+.mock-avatar {
+  width: 60px;
+  height: 70px;
+  background: #e2e8f0;
+  border-radius: 4px;
+}
+.mock-details {
+  flex: 1;
+}
+.mock-label {
+  font-size: 8px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.mock-val {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+.mock-aadhaar-num {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin-top: 8px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 8px;
+}
+.mock-qr {
+  width: 40px;
+  height: 40px;
+  background: #cbd5e1;
+}
+
+.aadhaar-logo-sm {
+  width: 50px;
+  height: 30px;
+  background: #ffecb3;
+  border-radius: 4px;
+}
+
+.fetched-details-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.fetched-row {
+  display: flex;
+  align-items: center;
+}
+.fetched-row.align-top {
+  align-items: flex-start;
+}
+.fetched-label {
+  width: 110px;
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fetched-val {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dark);
+}

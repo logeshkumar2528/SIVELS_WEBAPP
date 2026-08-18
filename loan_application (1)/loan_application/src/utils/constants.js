@@ -1,0 +1,5 @@
+export const CONSTANTS = {
+  OTP: "123456",
+  OTP_LENGTH: 6,
+  RESEND_TIMER_SECONDS: 45,
+};

@@ -1,0 +1,11 @@
+.textarea-container {
+  height: auto;
+  padding: 0;
+}
+
+.textarea-field {
+  padding: 0.5rem 0.75rem;
+  resize: none;
+  min-height: 55px;
+  max-height: 55px;
+}

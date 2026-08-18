@@ -1,0 +1,338 @@
+/*
+ * Header.css
+ * --------------------
+ * Purpose:
+ *   Visual styles for the top navigation bar.
+ *
+ * Rules:
+ *   - All values reference CSS variables from variables.css.
+ *   - No hardcoded colors, spacing, or radii.
+ *   - Header height is fixed via --header-height (the only allowed fixed height).
+ *   - All other dimensions flow naturally from content.
+ */
+
+
+/* ==========================================
+   HEADER SHELL
+========================================== */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--header-height);
+  padding: 0 var(--content-padding);
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  gap: var(--spacing-4);
+}
+
+
+/* ==========================================
+   LEFT — Menu toggle + Page title
+========================================== */
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+  min-width: 0;         /* Allow text truncation */
+}
+
+/* Hamburger button */
+.header-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.header-menu-btn:hover {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.header-menu-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Title group */
+.header-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.header-title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-family-base);
+  color: var(--color-text-primary);
+  margin: 0;
+  line-height: var(--line-height-tight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-subtitle {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-regular);
+  font-family: var(--font-family-base);
+  color: var(--color-text-muted);
+  margin: 0;
+  line-height: var(--line-height-tight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* ==========================================
+   RIGHT — Date, Notifications, User
+========================================== */
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  flex-shrink: 0;
+}
+
+
+/* ==========================================
+   DATE DISPLAY
+========================================== */
+
+.header-date {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-3);
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: default;
+}
+
+.header-date-icon {
+  display: flex;
+  align-items: center;
+  color: var(--color-primary);
+}
+
+.header-date-text {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-family-base);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+
+/* ==========================================
+   NOTIFICATION BELL
+========================================== */
+
+.header-notif-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.header-notif-btn:hover {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+  border-color: var(--color-primary-muted);
+}
+
+.header-notif-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.header-notif-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--spacing-1);
+  background-color: var(--color-danger);
+  color: var(--color-text-inverse);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-family-base);
+  border-radius: var(--radius-full);
+  line-height: 1;
+  border: 2px solid var(--color-surface);
+}
+
+
+/* ==========================================
+   USER BUTTON
+========================================== */
+
+.header-user-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.header-user-btn:hover {
+  background-color: var(--color-primary-light);
+  border-color: var(--color-primary-muted);
+}
+
+.header-user-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+
+/* ==========================================
+   AVATAR
+========================================== */
+
+.header-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  flex-shrink: 0;
+  background-color: var(--color-primary-light);
+}
+
+.header-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.header-avatar-initials {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-family-base);
+}
+
+
+/* ==========================================
+   USER INFO
+========================================== */
+
+.header-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  text-align: left;
+}
+
+.header-user-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-family-base);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  line-height: var(--line-height-tight);
+}
+
+.header-user-role {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+  font-family: var(--font-family-base);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  line-height: var(--line-height-tight);
+}
+
+.header-user-chevron {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+
+.header-user-btn:hover .header-user-chevron {
+  color: var(--color-primary);
+}
+
+
+/* ==========================================
+   RESPONSIVE
+========================================== */
+
+/* Hide date on tablet — title area needs space */
+@media (max-width: 1024px) {
+  .header-date {
+    display: none;
+  }
+}
+
+/* On mobile — hide user info text, show avatar only */
+@media (max-width: 768px) {
+  .header-user-info,
+  .header-user-chevron {
+    display: none;
+  }
+
+  .header-user-btn {
+    padding: var(--spacing-2);
+    border-radius: var(--radius-full);
+  }
+
+  .header-title {
+    font-size: var(--font-size-lg);
+  }
+
+  .header-subtitle {
+    display: none;
+  }
+}

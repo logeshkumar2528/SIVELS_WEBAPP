@@ -1,0 +1,135 @@
+/*
+ * StepProgress.css
+ * --------------------
+ * Purpose:
+ *   Styles for the multi-step workflow progress indicator.
+ *
+ * Layout:
+ *   Each step item is a flex column:
+ *     top row → [left-line?][circle][right-line?]
+ *     label below the top row
+ *   All items sit in a flex row.
+ */
+
+
+/* ==========================================
+   WRAPPER
+========================================== */
+
+.step-progress {
+  display: flex;
+  align-items: flex-start;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4) var(--spacing-5);
+  margin-bottom: var(--spacing-5);
+  overflow-x: auto;
+  scrollbar-width: none;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.step-progress::-webkit-scrollbar {
+  display: none;
+}
+
+
+/* ==========================================
+   STEP ITEM
+========================================== */
+
+.step-progress-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-2);
+  min-width: 80px;
+}
+
+
+/* ==========================================
+   TOP ROW — circle + connecting lines
+========================================== */
+
+.step-progress-top {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+/* Connecting line between steps */
+.step-connector {
+  flex: 1;
+  height: 2px;
+  background-color: var(--color-border);
+  transition: background-color var(--transition-base);
+}
+
+.step-connector--done {
+  background-color: var(--color-primary);
+}
+
+
+/* ==========================================
+   STEP CIRCLE
+========================================== */
+
+.step-progress-circle {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-border);
+  background-color: var(--color-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-family-base);
+  color: var(--color-text-muted);
+  transition:
+    background-color var(--transition-base),
+    border-color     var(--transition-base),
+    color            var(--transition-base);
+}
+
+/* Active step */
+.step-progress-item--active .step-progress-circle {
+  background-color: var(--color-primary);
+  border-color:     var(--color-primary);
+  color:            var(--color-text-inverse);
+}
+
+/* Completed step */
+.step-progress-item--completed .step-progress-circle {
+  background-color: var(--color-primary);
+  border-color:     var(--color-primary);
+  color:            var(--color-text-inverse);
+}
+
+
+/* ==========================================
+   STEP LABEL
+========================================== */
+
+.step-progress-label {
+  font-size: var(--font-size-xs);
+  font-family: var(--font-family-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  text-align: center;
+  line-height: var(--line-height-tight);
+  transition: color var(--transition-base);
+}
+
+.step-progress-item--active .step-progress-label {
+  color:       var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.step-progress-item--completed .step-progress-label {
+  color: var(--color-primary-muted);
+}

@@ -1,0 +1,64 @@
+/* ShieldCheckLoader.css
+   Success shield with a drawing checkmark. Adjust the two tokens to recolor. */
+.scl-wrap {
+  --scl-color: #34d399;
+  --scl-caption: #d1fae5;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  font-family: "Inter", sans-serif;
+}
+
+.scl-shield {
+  color: var(--scl-color);
+  animation: scl-pop 0.4s ease-out both;
+}
+
+@keyframes scl-pop {
+  from {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.scl-body {
+  opacity: 0.9;
+}
+
+.scl-check {
+  stroke-dasharray: 14;
+  stroke-dashoffset: 14;
+  animation: scl-draw 0.5s 0.25s ease-out forwards;
+}
+
+@keyframes scl-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.scl-caption {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--scl-caption);
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scl-shield {
+    animation: none;
+  }
+  .scl-check {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}

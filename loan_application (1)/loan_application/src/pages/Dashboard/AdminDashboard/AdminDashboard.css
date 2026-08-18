@@ -1,0 +1,454 @@
+/* AdminDashboard.css — light theme, sidebar + card layout, Sivels Finance */
+
+* { box-sizing: border-box; }
+
+.ldash-shell {
+  display: flex;
+  min-height: 100vh;
+  background: #f4f7fb;
+  color: #1b2436;
+  font-family: "Inter", "Segoe UI", Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Sidebar ---------- */
+.ldash-sidebar {
+  width: 220px;
+  background: #ffffff;
+  border-right: 1px solid #dbe4f5;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 14px;
+  flex-shrink: 0;
+  transition: width 0.2s ease, padding 0.2s ease;
+}
+
+.ldash-sidebar.collapsed { width: 76px; padding: 20px 10px; }
+.ldash-sidebar.collapsed .ldash-brand { justify-content: center; padding: 4px 0 20px; }
+.ldash-sidebar.collapsed .ldash-brand-logo-slot { display: none; }
+.ldash-sidebar.collapsed .ldash-nav-item { justify-content: center; padding: 10px; }
+.ldash-sidebar.collapsed .ldash-nav-divider { display: none; }
+
+.ldash-brand { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 8px 20px; margin-bottom: 12px; position: relative; }
+.ldash-brand-logo-slot {
+  /* Empty on purpose — drop a company logo/icon here */
+  width: 34px; height: 34px; flex-shrink: 0;
+}
+.ldash-sidebar-toggle {
+  display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 9px;
+  background: transparent; border: 1px solid #dbe4f5; color: #5b6577;
+  cursor: pointer; flex-shrink: 0; transition: background 0.15s ease, color 0.15s ease;
+}
+.ldash-sidebar-toggle:hover { background: #eef2fb; color: #1b2436; }
+.ldash-sidebar-close { display: none; }
+
+.ldash-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.ldash-nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px; border: none;
+  background: transparent; color: #5b6577; font-size: 13px;
+  text-align: left; cursor: pointer; transition: background 0.15s ease, color 0.15s ease;
+  width: 100%;
+}
+.ldash-nav-item:hover { background: #eef2fb; color: #1b2436; }
+.ldash-nav-item:focus-visible { outline: 2px solid #4f7fe0; outline-offset: 1px; }
+.ldash-nav-item.active { background: #16305c; color: #ffffff; font-weight: 600; }
+
+.ldash-nav-divider {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  color: #a3ada1; margin: 14px 12px 6px;
+}
+
+.ldash-sidebar-footer { display: flex; flex-direction: column; gap: 2px; padding-top: 14px; border-top: 1px solid #e8edf7; }
+
+.ldash-backdrop { display: none; }
+
+/* ---------- Main ---------- */
+.ldash-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+.ldash-topbar {
+  height: 70px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 28px; gap: 24px; flex-shrink: 0;
+}
+
+.ldash-menu-btn {
+  display: none;
+  align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 8px;
+  background: transparent; border: 1px solid #dbe4f5; color: #1b2436;
+  cursor: pointer; flex-shrink: 0;
+}
+
+.ldash-title { font-size: 22px; font-weight: 700; margin: 0; color: #1b2436; flex-shrink: 0; }
+
+.ldash-search {
+  display: flex; align-items: center; gap: 8px;
+  background: #ffffff; border: 1px solid #dbe4f5; border-radius: 10px;
+  padding: 9px 14px; flex: 1; max-width: 420px; color: #8892a3;
+}
+.ldash-search input { background: transparent; border: none; outline: none; color: #1b2436; font-size: 13px; width: 100%; }
+
+.ldash-profile { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.ldash-profile-name { font-size: 12.5px; font-weight: 600; margin: 0; color: #1b2436; text-align: right; }
+.ldash-profile-role { font-size: 10.5px; color: #8892a3; margin: 0; text-align: right; }
+.ldash-avatar {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: #dbe4f5; color: #1e4d8f; font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.ldash-content { flex: 1; padding: 8px 28px 32px; overflow-y: auto; }
+
+/* ---------- Hero metrics band ---------- */
+/* Numerals use a serif stack for financial gravitas — swap in a webfont
+   like Fraunces or Spectral here if the brand wants more character. */
+.ldash-hero {
+  background: linear-gradient(120deg, #0f2038 0%, #16305c 55%, #2a5aa0 100%);
+  border-radius: 18px;
+  padding: 24px 28px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+.ldash-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 85% -10%, rgba(201, 163, 92, 0.22), transparent 55%);
+  pointer-events: none;
+}
+.ldash-hero-skel { padding: 0; background: none; }
+
+.ldash-hero-metric { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; z-index: 1; }
+.ldash-hero-label { font-size: 11px; letter-spacing: 0.02em; color: rgba(255,255,255,0.62); font-weight: 500; }
+.ldash-hero-value {
+  font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  font-size: 30px; font-weight: 600; line-height: 1.1; color: #fdfbf6;
+  letter-spacing: -0.01em;
+}
+.ldash-hero-sub { font-size: 10.5px; color: rgba(255,255,255,0.55); }
+
+.ldash-hero-divider { width: 1px; align-self: stretch; background: rgba(255,255,255,0.14); flex-shrink: 0; }
+
+.ldash-hero-eff { display: flex; align-items: center; gap: 10px; }
+.ldash-eff-ring {
+  width: 52px; height: 52px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; position: relative;
+}
+.ldash-eff-ring::before {
+  content: ""; position: absolute; inset: 4px; border-radius: 50%; background: #16305c;
+}
+.ldash-eff-ring span {
+  position: relative; z-index: 1; font-size: 12px; font-weight: 700; color: #fdfbf6;
+  font-family: Georgia, serif;
+}
+
+@media (max-width: 950px) {
+  .ldash-hero { flex-wrap: wrap; gap: 18px 24px; padding: 20px; }
+  .ldash-hero-divider { display: none; }
+  .ldash-hero-metric { min-width: 42%; }
+}
+@media (max-width: 560px) {
+  .ldash-hero-metric { min-width: 100%; }
+}
+
+/* ---------- Grids ---------- */
+.ldash-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.ldash-grid-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.ldash-span-2 { grid-column: 1 / -1; }
+
+@media (max-width: 950px) {
+  .ldash-grid, .ldash-grid-bottom { grid-template-columns: 1fr; }
+  .ldash-kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .ldash-span-2 { grid-column: auto; }
+
+  .ldash-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 0 0 24px rgba(0,0,0,0.12);
+  }
+  .ldash-sidebar.open { transform: translateX(0); }
+  .ldash-sidebar.collapsed { width: 220px; padding: 20px 14px; }
+  .ldash-sidebar.collapsed .ldash-brand { justify-content: space-between; padding: 4px 8px 20px; }
+  .ldash-sidebar.collapsed .ldash-brand-logo-slot { display: block; }
+  .ldash-sidebar.collapsed .ldash-nav-item { justify-content: flex-start; padding: 10px 12px; }
+  .ldash-sidebar-toggle { display: none; }
+  .ldash-sidebar-close {
+    display: flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 8px; border: none;
+    background: #eef2fb; color: #1b2436; cursor: pointer;
+    margin-left: auto;
+  }
+  .ldash-backdrop {
+    display: block;
+    position: fixed; inset: 0; z-index: 30;
+    background: rgba(20, 26, 20, 0.35);
+  }
+  .ldash-menu-btn { display: flex; }
+  .ldash-title { display: none; }
+}
+
+@media (max-width: 560px) {
+  .ldash-kpi-row { grid-template-columns: 1fr 1fr; }
+  .ldash-content { padding: 8px 16px 24px; }
+  .ldash-topbar { padding: 0 16px; }
+}
+
+/* ---------- Cards ---------- */
+.ldash-card {
+  background: #ffffff;
+  border: 1px solid #e8edf7;
+  border-radius: 16px;
+  padding: 20px;
+  transition: box-shadow 0.2s ease;
+}
+.ldash-card:hover { box-shadow: 0 8px 24px rgba(38, 48, 42, 0.05); }
+
+.ldash-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 10px;
+}
+.ldash-card-head h3 { font-size: 14px; font-weight: 700; margin: 0; color: #1b2436; }
+
+.ldash-sort-wrap { position: relative; }
+.ldash-sort-btn {
+  font-size: 11.5px; color: #5b6577; background: #f4f7fb;
+  border: 1px solid #e8edf7; border-radius: 8px; padding: 5px 10px;
+  display: flex; align-items: center; gap: 3px; cursor: pointer;
+}
+.ldash-sort-menu {
+  position: absolute; right: 0; top: calc(100% + 6px);
+  background: #fff; border: 1px solid #e8edf7; border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(38, 48, 42, 0.12);
+  list-style: none; margin: 0; padding: 6px; z-index: 10; min-width: 140px;
+}
+.ldash-sort-menu button {
+  width: 100%; text-align: left; background: none; border: none;
+  padding: 7px 8px; border-radius: 6px; font-size: 12px; color: #1b2436; cursor: pointer;
+}
+.ldash-sort-menu button:hover, .ldash-sort-menu button.active { background: #eef2fb; }
+
+.ldash-see-details {
+  font-size: 11.5px; color: #1e4d8f; font-weight: 600; cursor: pointer;
+  background: none; border: none; padding: 0; text-decoration: none;
+}
+.ldash-see-details:hover { text-decoration: underline; }
+
+.ldash-icon-only {
+  background: none; border: none; color: #8892a3; cursor: pointer;
+  display: flex; align-items: center; padding: 2px; border-radius: 4px;
+}
+.ldash-icon-only:hover { color: #1b2436; }
+
+.ldash-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 11.5px; color: #5b6577; }
+.ldash-legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+
+/* ---------- Portfolio Overview stat cards ---------- */
+.ldash-earnings-card { display: flex; flex-direction: column; gap: 12px; }
+
+.ldash-stat {
+  border: 1px solid #e8edf7;
+  border-radius: 12px;
+  padding: 14px;
+}
+.ldash-stat.dark {
+  background: linear-gradient(135deg, #16305c, #1e4d8f);
+  border: none;
+  color: #fff;
+}
+.ldash-stat.dark .ldash-stat-head span,
+.ldash-stat.dark .ldash-stat-note { color: rgba(255,255,255,0.75); }
+.ldash-stat.dark .ldash-stat-value { color: #fff; }
+.ldash-stat.dark .ldash-icon-only { color: rgba(255,255,255,0.75); }
+.ldash-stat.dark .ldash-icon-only:hover { color: #fff; }
+
+.ldash-stat-head { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: #5b6577; margin-bottom: 8px; }
+.ldash-stat-value { font-size: 20px; font-weight: 700; margin: 0 0 4px; color: #1b2436; }
+.ldash-stat-note { font-size: 10.5px; color: #8892a3; margin: 0; line-height: 1.4; }
+
+/* ---------- Pending loan approvals queue ---------- */
+.ldash-queue-count { font-size: 11px; color: #8892a3; font-weight: 600; }
+
+.ldash-queue { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ldash-queue-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px; border: 1px solid #e8edf7; border-radius: 12px;
+  transition: opacity 0.2s ease, transform 0.2s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.ldash-queue-row:hover { background: #f7f9fd; box-shadow: 0 2px 8px rgba(22,48,92,0.06); }
+.ldash-queue-row.leaving { opacity: 0; transform: translateX(8px); }
+
+.ldash-mini-avatar {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  background: #e8edf7; color: #1e4d8f; font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.ldash-queue-main { flex: 1; min-width: 0; }
+.ldash-queue-borrower { font-size: 12.5px; font-weight: 600; margin: 0; color: #1b2436; }
+.ldash-queue-meta { font-size: 10.5px; color: #8892a3; margin: 2px 0 0; }
+
+.ldash-risk { font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 999px; flex-shrink: 0; }
+.ldash-risk.low { background: rgba(79, 127, 224, 0.14); color: #1e4d8f; }
+.ldash-risk.medium { background: rgba(201, 163, 92, 0.16); color: #a3792f; }
+.ldash-risk.high { background: rgba(214, 92, 92, 0.14); color: #b23b3b; }
+
+.ldash-queue-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.ldash-icon-btn {
+  width: 30px; height: 30px; border-radius: 9px; border: 1px solid transparent;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.ldash-icon-btn:hover { transform: scale(1.08); box-shadow: 0 3px 8px rgba(22,48,92,0.14); }
+.ldash-icon-btn.approve { background: rgba(79, 127, 224, 0.14); color: #1e4d8f; border-color: rgba(79, 127, 224, 0.3); }
+.ldash-icon-btn.reject { background: rgba(214, 92, 92, 0.12); color: #b23b3b; border-color: rgba(214, 92, 92, 0.25); }
+
+.ldash-empty {
+  display: flex; align-items: center; gap: 10px;
+  color: #8892a3; font-size: 12.5px; padding: 18px 4px;
+}
+
+/* ---------- Borrower analysis card ---------- */
+.ldash-borrower-analysis { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+
+.ldash-people-row { display: flex; gap: 4px; flex-wrap: wrap; max-width: 160px; }
+.ldash-person { width: 16px; height: 16px; border-radius: 50%; }
+.ldash-person.salaried { background: #4f7fe0; }
+.ldash-person.self-employed { background: #16305c; }
+
+.ldash-ring {
+  width: 100px; height: 100px; border-radius: 50%;
+  background: conic-gradient(#16305c 0% 70%, #e8edf7 70% 100%);
+  display: flex; align-items: center; justify-content: center;
+  position: relative; flex-shrink: 0;
+}
+.ldash-ring::before {
+  content: "";
+  position: absolute;
+  width: 74px; height: 74px;
+  background: #ffffff;
+  border-radius: 50%;
+}
+.ldash-ring-value {
+  position: relative; z-index: 1;
+  font-size: 20px; font-weight: 700; color: #1b2436;
+}
+.ldash-ring-caption {
+  font-size: 11px; color: #8892a3; margin: 12px 0 0;
+}
+
+/* ---------- Table card ---------- */
+.ldash-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ldash-table th { text-align: left; color: #8892a3; font-weight: 500; padding: 8px 6px; border-bottom: 1px solid #e8edf7; }
+.ldash-table td { padding: 11px 6px; border-bottom: 1px solid #f4f7fb; color: #1b2436; }
+
+.ldash-badge { padding: 3px 9px; border-radius: 999px; font-size: 10px; font-weight: 600; }
+.ldash-badge.current { background: rgba(79, 127, 224, 0.14); color: #1e4d8f; }
+.ldash-badge.due { background: rgba(201, 163, 92, 0.16); color: #a3792f; }
+.ldash-badge.overdue { background: rgba(214, 92, 92, 0.14); color: #b23b3b; }
+
+/* ---------- Product split donut ---------- */
+.ldash-donut-wrap { margin: 0 0 6px; }
+
+.ldash-donut-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ldash-donut-legend li { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #1b2436; }
+.ldash-donut-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.ldash-donut-name { flex: 1; color: #5b6577; }
+.ldash-donut-value { font-weight: 700; }
+
+/* ---------- NPA / DPD ledger stamp ---------- */
+.ldash-stamp-row { display: flex; align-items: center; gap: 22px; }
+
+.ldash-stamp {
+  width: 108px; height: 108px; border-radius: 50%;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transform: rotate(-6deg);
+  position: relative;
+}
+.ldash-stamp::before {
+  content: "";
+  position: absolute; inset: 6px; border-radius: 50%;
+  border: 1.5px dashed rgba(38, 48, 42, 0.35);
+}
+.ldash-stamp-inner {
+  width: 78px; height: 78px; border-radius: 50%; background: #fff;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1px; color: #16305c;
+}
+.ldash-stamp-pct { font-family: Georgia, serif; font-size: 18px; font-weight: 700; line-height: 1; margin-top: 2px; }
+.ldash-stamp-caption {
+  font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: #8892a3; font-weight: 600;
+}
+
+.ldash-bucket-list { list-style: none; margin: 0; padding: 0; flex: 1; display: flex; flex-direction: column; gap: 7px; }
+.ldash-bucket-list li { display: flex; align-items: center; gap: 8px; font-size: 11.5px; }
+.ldash-bucket-label { flex: 1; color: #5b6577; }
+.ldash-bucket-value { font-weight: 700; color: #1b2436; }
+
+@media (max-width: 480px) {
+  .ldash-stamp-row { flex-direction: column; align-items: flex-start; }
+}
+
+/* ---------- Entrance animation ---------- */
+.ldash-fade-up {
+  animation: ldashFadeUp 0.45s ease both;
+}
+
+@keyframes ldashFadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Skeleton loading ---------- */
+.ldash-skel-line {
+  height: 12px; border-radius: 6px;
+  background: linear-gradient(90deg, #e8edf7 25%, #f6f8f5 37%, #e8edf7 63%);
+  background-size: 400% 100%;
+  animation: ldashShimmer 1.3s ease infinite;
+}
+.ldash-skel-line.w40 { width: 40%; }
+.ldash-skel-line.w60 { width: 60%; margin-bottom: 8px; }
+.ldash-skel-line.tall { height: 20px; width: 45%; }
+.ldash-skel-block {
+  margin-top: 14px; border-radius: 10px;
+  background: linear-gradient(90deg, #eef2fb 25%, #f8faf7 37%, #eef2fb 63%);
+  background-size: 400% 100%;
+  animation: ldashShimmer 1.3s ease infinite;
+}
+
+@keyframes ldashShimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ldash-fade-up, .ldash-skel-line, .ldash-skel-block, .ldash-icon-btn, .ldash-kpi, .ldash-sidebar {
+    animation: none !important;
+    transition: none !important;
+  }
+}
