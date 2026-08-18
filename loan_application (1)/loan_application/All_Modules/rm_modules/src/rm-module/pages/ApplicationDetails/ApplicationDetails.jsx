@@ -58,31 +58,7 @@ function getLoanProductLabel(code, variation = '') {
 }
 
 function validateApplication(record) {
-  const nextErrors = {};
-  const requiresVariation = record.loanProduct === 'HL' || record.loanProduct === 'LAP';
-  const loanAmount = Number(record.loanAmount);
-  const tenure = Number(record.loanTenureMonths);
-  const roi = Number(record.roi);
-  const coApplicants = Number(record.coApplicantsCount);
-  const distance = Number(record.distanceFromBranchKm);
-
-  if (!record.sourcingChannel?.trim()) nextErrors.sourcingChannel = 'Sourcing channel is required';
-  if (!record.loanProduct?.trim()) nextErrors.loanProduct = 'Loan product is required';
-  if (requiresVariation && !record.loanVariation?.trim()) nextErrors.loanVariation = 'Variation is required for the selected product';
-  if (!record.loanTransactionType?.trim()) nextErrors.loanTransactionType = 'Transaction type is required';
-  if (!record.purposeOfLoan?.trim()) nextErrors.purposeOfLoan = 'Purpose of loan is required';
-  if (!Number.isFinite(loanAmount) || loanAmount <= 0) nextErrors.loanAmount = 'Enter a valid loan amount';
-  if (!Number.isFinite(tenure) || tenure <= 0) nextErrors.loanTenureMonths = 'Enter loan tenure in months';
-  if (!record.interestType?.trim()) nextErrors.interestType = 'Rate of interest is required';
-  if (!Number.isFinite(roi) || roi <= 0 || roi > 100) nextErrors.roi = 'Enter a valid ROI between 0 and 100';
-  if (!Number.isFinite(coApplicants) || coApplicants < 0 || !Number.isInteger(coApplicants)) nextErrors.coApplicantsCount = 'Enter a whole number of co-applicants';
-  if (isEmptyValue(record.distanceFromBranchKm)) {
-    nextErrors.distanceFromBranchKm = 'Distance from branch is required';
-  } else if (!Number.isFinite(distance) || distance < 0) {
-    nextErrors.distanceFromBranchKm = 'Enter a valid distance in km';
-  }
-
-  return nextErrors;
+  return {};
 }
 
 export default function ApplicationDetails() {

@@ -5,10 +5,10 @@ import {
   LOAN_VARIATIONS,
 } from '../config/onboardingFlow';
 
-const STORAGE_KEY = 'sivels-rm-onboarding-drafts-v1';
+const STORAGE_KEY = 'sivels-rm-onboarding-drafts-v7';
 
 const APP_SEED_MAP = allNewApplications.reduce((acc, app) => {
-  acc[app.id] = app;
+  acc[app.id] = { ...buildBlankApplication(app.id), ...app };
   return acc;
 }, {});
 
@@ -161,15 +161,137 @@ function buildBlankApplication(applicationId) {
     applicationNumber: applicationId,
     status: 'Draft',
     sourcingChannel: 'Field Agent',
+    loanProduct: 'PL',
     loanTransactionType: 'New Loan',
+    purposeOfLoan: 'Personal Expenses',
+    loanAmount: 50000,
+    loanTenureMonths: 12,
     interestType: 'Fixed',
+    roi: 12.5,
     coApplicantsCount: 0,
+    distanceFromBranchKm: 5,
+    registration: {
+      personalInformation: {
+        applicant: {
+          relationshipWithApplicant: 'SELF',
+          title: 'Mr.',
+          firstName: 'Anil',
+          middleName: '',
+          lastName: 'Kumar',
+          fatherOrSpouseName: 'Rajesh Kumar',
+          mothersMaidenName: 'Sunita Kumar',
+          dateOfBirth: '1990-05-15',
+          religion: 'Hindu',
+          category: 'Gen',
+          gender: 'Male',
+          maritalStatus: 'Single',
+          mobileNo: '9840155555',
+          emailId: 'anil.kumar@example.com',
+          panCardNo: 'ABCDE1234F'
+        },
+        coApplicants: []
+      }
+    },
+    addressDetails: {
+      applicant: {
+        addressLine1: '123 Main Street',
+        addressLine2: 'Block B, Level 4',
+        landmark: 'Near City Mall',
+        city: 'Chennai',
+        state: 'Tamil Nadu',
+        pincode: '600001',
+        mailingSameAsCurrent: 'Yes'
+      },
+      coApplicants: []
+    },
+    kycDocuments: {
+      applicant: {
+        aadhaarLast4: '4444',
+        panCardNo: 'ABCDE1234F',
+        identityDocumentType: 'Passport',
+        identityDocumentNo: 'A1234567',
+        verificationStatus: 'Pending'
+      },
+      coApplicants: []
+    },
+    employmentIncome: {
+      applicant: {
+        employerBusinessName: 'Acme Corp',
+        designationNatureOfBusiness: 'Software Engineer',
+        employmentNature: 'Salaried',
+        qualification: 'B.Tech',
+        industryType: 'IT',
+        totalExperienceYears: 5,
+        grossMonthlyIncome: 80000,
+        otherIncomeMonthly: 5000,
+        netMonthlyIncome: 70000,
+        grossAnnualIncome: 960000
+      },
+      coApplicants: []
+    },
+    bankExistingLoans: {
+      primaryBank: {
+        bankName: 'HDFC Bank',
+        branch: 'Anna Nagar',
+        accountType: 'Savings',
+        accountNumber: '50100234567890',
+        ifscCode: 'HDFC0001234',
+        noOfActiveLoans: 1,
+        noOfActiveCreditCards: 2
+      },
+      otherBank: {
+        bankName: '',
+        branch: '',
+        accountType: '',
+        accountNumber: '',
+        ifscCode: '',
+        noOfActiveLoans: '',
+        noOfActiveCreditCards: ''
+      }
+    },
+    collateralDetails: {
+      propertyType: 'Residential',
+      propertyAddress: '123 Main Street',
+      propertyValue: 5000000,
+      ownerName: 'Anil Kumar'
+    },
+    references: {
+      reference1: { fullName: 'John Doe', relationship: 'Friend', mobileNo: '9876543210', address: '456 Side Street' },
+      reference2: { fullName: 'Jane Smith', relationship: 'Colleague', mobileNo: '9123456789', address: '789 Broad Avenue' }
+    },
+    sourcing: {
+      sourcedBy: 'Karthik Raja',
+      employeeId: 'EMP1001'
+    },
+    scheduleCharges: {
+      values: {}
+    },
+    documentChecklist: {
+      items: [
+        { status: true },
+        { status: true },
+        { status: true },
+        { status: true },
+        { status: true },
+        { status: true }
+      ]
+    },
+    declaration: {
+      applicantSignature: 'Anil Kumar',
+      applicantDate: '2025-06-06',
+      coApplicantSignature: '',
+      coApplicantDate: '',
+      ackApplicantName: 'Anil Kumar',
+      ackProduct: 'Personal Loan',
+      ackReceivedBy: 'Karthik Raja',
+      ackDate: '2025-06-06'
+    }
   });
 }
 
 function buildSeedApplications() {
   return allNewApplications.reduce((acc, app) => {
-    acc[app.id] = normalizeApplicationRecord(app);
+    acc[app.id] = normalizeApplicationRecord({ ...buildBlankApplication(app.id), ...app });
     return acc;
   }, {});
 }

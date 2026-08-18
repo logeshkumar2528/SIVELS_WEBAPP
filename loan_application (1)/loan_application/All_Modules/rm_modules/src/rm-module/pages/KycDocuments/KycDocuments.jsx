@@ -52,6 +52,14 @@ function KycCard({ title, person, onChange, errors, onViewDocuments }) {
   const [otpStep, setOtpStep] = useState(person.verificationStatus === 'Verified' ? 'verified' : 'idle');
   const [otpValue, setOtpValue] = useState('');
 
+  useEffect(() => {
+    if (person.verificationStatus !== 'Verified' && otpStep === 'verified') {
+      setOtpStep('idle');
+    } else if (person.verificationStatus === 'Verified' && otpStep !== 'verified') {
+      setOtpStep('verified');
+    }
+  }, [person.verificationStatus, otpStep]);
+
   const handleSendOtp = () => {
     setOtpStep('otp_sent');
     setOtpValue('');
@@ -234,15 +242,16 @@ export default function KycDocuments() {
 
   const updatePerson = (scope, field, value, index = null) => {
     if (scope === 'applicant') {
-      const nextForm = { ...form, applicant: { ...form.applicant, [field]: value } };
-      persist(nextForm);
+      setForm((prev) => ({ ...prev, applicant: { ...prev.applicant, [field]: value } }));
       return;
     }
 
-    const nextCoApplicants = form.coApplicants.map((person, currentIndex) => (
-      currentIndex === index ? { ...person, [field]: value } : person
-    ));
-    persist({ ...form, coApplicants: nextCoApplicants });
+    setForm((prev) => {
+      const nextCoApplicants = prev.coApplicants.map((person, currentIndex) => (
+        currentIndex === index ? { ...person, [field]: value } : person
+      ));
+      return { ...prev, coApplicants: nextCoApplicants };
+    });
   };
 
   const handleContinue = () => {
