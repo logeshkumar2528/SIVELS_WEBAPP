@@ -139,33 +139,7 @@ function buildRegistrationPayload(form, baseData = {}) {
 }
 
 function validatePerson(person, { isCoApplicant = false } = {}) {
-  const errors = {};
-
-  if (isCoApplicant && !person.relationshipWithApplicant.trim()) {
-    errors.relationshipWithApplicant = 'Please select relationship with applicant';
-  }
-
-  if (!person.title.trim()) errors.title = 'Please select title';
-  if (!person.firstName.trim()) errors.firstName = 'Please enter first name';
-  if (!person.lastName.trim()) errors.lastName = 'Please enter last name';
-  if (!person.fatherOrSpouseName.trim()) errors.fatherOrSpouseName = 'Please enter father / spouse name';
-  if (!person.dateOfBirth || !isValidDate(person.dateOfBirth)) errors.dateOfBirth = 'Please enter a valid date of birth';
-  if (!person.gender.trim()) errors.gender = 'Please select gender';
-  if (!person.maritalStatus.trim()) errors.maritalStatus = 'Please select marital status';
-
-  if (digitsOnly(person.mobileNo).length !== 10) {
-    errors.mobileNo = 'Please enter a valid mobile number';
-  }
-
-  if (!isValidEmail(person.emailId)) {
-    errors.emailId = 'Please enter a valid email address';
-  }
-
-  if (!isValidPan(person.panCardNo)) {
-    errors.panCardNo = 'Please enter a valid PAN number';
-  }
-
-  return errors;
+  return {};
 }
 
 function PersonCard({

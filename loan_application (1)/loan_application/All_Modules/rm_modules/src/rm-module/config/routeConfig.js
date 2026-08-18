@@ -12,6 +12,7 @@ export const ROUTES = {
   PENDING_APPLICATIONS:  `${BASE}/applications/pending`,
   APPROVED_APPLICATIONS: `${BASE}/applications/approved`,
   RETURNED_APPLICATIONS: `${BASE}/applications/returned`,
+  SUBMISSION_HISTORY:    `${BASE}/applications/submission-history`,
   APPLICATION_DETAILS:   `${NEW_APPLICATION_BASE}/application-details`,
   PERSONAL_INFORMATION:   `${NEW_APPLICATION_BASE}/personal`,
   ADDRESS_DETAILS:       `${NEW_APPLICATION_BASE}/address`,

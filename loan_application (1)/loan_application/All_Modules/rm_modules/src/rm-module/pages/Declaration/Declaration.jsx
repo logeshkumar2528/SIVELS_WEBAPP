@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { PenTool, Calendar, User, Briefcase, UserCheck } from 'lucide-react';
+import { PenTool, Calendar, User, Briefcase, UserCheck, Phone, CheckCircle } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
+import Modal from '../../components/Modal/Modal';
 import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
@@ -29,6 +30,9 @@ export default function Declaration() {
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildDeclarationState(getApplication(appId)));
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [otpStep, setOtpStep] = useState('initial');
+  const [otpValue, setOtpValue] = useState('');
 
   useEffect(() => {
     ensureApplication(appId);
@@ -48,8 +52,14 @@ export default function Declaration() {
 
   const handleSubmit = () => {
     saveApplication(appId, buildSectionUpdate(appData, 'declaration', form));
+    setOtpStep('confirm_creation');
+    setOtpValue('');
+    setShowSubmitModal(true);
+  };
+
+  const finalizeSubmit = () => {
     saveApplication(appId, { status: 'Ready for Review' });
-    navigate(ROUTES.DASHBOARD);
+    navigate(ROUTES.SUBMISSION_HISTORY);
   };
 
   const handleBack = () => {
@@ -171,6 +181,92 @@ export default function Declaration() {
           </div>
         </div>
       </div>
+
+      <Modal show={showSubmitModal} onHide={() => { if(otpStep !== 'success') setShowSubmitModal(false); }} title={otpStep === 'confirm_creation' ? 'Confirm Account Creation' : 'Verify Mobile Number'} size="sm">
+        {otpStep === 'success' ? (
+          <div style={{ textAlign: 'center', padding: '4px', minHeight: '160px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyItems: 'center', justifyContent: 'center' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', borderRadius: '50%', background: '#effaf2', color: '#0F7A4C', marginBottom: '16px' }}>
+               <CheckCircle size={24} />
+            </div>
+            <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', marginBottom: '8px' }}>Profile Created</h3>
+            <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '20px' }}>Application submitted successfully.</p>
+            <Button variant="primary" style={{ width: '100%', justifyContent: 'center' }} onClick={finalizeSubmit}>
+              Continue
+            </Button>
+          </div>
+        ) : otpStep === 'confirm_creation' ? (
+          <div style={{ padding: '4px', minHeight: '160px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <p style={{ color: '#475569', fontSize: '13px', lineHeight: '1.5' }}>
+              Are you sure you want to create an account for <strong>{(() => {
+                const applicant = appData.registration?.personalInformation?.applicant;
+                const computedName = applicant ? `${applicant.firstName || ''} ${applicant.lastName || ''}`.trim() : '';
+                return appData.customerName || computedName || 'Unknown';
+              })()}</strong> (ID: <strong>{appId}</strong>)?
+            </p>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: 'auto' }}>
+              <Button variant="secondary" onClick={() => setShowSubmitModal(false)}>Cancel</Button>
+              <Button variant="primary" onClick={() => setOtpStep('initial')}>OK</Button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ padding: '4px', minHeight: '160px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div>
+              <p style={{ color: '#475569', fontSize: '13px', marginBottom: '16px', lineHeight: '1.5' }}>
+                Please verify the applicant's mobile number.
+              </p>
+              
+              <div className="aw-field" style={{ marginBottom: '16px' }}>
+                <div className="aw-input-wrapper">
+                  <Phone className="aw-input-icon" size={14} />
+                  <input 
+                    className="form-input aw-input aw-input--with-icon" 
+                    value={otpStep === 'otp_sent' ? otpValue : (appData.registration?.personalInformation?.applicant?.mobileNo || appData.mobileNo || appData.mobile || '')} 
+                    disabled={otpStep !== 'otp_sent'}
+                    placeholder={otpStep === 'otp_sent' ? "Enter 4-digit OTP" : ""}
+                    onChange={(e) => {
+                      if (otpStep === 'otp_sent') {
+                        setOtpValue(e.target.value.replace(/[^\d]/g, ''));
+                      }
+                    }}
+                    maxLength={otpStep === 'otp_sent' ? 4 : 10}
+                  />
+                  {otpStep === 'initial' && (
+                    <button
+                      type="button"
+                      onClick={() => setOtpStep('otp_sent')}
+                      style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', padding: '4px 12px', fontSize: '12px', fontWeight: 600, background: '#0F7A4C', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', zIndex: 10 }}
+                    >
+                      Send OTP
+                    </button>
+                  )}
+                  {otpStep === 'otp_sent' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (otpValue.length === 4) {
+                           setOtpStep('success');
+                        }
+                      }}
+                      disabled={otpValue.length < 4}
+                      style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', padding: '4px 12px', fontSize: '12px', fontWeight: 600, background: '#0F7A4C', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', zIndex: 10, opacity: otpValue.length < 4 ? 0.5 : 1 }}
+                    >
+                      Verify
+                    </button>
+                  )}
+                </div>
+                {otpStep === 'otp_sent' && (
+                   <p style={{ fontSize: '11px', color: '#64748b', marginTop: '6px' }}>OTP sent to {appData.registration?.personalInformation?.applicant?.mobileNo || appData.mobileNo || appData.mobile || ''}</p>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: 'auto' }}>
+              <Button variant="secondary" onClick={() => setShowSubmitModal(false)}>Cancel</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
     </WizardSectionLayout>
   );
 }

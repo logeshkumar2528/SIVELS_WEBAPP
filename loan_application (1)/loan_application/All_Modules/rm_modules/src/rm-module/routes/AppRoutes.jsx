@@ -21,6 +21,7 @@ import DocumentChecklist from '../pages/DocumentChecklist/DocumentChecklist';
 import Declaration from '../pages/Declaration/Declaration';
 import MyAgents from '../pages/MyAgents/MyAgents';
 import RmProfile from '../pages/RmProfile/RmProfile';
+import SubmissionHistory from '../pages/SubmissionHistory/SubmissionHistory';
 import { ApplicationDraftProvider } from '../state/ApplicationDraftContext';
 
 function LayoutWrapper({ children, title, subtitle }) {
@@ -97,6 +98,15 @@ export default function AppRoutes() {
           element={
             <LayoutWrapper title="Returned Applications" subtitle="Applications returned for correction">
               <NewApplications initialFilter="Returned" />
+            </LayoutWrapper>
+          }
+        />
+
+        <Route
+          path={ROUTES.SUBMISSION_HISTORY}
+          element={
+            <LayoutWrapper title="Submission History" subtitle="View all your submitted applications">
+              <SubmissionHistory />
             </LayoutWrapper>
           }
         />
