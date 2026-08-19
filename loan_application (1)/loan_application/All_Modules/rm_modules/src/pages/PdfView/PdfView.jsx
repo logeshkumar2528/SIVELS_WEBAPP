@@ -5,6 +5,7 @@ import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import { ROUTES } from '../../config/routeConfig';
 import Button from '../../components/Button/Button';
 import './PdfView.css';
+import LogoImage from '../../assets/logo/Navbar_logo/Logo.jpg';
 
 export default function PdfView() {
   const { applicationId } = useParams();
@@ -88,8 +89,7 @@ export default function PdfView() {
               <p>(Please Read the Guidelines on the last page)</p>
             </div>
             <div className="pdf-logo">
-              <p>AHFL ON THE</p>
-              <img src="https://upload.wikimedia.org/wikipedia/commons/4/4e/Aadhar_Housing_Finance_Logo.png" alt="Logo" />
+              <img src={LogoImage} alt="Logo" />
             </div>
           </div>
 
@@ -114,17 +114,29 @@ export default function PdfView() {
               </div>
             </div>
             <div className="pdf-office-photos">
+            <div className="pdf-photo-column">
               <div className="pdf-photo-box">
                 <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="App"/>
                 <div className="pdf-photo-timestamp">Applicant</div>
               </div>
-              {coApplicants.map((_, i) => (
-                <div className="pdf-photo-box" key={i}>
+              <div className="pdf-geo-details">
+                Lat: 13.0827, Long: 80.2707<br/>
+                {new Date().toISOString().slice(0,10)} {new Date().toLocaleTimeString()}
+              </div>
+            </div>
+            {coApplicants.map((_, i) => (
+              <div className="pdf-photo-column" key={i}>
+                <div className="pdf-photo-box">
                   <img src={`https://randomuser.me/api/portraits/women/${44 + i}.jpg`} alt="CoApp"/>
                   <div className="pdf-photo-timestamp">Co-Applicant {i + 1}</div>
                 </div>
-              ))}
-            </div>
+                <div className="pdf-geo-details">
+                  Lat: 13.0827, Long: 80.2707<br/>
+                  {new Date().toISOString().slice(0,10)} {new Date().toLocaleTimeString()}
+                </div>
+              </div>
+            ))}
+          </div>
           </div>
 
           <div className="pdf-section-title">PERSONAL INFORMATION</div>

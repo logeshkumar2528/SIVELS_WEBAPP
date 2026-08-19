@@ -26,6 +26,7 @@ export default function WizardSectionLayout({
   onContinue,
   onStepClick,
   children,
+  metaAction,
   footerNote = 'Draft changes are stored automatically in the browser.',
   footerHint,
   continueIcon = true,
@@ -96,6 +97,14 @@ export default function WizardSectionLayout({
                 <span className="ad-meta-value">{`${appData.createdDate || 'Today'}, 10:25 AM`}</span>
               </div>
             </div>
+            {metaAction && (
+              <>
+                <div className="ad-meta-divider" />
+                <div className="ad-meta-item" style={{ marginLeft: 'auto', paddingLeft: '16px' }}>
+                  {metaAction}
+                </div>
+              </>
+            )}
           </div>
         </header>
 

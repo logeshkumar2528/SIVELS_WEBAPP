@@ -8,6 +8,7 @@ import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
+import Modal from '../../components/Modal/Modal';
 import {
   buildSectionUpdate,
   createAddressTemplate,
@@ -172,6 +173,11 @@ export default function AddressDetails() {
   const ArrowLeftIcon = iconMap['ArrowLeft'];
   const InfoIcon = iconMap['Info'];
 
+  const [showDocsModal, setShowDocsModal] = useState(false);
+  const [fullViewImage, setFullViewImage] = useState(null);
+  const aadhaarFrontUrl = appData.sections?.kycDocuments?.applicant?.aadhaarFront?.preview || 'https://via.placeholder.com/400x250?text=Aadhaar+Front+Not+Uploaded';
+  const aadhaarBackUrl = appData.sections?.kycDocuments?.applicant?.aadhaarBack?.preview || 'https://via.placeholder.com/400x250?text=Aadhaar+Back+Not+Uploaded';
+
   useEffect(() => {
     setForm(buildAddressState(getApplication(appId)));
     setErrors({});
@@ -246,6 +252,7 @@ export default function AddressDetails() {
   };
 
   return (
+    <>
     <WizardSectionLayout
       appId={appId}
       appData={appData}
@@ -266,6 +273,15 @@ export default function AddressDetails() {
           onClick={handleBack}
         >
           Back to Personal Information
+        </Button>
+      }
+      metaAction={
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowDocsModal(true)}
+        >
+          View Aadhaar
         </Button>
       }
       footerHint={`Address details are stored against the same application ID. ${activeCount > 1 ? `${activeCount} applicant records are linked.` : 'Only the applicant record is linked.'}`}
@@ -296,5 +312,47 @@ export default function AddressDetails() {
         />
       ))}
     </WizardSectionLayout>
+
+      <Modal 
+        show={showDocsModal} 
+        onHide={() => setShowDocsModal(false)} 
+        title="Applicant Aadhaar Document View"
+        size="lg"
+      >
+        <div style={{ display: 'flex', flexDirection: 'row', gap: '16px', padding: '0 8px' }}>
+          <div style={{ flex: 1 }}>
+            <h4 style={{ marginBottom: '8px', fontSize: '14px', color: '#1e293b' }}>Aadhaar Front</h4>
+            <div 
+              style={{ width: '100%', height: '250px', backgroundColor: '#f1f5f9', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', cursor: 'pointer' }}
+              onClick={() => setFullViewImage(aadhaarFrontUrl)}
+              title="Click to view full size"
+            >
+              <img src={aadhaarFrontUrl} alt="Aadhaar Front" style={{ width: '100%', height: '100%', objectFit: 'contain', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'} onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'} />
+            </div>
+          </div>
+          <div style={{ flex: 1 }}>
+            <h4 style={{ marginBottom: '8px', fontSize: '14px', color: '#1e293b' }}>Aadhaar Back</h4>
+            <div 
+              style={{ width: '100%', height: '250px', backgroundColor: '#f1f5f9', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', cursor: 'pointer' }}
+              onClick={() => setFullViewImage(aadhaarBackUrl)}
+              title="Click to view full size"
+            >
+              <img src={aadhaarBackUrl} alt="Aadhaar Back" style={{ width: '100%', height: '100%', objectFit: 'contain', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'} onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'} />
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        show={!!fullViewImage}
+        onHide={() => setFullViewImage(null)}
+        title="Full View"
+        size="lg"
+      >
+        <div style={{ width: '100%', height: '70vh', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+          {fullViewImage && <img src={fullViewImage} alt="Full View" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />}
+        </div>
+      </Modal>
+    </>
   );
 }

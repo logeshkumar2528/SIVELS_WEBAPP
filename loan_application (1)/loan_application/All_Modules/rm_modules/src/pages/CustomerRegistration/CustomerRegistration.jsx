@@ -10,6 +10,7 @@ import DatePicker from '../../components/DatePicker/DatePicker';
 import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
+import Modal from '../../components/Modal/Modal';
 import './CustomerRegistration.css';
 
 const TITLE_OPTIONS = ['Mr.', 'Mrs.', 'Ms.'];
@@ -500,6 +501,10 @@ export default function CustomerRegistration() {
   };
 
   const applicant = form.applicant;
+  const [showDocsModal, setShowDocsModal] = useState(false);
+  const [fullViewImage, setFullViewImage] = useState(null);
+  const aadhaarFrontUrl = appData.sections?.kycDocuments?.applicant?.aadhaarFront?.preview || 'https://via.placeholder.com/400x250?text=Aadhaar+Front+Not+Uploaded';
+  const aadhaarBackUrl = appData.sections?.kycDocuments?.applicant?.aadhaarBack?.preview || 'https://via.placeholder.com/400x250?text=Aadhaar+Back+Not+Uploaded';
 
   return (
     <div className="page-container cr-page-root compact-mode">
@@ -552,13 +557,23 @@ export default function CustomerRegistration() {
             </div>
           </div>
           <div className="ad-meta-divider" />
-          <div className="ad-meta-item">
-            <span className="ad-meta-label">Submitted</span>
-            <div className="ad-meta-value-group">
-              {iconMap['Calendar'] && (() => { const Calendar = iconMap['Calendar']; return <Calendar size={14} />; })()}
-              <span className="ad-meta-value">{`${appData.createdDate || 'Today'}, 10:25 AM`}</span>
+            <div className="ad-meta-item">
+              <span className="ad-meta-label">Submitted</span>
+              <div className="ad-meta-value-group">
+                {iconMap['Calendar'] && (() => { const Calendar = iconMap['Calendar']; return <Calendar size={14} />; })()}
+                <span className="ad-meta-value">{`${appData.createdDate || 'Today'}, 10:25 AM`}</span>
+              </div>
             </div>
-          </div>
+            <div className="ad-meta-divider" />
+            <div className="ad-meta-item" style={{ marginLeft: 'auto', paddingLeft: '16px' }}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDocsModal(true)}
+              >
+                View Aadhaar
+              </Button>
+            </div>
         </div>
       </header>
 
@@ -626,6 +641,47 @@ export default function CustomerRegistration() {
           </div>
         </div>
       </div>
+
+      <Modal 
+        show={showDocsModal} 
+        onHide={() => setShowDocsModal(false)} 
+        title="Applicant Aadhaar Document View"
+        size="lg"
+      >
+        <div style={{ display: 'flex', flexDirection: 'row', gap: '16px', padding: '0 8px' }}>
+          <div style={{ flex: 1 }}>
+            <h4 style={{ marginBottom: '8px', fontSize: '14px', color: '#1e293b' }}>Aadhaar Front</h4>
+            <div 
+              style={{ width: '100%', height: '250px', backgroundColor: '#f1f5f9', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', cursor: 'pointer' }}
+              onClick={() => setFullViewImage(aadhaarFrontUrl)}
+              title="Click to view full size"
+            >
+              <img src={aadhaarFrontUrl} alt="Aadhaar Front" style={{ width: '100%', height: '100%', objectFit: 'contain', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'} onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'} />
+            </div>
+          </div>
+          <div style={{ flex: 1 }}>
+            <h4 style={{ marginBottom: '8px', fontSize: '14px', color: '#1e293b' }}>Aadhaar Back</h4>
+            <div 
+              style={{ width: '100%', height: '250px', backgroundColor: '#f1f5f9', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', cursor: 'pointer' }}
+              onClick={() => setFullViewImage(aadhaarBackUrl)}
+              title="Click to view full size"
+            >
+              <img src={aadhaarBackUrl} alt="Aadhaar Back" style={{ width: '100%', height: '100%', objectFit: 'contain', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'} onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'} />
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        show={!!fullViewImage}
+        onHide={() => setFullViewImage(null)}
+        title="Full View"
+        size="lg"
+      >
+        <div style={{ width: '100%', height: '70vh', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+          {fullViewImage && <img src={fullViewImage} alt="Full View" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />}
+        </div>
+      </Modal>
     </div>
   );
 }
