@@ -16,11 +16,21 @@ import {
   Building2,
   Users,
   Coins,
+  X
 } from 'lucide-react'
 import './Profile.css'
 
 function Profile() {
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false)
+  const [showCommissionModal, setShowCommissionModal] = useState(false)
+
+  // Dummy data for commission breakdown
+  const commissionBreakdown = [
+    { id: 1, name: 'Rajesh Kumar', loanAmount: '₹5,00,000', commission: '₹15,000', date: '12 Aug 2026' },
+    { id: 2, name: 'Priya Sharma', loanAmount: '₹3,50,000', commission: '₹10,500', date: '10 Aug 2026' },
+    { id: 3, name: 'Vikram Singh', loanAmount: '₹2,00,000', commission: '₹6,000', date: '05 Aug 2026' },
+    { id: 4, name: 'Anita Desai', loanAmount: '₹4,50,000', commission: '₹13,700', date: '01 Aug 2026' },
+  ]
 
   return (
     <div className="profile-page">
@@ -74,7 +84,14 @@ function Profile() {
               </div>
             </div>
 
-            <div className="profile-pill profile-pill--orange">
+            <div 
+              className="profile-pill profile-pill--orange" 
+              onClick={() => setShowCommissionModal(true)}
+              style={{ cursor: 'pointer', transition: 'transform 0.2s' }}
+              onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+              onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+              title="Click to view commission details"
+            >
               <div className="profile-pill-icon">
                 <Coins size={18} />
               </div>
@@ -261,6 +278,50 @@ function Profile() {
         </div>
         <Shield size={48} className="banner-watermark-shield" />
       </div>
+
+      {/* COMMISSION MODAL */}
+      {showCommissionModal && (
+        <div className="commission-modal-overlay" onClick={() => setShowCommissionModal(false)}>
+          <div className="commission-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="commission-modal-header">
+              <h3>Commission Breakdown</h3>
+              <button className="close-modal-btn" onClick={() => setShowCommissionModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="commission-modal-body">
+              <table className="commission-table">
+                <thead>
+                  <tr>
+                    <th>Customer Name</th>
+                    <th>Loan Amount</th>
+                    <th>Date</th>
+                    <th style={{ textAlign: 'right' }}>Commission</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {commissionBreakdown.map((item) => (
+                    <tr key={item.id}>
+                      <td style={{ fontWeight: 600 }}>{item.name}</td>
+                      <td>{item.loanAmount}</td>
+                      <td>{item.date}</td>
+                      <td style={{ textAlign: 'right', color: '#059669', fontWeight: 700 }}>
+                        {item.commission}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan="3" style={{ textAlign: 'right', fontWeight: 700 }}>Total</td>
+                    <td style={{ textAlign: 'right', color: '#059669', fontWeight: 800, fontSize: '16px' }}>₹45,200</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
