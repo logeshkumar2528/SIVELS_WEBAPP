@@ -17,6 +17,13 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: clip;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input, textarea {
+  user-select: auto;
+  -webkit-user-select: auto;
 }
 
 #root {
@@ -30,6 +37,20 @@ a {
 
 button, input, select, textarea {
   font-family: inherit;
+}
+
+label, 
+h1, h2, h3, h4, h5, h6,
+span.compact-section-title,
+div.compact-section-title,
+.ad-meta-item,
+.wizard-progress,
+.aw-custom-select-trigger,
+.ad-premium-header,
+.rs-card-header,
+.cr-section-divider {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 select {
