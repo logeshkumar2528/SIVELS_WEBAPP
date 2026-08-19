@@ -35,6 +35,7 @@
   /* BORDERS */
   --color-border:        #E4EDE7;   /* Default border */
   --color-border-light:  #F0F5F1;   /* Subtle divider */
+  --color-input-border:  #CBD5E1;   /* Input field border */
 
   /* TEXT */
   --color-text-primary:   #1A2320;  /* Headings, values */
