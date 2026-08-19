@@ -31,6 +31,7 @@ function AddCustomer() {
   })
 
   // File Upload State
+  const [imageFile, setImageFile] = useState(null)
   const [panFile, setPanFile] = useState(null)
   const [aadhaarFile, setAadhaarFile] = useState(null)
   const [passbookFile, setPassbookFile] = useState(null)
@@ -38,6 +39,7 @@ function AddCustomer() {
   const [otherDocsFiles, setOtherDocsFiles] = useState([])
 
   // Object URL Previews
+  const [imagePreview, setImagePreview] = useState(null)
   const [panPreview, setPanPreview] = useState(null)
   const [aadhaarPreview, setAadhaarPreview] = useState(null)
   const [passbookPreview, setPassbookPreview] = useState(null)
@@ -51,6 +53,16 @@ function AddCustomer() {
   const [submittedData, setSubmittedData] = useState(null)
 
   // Manage Preview Object URLs
+  useEffect(() => {
+    if (imageFile && imageFile.type.startsWith('image/')) {
+      const url = URL.createObjectURL(imageFile)
+      setImagePreview(url)
+      return () => URL.revokeObjectURL(url)
+    } else {
+      setImagePreview(null)
+    }
+  }, [imageFile])
+
   useEffect(() => {
     if (panFile && panFile.type.startsWith('image/')) {
       const url = URL.createObjectURL(panFile)
@@ -173,6 +185,7 @@ function AddCustomer() {
       expectedAmount: '500000',
       remarks: 'Looking for a quick personal loan.',
     })
+    setImageFile(null)
     setPanFile(null)
     setAadhaarFile(null)
     setPassbookFile(null)
@@ -275,6 +288,71 @@ function AddCustomer() {
           </div>
 
           <div className="documents-grid">
+            {/* CARD 0: Customer Image */}
+            <div className={`document-upload-card ${imageFile ? 'has-file' : ''}`}>
+              {imageFile ? (
+                <div className="file-preview-box">
+                  {imagePreview ? (
+                    <img
+                      src={imagePreview}
+                      alt="Customer Image Preview"
+                      className="thumbnail-preview-img"
+                      onClick={() => setModalImage({ src: imagePreview, title: 'Customer Image Preview' })}
+                    />
+                  ) : (
+                    <User size={18} className="document-icon-badge" />
+                  )}
+                  <div className="file-preview-details">
+                    <span className="file-preview-name">{imageFile.name}</span>
+                    <span className="file-preview-size">({formatFileSize(imageFile.size)})</span>
+                  </div>
+                  {imagePreview && (
+                    <button
+                      type="button"
+                      className="action-view"
+                      onClick={() => setModalImage({ src: imagePreview, title: 'Customer Image Preview' })}
+                    >
+                      <Eye size={14} />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="document-card-top">
+                  <div className="document-icon-badge">
+                    <User size={16} strokeWidth={1.8} />
+                  </div>
+                  <div className="document-card-info">
+                    <h4>Customer Image<span className="required-star">*</span></h4>
+                    <p>Upload clear customer image</p>
+                    <p className="document-card-subtitle">JPG, PNG (Max. 2MB)</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="file-actions-row">
+                <label className="file-upload-btn">
+                  <Upload size={13} strokeWidth={2} />
+                  <span>{imageFile ? 'Change' : 'Choose File'}</span>
+                  <input
+                    type="file"
+                    className="file-input-hidden"
+                    accept=".jpg,.jpeg,.png"
+                    onChange={(e) => handleFileChange(e, setImageFile)}
+                  />
+                </label>
+                {imageFile && (
+                  <button
+                    type="button"
+                    className="file-remove-btn"
+                    onClick={() => handleRemoveFile(setImageFile)}
+                  >
+                    <Trash2 size={13} />
+                    <span>Remove</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* CARD 1: PAN Card */}
             <div className={`document-upload-card ${panFile ? 'has-file' : ''}`}>
               {panFile ? (
