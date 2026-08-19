@@ -22,6 +22,7 @@ import Declaration from '../pages/Declaration/Declaration';
 import MyAgents from '../pages/MyAgents/MyAgents';
 import RmProfile from '../pages/RmProfile/RmProfile';
 import SubmissionHistory from '../pages/SubmissionHistory/SubmissionHistory';
+import PdfView from '../pages/PdfView/PdfView';
 import FieldVerification from '../pages/FieldVerification/FieldVerification';
 import FieldVerificationStep2 from '../pages/FieldVerification/FieldVerificationStep2';
 import { ApplicationDraftProvider } from '../state/ApplicationDraftContext';
@@ -109,6 +110,15 @@ export default function AppRoutes() {
           element={
             <LayoutWrapper title="Submission History" subtitle="View all your submitted applications">
               <SubmissionHistory />
+            </LayoutWrapper>
+          }
+        />
+
+        <Route
+          path={ROUTES.APPLICATION_PDF_VIEW}
+          element={
+            <LayoutWrapper title="Application PDF View" subtitle="View and download application PDF">
+              <PdfView />
             </LayoutWrapper>
           }
         />
