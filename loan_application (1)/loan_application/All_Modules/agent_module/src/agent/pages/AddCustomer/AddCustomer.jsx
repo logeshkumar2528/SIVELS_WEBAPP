@@ -21,13 +21,13 @@ function AddCustomer() {
 
   // Form State
   const [formData, setFormData] = useState({
-    fullName: '',
-    mobileNumber: '',
-    email: '',
-    employmentType: '',
-    loanPurpose: '',
-    expectedAmount: '',
-    remarks: '',
+    fullName: 'John Doe',
+    mobileNumber: '9876543210',
+    email: 'john.doe@example.com',
+    employmentType: 'Salaried',
+    loanPurpose: 'Personal Loan',
+    expectedAmount: '500000',
+    remarks: 'Looking for a quick personal loan.',
   })
 
   // File Upload State
@@ -177,13 +177,13 @@ function AddCustomer() {
   const handleResetForm = () => {
     setSubmittedData(null)
     setFormData({
-      fullName: '',
-      mobileNumber: '',
-      email: '',
-      employmentType: '',
-      loanPurpose: '',
-      expectedAmount: '',
-      remarks: '',
+      fullName: 'John Doe',
+      mobileNumber: '9876543210',
+      email: 'john.doe@example.com',
+      employmentType: 'Salaried',
+      loanPurpose: 'Personal Loan',
+      expectedAmount: '500000',
+      remarks: 'Looking for a quick personal loan.',
     })
     setImageFile(null)
     setPanFile(null)
@@ -223,7 +223,6 @@ function AddCustomer() {
                 placeholder="Enter full name"
                 value={formData.fullName}
                 onChange={handleInputChange}
-                required
               />
             </div>
 
@@ -240,7 +239,6 @@ function AddCustomer() {
                 value={formData.mobileNumber}
                 onChange={handleInputChange}
                 maxLength={10}
-                required
               />
             </div>
 
@@ -269,7 +267,6 @@ function AddCustomer() {
                 className="form-select"
                 value={formData.employmentType}
                 onChange={handleInputChange}
-                required
               >
                 <option value="" disabled>Select employment type</option>
                 <option value="Salaried">Salaried</option>
@@ -554,16 +551,16 @@ function AddCustomer() {
             {/* CONDITIONAL SALARIED, BUSINESS & OTHER DOCUMENTS */}
             {(formData.employmentType === 'Salaried' || formData.employmentType === 'Business' || formData.employmentType === 'Other') && (
               <>
-                {/* CARD 4: IT Slip */}
+                {/* CARD 4: Salary Slip */}
                 <div className={`document-upload-card ${itSlipFile ? 'has-file' : ''}`}>
                   {itSlipFile ? (
                     <div className="file-preview-box">
                       {itSlipPreview ? (
                         <img
                           src={itSlipPreview}
-                          alt="IT Slip Preview"
+                          alt="Salary Slip Preview"
                           className="thumbnail-preview-img"
-                          onClick={() => setModalImage({ src: itSlipPreview, title: 'IT Slip Preview' })}
+                          onClick={() => setModalImage({ src: itSlipPreview, title: 'Salary Slip Preview' })}
                         />
                       ) : (
                         <FileText size={18} className="document-icon-badge" />
@@ -576,7 +573,7 @@ function AddCustomer() {
                         <button
                           type="button"
                           className="action-view"
-                          onClick={() => setModalImage({ src: itSlipPreview, title: 'IT Slip Preview' })}
+                          onClick={() => setModalImage({ src: itSlipPreview, title: 'Salary Slip Preview' })}
                         >
                           <Eye size={14} />
                         </button>
@@ -588,8 +585,8 @@ function AddCustomer() {
                         <FileText size={16} strokeWidth={1.8} />
                       </div>
                       <div className="document-card-info">
-                        <h4>IT Slip<span className="required-star">*</span></h4>
-                        <p>Upload clear image of IT Slip</p>
+                        <h4>Salary Slip<span className="required-star">*</span></h4>
+                        <p>Upload clear image of Salary Slip</p>
                         <p className="document-card-subtitle">JPG, PNG or PDF (Max. 2MB)</p>
                       </div>
                     </div>
@@ -694,7 +691,6 @@ function AddCustomer() {
                 className="form-select"
                 value={formData.loanPurpose}
                 onChange={handleInputChange}
-                required
               >
                 <option value="" disabled>
                   Select purpose
@@ -719,7 +715,6 @@ function AddCustomer() {
                 placeholder="Enter expected loan amount"
                 value={formData.expectedAmount}
                 onChange={handleInputChange}
-                required
               />
             </div>
           </div>

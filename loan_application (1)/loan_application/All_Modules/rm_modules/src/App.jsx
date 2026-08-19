@@ -1,5 +1,5 @@
 import { BrowserRouter } from 'react-router-dom';
-import { RmModuleRoutes } from './rm-module';
+import { RmModuleRoutes } from './index';
 
 export default function App() {
   return (
