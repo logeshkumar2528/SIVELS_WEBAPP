@@ -22,7 +22,7 @@ export default function RmProfile() {
   const FileTextIcon = iconMap['FileText'];
 
   return (
-    <div className="page-container page-container--no-scroll" style={{ gap: '16px' }}>
+    <div className="page-container" style={{ gap: '16px', overflowY: 'auto', paddingBottom: '32px' }}>
       <Breadcrumb items={['Dashboard', 'Profile']} />
 
       {/* Top Banner */}
