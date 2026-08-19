@@ -81,7 +81,7 @@ export default function SubmissionHistory() {
         <Button
           size="sm"
           variant="secondary"
-          onClick={() => navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', row.id))}
+          onClick={() => navigate(ROUTES.APPLICATION_PDF_VIEW.replace(':applicationId', row.id))}
         >
           View Form
         </Button>

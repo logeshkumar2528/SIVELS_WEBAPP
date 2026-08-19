@@ -32,6 +32,7 @@ export const ROUTES = {
   CUSTOMER_REGISTRATION: `${NEW_APPLICATION_BASE}/personal`,
   CREATE_LOGIN:          `${NEW_APPLICATION_BASE}/charges`,
   REVIEW_SUBMIT:         `${NEW_APPLICATION_BASE}/declaration`,
+  APPLICATION_PDF_VIEW:  `${NEW_APPLICATION_BASE}/pdf-view`,
   MY_AGENTS:             `${BASE}/agents`,
   PROFILE:               `${BASE}/profile`,
   LOGOUT:                `${BASE}/logout`,
