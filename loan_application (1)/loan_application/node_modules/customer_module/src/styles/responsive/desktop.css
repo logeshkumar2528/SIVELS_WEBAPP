@@ -1,0 +1,23 @@
+/* ==========================================
+   DESKTOP RESPONSIVE STYLES (> 1025px)
+   ========================================== */
+
+@media (min-width: 1025px) and (max-width: 1280px) {
+  .dashboard-grid,
+  .emi-history-page {
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+
+  .dashboard-middle-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1281px) {
+  .dashboard-grid,
+  .emi-history-page {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+}
