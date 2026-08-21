@@ -1,0 +1,44 @@
+.layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--color-bg);
+}
+
+.layout-body {
+  flex: 0 0 calc(100% - var(--sidebar-width));
+  width: calc(100% - var(--sidebar-width));
+  margin-left: var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100vh;
+  overflow: hidden;
+  padding-top: var(--header-height);
+  transition: margin-left var(--transition-layout);
+}
+
+@media (max-width: 991px) {
+  .layout-body {
+    margin-left: 0;
+    width: 100%;
+    flex-basis: 100%;
+  }
+}
+
+.layout-content {
+  flex: 1;
+  padding: 12px 20px;
+  background-color: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  min-height: 0;
+  padding-bottom: 24px;
+  min-width: 0;
+}
+
+.body--no-scroll {
+  overflow: hidden;
+}
+

@@ -1,0 +1,31 @@
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-1) var(--spacing-3);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+}
+
+.status-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+}
+
+.status-badge--new { background: var(--color-status-new-bg); color: var(--color-status-new-text); }
+.status-badge--new .status-badge-dot { background: var(--color-status-new-text); }
+
+.status-badge--review { background: var(--color-status-review-bg); color: var(--color-status-review-text); }
+.status-badge--review .status-badge-dot { background: var(--color-status-review-text); }
+
+.status-badge--returned { background: var(--color-status-returned-bg); color: var(--color-status-returned-text); }
+.status-badge--returned .status-badge-dot { background: var(--color-status-returned-text); }
+
+.status-badge--approved { background: var(--color-status-approved-bg); color: var(--color-status-approved-text); }
+.status-badge--approved .status-badge-dot { background: var(--color-status-approved-text); }
+
+.status-badge--disbursed { background: var(--color-status-disbursed-bg); color: var(--color-status-disbursed-text); }
+.status-badge--disbursed .status-badge-dot { background: var(--color-status-disbursed-text); }

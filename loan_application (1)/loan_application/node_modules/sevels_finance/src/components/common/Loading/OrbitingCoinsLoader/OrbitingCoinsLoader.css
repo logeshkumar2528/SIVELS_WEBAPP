@@ -1,0 +1,119 @@
+/* OrbitingCoinsLoader.css
+   Theme tokens — soft muted gold on a deep slate-navy core.
+   Only these color values changed; animation and structure are untouched. */
+.ocl-wrap {
+  --ocl-navy-deep: #16202e;
+  --ocl-gold: #c2a86a;
+  --ocl-gold-soft: #e3d3a3;
+  --ocl-gold-dark: #8a744a;
+  --ocl-cream: #f5f1e8;
+  --ocl-slate: #c2ccd8;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  font-family: "Inter", sans-serif;
+}
+
+.ocl-orbit-stage {
+  width: 110px;
+  height: 110px;
+  position: relative;
+}
+
+.ocl-orbit-core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ocl-gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Fraunces", serif;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ocl-gold-soft);
+  background: var(--ocl-navy-deep);
+}
+
+.ocl-orbit-path {
+  position: absolute;
+  inset: 0;
+  animation: ocl-spin-orbit 3s linear infinite;
+}
+
+.ocl-orbit-path.ocl-rev {
+  animation-direction: reverse;
+  animation-duration: 4s;
+}
+
+.ocl-orbit-coin {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 13px;
+  height: 13px;
+  margin-left: -6.5px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 30%,
+    var(--ocl-gold-soft) 0%,
+    var(--ocl-gold) 60%,
+    var(--ocl-gold-dark) 100%
+  );
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.ocl-orbit-path.ocl-rev .ocl-orbit-coin {
+  top: auto;
+  bottom: 8px;
+}
+
+@keyframes ocl-spin-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ocl-caption {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ocl-slate);
+  text-align: center;
+}
+
+.ocl-dots span {
+  animation: ocl-dot-fade 1.4s infinite;
+  opacity: 0;
+}
+
+.ocl-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.ocl-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes ocl-dot-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ocl-orbit-path {
+    animation: none;
+  }
+}

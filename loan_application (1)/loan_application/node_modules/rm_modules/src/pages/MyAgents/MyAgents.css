@@ -1,0 +1,172 @@
+.ag-kpi-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.ag-kpi-card {
+  flex: 1;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+}
+
+.ag-kpi-icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ag-kpi-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ag-kpi-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.ag-kpi-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.ag-kpi-trend {
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.ag-main-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.ag-filter-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ag-filter-dropdowns {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.ag-filter-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 4px;
+}
+
+.ag-select {
+  height: 38px;
+  width: 150px;
+  font-size: 12px;
+  padding: 0 12px;
+}
+
+.ag-table-container {
+  flex: 1;
+  overflow: auto;
+  padding: 0 20px;
+}
+
+/* Custom Table Styles for MyAgents */
+.ag-table-container table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+}
+
+.ag-table-container th {
+  padding: 10px 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: capitalize;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.ag-table-container td {
+  padding: 10px 8px;
+  font-size: 11.5px;
+  border-bottom: 1px solid #f1f5f9;
+  background: white;
+}
+
+.ag-pagination-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: white;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.ag-page-info {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.ag-page-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ag-page-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #475569;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.ag-page-btn:hover {
+  background: #f8fafc;
+}
+
+.ag-page-btn.active {
+  background: #0f5132;
+  color: white;
+  border-color: #0f5132;
+}
+
+.ag-page-rows {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
