@@ -1,0 +1,73 @@
+/*
+ * Breadcrumb.css
+ * --------------------
+ * Purpose:
+ *   Styles for the breadcrumb navigation component.
+ * Rules:
+ *   - All values from variables.css.
+ *   - Inline flex list with separators.
+ */
+
+
+/* ==========================================
+   BREADCRUMB CONTAINER
+========================================== */
+
+.breadcrumb {
+  margin-bottom: var(--spacing-4);
+}
+
+.breadcrumb-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+
+/* ==========================================
+   BREADCRUMB ITEMS
+========================================== */
+
+.breadcrumb-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+}
+
+.breadcrumb-link {
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.breadcrumb-link:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.breadcrumb-text {
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family-base);
+  color: var(--color-text-secondary);
+}
+
+.breadcrumb-current {
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+}
+
+.breadcrumb-separator {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-muted);
+  margin: 0 var(--spacing-1);
+}
