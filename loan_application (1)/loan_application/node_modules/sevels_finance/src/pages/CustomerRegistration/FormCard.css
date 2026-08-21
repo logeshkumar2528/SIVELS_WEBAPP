@@ -1,0 +1,44 @@
+.form-card {
+  background-color: white;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.08);
+}
+
+.form-card-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.form-card-icon-wrapper {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Let the parent define the icon background colors based on the section */
+.personal-card .form-card-icon-wrapper { background-color: var(--primary-light); color: var(--primary); }
+.contact-card .form-card-icon-wrapper { background-color: #ECFDF5; color: #10B981; }
+.address-card .form-card-icon-wrapper { background-color: #FFFBEB; color: #F59E0B; }
+.employment-card .form-card-icon-wrapper { background-color: #EFF6FF; color: #3B82F6; }
+.business-card .form-card-icon-wrapper { background-color: #FEF2F2; color: #EF4444; }
+
+.form-card-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.form-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}

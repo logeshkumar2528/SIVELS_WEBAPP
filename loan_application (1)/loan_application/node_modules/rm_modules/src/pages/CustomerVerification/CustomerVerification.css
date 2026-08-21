@@ -1,0 +1,397 @@
+.cv-top-bar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-3, 12px);
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.cv-infobar-flex {
+  flex: 1;
+}
+
+.cv-main-grid {
+  display: grid;
+  grid-template-columns: 270px minmax(0, 1fr) 290px;
+  gap: 12px;
+  align-items: stretch;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden !important;
+}
+
+@media (max-width: 1200px) {
+  .cv-main-grid {
+    grid-template-columns: 1fr;
+    overflow-y: hidden;
+  }
+}
+
+.cv-left-col,
+.cv-center-col,
+.cv-right-col {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden !important;
+}
+
+.cv-center-col {
+  gap: 8px;
+}
+
+.cv-form-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 12px 16px;
+  gap: 8px;
+  background-color: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+  overflow: hidden !important;
+}
+
+.cv-docs-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 12px 14px;
+  gap: 6px;
+  background-color: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+  overflow: hidden !important;
+}
+
+.cv-action-footer {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-light, #edf2f7);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cv-blue-alert-footer {
+  margin-top: auto;
+}
+
+.cv-section-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--color-text-primary, #0f172a);
+  margin: 0;
+}
+
+.cv-sub-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--color-text-primary, #0f172a);
+  margin: 2px 0;
+}
+
+/* Alert Banners */
+.alert-banner--green {
+  background-color: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.alert-banner--blue {
+  background-color: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Checklist Rows */
+.checklist-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.checklist-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border: 1px solid #edf2f7;
+  border-radius: 6px;
+  background-color: #f8fafc;
+  transition: all 0.15s ease-in-out;
+}
+
+.checklist-row:hover {
+  background-color: #ffffff;
+  border-color: #cbd5e1;
+}
+
+.checklist-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checklist-icon-box {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background-color: #eafbf1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.checklist-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.checklist-radios {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.radio-label input[type="radio"] {
+  accent-color: #16a34a;
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+/* Notes Textarea */
+.form-group-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.notes-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.notes-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.notes-counter {
+  font-size: 10.5px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.cv-textarea {
+  width: 100%;
+  height: 64px;
+  min-height: 64px;
+  max-height: 64px;
+  border: 1px solid var(--color-input-border, #cbd5e1);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+}
+
+.cv-textarea:focus {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.12);
+}
+
+/* Document Cards in Right Column */
+.doc-card-box {
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  padding: 6px 10px;
+  background-color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
+}
+
+.doc-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.badge-available {
+  background-color: #eafbf1;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.doc-graphic-card {
+  border-radius: 6px;
+  padding: 5px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 9.5px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+/* Aadhaar Card Graphic */
+.aadhaar-graphic {
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
+  border: 1px solid #bbf7d0;
+}
+
+.aadhaar-head-row {
+  font-weight: 700;
+  color: #166534;
+  font-size: 8.5px;
+  text-align: center;
+  border-bottom: 1px solid #bbf7d0;
+  padding-bottom: 2px;
+}
+
+.aadhaar-body-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.aadhaar-photo-box {
+  width: 26px;
+  height: 30px;
+  border-radius: 3px;
+  border: 1px solid #cbd5e1;
+  overflow: hidden;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+
+.aadhaar-photo-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.aadhaar-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0px;
+}
+
+.a-name { font-weight: 700; font-size: 10.5px; color: #0f172a; }
+.a-sub { color: #64748b; font-size: 8.5px; }
+.a-no { font-size: 10px; font-weight: 700; color: #166534; }
+
+/* PAN Card Graphic */
+.pan-graphic {
+  background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+  border: 1px solid #bfdbfe;
+}
+
+.pan-head-row {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 700;
+  color: #1e40af;
+  font-size: 8.5px;
+  border-bottom: 1px solid #bfdbfe;
+  padding-bottom: 2px;
+}
+
+.pan-body-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pan-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0px;
+}
+
+.p-lbl { font-size: 8px; color: #64748b; }
+.p-val { font-size: 10px; font-weight: 700; color: #0f172a; }
+
+/* Bank Passbook Graphic */
+.bank-graphic {
+  background: linear-gradient(135deg, #fefce8 0%, #ffffff 100%);
+  border: 1px solid #fef08a;
+}
+
+.bank-head-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #fef08a;
+  padding-bottom: 2px;
+}
+
+.bank-title-name {
+  font-size: 9px;
+  font-weight: 700;
+  color: #854d0e;
+}
+
+.bank-branch-name {
+  font-size: 8px;
+  color: #a16207;
+}
+
+.bank-body-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0px;
+}
+
+.b-lbl { font-size: 8px; color: #713f12; }
+.b-val { font-size: 9.5px; font-weight: 600; color: #0f172a; }
+

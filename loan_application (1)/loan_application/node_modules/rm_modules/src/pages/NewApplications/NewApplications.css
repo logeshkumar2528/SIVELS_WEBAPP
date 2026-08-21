@@ -1,0 +1,8 @@
+/* Custom styles for NewApplications page */
+.new-apps-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
+}

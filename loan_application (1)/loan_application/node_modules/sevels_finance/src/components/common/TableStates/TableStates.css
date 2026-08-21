@@ -1,0 +1,102 @@
+/* =====================================================================
+   Premium table states — skeleton, empty, error
+   ===================================================================== */
+
+/* --- Skeleton shimmer rows ---------------------------------------------- */
+.ts-skeleton-row td {
+  padding: 0.95rem 1.5rem;
+  border-bottom: 1px solid var(--slate-100);
+}
+.ts-skeleton-line {
+  display: block;
+  height: 14px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(
+    90deg,
+    var(--slate-100) 25%,
+    var(--slate-200) 37%,
+    var(--slate-100) 63%
+  );
+  background-size: 400% 100%;
+  animation: ts-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes ts-shimmer {
+  0%   { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* --- Empty / error state ------------------------------------------------- */
+.ts-state-row td { border-bottom: none; }
+
+.ts-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 3.5rem 1.5rem;
+  text-align: center;
+  animation: ts-fade-in 0.35s ease both;
+}
+
+.ts-state-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-xl);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--brand-50);
+  color: var(--primary);
+  margin-bottom: 0.35rem;
+  box-shadow: inset 0 0 0 1px var(--brand-100);
+}
+.ts-state-icon-error {
+  background: var(--error-bg);
+  color: var(--error);
+  box-shadow: inset 0 0 0 1px var(--error-border);
+}
+
+.ts-state-title {
+  font-size: var(--text-lg);
+  font-weight: var(--fw-semibold);
+  color: var(--text-heading);
+  margin: 0;
+}
+
+.ts-state-msg {
+  font-size: var(--text-base);
+  color: var(--text-muted);
+  margin: 0;
+  max-width: 380px;
+  line-height: 1.5;
+}
+
+.ts-state-action { margin-top: 0.75rem; }
+
+.ts-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+  padding: 0.55rem 1.15rem;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  color: var(--slate-700);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.ts-retry:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--brand-50);
+  transform: translateY(-1px);
+}
+
+@keyframes ts-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

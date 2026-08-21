@@ -1,0 +1,315 @@
+.signup-card-wrapper {
+  display: flex;
+  flex-direction: column;
+  background-color: transparent;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  border: none;
+  position: relative;
+  overflow: visible;
+  width: 100%;
+  max-width: 420px;
+}
+
+.signup-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.3rem;
+  margin-bottom: 1.75rem;
+}
+
+.user-icon-circle {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background-color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.signup-header h2 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.signup-header p {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.9375rem;
+  line-height: 1.4;
+}
+
+.signup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.info-text {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 500;
+  background-color: #F0FDFA;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid #CCFBF1;
+}
+
+.auth-actions-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.premium-btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.85rem;
+  background: var(--gradient-brand);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: none;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), filter var(--transition-fast);
+}
+
+.premium-btn-primary:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  box-shadow: none;
+}
+
+.premium-btn-primary:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+/* --- Signup template: ProgressStepper visibility on dark gradient --- */
+.signup-card-wrapper .step-circle {
+  background-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.signup-card-wrapper .step-circle.active,
+.signup-card-wrapper .step-circle.completed {
+  background-color: #ffffff;
+  color: var(--primary);
+  border-color: #ffffff;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.15);
+}
+
+.signup-card-wrapper .step-label {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.signup-card-wrapper .step-label.label-active {
+  color: #ffffff;
+}
+
+.signup-card-wrapper .step-line {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+.signup-card-wrapper .step-line.line-completed {
+  background-color: #ffffff;
+}
+
+/* --- Signup template: underline inputs on the transparent gradient card --- */
+.signup-form .auth-input-container {
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 0;
+  background-color: transparent;
+  height: 3.25rem;
+}
+
+.signup-form .auth-input-container:focus-within {
+  border-bottom-color: #ffffff;
+  box-shadow: none;
+}
+
+.signup-form .auth-input-icon {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.signup-form .auth-input-container:focus-within .auth-input-icon {
+  color: #ffffff;
+}
+
+.signup-form .auth-input-field {
+  color: #ffffff;
+}
+
+.signup-form .auth-input-label {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.signup-form .auth-input-field:focus ~ .auth-input-label,
+.signup-form .auth-input-field:not(:placeholder-shown) ~ .auth-input-label {
+  color: #ffffff;
+}
+
+.signup-form .info-text {
+  color: rgba(255, 255, 255, 0.85);
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.signup-form .premium-btn-primary {
+  background: var(--primary-active);
+}
+
+.signup-form .premium-btn-outline {
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.signup-form .premium-btn-outline:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: #ffffff;
+  color: #ffffff;
+}
+
+.premium-btn-outline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.75rem;
+  background: transparent;
+  color: var(--text-heading);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.premium-btn-outline:hover {
+  background-color: var(--brand-50);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.loading-dots span {
+  animation: loadingDots 1.4s infinite ease-in-out both;
+  font-size: 1.5rem;
+  line-height: 0.5;
+}
+
+.loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+.loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes loadingDots {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+
+@media (max-width: 768px) {
+  .signup-card-wrapper {
+    padding: 2rem 1.5rem;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  }
+}
+
+/* --- Registration Success Toast ------------------------------------------ */
+.registration-success-toast {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: var(--z-toast, 1100);
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  box-shadow: var(--shadow-md);
+  animation: toast-slide-in 0.4s var(--ease-spring) forwards;
+}
+
+@keyframes toast-slide-in {
+  from { opacity: 0; transform: translateX(40px) scale(0.95); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.toast-icon {
+  color: var(--success);
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.toast-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding-right: 1.5rem;
+}
+
+.toast-title {
+  color: #166534;
+  font-weight: var(--fw-bold);
+  font-size: var(--text-base);
+}
+
+.toast-desc {
+  color: #15803d;
+  font-size: var(--text-sm);
+}
+
+.toast-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: transparent;
+  border: none;
+  color: #166534;
+  cursor: pointer;
+  padding: 0.2rem;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color var(--transition-fast);
+}
+
+.toast-close:hover {
+  background-color: rgba(22, 101, 52, 0.1);
+}
+
+@media (max-width: 480px) {
+  .registration-success-toast {
+    left: 1rem;
+    right: 1rem;
+    top: 1rem;
+    width: auto;
+  }
+}

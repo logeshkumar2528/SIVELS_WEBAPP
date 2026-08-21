@@ -1,0 +1,38 @@
+/* LoadingOverlay.css
+   Backdrop, blur, positioning and fade only.
+   The loader's own animation/styles live in OrbitingCoinsLoader.css. */
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999; /* above every layout, modal and toast */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background-color: rgba(10, 20, 32, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: loading-overlay-fade 200ms ease-out;
+}
+
+.loading-overlay__panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@keyframes loading-overlay-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-overlay {
+    animation: none;
+  }
+}

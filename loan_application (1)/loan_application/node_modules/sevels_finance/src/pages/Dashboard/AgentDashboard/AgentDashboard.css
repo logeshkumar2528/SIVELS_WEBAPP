@@ -1,0 +1,309 @@
+/* AgentDashboard.css — same blue brand palette as AdminDashboard, scoped to agent-specific UI */
+
+* { box-sizing: border-box; }
+
+.adash-shell {
+  display: flex;
+  min-height: 100vh;
+  background: #f4f7fb;
+  color: #1b2436;
+  font-family: "Inter", "Segoe UI", Arial, sans-serif;
+}
+
+/* Sidebar */
+.adash-sidebar {
+  width: 220px;
+  background: #ffffff;
+  border-right: 1px solid #e8edf7;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 14px 20px;
+  flex-shrink: 0;
+  transition: width 0.2s ease, padding 0.2s ease;
+}
+
+/* Top row — your logo on the left, collapse toggle on the right */
+.adash-sidebar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.adash-logo-slot {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: #f4f7fb;
+  border: 1.5px dashed #c9d3e6;
+  flex-shrink: 0;
+}
+.adash-sidebar-toggle {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #16305c;
+  border: none;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+.adash-sidebar-toggle:hover { background: #0f2038; }
+
+.adash-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.adash-nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px; border: none;
+  background: transparent; color: #5b6577; font-size: 13px;
+  text-align: left; cursor: pointer; transition: background 0.15s ease, color 0.15s ease;
+}
+.adash-nav-item:hover { background: #eef2fb; color: #1b2436; }
+.adash-nav-item.active { background: #16305c; color: #ffffff; font-weight: 600; box-shadow: 0 4px 12px rgba(22,48,92,0.2); }
+
+.adash-sidebar-footer { display: flex; flex-direction: column; gap: 2px; padding-top: 14px; border-top: 1px solid #eef2fb; }
+
+/* Collapsed state — icons only, no labels, logo slot tucks away */
+.adash-sidebar.collapsed { width: 68px; padding: 18px 10px 20px; }
+.adash-sidebar.collapsed .adash-sidebar-top { justify-content: center; }
+.adash-sidebar.collapsed .adash-logo-slot { display: none; }
+.adash-sidebar.collapsed .adash-nav-item { justify-content: center; padding: 10px; }
+.adash-sidebar.collapsed .adash-nav-item span { display: none; }
+
+/* Main */
+.adash-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+.adash-topbar {
+  height: 70px; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 28px; gap: 24px; flex-shrink: 0; background: #fff; border-bottom: 1px solid #eef2fb;
+}
+.adash-title { font-size: 20px; font-weight: 700; margin: 0; color: #1b2436; flex-shrink: 0; }
+
+.adash-search {
+  display: flex; align-items: center; gap: 8px;
+  background: #f4f7fb; border: 1px solid #e8edf7; border-radius: 10px;
+  padding: 9px 14px; flex: 1; max-width: 380px; color: #8892a3;
+}
+.adash-search input { background: transparent; border: none; outline: none; color: #1b2436; font-size: 13px; width: 100%; }
+
+.adash-profile { display: flex; align-items: center; gap: 12px; }
+.adash-profile-name { font-size: 12.5px; font-weight: 600; margin: 0; color: #1b2436; text-align: right; }
+.adash-profile-role { font-size: 10.5px; color: #8892a3; margin: 0; text-align: right; }
+.adash-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: #e8edf7; color: #16305c; font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.adash-icon-btn {
+  position: relative; width: 34px; height: 34px; border-radius: 8px;
+  border: 1px solid #e8edf7; background: #f4f7fb; color: #5b6577;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.adash-dot-badge { position: absolute; top: 6px; right: 7px; width: 6px; height: 6px; border-radius: 50%; background: #e05656; }
+
+.adash-content { flex: 1; padding: 24px 28px 40px; overflow-y: auto; }
+
+/* Hero band */
+.adash-hero {
+  background: linear-gradient(120deg, #0f2038 0%, #16305c 55%, #2a5aa0 100%);
+  border-radius: 18px;
+  padding: 22px 26px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  color: #fff;
+  flex-wrap: wrap;
+  box-shadow: 0 10px 26px rgba(15,32,56,0.22);
+}
+.adash-hero-metric { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
+.adash-hero-label { font-size: 11px; color: rgba(255,255,255,0.7); }
+.adash-hero-value { font-size: 22px; font-weight: 700; color: #fff; }
+.adash-hero-value small { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.6); }
+.adash-hero-sub { font-size: 10.5px; color: rgba(255,255,255,0.65); }
+.adash-hero-divider { width: 1px; height: 40px; background: rgba(255,255,255,0.18); }
+
+.adash-progress-track { width: 100%; height: 5px; background: rgba(255,255,255,0.18); border-radius: 4px; margin-top: 2px; overflow: hidden; }
+.adash-progress-fill { height: 100%; background: #ffffff; border-radius: 4px; }
+
+/* Quick action */
+.adash-quick-action {
+  width: 100%;
+  display: flex; align-items: center; gap: 14px;
+  background: #ffffff; border: 1.5px dashed #4f7fe0; border-radius: 14px;
+  padding: 16px 18px; margin-bottom: 18px; cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+  text-align: left;
+}
+.adash-quick-action:hover { background: #eef2fb; transform: translateY(-1px); }
+.adash-quick-action-icon {
+  width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+  background: rgba(79,127,224,0.14); color: #16305c;
+  display: flex; align-items: center; justify-content: center;
+}
+.adash-quick-action-title { font-size: 13.5px; font-weight: 700; margin: 0; color: #1b2436; }
+.adash-quick-action-sub { font-size: 11.5px; color: #5b6577; margin: 2px 0 0; }
+.adash-quick-action-arrow { margin-left: auto; color: #4f7fe0; flex-shrink: 0; }
+
+/* Grid */
+.adash-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 18px; margin-bottom: 18px; }
+
+@media (max-width: 950px) {
+  .adash-grid { grid-template-columns: 1fr; }
+  .adash-sidebar { display: none; }
+  .adash-search { max-width: 200px; }
+}
+
+.adash-card {
+  background: #ffffff;
+  border: 1px solid #eef2fb;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 2px 10px rgba(22,48,92,0.04);
+  margin-bottom: 18px;
+}
+
+.adash-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.adash-card-head h3 { font-size: 14px; font-weight: 700; margin: 0; color: #1b2436; }
+.adash-range-label { font-size: 11px; color: #8892a3; }
+.adash-see-details { font-size: 11.5px; color: #16305c; font-weight: 600; cursor: pointer; text-decoration: none; }
+
+.adash-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 11.5px; color: #5b6577; }
+.adash-legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+
+/* Commission summary card */
+.adash-summary-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f4f7fb; }
+.adash-summary-row:last-of-type { border-bottom: none; }
+.adash-summary-icon {
+  width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+  background: rgba(79,127,224,0.12); color: #16305c;
+  display: flex; align-items: center; justify-content: center;
+}
+.adash-summary-label { font-size: 11.5px; color: #5b6577; margin: 0; }
+.adash-summary-value { font-size: 14px; font-weight: 700; margin: 2px 0 0; color: #1b2436; }
+.adash-summary-note {
+  margin-top: 12px; font-size: 11px; line-height: 1.5; color: #8892a3;
+  background: #f4f7fb; border-radius: 8px; padding: 10px;
+}
+
+/* Table */
+.adash-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.adash-table th { text-align: left; color: #8892a3; font-weight: 500; padding: 8px 6px; border-bottom: 1px solid #eef2fb; }
+.adash-table td { padding: 11px 6px; border-bottom: 1px solid #f4f7fb; color: #1b2436; }
+.adash-table-row { transition: background 0.12s ease; }
+.adash-table-row:hover { background: #f7f9fd; }
+.adash-muted { color: #8892a3; }
+
+.adash-cell-with-avatar { display: flex; align-items: center; gap: 8px; }
+.adash-mini-avatar {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: #e8edf7; color: #16305c; font-size: 9.5px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+
+.adash-stage-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 600;
+}
+.adash-hero-metric.warn .adash-hero-value { color: #ffd7d7; }
+
+/* New Customer card with doc checklist */
+.adash-new-customer-card { border: 1.5px solid #dbe6fb; }
+.adash-doc-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px; margin-bottom: 16px;
+}
+.adash-doc-chip {
+  display: flex; align-items: center; gap: 7px;
+  background: #f4f7fb; border: 1px solid #e8edf7; border-radius: 8px;
+  padding: 8px 10px; font-size: 11.5px; color: #1b2436;
+}
+.adash-primary-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; background: #16305c; color: #fff; border: none;
+  border-radius: 10px; padding: 11px; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: background 0.15s ease;
+}
+.adash-primary-btn:hover { background: #0f2038; }
+
+/* Offer card */
+.adash-offer-card { border: 1.5px solid #cfe0ff; background: linear-gradient(180deg, #f7faff 0%, #ffffff 100%); }
+.adash-offer-body { display: flex; flex-direction: column; gap: 14px; }
+.adash-offer-customer { display: flex; align-items: center; gap: 12px; }
+.adash-offer-name { font-size: 14px; font-weight: 700; margin: 0; color: #1b2436; }
+.adash-mini-avatar.lg { width: 40px; height: 40px; font-size: 13px; }
+
+.adash-offer-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px; padding: 12px 0; border-top: 1px dashed #dbe6fb; border-bottom: 1px dashed #dbe6fb;
+}
+.adash-summary-value.big { font-size: 18px; color: #16305c; }
+
+.adash-offer-net {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #16305c; color: #fff; border-radius: 10px; padding: 12px 14px;
+  font-size: 13px;
+}
+.adash-offer-net strong { font-size: 16px; }
+
+/* Overdue queue */
+.adash-warn-icon { color: #d68a2b; vertical-align: -2px; }
+.adash-overdue-badge { padding: 3px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 600; }
+.adash-overdue-badge.low { background: rgba(201, 163, 92, 0.16); color: #a3792f; }
+.adash-overdue-badge.mid { background: rgba(214, 143, 60, 0.16); color: #b5651f; }
+.adash-overdue-badge.high { background: rgba(214, 92, 92, 0.14); color: #b23b3b; }
+
+.adash-collect-btn {
+  display: flex; align-items: center; gap: 5px;
+  background: rgba(79,127,224,0.12); color: #16305c; border: 1px solid rgba(79,127,224,0.3);
+  border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: 600; cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.adash-collect-btn:hover { transform: translateY(-1px); }
+
+/* Page head (subtitle under the topbar title, per tab) */
+.adash-page-head { margin-bottom: 18px; }
+.adash-page-head p { font-size: 12.5px; color: #5b6577; margin: 0; }
+
+/* My Customers — search + filter chips */
+.adash-filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.adash-local-search {
+  display: flex; align-items: center; gap: 8px;
+  background: #f4f7fb; border: 1px solid #e8edf7; border-radius: 10px;
+  padding: 9px 14px; max-width: 320px; width: 100%; color: #8892a3;
+}
+.adash-local-search input { background: transparent; border: none; outline: none; color: #1b2436; font-size: 13px; width: 100%; }
+.adash-filter-chip {
+  padding: 6px 13px; border-radius: 999px; font-size: 11.5px; font-weight: 600;
+  border: 1px solid #e8edf7; background: #f4f7fb; color: #5b6577; cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.adash-filter-chip:hover { background: #eef2fb; }
+.adash-filter-chip.active { background: #16305c; color: #fff; border-color: #16305c; }
+.adash-empty-state { text-align: center; padding: 40px 16px; color: #8892a3; font-size: 12.5px; }
+
+/* Commission — stat strip */
+.adash-stat-strip { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+.adash-stat-chip {
+  flex: 1; min-width: 160px; background: #ffffff; border: 1px solid #eef2fb;
+  border-radius: 14px; padding: 14px 16px; box-shadow: 0 2px 10px rgba(22,48,92,0.04);
+}
+.adash-stat-chip-label { font-size: 11px; color: #8892a3; margin: 0 0 4px; }
+.adash-stat-chip-value { font-size: 18px; font-weight: 700; color: #1b2436; margin: 0; }
+
+.adash-status-pill { padding: 3px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 600; }
+.adash-status-pill.paid { background: rgba(47,165,118,0.14); color: #1f8a5f; }
+.adash-status-pill.pending { background: rgba(201,163,92,0.16); color: #a3792f; }
+
+/* Additional pipeline stage colors */
+.adash-stage-badge.docs { background: rgba(139, 146, 163, 0.16); color: #5b6577; }
+.adash-stage-badge.rm { background: rgba(79, 127, 224, 0.14); color: #1e4d8f; }
+.adash-stage-badge.verified { background: rgba(79, 127, 224, 0.18); color: #16305c; }
+.adash-stage-badge.eligibility { background: rgba(201, 163, 92, 0.16); color: #a3792f; }
+.adash-stage-badge.offer { background: rgba(139, 92, 214, 0.14); color: #6a3fb5; }
+.adash-stage-badge.approved { background: rgba(47, 165, 118, 0.14); color: #1f8a5f; }
+.adash-stage-badge.rejected { background: rgba(214, 92, 92, 0.14); color: #b23b3b; }
