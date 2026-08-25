@@ -4,6 +4,7 @@ import Dashboard from './agent/pages/Dashboard/Dashboard'
 import AddCustomer from './agent/pages/AddCustomer/AddCustomer'
 import SubmissionHistory from './agent/pages/SubmissionHistory/SubmissionHistory'
 import Profile from './agent/pages/Profile/Profile'
+import CustomerOnboarding from './agent/pages/CustomerOnboarding/CustomerOnboarding'
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <Route path="add-customer" element={<AddCustomer />} />
         <Route path="submission-history" element={<SubmissionHistory />} />
         <Route path="profile" element={<Profile />} />
+        <Route path="customers/new" element={<Navigate to="/Agent/add-customer" replace />} />
       </Route>
 
       {/* Fallback wildcard redirect */}

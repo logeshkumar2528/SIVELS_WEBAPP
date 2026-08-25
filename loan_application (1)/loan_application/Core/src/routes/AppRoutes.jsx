@@ -24,6 +24,7 @@ import Users from '../pages/Users/Users';
 import AgentApp from '../../../Business_Modules/agent_module/src/App';
 import InvestorApp from '../roles/investors/InvestorApp';
 import CustomerApp from '../../../Business_Modules/customer_module/src/App';
+import EmploymentTypeDocumentMapping from '../pages/EmploymentTypeDocumentMapping/EmploymentTypeDocumentMapping';
 
 const PlaceholderPage = ({ title }) => (
   <div className="flex items-center justify-center p-12 text-slate-500 bg-white rounded-lg border border-slate-200">
@@ -55,6 +56,7 @@ const managementRoutes = [
   { path: '/roles', element: <Roles /> },
   { path: '/roles/create', element: <RoleForm /> },
   { path: '/roles/edit/:id', element: <RoleForm /> },
+  { path: '/employment-type-document-mapping', element: <EmploymentTypeDocumentMapping /> },
 ];
 
 const customerRoutes = [

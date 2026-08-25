@@ -467,8 +467,6 @@ input:checked + .toggle-slider:before {
     grid-template-columns: 1fr;
   }
 }
-  flex: 1;
-}
 
 .info-row {
   display: flex;
