@@ -1,0 +1,20 @@
+.master-placeholder-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+}
+
+.master-link {
+  color: var(--color-primary);
+  text-decoration: none;
+  word-break: break-all;
+  display: inline-block;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.master-link:hover {
+  text-decoration: underline;
+}

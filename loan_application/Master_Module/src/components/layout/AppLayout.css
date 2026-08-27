@@ -1,0 +1,21 @@
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--color-background);
+  overflow-x: hidden;
+}
+
+.app-main {
+  flex: 1;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: var(--spacing-xl) var(--spacing-lg);
+}
+
+@media (max-width: 768px) {
+  .app-main {
+    padding: var(--spacing-md);
+  }
+}
