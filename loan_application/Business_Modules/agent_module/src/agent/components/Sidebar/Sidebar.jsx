@@ -7,6 +7,7 @@ import {
   LogOut,
   Headphones,
 } from 'lucide-react'
+import { useAuth } from '../../../../../../Core/src/context/AuthContext'
 import logo from '../../../../../../Core/Logo_img/Logo.png'
 import './Sidebar.css'
 
@@ -18,12 +19,13 @@ const menuItems = [
 
 const bottomItems = [
   { id: 'profile', label: 'Profile', icon: UserCircle, route: '/Agent/profile' },
-  { id: 'logout', label: 'Logout', icon: LogOut, route: '/logout' },
+  { id: 'logout', label: 'Logout', icon: LogOut, route: '/login' },
 ]
 
 function Sidebar({ isOpen = false, onClose }) {
   const location = useLocation()
   const navigate = useNavigate()
+  const { logout } = useAuth()
 
   const isActive = (route) => {
     if (route === '/Agent/dashboard') {
@@ -37,8 +39,20 @@ function Sidebar({ isOpen = false, onClose }) {
     return location.pathname === route
   }
 
-  const handleNavigate = (route) => {
-    navigate(route)
+  const handleNavigate = (item) => {
+    if (item.id === 'logout') {
+      try {
+        if (logout) logout()
+      } catch (err) {
+        console.error('Logout error:', err)
+      }
+      localStorage.removeItem('sivels_currentUser')
+      localStorage.removeItem('sivels_permissions')
+      localStorage.removeItem('sivels_roles')
+      window.location.href = '/login'
+      return
+    }
+    navigate(item.route)
     if (onClose) onClose()
   }
 
@@ -74,7 +88,7 @@ function Sidebar({ isOpen = false, onClose }) {
                 <li key={item.id}>
                   <button
                     className={`sidebar-nav-item ${active ? 'sidebar-nav-item--active' : ''}`}
-                    onClick={() => handleNavigate(item.route)}
+                    onClick={() => handleNavigate(item)}
                   >
                     <span className="sidebar-nav-icon">
                       <Icon size={17} strokeWidth={1.8} />
@@ -98,7 +112,7 @@ function Sidebar({ isOpen = false, onClose }) {
                 <li key={item.id}>
                   <button
                     className={`sidebar-nav-item ${active ? 'sidebar-nav-item--active' : ''}`}
-                    onClick={() => handleNavigate(item.route)}
+                    onClick={() => handleNavigate(item)}
                   >
                     <span className="sidebar-nav-icon">
                       <Icon size={17} strokeWidth={1.8} />

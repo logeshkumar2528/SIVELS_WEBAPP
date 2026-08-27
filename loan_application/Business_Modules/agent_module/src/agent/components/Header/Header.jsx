@@ -1,33 +1,50 @@
+import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Bell, ChevronDown } from 'lucide-react'
+import { Bell } from 'lucide-react'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import './Header.css'
 
+const getBackendBaseUrl = () => {
+  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5118/api'
+  return apiBase.replace(/\/api\/?$/, '')
+}
+
+const resolveImageUrl = (path) => {
+  if (!path || typeof path !== 'string' || !path.trim()) return null
+  const trimmed = path.trim()
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+    return trimmed
+  }
+  const backendBase = getBackendBaseUrl()
+  const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+  return `${backendBase}${cleanPath}`
+}
+
 function Header() {
+  const [imageError, setImageError] = useState(false)
   const location = useLocation()
   const { agentData, loadingAgent } = useAgentIdentity()
 
   const getPageTitle = () => {
-    const path = location.pathname.toLowerCase()
-    if (path === '/' || path === '/agent' || path === '/agent/' || path === '/agent/dashboard') {
-      return 'Dashboard'
+    switch (location.pathname) {
+      case '/Agent/dashboard':
+        return 'Agent Dashboard'
+      case '/Agent/add-customer':
+        return 'Add Customer'
+      case '/Agent/submission-history':
+        return 'Submission History'
+      case '/Agent/profile':
+        return 'My Profile'
+      default:
+        return 'Agent Portal'
     }
-    if (path.includes('/add-customer')) {
-      return 'Add Customer'
-    }
-    if (path.includes('/submission-history')) {
-      return 'Submission History'
-    }
-    if (path.includes('/profile')) {
-      return 'Profile'
-    }
-    return 'Dashboard'
   }
 
   const agentName = agentData?.fullName || 'Agent'
   const agentInitial = agentName.charAt(0).toUpperCase()
   const agentCode = agentData?.agentCode || 'N/A'
-  const profileImage = agentData?.profileImagePath || null
+  const rawImagePath = agentData?.profileImagePath || agentData?.ProfileImagePath || null
+  const profileImage = !imageError && rawImagePath ? resolveImageUrl(rawImagePath) : null
 
   return (
     <header className="header">
@@ -47,24 +64,21 @@ function Header() {
           <div className="header-avatar" style={{ overflow: 'hidden' }}>
             {loadingAgent ? '' : profileImage ? (
               <img 
-                src={profileImage.startsWith('http') ? profileImage : `http://localhost:5118${profileImage}`} 
+                src={profileImage} 
                 alt={agentName}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  e.target.nextSibling.style.display = 'flex';
-                }}
+                onError={() => setImageError(true)}
               />
-            ) : null}
-            <span style={{ display: profileImage ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
-              {agentInitial}
-            </span>
+            ) : (
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+                {agentInitial}
+              </span>
+            )}
           </div>
           <div className="header-user-info">
             <span className="header-user-name">{loadingAgent ? 'Loading...' : agentName}</span>
             <span className="header-user-role">Agent ID : {loadingAgent ? '...' : agentCode}</span>
           </div>
-          <ChevronDown size={16} className="header-dropdown-icon" strokeWidth={1.8} />
         </div>
       </div>
     </header>

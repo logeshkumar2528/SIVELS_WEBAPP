@@ -92,7 +92,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  cursor: pointer;
+  cursor: default;
   padding: 4px 8px;
   border-radius: var(--radius-md);
   transition: background-color var(--transition-fast);
