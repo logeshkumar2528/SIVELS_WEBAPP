@@ -3,9 +3,7 @@ import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 // URL prefix → module folder mapping
 const moduleMap = [
   { prefix: '/Agent',      dir: 'Business_Modules/agent_module'    },
@@ -26,10 +24,8 @@ const moduleMap = [
   { prefix: '/signup',     dir: 'Core' },
   { prefix: '/otp',        dir: 'Core' },
 ];
-
 // Default module (Core / customer)
 const defaultDir = 'Core';
-
 function getModuleDir(url) {
   for (const m of moduleMap) {
     if (url === m.prefix || url.startsWith(m.prefix + '/') || url.startsWith(m.prefix + '?')) {
@@ -38,14 +34,11 @@ function getModuleDir(url) {
   }
   return defaultDir;
 }
-
 const multiModulePlugin = () => ({
   name: 'multi-module-router',
   configureServer(server) {
     server.middlewares.use(async (req, res, next) => {
       const url = req.url.split('?')[0];
-
-      // Let Vite handle its own internals and direct asset requests
       if (
         url.startsWith('/@') ||
         url.startsWith('/node_modules') ||
@@ -55,32 +48,21 @@ const multiModulePlugin = () => ({
       ) {
         return next();
       }
-
       const moduleDir = getModuleDir(url);
       const htmlPath = path.resolve(__dirname, moduleDir, 'index.html');
-
       if (!fs.existsSync(htmlPath)) {
         return next();
       }
-
       let html = fs.readFileSync(htmlPath, 'utf-8');
-
-      // Rewrite root-relative src paths to module-relative paths
-      // e.g. src="/src/main.jsx" → src="/Business_Modules/agent_module/src/main.jsx"
       html = html.replace(
         /(src|href)="\/src\//g,
         `$1="/${moduleDir}/src/`
       );
-
-      // Rewrite favicon and public assets
       html = html.replace(
         /(src|href)="\/(?!Business_Modules|Core|@|node_modules)([^"]+\.(svg|png|ico|jpg|jpeg|gif|webp))"/g,
         `$1="/${moduleDir}/public/$2"`
       );
-
-      // Apply Vite's HTML transforms (injects HMR, React Refresh, etc.)
       html = await server.transformIndexHtml(req.url, html);
-
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.end(html);
     });
@@ -91,5 +73,20 @@ export default defineConfig({
   plugins: [react(), multiModulePlugin()],
   server: {
     port: 5173,
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        core: path.resolve(__dirname, 'Core/index.html'),
+        agent: path.resolve(__dirname, 'Business_Modules/agent_module/index.html'),
+        backoffice: path.resolve(__dirname, 'Business_Modules/back_office/index.html'),
+        investors: path.resolve(__dirname, 'Business_Modules/investor_module/index.html'),
+        rm: path.resolve(__dirname, 'Business_Modules/rm_modules/index.html'),
+        customer: path.resolve(__dirname, 'Business_Modules/customer_module/index.html'),
+        credit: path.resolve(__dirname, 'Business_Modules/credit_manager/index.html'),
+        company: path.resolve(__dirname, 'Business_Modules/company details/index.html'),
+        master: path.resolve(__dirname, 'Master_Module/index.html'),
+      },
+    },
   },
 });
