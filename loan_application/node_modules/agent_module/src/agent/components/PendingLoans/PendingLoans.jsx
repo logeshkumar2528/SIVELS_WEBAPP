@@ -18,7 +18,7 @@ const allLoansData = [
 
 function PendingLoans() {
   const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const [pageSize, setPageSize] = useState(5)
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const totalItems = allLoansData.length
 
@@ -105,7 +105,8 @@ function PendingLoans() {
         pageSize={pageSize}
         onPageChange={setCurrentPage}
         onPageSizeChange={handlePageSizeChange}
-        pageSizeOptions={[5, 10, 20, 50]}
+        pageSizeOptions={[5, 10, 15, 20]}
+        useCustomSelect={true}
       />
 
       {/* View Customer Details Side Drawer */}

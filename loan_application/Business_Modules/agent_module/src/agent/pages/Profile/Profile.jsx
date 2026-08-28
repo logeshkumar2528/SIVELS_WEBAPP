@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect } from 'react'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
 import {
   Phone,
@@ -6,26 +6,37 @@ import {
   Calendar,
   Shield,
   User,
-  Lock,
-  Clock,
-  Monitor,
-  ChevronRight,
   CheckCircle2,
   IdCard,
   Building2,
   Users,
   Coins,
+  MapPin,
   X,
-  ChevronDown,
-  ChevronUp
+  ChevronRight
 } from 'lucide-react'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import './Profile.css'
 
+const getBackendBaseUrl = () => {
+  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5118/api'
+  return apiBase.replace(/\/api\/?$/, '')
+}
+
+const resolveImageUrl = (path) => {
+  if (!path || typeof path !== 'string' || !path.trim()) return null
+  const trimmed = path.trim()
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+    return trimmed
+  }
+  const backendBase = getBackendBaseUrl()
+  const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+  return `${backendBase}${cleanPath}`
+}
+
 function Profile() {
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false)
+  const [imageError, setImageError] = useState(false)
   const [showCommissionModal, setShowCommissionModal] = useState(false)
-  const [expandedRowId, setExpandedRowId] = useState(null)
   const [selectedEmiCustomer, setSelectedEmiCustomer] = useState(null)
 
   const [customersCount, setCustomersCount] = useState('...')
@@ -44,7 +55,7 @@ function Profile() {
     })
   }, [agentId, loadingAgent])
 
-  // Dummy data for commission breakdown
+  // Payout / commission breakdown data
   const commissionBreakdown = [
     { 
       id: 1, name: 'Rajesh Kumar', loanAmount: '₹5,00,000', commission: '₹15,000', date: '12 Aug 2026',
@@ -79,10 +90,6 @@ function Profile() {
     },
   ]
 
-  const toggleRow = (id) => {
-    setExpandedRowId(expandedRowId === id ? null : id)
-  }
-
   if (loadingAgent) {
     return (
       <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
@@ -92,7 +99,7 @@ function Profile() {
   }
 
   const agentName = agentData?.fullName || 'Agent'
-  const agentRole = agentData?.role || 'Sales Agent'
+  const agentRole = agentData?.role || 'Field Agent'
   const agentCode = agentData?.agentCode || 'N/A'
   const agentBranch = agentData?.branch || 'N/A'
   const agentMobile = agentData?.mobileNumber || 'N/A'
@@ -110,100 +117,88 @@ function Profile() {
   const agentAddress = agentData?.address || 'N/A'
   const agentState = agentData?.state || 'N/A'
   const agentPincode = agentData?.pincode || 'N/A'
-  const profileImage = agentData?.profileImagePath || null
+  const rawImagePath = agentData?.profileImagePath || agentData?.ProfileImagePath || null
+  const profileImageUrl = !imageError && rawImagePath ? resolveImageUrl(rawImagePath) : null
 
   return (
     <div className="profile-page">
-      {/* TOP CARD: PROFILE OVERVIEW */}
+      {/* 1. TOP CARD: PROFILE OVERVIEW (UNCHANGED) */}
       <div className="profile-card profile-overview-card">
-        {/* Left: Avatar & Change Photo */}
-        <div className="profile-avatar-col">
-          <div className="profile-avatar-img">
-            {profileImage ? (
-              <img 
-                src={profileImage.startsWith('http') ? profileImage : `http://localhost:5118${profileImage}`} 
-                alt={agentName} 
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  e.target.nextSibling.style.display = 'block';
-                }}
-              />
-            ) : null}
-            <User size={64} style={{ color: '#059669', display: profileImage ? 'none' : 'block' }} />
-          </div>
-        </div>
+        {/* Left Section: Avatar + Identity + Metric Tiles */}
+        <div className="profile-overview-left">
+          {/* Identity: Avatar + Name & Role */}
+          <div className="profile-identity-row">
+            <div className="profile-avatar-img">
+              {profileImageUrl ? (
+                <img 
+                  src={profileImageUrl} 
+                  alt={agentName} 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={() => setImageError(true)}
+                />
+              ) : (
+                <User size={38} strokeWidth={2} style={{ color: '#1A7A3C' }} />
+              )}
+            </div>
 
-        {/* Middle: Name, Role, ID & Branch Pills */}
-        <div className="profile-main-info">
-          <div className="profile-name-block">
-            <h1>{agentName}</h1>
-            <p>{agentRole}</p>
-          </div>
-
-          <div className="profile-pills-row">
-            <div className="profile-pill">
-              <div className="profile-pill-icon">
-                <IdCard size={18} />
+            <div className="profile-name-block">
+              <h1>{agentName}</h1>
+              <div className="profile-role-row">
+                <span className="profile-role-text">{agentRole}</span>
+                <CheckCircle2 size={15} className="profile-verified-badge" />
               </div>
-              <div>
+            </div>
+          </div>
+
+          {/* Metric Tiles Row */}
+          <div className="profile-pills-row">
+            {/* 1. Agent ID */}
+            <div className="profile-pill profile-pill--green">
+              <div className="profile-pill-icon">
+                <IdCard size={16} />
+              </div>
+              <div className="profile-pill-content">
                 <div className="profile-pill-label">Agent ID</div>
                 <div className="profile-pill-value">{agentCode}</div>
               </div>
             </div>
 
+            {/* 2. Branch */}
             <div className="profile-pill profile-pill--blue">
               <div className="profile-pill-icon">
-                <Building2 size={18} />
+                <Building2 size={16} />
               </div>
-              <div>
+              <div className="profile-pill-content">
                 <div className="profile-pill-label">Branch</div>
                 <div className="profile-pill-value">{agentBranch}</div>
               </div>
             </div>
 
+            {/* 3. Total Customers */}
             <div className="profile-pill profile-pill--purple">
               <div className="profile-pill-icon">
-                <Users size={18} />
+                <Users size={16} />
               </div>
-              <div>
+              <div className="profile-pill-content">
                 <div className="profile-pill-label">Total Customers</div>
                 <div className="profile-pill-value">{customersCount}</div>
               </div>
             </div>
 
+            {/* 4. Total Commission */}
             <div className="profile-pill profile-pill--orange">
               <div className="profile-pill-icon">
-                <Coins size={18} />
+                <Coins size={16} />
               </div>
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div className="profile-pill-content profile-pill-commission">
                 <div>
                   <div className="profile-pill-label">Total Commission</div>
                   <div className="profile-pill-value">₹45,200</div>
                 </div>
                 <button 
+                  type="button"
+                  className="btn-payout-detail"
                   onClick={() => setShowCommissionModal(true)}
-                  style={{
-                    background: '#fff',
-                    color: '#ea580c',
-                    border: '1px solid #ea580c',
-                    borderRadius: '4px',
-                    padding: '4px 8px',
-                    fontSize: '10px',
-                    cursor: 'pointer',
-                    fontWeight: '600',
-                    whiteSpace: 'nowrap',
-                    marginLeft: '8px',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.background = '#ea580c';
-                    e.currentTarget.style.color = '#fff';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.background = '#fff';
-                    e.currentTarget.style.color = '#ea580c';
-                  }}
                 >
                   View Payout Detail
                 </button>
@@ -212,10 +207,12 @@ function Profile() {
           </div>
         </div>
 
-        {/* Right: Meta List */}
+        {/* Right Section: Contact & Metadata */}
         <div className="profile-meta-list">
           <div className="profile-meta-item">
-            <Phone size={16} className="meta-icon" />
+            <div className="profile-meta-icon-wrapper">
+              <Phone size={14} />
+            </div>
             <div className="meta-text">
               <span className="meta-label">Mobile Number</span>
               <span className="meta-value">{agentMobile}</span>
@@ -223,7 +220,9 @@ function Profile() {
           </div>
 
           <div className="profile-meta-item">
-            <Mail size={16} className="meta-icon" />
+            <div className="profile-meta-icon-wrapper">
+              <Mail size={14} />
+            </div>
             <div className="meta-text">
               <span className="meta-label">Email Address</span>
               <span className="meta-value">{agentEmail}</span>
@@ -231,7 +230,9 @@ function Profile() {
           </div>
 
           <div className="profile-meta-item">
-            <Calendar size={16} className="meta-icon" />
+            <div className="profile-meta-icon-wrapper">
+              <Calendar size={14} />
+            </div>
             <div className="meta-text">
               <span className="meta-label">Date Joined</span>
               <span className="meta-value">{agentDateJoined}</span>
@@ -239,7 +240,9 @@ function Profile() {
           </div>
 
           <div className="profile-meta-item">
-            <Shield size={16} className="meta-icon" />
+            <div className="profile-meta-icon-wrapper">
+              <Shield size={14} />
+            </div>
             <div className="meta-text">
               <span className="meta-label">Role</span>
               <span className="meta-value">{agentRole}</span>
@@ -248,135 +251,145 @@ function Profile() {
         </div>
       </div>
 
-      {/* MIDDLE ROW: 2 EQUAL CARDS */}
-      <div className="profile-middle-row">
-        {/* Card 1: Personal Information */}
-        <div className="profile-card">
-          <div className="section-card-header">
-            <div className="section-card-title">
-              <div className="section-card-title-icon">
-                <User size={16} />
-              </div>
-              Personal Information
+      {/* 2. MIDDLE CARD: PERSONAL INFORMATION (HORIZONTAL 6-COLUMNS) */}
+      <div className="profile-card profile-personal-horizontal-card">
+        <div className="section-card-header">
+          <div className="section-card-title">
+            <div className="section-card-title-icon">
+              <User size={15} />
             </div>
-          </div>
-
-          <div className="info-list-table">
-            <div className="info-row">
-              <span className="info-row-key">Full Name</span>
-              <span className="info-row-value">{agentName}</span>
-            </div>
-            <div className="info-row">
-              <span className="info-row-key">Date of Birth</span>
-              <span className="info-row-value">{agentDob}</span>
-            </div>
-            <div className="info-row">
-              <span className="info-row-key">Gender</span>
-              <span className="info-row-value">{agentGender}</span>
-            </div>
-            <div className="info-row">
-              <span className="info-row-key">Address</span>
-              <span className="info-row-value">
-                {agentAddress}
-              </span>
-            </div>
-            <div className="info-row">
-              <span className="info-row-key">State</span>
-              <span className="info-row-value">{agentState}</span>
-            </div>
-            <div className="info-row">
-              <span className="info-row-key">Pincode</span>
-              <span className="info-row-value">{agentPincode}</span>
-            </div>
+            <span>Personal Information</span>
           </div>
         </div>
 
-        {/* Card 2: Account & Security */}
-        <div className="profile-card">
-          <div className="section-card-header">
-            <div className="section-card-title">
-              <div className="section-card-title-icon">
-                <Lock size={16} />
+        <div className="personal-info-horizontal-grid">
+          {/* 1. Full Name */}
+          <div className="personal-info-col">
+            <div className="personal-info-col-header">
+              <div className="personal-info-icon-box">
+                <User size={13} />
               </div>
-              Account & Security
+              <span className="personal-info-label">Full Name</span>
             </div>
+            <div className="personal-info-value">{agentName}</div>
           </div>
 
-          <div className="security-menu-list">
-            {/* Item 1: Change Password */}
-            <div className="security-menu-item">
-              <div className="security-item-left">
-                <Lock size={18} className="security-item-icon" />
-                <div className="security-item-text">
-                  <span className="security-item-title">Change Password</span>
-                  <span className="security-item-subtitle">
-                    Update your account password
-                  </span>
-                </div>
+          {/* 2. Date of Birth */}
+          <div className="personal-info-col">
+            <div className="personal-info-col-header">
+              <div className="personal-info-icon-box">
+                <Calendar size={13} />
               </div>
-              <ChevronRight size={18} className="security-chevron" />
+              <span className="personal-info-label">Date of Birth</span>
             </div>
+            <div className="personal-info-value">{agentDob}</div>
+          </div>
 
-            {/* Item 2: Login History */}
-            <div className="security-menu-item">
-              <div className="security-item-left">
-                <Clock size={18} className="security-item-icon" />
-                <div className="security-item-text">
-                  <span className="security-item-title">Login History</span>
-                  <span className="security-item-subtitle">
-                    View your recent login activity
-                  </span>
-                </div>
+          {/* 3. Gender */}
+          <div className="personal-info-col">
+            <div className="personal-info-col-header">
+              <div className="personal-info-icon-box">
+                <User size={13} />
               </div>
-              <ChevronRight size={18} className="security-chevron" />
+              <span className="personal-info-label">Gender</span>
             </div>
+            <div className="personal-info-value">{agentGender}</div>
+          </div>
 
-            {/* Item 3: Devices */}
-            <div className="security-menu-item">
-              <div className="security-item-left">
-                <Monitor size={18} className="security-item-icon" />
-                <div className="security-item-text">
-                  <span className="security-item-title">Devices</span>
-                  <span className="security-item-subtitle">
-                    Manage devices where you are logged in
-                  </span>
-                </div>
+          {/* 4. Address */}
+          <div className="personal-info-col">
+            <div className="personal-info-col-header">
+              <div className="personal-info-icon-box">
+                <MapPin size={13} />
               </div>
-              <ChevronRight size={18} className="security-chevron" />
+              <span className="personal-info-label">Address</span>
             </div>
+            <div className="personal-info-value personal-info-value--address">{agentAddress}</div>
+          </div>
 
-            {/* Item 4: Two Factor Authentication */}
-            <div className="security-menu-item">
-              <div className="security-item-left">
-                <Shield size={18} className="security-item-icon" />
-                <div className="security-item-text">
-                  <span className="security-item-title">
-                    Two Factor Authentication
-                  </span>
-                  <span className="security-item-subtitle">
-                    Add extra security to your account
-                  </span>
-                </div>
+          {/* 5. State */}
+          <div className="personal-info-col">
+            <div className="personal-info-col-header">
+              <div className="personal-info-icon-box">
+                <Building2 size={13} />
               </div>
-              <label className="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={twoFactorEnabled}
-                  onChange={(e) => setTwoFactorEnabled(e.target.checked)}
-                />
-                <span className="toggle-slider" />
-              </label>
+              <span className="personal-info-label">State</span>
             </div>
+            <div className="personal-info-value">{agentState}</div>
+          </div>
+
+          {/* 6. Pincode */}
+          <div className="personal-info-col personal-info-col--last">
+            <div className="personal-info-col-header">
+              <div className="personal-info-icon-box">
+                <MapPin size={13} />
+              </div>
+              <span className="personal-info-label">Pincode</span>
+            </div>
+            <div className="personal-info-value">{agentPincode}</div>
           </div>
         </div>
       </div>
 
-      {/* COMMISSION MODAL */}
+      {/* 3. BOTTOM CARD: PAYOUT BREAKDOWN (FULL WIDTH) */}
+      <div className="profile-card profile-payout-full-card">
+        <div className="section-card-header">
+          <div className="section-card-title">
+            <div className="section-card-title-icon">
+              <Coins size={15} />
+            </div>
+            <span>Payout Breakdown</span>
+          </div>
+        </div>
+
+        <div className="payout-table-wrapper">
+          <table className="payout-card-table">
+            <thead>
+              <tr>
+                <th>Customer Name</th>
+                <th>Loan Amount</th>
+                <th>Date</th>
+                <th style={{ textAlign: 'center' }}>Total Payout</th>
+                <th style={{ textAlign: 'center' }}>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {commissionBreakdown.map((item) => (
+                <tr key={item.id}>
+                  <td className="customer-name-cell">{item.name}</td>
+                  <td>{item.loanAmount}</td>
+                  <td className="payout-date-cell">{item.date}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    <span className="payout-badge">{item.commission}</span>
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    <button 
+                      type="button"
+                      onClick={() => setSelectedEmiCustomer(item)}
+                      className="btn-emi-wise"
+                    >
+                      EMI Wise <ChevronRight size={12} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="payout-card-footer">
+          <div className="payout-footer-left">
+            <CheckCircle2 size={15} className="payout-check-icon" />
+            <span>Total Commission Earned</span>
+          </div>
+          <div className="payout-footer-amount">₹45,200</div>
+        </div>
+      </div>
+
+      {/* COMMISSION MODAL (triggered from Top Card "View Payout Detail") */}
       {showCommissionModal && (
         <div className="commission-modal-overlay" onClick={() => setShowCommissionModal(false)}>
           <div className="commission-modal-content" onClick={(e) => e.stopPropagation()}>
-
-            {/* Modal Header */}
             <div className="commission-modal-header">
               <div className="commission-modal-header-left">
                 <div className="commission-modal-header-icon">
@@ -392,7 +405,6 @@ function Profile() {
               </button>
             </div>
 
-            {/* Modal Body */}
             <div className="commission-modal-body">
               <table className="commission-table">
                 <thead>
@@ -443,7 +455,6 @@ function Profile() {
               </table>
             </div>
 
-            {/* Modal Footer */}
             <div className="commission-modal-footer">
               <span className="commission-modal-footer-label">
                 <CheckCircle2 size={16} />
@@ -451,7 +462,6 @@ function Profile() {
               </span>
               <span className="commission-modal-footer-amount">₹45,200</span>
             </div>
-
           </div>
         </div>
       )}

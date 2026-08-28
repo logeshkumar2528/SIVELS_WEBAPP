@@ -3,10 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Plus,
   Search,
-  Calendar,
-  Filter,
   Eye,
-  MoreVertical,
   Clock,
   RefreshCw,
   CheckCircle2,
@@ -14,9 +11,21 @@ import {
 } from 'lucide-react'
 import Pagination from '../../components/Pagination/Pagination'
 import ViewCustomerModal from '../../components/ViewCustomerModal/ViewCustomerModal'
+import CustomSelect from '../AddCustomer/CustomSelect'
+import DatePicker from '../../components/DatePicker/DatePicker'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import './SubmissionHistory.css'
+
+const STATUS_OPTIONS = [
+  { value: 'All Status', label: 'All Status' },
+  { value: 'Draft', label: 'Draft' },
+  { value: 'Pending RM Review', label: 'Pending RM Review' },
+  { value: 'Under Review', label: 'Under Review' },
+  { value: 'Submitted', label: 'Submitted' },
+  { value: 'Returned by RM', label: 'Returned by RM' },
+  { value: 'Approved by RM', label: 'Approved by RM' },
+]
 
 function SubmissionHistory() {
   const navigate = useNavigate()
@@ -39,7 +48,7 @@ function SubmissionHistory() {
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(8)
+  const [pageSize, setPageSize] = useState(5)
 
   const fetchSubmissions = async () => {
     setLoading(true)
@@ -91,9 +100,12 @@ function SubmissionHistory() {
       const matchesStatus =
         selectedStatus === 'All Status' || item.status === selectedStatus
 
-      return matchesSearch && matchesStatus
+      const matchesDate =
+        !selectedDate || (item.createdAt && item.createdAt.startsWith(selectedDate))
+
+      return matchesSearch && matchesStatus && matchesDate
     })
-  }, [submissions, searchTerm, selectedStatus])
+  }, [submissions, searchTerm, selectedStatus, selectedDate])
 
   const totalItems = filteredSubmissions.length
 
@@ -181,21 +193,6 @@ function SubmissionHistory() {
 
   return (
     <div className="submission-history">
-      {/* Top Header */}
-      <div className="submission-history-header">
-        <div className="submission-history-title-area">
-          <h1>Submission History</h1>
-          <p>View all customers you have submitted to RM</p>
-        </div>
-        <button
-          type="button"
-          className="btn-add-customer-top"
-          onClick={() => navigate('/Agent/add-customer')}
-        >
-          <Plus size={18} strokeWidth={2.2} /> Add New Customer
-        </button>
-      </div>
-
       {/* Main Table Card */}
       <div className="submission-history-card">
         {/* Filter Bar */}
@@ -212,40 +209,33 @@ function SubmissionHistory() {
           </div>
 
           <div className="filter-date-box">
-            <Calendar size={16} className="filter-date-icon" />
-            <input
-              type="text"
-              className="filter-date-input"
-              placeholder="Select Date Range"
+            <DatePicker
               value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              onFocus={(e) => (e.target.type = 'date')}
-              onBlur={(e) => {
-                if (!e.target.value) e.target.type = 'text'
-              }}
+              onChange={(date) => setSelectedDate(date)}
+              placeholder="Select Date Range"
             />
           </div>
 
-          <select
-            className="filter-status-select"
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-          >
-            <option value="All Status">All Status</option>
-            <option value="Draft">Draft</option>
-            <option value="Pending RM Review">Pending RM Review</option>
-            <option value="Under Review">Under Review</option>
-            <option value="Submitted">Submitted</option>
-            <option value="Returned by RM">Returned by RM</option>
-            <option value="Approved by RM">Approved by RM</option>
-          </select>
-
-          <button type="button" className="btn-filter-action">
-            <Filter size={15} /> Filter
-          </button>
+          <div className="filter-status-box">
+            <CustomSelect
+              name="status"
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              options={STATUS_OPTIONS}
+              placeholder="All Status"
+            />
+          </div>
 
           <button type="button" className="btn-reset-link" onClick={handleResetFilters}>
             Reset
+          </button>
+
+          <button
+            type="button"
+            className="btn-add-customer-filter"
+            onClick={() => navigate('/Agent/add-customer')}
+          >
+            <Plus size={16} strokeWidth={2.2} /> Add New Customer
           </button>
         </div>
 
@@ -272,7 +262,7 @@ function SubmissionHistory() {
             <table className="history-table">
               <thead>
                 <tr>
-                  <th className="index-col">#</th>
+                  <th className="index-col">S.No</th>
                   <th>Customer Name</th>
                   <th>Mobile Number</th>
                   <th>Expected Loan Amount</th>
@@ -308,9 +298,6 @@ function SubmissionHistory() {
                           >
                             <Eye size={15} strokeWidth={1.8} /> View Details
                           </button>
-                          <button type="button" className="btn-more-options" aria-label="More options">
-                            <MoreVertical size={16} />
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -332,7 +319,8 @@ function SubmissionHistory() {
               setPageSize(size)
               setCurrentPage(1)
             }}
-            pageSizeOptions={[8, 10, 20, 50]}
+            pageSizeOptions={[5, 10, 15, 20]}
+            useCustomSelect={true}
           />
         )}
       </div>

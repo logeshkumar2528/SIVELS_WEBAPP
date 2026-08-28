@@ -1,5 +1,6 @@
 import { memo, useMemo } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import CustomSelect from '../../pages/AddCustomer/CustomSelect'
 import './Pagination.css'
 
 function getPageNumbers(currentPage, totalPages) {
@@ -29,7 +30,8 @@ const Pagination = memo(function Pagination({
   pageSize = 5,
   onPageChange,
   onPageSizeChange,
-  pageSizeOptions = [5, 10, 20, 50],
+  pageSizeOptions = [5, 10, 15, 20],
+  useCustomSelect = false,
 }) {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
   const startItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1
@@ -103,19 +105,33 @@ const Pagination = memo(function Pagination({
           <label className="pagination-page-size-label" htmlFor="pagination-page-size-select">
             Rows per page
           </label>
-          <select
-            id="pagination-page-size-select"
-            className="pagination-select"
-            value={pageSize}
-            onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            aria-label="Select rows per page"
-          >
-            {pageSizeOptions.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
+          {useCustomSelect ? (
+            <div className="pending-loans-page-size-custom">
+              <CustomSelect
+                id="pagination-page-size-select"
+                value={pageSize}
+                onChange={(e) => onPageSizeChange(Number(e.target.value))}
+                options={pageSizeOptions.map((size) => ({
+                  value: size,
+                  label: String(size),
+                }))}
+              />
+            </div>
+          ) : (
+            <select
+              id="pagination-page-size-select"
+              className="pagination-select"
+              value={pageSize}
+              onChange={(e) => onPageSizeChange(Number(e.target.value))}
+              aria-label="Select rows per page"
+            >
+              {pageSizeOptions.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       )}
     </div>

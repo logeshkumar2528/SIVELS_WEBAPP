@@ -11,9 +11,15 @@ import {
   Landmark,
   Trash2,
   Eye,
-  CheckCircle2
+  CheckCircle2,
+  Phone,
+  Mail,
+  Briefcase,
+  Target,
+  IndianRupee
 } from 'lucide-react'
 import CustomerSubmitted from '../CustomerSubmitted/CustomerSubmitted'
+import CustomSelect from './CustomSelect'
 import './AddCustomer.css'
 import { masterService } from '../../../../../../Core/src/services/masterService'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
@@ -558,17 +564,43 @@ function AddCustomer() {
     navigate('/Agent/dashboard')
   }
 
+  // Map API values for CustomSelect options
+  const employmentTypeOptions = employmentTypes.map(type => ({
+    value: type.employmentTypeId || type.id,
+    label: type.employmentTypeName || type.name
+  }))
 
+  const loanPurposeOptions = loanPurposes.map(purpose => ({
+    value: purpose.loanPurposeId || purpose.id,
+    label: purpose.productName || purpose.name
+  }))
+
+  const employmentPlaceholder = loadingMasters 
+    ? 'Loading employment types...' 
+    : employmentTypesError 
+      ? 'Unable to load employment types. Please try again.' 
+      : employmentTypes.length === 0 
+        ? 'No employment types available' 
+        : 'Select employment type'
+
+  const loanPurposePlaceholder = loadingMasters 
+    ? 'Loading loan purposes...' 
+    : loanPurposesError 
+      ? 'Unable to load loan purposes. Please try again.' 
+      : loanPurposes.length === 0 
+        ? 'No loan purposes available' 
+        : 'Select purpose'
 
   return (
     <div className="add-customer">
       {globalError && (
-        <div style={{ backgroundColor: '#fee2e2', color: '#991b1b', padding: '12px 16px', borderRadius: '6px', marginBottom: '16px', border: '1px solid #f87171' }}>
+        <div className="add-customer-error-banner">
           {globalError}
         </div>
       )}
 
       <form className="add-customer-card" onSubmit={handleSubmit} noValidate>
+        {/* Section 1: Basic Information */}
         <div className="form-section">
           <div className="form-section-header">
             <div className="form-section-icon-badge">
@@ -582,225 +614,73 @@ function AddCustomer() {
               <label className="form-label" htmlFor="fullName">
                 Full Name<span className="required-star">*</span>
               </label>
-              <input
-                id="fullName"
-                type="text"
-                name="fullName"
-                className="form-input"
-                style={fieldErrors.fullName ? { borderColor: '#dc2626' } : {}}
-                placeholder="Enter full name"
-                value={formData.fullName}
-                onChange={handleInputChange}
-                required
-              />
-              {fieldErrors.fullName && <div style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px' }}>{fieldErrors.fullName}</div>}
+              <div className="compact-input-wrapper">
+                <span className="compact-input-icon">
+                  <User size={16} strokeWidth={1.8} />
+                </span>
+                <input
+                  id="fullName"
+                  type="text"
+                  name="fullName"
+                  className={`form-input compact-input--with-icon ${fieldErrors.fullName ? 'is-invalid' : ''}`}
+                  placeholder="Enter full name"
+                  value={formData.fullName}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+              {fieldErrors.fullName && <div className="form-field-error">{fieldErrors.fullName}</div>}
             </div>
 
             <div className="form-group">
               <label className="form-label" htmlFor="mobileNumber">
                 Mobile Number<span className="required-star">*</span>
               </label>
-              <input
-                id="mobileNumber"
-                type="tel"
-                name="mobileNumber"
-                className="form-input"
-                style={fieldErrors.mobileNumber ? { borderColor: '#dc2626' } : {}}
-                placeholder="Enter 10 digit mobile number"
-                value={formData.mobileNumber}
-                onChange={handleInputChange}
-                maxLength={10}
-                required
-              />
-              {fieldErrors.mobileNumber && <div style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px' }}>{fieldErrors.mobileNumber}</div>}
+              <div className="compact-input-wrapper">
+                <span className="compact-input-icon">
+                  <Phone size={16} strokeWidth={1.8} />
+                </span>
+                <input
+                  id="mobileNumber"
+                  type="tel"
+                  name="mobileNumber"
+                  className={`form-input compact-input--with-icon ${fieldErrors.mobileNumber ? 'is-invalid' : ''}`}
+                  placeholder="Enter 10 digit mobile number"
+                  value={formData.mobileNumber}
+                  onChange={handleInputChange}
+                  maxLength={10}
+                  required
+                />
+              </div>
+              {fieldErrors.mobileNumber && <div className="form-field-error">{fieldErrors.mobileNumber}</div>}
             </div>
 
             <div className="form-group">
               <label className="form-label" htmlFor="email">
                 Email (Optional)
               </label>
-              <input
-                id="email"
-                type="email"
-                name="email"
-                className="form-input"
-                style={fieldErrors.email ? { borderColor: '#dc2626' } : {}}
-                placeholder="Enter email address"
-                value={formData.email}
-                onChange={handleInputChange}
-              />
-              {fieldErrors.email && <div style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px' }}>{fieldErrors.email}</div>}
-            </div>
-
-            <div className="form-group">
-              <label className="form-label" htmlFor="employmentTypeId">
-                Employment Type<span className="required-star">*</span>
-              </label>
-              <select
-                id="employmentTypeId"
-                name="employmentTypeId"
-                className="form-select"
-                style={fieldErrors.employmentTypeId ? { borderColor: '#dc2626' } : {}}
-                value={formData.employmentTypeId}
-                onChange={handleInputChange}
-                required
-                disabled={loadingMasters || employmentTypesError}
-              >
-                <option value="" disabled>
-                  {loadingMasters 
-                    ? 'Loading employment types...' 
-                    : employmentTypesError 
-                      ? 'Unable to load employment types. Please try again.' 
-                      : employmentTypes.length === 0 
-                        ? 'No employment types available' 
-                        : 'Select employment type'}
-                </option>
-                {employmentTypes.map(type => (
-                  <option key={type.employmentTypeId || type.id} value={type.employmentTypeId || type.id}>
-                    {type.employmentTypeName || type.name}
-                  </option>
-                ))}
-              </select>
-              {fieldErrors.employmentTypeId && <div style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px' }}>{fieldErrors.employmentTypeId}</div>}
+              <div className="compact-input-wrapper">
+                <span className="compact-input-icon">
+                  <Mail size={16} strokeWidth={1.8} />
+                </span>
+                <input
+                  id="email"
+                  type="email"
+                  name="email"
+                  className={`form-input compact-input--with-icon ${fieldErrors.email ? 'is-invalid' : ''}`}
+                  placeholder="Enter email address"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                />
+              </div>
+              {fieldErrors.email && <div className="form-field-error">{fieldErrors.email}</div>}
             </div>
           </div>
         </div>
 
-        {formData.employmentTypeId && (
-          <div className="form-section">
-            <div className="form-section-header">
-              <div className="form-section-icon-badge">
-                <FileText size={15} strokeWidth={2} />
-              </div>
-              <h3 className="form-section-title">
-                Required Documents {loadingMapping && <span style={{fontSize: '12px', marginLeft: '8px', color: '#666'}}>(Loading required documents...)</span>}
-              </h3>
-            </div>
+        <div className="compact-divider" />
 
-            <div className="documents-grid">
-              {documentMappings.length === 0 && !loadingMapping && (
-                <p style={{ color: '#666', fontSize: '14px', gridColumn: '1 / -1' }}>No documents configured for this employment type.</p>
-              )}
-
-              {documentMappings.map(mapping => {
-                const docName = mapping.documentTypeName || 'Document'
-                const isMultiple = docName.toLowerCase().includes('other')
-                const files = selectedFiles[mapping.documentTypeId]
-                const hasFile = isMultiple ? (files && files.length > 0) : !!files
-                const IconComponent = getDocumentIcon(docName)
-
-                const isUploaded = uploadedDocuments.includes(mapping.documentTypeId)
-
-                return (
-                  <div key={mapping.documentTypeId} className={`document-upload-card ${hasFile || isUploaded ? 'has-file' : ''}`}>
-                    {isUploaded ? (
-                      <div className="file-preview-box" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <CheckCircle2 size={18} color="#16a34a" />
-                          <div className="file-preview-details" style={{ margin: 0 }}>
-                            <span className="file-preview-name" style={{ color: '#166534', fontWeight: 600 }}>Successfully Uploaded</span>
-                          </div>
-                        </div>
-                      </div>
-                    ) : hasFile ? (
-                      isMultiple ? (
-                        <div className="file-preview-box" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px' }}>
-                          {files.map((file, index) => (
-                            <div key={index} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '4px', border: '1px solid #eaeaea', borderRadius: '4px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <FileText size={14} />
-                                <div className="file-preview-details" style={{ margin: 0 }}>
-                                  <span className="file-preview-name" style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
-                                </div>
-                              </div>
-                              <button
-                                type="button"
-                                className="file-remove-btn"
-                                onClick={() => handleRemoveFile(mapping.documentTypeId, index)}
-                                style={{ padding: '2px 4px', background: 'transparent', border: 'none' }}
-                                disabled={submitting}
-                              >
-                                <Trash2 size={13} color="#ef4444" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="file-preview-box">
-                          {previews[mapping.documentTypeId] ? (
-                            <img
-                              src={previews[mapping.documentTypeId]}
-                              alt={`${docName} Preview`}
-                              className="thumbnail-preview-img"
-                              onClick={() => setModalImage({ src: previews[mapping.documentTypeId], title: docName })}
-                            />
-                          ) : (
-                            <IconComponent size={18} className="document-icon-badge" />
-                          )}
-                          <div className="file-preview-details">
-                            <span className="file-preview-name">{files.name}</span>
-                            <span className="file-preview-size">({formatFileSize(files.size)})</span>
-                          </div>
-                          {previews[mapping.documentTypeId] && (
-                            <button
-                              type="button"
-                              className="action-view"
-                              onClick={() => setModalImage({ src: previews[mapping.documentTypeId], title: docName })}
-                            >
-                              <Eye size={14} />
-                            </button>
-                          )}
-                        </div>
-                      )
-                    ) : (
-                      <div className="document-card-top">
-                        <div className="document-icon-badge">
-                          <IconComponent size={16} strokeWidth={1.8} />
-                        </div>
-                        <div className="document-card-info">
-                          <h4>{docName}{mapping.isMandatory && <span className="required-star">*</span>}</h4>
-                          <p>Upload clear image of {docName}</p>
-                          <p className="document-card-subtitle">
-                            {isMultiple ? 'Upload multiple files' : 'JPG, PNG or PDF (Max. 10MB)'}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {!isUploaded && (
-                      <div className="file-actions-row">
-                        <label className={`file-upload-btn ${submitting ? 'disabled' : ''}`}>
-                          <Upload size={13} strokeWidth={2} />
-                          <span>{hasFile ? (isMultiple ? 'Add More' : 'Change') : (isMultiple ? 'Choose Files' : 'Upload Document')}</span>
-                          <input
-                            type="file"
-                            multiple={isMultiple}
-                            className="file-input-hidden"
-                            accept=".pdf,.jpg,.jpeg,.png"
-                            onChange={(e) => handleFileChange(e, mapping.documentTypeId, isMultiple)}
-                            disabled={submitting}
-                          />
-                        </label>
-                        {hasFile && !isMultiple && (
-                          <button
-                            type="button"
-                            className="file-remove-btn"
-                            onClick={() => handleRemoveFile(mapping.documentTypeId)}
-                            disabled={submitting}
-                          >
-                            <Trash2 size={13} />
-                            <span>Remove</span>
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
+        {/* Section 2: Loan Requirement */}
         <div className="form-section">
           <div className="form-section-header">
             <div className="form-section-icon-badge">
@@ -809,57 +689,71 @@ function AddCustomer() {
             <h3 className="form-section-title">Loan Requirement</h3>
           </div>
 
-          <div className="form-grid-2">
+          <div className="form-grid-3">
+            <div className="form-group">
+              <label className="form-label" htmlFor="employmentTypeId">
+                Employment Type<span className="required-star">*</span>
+              </label>
+              <CustomSelect
+                id="employmentTypeId"
+                name="employmentTypeId"
+                value={formData.employmentTypeId}
+                onChange={handleInputChange}
+                options={employmentTypeOptions}
+                placeholder={employmentPlaceholder}
+                disabled={loadingMasters || employmentTypesError}
+                error={!!fieldErrors.employmentTypeId}
+                icon={Briefcase}
+                required
+              />
+              {fieldErrors.employmentTypeId && <div className="form-field-error">{fieldErrors.employmentTypeId}</div>}
+            </div>
+
             <div className="form-group">
               <label className="form-label" htmlFor="loanPurposeId">
                 Loan Purpose<span className="required-star">*</span>
               </label>
-              <select
+              <CustomSelect
                 id="loanPurposeId"
                 name="loanPurposeId"
-                className="form-select"
-                style={fieldErrors.loanPurposeId ? { borderColor: '#dc2626' } : {}}
                 value={formData.loanPurposeId}
                 onChange={handleInputChange}
-                required
+                options={loanPurposeOptions}
+                placeholder={loanPurposePlaceholder}
                 disabled={loadingMasters || loanPurposesError}
-              >
-                <option value="" disabled>
-                  {loadingMasters 
-                    ? 'Loading loan purposes...' 
-                    : loanPurposesError 
-                      ? 'Unable to load loan purposes. Please try again.' 
-                      : loanPurposes.length === 0 
-                        ? 'No loan purposes available' 
-                        : 'Select purpose'}
-                </option>
-                {loanPurposes.map(purpose => (
-                  <option key={purpose.loanPurposeId || purpose.id} value={purpose.loanPurposeId || purpose.id}>
-                    {purpose.productName || purpose.name}
-                  </option>
-                ))}
-              </select>
-              {fieldErrors.loanPurposeId && <div style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px' }}>{fieldErrors.loanPurposeId}</div>}
+                error={!!fieldErrors.loanPurposeId}
+                icon={Target}
+                required
+              />
+              {fieldErrors.loanPurposeId && <div className="form-field-error">{fieldErrors.loanPurposeId}</div>}
             </div>
 
             <div className="form-group">
               <label className="form-label" htmlFor="expectedAmount">
                 Expected Loan Amount (₹)<span className="required-star">*</span>
               </label>
-              <input
-                id="expectedAmount"
-                type="text"
-                inputMode="numeric"
-                name="expectedAmount"
-                className="form-input"
-                style={(fieldErrors.expectedAmount || fieldErrors.expectedLoanAmount) ? { borderColor: '#dc2626' } : {}}
-                placeholder="Enter expected loan amount"
-                value={formData.expectedAmount}
-                onChange={handleInputChange}
-                min="1"
-                required
-              />
-              {(fieldErrors.expectedAmount || fieldErrors.expectedLoanAmount) && <div style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px' }}>{fieldErrors.expectedAmount || fieldErrors.expectedLoanAmount}</div>}
+              <div className="compact-input-wrapper">
+                <span className="compact-input-icon">
+                  <IndianRupee size={16} strokeWidth={1.8} />
+                </span>
+                <input
+                  id="expectedAmount"
+                  type="text"
+                  inputMode="numeric"
+                  name="expectedAmount"
+                  className={`form-input compact-input--with-icon ${(fieldErrors.expectedAmount || fieldErrors.expectedLoanAmount) ? 'is-invalid' : ''}`}
+                  placeholder="Enter expected loan amount"
+                  value={formData.expectedAmount}
+                  onChange={handleInputChange}
+                  min="1"
+                  required
+                />
+              </div>
+              {(fieldErrors.expectedAmount || fieldErrors.expectedLoanAmount) && (
+                <div className="form-field-error">
+                  {fieldErrors.expectedAmount || fieldErrors.expectedLoanAmount}
+                </div>
+              )}
             </div>
           </div>
 
@@ -871,18 +765,158 @@ function AddCustomer() {
               <textarea
                 id="remarks"
                 name="remarks"
-                className="form-textarea"
-                style={fieldErrors.remarks ? { borderColor: '#dc2626' } : {}}
+                className={`form-textarea ${fieldErrors.remarks ? 'is-invalid' : ''}`}
                 placeholder="Enter any remarks"
                 rows={3}
                 value={formData.remarks}
                 onChange={handleInputChange}
               />
-              {fieldErrors.remarks && <div style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px' }}>{fieldErrors.remarks}</div>}
+              {fieldErrors.remarks && <div className="form-field-error">{fieldErrors.remarks}</div>}
             </div>
           </div>
         </div>
 
+        {/* Section 3: Required Documents (when Employment Type is selected) */}
+        {formData.employmentTypeId && (
+          <>
+            <div className="compact-divider" />
+            <div className="form-section">
+              <div className="form-section-header">
+                <div className="form-section-icon-badge">
+                  <FileText size={15} strokeWidth={2} />
+                </div>
+                <h3 className="form-section-title">
+                  Required Documents {loadingMapping && <span className="section-subtitle">(Loading required documents...)</span>}
+                </h3>
+              </div>
+
+              <div className="documents-grid">
+                {documentMappings.length === 0 && !loadingMapping && (
+                  <p style={{ color: '#7A9485', fontSize: '13.5px', gridColumn: '1 / -1', margin: '4px 0' }}>
+                    No documents configured for this employment type.
+                  </p>
+                )}
+
+                {documentMappings.map(mapping => {
+                  const docName = mapping.documentTypeName || 'Document'
+                  const isMultiple = docName.toLowerCase().includes('other')
+                  const files = selectedFiles[mapping.documentTypeId]
+                  const hasFile = isMultiple ? (files && files.length > 0) : !!files
+                  const IconComponent = getDocumentIcon(docName)
+                  const isUploaded = uploadedDocuments.includes(mapping.documentTypeId)
+
+                  return (
+                    <div key={mapping.documentTypeId} className={`document-upload-card ${hasFile || isUploaded ? 'has-file' : ''}`}>
+                      {isUploaded ? (
+                        <div className="file-preview-box" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <CheckCircle2 size={18} color="#16A34A" />
+                            <div className="file-preview-details" style={{ margin: 0 }}>
+                              <span className="file-preview-name" style={{ color: '#166534', fontWeight: 600 }}>Successfully Uploaded</span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : hasFile ? (
+                        isMultiple ? (
+                          <div className="file-preview-box" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px' }}>
+                            {files.map((file, index) => (
+                              <div key={index} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '4px', border: '1px solid #E2E8E5', borderRadius: '4px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <FileText size={14} color="#1A7A3C" />
+                                  <div className="file-preview-details" style={{ margin: 0 }}>
+                                    <span className="file-preview-name" style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="file-remove-btn"
+                                  onClick={() => handleRemoveFile(mapping.documentTypeId, index)}
+                                  style={{ padding: '2px 4px', background: 'transparent', border: 'none' }}
+                                  disabled={submitting}
+                                >
+                                  <Trash2 size={13} color="#EF4444" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="file-preview-box">
+                            {previews[mapping.documentTypeId] ? (
+                              <img
+                                src={previews[mapping.documentTypeId]}
+                                alt={`${docName} Preview`}
+                                className="thumbnail-preview-img"
+                                onClick={() => setModalImage({ src: previews[mapping.documentTypeId], title: docName })}
+                              />
+                            ) : (
+                              <IconComponent size={18} className="document-icon-badge" />
+                            )}
+                            <div className="file-preview-details">
+                              <span className="file-preview-name">{files.name}</span>
+                              <span className="file-preview-size">({formatFileSize(files.size)})</span>
+                            </div>
+                            {previews[mapping.documentTypeId] && (
+                              <button
+                                type="button"
+                                className="action-view"
+                                onClick={() => setModalImage({ src: previews[mapping.documentTypeId], title: docName })}
+                              >
+                                <Eye size={14} />
+                              </button>
+                            )}
+                          </div>
+                        )
+                      ) : (
+                        <div className="document-card-top">
+                          <div className="document-icon-badge">
+                            <IconComponent size={16} strokeWidth={1.8} />
+                          </div>
+                          <div className="document-card-info">
+                            <h4>{docName}{mapping.isMandatory && <span className="required-star">*</span>}</h4>
+                            <p>Upload clear image of {docName}</p>
+                            <p className="document-card-subtitle">
+                              {isMultiple ? 'Upload multiple files' : 'JPG, PNG or PDF (Max. 10MB)'}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {!isUploaded && (
+                        <div className="file-actions-row">
+                          <label className={`file-upload-btn ${submitting ? 'disabled' : ''}`}>
+                            <Upload size={13} strokeWidth={2} />
+                            <span>{hasFile ? (isMultiple ? 'Add More' : 'Change') : (isMultiple ? 'Choose Files' : 'Upload Document')}</span>
+                            <input
+                              type="file"
+                              multiple={isMultiple}
+                              className="file-input-hidden"
+                              accept=".pdf,.jpg,.jpeg,.png"
+                              onChange={(e) => handleFileChange(e, mapping.documentTypeId, isMultiple)}
+                              disabled={submitting}
+                            />
+                          </label>
+                          {hasFile && !isMultiple && (
+                            <button
+                              type="button"
+                              className="file-remove-btn"
+                              onClick={() => handleRemoveFile(mapping.documentTypeId)}
+                              disabled={submitting}
+                            >
+                              <Trash2 size={13} />
+                              <span>Remove</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Bottom Actions */}
         <div className="form-actions">
           <button type="button" className="btn-cancel" onClick={handleCancel} disabled={submitting}>
             <X size={15} strokeWidth={2} /> Cancel
