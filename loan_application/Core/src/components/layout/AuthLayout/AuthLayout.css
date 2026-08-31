@@ -78,39 +78,6 @@
   position: relative;
 }
 
-.auth-top-nav {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 100%;
-  display: flex;
-  justify-content: flex-end;
-  padding: 24px 40px;
-  z-index: 10;
-}
-
-.support-link {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--font-size-sm, 12px);
-  font-weight: var(--font-weight-medium, 500);
-  color: var(--color-text-primary, #1A2320);
-}
-
-.support-icon {
-  color: var(--color-primary, #1A7A3C);
-}
-
-.support-link a {
-  color: var(--color-primary, #1A7A3C);
-  text-decoration: none;
-}
-
-.support-link a:hover {
-  text-decoration: underline;
-}
-
 .auth-form-container {
   flex: 1;
   display: flex;
@@ -143,13 +110,5 @@
   .auth-form-container {
     padding: 24px;
     align-items: flex-start;
-  }
-  
-  .auth-top-nav {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    padding: 0;
-    z-index: 10;
   }
 }

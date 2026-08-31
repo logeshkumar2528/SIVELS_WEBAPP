@@ -1,23 +1,26 @@
+/* ==========================================================================
+   VERIFY OTP PAGE STYLES
+   Exact same card dimensions, padding, header sizing and alignment as Login card
+   ========================================================================== */
+
 .verify-main-card {
   position: relative;
   width: 100%;
   max-width: 480px;
   background-color: var(--color-surface, #FFFFFF);
   border-radius: var(--radius-xl, 16px);
-  padding: 36px 40px 28px;
-  box-shadow: 0 16px 40px rgba(22, 34, 25, 0.08);
-  border: 1px solid var(--color-border, #E4EDE7);
-  min-height: 540px;
+  padding: 40px;
+  box-shadow: var(--shadow-xl, 0 16px 40px rgba(22, 34, 25, 0.12));
+  height: 560px; /* Exact fixed height matching login-card */
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   box-sizing: border-box;
 }
 
 .back-btn {
   position: absolute;
   top: 24px;
-  left: 28px;
+  left: 24px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -30,6 +33,7 @@
   padding: 6px 10px;
   border-radius: 6px;
   transition: all 150ms ease;
+  z-index: 5;
 }
 
 .back-btn:hover {
@@ -42,20 +46,20 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  margin-top: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 32px;
+  height: 180px; /* Exact fixed height matching login-header */
 }
 
 .verify-header .icon-circle {
-  width: 58px;
-  height: 58px;
+  width: 64px;
+  height: 64px;
   flex-shrink: 0;
   background-color: var(--color-primary-light, #EAF5EE);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 16px;
+  margin-bottom: 24px;
 }
 
 .verify-header .primary-icon {
@@ -76,7 +80,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   line-height: 1.4;
 }
 
@@ -112,15 +116,15 @@
 .verify-form {
   display: flex;
   flex-direction: column;
+  gap: 12px;
   width: 100%;
 }
 
 .otp-error-wrapper {
-  min-height: 28px;
+  min-height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 8px;
 }
 
 .otp-error-banner {
@@ -131,7 +135,7 @@
   background-color: #FEE2E2;
   color: #DC2626;
   border: 1px solid #FCA5A5;
-  padding: 8px 14px;
+  padding: 6px 12px;
   border-radius: var(--radius-md, 8px);
   font-size: var(--font-size-xs, 12px);
   font-weight: var(--font-weight-medium, 500);
@@ -144,15 +148,15 @@
   gap: 10px;
   justify-content: center;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 4px;
   width: 100%;
 }
 
 .otp-digit {
   width: 46px;
-  height: 54px;
+  height: 52px;
   border: 1.5px solid var(--color-border, #D5E2D9);
-  border-radius: var(--radius-md, 10px);
+  border-radius: var(--radius-md, 8px);
   font-size: var(--font-size-2xl, 22px);
   font-weight: var(--font-weight-bold, 700);
   text-align: center;
@@ -180,7 +184,7 @@
   justify-content: center;
   gap: 6px;
   font-size: var(--font-size-sm, 13px);
-  margin-bottom: 24px;
+  margin: 2px 0 4px;
 }
 
 .resend-text {
@@ -216,7 +220,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Explicit verify button style matching Sivels brand */
+/* Explicit verify button style matching Sivels brand and Login button */
 .verify-main-card .btn-primary {
   display: flex;
   align-items: center;
@@ -230,7 +234,7 @@
   border-radius: var(--radius-md, 8px);
   font-size: var(--font-size-md, 14px);
   font-weight: var(--font-weight-semibold, 600);
-  border: none;
+  border: none !important;
   cursor: pointer;
   transition: all var(--transition-fast, 150ms ease);
   width: 100%;
@@ -256,10 +260,9 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-top: 24px;
-  padding-top: 8px;
-  color: var(--color-text-secondary, #5D7264);
-  text-align: center;
+  margin-top: auto;
+  padding-top: 24px;
+  color: var(--color-text-secondary, #3D5245);
 }
 
 .secure-icon {
@@ -270,7 +273,6 @@
 .secure-footer span {
   font-size: var(--font-size-xs, 11px);
   font-weight: var(--font-weight-medium, 500);
-  line-height: 1.4;
 }
 
 /* Non-blocking Professional Toast Notification */
@@ -281,48 +283,34 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 14px 18px;
-  border-radius: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg, 12px);
   background-color: #FFFFFF;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.06);
-  z-index: 9999;
-  max-width: 380px;
-  width: calc(100vw - 48px);
-  animation: slideInToast 240ms cubic-bezier(0.16, 1, 0.3, 1);
-  box-sizing: border-box;
-}
-
-@keyframes slideInToast {
-  from {
-    opacity: 0;
-    transform: translateY(-12px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--color-border, #E4EDE7);
+  z-index: 1000;
+  max-width: 360px;
+  animation: slideInRight 0.25s ease-out;
 }
 
 .otp-toast.success {
-  border: 1px solid #BBF7D0;
-  border-left: 4px solid #16A34A;
+  border-left: 4px solid var(--color-success, #16A34A);
 }
 
 .otp-toast.error {
-  border: 1px solid #FECACA;
   border-left: 4px solid #DC2626;
 }
 
 .otp-toast-icon {
   flex-shrink: 0;
-  margin-top: 1px;
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-top: 2px;
 }
 
 .otp-toast.success .otp-toast-icon {
-  color: #16A34A;
+  color: var(--color-success, #16A34A);
 }
 
 .otp-toast.error .otp-toast-icon {
@@ -332,72 +320,73 @@
 .otp-toast-content {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   flex: 1;
 }
 
 .otp-toast-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1A2320;
-  line-height: 1.3;
+  font-size: var(--font-size-sm, 13px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary, #1A2320);
 }
 
 .otp-toast-message {
-  font-size: 12px;
-  color: #4A6354;
+  font-size: var(--font-size-xs, 12px);
+  color: var(--color-text-secondary, #5D7264);
   line-height: 1.4;
 }
 
 .otp-toast-close {
-  flex-shrink: 0;
   background: none;
   border: none;
+  color: var(--color-text-muted, #7A9485);
   cursor: pointer;
-  color: #8CA395;
   padding: 2px;
   border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 150ms ease;
-  margin-left: 4px;
+  transition: color 150ms ease;
 }
 
 .otp-toast-close:hover {
-  color: #1A2320;
-  background-color: #F0F4F2;
+  color: var(--color-text-primary, #1A2320);
 }
 
-/* Responsive */
-@media (max-width: 520px) {
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 600px) {
+  .verify-main-card {
+    padding: 24px;
+    box-shadow: none;
+    background: transparent;
+    height: auto;
+  }
+
+  .back-btn {
+    top: 12px;
+    left: 12px;
+  }
+
+  .otp-digit {
+    width: 40px;
+    height: 48px;
+    font-size: 18px;
+  }
+
   .otp-toast {
     top: 16px;
     right: 16px;
     left: 16px;
-    width: auto;
     max-width: none;
   }
-
-  .verify-main-card {
-    padding: 28px 20px 20px;
-    min-height: auto;
-  }
-
-  .back-btn {
-    top: 16px;
-    left: 16px;
-  }
-
-  .otp-inputs {
-    gap: 6px;
-  }
-
-  .otp-digit {
-    width: 38px;
-    height: 48px;
-    font-size: 18px;
-    border-radius: 8px;
-  }
 }
-

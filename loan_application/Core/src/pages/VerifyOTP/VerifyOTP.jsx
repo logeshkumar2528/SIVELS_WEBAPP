@@ -136,17 +136,38 @@ export default function VerifyOTP() {
       const cleanMobile = normalizeMobileNumber(mobileNumber);
 
       // 1. Verify OTP solely through the Backend API (POST /MobileOtp/verify-mobile-otp)
+      let result;
       try {
-        await authService.verifyMobileOtp(enteredOtp);
+        result = await authService.verifyMobileOtp(cleanMobile, enteredOtp);
       } catch (apiErr) {
         setLoading(false);
         const errMsg = apiErr.message || 'Invalid OTP. Please check the code and try again.';
         setErrorMessage(errMsg);
-        showToast('error', 'Invalid OTP', 'Please check the code and try again.');
+        showToast('error', 'Invalid OTP', errMsg);
         return;
       }
 
-      // 2. Show brief success notification
+      // Explicitly inspect API response body - verify success condition
+      const isLoginSuccessfulMessage =
+        typeof result?.message === 'string' &&
+        result.message.trim().toLowerCase() === 'login successful';
+
+      const isSuccess =
+        result?.success === true ||
+        result?.isSuccess === true ||
+        result?.data?.success === true ||
+        isLoginSuccessfulMessage;
+
+      if (!isSuccess) {
+        setLoading(false);
+        const errMsg = result?.message || result?.error || 'Invalid OTP. Please check the code and try again.';
+        setErrorMessage(errMsg);
+        showToast('error', 'Invalid OTP', errMsg);
+        return;
+      }
+
+      // 2. Clear any error banner and show brief success notification
+      setErrorMessage('');
       showToast('success', 'OTP Verified', 'Verification successful. Redirecting...');
 
       // 3. Resolve destination module & account

@@ -1,6 +1,5 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import { Headset } from 'lucide-react';
 import './AuthLayout.css';
 import logo from '../../../assets/Logo_img/Logo.png';
 
@@ -24,13 +23,6 @@ export default function AuthLayout() {
       
       {/* Right Column */}
       <div className="auth-right">
-        <div className="auth-top-nav">
-          <div className="support-link">
-            <Headset size={18} className="support-icon" />
-            <span>Need help? <a href="#">Contact Support</a></span>
-          </div>
-        </div>
-        
         <div className="auth-form-container">
           <Outlet />
         </div>
