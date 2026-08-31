@@ -5,7 +5,7 @@ import {
   LOAN_VARIATIONS,
 } from '../config/onboardingFlow';
 
-const STORAGE_KEY = 'sivels-rm-onboarding-drafts-v7';
+const STORAGE_KEY = 'sivels-rm-onboarding-drafts-v9';
 
 const APP_SEED_MAP = allNewApplications.reduce((acc, app) => {
   acc[app.id] = { ...buildBlankApplication(app.id), ...app };
@@ -109,10 +109,9 @@ function getLoanProductDisplay(code, variation = '') {
 
 function normalizeApplicationRecord(record = {}) {
   const loanProduct = record.loanProduct || inferLoanProductCode(record);
-  const variationOptions = LOAN_VARIATIONS[loanProduct] || [];
-  const loanVariation = variationOptions.includes(record.loanVariation) ? record.loanVariation : '';
-  const purposeOfLoan = record.purposeOfLoan || record.loanPurpose || record.loanType || '';
-  const loanAmount = extractDigits(record.loanAmount || record.amount);
+  const loanVariation = record.loanVariation !== undefined && record.loanVariation !== null ? record.loanVariation : '';
+  const purposeOfLoan = record.purposeOfLoan || '';
+  const loanAmount = record.loanAmount !== undefined ? extractDigits(record.loanAmount) : '';
   const loanTenureMonths = extractDigits(record.loanTenureMonths);
   const roi = record.roi === '' || record.roi === undefined || record.roi === null ? '' : Number(record.roi);
   const coApplicantsCount = record.coApplicantsCount === '' || record.coApplicantsCount === undefined || record.coApplicantsCount === null
@@ -131,17 +130,17 @@ function normalizeApplicationRecord(record = {}) {
     applicationNumber,
     branch: record.branch || inferBranch(record.address),
     location: record.location || inferLocation(record.address),
-    sourcingChannel: record.sourcingChannel || 'Field Agent',
+    sourcingChannel: record.sourcingChannel || '',
     loanProduct,
     loanProductDisplay: loanProductDisplay || record.loanType || '',
     loanVariation,
-    loanTransactionType: record.loanTransactionType || 'New Loan',
+    loanTransactionType: record.loanTransactionType || '',
     purposeOfLoan,
     loanPurpose: purposeOfLoan,
     loanAmount,
     loanAmountDisplay: loanAmount === '' ? (record.amount || '') : formatRupees(loanAmount),
     loanTenureMonths,
-    interestType: record.interestType || 'Fixed',
+    interestType: record.interestType || '',
     roi,
     coApplicantsCount,
     distanceFromBranchKm,
@@ -150,7 +149,7 @@ function normalizeApplicationRecord(record = {}) {
     status: record.status || 'Draft',
     branchDisplay: record.branchDisplay || inferBranch(record.address),
     locationDisplay: record.locationDisplay || inferLocation(record.address),
-    sourcingChannelDisplay: record.sourcingChannelDisplay || record.sourcingChannel || 'Field Agent',
+    sourcingChannelDisplay: record.sourcingChannelDisplay || record.sourcingChannel || '',
     createdDate: record.createdDate || '',
   };
 }
@@ -160,104 +159,98 @@ function buildBlankApplication(applicationId) {
     id: applicationId,
     applicationNumber: applicationId,
     status: 'Draft',
-    sourcingChannel: 'Field Agent',
-    loanProduct: 'PL',
-    loanTransactionType: 'New Loan',
-    purposeOfLoan: 'Personal Expenses',
-    loanAmount: 50000,
-    loanTenureMonths: 12,
-    interestType: 'Fixed',
-    roi: 12.5,
-    coApplicantsCount: 0,
-    distanceFromBranchKm: 5,
+    sourcingChannel: '',
+    loanProduct: '',
+    loanTransactionType: '',
+    purposeOfLoan: '',
+    loanAmount: '',
+    loanTenureMonths: '',
+    interestType: '',
+    roi: '',
+    coApplicantsCount: '',
+    distanceFromBranchKm: '',
     registration: {
       personalInformation: {
         applicant: {
-          relationshipWithApplicant: 'SELF',
-          title: 'Mr.',
-          firstName: 'Anil',
+          relationshipWithApplicant: '',
+          title: '',
+          firstName: '',
           middleName: '',
-          lastName: 'Kumar',
-          fatherOrSpouseName: 'Rajesh Kumar',
-          mothersMaidenName: 'Sunita Kumar',
-          dateOfBirth: '1990-05-15',
-          religion: 'Hindu',
-          category: 'Gen',
-          gender: 'Male',
-          maritalStatus: 'Single',
-          mobileNo: '9840155555',
-          emailId: 'anil.kumar@example.com',
-          panCardNo: 'ABCDE1234F'
+          lastName: '',
+          fatherOrSpouseName: '',
+          mothersMaidenName: '',
+          dateOfBirth: '',
+          religion: '',
+          category: '',
+          gender: '',
+          maritalStatus: '',
+          mobileNo: '',
+          emailId: '',
+          panCardNo: ''
         },
         coApplicants: []
       }
     },
     addressDetails: {
       applicant: {
-        addressLine1: '123 Main Street',
-        addressLine2: 'Block B, Level 4',
-        landmark: 'Near City Mall',
-        city: 'Chennai',
-        state: 'Tamil Nadu',
-        pincode: '600001',
-        mailingSameAsCurrent: 'Yes'
+        addressLine1: '',
+        addressLine2: '',
+        landmark: '',
+        city: '',
+        state: '',
+        pincode: '',
+        mailingSameAsCurrent: ''
       },
       coApplicants: []
     },
     kycDocuments: {
       applicant: {
-        aadhaarLast4: '4444',
-        panCardNo: 'ABCDE1234F',
-        identityDocumentType: 'Passport',
-        identityDocumentNo: 'A1234567',
-        verificationStatus: 'Pending'
+        aadhaarLast4: '',
+        panCardNo: '',
+        identityDocumentType: '',
+        identityDocumentNo: '',
+        verificationStatus: ''
       },
       coApplicants: []
     },
     employmentIncome: {
       applicant: {
-        employerBusinessName: 'Acme Corp',
-        designationNatureOfBusiness: 'Software Engineer',
-        employmentNature: 'Salaried',
-        qualification: 'B.Tech',
-        industryType: 'IT',
-        totalExperienceYears: 5,
-        grossMonthlyIncome: 80000,
-        otherIncomeMonthly: 5000,
-        netMonthlyIncome: 70000,
-        grossAnnualIncome: 960000
+        employerBusinessName: '',
+        designationNatureOfBusiness: '',
+        employmentNature: '',
+        qualification: '',
+        industryType: '',
+        totalExperienceYears: '',
+        grossMonthlyIncome: '',
+        otherIncomeMonthly: '',
+        netMonthlyIncome: '',
+        grossAnnualIncome: ''
       },
       coApplicants: []
     },
     bankExistingLoans: {
       primaryBank: {
-        bankName: 'HDFC Bank',
-        branch: 'Anna Nagar',
-        accountType: 'Savings',
-        accountNumber: '50100234567890',
-        ifscCode: 'HDFC0001234',
-        noOfActiveLoans: 1,
-        noOfActiveCreditCards: 2
-      },
-      otherBank: {
         bankName: '',
         branch: '',
         accountType: '',
         accountNumber: '',
         ifscCode: '',
-        noOfActiveLoans: '',
-        noOfActiveCreditCards: ''
-      }
+        accountHolderName: '',
+        bankAddress: '',
+        averageMonthlyBalance: '',
+        latestBalance: ''
+      },
+      existingLoans: []
     },
     collateralDetails: {
-      propertyType: 'Residential',
-      propertyAddress: '123 Main Street',
-      propertyValue: 5000000,
-      ownerName: 'Anil Kumar'
+      propertyType: '',
+      propertyAddress: '',
+      propertyValue: '',
+      ownerName: ''
     },
     references: {
-      reference1: { fullName: 'John Doe', relationship: 'Friend', mobileNo: '9876543210', address: '456 Side Street' },
-      reference2: { fullName: 'Jane Smith', relationship: 'Colleague', mobileNo: '9123456789', address: '789 Broad Avenue' }
+      reference1: { fullName: '', relationship: '', mobileNo: '', address: '' },
+      reference2: { fullName: '', relationship: '', mobileNo: '', address: '' }
     },
     sourcing: {
       sourcedBy: 'Karthik Raja',

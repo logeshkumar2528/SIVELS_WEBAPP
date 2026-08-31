@@ -1,56 +1,32 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import iconMap from '../../config/iconMap';
 import DataTable from '../../components/DataTable/DataTable';
 import StatusBadge from '../../components/StatusBadge/StatusBadge';
 import Button from '../../components/Button/Button';
 import Modal from '../../components/Modal/Modal';
 import Select from '../../components/Select/Select';
-import { agentApi } from '../../services/agentApi';
+import { myAgentsList } from './myAgentsData';
 import './MyAgents.css';
 
 export default function MyAgents() {
-  const [agents, setAgents] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAgent, setSelectedAgent] = useState(null);
   
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editForm, setEditForm] = useState({});
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-
   const SearchIcon = iconMap['Search'];
   const UsersIcon = iconMap['Users'];
   const ClockIcon = iconMap['Clock'];
   const IndianRupeeIcon = iconMap['IndianRupee'];
+  const UserCheckIcon = iconMap['UserCheck']; // or similar
   const DownloadIcon = iconMap['Download'];
   const EyeIcon = iconMap['Eye'];
   const ChevronLeftIcon = iconMap['ChevronLeft'];
   const ChevronRightIcon = iconMap['ChevronRight'];
 
-  const fetchAgents = async () => {
-    setIsLoading(true);
-    try {
-      const data = await agentApi.getAgents();
-      setAgents(data);
-    } catch (err) {
-      console.error(err);
-      // fallback handled gracefully
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchAgents();
-  }, []);
-
-  const filteredAgents = agents.filter(
+  const filteredAgents = myAgentsList.filter(
     (ag) =>
-      (ag.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (ag.branch || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (ag.mobileNumber || '').includes(searchTerm) ||
-      (ag.agentCode || '').toLowerCase().includes(searchTerm.toLowerCase())
+      ag.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      ag.assignedArea.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      ag.phone.includes(searchTerm)
   );
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -59,6 +35,7 @@ export default function MyAgents() {
   const totalRecords = filteredAgents.length;
   const totalPages = Math.ceil(totalRecords / rowsPerPage);
   
+  // Reset to page 1 if search term changes and reduces pages
   if (currentPage > totalPages && totalPages > 0) {
     setCurrentPage(1);
   }
@@ -75,83 +52,30 @@ export default function MyAgents() {
     if (currentPage < totalPages) setCurrentPage(currentPage + 1);
   };
 
-  const handleViewDetails = async (agentId) => {
-    try {
-      const data = await agentApi.getAgentById(agentId);
-      setSelectedAgent(data);
-      setIsEditMode(false);
-      setEditForm(data);
-    } catch (err) {
-      alert('Failed to fetch agent details');
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!window.confirm('Are you sure you want to delete this agent?')) return;
-    setIsDeleting(true);
-    try {
-      await agentApi.deleteAgent(selectedAgent.agentId);
-      alert('Agent deleted successfully');
-      setSelectedAgent(null);
-      fetchAgents();
-    } catch (err) {
-      let errorMsg = 'Failed to delete agent';
-      if (err.message) errorMsg = err.message;
-      alert(errorMsg);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleSaveEdit = async () => {
-    setIsSaving(true);
-    try {
-      await agentApi.updateAgent(selectedAgent.agentId, editForm);
-      alert('Agent updated successfully');
-      setSelectedAgent(null);
-      fetchAgents();
-    } catch (err) {
-      let errorMsg = "Failed to update agent.";
-      if (err.errors) {
-        const messages = [];
-        Object.values(err.errors).forEach(val => {
-          if (Array.isArray(val)) messages.push(...val);
-          else messages.push(val);
-        });
-        errorMsg = messages.join('\\n');
-      } else if (err.message) {
-        errorMsg = err.message;
-      }
-      alert(errorMsg);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const columns = [
     { 
       key: 'name', 
       label: 'Agent Name', 
       render: (row) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <img src={row.profileImagePath ? `https://fusiontecsoftware.com${row.profileImagePath}` : 'https://via.placeholder.com/32'} alt={row.fullName} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
-          <span style={{ fontWeight: 600, color: '#0f172a' }}>{row.fullName}</span>
+          <img src={row.avatarUrl} alt={row.name} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+          <span style={{ fontWeight: 600, color: '#0f172a' }}>{row.name}</span>
         </div>
       )
     },
-    { key: 'id', label: 'Agent ID', render: (row) => <span style={{ color: '#475569' }}>{row.agentCode}</span> },
-    { key: 'assignedArea', label: 'Area / Branch', render: (row) => <span style={{ color: '#475569' }}>{row.branch}</span> },
-    { key: 'phone', label: 'Mobile Number', render: (row) => <span style={{ color: '#475569' }}>{row.mobileNumber}</span> },
-    { key: 'customersAdded', label: 'Customers Added', render: (row) => <span style={{ color: '#475569', fontWeight: 500 }}>{row.customersAdded || 0}</span> },
-    { key: 'activeCustomers', label: 'Active Customers', render: (row) => <span style={{ color: '#16a34a', fontWeight: 600 }}>{row.activeCustomers || 0}</span> },
-    { key: 'pendingVerification', label: 'Pending Verification', render: (row) => <span style={{ color: '#ea580c', fontWeight: 600 }}>{row.pendingVerification || 0}</span> },
-    { key: 'pendingCollections', label: 'Pending Collections', render: (row) => <span style={{ color: '#dc2626', fontWeight: 600 }}>{row.pendingCollections || 0}</span> },
-    { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.isActive ? 'Active' : 'Inactive'} /> },
+    { key: 'id', label: 'Agent ID', render: (row) => <span style={{ color: '#475569' }}>{row.id}</span> },
+    { key: 'assignedArea', label: 'Area / Branch', render: (row) => <span style={{ color: '#475569' }}>{row.assignedArea}</span> },
+    { key: 'phone', label: 'Mobile Number', render: (row) => <span style={{ color: '#475569' }}>{row.phone}</span> },
+    { key: 'customersAdded', label: 'Customers Added', render: (row) => <span style={{ color: '#475569', fontWeight: 500 }}>{row.customersAdded}</span> },
+    { key: 'activeCustomers', label: 'Active Customers', render: (row) => <span style={{ color: '#16a34a', fontWeight: 600 }}>{row.activeCustomers}</span> },
+    { key: 'pendingVerification', label: 'Pending Verification', render: (row) => <span style={{ color: '#ea580c', fontWeight: 600 }}>{row.pendingVerification}</span> },
+    { key: 'pendingCollections', label: 'Pending Collections', render: (row) => <span style={{ color: '#dc2626', fontWeight: 600 }}>{row.pendingCollections}</span> },
+    { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
     { 
       key: 'action', 
       label: 'Action', 
       render: (row) => (
-        <Button variant="outline" size="sm" icon={EyeIcon ? <EyeIcon size={14} /> : null} onClick={() => handleViewDetails(row.agentId)}>
+        <Button variant="outline" size="sm" icon={EyeIcon ? <EyeIcon size={14} /> : null} onClick={() => setSelectedAgent(row)}>
           View Details
         </Button>
       )
@@ -169,7 +93,7 @@ export default function MyAgents() {
           </div>
           <div className="ag-kpi-info">
             <span className="ag-kpi-title">Total Agents</span>
-            <span className="ag-kpi-value">{agents.length}</span>
+            <span className="ag-kpi-value">12</span>
             <span className="ag-kpi-trend text-muted">All Areas</span>
           </div>
         </div>
@@ -180,8 +104,8 @@ export default function MyAgents() {
           </div>
           <div className="ag-kpi-info">
             <span className="ag-kpi-title">Total Customers</span>
-            <span className="ag-kpi-value">0</span>
-            <span className="ag-kpi-trend"><span className="text-success">↑ 0%</span> vs last month</span>
+            <span className="ag-kpi-value">256</span>
+            <span className="ag-kpi-trend"><span className="text-success">↑ 14.6%</span> vs last month</span>
           </div>
         </div>
 
@@ -191,8 +115,8 @@ export default function MyAgents() {
           </div>
           <div className="ag-kpi-info">
             <span className="ag-kpi-title">Pending Verification</span>
-            <span className="ag-kpi-value">0</span>
-            <span className="ag-kpi-trend"><span className="text-danger">↑ 0%</span> vs last month</span>
+            <span className="ag-kpi-value">38</span>
+            <span className="ag-kpi-trend"><span className="text-danger">↑ 8.2%</span> vs last month</span>
           </div>
         </div>
 
@@ -202,8 +126,8 @@ export default function MyAgents() {
           </div>
           <div className="ag-kpi-info">
             <span className="ag-kpi-title">Active Customers</span>
-            <span className="ag-kpi-value">0</span>
-            <span className="ag-kpi-trend"><span className="text-success">↑ 0%</span> vs last month</span>
+            <span className="ag-kpi-value">198</span>
+            <span className="ag-kpi-trend"><span className="text-success">↑ 12.4%</span> vs last month</span>
           </div>
         </div>
 
@@ -213,14 +137,15 @@ export default function MyAgents() {
           </div>
           <div className="ag-kpi-info">
             <span className="ag-kpi-title">Pending Collections</span>
-            <span className="ag-kpi-value">0</span>
-            <span className="ag-kpi-trend"><span className="text-danger">↑ 0%</span> vs last month</span>
+            <span className="ag-kpi-value">26</span>
+            <span className="ag-kpi-trend"><span className="text-danger">↑ 5.3%</span> vs last month</span>
           </div>
         </div>
       </div>
 
       <div className="panel ag-main-panel">
         
+        {/* Advanced Filter Bar */}
         <div className="ag-filter-bar">
           <div className="search-box" style={{ width: '300px' }}>
             {SearchIcon && <SearchIcon size={16} className="search-icon" />}
@@ -239,7 +164,9 @@ export default function MyAgents() {
               <Select 
                  placeholder="All Areas"
                  options={[
-                   {value: "All Areas", label: "All Areas"}
+                   {value: "All Areas", label: "All Areas"},
+                   {value: "KK Nagar", label: "KK Nagar"},
+                   {value: "Anna Nagar", label: "Anna Nagar"}
                  ]}
                  className="ag-select"
                  value="All Areas"
@@ -274,13 +201,10 @@ export default function MyAgents() {
         </div>
 
         <div className="ag-table-container">
-          {isLoading ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>Loading agents...</div>
-          ) : (
-            <DataTable columns={columns} data={currentRecords} rowKeyField="agentId" />
-          )}
+          <DataTable columns={columns} data={currentRecords} rowKeyField="id" />
         </div>
 
+        {/* Pagination Footer */}
         <div className="ag-pagination-footer">
           <span className="ag-page-info">
             {totalRecords > 0 ? `Showing ${startIndex + 1} to ${endIndex} of ${totalRecords} agents` : 'No agents found'}
@@ -337,93 +261,62 @@ export default function MyAgents() {
         
       </div>
 
-      <Modal show={!!selectedAgent} onHide={() => setSelectedAgent(null)} title={isEditMode ? "Edit Agent" : "Agent Details"}>
+      {/* Agent Details Modal */}
+      <Modal show={!!selectedAgent} onHide={() => setSelectedAgent(null)} title="Agent Details">
         {selectedAgent && (
           <div className="agent-details-modal">
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-              <img src={selectedAgent.profileImagePath ? `https://fusiontecsoftware.com${selectedAgent.profileImagePath}` : 'https://via.placeholder.com/64'} alt={selectedAgent.fullName} style={{ width: '64px', height: '64px', borderRadius: '50%', objectFit: 'cover' }} />
+              <img src={selectedAgent.avatarUrl} alt={selectedAgent.name} style={{ width: '64px', height: '64px', borderRadius: '50%', objectFit: 'cover' }} />
               <div>
-                <h3 style={{ margin: 0, fontSize: '18px', color: '#0f172a' }}>{selectedAgent.fullName}</h3>
-                <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>ID: {selectedAgent.agentCode}</p>
+                <h3 style={{ margin: 0, fontSize: '18px', color: '#0f172a' }}>{selectedAgent.name}</h3>
+                <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>ID: {selectedAgent.id}</p>
                 <div style={{ marginTop: '8px' }}>
-                  <StatusBadge status={selectedAgent.isActive ? 'Active' : 'Inactive'} />
+                  <StatusBadge status={selectedAgent.status} />
                 </div>
               </div>
             </div>
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
-                <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Mobile Number</label>
-                {isEditMode ? (
-                  <input className="form-input" value={editForm.mobileNumber || ''} onChange={e => setEditForm({...editForm, mobileNumber: e.target.value})} />
-                ) : (
-                  <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 500 }}>{selectedAgent.mobileNumber}</div>
-                )}
+                <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Contact Phone</label>
+                <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 500 }}>{selectedAgent.phone}</div>
               </div>
               <div>
                 <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Email Address</label>
-                {isEditMode ? (
-                  <input className="form-input" type="email" value={editForm.emailAddress || ''} onChange={e => setEditForm({...editForm, emailAddress: e.target.value})} />
-                ) : (
-                  <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 500 }}>{selectedAgent.emailAddress}</div>
-                )}
+                <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 500 }}>{selectedAgent.email}</div>
               </div>
               <div>
-                <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Assigned Territory (Branch)</label>
-                {isEditMode ? (
-                  <input className="form-input" value={editForm.branch || ''} onChange={e => setEditForm({...editForm, branch: e.target.value})} />
-                ) : (
-                  <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 500 }}>{selectedAgent.branch}</div>
-                )}
+                <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Assigned Territory</label>
+                <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 500 }}>{selectedAgent.assignedArea}</div>
               </div>
               <div>
                 <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Join Date</label>
-                {isEditMode ? (
-                  <input className="form-input" type="date" value={editForm.dateJoined ? editForm.dateJoined.substring(0,10) : ''} onChange={e => setEditForm({...editForm, dateJoined: e.target.value})} />
-                ) : (
-                  <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 500 }}>{selectedAgent.dateJoined ? selectedAgent.dateJoined.substring(0,10) : ''}</div>
-                )}
+                <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 500 }}>{selectedAgent.joinDate}</div>
               </div>
-              {!isEditMode && (
-                <>
-                  <div>
-                    <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Customers Added</label>
-                    <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 500 }}>{selectedAgent.customersAdded || 0}</div>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Active Customers</label>
-                    <div style={{ fontSize: '13px', color: '#16a34a', fontWeight: 600 }}>{selectedAgent.activeCustomers || 0}</div>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Pending Verification</label>
-                    <div style={{ fontSize: '13px', color: '#ea580c', fontWeight: 600 }}>{selectedAgent.pendingVerification || 0}</div>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Pending Collections</label>
-                    <div style={{ fontSize: '13px', color: '#dc2626', fontWeight: 600 }}>{selectedAgent.pendingCollections || 0}</div>
-                  </div>
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Total Loans Disbursed</label>
-                    <div style={{ fontSize: '16px', color: '#0f172a', fontWeight: 700 }}>{selectedAgent.loansDisbursed || 0}</div>
-                  </div>
-                </>
-              )}
+              <div>
+                <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Customers Added</label>
+                <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 500 }}>{selectedAgent.customersAdded}</div>
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Active Customers</label>
+                <div style={{ fontSize: '13px', color: '#16a34a', fontWeight: 600 }}>{selectedAgent.activeCustomers}</div>
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Pending Verification</label>
+                <div style={{ fontSize: '13px', color: '#ea580c', fontWeight: 600 }}>{selectedAgent.pendingVerification}</div>
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Pending Collections</label>
+                <div style={{ fontSize: '13px', color: '#dc2626', fontWeight: 600 }}>{selectedAgent.pendingCollections}</div>
+              </div>
+              <div style={{ gridColumn: 'span 2' }}>
+                <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Total Loans Disbursed</label>
+                <div style={{ fontSize: '16px', color: '#0f172a', fontWeight: 700 }}>{selectedAgent.loansDisbursed}</div>
+              </div>
             </div>
             
-            <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              {!isEditMode && (
-                <>
-                  <Button variant="outline" style={{ borderColor: '#ef4444', color: '#ef4444' }} onClick={handleDelete} disabled={isDeleting}>Delete</Button>
-                  <Button variant="primary" onClick={() => setIsEditMode(true)}>Edit</Button>
-                  <Button variant="secondary" onClick={() => setSelectedAgent(null)}>Close</Button>
-                </>
-              )}
-              {isEditMode && (
-                <>
-                  <Button variant="secondary" onClick={() => { setIsEditMode(false); setEditForm(selectedAgent); }}>Cancel</Button>
-                  <Button variant="primary" onClick={handleSaveEdit} disabled={isSaving}>{isSaving ? 'Saving...' : 'Save'}</Button>
-                </>
-              )}
+            <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end' }}>
+              <Button variant="secondary" onClick={() => setSelectedAgent(null)}>Close</Button>
             </div>
           </div>
         )}

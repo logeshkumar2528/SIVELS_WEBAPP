@@ -21,13 +21,6 @@ import Button from '../../components/Button/Button';
 import Select from '../../components/Select/Select';
 import StatusBadge from '../../components/StatusBadge/StatusBadge';
 import { ROUTES } from '../../config/routeConfig';
-import {
-  INTEREST_TYPES,
-  LOAN_PRODUCTS,
-  LOAN_TRANSACTION_TYPES,
-  LOAN_VARIATIONS,
-  SOURCING_CHANNELS,
-} from '../../config/onboardingFlow';
 import { APPLICATION_WIZARD_STEPS, getWizardActiveStepByPath } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import './ApplicationDetails.css';
@@ -49,15 +42,6 @@ function formatRupeeValue(value) {
   return `₹${Number(digits).toLocaleString('en-IN')}`;
 }
 
-function getLoanProductLabel(code, variation = '') {
-  const meta = LOAN_PRODUCTS.find((product) => product.value === code);
-  if (!meta) {
-    return '';
-  }
-
-  return variation ? `${meta.label} - ${variation}` : meta.label;
-}
-
 function validateApplication(record) {
   return {};
 }
@@ -71,13 +55,60 @@ export default function ApplicationDetails() {
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [errors, setErrors] = useState({});
 
+  const [sourcingChannelOptions, setSourcingChannelOptions] = useState([]);
+  const [loanProductOptions, setLoanProductOptions] = useState([]);
+  const [loanTransactionTypeOptions, setLoanTransactionTypeOptions] = useState([]);
+  const [interestTypeOptions, setInterestTypeOptions] = useState([]);
+  const [loanPurposeOptions, setLoanPurposeOptions] = useState([]);
+  const [loanVariationMaster, setLoanVariationMaster] = useState([]);
+  const [isLoadingMasters, setIsLoadingMasters] = useState(false);
+
   useEffect(() => {
     ensureApplication(appId);
   }, [appId, ensureApplication]);
 
+  useEffect(() => {
+    async function fetchMasterData(endpoint, idField, nameField, setOptionsState) {
+      try {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+        const response = await fetch(`${baseUrl}/${endpoint}`);
+        if (response.ok) {
+          const data = await response.json();
+          const options = data.map(item => ({
+            value: item[idField],
+            label: item[nameField],
+            raw: item
+          }));
+          setOptionsState(options);
+        }
+      } catch (error) {
+        console.error(`Error fetching ${endpoint}:`, error);
+      }
+    }
+
+    async function loadAllMasters() {
+      setIsLoadingMasters(true);
+      await Promise.allSettled([
+        fetchMasterData('SourcingChannelMaster', 'sourcingChannelId', 'sourcingChannelName', setSourcingChannelOptions),
+        fetchMasterData('LoanProductMaster', 'loanProductId', 'productName', setLoanProductOptions),
+        fetchMasterData('LoanTransactionTypeMaster', 'loanTransactionTypeId', 'transactionTypeName', setLoanTransactionTypeOptions),
+        fetchMasterData('InterestTypeMaster', 'interestTypeId', 'interestTypeName', setInterestTypeOptions),
+        fetchMasterData('LoanPurposeMaster', 'loanPurposeId', 'purposeName', setLoanPurposeOptions),
+        fetchMasterData('LoanProductVariationMaster', 'loanProductVariationId', 'variationName', setLoanVariationMaster),
+      ]);
+      setIsLoadingMasters(false);
+    }
+    
+    loadAllMasters();
+  }, []);
+
   const appData = getApplication(appId);
-  const requiresVariation = appData.loanProduct === 'HL' || appData.loanProduct === 'LAP';
-  const variationOptions = useMemo(() => LOAN_VARIATIONS[appData.loanProduct] || [], [appData.loanProduct]);
+  const selectedProduct = loanProductOptions.find(p => p.value === appData.loanProduct);
+  const requiresVariation = selectedProduct?.raw?.productCode === 'HL' || selectedProduct?.raw?.productCode === 'LAP';
+  const variationOptions = useMemo(
+    () => loanVariationMaster.filter(opt => !opt.raw?.loanProductId || opt.raw?.loanProductId === appData.loanProduct),
+    [loanVariationMaster, appData.loanProduct]
+  );
   const activeStep = useMemo(() => getWizardActiveStepByPath(location.pathname, APPLICATION_WIZARD_STEPS), [location.pathname]);
 
   const updateField = (field, rawValue) => {
@@ -88,8 +119,9 @@ export default function ApplicationDetails() {
     const updates = { [field]: nextValue };
 
     if (field === 'loanProduct') {
-      const selected = LOAN_PRODUCTS.find((product) => product.value === rawValue);
-      if (!selected || !selected.requiresVariation) {
+      const selected = loanProductOptions.find((product) => product.value === rawValue);
+      const isVariationRequired = selected?.raw?.productCode === 'HL' || selected?.raw?.productCode === 'LAP';
+      if (!isVariationRequired) {
         updates.loanVariation = '';
       }
     }
@@ -105,7 +137,7 @@ export default function ApplicationDetails() {
     });
   };
 
-  const handleProceed = () => {
+  const handleProceed = async () => {
     const validationErrors = validateApplication(appData);
     setErrors(validationErrors);
 
@@ -113,18 +145,99 @@ export default function ApplicationDetails() {
       return;
     }
 
-    saveApplication(appId, { status: 'Pending Verification' });
-    navigate(ROUTES.KYC_DOCUMENTS.replace(':applicationId', appId));
+    try {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+      const isUpdate = !!appData.applicationProductDetailsId;
+      const url = isUpdate 
+        ? `${baseUrl}/ApplicationProductDetails/${appData.applicationProductDetailsId}` 
+        : `${baseUrl}/ApplicationProductDetails`;
+      
+      let agentId = appData.agentId;
+      if (!agentId) {
+        try {
+          const agentRes = await fetch(`${baseUrl}/AgentMaster`);
+          if (agentRes.ok) {
+            const agents = await agentRes.json();
+            if (agents && agents.length > 0) {
+              agentId = agents[0].agentId || agents[0].AgentId;
+            }
+          }
+        } catch (e) {
+          console.error("Failed to fetch default agent:", e);
+        }
+      }
+      agentId = agentId || 1;
+
+      const payload = {
+        AgentId: agentId,
+        SourcingChannelId: Number(appData.sourcingChannel) || 0,
+        LoanProductId: Number(appData.loanProduct) || 0,
+        LoanProductVariationId: appData.loanVariation ? Number(appData.loanVariation) : null,
+        LoanTransactionTypeId: Number(appData.loanTransactionType) || 0,
+        LoanPurposeId: Number(appData.purposeOfLoan) || 0,
+        LoanAmount: Number(appData.loanAmount) || 0,
+        LoanTenure: Number(appData.loanTenureMonths) || 0,
+        InterestTypeId: Number(appData.interestType) || 0,
+        ROI: appData.roi !== null && appData.roi !== '' ? Number(appData.roi) : null,
+        DistanceFromBranch: appData.distanceFromBranchKm !== null && appData.distanceFromBranchKm !== '' ? Number(appData.distanceFromBranchKm) : null,
+        NoOfCoApplicants: appData.coApplicantsCount !== null && appData.coApplicantsCount !== '' ? Number(appData.coApplicantsCount) : null,
+        CreatedBy: 1
+      };
+
+      if (isUpdate) {
+        payload.ApplicationProductDetailsId = appData.applicationProductDetailsId;
+      }
+
+      console.log('Sending payload to backend:', payload);
+
+      const response = await fetch(url, {
+        method: isUpdate ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to save to database:', errorData);
+        let errorMsg = errorData.Message || errorData.title || 'Unknown error';
+        if (errorData.errors) {
+            errorMsg += '\n' + JSON.stringify(errorData.errors, null, 2);
+        }
+        alert(`Failed to save application:\n${errorMsg}`);
+        return;
+      }
+
+      let savedData = {};
+      if (response.status !== 204) {
+        const text = await response.text();
+        if (text) {
+          try {
+            savedData = JSON.parse(text);
+          } catch (e) {
+            console.error('Failed to parse successful response:', e);
+          }
+        }
+      }
+
+      saveApplication(appId, { 
+        status: 'Pending Verification',
+        applicationProductDetailsId: savedData.applicationProductDetailsId || savedData.ApplicationProductDetailsId || appData.applicationProductDetailsId
+      });
+      navigate(ROUTES.KYC_DOCUMENTS.replace(':applicationId', appId));
+    } catch (error) {
+      console.error('Error saving application:', error);
+      alert('Network error while saving application.');
+    }
   };
 
   const handleBack = () => {
     navigate(ROUTES.NEW_APPLICATIONS);
   };
 
-  const applicantName = appData.agentName || appData.customerName || 'Karthik Raja';
-  const branchName = appData.branch || 'KK Nagar';
-  const submittedTime = `${appData.createdDate || '05 Jun 2025'}, 10:25 AM`;
-  const statusText = appData.status || 'Pending Verification';
+  const applicantName = appData.agentName || appData.customerName || '';
+  const branchName = appData.branch || '';
+  const submittedTime = appData.createdDate || '';
+  const statusText = appData.status || '';
 
   return (
     <div className="page-container ad-page-root compact-mode">
@@ -204,9 +317,10 @@ export default function ApplicationDetails() {
                       error={!!errors.sourcingChannel}
                       value={appData.sourcingChannel || ''}
                       onChange={(val) => updateField('sourcingChannel', val)}
-                      placeholder="Select sourcing channel"
-                      options={SOURCING_CHANNELS.map(c => ({value: c, label: c}))}
+                      placeholder={isLoadingMasters ? "Loading..." : "Select sourcing channel"}
+                      options={sourcingChannelOptions}
                       icon={<UserCheck size={16} />}
+                      disabled={isLoadingMasters}
                     />
                   </div>
                   {errors.sourcingChannel && <span className="ad-field-error">{errors.sourcingChannel}</span>}
@@ -224,9 +338,10 @@ export default function ApplicationDetails() {
                       error={!!errors.loanProduct}
                       value={appData.loanProduct || ''}
                       onChange={(val) => updateField('loanProduct', val)}
-                      placeholder="Select loan product"
-                      options={LOAN_PRODUCTS}
+                      placeholder={isLoadingMasters ? "Loading..." : "Select loan product"}
+                      options={loanProductOptions}
                       icon={<Briefcase size={16} />}
+                      disabled={isLoadingMasters}
                     />
                   </div>
                   {errors.loanProduct && <span className="ad-field-error">{errors.loanProduct}</span>}
@@ -239,9 +354,10 @@ export default function ApplicationDetails() {
                       error={!!errors.loanTransactionType}
                       value={appData.loanTransactionType || ''}
                       onChange={(val) => updateField('loanTransactionType', val)}
-                      placeholder="Select transaction type"
-                      options={LOAN_TRANSACTION_TYPES.map(t => ({value: t, label: t}))}
+                      placeholder={isLoadingMasters ? "Loading..." : "Select transaction type"}
+                      options={loanTransactionTypeOptions}
                       icon={<RefreshCw size={16} />}
+                      disabled={isLoadingMasters}
                     />
                   </div>
                   {errors.loanTransactionType && <span className="ad-field-error">{errors.loanTransactionType}</span>}
@@ -250,15 +366,14 @@ export default function ApplicationDetails() {
                 <div className="compact-field">
                   <label className="compact-label">Purpose of Loan</label>
                   <div className="compact-input-wrapper">
-                    <span className="compact-input-icon">
-                      <Target size={16} />
-                    </span>
-                    <input
-                      className={`form-input compact-input compact-input--with-icon ${errors.purposeOfLoan ? 'ad-input--invalid' : ''}`}
-                      type="text"
+                    <Select
+                      error={!!errors.purposeOfLoan}
                       value={appData.purposeOfLoan || ''}
-                      onChange={(event) => updateField('purposeOfLoan', event.target.value)}
-                      placeholder="Short purpose note"
+                      onChange={(val) => updateField('purposeOfLoan', val)}
+                      placeholder={isLoadingMasters ? "Loading..." : "Select loan purpose"}
+                      options={loanPurposeOptions}
+                      icon={<Target size={16} />}
+                      disabled={isLoadingMasters}
                     />
                   </div>
                   {errors.purposeOfLoan && <span className="ad-field-error">{errors.purposeOfLoan}</span>}
@@ -311,9 +426,10 @@ export default function ApplicationDetails() {
                       error={!!errors.interestType}
                       value={appData.interestType || ''}
                       onChange={(val) => updateField('interestType', val)}
-                      placeholder="Select interest type"
-                      options={INTEREST_TYPES.map(t => ({value: t, label: t}))}
+                      placeholder={isLoadingMasters ? "Loading..." : "Select interest type"}
+                      options={interestTypeOptions}
                       icon={<TrendingUp size={16} />}
+                      disabled={isLoadingMasters}
                     />
                   </div>
                   {errors.interestType && <span className="ad-field-error">{errors.interestType}</span>}
@@ -388,9 +504,10 @@ export default function ApplicationDetails() {
                         error={!!errors.loanVariation}
                         value={appData.loanVariation || ''}
                         onChange={(val) => updateField('loanVariation', val)}
-                        placeholder="Select variation"
-                        options={variationOptions.map(v => ({value: v, label: v}))}
+                        placeholder={isLoadingMasters ? "Loading..." : "Select variation"}
+                        options={variationOptions}
                         icon={<GitBranch size={16} />}
+                        disabled={isLoadingMasters}
                       />
                     </div>
                     {errors.loanVariation && <span className="ad-field-error">{errors.loanVariation}</span>}

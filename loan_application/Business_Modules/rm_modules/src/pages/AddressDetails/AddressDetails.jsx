@@ -17,11 +17,7 @@ import {
   getSectionState,
 } from '../applicationWizard/flowUtils';
 
-const STATE_OPTIONS = [
-  'Andhra Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Delhi', 'Gujarat', 'Haryana', 'Jharkhand',
-  'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Odisha', 'Punjab', 'Rajasthan',
-  'Tamil Nadu', 'Telangana', 'Uttar Pradesh', 'West Bengal',
-];
+
 
 function buildAddressState(appData) {
   const saved = getSectionState(appData, 'addressDetails', {});
@@ -43,7 +39,15 @@ function buildAddressState(appData) {
 
 function validateAddress(address) { return {}; }
 
-function AddressCard({ title, address, onChange, errors }) {
+function AddressCard({ 
+  title, 
+  address, 
+  onChange, 
+  errors,
+  cityOptions = [],
+  stateOptions = [],
+  isLoadingMasters = false
+}) {
   return (
     <div className="aw-mini-card">
       <div className="aw-mini-card__header">
@@ -95,11 +99,14 @@ function AddressCard({ title, address, onChange, errors }) {
           <div className="aw-field">
             <label className="form-label">City</label>
             <div className="aw-input-wrapper">
-              <Building2 className="aw-input-icon" size={14} />
-              <input
-                className={`form-input aw-input aw-input--with-icon ${errors.city ? 'aw-input--invalid' : ''}`}
+              <Select
+                error={!!errors.city}
                 value={address.city}
-                onChange={(e) => onChange('city', e.target.value)}
+                onChange={(val) => onChange('city', val)}
+                placeholder={isLoadingMasters ? "Loading..." : "Select city"}
+                options={cityOptions}
+                disabled={isLoadingMasters}
+                icon={<Building2 size={14} />}
               />
             </div>
             {errors.city && <span className="aw-field-error">{errors.city}</span>}
@@ -112,8 +119,9 @@ function AddressCard({ title, address, onChange, errors }) {
                 error={!!errors.state}
                 value={address.state}
                 onChange={(val) => onChange('state', val)}
-                placeholder="Select state"
-                options={STATE_OPTIONS.map((state) => ({ value: state, label: state }))}
+                placeholder={isLoadingMasters ? "Loading..." : "Select state"}
+                options={stateOptions}
+                disabled={isLoadingMasters}
                 icon={<Map size={14} />}
               />
             </div>
@@ -163,6 +171,36 @@ export default function AddressDetails() {
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildAddressState(getApplication(appId)));
   const [errors, setErrors] = useState({});
+
+  const [isLoadingMasters, setIsLoadingMasters] = useState(false);
+  const [stateOptions, setStateOptions] = useState([]);
+  const [cityOptions, setCityOptions] = useState([]);
+
+  useEffect(() => {
+    async function fetchMaster(endpoint, idField, nameField, setStateFunc) {
+      try {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+        const res = await fetch(`${baseUrl}/${endpoint}`);
+        if (res.ok) {
+          const data = await res.json();
+          setStateFunc(data.map(item => ({ value: item[idField], label: item[nameField], raw: item })));
+        }
+      } catch (e) {
+        console.error(`Failed to fetch ${endpoint}:`, e);
+      }
+    }
+
+    async function loadMasters() {
+      setIsLoadingMasters(true);
+      await Promise.allSettled([
+        fetchMaster('State', 'stateId', 'stateName', setStateOptions),
+        fetchMaster('City', 'cityId', 'cityName', setCityOptions),
+      ]);
+      setIsLoadingMasters(false);
+    }
+    
+    loadMasters();
+  }, []);
 
   useEffect(() => {
     ensureApplication(appId);
@@ -235,7 +273,7 @@ export default function AddressDetails() {
     return nextErrors;
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     const validationErrors = validateForm();
     setErrors(validationErrors);
 
@@ -243,8 +281,80 @@ export default function AddressDetails() {
       return;
     }
 
-    saveApplication(appId, buildSectionUpdate(appData, 'addressDetails', form));
-    navigate(ROUTES.EMPLOYMENT_INCOME.replace(':applicationId', appId));
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+    const allPersons = [
+      { ...form.applicant, isPrimary: true },
+      ...form.coApplicants.map((co, i) => ({ ...co, index: i, isPrimary: false }))
+    ];
+
+    try {
+      for (const person of allPersons) {
+        const personalInfoId = person.isPrimary
+          ? appData.registration?.personalInformation?.applicant?.personalInformationId
+          : appData.registration?.personalInformation?.coApplicants?.[person.index]?.personalInformationId;
+
+        if (!personalInfoId) {
+          console.warn('No Personal Information ID found, skipping Address Details API save');
+          continue;
+        }
+
+        const isUpdate = !!person.addressDetailsId;
+        const url = isUpdate
+          ? `${baseUrl}/ApplicationAddressDetails/${person.addressDetailsId}`
+          : `${baseUrl}/ApplicationAddressDetails`;
+
+        const payload = {
+          PersonalInformationId: Number(personalInfoId),
+          AddressLine1: person.addressLine1 || '',
+          AddressLine2: person.addressLine2 || null,
+          Landmark: person.landmark || null,
+          CityId: person.city ? Number(person.city) : 1, // Defaulting if not set properly
+          StateId: person.state ? Number(person.state) : 1,
+          MailingAsCurrent: person.mailingSameAsCurrent === 'Yes',
+          CreatedBy: 1
+        };
+
+        if (isUpdate) {
+          payload.ApplicationAddressDetailsId = Number(person.addressDetailsId);
+        }
+
+        const response = await fetch(url, {
+          method: isUpdate ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to save: ${response.statusText}`);
+        }
+
+        let savedData = null;
+        if (response.status !== 204) {
+          const text = await response.text();
+          if (text) { try { savedData = JSON.parse(text); } catch (e) { /* ignore */ } }
+        }
+        
+        const savedId = savedData?.applicationAddressDetailsId || savedData?.ApplicationAddressDetailsId;
+        if (savedId) {
+          person.addressDetailsId = savedId;
+        }
+      }
+
+      const finalForm = {
+        ...form,
+        applicant: { ...form.applicant, addressDetailsId: allPersons[0].addressDetailsId },
+        coApplicants: form.coApplicants.map((co, i) => ({
+          ...co,
+          addressDetailsId: allPersons[i + 1]?.addressDetailsId || co.addressDetailsId
+        }))
+      };
+
+      saveApplication(appId, buildSectionUpdate(appData, 'addressDetails', finalForm));
+      navigate(ROUTES.EMPLOYMENT_INCOME.replace(':applicationId', appId));
+    } catch (err) {
+      console.error('Error saving Address Details:', err);
+      alert('Network error while saving address details.');
+    }
   };
 
   const handleBack = () => {
@@ -296,6 +406,9 @@ export default function AddressDetails() {
             .filter(([key]) => key.startsWith('applicant.'))
             .map(([key, value]) => [key.split('.').slice(1).join('.'), value]),
         )}
+        cityOptions={cityOptions}
+        stateOptions={stateOptions}
+        isLoadingMasters={isLoadingMasters}
       />
 
       {activeCount > 0 && form.coApplicants.map((address, index) => (
@@ -309,6 +422,9 @@ export default function AddressDetails() {
               .filter(([key]) => key.startsWith(`coApplicants.${index}.`))
               .map(([key, value]) => [key.split('.').slice(2).join('.'), value]),
           )}
+          cityOptions={cityOptions}
+          stateOptions={stateOptions}
+          isLoadingMasters={isLoadingMasters}
         />
       ))}
     </WizardSectionLayout>

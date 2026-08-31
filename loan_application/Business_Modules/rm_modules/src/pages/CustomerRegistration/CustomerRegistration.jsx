@@ -13,12 +13,6 @@ import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import Modal from '../../components/Modal/Modal';
 import './CustomerRegistration.css';
 
-const TITLE_OPTIONS = ['Mr.', 'Mrs.', 'Ms.'];
-const CATEGORY_OPTIONS = ['Gen', 'SC', 'ST', 'OBC'];
-const GENDER_OPTIONS = ['Male', 'Female', 'Other'];
-const MARITAL_STATUS_OPTIONS = ['Married', 'Single'];
-const RELATIONSHIP_OPTIONS = ['Spouse', 'Father', 'Mother', 'Son', 'Daughter', 'Brother', 'Sister', 'Other'];
-
 function digitsOnly(value) {
   return String(value || '').replace(/[^\d]/g, '');
 }
@@ -55,21 +49,22 @@ function composeFullName(person = {}) {
 
 function createEmptyPerson(overrides = {}) {
   return {
-    relationshipWithApplicant: overrides.relationshipWithApplicant || '',
-    title: overrides.title || '',
-    firstName: overrides.firstName || '',
-    middleName: overrides.middleName || '',
-    lastName: overrides.lastName || '',
-    fatherOrSpouseName: overrides.fatherOrSpouseName || '',
-    mothersMaidenName: overrides.mothersMaidenName || '',
-    dateOfBirth: overrides.dateOfBirth || '',
-    religion: overrides.religion || '',
-    category: overrides.category || '',
-    gender: overrides.gender || '',
-    maritalStatus: overrides.maritalStatus || '',
-    mobileNo: overrides.mobileNo || '',
-    emailId: overrides.emailId || '',
-    panCardNo: overrides.panCardNo || '',
+    personalInformationId: overrides.personalInformationId || null,
+    relationshipWithApplicant: overrides.relationshipWithApplicant ?? '',
+    title: overrides.title ?? '',
+    firstName: overrides.firstName ?? '',
+    middleName: overrides.middleName ?? '',
+    lastName: overrides.lastName ?? '',
+    fatherOrSpouseName: overrides.fatherOrSpouseName ?? '',
+    mothersMaidenName: overrides.mothersMaidenName ?? '',
+    dateOfBirth: overrides.dateOfBirth ?? '',
+    religion: overrides.religion ?? '',
+    category: overrides.category ?? '',
+    gender: overrides.gender ?? '',
+    maritalStatus: overrides.maritalStatus ?? '',
+    mobileNo: overrides.mobileNo ?? '',
+    emailId: overrides.emailId ?? '',
+    panCardNo: overrides.panCardNo ?? '',
   };
 }
 
@@ -81,41 +76,43 @@ function buildPersonalInformationState(appData) {
   const coApplicantCount = Number(appData.coApplicantsCount ?? saved.coApplicantsCount ?? 0);
 
   const applicant = createEmptyPerson({
-    relationshipWithApplicant: 'SELF',
-    title: savedApplicant.title || '',
-    firstName: savedApplicant.firstName || applicantNameParts.firstName,
-    middleName: savedApplicant.middleName || applicantNameParts.middleName,
-    lastName: savedApplicant.lastName || applicantNameParts.lastName,
-    fatherOrSpouseName: savedApplicant.fatherOrSpouseName || '',
-    mothersMaidenName: savedApplicant.mothersMaidenName || '',
-    dateOfBirth: savedApplicant.dateOfBirth || savedApplicant.dob || '',
-    religion: savedApplicant.religion || '',
-    category: savedApplicant.category || '',
-    gender: savedApplicant.gender || appData.gender || '',
-    maritalStatus: savedApplicant.maritalStatus || '',
-    mobileNo: savedApplicant.mobileNo || appData.mobile || '',
-    emailId: savedApplicant.emailId || appData.email || '',
-    panCardNo: savedApplicant.panCardNo || appData.panNumber || '',
+    personalInformationId: savedApplicant.personalInformationId || null,
+    relationshipWithApplicant: savedApplicant.relationshipWithApplicant ?? '',
+    title: savedApplicant.title ?? '',
+    firstName: savedApplicant.firstName ?? applicantNameParts.firstName,
+    middleName: savedApplicant.middleName ?? applicantNameParts.middleName,
+    lastName: savedApplicant.lastName ?? applicantNameParts.lastName,
+    fatherOrSpouseName: savedApplicant.fatherOrSpouseName ?? '',
+    mothersMaidenName: savedApplicant.mothersMaidenName ?? '',
+    dateOfBirth: savedApplicant.dateOfBirth ?? savedApplicant.dob ?? '',
+    religion: savedApplicant.religion ?? '',
+    category: savedApplicant.category ?? '',
+    gender: savedApplicant.gender ?? appData.gender ?? '',
+    maritalStatus: savedApplicant.maritalStatus ?? '',
+    mobileNo: savedApplicant.mobileNo ?? appData.mobile ?? '',
+    emailId: savedApplicant.emailId ?? appData.email ?? '',
+    panCardNo: savedApplicant.panCardNo ?? appData.panNumber ?? '',
   });
 
   const coApplicants = Array.from({ length: coApplicantCount }, (_, index) => {
     const current = savedCoApplicants[index] || {};
     return createEmptyPerson({
-      relationshipWithApplicant: current.relationshipWithApplicant || current.relationship || '',
-      title: current.title || '',
-      firstName: current.firstName || '',
-      middleName: current.middleName || '',
-      lastName: current.lastName || '',
-      fatherOrSpouseName: current.fatherOrSpouseName || '',
-      mothersMaidenName: current.mothersMaidenName || '',
-      dateOfBirth: current.dateOfBirth || current.dob || '',
-      religion: current.religion || '',
-      category: current.category || '',
-      gender: current.gender || '',
-      maritalStatus: current.maritalStatus || '',
-      mobileNo: current.mobileNo || current.mobile || '',
-      emailId: current.emailId || current.email || '',
-      panCardNo: current.panCardNo || current.panNumber || '',
+      personalInformationId: current.personalInformationId || null,
+      relationshipWithApplicant: current.relationshipWithApplicant ?? current.relationship ?? '',
+      title: current.title ?? '',
+      firstName: current.firstName ?? '',
+      middleName: current.middleName ?? '',
+      lastName: current.lastName ?? '',
+      fatherOrSpouseName: current.fatherOrSpouseName ?? '',
+      mothersMaidenName: current.mothersMaidenName ?? '',
+      dateOfBirth: current.dateOfBirth ?? current.dob ?? '',
+      religion: current.religion ?? '',
+      category: current.category ?? '',
+      gender: current.gender ?? '',
+      maritalStatus: current.maritalStatus ?? '',
+      mobileNo: current.mobileNo ?? current.mobile ?? '',
+      emailId: current.emailId ?? current.email ?? '',
+      panCardNo: current.panCardNo ?? current.panNumber ?? '',
     });
   });
 
@@ -151,7 +148,13 @@ function PersonCard({
   onChange,
   errors,
   relationshipMode = 'readOnly',
-  relationshipOptions = RELATIONSHIP_OPTIONS,
+  relationshipOptions = [],
+  titleOptions = [],
+  categoryOptions = [],
+  genderOptions = [],
+  maritalStatusOptions = [],
+  religionOptions = [],
+  isLoadingMasters = false
 }) {
   const handleChange = (field, value) => onChange(field, value);
 
@@ -176,31 +179,32 @@ function PersonCard({
                   error={!!errors.relationshipWithApplicant}
                   value={person.relationshipWithApplicant}
                   onChange={(val) => handleChange('relationshipWithApplicant', val)}
-                  placeholder="Select relationship"
-                  options={relationshipOptions.map((option) => ({value: option, label: option}))}
-                  icon={<Users size={14} />}
+                  placeholder={isLoadingMasters ? "Loading..." : "Select relationship"}
+                  options={relationshipOptions}
+                  disabled={isLoadingMasters}
                 />
               ) : (
-                <>
-                  <Users className="cr-input-icon" size={14} />
-                  <input className="form-input cr-input cr-input--with-icon" value="SELF" readOnly />
-                </>
+                <div className="cr-input-readonly">
+                  <User size={14} className="cr-input-icon" />
+                  <span>{person.relationshipWithApplicant}</span>
+                </div>
               )}
             </div>
-            {errors.relationshipWithApplicant && <span className="cr-field-error">{errors.relationshipWithApplicant}</span>}
+            {errors.relationshipWithApplicant && (
+              <span className="cr-field-error">{errors.relationshipWithApplicant}</span>
+            )}
           </div>
 
           <div className="cr-field">
-            <label className="form-label">
-              Title
-            </label>
+            <label className="form-label">Title</label>
             <div className="cr-input-wrapper">
               <Select
                 error={!!errors.title}
                 value={person.title}
                 onChange={(val) => handleChange('title', val)}
-                placeholder="Select title"
-                options={TITLE_OPTIONS.map((option) => ({value: option, label: option}))}
+                placeholder={isLoadingMasters ? "Loading..." : "Select title"}
+                options={titleOptions}
+                disabled={isLoadingMasters}
                 icon={<User size={14} />}
               />
             </div>
@@ -300,42 +304,41 @@ function PersonCard({
           <div className="cr-field">
             <label className="form-label">Religion</label>
             <div className="cr-input-wrapper">
-              <FileText className="cr-input-icon" size={14} />
-              <input
-                className="form-input cr-input cr-input--with-icon"
-                type="text"
-                value={person.religion}
-                onChange={(event) => handleChange('religion', event.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="cr-field">
-            <label className="form-label">
-              Category
-            </label>
-            <div className="cr-input-wrapper">
               <Select
-                value={person.category}
-                onChange={(val) => handleChange('category', val)}
-                placeholder="Select category"
-                options={CATEGORY_OPTIONS.map((option) => ({value: option, label: option}))}
+                value={person.religion}
+                onChange={(val) => handleChange('religion', val)}
+                placeholder={isLoadingMasters ? "Loading..." : "Select religion"}
+                options={religionOptions}
+                disabled={isLoadingMasters}
                 icon={<FileText size={14} />}
               />
             </div>
           </div>
 
           <div className="cr-field">
-            <label className="form-label">
-              Gender
-            </label>
+            <label className="form-label">Category</label>
+            <div className="cr-input-wrapper">
+              <Select
+                value={person.category}
+                onChange={(val) => handleChange('category', val)}
+                placeholder={isLoadingMasters ? "Loading..." : "Select category"}
+                options={categoryOptions}
+                disabled={isLoadingMasters}
+                icon={<FileText size={14} />}
+              />
+            </div>
+          </div>
+
+          <div className="cr-field">
+            <label className="form-label">Gender</label>
             <div className="cr-input-wrapper">
               <Select
                 error={!!errors.gender}
                 value={person.gender}
                 onChange={(val) => handleChange('gender', val)}
-                placeholder="Select gender"
-                options={GENDER_OPTIONS.map((option) => ({value: option, label: option}))}
+                placeholder={isLoadingMasters ? "Loading..." : "Select gender"}
+                options={genderOptions}
+                disabled={isLoadingMasters}
                 icon={<User size={14} />}
               />
             </div>
@@ -343,16 +346,15 @@ function PersonCard({
           </div>
 
           <div className="cr-field">
-            <label className="form-label">
-              Marital Status
-            </label>
+            <label className="form-label">Marital Status</label>
             <div className="cr-input-wrapper">
               <Select
                 error={!!errors.maritalStatus}
                 value={person.maritalStatus}
                 onChange={(val) => handleChange('maritalStatus', val)}
-                placeholder="Select marital status"
-                options={MARITAL_STATUS_OPTIONS.map((option) => ({value: option, label: option}))}
+                placeholder={isLoadingMasters ? "Loading..." : "Select marital status"}
+                options={maritalStatusOptions}
+                disabled={isLoadingMasters}
                 icon={<UserCheck size={14} />}
               />
             </div>
@@ -407,9 +409,51 @@ export default function CustomerRegistration() {
   const [form, setForm] = useState(() => buildPersonalInformationState(getApplication(appId)));
   const [errors, setErrors] = useState({});
 
+  const [isLoadingMasters, setIsLoadingMasters] = useState(false);
+  const [titleOptions, setTitleOptions] = useState([]);
+  const [categoryOptions, setCategoryOptions] = useState([]);
+  const [genderOptions, setGenderOptions] = useState([]);
+  const [maritalStatusOptions, setMaritalStatusOptions] = useState([]);
+  const [relationshipOptions, setRelationshipOptions] = useState([]);
+  const [religionOptions, setReligionOptions] = useState([]);
+
   useEffect(() => {
     ensureApplication(appId);
   }, [appId, ensureApplication]);
+
+  useEffect(() => {
+    async function fetchMaster(endpoint, idField, nameField, setState, uniqueValues = false) {
+      try {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+        const res = await fetch(`${baseUrl}/${endpoint}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (uniqueValues) {
+             const uniqueNames = [...new Set(data.map(item => item[nameField]))];
+             setState(uniqueNames.map(name => ({ value: name, label: name })));
+          } else {
+             setState(data.map(item => ({ value: item[idField], label: item[nameField], raw: item })));
+          }
+        }
+      } catch (e) {
+        console.error(`Failed to fetch ${endpoint}:`, e);
+      }
+    }
+
+    async function loadMasters() {
+      setIsLoadingMasters(true);
+      await Promise.allSettled([
+        fetchMaster('TitleMaster', 'titleID', 'titleName', setTitleOptions),
+        fetchMaster('masters/CasteMaster', 'casteId', 'casteName', setCategoryOptions),
+        fetchMaster('gender', 'genderId', 'genderName', setGenderOptions),
+        fetchMaster('marital-status', 'maritalStatusId', 'maritalStatusName', setMaritalStatusOptions),
+        fetchMaster('RelationshipMaster', 'relationshipId', 'relationshipName', setRelationshipOptions),
+        fetchMaster('masters/ReligionMaster', 'religionId', 'religionName', setReligionOptions),
+      ]);
+      setIsLoadingMasters(false);
+    }
+    loadMasters();
+  }, []);
 
   const appData = useMemo(() => getApplication(appId), [getApplication, appId]);
   const coApplicantCount = Number(appData.coApplicantsCount || 0);
@@ -481,7 +525,7 @@ export default function CustomerRegistration() {
     return nextErrors;
   };
 
-  const handleSaveAndContinue = () => {
+  const handleSaveAndContinue = async () => {
     const validationErrors = validateForm();
     setErrors(validationErrors);
 
@@ -489,11 +533,97 @@ export default function CustomerRegistration() {
       return;
     }
 
-    saveApplication(appId, {
-      ...buildRegistrationPayload(form, appData),
-    });
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+    
+    // Save to API for each person
+    const allPersons = [
+      { ...form.applicant, isPrimary: true },
+      ...form.coApplicants.map((co, i) => ({ ...co, index: i, isPrimary: false }))
+    ];
 
-    navigate(ROUTES.ADDRESS_DETAILS.replace(':applicationId', appId));
+    try {
+      for (const person of allPersons) {
+        // Find corresponding KYC doc ID
+        const kycDocId = person.isPrimary 
+          ? appData.kycDocuments?.applicant?.kycDocumentId 
+          : appData.kycDocuments?.coApplicants?.[person.index]?.kycDocumentId;
+
+        if (!kycDocId) {
+          console.warn('No KYC Document ID found for person, skipping API save');
+          continue;
+        }
+
+        const isUpdate = !!person.personalInformationId;
+        const url = isUpdate
+          ? `${baseUrl}/ApplicationPersonalInformation/${person.personalInformationId}`
+          : `${baseUrl}/ApplicationPersonalInformation`;
+
+        const payload = {
+          ApplicationKYCDocumentId: Number(kycDocId),
+          RelationshipId: person.relationshipWithApplicant ? Number(person.relationshipWithApplicant) : 1, // Defaulting if not selected
+          TitleId: person.title ? Number(person.title) : 1,
+          FirstName: person.firstName || '',
+          MiddleName: person.middleName || null,
+          LastName: person.lastName || '',
+          FatherSpouseName: person.fatherOrSpouseName || null,
+          CasteId: person.category ? Number(person.category) : null,
+          GenderId: person.gender ? Number(person.gender) : null,
+          MaritalStatusId: person.maritalStatus ? Number(person.maritalStatus) : null,
+          MobileNumber: person.mobileNo || null,
+          EmailId: person.emailId || null,
+          ReligionId: person.religion ? Number(person.religion) : null,
+          DateOfBirth: person.dateOfBirth ? new Date(person.dateOfBirth).toISOString() : null,
+          MothersMaidenName: person.mothersMaidenName || null,
+          CreatedBy: 1
+        };
+        
+        if (isUpdate) {
+          payload.PersonalInformationId = Number(person.personalInformationId);
+        }
+
+        console.log(`Saving PersonalInfo [${isUpdate ? 'PUT' : 'POST'}]:`, payload);
+
+        const response = await fetch(url, {
+          method: isUpdate ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to save: ${response.statusText}`);
+        }
+
+        let savedData = null;
+        if (response.status !== 204) {
+          const text = await response.text();
+          if (text) { try { savedData = JSON.parse(text); } catch (e) { /* ignore */ } }
+        }
+        
+        const savedId = savedData?.personalInformationId || savedData?.PersonalInformationId;
+        if (savedId) {
+          person.personalInformationId = savedId;
+        }
+      }
+
+      // Sync updated IDs back to form state
+      const finalForm = {
+        ...form,
+        applicant: { ...form.applicant, personalInformationId: allPersons[0].personalInformationId },
+        coApplicants: form.coApplicants.map((co, i) => ({
+          ...co,
+          personalInformationId: allPersons[i + 1]?.personalInformationId || co.personalInformationId
+        }))
+      };
+
+      saveApplication(appId, {
+        ...buildRegistrationPayload(finalForm, appData),
+      });
+
+      navigate(ROUTES.ADDRESS_DETAILS.replace(':applicationId', appId));
+    } catch (err) {
+      console.error('Error saving Personal Information:', err);
+      alert('Network error while saving personal information.');
+    }
   };
 
   const handleBack = () => {
@@ -588,6 +718,14 @@ export default function CustomerRegistration() {
                 .filter(([key]) => key.startsWith('applicant.'))
                 .map(([key, value]) => [key.split('.').slice(1).join('.'), value]),
             )}
+            relationshipMode="select"
+            titleOptions={titleOptions}
+            categoryOptions={categoryOptions}
+            genderOptions={genderOptions}
+            maritalStatusOptions={maritalStatusOptions}
+            relationshipOptions={relationshipOptions}
+            religionOptions={religionOptions}
+            isLoadingMasters={isLoadingMasters}
           />
 
           {coApplicantCount > 0 && (
@@ -611,6 +749,13 @@ export default function CustomerRegistration() {
                   .map(([key, value]) => [key.split('.').slice(2).join('.'), value]),
               )}
               relationshipMode="select"
+              titleOptions={titleOptions}
+              categoryOptions={categoryOptions}
+              genderOptions={genderOptions}
+              maritalStatusOptions={maritalStatusOptions}
+              relationshipOptions={relationshipOptions}
+              religionOptions={religionOptions}
+              isLoadingMasters={isLoadingMasters}
             />
           ))}
         </div>
