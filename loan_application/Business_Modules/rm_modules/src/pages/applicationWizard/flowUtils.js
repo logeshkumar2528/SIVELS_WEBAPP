@@ -43,6 +43,7 @@ export function createPersonTemplate(overrides = {}) {
 
 export function createAddressTemplate(overrides = {}) {
   return {
+    addressDetailsId: overrides.addressDetailsId || null,
     addressLine1: overrides.addressLine1 || '',
     addressLine2: overrides.addressLine2 || '',
     landmark: overrides.landmark || '',

@@ -17,7 +17,9 @@ export default function Select({
   const [rect, setRect] = useState(null);
   const triggerRef = useRef(null);
 
-  const selectedOption = options.find(opt => opt.value === value);
+  const selectedOption = options.find(
+    (opt) => opt.value === value || (value !== '' && value !== null && value !== undefined && String(opt.value) === String(value))
+  );
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -113,18 +115,21 @@ export default function Select({
                 {placeholder}
               </li>
             )}
-            {options.map((option, index) => (
-              <li 
-                key={index} 
-                className={`aw-custom-select-option ${option.value === value ? 'selected' : ''}`}
-                onClick={() => {
-                  onChange(option.value);
-                  setIsOpen(false);
-                }}
-              >
-                {option.label}
-              </li>
-            ))}
+            {options.map((option, index) => {
+              const isSelected = option.value === value || (value !== '' && value !== null && value !== undefined && String(option.value) === String(value));
+              return (
+                <li 
+                  key={index} 
+                  className={`aw-custom-select-option ${isSelected ? 'selected' : ''}`}
+                  onClick={() => {
+                    onChange(option.value);
+                    setIsOpen(false);
+                  }}
+                >
+                  {option.label}
+                </li>
+              );
+            })}
           </ul>
         </div>,
         document.body

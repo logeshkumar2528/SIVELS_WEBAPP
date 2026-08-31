@@ -15,7 +15,7 @@ import {
   getSectionState,
 } from '../applicationWizard/flowUtils';
 
-const EMPLOYMENT_OPTIONS = ['Salaried', 'Self-Employed'];
+
 
 function buildEmploymentState(appData) {
   const saved = getSectionState(appData, 'employmentIncome', {});
@@ -23,6 +23,7 @@ function buildEmploymentState(appData) {
   const savedCoApplicants = Array.isArray(saved.coApplicants) ? saved.coApplicants : [];
 
   const createPerson = (source = {}) => ({
+    employmentIncomeDetailsId: source.employmentIncomeDetailsId || null,
     employerBusinessName: source.employerBusinessName || '',
     designationNatureOfBusiness: source.designationNatureOfBusiness || '',
     employmentNature: source.employmentNature || '',
@@ -43,7 +44,15 @@ function buildEmploymentState(appData) {
 
 function validateEmployment(person) { return {}; }
 
-function EmploymentCard({ title, person, onChange, errors }) {
+function EmploymentCard({ 
+  title, 
+  person, 
+  onChange, 
+  errors,
+  qualificationOptions = [],
+  employmentNatureOptions = [],
+  isLoadingMasters = false
+}) {
   return (
     <div className="aw-mini-card">
       <div className="aw-mini-card__header">
@@ -87,9 +96,9 @@ function EmploymentCard({ title, person, onChange, errors }) {
                 error={!!errors.employmentNature}
                 value={person.employmentNature}
                 onChange={(val) => onChange('employmentNature', val)}
-                placeholder="Select employment nature"
-                options={EMPLOYMENT_OPTIONS.map((option) => ({value: option, label: option}))}
-                icon={<UserCog size={14} />}
+                placeholder={isLoadingMasters ? "Loading..." : "Select type"}
+                options={employmentNatureOptions}
+                disabled={isLoadingMasters}
               />
             </div>
             {errors.employmentNature && <span className="aw-field-error">{errors.employmentNature}</span>}
@@ -98,13 +107,17 @@ function EmploymentCard({ title, person, onChange, errors }) {
           <div className="aw-field">
             <label className="form-label">Qualification</label>
             <div className="aw-input-wrapper">
-              <GraduationCap className="aw-input-icon" size={14} />
-              <input
-                className="form-input aw-input aw-input--with-icon"
+              <Select
+                error={!!errors.qualification}
                 value={person.qualification}
-                onChange={(e) => onChange('qualification', e.target.value)}
+                onChange={(val) => onChange('qualification', val)}
+                placeholder={isLoadingMasters ? "Loading..." : "Select qualification"}
+                options={qualificationOptions}
+                disabled={isLoadingMasters}
+                icon={<GraduationCap size={14} />}
               />
             </div>
+            {errors.qualification && <span className="aw-field-error">{errors.qualification}</span>}
           </div>
 
           <div className="aw-field">
@@ -211,6 +224,36 @@ export default function EmploymentIncome() {
   const [form, setForm] = useState(() => buildEmploymentState(getApplication(appId)));
   const [errors, setErrors] = useState({});
 
+  const [isLoadingMasters, setIsLoadingMasters] = useState(false);
+  const [qualificationOptions, setQualificationOptions] = useState([]);
+  const [employmentNatureOptions, setEmploymentNatureOptions] = useState([]);
+
+  useEffect(() => {
+    async function fetchMaster(endpoint, idField, nameField, setStateFunc) {
+      try {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+        const res = await fetch(`${baseUrl}/${endpoint}`);
+        if (res.ok) {
+          const data = await res.json();
+          setStateFunc(data.map(item => ({ value: item[idField], label: item[nameField], raw: item })));
+        }
+      } catch (e) {
+        console.error(`Failed to fetch ${endpoint}:`, e);
+      }
+    }
+
+    async function loadMasters() {
+      setIsLoadingMasters(true);
+      await Promise.allSettled([
+        fetchMaster('EducationMaster', 'educationId', 'educationName', setQualificationOptions),
+        fetchMaster('EmploymentType', 'employmentTypeId', 'employmentTypeName', setEmploymentNatureOptions),
+      ]);
+      setIsLoadingMasters(false);
+    }
+    
+    loadMasters();
+  }, []);
+
   useEffect(() => {
     ensureApplication(appId);
   }, [appId, ensureApplication]);
@@ -242,7 +285,7 @@ export default function EmploymentIncome() {
     persist({ ...form, coApplicants: nextCoApplicants });
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     const nextErrors = {};
     const applicantErrors = validateEmployment(form.applicant);
     Object.entries(applicantErrors).forEach(([field, message]) => {
@@ -261,8 +304,84 @@ export default function EmploymentIncome() {
       return;
     }
 
-    saveApplication(appId, buildSectionUpdate(appData, 'employmentIncome', form));
-    navigate(ROUTES.BANK_EXISTING_LOANS.replace(':applicationId', appId));
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+    const allPersons = [
+      { ...form.applicant, isPrimary: true },
+      ...form.coApplicants.map((co, i) => ({ ...co, index: i, isPrimary: false }))
+    ];
+
+    try {
+      for (const person of allPersons) {
+        const addressId = person.isPrimary
+          ? appData.sections?.addressDetails?.applicant?.addressDetailsId || appData.addressDetails?.applicant?.addressDetailsId
+          : appData.sections?.addressDetails?.coApplicants?.[person.index]?.addressDetailsId || appData.addressDetails?.coApplicants?.[person.index]?.addressDetailsId;
+
+        if (!addressId) {
+          console.warn('No Address Details ID found, skipping Employment API save');
+          continue;
+        }
+
+        const isUpdate = !!person.employmentIncomeDetailsId;
+        const url = isUpdate
+          ? `${baseUrl}/ApplicationEmploymentIncomeDetails/${person.employmentIncomeDetailsId}`
+          : `${baseUrl}/ApplicationEmploymentIncomeDetails`;
+
+        const payload = {
+          ApplicationAddressDetailsId: Number(addressId),
+          EmployerBusinessName: person.employerBusinessName || '',
+          DesignationNatureOfBusiness: person.designationNatureOfBusiness || '',
+          EmploymentTypeId: person.employmentNature ? Number(person.employmentNature) : 1,
+          EducationId: person.qualification ? Number(person.qualification) : 1,
+          IndustryType: person.industryType || '',
+          TotalExperience: Number(person.totalExperienceYears) || 0,
+          GrossMonthlyIncome: Number(person.grossMonthlyIncome) || 0,
+          OtherMonthlyIncome: Number(person.otherIncomeMonthly) || 0,
+          NetMonthlyIncome: Number(person.netMonthlyIncome) || 0,
+          GrossAnnualIncome: Number(person.grossAnnualIncome) || 0,
+          CreatedBy: 1
+        };
+
+        if (isUpdate) {
+          payload.ApplicationEmploymentIncomeDetailsId = Number(person.employmentIncomeDetailsId);
+        }
+
+        const response = await fetch(url, {
+          method: isUpdate ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to save: ${response.statusText}`);
+        }
+
+        let savedData = null;
+        if (response.status !== 204) {
+          const text = await response.text();
+          if (text) { try { savedData = JSON.parse(text); } catch (e) { /* ignore */ } }
+        }
+        
+        const savedId = savedData?.applicationEmploymentIncomeDetailsId || savedData?.ApplicationEmploymentIncomeDetailsId;
+        if (savedId) {
+          person.employmentIncomeDetailsId = savedId;
+        }
+      }
+
+      const finalForm = {
+        ...form,
+        applicant: { ...form.applicant, employmentIncomeDetailsId: allPersons[0].employmentIncomeDetailsId },
+        coApplicants: form.coApplicants.map((co, i) => ({
+          ...co,
+          employmentIncomeDetailsId: allPersons[i + 1]?.employmentIncomeDetailsId || co.employmentIncomeDetailsId
+        }))
+      };
+
+      saveApplication(appId, buildSectionUpdate(appData, 'employmentIncome', finalForm));
+      navigate(ROUTES.BANK_EXISTING_LOANS.replace(':applicationId', appId));
+    } catch (err) {
+      console.error('Error saving Employment Details:', err);
+      alert('Network error while saving employment details.');
+    }
   };
 
   const handleBack = () => {
@@ -295,16 +414,19 @@ export default function EmploymentIncome() {
       footerHint={`Employment and income data is stored for ${activeCount > 1 ? `${activeCount} applicant records` : 'the applicant record'} on the same application.`}
     >
 
-      <EmploymentCard
-        title="Applicant Employment & Income"
-        person={form.applicant}
-        onChange={(field, value) => updatePerson('applicant', field, value)}
-        errors={Object.fromEntries(
-          Object.entries(errors)
-            .filter(([key]) => key.startsWith('applicant.'))
-            .map(([key, value]) => [key.split('.').slice(1).join('.'), value]),
-        )}
-      />
+        <EmploymentCard
+          title="Applicant Employment & Income"
+          person={form.applicant}
+          onChange={(field, value) => updatePerson('applicant', field, value)}
+          errors={Object.fromEntries(
+            Object.entries(errors)
+              .filter(([key]) => key.startsWith('applicant.'))
+              .map(([key, value]) => [key.split('.').slice(1).join('.'), value]),
+          )}
+          qualificationOptions={qualificationOptions}
+          employmentNatureOptions={employmentNatureOptions}
+          isLoadingMasters={isLoadingMasters}
+        />
 
       {activeCount > 0 && form.coApplicants.map((person, index) => (
         <EmploymentCard
@@ -317,6 +439,9 @@ export default function EmploymentIncome() {
               .filter(([key]) => key.startsWith(`coApplicants.${index}.`))
               .map(([key, value]) => [key.split('.').slice(2).join('.'), value]),
           )}
+          qualificationOptions={qualificationOptions}
+          employmentNatureOptions={employmentNatureOptions}
+          isLoadingMasters={isLoadingMasters}
         />
       ))}
     </WizardSectionLayout>

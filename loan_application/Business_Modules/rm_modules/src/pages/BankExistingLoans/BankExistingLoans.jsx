@@ -23,6 +23,7 @@ function buildBankState(appData) {
   const savedCoApplicants = Array.isArray(saved.coApplicants) ? saved.coApplicants : [];
 
   const createBank = (source = {}) => ({
+    applicationBankExistingLoanDetailsId: source.applicationBankExistingLoanDetailsId || null,
     bankName: source.bankName || '',
     branch: source.branch || '',
     ifscCode: source.ifscCode || '',
@@ -45,7 +46,15 @@ function buildBankState(appData) {
   };
 }
 
-function BankCard({ title, bank, onChange, onViewLoans }) {
+function BankCard({ 
+  title, 
+  bank, 
+  onChange, 
+  onViewLoans,
+  bankOptions = [],
+  branchOptions = [],
+  isLoadingMasters = false 
+}) {
   return (
     <div className="aw-mini-card">
       <div className="aw-mini-card__header">
@@ -59,15 +68,29 @@ function BankCard({ title, bank, onChange, onViewLoans }) {
           <div className="aw-field">
             <label className="form-label">Bank Name</label>
             <div className="aw-input-wrapper">
-              <Building2 className="aw-input-icon" size={14} />
-              <input className="form-input aw-input aw-input--with-icon" value={bank.bankName} onChange={(e) => onChange('bankName', e.target.value)} />
+              <Select
+                value={bank.bankName}
+                onChange={(val) => {
+                  onChange({ bankName: val, branch: '' });
+                }}
+                placeholder={isLoadingMasters ? "Loading..." : "Select Bank"}
+                options={bankOptions}
+                disabled={isLoadingMasters}
+                icon={<Building2 size={14} />}
+              />
             </div>
           </div>
           <div className="aw-field">
             <label className="form-label">Branch</label>
             <div className="aw-input-wrapper">
-              <MapPin className="aw-input-icon" size={14} />
-              <input className="form-input aw-input aw-input--with-icon" value={bank.branch} onChange={(e) => onChange('branch', e.target.value)} />
+              <Select
+                value={bank.branch}
+                onChange={(val) => onChange('branch', val)}
+                placeholder={isLoadingMasters ? "Loading..." : "Select Branch"}
+                options={branchOptions.filter(b => !bank.bankName || b.raw.bankId === Number(bank.bankName))}
+                disabled={isLoadingMasters || !bank.bankName}
+                icon={<MapPin size={14} />}
+              />
             </div>
           </div>
           <div className="aw-field">
@@ -110,6 +133,35 @@ export default function BankExistingLoans() {
   const [form, setForm] = useState(() => buildBankState(getApplication(appId)));
   const [viewingLoansFor, setViewingLoansFor] = useState(null);
   const [transientLoans, setTransientLoans] = useState({});
+  const [isLoadingMasters, setIsLoadingMasters] = useState(false);
+  const [bankOptions, setBankOptions] = useState([]);
+  const [branchOptions, setBranchOptions] = useState([]);
+
+  useEffect(() => {
+    async function fetchMaster(endpoint, idField, nameField, setStateFunc) {
+      try {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+        const res = await fetch(`${baseUrl}/${endpoint}`);
+        if (res.ok) {
+          const data = await res.json();
+          setStateFunc(data.map(item => ({ value: item[idField], label: item[nameField], raw: item })));
+        }
+      } catch (e) {
+        console.error(`Failed to fetch ${endpoint}:`, e);
+      }
+    }
+
+    async function loadMasters() {
+      setIsLoadingMasters(true);
+      await Promise.allSettled([
+        fetchMaster('masters/bank/active', 'bankId', 'bankName', setBankOptions),
+        fetchMaster('BankBranch', 'bankBranchId', 'branchName', setBranchOptions),
+      ]);
+      setIsLoadingMasters(false);
+    }
+    
+    loadMasters();
+  }, []);
 
   useEffect(() => {
     ensureApplication(appId);
@@ -128,32 +180,40 @@ export default function BankExistingLoans() {
     saveApplication(appId, buildSectionUpdate(appData, 'bankExistingLoans', nextForm));
   };
 
-  const updateApplicantBank = (scope, field, value) => {
-    const nextForm = {
-      ...form,
-      applicant: {
-        ...form.applicant,
-        [scope]: {
-          ...form.applicant[scope],
-          [field]: value,
+  const updateApplicantBank = (scope, fieldOrObj, value) => {
+    setForm(prevForm => {
+      const updates = typeof fieldOrObj === 'object' ? fieldOrObj : { [fieldOrObj]: value };
+      const nextForm = {
+        ...prevForm,
+        applicant: {
+          ...prevForm.applicant,
+          [scope]: {
+            ...prevForm.applicant[scope],
+            ...updates,
+          },
         },
-      },
-    };
-    persist(nextForm);
+      };
+      saveApplication(appId, buildSectionUpdate(appData, 'bankExistingLoans', nextForm));
+      return nextForm;
+    });
   };
 
-  const updateCoApplicantBank = (index, scope, field, value) => {
-    const nextForm = {
-      ...form,
-      coApplicants: form.coApplicants.map((ca, i) => i === index ? {
-        ...ca,
-        [scope]: {
-          ...ca[scope],
-          [field]: value,
-        },
-      } : ca),
-    };
-    persist(nextForm);
+  const updateCoApplicantBank = (index, scope, fieldOrObj, value) => {
+    setForm(prevForm => {
+      const updates = typeof fieldOrObj === 'object' ? fieldOrObj : { [fieldOrObj]: value };
+      const nextForm = {
+        ...prevForm,
+        coApplicants: prevForm.coApplicants.map((ca, i) => i === index ? {
+          ...ca,
+          [scope]: {
+            ...ca[scope],
+            ...updates,
+          },
+        } : ca),
+      };
+      saveApplication(appId, buildSectionUpdate(appData, 'bankExistingLoans', nextForm));
+      return nextForm;
+    });
   };
 
   const updateLoanDetail = (loanIndex, field, value) => {
@@ -173,9 +233,81 @@ export default function BankExistingLoans() {
     });
   };
 
-  const handleContinue = () => {
-    saveApplication(appId, buildSectionUpdate(appData, 'bankExistingLoans', form));
-    navigate(ROUTES.COLLATERAL.replace(':applicationId', appId));
+  const handleContinue = async () => {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+    const allPersons = [
+      { banks: form.applicant, isPrimary: true },
+      ...form.coApplicants.map((co, i) => ({ banks: co, index: i, isPrimary: false }))
+    ];
+
+    try {
+      for (const person of allPersons) {
+        const empId = person.isPrimary
+          ? appData.sections?.employmentIncome?.applicant?.employmentIncomeDetailsId || appData.employmentIncome?.applicant?.employmentIncomeDetailsId
+          : appData.sections?.employmentIncome?.coApplicants?.[person.index]?.employmentIncomeDetailsId || appData.employmentIncome?.coApplicants?.[person.index]?.employmentIncomeDetailsId;
+
+        if (!empId) {
+          console.warn('No Employment Income Details ID found, skipping Bank API save for this applicant');
+          continue;
+        }
+
+        const banksToSave = [
+          { data: person.banks.primaryBank, type: 'primary' },
+          { data: person.banks.otherBank, type: 'other' }
+        ];
+
+        for (const bank of banksToSave) {
+          if (!bank.data.bankName) continue; // Skip if no bank is selected
+
+          const isUpdate = !!bank.data.applicationBankExistingLoanDetailsId;
+          const url = isUpdate
+            ? `${baseUrl}/ApplicationBankExistingLoanDetails/${bank.data.applicationBankExistingLoanDetailsId}`
+            : `${baseUrl}/ApplicationBankExistingLoanDetails`;
+
+          const payload = {
+            ApplicationEmploymentIncomeDetailsId: Number(empId),
+            BankId: Number(bank.data.bankName),
+            BankBranchId: Number(bank.data.branch) || 0,
+            AccountNumber: bank.data.accountNumber || '',
+            NoOfActiveLoans: Number(bank.data.noOfActiveLoans) || 0,
+            NoOfActiveCreditCards: Number(bank.data.noOfActiveCreditCards) || 0,
+            IsPrimaryBank: bank.type === 'primary',
+            CreatedBy: 1
+          };
+
+          if (isUpdate) {
+            payload.ApplicationBankExistingLoanDetailsId = Number(bank.data.applicationBankExistingLoanDetailsId);
+          }
+
+          const response = await fetch(url, {
+            method: isUpdate ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+
+          if (!response.ok) {
+            throw new Error(`Failed to save ${bank.type} bank: ${response.statusText}`);
+          }
+
+          let savedData = null;
+          if (response.status !== 204) {
+            const text = await response.text();
+            if (text) { try { savedData = JSON.parse(text); } catch (e) { /* ignore */ } }
+          }
+          
+          const savedId = savedData?.applicationBankExistingLoanDetailsId || savedData?.ApplicationBankExistingLoanDetailsId;
+          if (savedId) {
+            bank.data.applicationBankExistingLoanDetailsId = savedId;
+          }
+        }
+      }
+
+      saveApplication(appId, buildSectionUpdate(appData, 'bankExistingLoans', form));
+      navigate(ROUTES.COLLATERAL.replace(':applicationId', appId));
+    } catch (err) {
+      console.error('Error saving Bank Details:', err);
+      alert('Network error while saving bank details.');
+    }
   };
 
   const handleBack = () => {
@@ -214,12 +346,18 @@ export default function BankExistingLoans() {
           bank={form.applicant.primaryBank}
           onChange={(field, value) => updateApplicantBank('primaryBank', field, value)}
           onViewLoans={() => setViewingLoansFor({ type: 'applicant', scope: 'primaryBank' })}
+          bankOptions={bankOptions}
+          branchOptions={branchOptions}
+          isLoadingMasters={isLoadingMasters}
         />
         <BankCard
           title="Other Bank"
           bank={form.applicant.otherBank}
           onChange={(field, value) => updateApplicantBank('otherBank', field, value)}
           onViewLoans={() => setViewingLoansFor({ type: 'applicant', scope: 'otherBank' })}
+          bankOptions={bankOptions}
+          branchOptions={branchOptions}
+          isLoadingMasters={isLoadingMasters}
         />
       </div>
 
@@ -234,12 +372,18 @@ export default function BankExistingLoans() {
               bank={coApp.primaryBank}
               onChange={(field, value) => updateCoApplicantBank(index, 'primaryBank', field, value)}
               onViewLoans={() => setViewingLoansFor({ type: 'coApplicant', index, scope: 'primaryBank' })}
+              bankOptions={bankOptions}
+              branchOptions={branchOptions}
+              isLoadingMasters={isLoadingMasters}
             />
             <BankCard
               title="Other Bank"
               bank={coApp.otherBank}
               onChange={(field, value) => updateCoApplicantBank(index, 'otherBank', field, value)}
               onViewLoans={() => setViewingLoansFor({ type: 'coApplicant', index, scope: 'otherBank' })}
+              bankOptions={bankOptions}
+              branchOptions={branchOptions}
+              isLoadingMasters={isLoadingMasters}
             />
           </div>
         </div>

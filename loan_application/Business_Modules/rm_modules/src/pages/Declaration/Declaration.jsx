@@ -8,19 +8,28 @@ import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
-import { buildSectionUpdate, getSectionState } from '../applicationWizard/flowUtils';
+import { buildSectionUpdate, getSectionState, getApplicantCount, createArray } from '../applicationWizard/flowUtils';
 
 function buildDeclarationState(appData) {
   const saved = getSectionState(appData, 'declaration', {});
+  const applicant = appData.registration?.personalInformation?.applicant || {};
+  const applicantName = appData.customerName || [applicant.firstName, applicant.lastName].filter(Boolean).join(' ') || '';
+  const coApplicantCount = getApplicantCount(appData);
+  const savedCoApplicants = Array.isArray(saved.coApplicants) ? saved.coApplicants : [];
+
   return {
-    applicantSignature: saved.applicantSignature || '',
-    applicantDate: saved.applicantDate || '',
+    applicantSignature: saved.applicantSignature || applicantName || '',
+    applicantDate: saved.applicantDate || '2025-06-06',
+    coApplicants: createArray(coApplicantCount, (index) => ({
+      signature: savedCoApplicants[index]?.signature || (index === 0 ? saved.coApplicantSignature : '') || '',
+      date: savedCoApplicants[index]?.date || (index === 0 ? saved.coApplicantDate : '') || '2025-06-06',
+    })),
     coApplicantSignature: saved.coApplicantSignature || '',
     coApplicantDate: saved.coApplicantDate || '',
-    ackApplicantName: saved.ackApplicantName || appData.applicantName || '',
-    ackProduct: saved.ackProduct || appData.loanProduct || appData.loanType || '',
-    ackReceivedBy: saved.ackReceivedBy || appData.agentName || '',
-    ackDate: saved.ackDate || '',
+    ackApplicantName: saved.ackApplicantName || applicantName || '',
+    ackProduct: saved.ackProduct || appData.loanProductDisplay || appData.loanType || appData.loanProduct || '',
+    ackReceivedBy: saved.ackReceivedBy || appData.agentName || 'Rajesh Kumar',
+    ackDate: saved.ackDate || '2025-06-06',
   };
 }
 
@@ -39,6 +48,7 @@ export default function Declaration() {
   }, [appId, ensureApplication]);
 
   const appData = getApplication(appId);
+  const coApplicantCount = getApplicantCount(appData);
   const ArrowLeftIcon = iconMap['ArrowLeft'];
 
   useEffect(() => {
@@ -103,41 +113,110 @@ export default function Declaration() {
             I/We declare that the information given in this application is true, correct and complete to the best of my/our knowledge. I/We authorise Sivels Finance (a unit of Sivels Holding Pvt Ltd) and its representatives to verify the details furnished, obtain credit bureau reports, and process my/our personal data for evaluation, sanction and servicing of this loan, in accordance with applicable law. I/We understand that the Admin Fee is non-refundable, and that submission of this form does not guarantee sanction of the loan applied for.
           </div>
 
-          <div className="aw-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {coApplicantCount === 0 ? (
+            <div className="aw-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
               <div className="aw-field">
                 <label className="form-label">Signature of Applicant</label>
                 <div className="aw-input-wrapper">
                   <PenTool className="aw-input-icon" size={14} />
-                  <input className="form-input aw-input aw-input--with-icon" value={form.applicantSignature} onChange={(e) => persist({ ...form, applicantSignature: e.target.value })} placeholder="Type name to sign" />
+                  <input
+                    className="form-input aw-input aw-input--with-icon"
+                    value={form.applicantSignature}
+                    onChange={(e) => persist({ ...form, applicantSignature: e.target.value })}
+                    placeholder="Type name to sign"
+                  />
                 </div>
               </div>
               <div className="aw-field">
                 <label className="form-label">Date</label>
                 <div className="aw-input-wrapper">
                   <Calendar className="aw-input-icon" size={14} />
-                  <input type="date" className="form-input aw-input aw-input--with-icon" value={form.applicantDate} onChange={(e) => persist({ ...form, applicantDate: e.target.value })} />
+                  <input
+                    type="date"
+                    className="form-input aw-input aw-input--with-icon"
+                    value={form.applicantDate}
+                    onChange={(e) => persist({ ...form, applicantDate: e.target.value })}
+                  />
                 </div>
               </div>
             </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div className="aw-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+                <div className="aw-field">
+                  <label className="form-label">Signature of Applicant</label>
+                  <div className="aw-input-wrapper">
+                    <PenTool className="aw-input-icon" size={14} />
+                    <input
+                      className="form-input aw-input aw-input--with-icon"
+                      value={form.applicantSignature}
+                      onChange={(e) => persist({ ...form, applicantSignature: e.target.value })}
+                      placeholder="Type name to sign"
+                    />
+                  </div>
+                </div>
+                <div className="aw-field">
+                  <label className="form-label">Date</label>
+                  <div className="aw-input-wrapper">
+                    <Calendar className="aw-input-icon" size={14} />
+                    <input
+                      type="date"
+                      className="form-input aw-input aw-input--with-icon"
+                      value={form.applicantDate}
+                      onChange={(e) => persist({ ...form, applicantDate: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div className="aw-field">
-                <label className="form-label">Signature of Co-Applicant</label>
-                <div className="aw-input-wrapper">
-                  <PenTool className="aw-input-icon" size={14} />
-                  <input className="form-input aw-input aw-input--with-icon" value={form.coApplicantSignature} onChange={(e) => persist({ ...form, coApplicantSignature: e.target.value })} placeholder="Type name to sign" />
+              {form.coApplicants.map((coApp, index) => (
+                <div key={index} className="aw-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+                  <div className="aw-field">
+                    <label className="form-label">
+                      Signature of Co-Applicant {coApplicantCount > 1 ? index + 1 : ''}
+                    </label>
+                    <div className="aw-input-wrapper">
+                      <PenTool className="aw-input-icon" size={14} />
+                      <input
+                        className="form-input aw-input aw-input--with-icon"
+                        value={coApp.signature}
+                        onChange={(e) => {
+                          const updated = [...form.coApplicants];
+                          updated[index] = { ...updated[index], signature: e.target.value };
+                          persist({
+                            ...form,
+                            coApplicants: updated,
+                            coApplicantSignature: updated[0]?.signature || '',
+                          });
+                        }}
+                        placeholder="Type name to sign"
+                      />
+                    </div>
+                  </div>
+                  <div className="aw-field">
+                    <label className="form-label">Date</label>
+                    <div className="aw-input-wrapper">
+                      <Calendar className="aw-input-icon" size={14} />
+                      <input
+                        type="date"
+                        className="form-input aw-input aw-input--with-icon"
+                        value={coApp.date}
+                        onChange={(e) => {
+                          const updated = [...form.coApplicants];
+                          updated[index] = { ...updated[index], date: e.target.value };
+                          persist({
+                            ...form,
+                            coApplicants: updated,
+                            coApplicantDate: updated[0]?.date || '',
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="aw-field">
-                <label className="form-label">Date</label>
-                <div className="aw-input-wrapper">
-                  <Calendar className="aw-input-icon" size={14} />
-                  <input type="date" className="form-input aw-input aw-input--with-icon" value={form.coApplicantDate} onChange={(e) => persist({ ...form, coApplicantDate: e.target.value })} />
-                </div>
-              </div>
+              ))}
             </div>
-          </div>
+          )}
         </div>
       </div>
 

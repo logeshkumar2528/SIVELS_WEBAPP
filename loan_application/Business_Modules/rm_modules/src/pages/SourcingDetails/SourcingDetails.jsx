@@ -12,7 +12,7 @@ import { buildSectionUpdate, getSectionState } from '../applicationWizard/flowUt
 function buildSourcingState(appData) {
   const saved = getSectionState(appData, 'sourcing', {});
   return {
-    sourcedBy: saved.sourcedBy || appData.agentName || '',
+    sourcedBy: saved.sourcedBy || '',
     employeeId: saved.employeeId || '',
   };
 }
@@ -23,6 +23,36 @@ export default function SourcingDetails() {
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildSourcingState(getApplication(appId)));
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    async function fetchRM() {
+      setIsLoading(true);
+      try {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+        const res = await fetch(`${baseUrl}/RMMaster`);
+        if (res.ok) {
+          const data = await res.json();
+          // Find the first active RM or just the first one
+          const rm = data.find(r => r.isActive) || data[0];
+          if (rm) {
+            const updates = { sourcedBy: rm.fullName || '', employeeId: rm.rmCode || '' };
+            setForm(prev => ({ ...prev, ...updates }));
+            // Also save this derived state to draft so it's persisted
+            saveApplication(appId, buildSectionUpdate(getApplication(appId), 'sourcing', updates));
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch RM Details:', err);
+      }
+      setIsLoading(false);
+    }
+    
+    // Only fetch if we don't already have it
+    if (!form.sourcedBy && !form.employeeId) {
+      fetchRM();
+    }
+  }, []);
 
   useEffect(() => {
     ensureApplication(appId);
@@ -30,10 +60,6 @@ export default function SourcingDetails() {
 
   const appData = getApplication(appId);
   const ArrowLeftIcon = iconMap['ArrowLeft'];
-
-  useEffect(() => {
-    setForm(buildSourcingState(getApplication(appId)));
-  }, [appId, getApplication]);
 
   const persist = (nextForm) => {
     setForm(nextForm);
@@ -86,14 +112,24 @@ export default function SourcingDetails() {
               <label className="form-label">Sourced By (RM Name)</label>
               <div className="aw-input-wrapper">
                 <User className="aw-input-icon" size={14} />
-                <input className="form-input aw-input aw-input--with-icon" value={form.sourcedBy} onChange={(e) => persist({ ...form, sourcedBy: e.target.value })} />
+                <input 
+                  className="form-input aw-input aw-input--with-icon" 
+                  value={isLoading ? 'Loading...' : form.sourcedBy} 
+                  readOnly 
+                  disabled
+                />
               </div>
             </div>
             <div className="aw-field">
               <label className="form-label">Employee ID</label>
               <div className="aw-input-wrapper">
                 <Hash className="aw-input-icon" size={14} />
-                <input className="form-input aw-input aw-input--with-icon" value={form.employeeId} onChange={(e) => persist({ ...form, employeeId: e.target.value })} />
+                <input 
+                  className="form-input aw-input aw-input--with-icon" 
+                  value={isLoading ? 'Loading...' : form.employeeId} 
+                  readOnly
+                  disabled
+                />
               </div>
             </div>
           </div>

@@ -6,6 +6,7 @@ const BASE = '/rm';
 const NEW_APPLICATION_BASE = `${BASE}/applications/new/:applicationId`;
 
 export const ROUTES = {
+  LOGIN:                 `${BASE}/login`,
   DASHBOARD:             `${BASE}/dashboard`,
   NEW_APPLICATIONS:      `${BASE}/applications/new`,
   PENDING_APPLICATIONS:  `${BASE}/applications/pending`,
@@ -32,7 +33,6 @@ export const ROUTES = {
   CREATE_LOGIN:          `${NEW_APPLICATION_BASE}/charges`,
   REVIEW_SUBMIT:         `${NEW_APPLICATION_BASE}/declaration`,
   APPLICATION_PDF_VIEW:  `${NEW_APPLICATION_BASE}/pdf-view`,
-  AGENT_CREATION:        `${BASE}/agent-creation`,
   MY_AGENTS:             `${BASE}/agents`,
   PROFILE:               `${BASE}/profile`,
   LOGOUT:                `${BASE}/logout`,

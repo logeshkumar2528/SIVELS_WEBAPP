@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { User, Users, Phone, MapPin } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
+import Select from '../../components/Select/Select';
 import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
@@ -12,6 +13,7 @@ import { buildSectionUpdate, getSectionState } from '../applicationWizard/flowUt
 function buildReferenceState(appData) {
   const saved = getSectionState(appData, 'references', {});
   const createReference = (source = {}) => ({
+    applicationReferenceDetailsId: source.applicationReferenceDetailsId || null,
     fullName: source.fullName || '',
     relationship: source.relationship || '',
     address: source.address || '',
@@ -24,7 +26,13 @@ function buildReferenceState(appData) {
   };
 }
 
-function ReferenceCard({ title, reference, onChange }) {
+function ReferenceCard({ 
+  title, 
+  reference, 
+  onChange,
+  relationshipOptions = [],
+  isLoadingMasters = false
+}) {
   return (
     <div className="aw-mini-card">
       <div className="aw-mini-card__header">
@@ -45,8 +53,14 @@ function ReferenceCard({ title, reference, onChange }) {
           <div className="aw-field">
             <label className="form-label">Relationship</label>
             <div className="aw-input-wrapper">
-              <Users className="aw-input-icon" size={14} />
-              <input className="form-input aw-input aw-input--with-icon" value={reference.relationship} onChange={(e) => onChange('relationship', e.target.value)} />
+              <Select
+                value={reference.relationship}
+                onChange={(val) => onChange('relationship', val)}
+                placeholder={isLoadingMasters ? "Loading..." : "Select Relationship"}
+                options={relationshipOptions}
+                disabled={isLoadingMasters}
+                icon={<Users size={14} />}
+              />
             </div>
           </div>
           <div className="aw-field">
@@ -76,6 +90,27 @@ export default function ReferenceDetails() {
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildReferenceState(getApplication(appId)));
 
+  const [isLoadingMasters, setIsLoadingMasters] = useState(false);
+  const [relationshipOptions, setRelationshipOptions] = useState([]);
+
+  useEffect(() => {
+    async function loadMasters() {
+      setIsLoadingMasters(true);
+      try {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+        const res = await fetch(`${baseUrl}/RelationshipMaster`);
+        if (res.ok) {
+          const data = await res.json();
+          setRelationshipOptions(data.map(item => ({ value: item.relationshipId, label: item.relationshipName, raw: item })));
+        }
+      } catch (e) {
+        console.error('Failed to fetch RelationshipMaster:', e);
+      }
+      setIsLoadingMasters(false);
+    }
+    loadMasters();
+  }, []);
+
   useEffect(() => {
     ensureApplication(appId);
   }, [appId, ensureApplication]);
@@ -102,7 +137,68 @@ export default function ReferenceDetails() {
     });
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+    const prodId = appData.applicationProductDetailsId;
+
+    if (!prodId) {
+      console.warn('No Application Product Details ID found, skipping Reference API save');
+    } else {
+      try {
+        const references = [
+          { key: 'reference1', data: form.reference1 },
+          { key: 'reference2', data: form.reference2 }
+        ];
+
+        for (const ref of references) {
+          if (!ref.data.fullName) continue; // Skip if no reference provided
+
+          const isUpdate = !!ref.data.applicationReferenceDetailsId;
+          const url = isUpdate
+            ? `${baseUrl}/ApplicationReferenceDetails/${ref.data.applicationReferenceDetailsId}`
+            : `${baseUrl}/ApplicationReferenceDetails`;
+
+          const payload = {
+            ApplicationProductDetailsId: Number(prodId),
+            FullName: ref.data.fullName || '',
+            RelationshipId: Number(ref.data.relationship) || 0,
+            MobileNumber: ref.data.mobileNo || '',
+            Address: ref.data.address || '',
+            CreatedBy: 1
+          };
+
+          if (isUpdate) {
+            payload.ApplicationReferenceDetailsId = Number(ref.data.applicationReferenceDetailsId);
+          }
+
+          const response = await fetch(url, {
+            method: isUpdate ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+
+          if (!response.ok) {
+            throw new Error(`Failed to save ${ref.key}: ${response.statusText}`);
+          }
+
+          let savedData = null;
+          if (response.status !== 204) {
+            const text = await response.text();
+            if (text) { try { savedData = JSON.parse(text); } catch (e) { /* ignore */ } }
+          }
+          
+          const savedId = savedData?.applicationReferenceDetailsId || savedData?.ApplicationReferenceDetailsId;
+          if (savedId) {
+            form[ref.key].applicationReferenceDetailsId = savedId;
+          }
+        }
+      } catch (err) {
+        console.error('Error saving Reference Details:', err);
+        alert('Network error while saving reference details.');
+        return; // Halt continuation on error
+      }
+    }
+
     saveApplication(appId, buildSectionUpdate(appData, 'references', form));
     navigate(ROUTES.SOURCING.replace(':applicationId', appId));
   };
@@ -140,11 +236,15 @@ export default function ReferenceDetails() {
           title="REFERENCE 1"
           reference={form.reference1}
           onChange={(field, value) => updateReference('reference1', field, value)}
+          relationshipOptions={relationshipOptions}
+          isLoadingMasters={isLoadingMasters}
         />
         <ReferenceCard
           title="REFERENCE 2"
           reference={form.reference2}
           onChange={(field, value) => updateReference('reference2', field, value)}
+          relationshipOptions={relationshipOptions}
+          isLoadingMasters={isLoadingMasters}
         />
       </div>
     </WizardSectionLayout>

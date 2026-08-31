@@ -49,7 +49,7 @@ function buildKycState(appData) {
 
 function validateKyc(person) { return {}; }
 
-function KycCard({ title, person, onChange, errors, onViewDocuments, isCoApplicant }) {
+function KycCard({ title, person, onChange, errors, onViewDocuments, isCoApplicant, documentTypeOptions = [], verificationOptions = [], isLoadingMasters = false }) {
   const [otpStep, setOtpStep] = useState(person.verificationStatus === 'Verified' ? 'verified' : 'idle');
   const [otpValue, setOtpValue] = useState('');
   const fileInputRef = useRef(null);
@@ -163,8 +163,9 @@ function KycCard({ title, person, onChange, errors, onViewDocuments, isCoApplica
               <Select
                 value={person.identityDocumentType}
                 onChange={(val) => onChange('identityDocumentType', val)}
-                options={DOCUMENT_TYPES.map((option) => ({value: option, label: option}))}
-                placeholder="Select document type"
+                options={documentTypeOptions}
+                placeholder={isLoadingMasters ? "Loading..." : "Select document type"}
+                disabled={isLoadingMasters}
                 className={errors.identityDocumentType ? 'aw-input--invalid' : ''}
               />
             </div>
@@ -174,11 +175,12 @@ function KycCard({ title, person, onChange, errors, onViewDocuments, isCoApplica
           <div className="aw-field">
             <label className="form-label">Document Number</label>
             <div className="aw-input-wrapper">
-              <FileText className="aw-input-icon" size={14} />
               <input
-                className={`form-input aw-input aw-input--with-icon ${errors.identityDocumentNo ? 'aw-input--invalid' : ''}`}
+                type="text"
+                className={`form-input aw-input ${errors.identityDocumentNo ? 'aw-input--invalid' : ''}`}
                 value={person.identityDocumentNo}
                 onChange={(e) => onChange('identityDocumentNo', e.target.value)}
+                placeholder="Enter Document Number"
               />
             </div>
             {errors.identityDocumentNo && <span className="aw-field-error">{errors.identityDocumentNo}</span>}
@@ -190,8 +192,9 @@ function KycCard({ title, person, onChange, errors, onViewDocuments, isCoApplica
               <Select
                 value={person.verificationStatus}
                 onChange={(val) => onChange('verificationStatus', val)}
-                placeholder="Select status"
-                options={STATUS_OPTIONS.map((option) => ({value: option, label: option}))}
+                placeholder={isLoadingMasters ? "Loading..." : "Select status"}
+                options={verificationOptions}
+                disabled={isLoadingMasters}
                 icon={<UserCheck size={14} />}
               />
             </div>
@@ -251,22 +254,49 @@ function KycCard({ title, person, onChange, errors, onViewDocuments, isCoApplica
     const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
     const [form, setForm] = useState(() => buildKycState(getApplication(appId)));
     const [errors, setErrors] = useState({});
-  
+
     const [viewingDocsFor, setViewingDocsFor] = useState(null);
     const [zoomedImage, setZoomedImage] = useState(null);
-  
+    const [isLoadingMasters, setIsLoadingMasters] = useState(false);
+    const [documentTypeOptions, setDocumentTypeOptions] = useState([]);
+    const [verificationOptions, setVerificationOptions] = useState([]);
+
     useEffect(() => {
       ensureApplication(appId);
     }, [appId, ensureApplication]);
-  
+
+    useEffect(() => {
+      async function fetchMaster(endpoint, idField, nameField, setState) {
+        try {
+          const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+          const res = await fetch(`${baseUrl}/${endpoint}`);
+          if (res.ok) {
+            const data = await res.json();
+            setState(data.map(item => ({ value: item[idField], label: item[nameField], raw: item })));
+          }
+        } catch (e) {
+          console.error(`Failed to fetch ${endpoint}:`, e);
+        }
+      }
+      async function loadMasters() {
+        setIsLoadingMasters(true);
+        await Promise.allSettled([
+          fetchMaster('DocumentTypeMaster', 'documentTypeId', 'documentTypeName', setDocumentTypeOptions),
+          fetchMaster('VerificationMaster', 'verificationId', 'verificationName', setVerificationOptions),
+        ]);
+        setIsLoadingMasters(false);
+      }
+      loadMasters();
+    }, []);
+
     const appData = getApplication(appId);
     const ArrowLeftIcon = iconMap['ArrowLeft'];
     const activeCount = useMemo(() => getApplicantCount(appData), [appData]);
-  
+
     useEffect(() => {
       setForm(buildKycState(getApplication(appId)));
     }, [appId, activeCount, getApplication]);
-  
+
     const updatePerson = (type, field, value, index = null) => {
       setForm(prev => {
         if (type === 'applicant') {
@@ -285,8 +315,8 @@ function KycCard({ title, person, onChange, errors, onViewDocuments, isCoApplica
         });
       }
     };
-  
-    const handleContinue = () => {
+
+    const handleContinue = async () => {
       let currentErrors = {};
       const appErrs = validateKyc(form.applicant);
       if (Object.keys(appErrs).length > 0) {
@@ -302,8 +332,86 @@ function KycCard({ title, person, onChange, errors, onViewDocuments, isCoApplica
         setErrors(currentErrors);
         return;
       }
-      saveApplication(appId, buildSectionUpdate(appData, 'kycDocuments', form));
-      navigate(ROUTES.PERSONAL_INFORMATION.replace(':applicationId', appId));
+
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+      const applicationProductDetailsId = appData.applicationProductDetailsId;
+
+      if (!applicationProductDetailsId) {
+        alert('Application product details not saved yet. Please go back and save Application Details first.');
+        return;
+      }
+
+      const savedSection = appData.kycDocuments || {};
+      const allPersons = [
+        { ...form.applicant, kycDocumentId: savedSection?.applicant?.kycDocumentId || null },
+        ...form.coApplicants.map((co, i) => ({
+          ...co,
+          kycDocumentId: savedSection?.coApplicants?.[i]?.kycDocumentId || null,
+        })),
+      ];
+
+      try {
+        for (const person of allPersons) {
+          const isUpdate = !!person.kycDocumentId;
+          const url = isUpdate
+            ? `${baseUrl}/ApplicationKYCDocuments/${person.kycDocumentId}`
+            : `${baseUrl}/ApplicationKYCDocuments`;
+
+          const payload = {
+            ApplicationProductDetailsId: Number(applicationProductDetailsId),
+            AadhaarLastFourDigits: person.aadhaarLast4 || null,
+            PANCardNo: person.panCardNo || null,
+            DocumentNumber: person.identityDocumentNo || null,
+            VerificationId: person.verificationStatus ? Number(person.verificationStatus) : null,
+            DocumentTypeId: person.identityDocumentType ? Number(person.identityDocumentType) : null,
+            DocumentPath: null,
+            CreatedBy: 1,
+          };
+          if (isUpdate) {
+            payload.ApplicationKYCDocumentId = Number(person.kycDocumentId);
+          }
+
+          console.log(`Saving KYC [${isUpdate ? 'PUT' : 'POST'}]:`, payload);
+
+          const response = await fetch(url, {
+            method: isUpdate ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            let msg = errData.Message || errData.title || 'Unknown error';
+            if (errData.errors) msg += '\n' + JSON.stringify(errData.errors, null, 2);
+            alert(`Failed to save KYC:\n${msg}`);
+            return;
+          }
+
+          let savedData = {};
+          if (response.status !== 204) {
+            const text = await response.text();
+            if (text) { try { savedData = JSON.parse(text); } catch (e) { /* ignore */ } }
+          }
+          const savedId = savedData.applicationKYCDocumentId || savedData.ApplicationKYCDocumentId;
+          if (savedId) person.kycDocumentId = savedId;
+        }
+
+        saveApplication(appId, {
+          ...buildSectionUpdate(appData, 'kycDocuments', form),
+          kycDocuments: {
+            applicant: { ...form.applicant, kycDocumentId: allPersons[0].kycDocumentId },
+            coApplicants: form.coApplicants.map((co, i) => ({
+              ...co,
+              kycDocumentId: allPersons[i + 1]?.kycDocumentId || co.kycDocumentId,
+            })),
+          },
+        });
+
+        navigate(ROUTES.PERSONAL_INFORMATION.replace(':applicationId', appId));
+      } catch (err) {
+        console.error('Error saving KYC:', err);
+        alert('Network error while saving KYC documents.');
+      }
     };
   
     const handleBack = () => {
@@ -346,6 +454,9 @@ function KycCard({ title, person, onChange, errors, onViewDocuments, isCoApplica
             person={form.applicant}
             onChange={(field, value) => updatePerson('applicant', field, value)}
             onViewDocuments={() => setViewingDocsFor('applicant')}
+            documentTypeOptions={documentTypeOptions}
+            verificationOptions={verificationOptions}
+            isLoadingMasters={isLoadingMasters}
             errors={Object.fromEntries(
               Object.entries(errors)
                 .filter(([key]) => key.startsWith('applicant.'))
@@ -361,6 +472,9 @@ function KycCard({ title, person, onChange, errors, onViewDocuments, isCoApplica
               isCoApplicant={true}
               onChange={(field, value) => updatePerson('coApplicants', field, value, index)}
               onViewDocuments={() => setViewingDocsFor(index)}
+              documentTypeOptions={documentTypeOptions}
+              verificationOptions={verificationOptions}
+              isLoadingMasters={isLoadingMasters}
               errors={Object.fromEntries(
                 Object.entries(errors)
                   .filter(([key]) => key.startsWith(`coApplicants.${index}.`))

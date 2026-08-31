@@ -1,8 +1,10 @@
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import ErrorBoundary from '../components/ErrorBoundary/ErrorBoundary';
 import MainLayout from '../layouts/MainLayout/MainLayout';
 import { ROUTES } from '../config/routeConfig';
 
+import RmLogin from '../pages/RmLogin/RmLogin';
 import Dashboard from '../pages/Dashboard/Dashboard';
 import NewApplications from '../pages/NewApplications/NewApplications';
 import ApplicationDetails from '../pages/ApplicationDetails/ApplicationDetails';
@@ -18,7 +20,6 @@ import ScheduleOfCharges from '../pages/ScheduleOfCharges/ScheduleOfCharges';
 import DocumentChecklist from '../pages/DocumentChecklist/DocumentChecklist';
 import Declaration from '../pages/Declaration/Declaration';
 import MyAgents from '../pages/MyAgents/MyAgents';
-import AgentCreation from '../pages/AgentCreation/AgentCreation';
 import RmProfile from '../pages/RmProfile/RmProfile';
 import SubmissionHistory from '../pages/SubmissionHistory/SubmissionHistory';
 import PdfView from '../pages/PdfView/PdfView';
@@ -41,11 +42,23 @@ function LayoutWrapper({ children, title, subtitle }) {
 }
 
 export default function AppRoutes() {
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const location = useLocation();
+
+  const handleLogin = () => {
+    setIsAuthenticated(true);
+  };
+
+  if (!isAuthenticated && location.pathname !== ROUTES.LOGIN) {
+    return <RmLogin onLogin={handleLogin} />;
+  }
+
   return (
     <ApplicationDraftProvider>
       <ErrorBoundary>
         <Routes>
         <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
+        <Route path={ROUTES.LOGIN} element={<RmLogin onLogin={handleLogin} />} />
 
         <Route
           path={ROUTES.DASHBOARD}
@@ -246,15 +259,6 @@ export default function AppRoutes() {
         />
 
         <Route
-          path={ROUTES.AGENT_CREATION}
-          element={
-            <LayoutWrapper title="Agent Creation" subtitle="Create New Field Agent">
-              <AgentCreation />
-            </LayoutWrapper>
-          }
-        />
-
-        <Route
           path={ROUTES.PROFILE}
           element={
             <LayoutWrapper title="My RM Profile" subtitle="Branch Info & Targets">
@@ -265,7 +269,25 @@ export default function AppRoutes() {
 
         <Route
           path={ROUTES.LOGOUT}
-          element={<Navigate to="/login" replace />}
+          element={
+            <div style={{ padding: '40px', textAlign: 'center' }}>
+              <h2>Logged Out</h2>
+              <p>You have been safely logged out.</p>
+              <button
+                onClick={handleLogin}
+                style={{
+                  padding: '10px 20px',
+                  background: 'var(--color-primary)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                Log Back In
+              </button>
+            </div>
+          }
         />
 
         <Route path="*" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
