@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Smartphone, ShieldCheck, ArrowRight, ChevronDown } from 'lucide-react';
-import { detectAccountModule, normalizeMobileNumber } from '../../services/moduleDetectionService';
+import { normalizeMobileNumber } from '../../services/moduleDetectionService';
+import { authService } from '../../services/authService';
 import './Login.css';
 
 export default function Login() {
@@ -17,35 +18,15 @@ export default function Login() {
       setLoading(true);
       setError('');
       try {
-        const detection = await detectAccountModule(cleanMobile);
+        await authService.sendOtp(cleanMobile);
 
-        if (detection.status === 'DUPLICATE') {
-          setError(detection.error || 'Multiple accounts found with this mobile number. Please contact support.');
-          return;
-        }
-
-        if (detection.status === 'NOT_FOUND') {
-          setError(detection.error || 'No account found with this mobile number');
-          return;
-        }
-
-        if (detection.status === 'ERROR') {
-          setError(detection.error || 'Failed to verify account. Please check your connection and try again.');
-          return;
-        }
-
-        if (detection.destination) {
-          navigate('/verify', {
-            state: {
-              mobileNumber: cleanMobile,
-              module: detection.module,
-              destination: detection.destination,
-              accountData: detection.accountData
-            }
-          });
-        }
+        navigate('/verify', {
+          state: {
+            mobileNumber: cleanMobile,
+          }
+        });
       } catch (err) {
-        setError(err.message || 'Failed to verify account. Please check your connection and try again.');
+        setError(err.message || 'Failed to send OTP. Please check your connection and try again.');
       } finally {
         setLoading(false);
       }

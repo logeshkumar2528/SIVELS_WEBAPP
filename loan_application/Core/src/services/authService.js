@@ -2,8 +2,32 @@ import axiosInstance from '../api/axiosInstance';
 
 export const authService = {
   // ──────────────────────────────────────────────────────────────────────────
+  // SEND OTP  →  POST /api/MobileOtp/verify-mobile-otp
+  // baseURL is already "https://fusiontecsoftware.com/sivels/api"
+  // ──────────────────────────────────────────────────────────────────────────
+  sendOtp: async (phoneNumber) => {
+    try {
+      const response = await axiosInstance.post('/MobileOtp/verify-mobile-otp', {
+        phoneNumber,
+      });
+
+      return response.data;
+    } catch (error) {
+      if (error.response) {
+        const msg =
+          error.response.data?.message ||
+          error.response.data?.error ||
+          `Error ${error.response.status}: OTP request failed`;
+        throw new Error(msg);
+      }
+
+      throw new Error('Network error. Please check your connection and try again.');
+    }
+  },
+
+  // ──────────────────────────────────────────────────────────────────────────
   // LOGIN  →  POST /api/user/login
-  // baseURL is already "http://localhost:5118/api", so endpoint = "/user/login"
+  // baseURL is already "https://fusiontecsoftware.com/sivels/api", so endpoint = "/user/login"
   // ──────────────────────────────────────────────────────────────────────────
   login: async (mobileNumber) => {
     try {
