@@ -16,6 +16,30 @@
   box-sizing: border-box;
 }
 
+.agent-creation-error {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626;
+  border-radius: 8px;
+  color: #991b1b;
+}
+
+.agent-creation-error-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.agent-creation-error-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #b91c1c;
+  word-break: break-word;
+}
+
 .section-header-row {
   display: flex;
   align-items: center;
@@ -121,6 +145,11 @@
   flex-direction: column;
   gap: 16px;
   width: 100%;
+  padding: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdfb 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 
 .section-heading {
@@ -194,6 +223,19 @@
   outline: none;
 }
 
+.form-control-readonly {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: #dbe7df;
+  cursor: default;
+  font-weight: 600;
+}
+
+.form-control-readonly:focus {
+  border-color: #dbe7df;
+  box-shadow: none;
+}
+
 .text-uppercase {
   text-transform: uppercase;
 }
@@ -213,6 +255,11 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
+}
+
+.agent-info-grid,
+.agent-docs-grid {
+  align-items: start;
 }
 
 .upload-box-container {
@@ -393,6 +440,17 @@
 .preview-filesize {
   font-size: 11.5px;
   color: #64748b;
+}
+
+@media (max-width: 900px) {
+  .form-section {
+    padding: 16px;
+  }
+
+  .form-grid-2col,
+  .documents-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .preview-actions-col {
