@@ -26,6 +26,45 @@ export const authService = {
   },
 
   // ──────────────────────────────────────────────────────────────────────────
+  // VERIFY MOBILE OTP  →  POST /MobileOtp/verify-mobile-otp
+  // Payload: { otp: "123456" }
+  // Backend Controller:
+  // [HttpPost("verify-mobile-otp")]
+  // public async Task<IActionResult> VerifyMobileOtp([FromBody] VerifyMobileOtpRequestDto request)
+  // {
+  //     var result = await _otpService.VerifyMobileOtpAsync(request.Otp, HttpContext);
+  //     return Ok(result);
+  // }
+  // ──────────────────────────────────────────────────────────────────────────
+  verifyMobileOtp: async (otp) => {
+    try {
+      const response = await axiosInstance.post('/MobileOtp/verify-mobile-otp', {
+        otp: String(otp).trim(),
+      });
+      const data = response.data;
+
+      // Persist auth token if provided by backend response
+      const token = data?.token || data?.accessToken || data?.access_token || data?.data?.token;
+      if (token) {
+        localStorage.setItem('authToken', token);
+      }
+
+      return data;
+    } catch (error) {
+      if (error.response) {
+        const msg =
+          error.response.data?.message ||
+          error.response.data?.error ||
+          error.response.data?.title ||
+          'Invalid OTP. Please check the code and try again.';
+        throw new Error(msg);
+      }
+
+      throw new Error('Network error. Please check your connection and try again.');
+    }
+  },
+
+  // ──────────────────────────────────────────────────────────────────────────
   // LOGIN  →  POST /api/user/login
   // baseURL is already "http://localhost:5118/api", so endpoint = "/user/login"
   // ──────────────────────────────────────────────────────────────────────────

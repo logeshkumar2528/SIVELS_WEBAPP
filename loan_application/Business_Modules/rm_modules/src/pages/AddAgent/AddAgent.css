@@ -1,0 +1,622 @@
+/* ==========================================================================
+   AGENT CREATION PAGE STYLES - RM MODULE
+   Matching the OLD Sivels Finance UI design:
+   - One main container card
+   - Simple section headings with divider lines
+   - Clean 2-column grid layout
+   - Full available page width
+   ========================================================================== */
+
+.agent-creation-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  padding: 0 0 32px;
+  box-sizing: border-box;
+}
+
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.agent-creation-back-btn {
+  background-color: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #334155 !important;
+  font-weight: 600;
+  height: 34px;
+  padding: 0 14px;
+  transition: all 0.2s ease;
+}
+
+.agent-creation-back-btn:hover {
+  background-color: #f8fafc !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+}
+
+/* ==========================================
+   TOAST ALERT
+========================================== */
+.agent-creation-toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-left: 4px solid #16a34a;
+  border-radius: 8px;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.toast-icon {
+  color: #16a34a;
+  flex-shrink: 0;
+}
+
+.toast-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.toast-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #166534;
+}
+
+.toast-desc {
+  font-size: 12px;
+  color: #15803d;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: #86efac;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.toast-close:hover {
+  color: #166534;
+  background-color: #dcfce7;
+}
+
+/* ==========================================
+   ONE SINGLE OVERALL MAIN FORM CARD
+========================================== */
+.agent-creation-main-card {
+  background-color: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-lg, 12px);
+  padding: 28px 32px 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.agent-creation-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+}
+
+/* ==========================================
+   SECTION HEADINGS & DIVIDERS
+========================================== */
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.section-heading {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-primary, #0f172a);
+  margin: 0;
+}
+
+.section-divider {
+  height: 1px;
+  background-color: #f1f5f9;
+  width: 100%;
+  margin: 2px 0 6px;
+}
+
+/* ==========================================
+   2-COLUMN FORM GRID
+========================================== */
+.form-grid-2col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 24px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group-full {
+  grid-column: 1 / -1;
+}
+
+.form-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #334155;
+  margin: 0;
+}
+
+.required-star {
+  color: #dc2626;
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+.form-control {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: var(--color-text-primary, #0f172a);
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.form-control::placeholder {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.form-control:focus {
+  border-color: var(--color-primary, #0f7a4c);
+  box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.12);
+  outline: none;
+}
+
+.text-uppercase {
+  text-transform: uppercase;
+}
+
+.form-textarea {
+  height: auto;
+  padding: 10px 12px;
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.5;
+}
+
+/* ==========================================
+   REQUIRED DOCUMENTS UPLOAD SECTION (2 COLUMNS)
+========================================== */
+.documents-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.upload-box-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.upload-box-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.upload-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.upload-subtitle {
+  font-size: 12px;
+  color: #475569;
+}
+
+.upload-format-note {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+/* Empty upload dropzone */
+.upload-dropzone {
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 22px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background-color: #fafbfb;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 110px;
+  box-sizing: border-box;
+}
+
+.upload-dropzone:hover {
+  border-color: var(--color-primary, #0f7a4c);
+  background-color: #f0fdf4;
+}
+
+.upload-icon-wrap {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background-color: #eaf5ee;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-icon {
+  color: var(--color-primary, #0f7a4c);
+}
+
+.upload-btn {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #334155 !important;
+  font-weight: 600;
+  height: 34px;
+  padding: 0 14px;
+}
+
+.upload-dropzone:hover .upload-btn {
+  border-color: var(--color-primary, #0f7a4c) !important;
+  color: var(--color-primary, #0f7a4c) !important;
+}
+
+/* Selected File Preview Box */
+.upload-preview-box {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background-color: #f8fafc;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  min-height: 84px;
+  box-sizing: border-box;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.preview-thumb-col {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.img-thumb {
+  width: 54px;
+  height: 54px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1.5px solid #cbd5e1;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.img-thumb:hover {
+  transform: scale(1.04);
+}
+
+.profile-thumb-circle {
+  border-radius: 50%;
+  border: 2px solid var(--color-primary, #0f7a4c);
+}
+
+.pdf-thumb-box {
+  width: 54px;
+  height: 54px;
+  border-radius: 8px;
+  background-color: #fee2e2;
+  border: 1.5px solid #fca5a5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.pdf-icon {
+  color: #dc2626;
+}
+
+.pdf-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: #b91c1c;
+  line-height: 1;
+}
+
+.preview-info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.check-icon {
+  color: #16a34a;
+  flex-shrink: 0;
+}
+
+.preview-filename {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.preview-filesize {
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.preview-actions-col {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.btn-action-view {
+  background-color: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f7a4c;
+}
+
+.btn-action-view:hover {
+  background-color: #eaf5ee;
+  border-color: #0f7a4c;
+}
+
+.btn-action-change {
+  background-color: #ffffff;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.btn-action-change:hover {
+  background-color: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.btn-action-remove {
+  background-color: #ffffff;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+.btn-action-remove:hover {
+  background-color: #fee2e2;
+  border-color: #f87171;
+}
+
+/* ==========================================
+   BOTTOM ACTION BUTTONS
+========================================== */
+.form-actions-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  padding-top: 8px;
+}
+
+.btn-footer-cancel {
+  background-color: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #334155 !important;
+  font-weight: 600;
+  min-width: 100px;
+  height: 42px;
+}
+
+.btn-footer-cancel:hover {
+  background-color: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+}
+
+.btn-footer-save {
+  background-color: var(--color-primary, #0f7a4c) !important;
+  border-color: var(--color-primary, #0f7a4c) !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  padding: 0 24px;
+  height: 42px;
+  box-shadow: 0 2px 6px rgba(15, 122, 76, 0.25);
+  transition: all 0.2s ease;
+}
+
+.btn-footer-save:hover {
+  background-color: var(--color-primary-hover, #15692F) !important;
+  border-color: var(--color-primary-hover, #15692F) !important;
+  box-shadow: 0 4px 12px rgba(15, 122, 76, 0.35);
+  transform: translateY(-1px);
+}
+
+/* ==========================================
+   MODAL PREVIEW LIGHTBOX
+========================================== */
+.modal-preview-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-height: 75vh;
+}
+
+.image-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  width: 100%;
+}
+
+.modal-full-img {
+  max-width: 100%;
+  max-height: 68vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+}
+
+.pdf-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 550px;
+}
+
+.pdf-iframe {
+  width: 100%;
+  flex: 1;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background-color: #ffffff;
+}
+
+.pdf-fallback-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.pdf-external-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-primary, #0f7a4c);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.pdf-external-link:hover {
+  text-decoration: underline;
+  color: var(--color-primary-hover, #15692F);
+}
+
+/* ==========================================
+   RESPONSIVE BREAKPOINTS
+========================================== */
+@media (max-width: 768px) {
+  .agent-creation-main-card {
+    padding: 20px 18px 20px;
+  }
+
+  .agent-creation-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .agent-creation-back-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .form-grid-2col,
+  .documents-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .form-actions-footer {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .btn-footer-cancel,
+  .btn-footer-save {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .upload-preview-box {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .preview-actions-col {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

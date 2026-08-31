@@ -19,6 +19,7 @@ import SourcingDetails from '../pages/SourcingDetails/SourcingDetails';
 import ScheduleOfCharges from '../pages/ScheduleOfCharges/ScheduleOfCharges';
 import DocumentChecklist from '../pages/DocumentChecklist/DocumentChecklist';
 import Declaration from '../pages/Declaration/Declaration';
+import AddAgent from '../pages/AddAgent/AddAgent';
 import MyAgents from '../pages/MyAgents/MyAgents';
 import RmProfile from '../pages/RmProfile/RmProfile';
 import SubmissionHistory from '../pages/SubmissionHistory/SubmissionHistory';
@@ -245,6 +246,15 @@ export default function AppRoutes() {
           element={
             <LayoutWrapper title="Declaration" subtitle="Step 12 of 12">
               <Declaration />
+            </LayoutWrapper>
+          }
+        />
+
+        <Route
+          path={ROUTES.ADD_AGENT}
+          element={
+            <LayoutWrapper title="Agent Creation" subtitle="Create a new field agent profile.">
+              <AddAgent />
             </LayoutWrapper>
           }
         />
