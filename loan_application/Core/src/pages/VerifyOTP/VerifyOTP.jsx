@@ -1,22 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, ShieldCheck, ArrowRight, Edit2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, ArrowRight, Edit2, AlertCircle, CheckCircle2, X } from 'lucide-react';
 import { CONSTANTS } from '../../utils/constants';
 import { detectAccountModule, normalizeMobileNumber } from '../../services/moduleDetectionService';
+import { authService } from '../../services/authService';
 import { useAuth } from '../../context/AuthContext';
 import './VerifyOTP.css';
 
 export default function VerifyOTP() {
-  // OTP_LENGTH from constants (currently 4)
-  const OTP_LENGTH = CONSTANTS.OTP_LENGTH;
+  const OTP_LENGTH = CONSTANTS.OTP_LENGTH || 6;
 
   const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(''));
-  const [timer, setTimer] = useState(CONSTANTS.RESEND_TIMER_SECONDS);
+  const [timer, setTimer] = useState(CONSTANTS.RESEND_TIMER_SECONDS || 45);
   const [errorMessage, setErrorMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showOtpPopup, setShowOtpPopup] = useState(false);
+  const [toast, setToast] = useState(null);
 
   const inputRefs = useRef([]);
+  const toastTimeoutRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
@@ -25,7 +26,25 @@ export default function VerifyOTP() {
   const moduleName = location.state?.module;
   const destination = location.state?.destination;
   const accountData = location.state?.accountData;
-  const otpResponse = location.state?.otpResponse;
+  const initialOtpResponse = location.state?.otpResponse;
+
+  const showToast = (type, title, message) => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    setToast({ type, title, message });
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast(null);
+    }, 3500);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!mobileNumber) {
@@ -34,10 +53,14 @@ export default function VerifyOTP() {
   }, [mobileNumber, navigate]);
 
   useEffect(() => {
-    if (otpResponse) {
-      setShowOtpPopup(true);
+    if (initialOtpResponse) {
+      showToast(
+        'success',
+        'OTP sent successfully',
+        'A new OTP has been sent to your registered mobile number.'
+      );
     }
-  }, [otpResponse]);
+  }, [initialOtpResponse]);
 
   // ── Countdown timer ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -48,49 +71,91 @@ export default function VerifyOTP() {
 
   // ── OTP input handlers ───────────────────────────────────────────────────
   const handleChange = (index, value) => {
-    if (value.length > 1) value = value.slice(-1);
-    if (!/^\d*$/.test(value)) return;
+    const cleaned = value.replace(/\D/g, '');
+    if (!cleaned && value !== '') return;
 
+    const char = cleaned.slice(-1);
     const newOtp = [...otp];
-    newOtp[index] = value;
+    newOtp[index] = char;
     setOtp(newOtp);
     if (errorMessage) setErrorMessage('');
 
     // Auto-advance to next box
-    if (value !== '' && index < OTP_LENGTH - 1) {
+    if (char && index < OTP_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   };
 
   const handleKeyDown = (index, e) => {
-    if (e.key === 'Backspace' && otp[index] === '' && index > 0) {
+    if (e.key === 'Backspace') {
+      if (otp[index] === '' && index > 0) {
+        inputRefs.current[index - 1]?.focus();
+      } else {
+        const newOtp = [...otp];
+        newOtp[index] = '';
+        setOtp(newOtp);
+      }
+    } else if (e.key === 'ArrowLeft' && index > 0) {
       inputRefs.current[index - 1]?.focus();
+    } else if (e.key === 'ArrowRight' && index < OTP_LENGTH - 1) {
+      inputRefs.current[index + 1]?.focus();
     }
   };
 
-  // ── Submit ───────────────────────────────────────────────────────────────
+  const handlePaste = (e) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH);
+    if (!pasted) return;
+
+    const newOtp = Array(OTP_LENGTH).fill('');
+    pasted.split('').forEach((char, idx) => {
+      newOtp[idx] = char;
+    });
+    setOtp(newOtp);
+    if (errorMessage) setErrorMessage('');
+
+    const focusIdx = Math.min(pasted.length, OTP_LENGTH - 1);
+    inputRefs.current[focusIdx]?.focus();
+  };
+
+  // ── Submit & Verify OTP ──────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     const enteredOtp = otp.join('');
 
-    // Validate OTP (Master requires '1234'; other accounts follow CONSTANTS.OTP)
-    const isMaster = normalizeMobileNumber(mobileNumber) === '9841446699' || moduleName === 'Master';
-    const expectedOtp = isMaster ? '1234' : CONSTANTS.OTP;
-
-    if (enteredOtp !== expectedOtp) {
-      setErrorMessage('Invalid OTP. Please try again.');
+    if (enteredOtp.length !== OTP_LENGTH) {
+      setErrorMessage('Please enter all 6 digits.');
+      showToast('error', 'Invalid OTP', 'Please enter all 6 digits.');
       return;
     }
 
     setLoading(true);
+    setErrorMessage('');
+
     try {
+      const cleanMobile = normalizeMobileNumber(mobileNumber);
+
+      // 1. Verify OTP solely through the Backend API (POST /MobileOtp/verify-mobile-otp)
+      try {
+        await authService.verifyMobileOtp(enteredOtp);
+      } catch (apiErr) {
+        setLoading(false);
+        const errMsg = apiErr.message || 'Invalid OTP. Please check the code and try again.';
+        setErrorMessage(errMsg);
+        showToast('error', 'Invalid OTP', 'Please check the code and try again.');
+        return;
+      }
+
+      // 2. Show brief success notification
+      showToast('success', 'OTP Verified', 'Verification successful. Redirecting...');
+
+      // 3. Resolve destination module & account
       let resolvedModule = moduleName;
       let resolvedDestination = destination;
       let resolvedAccount = accountData;
 
-      // If missing from location.state (e.g. direct access or refresh), detect dynamically
       if (!resolvedModule || !resolvedDestination || !resolvedAccount) {
-        const detection = await detectAccountModule(mobileNumber);
+        const detection = await detectAccountModule(cleanMobile);
         if (detection.destination) {
           resolvedModule = detection.module;
           resolvedDestination = detection.destination;
@@ -102,17 +167,16 @@ export default function VerifyOTP() {
         }
       }
 
-      // Construct dynamic user profile for AuthContext & localStorage
+      // 4. Construct user profile & set auth session
       const userData = {
         ...resolvedAccount,
-        mobileNumber: normalizeMobileNumber(mobileNumber),
+        mobileNumber: cleanMobile,
         role: resolvedModule,
       };
 
-      // Set user session in AuthContext
       login(userData, {});
 
-      // Persist detected account information dynamically for standalone Vite modules
+      // 5. Persist account information for standalone Vite modules
       localStorage.setItem('sivels_currentUser', JSON.stringify(userData));
       if (resolvedModule === 'Agent') {
         localStorage.setItem('agentData', JSON.stringify(resolvedAccount));
@@ -133,99 +197,104 @@ export default function VerifyOTP() {
         localStorage.setItem('masterData', JSON.stringify(resolvedAccount));
       }
 
-      // Navigate across module boundaries using window.location.href
-      // so Vite serves the standalone module (Agent, RM, Customer, or Master)
-      window.location.href = resolvedDestination;
+      // 6. Brief pause to allow success toast to show before page transition
+      setTimeout(() => {
+        window.location.href = resolvedDestination;
+      }, 500);
 
     } catch (err) {
-      setErrorMessage('Authentication failed. Please try again.');
-    } finally {
+      setErrorMessage(err.message || 'Authentication failed. Please try again.');
+      showToast('error', 'Authentication failed', err.message || 'Please try again.');
       setLoading(false);
     }
   };
 
-  // Submit button is enabled only when all OTP_LENGTH boxes are filled
   const isComplete = otp.every((digit) => digit !== '');
 
   // ── Resend OTP ────────────────────────────────────────────────────────────
-  const handleResend = () => {
-    // Resend flow is still handled locally here; the actual OTP request is made from Login.
-    setTimer(CONSTANTS.RESEND_TIMER_SECONDS);
+  const handleResend = async () => {
+    const cleanMobile = normalizeMobileNumber(mobileNumber);
+    if (!cleanMobile) return;
+
+    setTimer(CONSTANTS.RESEND_TIMER_SECONDS || 45);
     setOtp(Array(OTP_LENGTH).fill(''));
     setErrorMessage('');
-    // Focus first box
     setTimeout(() => inputRefs.current[0]?.focus(), 50);
+
+    try {
+      await authService.sendOtp(cleanMobile);
+      showToast(
+        'success',
+        'OTP sent successfully',
+        'A new OTP has been sent to your registered mobile number.'
+      );
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed to resend OTP. Please try again.');
+      showToast('error', 'Failed to send OTP', err.message || 'Please check your connection and try again.');
+    }
   };
 
   return (
     <div className="login-container">
-      <div className="verify-main-card login-card">
+      {/* Non-blocking Professional Toast Notification */}
+      {toast && (
+        <div className={`otp-toast ${toast.type}`} role="status" aria-live="polite">
+          <div className="otp-toast-icon">
+            {toast.type === 'success' ? (
+              <CheckCircle2 size={18} />
+            ) : (
+              <AlertCircle size={18} />
+            )}
+          </div>
+          <div className="otp-toast-content">
+            <span className="otp-toast-title">{toast.title}</span>
+            {toast.message && <span className="otp-toast-message">{toast.message}</span>}
+          </div>
+          <button
+            type="button"
+            className="otp-toast-close"
+            onClick={() => setToast(null)}
+            aria-label="Close notification"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      <div className="verify-main-card">
         <button type="button" className="back-btn" onClick={() => navigate('/login')}>
-          <ArrowLeft size={18} />
+          <ArrowLeft size={16} />
           <span>Back</span>
         </button>
 
-        <div className="verify-header login-header">
+        <div className="verify-header">
           <div className="icon-circle">
             <ShieldCheck size={28} className="primary-icon" />
           </div>
           <h2>Verify OTP</h2>
           <p>
-            We have sent a {OTP_LENGTH}-digit OTP to<br />
-            <span className="bold-number">+91 {mobileNumber}</span>
-            <button type="button" className="edit-btn" onClick={() => navigate('/login')}>
-              <Edit2 size={12} />
-              <span>Edit</span>
-            </button>
+            <span>We have sent a {OTP_LENGTH}-digit OTP to</span>
+            <span className="bold-number">
+              +91 {mobileNumber}
+              <button type="button" className="edit-btn" onClick={() => navigate('/login')}>
+                <Edit2 size={12} />
+                <span>Edit</span>
+              </button>
+            </span>
           </p>
         </div>
-
-        {showOtpPopup && (
-          <div
-            className="otp-popup-backdrop"
-            onClick={() => setShowOtpPopup(false)}
-            role="presentation"
-          >
-            <div
-              className="otp-popup"
-              onClick={(e) => e.stopPropagation()}
-              role="dialog"
-              aria-modal="true"
-              aria-label="OTP response"
-            >
-              <div className="otp-popup-header">
-                <ShieldCheck size={18} />
-                <span>OTP Sent</span>
-                <button type="button" className="otp-popup-close" onClick={() => setShowOtpPopup(false)}>
-                  ×
-                </button>
-              </div>
-              <div className="otp-popup-body">
-                <p>{otpResponse?.message || otpResponse?.data?.message || 'OTP sent successfully.'}</p>
-                {otpResponse?.otp && (
-                  <p className="otp-popup-meta">OTP Reference: {otpResponse.otp}</p>
-                )}
-              </div>
-              <div className="otp-popup-actions">
-                <button type="button" className="btn-primary" onClick={() => setShowOtpPopup(false)}>
-                  OK
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="verify-form">
           <div className="otp-error-wrapper">
             {errorMessage && (
               <div className="otp-error-banner">
-                <AlertCircle size={16} />
+                <AlertCircle size={15} />
                 <span>{errorMessage}</span>
               </div>
             )}
           </div>
 
-          <div className="otp-inputs">
+          <div className="otp-inputs" onPaste={handlePaste}>
             {otp.map((digit, index) => (
               <input
                 key={index}
