@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../../../../Core/src/context/AuthContext';
 
 import Sidebar from '../../components/Sidebar/Sidebar';
 import Header from '../../components/Header/Header';
@@ -29,6 +30,7 @@ function MainLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const { currentUser } = useAuth();
 
   useEffect(() => {
     document.body.classList.toggle('body--no-scroll', sidebarOpen);
@@ -52,6 +54,12 @@ function MainLayout({
   }, [navigate]);
 
   const todayDate = formatHeaderDate(new Date());
+  const resolvedUser = currentUser
+    ? {
+        name: currentUser.fullName || currentUser.name || 'Relationship Manager',
+        role: currentUser.role || 'Relationship Manager',
+      }
+    : user;
 
   return (
     <div className={['layout', sidebarOpen ? 'layout--sidebar-open' : ''].join(' ').trim()}>
@@ -70,7 +78,7 @@ function MainLayout({
           subtitle={subtitle}
           date={todayDate}
           notificationCount={notificationCount}
-          user={user}
+          user={resolvedUser}
           onMenuToggle={handleMenuToggle}
           onNotificationsClick={onNotificationsClick}
           onUserMenuClick={onUserMenuClick}
