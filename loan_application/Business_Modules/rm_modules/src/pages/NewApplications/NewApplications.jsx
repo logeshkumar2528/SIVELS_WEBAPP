@@ -13,12 +13,114 @@ import { allNewApplications } from './newApplicationsData';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import './NewApplications.css';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+
+const normalizeMobile = (value) => String(value || '').replace(/\D/g, '');
+
+const formatCurrency = (value) => {
+  if (value === null || value === undefined || value === '') return '';
+  return `Rs. ${Number(value).toLocaleString('en-IN')}`;
+};
+
+const formatDate = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const getCurrentAgentId = () => {
+  try {
+    const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || 'null');
+    const agentData = JSON.parse(localStorage.getItem('agentData') || 'null');
+    return (
+      currentUser?.agentId ||
+      currentUser?.AgentId ||
+      agentData?.agentId ||
+      agentData?.AgentId ||
+      Number(localStorage.getItem('agentId')) ||
+      null
+    );
+  } catch {
+    return Number(localStorage.getItem('agentId')) || null;
+  }
+};
+
+const resolveApiArray = (data) => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.value)) return data.value;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.data)) return data.data;
+  return [];
+};
+
+const normalizeText = (value) => String(value || '').trim().toLowerCase();
+
+const getCurrentRMContext = () => {
+  try {
+    const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || 'null');
+    const rmData = JSON.parse(localStorage.getItem('rmData') || 'null');
+    return {
+      rmId:
+        currentUser?.rmId ||
+        currentUser?.RMId ||
+        rmData?.rmId ||
+        rmData?.RMId ||
+        Number(localStorage.getItem('rmId')) ||
+        null,
+      branch:
+        currentUser?.branch ||
+        currentUser?.Branch ||
+        rmData?.branch ||
+        rmData?.Branch ||
+        '',
+      fullName:
+        currentUser?.fullName ||
+        currentUser?.FullName ||
+        rmData?.fullName ||
+        rmData?.FullName ||
+        '',
+    };
+  } catch {
+    return {
+      rmId: Number(localStorage.getItem('rmId')) || null,
+      branch: '',
+      fullName: '',
+    };
+  }
+};
+
+const mapBackendApplication = (item, index) => {
+  const applicationId = item.applicationId || item.applicationNumber || item.agentCustomerId || item.customerId || `${index + 1}`;
+  const normalizedStatus = String(item.status || 'New').trim();
+  return {
+    id: String(applicationId),
+    customerName: item.fullName || item.customerName || '',
+    mobile: normalizeMobile(item.mobileNumber || item.mobile || ''),
+    loanType: item.loanPurposeName || item.loanType || '',
+    amount: formatCurrency(item.expectedLoanAmount ?? item.amount),
+    agentName: item.agentName || '',
+    createdDate: formatDate(item.createdAt || item.createdDate),
+    status: normalizedStatus === 'Draft' ? 'New' : normalizedStatus,
+    rawStatus: normalizedStatus,
+    agentCustomerId: item.agentCustomerId || item.customerId || null,
+    agentId: item.agentId || item.AgentId || null,
+  };
+};
+
 export default function NewApplications({ initialFilter = 'All' }) {
   const navigate = useNavigate();
   const { createApplicationDraft } = useApplicationDraftStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState(initialFilter);
   const [currentPage, setCurrentPage] = useState(1);
+  const [applications, setApplications] = useState(allNewApplications.map(mapBackendApplication));
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const pageSize = 10;
 
   const SearchIcon = iconMap['Search'];
@@ -31,8 +133,114 @@ export default function NewApplications({ initialFilter = 'All' }) {
     setSearchTerm('');
   }, [initialFilter]);
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadApplications() {
+      const rmContext = getCurrentRMContext();
+
+      if (!rmContext.rmId && !rmContext.branch) {
+        setApplications(allNewApplications.map(mapBackendApplication));
+        setLoadError('No RM context found in session. Showing sample data.');
+        return;
+      }
+
+      setIsLoading(true);
+      setLoadError('');
+
+      try {
+        const [agentRes, customerRes] = await Promise.all([
+          fetch(`${API_BASE}/AgentMaster`),
+          fetch(`${API_BASE}/AgentAddCustomer`),
+        ]);
+
+        if (!agentRes.ok) {
+          throw new Error(`Failed to load agents (${agentRes.status})`);
+        }
+        if (!customerRes.ok) {
+          throw new Error(`Failed to load applications (${customerRes.status})`);
+        }
+
+        const [agentsData, customersData] = await Promise.all([
+          agentRes.json(),
+          customerRes.json(),
+        ]);
+
+        const agents = resolveApiArray(agentsData);
+        const rows = resolveApiArray(customersData);
+
+        const rmBranch = normalizeText(rmContext.branch);
+        const matchedAgents = agents.filter((agent) => {
+          const agentRmId = Number(
+            agent.rmId ||
+            agent.RMId ||
+            agent.managerId ||
+            agent.ManagerId ||
+            agent.reportingManagerId ||
+            agent.reportToRmId ||
+            agent.reportManagerId ||
+            0
+          );
+          const agentBranch = normalizeText(agent.branch || agent.Branch);
+          const agentCreatedBy = Number(agent.createdBy || agent.CreatedBy || 0);
+
+          if (rmContext.rmId && (agentRmId || agentCreatedBy)) {
+            if (agentRmId && Number(agentRmId) === Number(rmContext.rmId)) return true;
+            if (agentCreatedBy && Number(agentCreatedBy) === Number(rmContext.rmId)) return true;
+          }
+
+          if (rmBranch && agentBranch) {
+            return agentBranch === rmBranch;
+          }
+
+          return false;
+        });
+
+        const agentIds = new Set(
+          matchedAgents
+            .map((agent) => Number(agent.agentId || agent.AgentId))
+            .filter((value) => Number.isFinite(value) && value > 0)
+        );
+
+        let filtered = rows.filter((item) => {
+          const rowAgentId = Number(item.agentId || item.AgentId);
+          return agentIds.has(rowAgentId);
+        });
+
+        // Defensive fallback: if the backend returned rows but the RM-agent join
+        // fields are incomplete, show the live data rather than an empty grid.
+        if (rows.length > 0 && filtered.length === 0) {
+          filtered = rows;
+          setLoadError('Loaded live applications, but RM-to-agent mapping was incomplete. Showing all records from AgentAddCustomer.');
+        }
+
+        const mapped = filtered.map(mapBackendApplication);
+
+        if (active) {
+          setApplications(mapped);
+        }
+      } catch (error) {
+        console.error('Failed to fetch AgentAddCustomer:', error);
+        if (active) {
+          setApplications(allNewApplications.map(mapBackendApplication));
+          setLoadError('Unable to load live applications for this RM. Showing sample data.');
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadApplications();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const filteredData = useMemo(() => {
-    return allNewApplications.filter((app) => {
+    return applications.filter((app) => {
       const matchesSearch =
         app.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         app.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -40,7 +248,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
       const matchesStatus = statusFilter === 'All' || app.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
-  }, [searchTerm, statusFilter]);
+  }, [applications, searchTerm, statusFilter]);
 
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
@@ -73,12 +281,13 @@ export default function NewApplications({ initialFilter = 'All' }) {
         let btnText = 'Verify Now';
         if (row.status === 'Approved') btnText = 'View Details';
         if (row.status === 'Returned') btnText = 'Review Return';
+        const applicationId = row.agentCustomerId || row.id;
 
         return (
           <Button
             size="sm"
             variant="primary"
-            onClick={() => navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', row.id))}
+            onClick={() => navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId))}
           >
             {btnText}
           </Button>
@@ -90,6 +299,16 @@ export default function NewApplications({ initialFilter = 'All' }) {
   return (
     <div className="listing-page-wrapper">
       <div className="panel listing-card-full">
+        {loadError && (
+          <div className="alert alert-warning" style={{ marginBottom: '12px' }}>
+            {loadError}
+          </div>
+        )}
+        {isLoading && (
+          <div style={{ marginBottom: '12px', color: '#64748b', fontSize: '14px' }}>
+            Loading applications...
+          </div>
+        )}
         <div className="filter-bar">
           <div className="search-box">
             {SearchIcon && <SearchIcon size={16} className="search-icon" />}
