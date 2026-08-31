@@ -42,6 +42,42 @@ function formatRupeeValue(value) {
   return `₹${Number(digits).toLocaleString('en-IN')}`;
 }
 
+function formatDateTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  });
+}
+
+function getCustomerInitials(name = '') {
+  return String(name)
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('');
+}
+
+function buildApplicationDisplayId(record = {}, fallbackId = '') {
+  const initials = getCustomerInitials(record.fullName || record.customerName || '');
+  const mobile = String(record.mobileNumber || record.mobile || '').replace(/\D/g, '');
+  const mobileTail = mobile.slice(-2).padStart(2, '0');
+  const serial = String(record.agentCustomerId || record.customerId || fallbackId || '').replace(/\D/g, '');
+  const serialTail = serial ? serial : String(fallbackId || '').replace(/\D/g, '');
+
+  const prefix = initials ? `${initials}${mobileTail}` : `APP${mobileTail}`;
+  return serialTail ? `${prefix}-${serialTail}` : prefix;
+}
+
 function validateApplication(record) {
   return {};
 }
@@ -54,6 +90,10 @@ export default function ApplicationDetails() {
 
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [errors, setErrors] = useState({});
+  const [isLoadingApplication, setIsLoadingApplication] = useState(false);
+  const [applicationLoadError, setApplicationLoadError] = useState('');
+  const [displayRecord, setDisplayRecord] = useState(null);
+  const [agentBranch, setAgentBranch] = useState('');
 
   const [sourcingChannelOptions, setSourcingChannelOptions] = useState([]);
   const [loanProductOptions, setLoanProductOptions] = useState([]);
@@ -66,6 +106,81 @@ export default function ApplicationDetails() {
   useEffect(() => {
     ensureApplication(appId);
   }, [appId, ensureApplication]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadApplicationFromApi() {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+      setIsLoadingApplication(true);
+      setApplicationLoadError('');
+
+      try {
+        const response = await fetch(`${baseUrl}/AgentAddCustomer/${appId}`);
+        if (!response.ok) {
+          throw new Error(`Failed to load application ${appId} (${response.status})`);
+        }
+
+        const data = await response.json();
+        const record = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
+
+        if (active && record) {
+          setDisplayRecord(record);
+          setAgentBranch('');
+          saveApplication(appId, {
+            agentCustomerId: record.agentCustomerId || record.AgentCustomerId || appId,
+            agentId: record.agentId || record.AgentId || '',
+            customerName: record.fullName || record.customerName || '',
+            mobile: record.mobileNumber || record.mobile || '',
+            email: record.email || record.emailAddress || '',
+            loanType: record.loanPurposeName || record.loanType || '',
+            amount: record.expectedLoanAmount !== undefined ? `Rs. ${Number(record.expectedLoanAmount).toLocaleString('en-IN')}` : (record.amount || ''),
+            agentName: record.agentName || '',
+            createdDate: record.createdAt || record.createdDate || '',
+            status: record.status === 'Draft' ? 'New' : (record.status || 'New'),
+            branch: record.branch || '',
+            purposeOfLoan: record.loanPurposeId || record.purposeOfLoan || '',
+            loanAmount: record.expectedLoanAmount ?? '',
+          });
+
+          const agentId = record.agentId || record.AgentId;
+          if (agentId) {
+            try {
+              const agentResponse = await fetch(`${baseUrl}/AgentMaster/${agentId}`);
+              if (agentResponse.ok) {
+                const agentData = await agentResponse.json();
+                const agentRecord = Array.isArray(agentData)
+                  ? agentData[0]
+                  : (agentData?.value ? agentData.value[0] : agentData);
+                const branch = agentRecord?.branch || agentRecord?.Branch || '';
+                if (active) {
+                  setAgentBranch(branch);
+                  saveApplication(appId, { branch });
+                }
+              }
+            } catch (agentError) {
+              console.error('Failed to load branch from AgentMaster:', agentError);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load application from AgentAddCustomer:', error);
+        if (active) {
+          setApplicationLoadError('Unable to load live application data. Showing draft values.');
+        }
+      } finally {
+        if (active) {
+          setIsLoadingApplication(false);
+        }
+      }
+    }
+
+    loadApplicationFromApi();
+
+    return () => {
+      active = false;
+    };
+  }, [appId, saveApplication]);
 
   useEffect(() => {
     async function fetchMasterData(endpoint, idField, nameField, setOptionsState) {
@@ -234,14 +349,20 @@ export default function ApplicationDetails() {
     navigate(ROUTES.NEW_APPLICATIONS);
   };
 
-  const applicantName = appData.agentName || appData.customerName || '';
-  const branchName = appData.branch || '';
-  const submittedTime = appData.createdDate || '';
+  const applicantName = appData.customerName || displayRecord?.fullName || displayRecord?.customerName || '';
+  const branchName = agentBranch || appData.branch || '';
+  const submittedTime = formatDateTime(displayRecord?.createdAt || appData.createdDate || '');
+  const applicationDisplayId = buildApplicationDisplayId(displayRecord || appData, appId);
   const statusText = appData.status || '';
 
   return (
     <div className="page-container ad-page-root compact-mode">
       <div className="ad-shell compact">
+        {applicationLoadError && (
+          <div className="alert alert-warning" style={{ marginBottom: '12px' }}>
+            {applicationLoadError}
+          </div>
+        )}
         <header className="ad-premium-header">
           <div className="ad-premium-header-top">
             <div className="ad-title-group">
@@ -272,7 +393,7 @@ export default function ApplicationDetails() {
               <span className="ad-meta-label">Applicant</span>
               <div className="ad-meta-value-group highlight">
                 <User size={14} />
-                <span className="ad-meta-value">{applicantName}</span>
+                <span className="ad-meta-value">{isLoadingApplication ? 'Loading...' : applicantName}</span>
               </div>
             </div>
             <div className="ad-meta-divider" />
@@ -280,7 +401,7 @@ export default function ApplicationDetails() {
               <span className="ad-meta-label">App ID</span>
               <div className="ad-meta-value-group">
                 <FileText size={14} />
-                <span className="ad-meta-value">{appData.applicationNumber || appId}</span>
+                <span className="ad-meta-value">{isLoadingApplication ? 'Loading...' : applicationDisplayId}</span>
               </div>
             </div>
             <div className="ad-meta-divider" />
@@ -288,7 +409,7 @@ export default function ApplicationDetails() {
               <span className="ad-meta-label">Branch</span>
               <div className="ad-meta-value-group">
                 <MapPin size={14} />
-                <span className="ad-meta-value">{branchName}</span>
+                <span className="ad-meta-value">{isLoadingApplication ? 'Loading...' : branchName}</span>
               </div>
             </div>
             <div className="ad-meta-divider" />
@@ -296,7 +417,7 @@ export default function ApplicationDetails() {
               <span className="ad-meta-label">Submitted</span>
               <div className="ad-meta-value-group">
                 <Calendar size={14} />
-                <span className="ad-meta-value">{submittedTime}</span>
+                <span className="ad-meta-value">{isLoadingApplication ? 'Loading...' : submittedTime}</span>
               </div>
             </div>
             <div className="ad-meta-item status">
