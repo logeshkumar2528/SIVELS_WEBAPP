@@ -2,6 +2,30 @@ import axiosInstance from '../api/axiosInstance';
 
 export const authService = {
   // ──────────────────────────────────────────────────────────────────────────
+  // SEND OTP  →  POST /MobileOtp/send-mobile-otp
+  // Payload: { phoneNumber: "9876543210" }
+  // ──────────────────────────────────────────────────────────────────────────
+  sendOtp: async (phoneNumber) => {
+    try {
+      const response = await axiosInstance.post('/MobileOtp/send-mobile-otp', {
+        phoneNumber,
+      });
+
+      return response.data;
+    } catch (error) {
+      if (error.response) {
+        const msg =
+          error.response.data?.message ||
+          error.response.data?.error ||
+          `Error ${error.response.status}: Failed to send OTP`;
+        throw new Error(msg);
+      }
+
+      throw new Error('Network error. Please check your connection and try again.');
+    }
+  },
+
+  // ──────────────────────────────────────────────────────────────────────────
   // LOGIN  →  POST /api/user/login
   // baseURL is already "http://localhost:5118/api", so endpoint = "/user/login"
   // ──────────────────────────────────────────────────────────────────────────

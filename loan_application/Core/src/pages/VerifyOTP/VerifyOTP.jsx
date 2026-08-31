@@ -14,6 +14,7 @@ export default function VerifyOTP() {
   const [timer, setTimer] = useState(CONSTANTS.RESEND_TIMER_SECONDS);
   const [errorMessage, setErrorMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showOtpPopup, setShowOtpPopup] = useState(false);
 
   const inputRefs = useRef([]);
   const navigate = useNavigate();
@@ -24,12 +25,19 @@ export default function VerifyOTP() {
   const moduleName = location.state?.module;
   const destination = location.state?.destination;
   const accountData = location.state?.accountData;
+  const otpResponse = location.state?.otpResponse;
 
   useEffect(() => {
     if (!mobileNumber) {
       navigate('/login', { replace: true });
     }
   }, [mobileNumber, navigate]);
+
+  useEffect(() => {
+    if (otpResponse) {
+      setShowOtpPopup(true);
+    }
+  }, [otpResponse]);
 
   // ── Countdown timer ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -141,7 +149,7 @@ export default function VerifyOTP() {
 
   // ── Resend OTP ────────────────────────────────────────────────────────────
   const handleResend = () => {
-    // No OTP API — just reset timer and clear boxes
+    // Resend flow is still handled locally here; the actual OTP request is made from Login.
     setTimer(CONSTANTS.RESEND_TIMER_SECONDS);
     setOtp(Array(OTP_LENGTH).fill(''));
     setErrorMessage('');
@@ -171,6 +179,41 @@ export default function VerifyOTP() {
             </button>
           </p>
         </div>
+
+        {showOtpPopup && (
+          <div
+            className="otp-popup-backdrop"
+            onClick={() => setShowOtpPopup(false)}
+            role="presentation"
+          >
+            <div
+              className="otp-popup"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-label="OTP response"
+            >
+              <div className="otp-popup-header">
+                <ShieldCheck size={18} />
+                <span>OTP Sent</span>
+                <button type="button" className="otp-popup-close" onClick={() => setShowOtpPopup(false)}>
+                  ×
+                </button>
+              </div>
+              <div className="otp-popup-body">
+                <p>{otpResponse?.message || otpResponse?.data?.message || 'OTP sent successfully.'}</p>
+                {otpResponse?.otp && (
+                  <p className="otp-popup-meta">OTP Reference: {otpResponse.otp}</p>
+                )}
+              </div>
+              <div className="otp-popup-actions">
+                <button type="button" className="btn-primary" onClick={() => setShowOtpPopup(false)}>
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="verify-form">
           <div className="otp-error-wrapper">

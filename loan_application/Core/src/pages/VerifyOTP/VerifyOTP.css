@@ -104,6 +104,64 @@
   width: 100%;
 }
 
+.otp-popup-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 20px;
+}
+
+.otp-popup {
+  width: min(100%, 420px);
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.24);
+  overflow: hidden;
+}
+
+.otp-popup-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+  background: #eef8f1;
+  color: var(--color-primary, #1A7A3C);
+  font-weight: 700;
+}
+
+.otp-popup-close {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  font-size: 24px;
+  line-height: 1;
+  color: #5d6d64;
+  cursor: pointer;
+}
+
+.otp-popup-body {
+  padding: 18px;
+  color: var(--color-text-primary, #1A2320);
+  line-height: 1.5;
+}
+
+.otp-popup-meta {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #5d6d64;
+  word-break: break-word;
+}
+
+.otp-popup-actions {
+  padding: 0 18px 18px;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .resend-container {
   display: flex;
   align-items: center;
@@ -155,5 +213,13 @@
     width: 40px;
     height: 48px;
     font-size: var(--font-size-xl, 18px);
+  }
+
+  .otp-popup-actions {
+    justify-content: stretch;
+  }
+
+  .otp-popup-actions .btn-primary {
+    width: 100%;
   }
 }
