@@ -60,12 +60,21 @@ function makeAgentId(agent = {}, index = 0) {
   return agent.agentCode || agent.agentId || `AGT-${String(index + 1).padStart(3, '0')}`;
 }
 
+function normalizeStatus(value, fallback = 'Inactive') {
+  const text = normalizeText(value);
+  if (!text) return fallback;
+  if (['1', 'true', 'active', 'activated', 'approved', 'yes', 'y'].includes(text)) return 'Active';
+  if (['0', 'false', 'inactive', 'disabled', 'deactive', 'deactivated', 'no', 'n'].includes(text)) return 'Inactive';
+  return String(value).trim();
+}
+
 function buildRow(agent, customerRows = []) {
   const agentId = Number(agent.agentId || agent.AgentId || 0);
   const rowsForAgent = customerRows.filter((row) => Number(row.agentId || row.AgentId || 0) === agentId);
   const activeCustomers = rowsForAgent.filter((row) => row.isActive === true || normalizeText(row.status) === 'approved').length;
   const pendingVerification = rowsForAgent.filter((row) => normalizeText(row.status) === 'draft' || normalizeText(row.status) === 'pending').length;
   const pendingCollections = rowsForAgent.filter((row) => normalizeText(row.status) === 'collection pending' || normalizeText(row.status) === 'overdue').length;
+  const recordStatus = normalizeStatus(agent.status ?? agent.isActive ?? agent.IsActive, agent.isActive === false ? 'Inactive' : 'Active');
 
   return {
     id: makeAgentId(agent, agentId),
@@ -79,7 +88,7 @@ function buildRow(agent, customerRows = []) {
     pendingCollections,
     customersAdded: rowsForAgent.length,
     totalLoanAmount: rowsForAgent.reduce((sum, row) => sum + Number(row.expectedLoanAmount || row.loanAmount || 0), 0),
-    status: rowsForAgent.some((row) => row.isActive === true) ? 'Active' : (rowsForAgent.length ? 'New' : 'Inactive'),
+    status: recordStatus,
     joinDate: formatDate(agent.createdAt || agent.dateJoined || agent.createdDate),
     avatarUrl: buildAvatar(agent.fullName || agent.agentName || agent.name || 'Agent'),
     raw: agent,
@@ -91,6 +100,12 @@ export default function MyAgents() {
   const currentUser = useMemo(() => getStoredUser(), []);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAgent, setSelectedAgent] = useState(null);
+  const [selectedAgentDetails, setSelectedAgentDetails] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [isLoading, setIsLoading] = useState(true);
@@ -103,8 +118,129 @@ export default function MyAgents() {
   const IndianRupeeIcon = iconMap['IndianRupee'];
   const DownloadIcon = iconMap['Download'];
   const EyeIcon = iconMap['Eye'];
+  const TrashIcon = iconMap['XCircle'];
   const ChevronLeftIcon = iconMap['ChevronLeft'];
   const ChevronRightIcon = iconMap['ChevronRight'];
+
+  const getAuthHeaders = () => {
+    const headers = {};
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    return headers;
+  };
+
+  const openAgentDetails = async (row) => {
+    setSelectedAgent(row);
+    setSelectedAgentDetails(row?.raw || row || null);
+    setDetailsError('');
+    setDetailsLoading(true);
+
+    try {
+      const agentId = row?.raw?.agentId || row?.raw?.AgentId || row?.agentId || row?.raw?.agentCode || row?.id;
+      if (!agentId) return;
+
+      const response = await fetch(`${API_BASE}/AgentMaster/${agentId}`, {
+        headers: getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to load agent details (${response.status})`);
+      }
+
+      const details = await response.json();
+      const detailRecord = Array.isArray(details)
+        ? details[0]
+        : (details?.value?.[0] || details?.data || details);
+
+      setSelectedAgentDetails(detailRecord || row?.raw || null);
+    } catch (error) {
+      console.error('Failed to load agent details:', error);
+      setDetailsError(error.message || 'Failed to load agent details.');
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const openDeleteConfirm = (row) => {
+    setDeleteTarget(row);
+    setDeleteError('');
+  };
+
+  const closeDeleteConfirm = () => {
+    if (deleteLoading) return;
+    setDeleteTarget(null);
+    setDeleteError('');
+  };
+
+  const markAgentInactive = async () => {
+    const row = deleteTarget;
+    if (!row) return;
+
+    setDeleteLoading(true);
+    setDeleteError('');
+
+    try {
+      const agentId = row?.raw?.agentId || row?.raw?.AgentId || row?.agentId || row?.raw?.agentCode || row?.id;
+      if (!agentId) {
+        throw new Error('Agent ID not found.');
+      }
+
+      const payload = {
+        ...row.raw,
+        isActive: false,
+        status: 'Inactive',
+      };
+
+      const response = await fetch(`${API_BASE}/AgentMaster/${agentId}`, {
+        method: 'PUT',
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to deactivate agent (${response.status})`);
+      }
+
+      setAgentRows((current) =>
+        current.map((agent) => {
+          if (agent.agentId === row.agentId || agent.id === row.id) {
+            return {
+              ...agent,
+              status: 'Inactive',
+              raw: {
+                ...agent.raw,
+                isActive: false,
+                status: 'Inactive',
+              },
+            };
+          }
+          return agent;
+        })
+      );
+
+      setDeleteTarget(null);
+    } catch (error) {
+      console.error('Failed to deactivate agent:', error);
+      setDeleteError(error.message || 'Failed to deactivate agent.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const closeAgentDetails = () => {
+    setSelectedAgent(null);
+    setSelectedAgentDetails(null);
+    setDetailsError('');
+    setDetailsLoading(false);
+  };
+
+  const safeSelectedAgent = selectedAgent || {};
+  const safeAgentDetails = selectedAgentDetails || selectedAgent?.raw || {};
 
   useEffect(() => {
     let active = true;
@@ -244,9 +380,26 @@ export default function MyAgents() {
       key: 'action',
       label: 'Action',
       render: (row) => (
-        <Button variant="outline" size="sm" icon={EyeIcon ? <EyeIcon size={14} /> : null} onClick={() => setSelectedAgent(row)}>
-          View Details
-        </Button>
+        <div className="ag-row-actions">
+          <Button
+            variant="outline"
+            size="sm"
+            className="ag-icon-btn ag-icon-btn--view"
+            icon={EyeIcon ? <EyeIcon size={14} /> : null}
+            onClick={() => openAgentDetails(row)}
+            aria-label={`View details for ${row.name}`}
+            title="View Details"
+          />
+          <button
+            type="button"
+            className="ag-icon-btn ag-icon-btn--delete"
+            onClick={() => openDeleteConfirm(row)}
+            aria-label={`Delete ${row.name}`}
+            title="Delete"
+          >
+            {TrashIcon ? <TrashIcon size={14} /> : null}
+          </button>
+        </div>
       ),
     },
   ];
@@ -437,31 +590,160 @@ export default function MyAgents() {
         </div>
       </div>
 
-      {selectedAgent && (
-        <Modal title="Agent Details" onClose={() => setSelectedAgent(null)}>
-          <div style={{ display: 'grid', gap: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <img src={selectedAgent.avatarUrl} alt={selectedAgent.name} style={{ width: '54px', height: '54px', borderRadius: '50%' }} />
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '18px' }}>{selectedAgent.name}</div>
-                <div style={{ color: '#64748b' }}>{selectedAgent.id} • {selectedAgent.assignedArea}</div>
+      <Modal show={!!selectedAgent} title="Agent Details" onHide={closeAgentDetails}>
+          <div className="agent-detail-modal">
+            <div className="agent-detail-hero">
+              <div className="agent-detail-avatar-wrap">
+                <img
+                  src={safeSelectedAgent.avatarUrl || buildAvatar(safeAgentDetails.fullName || safeAgentDetails.name || 'Agent')}
+                  alt={safeSelectedAgent.name || safeAgentDetails.fullName || 'Agent'}
+                  className="agent-detail-avatar"
+                />
+              </div>
+              <div className="agent-detail-hero-copy">
+                <div className="agent-detail-name">{safeSelectedAgent.name || safeAgentDetails.fullName || 'Agent'}</div>
+                <div className="agent-detail-meta">
+                  {safeSelectedAgent.id || safeAgentDetails.agentCode || '-'} <span>•</span> {safeSelectedAgent.assignedArea || safeAgentDetails.branch || '-'}
+                </div>
+                <div className="agent-detail-badges">
+                  <span className={`agent-detail-pill ${String(safeAgentDetails.isActive ?? safeSelectedAgent.raw?.isActive ?? true).toLowerCase() === 'true' ? 'is-active' : 'is-inactive'}`}>
+                    {(safeAgentDetails.isActive ?? safeSelectedAgent.raw?.isActive ?? true) ? 'Active' : 'Inactive'}
+                  </span>
+                  <span className="agent-detail-pill agent-detail-pill--outline">
+                    {safeAgentDetails.role || 'Agent'}
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
-              <div><strong>Mobile:</strong> {selectedAgent.phone}</div>
-              <div><strong>Email:</strong> {selectedAgent.email || '-'}</div>
-              <div><strong>Customers Added:</strong> {selectedAgent.customersAdded}</div>
-              <div><strong>Active Customers:</strong> {selectedAgent.activeCustomers}</div>
-              <div><strong>Pending Verification:</strong> {selectedAgent.pendingVerification}</div>
-              <div><strong>Pending Collections:</strong> {selectedAgent.pendingCollections}</div>
-              <div><strong>Status:</strong> {selectedAgent.status}</div>
-              <div><strong>Joined:</strong> {selectedAgent.joinDate}</div>
-              <div><strong>Total Loan Amount:</strong> {formatCurrency(selectedAgent.totalLoanAmount)}</div>
+            {detailsLoading && (
+              <div className="agent-detail-alert agent-detail-alert--info">
+                Loading latest agent details...
+              </div>
+            )}
+
+            {detailsError && (
+              <div className="agent-detail-alert agent-detail-alert--error">
+                {detailsError}
+              </div>
+            )}
+
+            <div className="agent-detail-section">
+              <div className="agent-detail-section-title">Contact Details</div>
+              <div className="agent-detail-stats">
+              <div className="agent-detail-stat">
+                <span className="agent-detail-stat-label">Mobile</span>
+                <span className="agent-detail-stat-value">{safeAgentDetails.mobileNumber || safeSelectedAgent.phone || '-'}</span>
+              </div>
+              <div className="agent-detail-stat">
+                <span className="agent-detail-stat-label">Email</span>
+                <span className="agent-detail-stat-value">{safeAgentDetails.emailAddress || safeAgentDetails.email || safeSelectedAgent.email || '-'}</span>
+              </div>
+              <div className="agent-detail-stat">
+                <span className="agent-detail-stat-label">Branch</span>
+                <span className="agent-detail-stat-value">{safeAgentDetails.branch || safeSelectedAgent.assignedArea || '-'}</span>
+              </div>
+              <div className="agent-detail-stat">
+                <span className="agent-detail-stat-label">Role</span>
+                <span className="agent-detail-stat-value">{safeAgentDetails.role || '-'}</span>
+              </div>
+              <div className="agent-detail-stat">
+                <span className="agent-detail-stat-label">RM ID</span>
+                <span className="agent-detail-stat-value">{safeAgentDetails.rmId ?? safeAgentDetails.RMId ?? '-'}</span>
+              </div>
+              <div className="agent-detail-stat">
+                <span className="agent-detail-stat-label">Created By</span>
+                <span className="agent-detail-stat-value">{safeAgentDetails.createdBy ?? safeAgentDetails.createdby ?? '-'}</span>
+              </div>
+              <div className="agent-detail-stat">
+                <span className="agent-detail-stat-label">Joined</span>
+                <span className="agent-detail-stat-value">{formatDate(safeAgentDetails.dateJoined || safeAgentDetails.createdAt || safeSelectedAgent.joinDate)}</span>
+              </div>
+              <div className="agent-detail-stat">
+                <span className="agent-detail-stat-label">Status</span>
+                <span className="agent-detail-stat-value">{safeSelectedAgent.status || 'Active'}</span>
+              </div>
+              <div className="agent-detail-stat">
+                <span className="agent-detail-stat-label">Customers Added</span>
+                <span className="agent-detail-stat-value">{safeSelectedAgent.customersAdded ?? 0}</span>
+              </div>
+              <div className="agent-detail-stat">
+                <span className="agent-detail-stat-label">Active Customers</span>
+                <span className="agent-detail-stat-value">{safeSelectedAgent.activeCustomers ?? 0}</span>
+              </div>
+              <div className="agent-detail-stat">
+                <span className="agent-detail-stat-label">Pending Verification</span>
+                <span className="agent-detail-stat-value">{safeSelectedAgent.pendingVerification ?? 0}</span>
+              </div>
+              <div className="agent-detail-stat">
+                <span className="agent-detail-stat-label">Pending Collections</span>
+                <span className="agent-detail-stat-value">{safeSelectedAgent.pendingCollections ?? 0}</span>
+              </div>
+              <div className="agent-detail-stat agent-detail-stat--highlight">
+                <span className="agent-detail-stat-label">Total Loan Amount</span>
+                <span className="agent-detail-stat-value">{formatCurrency(safeSelectedAgent.totalLoanAmount ?? 0)}</span>
+              </div>
+              </div>
+            </div>
+
+            <div className="agent-detail-section">
+              <div className="agent-detail-section-title">Identity & Work Info</div>
+              <div className="agent-detail-surface">
+              <div className="agent-detail-surface-title">Live Agent Record</div>
+              <div className="agent-detail-surface-grid">
+                <div className="agent-detail-surface-item">
+                  <span className="agent-detail-surface-label">Name</span>
+                  <span className="agent-detail-surface-value">{safeAgentDetails.fullName || safeAgentDetails.name || safeSelectedAgent.name || '-'}</span>
+                </div>
+                <div className="agent-detail-surface-item">
+                  <span className="agent-detail-surface-label">Agent Code</span>
+                  <span className="agent-detail-surface-value">{safeAgentDetails.agentCode || safeSelectedAgent.id || '-'}</span>
+                </div>
+                <div className="agent-detail-surface-item">
+                  <span className="agent-detail-surface-label">Address</span>
+                  <span className="agent-detail-surface-value">{safeAgentDetails.address || '-'}</span>
+                </div>
+                <div className="agent-detail-surface-item">
+                  <span className="agent-detail-surface-label">Pincode</span>
+                  <span className="agent-detail-surface-value">{safeAgentDetails.pincode || '-'}</span>
+                </div>
+                <div className="agent-detail-surface-item">
+                  <span className="agent-detail-surface-label">IFSC</span>
+                  <span className="agent-detail-surface-value">{safeAgentDetails.ifscCode || '-'}</span>
+                </div>
+              </div>
+              </div>
             </div>
           </div>
-        </Modal>
-      )}
+      </Modal>
+
+      <Modal
+        show={!!deleteTarget}
+        onHide={closeDeleteConfirm}
+        title="Deactivate Agent"
+        size="sm"
+        footer={(
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', width: '100%' }}>
+            <Button type="button" variant="secondary" onClick={closeDeleteConfirm} disabled={deleteLoading}>
+              Cancel
+            </Button>
+            <Button type="button" variant="danger" onClick={markAgentInactive} disabled={deleteLoading}>
+              {deleteLoading ? 'Updating...' : 'Set Inactive'}
+            </Button>
+          </div>
+        )}
+      >
+        <div style={{ display: 'grid', gap: '10px' }}>
+          <p style={{ margin: 0, color: '#334155', lineHeight: 1.6 }}>
+            This will mark <strong>{deleteTarget?.name || 'this agent'}</strong> as inactive. The record will remain in the system.
+          </p>
+          {deleteError && (
+            <div style={{ padding: '10px 12px', borderRadius: '10px', background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c' }}>
+              {deleteError}
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

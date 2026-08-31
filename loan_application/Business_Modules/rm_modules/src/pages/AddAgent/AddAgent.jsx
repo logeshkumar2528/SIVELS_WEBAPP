@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   User,
@@ -30,16 +30,32 @@ import Modal from '../../components/Modal/Modal';
 import { ROUTES } from '../../config/routeConfig';
 import './AddAgent.css';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+
 const GENDER_OPTIONS = [
-  { value: 'Male', label: 'Male' },
-  { value: 'Female', label: 'Female' },
-  { value: 'Other', label: 'Other' },
+  { value: 1, label: 'Male' },
+  { value: 2, label: 'Female' },
+  { value: 3, label: 'Other' },
 ];
 
 export default function AddAgent() {
   const navigate = useNavigate();
   const aadhaarInputRef = useRef(null);
   const profileImgInputRef = useRef(null);
+
+  const getCurrentUser = () => {
+    try {
+      const raw = localStorage.getItem('sivels_currentUser');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const currentUser = useMemo(() => getCurrentUser(), []);
+  const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || currentUser?.rmid || 0);
+  const currentRmName = currentUser?.fullName || currentUser?.name || 'this RM';
+  const currentBranch = currentUser?.branch || '';
 
   // Form State matching the OLD UI exact fields
   const [formData, setFormData] = useState({
@@ -48,7 +64,7 @@ export default function AddAgent() {
     dateOfBirth: '',
 
     // Row 2
-    gender: '',
+    genderId: '',
     relationshipManager: '',
 
     // Row 3 (Full width)
@@ -64,7 +80,7 @@ export default function AddAgent() {
 
     // Row 6
     dateJoined: new Date().toISOString().split('T')[0],
-    role: '',
+    role: 'Agent',
 
     // Row 7
     branch: '',
@@ -84,13 +100,57 @@ export default function AddAgent() {
 
   // Modal Lightbox
   const [docModalOpen, setDocModalOpen] = useState(false);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    if (currentUser) {
+      setFormData((prev) => ({
+        ...prev,
+        relationshipManager: currentRmName,
+        branch: prev.branch || currentBranch || '',
+        role: prev.role || 'Agent',
+      }));
+    }
+  }, [currentBranch, currentRmName, currentUser]);
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
     }));
+  };
+
+  const buildPayload = () => ({
+    fullName: formData.fullName.trim(),
+    dateOfBirth: formData.dateOfBirth,
+    genderId: Number(formData.genderId || 0),
+    rmId: currentRmId || Number(currentUser?.id || currentUser?.userId || 0),
+    address: formData.address.trim(),
+    state: formData.state.trim(),
+    pincode: formData.pincode.trim(),
+    mobileNumber: formData.mobileNumber.trim(),
+    emailAddress: formData.emailAddress.trim(),
+    dateJoined: formData.dateJoined,
+    role: formData.role.trim(),
+    branch: formData.branch.trim() || currentBranch || '',
+    isActive: true,
+    bankAccountNumber: formData.bankAccountNumber.trim(),
+    ifscCode: formData.ifscCode.trim().toUpperCase(),
+    createdBy: currentRmId || Number(currentUser?.id || currentUser?.userId || 0),
+  });
+
+  const getAuthHeaders = () => {
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    return headers;
   };
 
   const handleAadhaarUpload = (e) => {
@@ -154,23 +214,103 @@ export default function AddAgent() {
     return `${kb.toFixed(1)} KB`;
   };
 
-  const handleSubmit = (e) => {
+  const validateForm = () => {
+    const requiredFields = [
+      ['fullName', 'full name'],
+      ['pincode', 'pincode'],
+      ['mobileNumber', 'mobile number'],
+      ['bankAccountNumber', 'bank account number'],
+      ['ifscCode', 'ifsc code'],
+    ];
+
+    for (const [field, label] of requiredFields) {
+      if (!String(formData[field] ?? '').trim()) {
+        return `Please fill ${label}.`;
+      }
+    }
+
+    if (!String(formData.pincode).match(/^\d{6}$/)) {
+      return 'Please enter a valid 6-digit pincode.';
+    }
+
+    if (!String(formData.mobileNumber).match(/^\d{10}$/)) {
+      return 'Please enter a valid 10-digit mobile number.';
+    }
+
+    if (!String(formData.bankAccountNumber).match(/^\d{9,18}$/)) {
+      return 'Please enter a valid bank account number.';
+    }
+
+    if (!String(formData.ifscCode).match(/^[A-Z]{4}0[A-Z0-9]{6}$/)) {
+      return 'Please enter a valid IFSC code.';
+    }
+
+    if (!currentRmId) {
+      return 'RM session was not found. Please log in again.';
+    }
+
+    return '';
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // UI-only confirmation feedback
-    setSubmittedSuccess(true);
-    setTimeout(() => {
-      setSubmittedSuccess(false);
-    }, 4000);
+    const validationError = validateForm();
+    if (validationError) {
+      setErrorMessage(validationError);
+      return;
+    }
+    setErrorMessage('');
+    setConfirmModalOpen(true);
+  };
+
+  const confirmCreateAgent = async () => {
+    setIsSaving(true);
+    setErrorMessage('');
+
+    try {
+      const payload = buildPayload();
+      console.log('Creating agent with payload:', payload);
+
+      const response = await fetch(`${API_BASE}/AgentMaster`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `Failed to save agent (${response.status})`);
+      }
+
+      setConfirmModalOpen(false);
+      setSubmittedSuccess(true);
+      setTimeout(() => {
+        setSubmittedSuccess(false);
+        navigate(ROUTES.MY_AGENTS);
+      }, 1200);
+    } catch (error) {
+      console.error('Failed to create agent:', error);
+      setErrorMessage(error.message || 'Failed to create agent.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
     <div className="agent-creation-page">
+      {errorMessage && (
+        <div className="agent-creation-error" role="alert">
+          <span className="agent-creation-error-title">Could not save agent</span>
+          <span className="agent-creation-error-text">{errorMessage}</span>
+        </div>
+      )}
+
       {submittedSuccess && (
         <div className="agent-creation-toast" role="alert">
           <CheckCircle2 size={18} className="toast-icon" />
           <div className="toast-content">
-            <span className="toast-title">Form Validated (UI Mode)</span>
-            <span className="toast-desc">Agent profile form is filled. Backend integration will be connected in Phase 2.</span>
+            <span className="toast-title">Agent created successfully</span>
+            <span className="toast-desc">The agent has been saved to the database.</span>
           </div>
           <button
             type="button"
@@ -205,7 +345,7 @@ export default function AddAgent() {
             </div>
             <div className="section-divider" />
 
-            <div className="form-grid-2col">
+            <div className="form-grid-2col agent-info-grid">
               {/* Row 1: Full Name * | Date of Birth * */}
               <div className="form-group">
                 <label className="form-label">
@@ -239,8 +379,8 @@ export default function AddAgent() {
                   Gender <span className="required-star">*</span>
                 </label>
                 <Select
-                  value={formData.gender}
-                  onChange={(val) => handleInputChange('gender', val)}
+                  value={formData.genderId}
+                  onChange={(val) => handleInputChange('genderId', val)}
                   options={GENDER_OPTIONS}
                   placeholder="Select gender"
                 />
@@ -252,11 +392,10 @@ export default function AddAgent() {
                 </label>
                 <input
                   type="text"
-                  className="form-control"
-                  placeholder="Enter Relationship Manager Name"
+                  className="form-control form-control-readonly"
                   value={formData.relationshipManager}
-                  onChange={(e) => handleInputChange('relationshipManager', e.target.value)}
-                  required
+                  readOnly
+                  aria-readonly="true"
                 />
               </div>
 
@@ -352,11 +491,10 @@ export default function AddAgent() {
                 </label>
                 <input
                   type="text"
-                  className="form-control"
-                  placeholder="Enter role"
+                  className="form-control form-control-readonly"
                   value={formData.role}
-                  onChange={(e) => handleInputChange('role', e.target.value)}
-                  required
+                  readOnly
+                  aria-readonly="true"
                 />
               </div>
 
@@ -367,11 +505,10 @@ export default function AddAgent() {
                 </label>
                 <input
                   type="text"
-                  className="form-control"
-                  placeholder="Enter branch"
+                  className="form-control form-control-readonly"
                   value={formData.branch}
-                  onChange={(e) => handleInputChange('branch', e.target.value)}
-                  required
+                  readOnly
+                  aria-readonly="true"
                 />
               </div>
 
@@ -412,7 +549,7 @@ export default function AddAgent() {
             <h2 className="section-heading">Required Documents</h2>
             <div className="section-divider" />
 
-            <div className="documents-grid">
+            <div className="documents-grid agent-docs-grid">
               {/* LEFT: Aadhaar Card * */}
               <div className="upload-box-container">
                 <div className="upload-box-header">
@@ -589,7 +726,7 @@ export default function AddAgent() {
             </div>
           </div>
 
-          <div className="section-divider" />
+      <div className="section-divider" />
 
           {/* BOTTOM ACTION BUTTONS */}
           <div className="form-actions-footer">
@@ -598,9 +735,9 @@ export default function AddAgent() {
               size="md"
               onClick={() => navigate(ROUTES.MY_AGENTS)}
               className="btn-footer-cancel"
-            >
-              Cancel
-            </Button>
+              >
+                Cancel
+              </Button>
 
             <Button
               variant="primary"
@@ -608,7 +745,7 @@ export default function AddAgent() {
               type="submit"
               icon={<CheckCircle2 size={16} />}
               className="btn-footer-save"
-            >
+              >
               Save Agent
             </Button>
           </div>
@@ -652,6 +789,34 @@ export default function AddAgent() {
               />
             </div>
           )}
+        </div>
+      </Modal>
+
+      <Modal
+        show={confirmModalOpen}
+        onHide={() => !isSaving && setConfirmModalOpen(false)}
+        title="Confirm Agent Creation"
+        size="md"
+        footer={(
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', width: '100%' }}>
+            <Button type="button" variant="secondary" onClick={() => setConfirmModalOpen(false)} disabled={isSaving}>
+              Cancel
+            </Button>
+            <Button type="button" variant="primary" onClick={confirmCreateAgent} disabled={isSaving}>
+              {isSaving ? 'Saving...' : 'Yes, Create Agent'}
+            </Button>
+          </div>
+        )}
+      >
+        <div style={{ display: 'grid', gap: '10px' }}>
+          <p style={{ margin: 0, color: '#334155', lineHeight: 1.6 }}>
+            Are you sure you want to create an agent under <strong>{currentRmName}</strong>?
+          </p>
+          <div style={{ padding: '12px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#0f172a' }}>
+            <div><strong>Branch:</strong> {formData.branch || currentBranch || '-'}</div>
+            <div><strong>Agent:</strong> {formData.fullName || '-'}</div>
+            <div><strong>Mobile:</strong> {formData.mobileNumber || '-'}</div>
+          </div>
         </div>
       </Modal>
     </div>

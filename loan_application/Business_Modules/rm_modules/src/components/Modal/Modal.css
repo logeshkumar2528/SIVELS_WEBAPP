@@ -8,9 +8,13 @@
   z-index: var(--z-modal);
   padding: var(--spacing-4);
   backdrop-filter: blur(3px);
+  pointer-events: auto;
 }
 
 .modal-container {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
   background-color: var(--color-surface);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xl);
