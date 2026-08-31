@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import iconMap from '../../config/iconMap';
 import Breadcrumb from '../../components/Breadcrumb/Breadcrumb';
 import Button from '../../components/Button/Button';
-import { useAuth } from '../../../../../Core/src/context/AuthContext';
 import './RmProfile.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -68,8 +67,17 @@ function buildFallbackProfile(currentUser = {}) {
 }
 
 export default function RmProfile() {
-  const { currentUser } = useAuth();
-  const [profile, setProfile] = useState(() => buildFallbackProfile(currentUser || {}));
+  const getCurrentUser = () => {
+    try {
+      const raw = localStorage.getItem('sivels_currentUser');
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
+  const [profile, setProfile] = useState(() => buildFallbackProfile(getCurrentUser()));
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
@@ -156,6 +164,12 @@ export default function RmProfile() {
       active = false;
     };
   }, [currentUser]);
+
+  useEffect(() => {
+    const handleStorage = () => setCurrentUser(getCurrentUser());
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   const displayAddress = useMemo(() => String(profile.address || '').replace('\n', ', '), [profile.address]);
 

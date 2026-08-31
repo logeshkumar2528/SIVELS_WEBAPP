@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../../../../Core/src/context/AuthContext';
 
 import Sidebar from '../../components/Sidebar/Sidebar';
 import Header from '../../components/Header/Header';
@@ -30,7 +29,16 @@ function MainLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { currentUser } = useAuth();
+
+  const getCurrentUser = useCallback(() => {
+    try {
+      const raw = localStorage.getItem('sivels_currentUser');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+  const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
 
   useEffect(() => {
     document.body.classList.toggle('body--no-scroll', sidebarOpen);
@@ -40,6 +48,12 @@ function MainLayout({
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    const handleStorage = () => setCurrentUser(getCurrentUser());
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [getCurrentUser]);
 
   const handleMenuToggle = useCallback(() => {
     setSidebarOpen((prev) => !prev);
