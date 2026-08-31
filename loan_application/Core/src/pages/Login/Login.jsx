@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Smartphone, ShieldCheck, ArrowRight, ChevronDown } from 'lucide-react';
 import { detectAccountModule, normalizeMobileNumber } from '../../services/moduleDetectionService';
+import { authService } from '../../services/authService';
 import './Login.css';
 
 export default function Login() {
@@ -17,6 +18,7 @@ export default function Login() {
       setLoading(true);
       setError('');
       try {
+        const otpResponse = await authService.sendOtp(cleanMobile);
         const detection = await detectAccountModule(cleanMobile);
 
         if (detection.status === 'DUPLICATE') {
@@ -40,12 +42,13 @@ export default function Login() {
               mobileNumber: cleanMobile,
               module: detection.module,
               destination: detection.destination,
-              accountData: detection.accountData
+              accountData: detection.accountData,
+              otpResponse,
             }
           });
         }
       } catch (err) {
-        setError(err.message || 'Failed to verify account. Please check your connection and try again.');
+        setError(err.message || 'Failed to send OTP. Please check your connection and try again.');
       } finally {
         setLoading(false);
       }
