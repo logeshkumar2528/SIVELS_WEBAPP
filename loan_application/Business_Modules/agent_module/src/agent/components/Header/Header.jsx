@@ -5,7 +5,7 @@ import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import './Header.css'
 
 const getBackendBaseUrl = () => {
-  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5118/api'
+  const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api/'
   return apiBase.replace(/\/api\/?$/, '')
 }
 

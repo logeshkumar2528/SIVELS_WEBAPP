@@ -134,7 +134,7 @@ export default function MyAgents() {
       label: 'Agent Name', 
       render: (row) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <img src={row.profileImagePath ? `http://localhost:5118${row.profileImagePath}` : 'https://via.placeholder.com/32'} alt={row.fullName} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+          <img src={row.profileImagePath ? `https://fusiontecsoftware.com${row.profileImagePath}` : 'https://via.placeholder.com/32'} alt={row.fullName} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
           <span style={{ fontWeight: 600, color: '#0f172a' }}>{row.fullName}</span>
         </div>
       )
@@ -341,7 +341,7 @@ export default function MyAgents() {
         {selectedAgent && (
           <div className="agent-details-modal">
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-              <img src={selectedAgent.profileImagePath ? `http://localhost:5118${selectedAgent.profileImagePath}` : 'https://via.placeholder.com/64'} alt={selectedAgent.fullName} style={{ width: '64px', height: '64px', borderRadius: '50%', objectFit: 'cover' }} />
+              <img src={selectedAgent.profileImagePath ? `https://fusiontecsoftware.com${selectedAgent.profileImagePath}` : 'https://via.placeholder.com/64'} alt={selectedAgent.fullName} style={{ width: '64px', height: '64px', borderRadius: '50%', objectFit: 'cover' }} />
               <div>
                 <h3 style={{ margin: 0, fontSize: '18px', color: '#0f172a' }}>{selectedAgent.fullName}</h3>
                 <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>ID: {selectedAgent.agentCode}</p>

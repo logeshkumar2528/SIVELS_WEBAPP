@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:5118/api';
+const API_BASE_URL = 'https://fusiontecsoftware.com/sivels/api';
 
 export const agentApi = {
   createAgent: async (agentData) => {
