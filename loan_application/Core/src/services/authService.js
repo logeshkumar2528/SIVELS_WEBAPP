@@ -27,18 +27,25 @@ export const authService = {
 
   // ──────────────────────────────────────────────────────────────────────────
   // VERIFY MOBILE OTP  →  POST /MobileOtp/verify-mobile-otp
-  // Payload: { otp: "123456" }
-  // Backend Controller:
-  // [HttpPost("verify-mobile-otp")]
-  // public async Task<IActionResult> VerifyMobileOtp([FromBody] VerifyMobileOtpRequestDto request)
-  // {
-  //     var result = await _otpService.VerifyMobileOtpAsync(request.Otp, HttpContext);
-  //     return Ok(result);
-  // }
+  // Payload: { mobileNumber: "9345638127", otp: "580232" }
   // ──────────────────────────────────────────────────────────────────────────
-  verifyMobileOtp: async (otp) => {
+  verifyMobileOtp: async (mobileNumberOrPayload, maybeOtp) => {
+    let mobileNumber = '';
+    let otp = '';
+
+    if (typeof mobileNumberOrPayload === 'object' && mobileNumberOrPayload !== null) {
+      mobileNumber = mobileNumberOrPayload.mobileNumber || '';
+      otp = mobileNumberOrPayload.otp || '';
+    } else if (maybeOtp !== undefined) {
+      mobileNumber = mobileNumberOrPayload || '';
+      otp = maybeOtp || '';
+    } else {
+      otp = mobileNumberOrPayload || '';
+    }
+
     try {
       const response = await axiosInstance.post('/MobileOtp/verify-mobile-otp', {
+        mobileNumber: String(mobileNumber).trim(),
         otp: String(otp).trim(),
       });
       const data = response.data;

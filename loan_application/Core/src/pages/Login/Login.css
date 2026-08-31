@@ -127,28 +127,44 @@
   line-height: var(--line-height-normal, 1.5);
 }
 
+.login-form .btn-primary,
+.login-card .btn-primary,
 .btn-primary {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 16px;
-  background-color: var(--color-primary, #1A7A3C);
-  color: var(--color-text-inverse, #FFFFFF);
+  padding: 14px 20px;
+  height: 48px;
+  background-color: var(--color-primary, #1A7A3C) !important;
+  background: var(--color-primary, #1A7A3C) !important;
+  color: #FFFFFF !important;
   border-radius: var(--radius-md, 8px);
   font-size: var(--font-size-md, 14px);
   font-weight: var(--font-weight-semibold, 600);
-  transition: background-color var(--transition-fast, 150ms ease);
+  border: none !important;
+  cursor: pointer;
+  transition: all var(--transition-fast, 150ms ease);
   width: 100%;
+  box-shadow: 0 2px 6px rgba(26, 122, 60, 0.25) !important;
 }
 
+.login-form .btn-primary:hover:not(:disabled),
+.login-card .btn-primary:hover:not(:disabled),
 .btn-primary:hover:not(:disabled) {
-  background-color: var(--color-primary-hover, #15692F);
+  background-color: var(--color-primary-hover, #15692F) !important;
+  background: var(--color-primary-hover, #15692F) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(26, 122, 60, 0.35) !important;
 }
 
+.login-form .btn-primary:disabled,
+.login-card .btn-primary:disabled,
 .btn-primary:disabled {
-  opacity: 0.7;
+  opacity: 0.6;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none !important;
 }
 
 .register-prompt {
