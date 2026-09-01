@@ -27,6 +27,7 @@ import Button from '../../components/Button/Button';
 import Select from '../../components/Select/Select';
 import DatePicker from '../../components/DatePicker/DatePicker';
 import Modal from '../../components/Modal/Modal';
+import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { ROUTES } from '../../config/routeConfig';
 import './AddAgent.css';
 
@@ -104,6 +105,7 @@ export default function AddAgent() {
   const [isSaving, setIsSaving] = useState(false);
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [errorDetails, setErrorDetails] = useState(null);
 
   useEffect(() => {
     if (currentUser) {
@@ -257,15 +259,18 @@ export default function AddAgent() {
     const validationError = validateForm();
     if (validationError) {
       setErrorMessage(validationError);
+      setErrorDetails(null);
       return;
     }
     setErrorMessage('');
+    setErrorDetails(null);
     setConfirmModalOpen(true);
   };
 
   const confirmCreateAgent = async () => {
     setIsSaving(true);
     setErrorMessage('');
+    setErrorDetails(null);
 
     try {
       const payload = buildPayload();
@@ -279,7 +284,21 @@ export default function AddAgent() {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(errorText || `Failed to save agent (${response.status})`);
+        let errorDetailsFromApi = errorText;
+        try {
+          errorDetailsFromApi = errorText ? JSON.parse(errorText) : null;
+        } catch {
+          // Keep plain-text API errors as-is.
+        }
+        const error = new Error(
+          errorDetailsFromApi?.message ||
+          errorDetailsFromApi?.Message ||
+          errorDetailsFromApi?.title ||
+          errorText ||
+          `Failed to save agent (${response.status})`
+        );
+        error.details = errorDetailsFromApi;
+        throw error;
       }
 
       setConfirmModalOpen(false);
@@ -291,6 +310,7 @@ export default function AddAgent() {
     } catch (error) {
       console.error('Failed to create agent:', error);
       setErrorMessage(error.message || 'Failed to create agent.');
+      setErrorDetails(error.details || null);
     } finally {
       setIsSaving(false);
     }
@@ -298,12 +318,16 @@ export default function AddAgent() {
 
   return (
     <div className="agent-creation-page">
-      {errorMessage && (
-        <div className="agent-creation-error" role="alert">
-          <span className="agent-creation-error-title">Could not save agent</span>
-          <span className="agent-creation-error-text">{errorMessage}</span>
-        </div>
-      )}
+      <ErrorPopup
+        show={!!errorMessage}
+        title="Could not save agent"
+        message={errorMessage}
+        details={errorDetails}
+        onClose={() => {
+          setErrorMessage('');
+          setErrorDetails(null);
+        }}
+      />
 
       {submittedSuccess && (
         <div className="agent-creation-toast" role="alert">

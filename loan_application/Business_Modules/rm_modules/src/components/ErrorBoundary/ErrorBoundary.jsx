@@ -1,4 +1,5 @@
 import React from 'react';
+import ErrorPopup from '../ErrorPopup/ErrorPopup';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -17,25 +18,13 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: '40px', textAlign: 'center', fontFamily: 'sans-serif' }}>
-          <h2 style={{ color: '#dc2626' }}>Something went wrong in RM Module.</h2>
-          <p style={{ color: '#64748b' }}>{this.state.error?.toString()}</p>
-          <button
-            onClick={() => window.location.reload()}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#0F7A4C',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              marginTop: '16px',
-              fontWeight: 600
-            }}
-          >
-            Reload Page
-          </button>
-        </div>
+        <ErrorPopup
+          show
+          title="Application Error"
+          message="The application encountered an unexpected error."
+          details={this.state.error?.stack || this.state.error?.toString()}
+          onClose={() => window.location.reload()}
+        />
       );
     }
     return this.props.children;
