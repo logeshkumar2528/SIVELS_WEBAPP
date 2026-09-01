@@ -59,6 +59,10 @@ const multiModulePlugin = () => ({
         `$1="/${moduleDir}/src/`
       );
       html = html.replace(
+        /(src|href)="\.\/src\//g,
+        `$1="/${moduleDir}/src/`
+      );
+      html = html.replace(
         /(src|href)="\/(?!Business_Modules|Core|@|node_modules)([^"]+\.(svg|png|ico|jpg|jpeg|gif|webp))"/g,
         `$1="/${moduleDir}/public/$2"`
       );

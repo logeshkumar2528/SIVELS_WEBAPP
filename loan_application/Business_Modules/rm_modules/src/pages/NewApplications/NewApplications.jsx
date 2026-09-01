@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import iconMap from '../../config/iconMap';
 import DataTable from '../../components/DataTable/DataTable';
 import StatusBadge from '../../components/StatusBadge/StatusBadge';
+import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import SectionHeader from '../../components/SectionHeader/SectionHeader';
 import Button from '../../components/Button/Button';
 import Pagination from '../../components/Pagination/Pagination';
@@ -120,7 +121,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [applications, setApplications] = useState(allNewApplications.map(mapBackendApplication));
   const [isLoading, setIsLoading] = useState(false);
-  const [loadError, setLoadError] = useState('');
+  const [errorPopup, setErrorPopup] = useState('');
   const pageSize = 10;
 
   const SearchIcon = iconMap['Search'];
@@ -141,12 +142,11 @@ export default function NewApplications({ initialFilter = 'All' }) {
 
       if (!rmContext.rmId && !rmContext.branch) {
         setApplications(allNewApplications.map(mapBackendApplication));
-        setLoadError('No RM context found in session. Showing sample data.');
+        setErrorPopup('No RM context found in session. Please sign in again.');
         return;
       }
 
       setIsLoading(true);
-      setLoadError('');
 
       try {
         const [agentRes, customerRes] = await Promise.all([
@@ -211,7 +211,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
         // fields are incomplete, show the live data rather than an empty grid.
         if (rows.length > 0 && filtered.length === 0) {
           filtered = rows;
-          setLoadError('Loaded live applications, but RM-to-agent mapping was incomplete. Showing all records from AgentAddCustomer.');
+          setErrorPopup('The RM-to-agent mapping is incomplete. The application list may not be accurate.');
         }
 
         const mapped = filtered.map(mapBackendApplication);
@@ -223,7 +223,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
         console.error('Failed to fetch AgentAddCustomer:', error);
         if (active) {
           setApplications(allNewApplications.map(mapBackendApplication));
-          setLoadError('Unable to load live applications for this RM. Showing sample data.');
+          setErrorPopup('Unable to load live applications for this RM. Please try again.');
         }
       } finally {
         if (active) {
@@ -299,11 +299,12 @@ export default function NewApplications({ initialFilter = 'All' }) {
   return (
     <div className="listing-page-wrapper">
       <div className="panel listing-card-full">
-        {loadError && (
-          <div className="alert alert-warning" style={{ marginBottom: '12px' }}>
-            {loadError}
-          </div>
-        )}
+        <ErrorPopup
+          show={!!errorPopup}
+          title="Application List Error"
+          message={errorPopup}
+          onClose={() => setErrorPopup('')}
+        />
         {isLoading && (
           <div style={{ marginBottom: '12px', color: '#64748b', fontSize: '14px' }}>
             Loading applications...

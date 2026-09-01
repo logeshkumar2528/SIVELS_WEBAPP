@@ -20,6 +20,7 @@ import {
 import Button from '../../components/Button/Button';
 import Select from '../../components/Select/Select';
 import StatusBadge from '../../components/StatusBadge/StatusBadge';
+import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS, getWizardActiveStepByPath } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
@@ -91,7 +92,7 @@ export default function ApplicationDetails() {
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [errors, setErrors] = useState({});
   const [isLoadingApplication, setIsLoadingApplication] = useState(false);
-  const [applicationLoadError, setApplicationLoadError] = useState('');
+  const [errorPopup, setErrorPopup] = useState(null);
   const [displayRecord, setDisplayRecord] = useState(null);
   const [agentBranch, setAgentBranch] = useState('');
 
@@ -113,7 +114,6 @@ export default function ApplicationDetails() {
     async function loadApplicationFromApi() {
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
       setIsLoadingApplication(true);
-      setApplicationLoadError('');
 
       try {
         const response = await fetch(`${baseUrl}/AgentAddCustomer/${appId}`);
@@ -166,7 +166,7 @@ export default function ApplicationDetails() {
       } catch (error) {
         console.error('Failed to load application from AgentAddCustomer:', error);
         if (active) {
-          setApplicationLoadError('Unable to load live application data. Showing draft values.');
+          setErrorPopup({ title: 'Application Load Error', message: 'Unable to load live application data. Please try again.' });
         }
       } finally {
         if (active) {
@@ -257,6 +257,11 @@ export default function ApplicationDetails() {
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) {
+      setErrorPopup({
+        title: 'Please complete the application',
+        message: 'The application cannot continue until the highlighted fields are corrected.',
+        details: validationErrors,
+      });
       return;
     }
 
@@ -318,7 +323,7 @@ export default function ApplicationDetails() {
         if (errorData.errors) {
             errorMsg += '\n' + JSON.stringify(errorData.errors, null, 2);
         }
-        alert(`Failed to save application:\n${errorMsg}`);
+        setErrorPopup({ title: 'Application Save Failed', message: errorMsg, details: errorData });
         return;
       }
 
@@ -341,7 +346,7 @@ export default function ApplicationDetails() {
       navigate(ROUTES.KYC_DOCUMENTS.replace(':applicationId', appId));
     } catch (error) {
       console.error('Error saving application:', error);
-      alert('Network error while saving application.');
+      setErrorPopup({ title: 'Network Error', message: 'Network error while saving application. Please try again.', details: error.message });
     }
   };
 
@@ -358,11 +363,13 @@ export default function ApplicationDetails() {
   return (
     <div className="page-container ad-page-root compact-mode">
       <div className="ad-shell compact">
-        {applicationLoadError && (
-          <div className="alert alert-warning" style={{ marginBottom: '12px' }}>
-            {applicationLoadError}
-          </div>
-        )}
+        <ErrorPopup
+          show={!!errorPopup}
+          title={errorPopup?.title}
+          message={errorPopup?.message}
+          details={errorPopup?.details}
+          onClose={() => setErrorPopup(null)}
+        />
         <header className="ad-premium-header">
           <div className="ad-premium-header-top">
             <div className="ad-title-group">
