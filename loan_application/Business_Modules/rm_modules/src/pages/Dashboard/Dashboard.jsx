@@ -9,17 +9,21 @@ import SectionHeader from '../../components/SectionHeader/SectionHeader';
 import Modal from '../../components/Modal/Modal';
 import Button from '../../components/Button/Button';
 import { ROUTES } from '../../config/routeConfig';
-import {
-  dashboardStats,
-  recentApplicationsData,
-  agentPerformanceData,
-  statusSummaryData,
-} from './dashboardData';
+import { useRmDashboardData } from '../../hooks/useRmDashboardData';
 import './Dashboard.css';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [selectedAgent, setSelectedAgent] = useState(null);
+  const {
+    dashboardStats,
+    recentApplicationsData,
+    agentPerformanceData,
+    statusSummaryData,
+    totalApplications,
+    isLoading,
+    error,
+  } = useRmDashboardData();
 
   const FilePlusIcon = iconMap['FilePlus'];
   const ShieldCheckIcon = iconMap['ShieldCheck'];
@@ -67,6 +71,18 @@ export default function Dashboard() {
         title="Relationship Manager Dashboard"
         subtitle="Overview of customer applications, verification tasks, and field agent performance."
       />
+
+      {isLoading && (
+        <div className="panel" style={{ marginBottom: '20px' }}>
+          Loading live RM dashboard data...
+        </div>
+      )}
+
+      {error && (
+        <div className="panel" style={{ marginBottom: '20px', borderColor: '#fca5a5', color: '#b91c1c' }}>
+          {error}
+        </div>
+      )}
 
       {/* KPI Stats Grid */}
       <div className="stats-grid">
@@ -148,7 +164,7 @@ export default function Dashboard() {
           <div className="panel-header">
             <h3 className="panel-title">Application Status</h3>
           </div>
-          <DonutChart data={statusSummaryData} total={182} />
+          <DonutChart data={statusSummaryData} total={totalApplications} />
           <div className="status-legend-list">
             {statusSummaryData.map((s) => (
               <div key={s.label} className="status-legend-item">

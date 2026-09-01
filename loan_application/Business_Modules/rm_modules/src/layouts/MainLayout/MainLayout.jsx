@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from '../../components/Sidebar/Sidebar';
 import Header from '../../components/Header/Header';
 import { NAV_ITEMS } from '../../config/navConfig';
+import { useRmDashboardData } from '../../hooks/useRmDashboardData';
 import '../../styles/variables.css';
 import '../../styles/listingPages.css';
 import './MainLayout.css';
@@ -19,7 +20,6 @@ function formatHeaderDate(date) {
 function MainLayout({
   title = '',
   subtitle = '',
-  badgeCounts = { newApplications: 12, verification: 5, returned: 2 },
   user = { name: 'Rajesh Kumar', role: 'Relationship Manager' },
   notificationCount = 3,
   onNotificationsClick,
@@ -39,6 +39,7 @@ function MainLayout({
     }
   }, []);
   const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
+  const { badgeCounts } = useRmDashboardData();
 
   useEffect(() => {
     document.body.classList.toggle('body--no-scroll', sidebarOpen);
