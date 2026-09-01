@@ -70,7 +70,7 @@ export default function WizardSectionLayout({
               <span className="ad-meta-label">Applicant</span>
               <div className="ad-meta-value-group highlight">
                 {iconMap['User'] && (() => { const User = iconMap['User']; return <User size={14} />; })()}
-                <span className="ad-meta-value">{appData.agentName || appData.customerName || 'Karthik Raja'}</span>
+                <span className="ad-meta-value">{appData.customerName || appData.fullName || appData.applicantName || appData.agentName || 'Applicant'}</span>
               </div>
             </div>
             <div className="ad-meta-divider" />

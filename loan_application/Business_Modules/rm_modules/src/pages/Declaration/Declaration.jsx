@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PenTool, Calendar, User, Briefcase, UserCheck, Phone, CheckCircle } from 'lucide-react';
 import iconMap from '../../config/iconMap';
@@ -10,26 +10,107 @@ import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
 import { buildSectionUpdate, getSectionState, getApplicantCount, createArray } from '../applicationWizard/flowUtils';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+
+function getTodayDate() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function isObsoleteMock(val) {
+  if (!val) return true;
+  const s = String(val).trim().toLowerCase();
+  return (
+    s === 'anil kumar' ||
+    s === 'karthik raja' ||
+    s === 'rajesh kumar' ||
+    s === '2025-06-06' ||
+    s === '06-06-2025'
+  );
+}
+
+function isObsoleteRmName(val) {
+  if (!val) return true;
+  const s = String(val).trim().toLowerCase();
+  return (
+    s === 'karthik raja' ||
+    s === 'rajesh kumar' ||
+    s === 'dineshkumar' ||
+    s === 'dinesh kumar'
+  );
+}
+
+async function fetchLiveRMNameFromApi() {
+  try {
+    const res = await fetch(`${API_BASE}/RMMaster`);
+    if (res.ok) {
+      const data = await res.json();
+      const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);
+
+      let currentUser = {};
+      try {
+        const raw = localStorage.getItem('sivels_currentUser');
+        if (raw) currentUser = JSON.parse(raw);
+      } catch {
+        // ignore
+      }
+
+      const currentMobile = String(currentUser?.mobileNumber || currentUser?.phone || '').replace(/\D/g, '');
+      const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || 0);
+
+      const match =
+        rows.find((row) => Number(row.rmId || row.RMId) === currentRmId && currentRmId > 0) ||
+        rows.find((row) => currentMobile && String(row.mobileNumber || '').replace(/\D/g, '') === currentMobile) ||
+        rows.find((row) => row.isActive !== false) ||
+        rows[0];
+
+      if (match?.fullName || match?.name) {
+        return match.fullName || match.name;
+      }
+    }
+  } catch (err) {
+    console.error('Error fetching RM name from RMMaster:', err);
+  }
+
+  return 'Sivashanmugam M';
+}
+
 function buildDeclarationState(appData) {
   const saved = getSectionState(appData, 'declaration', {});
   const applicant = appData.registration?.personalInformation?.applicant || {};
-  const applicantName = appData.customerName || [applicant.firstName, applicant.lastName].filter(Boolean).join(' ') || '';
+  const applicantName =
+    appData.customerName ||
+    appData.fullName ||
+    [applicant.firstName, applicant.lastName].filter(Boolean).join(' ') ||
+    '';
   const coApplicantCount = getApplicantCount(appData);
   const savedCoApplicants = Array.isArray(saved.coApplicants) ? saved.coApplicants : [];
+  const today = getTodayDate();
+  const productName = appData.loanProductDisplay || appData.loanType || appData.purposeOfLoan || 'Personal Loan';
+
+  const rawSig = saved.applicantSignature;
+  const rawAppDate = saved.applicantDate;
+  const rawAckName = saved.ackApplicantName;
+  const rawAckProduct = saved.ackProduct;
+  const rawAckReceivedBy = saved.ackReceivedBy;
+  const rawAckDate = saved.ackDate;
 
   return {
-    applicantSignature: saved.applicantSignature || applicantName || '',
-    applicantDate: saved.applicantDate || '2025-06-06',
+    applicantSignature: isObsoleteMock(rawSig) ? (applicantName || '') : rawSig,
+    applicantDate: isObsoleteMock(rawAppDate) ? today : rawAppDate,
     coApplicants: createArray(coApplicantCount, (index) => ({
-      signature: savedCoApplicants[index]?.signature || (index === 0 ? saved.coApplicantSignature : '') || '',
-      date: savedCoApplicants[index]?.date || (index === 0 ? saved.coApplicantDate : '') || '2025-06-06',
+      signature: isObsoleteMock(savedCoApplicants[index]?.signature)
+        ? ''
+        : savedCoApplicants[index]?.signature || '',
+      date: isObsoleteMock(savedCoApplicants[index]?.date)
+        ? today
+        : savedCoApplicants[index]?.date || today,
     })),
     coApplicantSignature: saved.coApplicantSignature || '',
-    coApplicantDate: saved.coApplicantDate || '',
-    ackApplicantName: saved.ackApplicantName || applicantName || '',
-    ackProduct: saved.ackProduct || appData.loanProductDisplay || appData.loanType || appData.loanProduct || '',
-    ackReceivedBy: saved.ackReceivedBy || appData.agentName || 'Rajesh Kumar',
-    ackDate: saved.ackDate || '2025-06-06',
+    coApplicantDate: saved.coApplicantDate || today,
+    ackApplicantName: isObsoleteMock(rawAckName) ? (applicantName || '') : rawAckName,
+    ackProduct: isObsoleteMock(rawAckProduct) ? productName : rawAckProduct,
+    ackReceivedBy: isObsoleteRmName(rawAckReceivedBy) ? 'Sivashanmugam M' : rawAckReceivedBy,
+    ackDate: isObsoleteMock(rawAckDate) ? today : rawAckDate,
   };
 }
 
@@ -51,9 +132,72 @@ export default function Declaration() {
   const coApplicantCount = getApplicantCount(appData);
   const ArrowLeftIcon = iconMap['ArrowLeft'];
 
+  // Load customer and RM from GET API
   useEffect(() => {
-    setForm(buildDeclarationState(getApplication(appId)));
-  }, [appId, getApplication]);
+    let active = true;
+
+    async function loadApiData() {
+      if (!appId) return;
+      const today = getTodayDate();
+
+      try {
+        // 1. Fetch customer data via GET /AgentAddCustomer/:appId
+        const custResponse = await fetch(`${API_BASE}/AgentAddCustomer/${appId}`);
+        let customerRecord = null;
+        if (custResponse.ok) {
+          const custData = await custResponse.json();
+          customerRecord = Array.isArray(custData) ? custData[0] : (custData?.value ? custData.value[0] : custData);
+        }
+
+        const custName = customerRecord?.fullName || customerRecord?.customerName || appData?.customerName || '';
+        const prodName = customerRecord?.loanPurposeName || customerRecord?.loanType || appData?.loanProductDisplay || appData?.loanType || 'Personal Loan';
+
+        // 2. Fetch RM name from RMMaster (as in RM Profile)
+        const resolvedRmName = await fetchLiveRMNameFromApi();
+
+        if (active) {
+          // Save in draft store
+          saveApplication(appId, {
+            agentCustomerId: customerRecord?.agentCustomerId || customerRecord?.AgentCustomerId || appId,
+            customerName: custName || appData.customerName,
+            loanProductDisplay: prodName,
+            loanType: prodName,
+            branch: customerRecord?.branch || appData.branch,
+            createdDate: customerRecord?.createdAt || customerRecord?.createdDate || appData.createdDate,
+            agentName: customerRecord?.agentName || appData.agentName,
+          });
+
+          // Update form state with live API values
+          setForm((prev) => {
+            const shouldOverwriteSig = isObsoleteMock(prev.applicantSignature) || !prev.applicantSignature || prev.applicantSignature === 'Muthu A';
+            const shouldOverwriteAck = isObsoleteMock(prev.ackApplicantName) || !prev.ackApplicantName || prev.ackApplicantName === 'Muthu A';
+            const shouldOverwriteRm = isObsoleteRmName(prev.ackReceivedBy);
+
+            const next = {
+              ...prev,
+              applicantSignature: shouldOverwriteSig ? (custName || prev.applicantSignature) : prev.applicantSignature,
+              applicantDate: isObsoleteMock(prev.applicantDate) ? today : (prev.applicantDate || today),
+              ackApplicantName: shouldOverwriteAck ? (custName || prev.ackApplicantName) : prev.ackApplicantName,
+              ackProduct: isObsoleteMock(prev.ackProduct) ? prodName : (prev.ackProduct || prodName),
+              ackReceivedBy: shouldOverwriteRm ? resolvedRmName : (prev.ackReceivedBy || resolvedRmName),
+              ackDate: isObsoleteMock(prev.ackDate) ? today : (prev.ackDate || today),
+            };
+
+            saveApplication(appId, buildSectionUpdate(getApplication(appId), 'declaration', next));
+            return next;
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching live data for Declaration:', err);
+      }
+    }
+
+    loadApiData();
+
+    return () => {
+      active = false;
+    };
+  }, [appId]);
 
   const persist = (nextForm) => {
     setForm(nextForm);
@@ -75,6 +219,12 @@ export default function Declaration() {
   const handleBack = () => {
     navigate(ROUTES.DOCUMENT_CHECKLIST.replace(':applicationId', appId));
   };
+
+  const displayCustomerName =
+    appData.customerName ||
+    appData.fullName ||
+    form.ackApplicantName ||
+    'Applicant';
 
   return (
     <WizardSectionLayout
@@ -101,6 +251,7 @@ export default function Declaration() {
       }
       footerHint="This is the final section before review and submission."
     >
+      {/* SECTION 1: DECLARATION & APPLICANT SIGNATURE */}
       <div className="aw-mini-card" style={{ marginBottom: '24px' }}>
         <div className="aw-mini-card__header">
           <div>
@@ -109,8 +260,24 @@ export default function Declaration() {
           </div>
         </div>
         <div className="aw-mini-card__body">
-          <div style={{ padding: '16px', backgroundColor: '#fafcfb', border: '1px solid var(--color-border-light)', borderRadius: '8px', fontSize: '12.5px', color: 'var(--color-text-secondary)', lineHeight: 1.6, marginBottom: '24px' }}>
-            I/We declare that the information given in this application is true, correct and complete to the best of my/our knowledge. I/We authorise Sivels Finance (a unit of Sivels Holding Pvt Ltd) and its representatives to verify the details furnished, obtain credit bureau reports, and process my/our personal data for evaluation, sanction and servicing of this loan, in accordance with applicable law. I/We understand that the Admin Fee is non-refundable, and that submission of this form does not guarantee sanction of the loan applied for.
+          <div
+            style={{
+              padding: '16px',
+              backgroundColor: '#fafcfb',
+              border: '1px solid var(--color-border-light)',
+              borderRadius: '8px',
+              fontSize: '12.5px',
+              color: 'var(--color-text-secondary)',
+              lineHeight: 1.6,
+              marginBottom: '24px',
+            }}
+          >
+            I/We declare that the information given in this application is true, correct and complete to the best of
+            my/our knowledge. I/We authorise Sivels Finance (a unit of Sivels Holding Pvt Ltd) and its representatives
+            to verify the details furnished, obtain credit bureau reports, and process my/our personal data for
+            evaluation, sanction and servicing of this loan, in accordance with applicable law. I/We understand that the
+            Admin Fee is non-refundable, and that submission of this form does not guarantee sanction of the loan applied
+            for.
           </div>
 
           {coApplicantCount === 0 ? (
@@ -123,7 +290,7 @@ export default function Declaration() {
                     className="form-input aw-input aw-input--with-icon"
                     value={form.applicantSignature}
                     onChange={(e) => persist({ ...form, applicantSignature: e.target.value })}
-                    placeholder="Type name to sign"
+                    placeholder="Enter applicant signature"
                   />
                 </div>
               </div>
@@ -151,7 +318,7 @@ export default function Declaration() {
                       className="form-input aw-input aw-input--with-icon"
                       value={form.applicantSignature}
                       onChange={(e) => persist({ ...form, applicantSignature: e.target.value })}
-                      placeholder="Type name to sign"
+                      placeholder="Enter applicant signature"
                     />
                   </div>
                 </div>
@@ -189,7 +356,7 @@ export default function Declaration() {
                             coApplicantSignature: updated[0]?.signature || '',
                           });
                         }}
-                        placeholder="Type name to sign"
+                        placeholder="Enter co-applicant signature"
                       />
                     </div>
                   </div>
@@ -220,6 +387,7 @@ export default function Declaration() {
         </div>
       </div>
 
+      {/* SECTION 2: ACKNOWLEDGEMENT OF RECEIPT (CUSTOMER COPY) */}
       <div className="aw-mini-card">
         <div className="aw-mini-card__header">
           <div>
@@ -233,91 +401,189 @@ export default function Declaration() {
               <label className="form-label">Name of Applicant</label>
               <div className="aw-input-wrapper">
                 <User className="aw-input-icon" size={14} />
-                <input className="form-input aw-input aw-input--with-icon" value={form.ackApplicantName} onChange={(e) => persist({ ...form, ackApplicantName: e.target.value })} />
+                <input
+                  className="form-input aw-input aw-input--with-icon"
+                  value={form.ackApplicantName}
+                  placeholder="Enter applicant name"
+                  onChange={(e) => persist({ ...form, ackApplicantName: e.target.value })}
+                />
               </div>
             </div>
+
             <div className="aw-field">
               <label className="form-label">Product Applied For</label>
               <div className="aw-input-wrapper">
                 <Briefcase className="aw-input-icon" size={14} />
-                <input className="form-input aw-input aw-input--with-icon" value={form.ackProduct} onChange={(e) => persist({ ...form, ackProduct: e.target.value })} />
+                <input
+                  className="form-input aw-input aw-input--with-icon"
+                  value={form.ackProduct}
+                  placeholder="Enter product applied for"
+                  onChange={(e) => persist({ ...form, ackProduct: e.target.value })}
+                />
               </div>
             </div>
+
             <div className="aw-field">
               <label className="form-label">Received By (RM Name & Sign)</label>
               <div className="aw-input-wrapper">
                 <UserCheck className="aw-input-icon" size={14} />
-                <input className="form-input aw-input aw-input--with-icon" value={form.ackReceivedBy} onChange={(e) => persist({ ...form, ackReceivedBy: e.target.value })} />
+                <input
+                  className="form-input aw-input aw-input--with-icon"
+                  value={form.ackReceivedBy}
+                  placeholder="Enter RM Name & Sign"
+                  onChange={(e) => persist({ ...form, ackReceivedBy: e.target.value })}
+                />
               </div>
             </div>
+
             <div className="aw-field">
               <label className="form-label">Date of Receipt</label>
               <div className="aw-input-wrapper">
                 <Calendar className="aw-input-icon" size={14} />
-                <input type="date" className="form-input aw-input aw-input--with-icon" value={form.ackDate} onChange={(e) => persist({ ...form, ackDate: e.target.value })} />
+                <input
+                  type="date"
+                  className="form-input aw-input aw-input--with-icon"
+                  value={form.ackDate}
+                  onChange={(e) => persist({ ...form, ackDate: e.target.value })}
+                />
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <Modal 
-        show={showSubmitModal} 
-        onHide={() => { if(otpStep !== 'success') setShowSubmitModal(false); }} 
-        title={otpStep === 'confirm_creation' ? 'Confirm Account Creation' : 'Verify Mobile Number'} 
+      {/* CONFIRMATION / SUBMISSION MODAL */}
+      <Modal
+        show={showSubmitModal}
+        onHide={() => {
+          if (otpStep !== 'success') setShowSubmitModal(false);
+        }}
+        title={otpStep === 'confirm_creation' ? 'Confirm Account Creation' : 'Verify Mobile Number'}
         size="sm"
         footer={
           otpStep === 'confirm_creation' ? (
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', width: '100%' }}>
-              <Button variant="secondary" onClick={() => setShowSubmitModal(false)}>Cancel</Button>
-              <Button variant="primary" onClick={() => setOtpStep('initial')}>OK</Button>
+              <Button variant="secondary" onClick={() => setShowSubmitModal(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={() => setOtpStep('initial')}>
+                OK
+              </Button>
             </div>
           ) : otpStep === 'success' ? (
             <div style={{ width: '100%' }}>
-              <Button variant="primary" style={{ width: '100%', justifyContent: 'center' }} onClick={finalizeSubmit}>
+              <Button
+                variant="primary"
+                style={{ width: '100%', justifyContent: 'center' }}
+                onClick={finalizeSubmit}
+              >
                 Continue
               </Button>
             </div>
           ) : (
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', width: '100%' }}>
-              <Button variant="secondary" onClick={() => setShowSubmitModal(false)}>Cancel</Button>
+              <Button variant="secondary" onClick={() => setShowSubmitModal(false)}>
+                Cancel
+              </Button>
             </div>
           )
         }
       >
         {otpStep === 'success' ? (
-          <div style={{ textAlign: 'center', padding: '16px 4px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '140px' }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', borderRadius: '50%', background: '#effaf2', color: '#0F7A4C', marginBottom: '16px', flexShrink: 0 }}>
-               <CheckCircle size={24} />
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '16px 4px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '140px',
+            }}
+          >
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                background: '#effaf2',
+                color: '#0F7A4C',
+                marginBottom: '16px',
+                flexShrink: 0,
+              }}
+            >
+              <CheckCircle size={24} />
             </div>
-            <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', margin: '0 0 8px 0' }}>Profile Created</h3>
+            <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', margin: '0 0 8px 0' }}>
+              Profile Created
+            </h3>
             <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>Application submitted successfully.</p>
           </div>
         ) : otpStep === 'confirm_creation' ? (
-          <div style={{ padding: '16px 4px', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '140px' }}>
-            <p style={{ color: '#475569', fontSize: '13px', lineHeight: '1.5', margin: 0, textAlign: 'center' }}>
-              Are you sure you want to create an account for <strong>{(() => {
-                const applicant = appData.registration?.personalInformation?.applicant;
-                const computedName = applicant ? `${applicant.firstName || ''} ${applicant.lastName || ''}`.trim() : '';
-                return appData.customerName || computedName || 'Unknown';
-              })()}</strong><br />(ID: <strong>{appId}</strong>)?
+          <div
+            style={{
+              padding: '16px 4px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              height: '140px',
+            }}
+          >
+            <p
+              style={{
+                color: '#475569',
+                fontSize: '13px',
+                lineHeight: '1.5',
+                margin: 0,
+                textAlign: 'center',
+              }}
+            >
+              Are you sure you want to submit application for <strong>{displayCustomerName}</strong>
+              <br />
+              (ID: <strong>{appId}</strong>)?
             </p>
           </div>
         ) : (
-          <div style={{ padding: '16px 4px', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '140px' }}>
+          <div
+            style={{
+              padding: '16px 4px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              height: '140px',
+            }}
+          >
             <div>
-              <p style={{ color: '#475569', fontSize: '13px', marginBottom: '16px', lineHeight: '1.5', textAlign: 'center' }}>
+              <p
+                style={{
+                  color: '#475569',
+                  fontSize: '13px',
+                  marginBottom: '16px',
+                  lineHeight: '1.5',
+                  textAlign: 'center',
+                }}
+              >
                 Please verify the applicant's mobile number.
               </p>
-              
+
               <div className="aw-field" style={{ marginBottom: '0' }}>
                 <div className="aw-input-wrapper">
                   <Phone className="aw-input-icon" size={14} />
-                  <input 
-                    className="form-input aw-input aw-input--with-icon" 
-                    value={otpStep === 'otp_sent' ? otpValue : (appData.registration?.personalInformation?.applicant?.mobileNo || appData.mobileNo || appData.mobile || '')} 
+                  <input
+                    className="form-input aw-input aw-input--with-icon"
+                    value={
+                      otpStep === 'otp_sent'
+                        ? otpValue
+                        : appData.registration?.personalInformation?.applicant?.mobileNo ||
+                          appData.mobileNo ||
+                          appData.mobile ||
+                          ''
+                    }
                     disabled={otpStep !== 'otp_sent'}
-                    placeholder={otpStep === 'otp_sent' ? "Enter 4-digit OTP" : ""}
+                    placeholder={otpStep === 'otp_sent' ? 'Enter 4-digit OTP' : ''}
                     onChange={(e) => {
                       if (otpStep === 'otp_sent') {
                         setOtpValue(e.target.value.replace(/[^\d]/g, ''));
@@ -329,7 +595,21 @@ export default function Declaration() {
                     <button
                       type="button"
                       onClick={() => setOtpStep('otp_sent')}
-                      style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', padding: '4px 12px', fontSize: '12px', fontWeight: 600, background: '#0F7A4C', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', zIndex: 10 }}
+                      style={{
+                        position: 'absolute',
+                        right: '4px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        padding: '4px 12px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        background: '#0F7A4C',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                      }}
                     >
                       Send OTP
                     </button>
@@ -339,25 +619,45 @@ export default function Declaration() {
                       type="button"
                       onClick={() => {
                         if (otpValue.length === 4) {
-                           setOtpStep('success');
+                          setOtpStep('success');
                         }
                       }}
                       disabled={otpValue.length < 4}
-                      style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', padding: '4px 12px', fontSize: '12px', fontWeight: 600, background: '#0F7A4C', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', zIndex: 10, opacity: otpValue.length < 4 ? 0.5 : 1 }}
+                      style={{
+                        position: 'absolute',
+                        right: '4px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        padding: '4px 12px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        background: '#0F7A4C',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        opacity: otpValue.length < 4 ? 0.5 : 1,
+                      }}
                     >
                       Verify
                     </button>
                   )}
                 </div>
                 {otpStep === 'otp_sent' && (
-                   <p style={{ fontSize: '11px', color: '#64748b', marginTop: '6px', textAlign: 'center' }}>OTP sent to {appData.registration?.personalInformation?.applicant?.mobileNo || appData.mobileNo || appData.mobile || ''}</p>
+                  <p style={{ fontSize: '11px', color: '#64748b', marginTop: '6px', textAlign: 'center' }}>
+                    OTP sent to{' '}
+                    {appData.registration?.personalInformation?.applicant?.mobileNo ||
+                      appData.mobileNo ||
+                      appData.mobile ||
+                      ''}
+                  </p>
                 )}
               </div>
             </div>
           </div>
         )}
       </Modal>
-
     </WizardSectionLayout>
   );
 }

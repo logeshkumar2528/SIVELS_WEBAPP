@@ -1,0 +1,390 @@
+/* ==========================================================================
+   KYC DOCUMENTS PAGE & DOCUMENT GALLERY STYLES
+   Sivels Finance RM Module
+   ========================================================================== */
+
+/* Gallery Grid inside Modal */
+.kyc-docs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  width: 100%;
+  padding: 4px 0;
+  box-sizing: border-box;
+}
+
+/* Document Item Card */
+.kyc-doc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.kyc-doc-card:hover {
+  border-color: var(--color-primary, #0F7A4C);
+  box-shadow: 0 4px 12px rgba(15, 122, 76, 0.08);
+}
+
+.kyc-doc-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kyc-doc-type-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary, #0f172a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kyc-doc-filename {
+  font-size: 11px;
+  color: var(--color-text-muted, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Image Thumbnail Container */
+.kyc-doc-thumb-wrapper {
+  width: 100%;
+  height: 130px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  background-color: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.kyc-doc-thumb-wrapper:hover {
+  background-color: #f1f5f9;
+}
+
+.kyc-doc-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 4px;
+  box-sizing: border-box;
+  transition: transform 0.2s ease;
+}
+
+.kyc-doc-thumb-wrapper:hover .kyc-doc-thumb-img {
+  transform: scale(1.03);
+}
+
+.kyc-doc-zoom-hint {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  background-color: rgba(15, 23, 42, 0.7);
+  color: #ffffff;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.kyc-doc-thumb-wrapper:hover .kyc-doc-zoom-hint {
+  opacity: 1;
+}
+
+/* PDF Card inside Grid */
+.kyc-doc-pdf-card {
+  width: 100%;
+  height: 130px;
+  border-radius: 6px;
+  border: 1px solid #fecaca;
+  background-color: #fff5f5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.kyc-doc-pdf-card:hover {
+  background-color: #fee2e2;
+  border-color: #f87171;
+}
+
+.kyc-doc-pdf-icon-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background-color: #fee2e2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #dc2626;
+}
+
+.kyc-doc-pdf-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #dc2626;
+  background-color: #ffffff;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid #fca5a5;
+  transition: all 0.15s ease;
+}
+
+.kyc-doc-pdf-card:hover .kyc-doc-pdf-view-btn {
+  background-color: #dc2626;
+  color: #ffffff;
+}
+
+/* Error State per card */
+.kyc-doc-error-card {
+  width: 100%;
+  height: 130px;
+  border-radius: 6px;
+  border: 1px dashed #fca5a5;
+  background-color: #fff5f5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.kyc-doc-error-text {
+  font-size: 11.5px;
+  color: #b91c1c;
+  font-weight: 500;
+}
+
+.kyc-doc-retry-btn {
+  background: #ffffff;
+  border: 1px solid #fca5a5;
+  color: #dc2626;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+/* Loading State */
+.kyc-docs-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  color: var(--color-text-muted, #64748b);
+  width: 100%;
+}
+
+.kyc-docs-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e2e8f0;
+  border-top-color: var(--color-primary, #0F7A4C);
+  border-radius: 50%;
+  animation: kycSpin 0.7s linear infinite;
+}
+
+@keyframes kycSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.kyc-docs-loading-text {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #334155;
+}
+
+/* Empty State */
+.kyc-docs-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 44px 20px;
+  background-color: #fafbfb;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 10px;
+  text-align: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.kyc-docs-empty-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: #eaf5ee;
+  color: var(--color-primary, #0F7A4C);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kyc-docs-empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  margin: 0;
+}
+
+.kyc-docs-empty-desc {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+
+/* ==========================================
+   FULLSCREEN LIGHTBOX / PREVIEW MODAL
+========================================== */
+.kyc-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  animation: kycFadeIn 0.2s ease-out;
+}
+
+@keyframes kycFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.kyc-lightbox-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  background-color: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.kyc-lightbox-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kyc-lightbox-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.kyc-lightbox-filename {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.kyc-lightbox-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.kyc-lightbox-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.kyc-lightbox-action-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.kyc-lightbox-close-btn {
+  background: transparent;
+  border: none;
+  color: #cbd5e1;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+}
+
+.kyc-lightbox-close-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.kyc-lightbox-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.kyc-lightbox-img {
+  max-width: 100%;
+  max-height: 82vh;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.kyc-lightbox-iframe {
+  width: 90%;
+  max-width: 1000px;
+  height: 82vh;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  background-color: #ffffff;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}

@@ -422,6 +422,57 @@ export default function CustomerRegistration() {
   }, [appId, ensureApplication]);
 
   useEffect(() => {
+    let active = true;
+    async function fetchCustomerDetails() {
+      if (!appId) return;
+      try {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+        const res = await fetch(`${baseUrl}/AgentAddCustomer/${appId}`);
+        if (res.ok) {
+          const data = await res.json();
+          const record = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
+          if (active && record) {
+            const custName = record.fullName || record.customerName || '';
+            const parts = splitFullName(custName);
+            saveApplication(appId, {
+              agentCustomerId: record.agentCustomerId || record.AgentCustomerId || appId,
+              customerName: custName,
+              mobile: record.mobileNumber || record.mobile,
+              branch: record.branch,
+              createdDate: record.createdAt || record.createdDate,
+              agentName: record.agentName,
+            });
+            setForm((prev) => {
+              const currentName = composeFullName(prev.applicant);
+              if (!currentName || currentName === 'Anil Kumar') {
+                return {
+                  ...prev,
+                  applicant: {
+                    ...prev.applicant,
+                    firstName: parts.firstName || prev.applicant.firstName,
+                    middleName: parts.middleName || prev.applicant.middleName,
+                    lastName: parts.lastName || prev.applicant.lastName,
+                    mobileNo: record.mobileNumber || record.mobile || prev.applicant.mobileNo,
+                  }
+                };
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching customer details for CustomerRegistration:', err);
+      }
+    }
+
+    fetchCustomerDetails();
+
+    return () => {
+      active = false;
+    };
+  }, [appId]);
+
+  useEffect(() => {
     async function fetchMaster(endpoint, idField, nameField, setState, uniqueValues = false) {
       try {
         const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -667,7 +718,7 @@ export default function CustomerRegistration() {
             <span className="ad-meta-label">Applicant</span>
             <div className="ad-meta-value-group highlight">
               {iconMap['User'] && (() => { const User = iconMap['User']; return <User size={14} />; })()}
-              <span className="ad-meta-value">{appData.agentName || appData.customerName || 'Karthik Raja'}</span>
+              <span className="ad-meta-value">{appData.customerName || appData.fullName || composeFullName(form.applicant) || 'Applicant'}</span>
             </div>
           </div>
           <div className="ad-meta-divider" />

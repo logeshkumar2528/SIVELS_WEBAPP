@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { User, Hash } from 'lucide-react';
 import iconMap from '../../config/iconMap';
@@ -9,11 +9,28 @@ import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
 import { buildSectionUpdate, getSectionState } from '../applicationWizard/flowUtils';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+
+function isObsoleteMock(val) {
+  if (!val) return true;
+  const s = String(val).trim().toLowerCase();
+  return (
+    s === 'karthik raja' ||
+    s === 'anil kumar' ||
+    s === '# emp1001' ||
+    s === 'emp1001' ||
+    s === 'rm0001'
+  );
+}
+
 function buildSourcingState(appData) {
   const saved = getSectionState(appData, 'sourcing', {});
+  const rawSourcedBy = saved.sourcedBy;
+  const rawEmployeeId = saved.employeeId;
+
   return {
-    sourcedBy: saved.sourcedBy || '',
-    employeeId: saved.employeeId || '',
+    sourcedBy: isObsoleteMock(rawSourcedBy) ? 'Sivashanmugam M' : rawSourcedBy,
+    employeeId: isObsoleteMock(rawEmployeeId) ? 'RM001' : rawEmployeeId,
   };
 }
 
@@ -24,39 +41,63 @@ export default function SourcingDetails() {
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildSourcingState(getApplication(appId)));
   const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    async function fetchRM() {
-      setIsLoading(true);
-      try {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-        const res = await fetch(`${baseUrl}/RMMaster`);
-        if (res.ok) {
-          const data = await res.json();
-          // Find the first active RM or just the first one
-          const rm = data.find(r => r.isActive) || data[0];
-          if (rm) {
-            const updates = { sourcedBy: rm.fullName || '', employeeId: rm.rmCode || '' };
-            setForm(prev => ({ ...prev, ...updates }));
-            // Also save this derived state to draft so it's persisted
-            saveApplication(appId, buildSectionUpdate(getApplication(appId), 'sourcing', updates));
-          }
-        }
-      } catch (err) {
-        console.error('Failed to fetch RM Details:', err);
-      }
-      setIsLoading(false);
-    }
-    
-    // Only fetch if we don't already have it
-    if (!form.sourcedBy && !form.employeeId) {
-      fetchRM();
-    }
-  }, []);
+  const isFetchedRef = useRef(false);
 
   useEffect(() => {
     ensureApplication(appId);
-  }, [appId, ensureApplication]);
+  }, [appId]);
+
+  // Fetch live RM profile once on mount / appId change
+  useEffect(() => {
+    let active = true;
+
+    async function fetchRM() {
+      setIsLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/RMMaster`);
+        if (res.ok) {
+          const data = await res.json();
+          const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);
+
+          let currentUser = {};
+          try {
+            const raw = localStorage.getItem('sivels_currentUser');
+            if (raw) currentUser = JSON.parse(raw);
+          } catch {
+            // ignore
+          }
+
+          const currentMobile = String(currentUser?.mobileNumber || currentUser?.phone || '').replace(/\D/g, '');
+          const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || 0);
+
+          const rm =
+            rows.find((row) => Number(row.rmId || row.RMId) === currentRmId && currentRmId > 0) ||
+            rows.find((row) => currentMobile && String(row.mobileNumber || '').replace(/\D/g, '') === currentMobile) ||
+            rows.find((row) => row.isActive !== false) ||
+            rows[0];
+
+          if (active && rm) {
+            const updates = {
+              sourcedBy: rm.fullName || 'Sivashanmugam M',
+              employeeId: rm.rmCode || `RM${String(rm.rmId || 1).padStart(3, '0')}`,
+            };
+            setForm(updates);
+            saveApplication(appId, { sourcing: updates });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch RM Details from RMMaster:', err);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+
+    fetchRM();
+
+    return () => {
+      active = false;
+    };
+  }, [appId]);
 
   const appData = getApplication(appId);
   const ArrowLeftIcon = iconMap['ArrowLeft'];
@@ -112,11 +153,11 @@ export default function SourcingDetails() {
               <label className="form-label">Sourced By (RM Name)</label>
               <div className="aw-input-wrapper">
                 <User className="aw-input-icon" size={14} />
-                <input 
-                  className="form-input aw-input aw-input--with-icon" 
-                  value={isLoading ? 'Loading...' : form.sourcedBy} 
-                  readOnly 
-                  disabled
+                <input
+                  className="form-input aw-input aw-input--with-icon"
+                  value={isLoading ? 'Loading...' : form.sourcedBy}
+                  onChange={(e) => persist({ ...form, sourcedBy: e.target.value })}
+                  placeholder="Enter RM Name"
                 />
               </div>
             </div>
@@ -124,11 +165,11 @@ export default function SourcingDetails() {
               <label className="form-label">Employee ID</label>
               <div className="aw-input-wrapper">
                 <Hash className="aw-input-icon" size={14} />
-                <input 
-                  className="form-input aw-input aw-input--with-icon" 
-                  value={isLoading ? 'Loading...' : form.employeeId} 
-                  readOnly
-                  disabled
+                <input
+                  className="form-input aw-input aw-input--with-icon"
+                  value={isLoading ? 'Loading...' : form.employeeId}
+                  onChange={(e) => persist({ ...form, employeeId: e.target.value })}
+                  placeholder="Enter Employee ID (e.g. RM001)"
                 />
               </div>
             </div>
