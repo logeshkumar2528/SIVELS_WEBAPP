@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Plus, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { RefreshCw, FileText } from 'lucide-react';
 import { MasterTable } from '../../../components/masters/MasterTable/MasterTable';
 import { MasterSearch } from '../../../components/masters/MasterSearch/MasterSearch';
 import { MasterFilter } from '../../../components/masters/MasterFilter/MasterFilter';
@@ -11,11 +11,11 @@ import { DocumentTypeDeleteConfirm } from './DocumentTypeDeleteConfirm';
 import { formatDateTime } from '../../../utils/dateHelper';
 import './DocumentType.css';
 
-const PAGE_SIZE = 10;
 
 const COLUMNS = [
   { key: 'documentTypeCode', label: 'Document Type Code' },
   { key: 'documentTypeName', label: 'Document Type Name' },
+  { key: 'employmentTypeName', label: 'Employment Type' },
   { 
     key: 'createdAt', 
     label: 'Created Date',
@@ -47,6 +47,7 @@ export function DocumentType() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Form State
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -55,6 +56,7 @@ export function DocumentType() {
   // Delete State
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deletingRecord, setDeletingRecord] = useState(null);
+  const hasFetchedRef = useRef(false);
 
   const fetchDocumentTypes = async () => {
     setIsLoading(true);
@@ -72,6 +74,8 @@ export function DocumentType() {
   };
 
   useEffect(() => {
+    if (hasFetchedRef.current) return;
+    hasFetchedRef.current = true;
     fetchDocumentTypes();
   }, []);
 
@@ -96,11 +100,11 @@ export function DocumentType() {
   }, [data, searchTerm, filterStatus]);
 
   // Client-side pagination
-  const totalPages = Math.ceil(filteredData.length / PAGE_SIZE) || 1;
+  const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
   const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return filteredData.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [filteredData, currentPage]);
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredData.slice(startIndex, startIndex + pageSize);
+  }, [filteredData, currentPage, pageSize]);
 
   // Reset to first page when search or filter changes
   useEffect(() => {
@@ -133,7 +137,10 @@ export function DocumentType() {
   return (
     <div className="masters-page">
       <header className="masters-page-header">
-        <div>
+        <div className="masters-page-header-icon">
+            <FileText size={24} />
+          </div>
+          <div>
           <h1 className="masters-page-title">Document Type Master</h1>
           <p className="masters-page-description">
             Manage reusable document types.
@@ -169,7 +176,7 @@ export function DocumentType() {
             className="masters-btn-primary" 
             onClick={handleAdd}
           >
-            <Plus size={18} />
+            <FileText size={18} />
             <span>Add Document Type</span>
           </button>
         </div>
@@ -190,6 +197,9 @@ export function DocumentType() {
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
+            totalItems={filteredData.length}
+            pageSize={pageSize}
+            onPageSizeChange={(newSize) => { setPageSize(newSize); setCurrentPage(1); }}
           />
         )}
       </div>

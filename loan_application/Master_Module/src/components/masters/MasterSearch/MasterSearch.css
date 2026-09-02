@@ -3,22 +3,23 @@
   align-items: center;
   position: relative;
   width: 100%;
-  max-width: 320px;
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--border-radius-sm);
+  max-width: 400px; /* Made larger */
+  background-color: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 0.5rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
 }
 
 .master-search:focus-within {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(36, 161, 72, 0.2);
+  border-color: #15803d;
+  box-shadow: 0 0 0 2px rgba(21, 128, 61, 0.1);
 }
 
 .master-search-icon {
   position: absolute;
-  left: var(--spacing-sm);
-  color: var(--color-text-muted);
+  left: 0.75rem;
+  color: #94a3b8;
   pointer-events: none;
 }
 
@@ -26,9 +27,9 @@
   width: 100%;
   border: none;
   background: none;
-  padding: var(--spacing-sm) var(--spacing-xl);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-primary);
+  padding: 0.625rem 2.25rem;
+  font-size: 0.875rem;
+  color: #0f172a;
 }
 
 .master-search-input:focus {
@@ -36,26 +37,29 @@
 }
 
 .master-search-input::placeholder {
-  color: var(--color-text-muted);
+  color: #94a3b8;
 }
 
 .master-search-clear {
   position: absolute;
-  right: var(--spacing-sm);
+  right: 0.75rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-muted);
+  color: #94a3b8;
   padding: 0.125rem;
-  border-radius: var(--border-radius-sm);
+  border-radius: 0.375rem;
+  cursor: pointer;
+  background: transparent;
+  border: none;
 }
 
 .master-search-clear:hover {
-  background-color: var(--color-background);
-  color: var(--color-text-primary);
+  background-color: #f1f5f9;
+  color: #475569;
 }
 
 .master-search-clear:focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid #15803d;
   outline-offset: 2px;
 }

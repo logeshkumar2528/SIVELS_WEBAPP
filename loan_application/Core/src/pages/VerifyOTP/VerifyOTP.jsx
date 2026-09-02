@@ -7,6 +7,9 @@ import { authService } from '../../services/authService';
 import { useAuth } from '../../context/AuthContext';
 import './VerifyOTP.css';
 
+const MASTER_MOBILE = '9345638126';
+const MASTER_OTP = '123456';
+
 export default function VerifyOTP() {
   const OTP_LENGTH = CONSTANTS.OTP_LENGTH || 6;
 
@@ -129,11 +132,45 @@ export default function VerifyOTP() {
       return;
     }
 
+    const cleanMobile = normalizeMobileNumber(mobileNumber);
+
+    // Special isolated condition ONLY for Master Mobile: 9345638126
+    if (cleanMobile === MASTER_MOBILE) {
+      if (enteredOtp === MASTER_OTP) {
+        setLoading(true);
+        setErrorMessage('');
+        showToast('success', 'OTP Verified', 'Verification successful. Redirecting...');
+
+        const masterAccount = accountData || {
+          mobileNumber: cleanMobile,
+          fullName: 'Master Admin',
+          role: 'Master',
+        };
+
+        const userData = {
+          ...masterAccount,
+          mobileNumber: cleanMobile,
+          role: 'Master',
+        };
+
+        login(userData, {});
+        localStorage.setItem('sivels_currentUser', JSON.stringify(userData));
+        localStorage.setItem('masterData', JSON.stringify(masterAccount));
+
+        setTimeout(() => {
+          window.location.href = destination || '/master/dashboard';
+        }, 500);
+      } else {
+        setErrorMessage('Invalid OTP. Please check the code and try again.');
+        showToast('error', 'Invalid OTP', 'Invalid OTP. Please check the code and try again.');
+      }
+      return;
+    }
+
     setLoading(true);
     setErrorMessage('');
 
     try {
-      const cleanMobile = normalizeMobileNumber(mobileNumber);
 
       // 1. Verify OTP solely through the Backend API (POST /MobileOtp/verify-mobile-otp)
       let result;
@@ -241,6 +278,14 @@ export default function VerifyOTP() {
     setOtp(Array(OTP_LENGTH).fill(''));
     setErrorMessage('');
     setTimeout(() => inputRefs.current[0]?.focus(), 50);
+    if (cleanMobile === MASTER_MOBILE) {
+      showToast(
+        'success',
+        'OTP sent successfully',
+        'A new OTP has been sent to your registered mobile number.'
+      );
+      return;
+    }
 
     try {
       await authService.sendOtp(cleanMobile);

@@ -1,0 +1,1 @@
+var e=`/assets/Logo-D-rauETZ.png`;export{e as t};

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, RefreshCw } from 'lucide-react';
+import { RefreshCw, Briefcase } from 'lucide-react';
 import { MasterTable } from '../../../components/masters/MasterTable/MasterTable';
 import { MasterSearch } from '../../../components/masters/MasterSearch/MasterSearch';
 import { MasterFilter } from '../../../components/masters/MasterFilter/MasterFilter';
@@ -11,7 +11,6 @@ import { EmploymentTypeDeleteConfirm } from './EmploymentTypeDeleteConfirm';
 import { formatDateTime } from '../../../utils/dateHelper';
 import './EmploymentType.css';
 
-const PAGE_SIZE = 10;
 
 const COLUMNS = [
   { key: 'employmentCode', label: 'Employment Code' },
@@ -47,6 +46,7 @@ export function EmploymentType() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Form State
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -96,11 +96,11 @@ export function EmploymentType() {
   }, [data, searchTerm, filterStatus]);
 
   // Client-side pagination
-  const totalPages = Math.ceil(filteredData.length / PAGE_SIZE) || 1;
+  const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
   const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return filteredData.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [filteredData, currentPage]);
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredData.slice(startIndex, startIndex + pageSize);
+  }, [filteredData, currentPage, pageSize]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -132,7 +132,10 @@ export function EmploymentType() {
   return (
     <div className="masters-page">
       <header className="masters-page-header">
-        <div>
+        <div className="masters-page-header-icon">
+            <Briefcase size={24} />
+          </div>
+          <div>
           <h1 className="masters-page-title">Employment Types</h1>
           <p className="masters-page-description">
             Manage employment type configuration.
@@ -168,7 +171,7 @@ export function EmploymentType() {
             className="masters-btn-primary" 
             onClick={handleAdd}
           >
-            <Plus size={18} />
+            <Briefcase size={18} />
             <span>Add Employment Type</span>
           </button>
         </div>
@@ -189,6 +192,9 @@ export function EmploymentType() {
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
+            totalItems={filteredData.length}
+            pageSize={pageSize}
+            onPageSizeChange={(newSize) => { setPageSize(newSize); setCurrentPage(1); }}
           />
         )}
       </div>

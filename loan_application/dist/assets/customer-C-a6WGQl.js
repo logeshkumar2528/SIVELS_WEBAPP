@@ -1,1 +1,0 @@
-import{_ as e,b as t,h as n,i as r,t as i}from"./jsx-runtime-Cat2VTl_.js";import{t as a}from"./App-FToHGqJ1.js";var o=t(e(),1),s=n(),c=i();(0,s.createRoot)(document.getElementById(`root`)).render((0,c.jsx)(o.StrictMode,{children:(0,c.jsx)(r,{children:(0,c.jsx)(a,{})})}));

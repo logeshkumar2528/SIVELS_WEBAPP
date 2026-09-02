@@ -1,23 +1,74 @@
+/* Redesign - Fintech Minimal */
 .masters-page {
+  --color-primary: #15803d; 
+  --color-primary-light: #dcfce7;
+  --color-danger: #dc2626;
+  --color-danger-light: #fee2e2;
+  --color-surface: #ffffff;
+  --color-background: #f8fafc;
+  --color-border: #e2e8f0;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #64748b;
+  --color-text-muted: #94a3b8;
+  
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  
+  --border-radius-sm: 0.375rem;
+  --border-radius-md: 0.5rem;
+  --border-radius-lg: 0.75rem;
+  
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.5rem;
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+
   padding: var(--spacing-xl);
-  max-width: 1200px;
-  margin: 0 auto;
+  max-width: 100%;
+  width: 100%;
+  margin: var(--spacing-xl) auto;
+  background-color: var(--color-surface);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border);
 }
 
 .masters-page-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
   margin-bottom: var(--spacing-xl);
 }
 
+.masters-page-header-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background-color: #f0fdf4;
+  color: #15803d;
+  border-radius: 12px;
+}
+
 .masters-page-title {
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
+  font-size: 1.5rem;
+  font-weight: 700;
   color: var(--color-text-primary);
-  margin-bottom: var(--spacing-xs);
+  margin: 0 0 0.25rem 0;
 }
 
 .masters-page-description {
-  font-size: var(--font-size-sm);
+  font-size: 0.875rem;
   color: var(--color-text-secondary);
+  margin: 0;
 }
 
 .masters-page-toolbar {
@@ -31,7 +82,7 @@
 
 .masters-page-search-area {
   flex: 1;
-  min-width: 250px;
+  min-width: 300px;
 }
 
 .masters-page-actions-area {
@@ -40,18 +91,37 @@
   gap: var(--spacing-sm);
 }
 
+/* Custom Table Render Styles */
+.text-code-green {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.table-date-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: #475569;
+}
+
+.table-date-icon {
+  color: #94a3b8;
+}
+
 /* Buttons */
 .masters-btn-primary,
 .masters-btn-secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-sm) var(--spacing-md);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  border-radius: var(--border-radius-sm);
+  gap: 0.375rem;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 0.375rem;
   transition: all 0.2s ease;
+  cursor: pointer;
+  border: 1px solid transparent;
 }
 
 .masters-btn-primary {
@@ -67,12 +137,13 @@
 .masters-btn-primary:hover,
 .masters-btn-danger:hover {
   opacity: 0.9;
+  box-shadow: var(--shadow-sm);
 }
 
 .masters-btn-secondary {
   background-color: var(--color-surface);
   color: var(--color-text-primary);
-  border: 1px solid var(--color-border);
+  border-color: var(--color-border);
 }
 
 .masters-btn-secondary:hover {
@@ -85,9 +156,24 @@
   outline-offset: 2px;
 }
 
+.icon-btn {
+  padding: 0.625rem;
+}
+
+.master-spin {
+  animation: master-spin 1s linear infinite;
+}
+
+@keyframes master-spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .masters-page {
+    margin: var(--spacing-md);
     padding: var(--spacing-md);
   }
 
@@ -107,15 +193,5 @@
   
   .masters-btn-primary {
     width: 100%;
-  }
-}
-
-.master-spin {
-  animation: master-spin 1s linear infinite;
-}
-
-@keyframes master-spin {
-  100% {
-    transform: rotate(360deg);
   }
 }

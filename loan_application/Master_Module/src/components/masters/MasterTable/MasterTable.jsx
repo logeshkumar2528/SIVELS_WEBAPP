@@ -1,4 +1,4 @@
-import { Edit, Trash2 } from 'lucide-react';
+import { Edit, Trash2, ChevronsUpDown } from 'lucide-react';
 import './MasterTable.css';
 
 export function MasterTable({ 
@@ -42,7 +42,10 @@ export function MasterTable({
           <tr>
             {columns.map((col) => (
               <th key={col.key} className={`master-table-th ${col.className || ''}`}>
-                {col.label}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {col.label}
+                  <ChevronsUpDown size={12} color="#94a3b8" />
+                </div>
               </th>
             ))}
             {(onEdit || onDelete) && (

@@ -26,6 +26,15 @@ import { Country } from './pages/masters/Country/Country';
 import { District } from './pages/masters/District/District';
 import { EmploymentTypeDocumentMapping } from './pages/masters/EmploymentTypeDocumentMapping/EmploymentTypeDocumentMapping';
 import { LoanProductVariation } from './pages/masters/LoanProductVariation/LoanProductVariation';
+import { Verification } from './pages/masters/Verification/Verification';
+import { Property } from './pages/masters/Property/Property';
+import { PropertyUsage } from './pages/masters/PropertyUsage/PropertyUsage';
+import { Education } from './pages/masters/Education/Education';
+import { Religion } from './pages/masters/Religion/Religion';
+import { Caste } from './pages/masters/Caste/Caste';
+import { LoanProductCollateral } from './pages/masters/LoanProductCollateral/LoanProductCollateral';
+import { RateOfInterest } from './pages/masters/RateOfInterest/RateOfInterest';
+import { CompanyConfiguration } from './features/company/CompanyConfiguration';
 
 function App() {
   return (
@@ -35,6 +44,7 @@ function App() {
         <Route path="/" element={<AppLayout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="company" element={<CompanyConfiguration />} />
           
           <Route path="masters">
             <Route index element={<Navigate to="interest-type" replace />} />
@@ -60,6 +70,14 @@ function App() {
             <Route path="district" element={<District />} />
             <Route path="employment-type-document-mapping" element={<EmploymentTypeDocumentMapping />} />
             <Route path="loan-product-variation" element={<LoanProductVariation />} />
+            <Route path="verification" element={<Verification />} />
+            <Route path="property" element={<Property />} />
+            <Route path="property-usage" element={<PropertyUsage />} />
+            <Route path="education" element={<Education />} />
+            <Route path="religion" element={<Religion />} />
+            <Route path="caste" element={<Caste />} />
+            <Route path="loan-product-collateral" element={<LoanProductCollateral />} />
+            <Route path="rate-of-interest" element={<RateOfInterest />} />
           </Route>
         </Route>
       </Routes>

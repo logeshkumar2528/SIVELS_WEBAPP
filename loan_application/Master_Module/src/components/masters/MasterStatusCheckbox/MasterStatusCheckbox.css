@@ -1,0 +1,88 @@
+.status-radio-container {
+  display: flex;
+  gap: 1rem;
+  width: 100%;
+}
+
+@media (max-width: 600px) {
+  .status-radio-container {
+    flex-direction: column;
+  }
+}
+
+.status-radio-card {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.status-radio-card.active-card {
+  border-color: #15803d;
+  background-color: #f0fdf4;
+}
+
+.status-radio-card.disabled-card {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.status-radio-input {
+  display: none;
+}
+
+.status-radio-custom {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  border: 1px solid #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+  transition: all 0.2s ease;
+  background: #ffffff;
+}
+
+.status-radio-card.active-card .status-radio-custom {
+  border-color: #15803d;
+}
+
+.status-radio-custom-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background-color: #15803d;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all 0.2s ease;
+}
+
+.status-radio-card.active-card .status-radio-custom-dot {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.status-radio-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.status-radio-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.status-radio-subtitle {
+  font-size: 0.75rem;
+  color: #64748b;
+}

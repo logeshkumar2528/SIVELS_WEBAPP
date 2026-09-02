@@ -18,6 +18,24 @@ export default function Login() {
       setLoading(true);
       setError('');
       try {
+        // Special isolated condition ONLY for Master Mobile: 9345638126
+        if (cleanMobile === '9345638126') {
+          navigate('/verify', {
+            state: {
+              mobileNumber: cleanMobile,
+              module: 'Master',
+              destination: '/master/dashboard',
+              accountData: {
+                mobileNumber: cleanMobile,
+                fullName: 'Master Admin',
+                role: 'Master',
+              },
+              otpResponse: { success: true, message: 'OTP sent successfully' },
+            }
+          });
+          return;
+        }
+
         const otpResponse = await authService.sendOtp(cleanMobile);
         const detection = await detectAccountModule(cleanMobile);
 
