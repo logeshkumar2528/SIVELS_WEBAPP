@@ -35,6 +35,7 @@ import { Caste } from './pages/masters/Caste/Caste';
 import { LoanProductCollateral } from './pages/masters/LoanProductCollateral/LoanProductCollateral';
 import { RateOfInterest } from './pages/masters/RateOfInterest/RateOfInterest';
 import { CompanyConfiguration } from './features/company/CompanyConfiguration';
+import AddAgent from '../../Business_Modules/rm_modules/src/pages/AddAgent/AddAgent';
 
 function App() {
   return (
@@ -44,6 +45,7 @@ function App() {
         <Route path="/" element={<AppLayout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="add-agent" element={<AddAgent />} />
           <Route path="company" element={<CompanyConfiguration />} />
           
           <Route path="masters">

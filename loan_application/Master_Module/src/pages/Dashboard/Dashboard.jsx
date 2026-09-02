@@ -1,12 +1,20 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Activity, ArrowUpRight, BriefcaseBusiness, CheckCircle2, Clock3, Plus, Search, Users } from 'lucide-react';
 import './Dashboard.css';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+const initialAgents = [{ id: 1, name: 'Aarav Finance', email: 'aarav@partner.com', phone: '+91 98765 41230', rm: 'Ananya Sharma', status: 'Active', applications: 42 }, { id: 2, name: 'Bright Capital', email: 'hello@brightcapital.com', phone: '+91 98450 12345', rm: 'Rahul Menon', status: 'Active', applications: 31 }, { id: 3, name: 'NorthStar Associates', email: 'team@northstar.in', phone: '+91 99876 54321', rm: 'Priya Nair', status: 'Pending', applications: 18 }];
+
 export function Dashboard() {
-  return (
-    <div className="dashboard-page">
-      <header className="dashboard-header">
-        <h1 className="dashboard-title">Dashboard</h1>
-        <p className="dashboard-description">Welcome to Sivels Finance Admin</p>
-      </header>
-    </div>
-  );
+  const navigate = useNavigate();
+  const [agents] = useState(initialAgents); const [rms, setRms] = useState([]); const [query, setQuery] = useState('');
+  useEffect(() => { fetch(`${API_BASE}/RMMaster`).then((r) => r.ok ? r.json() : []).then((rows) => setRms((Array.isArray(rows) ? rows : rows?.data || []).map((rm) => ({ id: rm.rmId || rm.RMId || rm.id, name: rm.name || rm.fullName || rm.rmName || rm.RMName || `${rm.firstName || ''} ${rm.lastName || ''}`.trim() })).filter((rm) => rm.name))).catch(() => setRms([])); }, []);
+  const filteredAgents = useMemo(() => agents.filter((a) => `${a.name} ${a.email} ${a.rm}`.toLowerCase().includes(query.toLowerCase())), [agents, query]);
+  return <div className="dashboard-page">
+    <header className="dashboard-header"><div><span className="eyebrow">MASTER WORKSPACE</span><h1 className="dashboard-title">Good morning, Admin</h1><p className="dashboard-description">Manage your lending network and keep applications moving.</p></div><button className="primary-button" onClick={() => navigate('/add-agent')}><Plus size={18} /> Create agent</button></header>
+    <section className="stat-grid">{[[Users, 'green', 'Total agents', agents.length, '12% this month'], [BriefcaseBusiness, 'blue', 'Active applications', '128', '8.4% this month'], [Clock3, 'orange', 'Pending review', '24', 'Needs attention'], [CheckCircle2, 'purple', 'Disbursed this month', '₹42.8L', '18.2% this month']].map(([Icon, color, label, value, note]) => <div className="stat-card" key={label}><div className={`stat-icon ${color}`}><Icon size={20} /></div><div><span>{label}</span><strong>{value}</strong><small className={label === 'Pending review' ? 'neutral' : ''}><ArrowUpRight size={13} /> {note}</small></div></div>)}</section>
+    <section className="content-card agent-card"><div className="card-heading"><div><h2>Agents</h2><p>Manage agents and their RM assignments.</p></div><div className="search-box"><Search size={17} /><input placeholder="Search agents..." value={query} onChange={(e) => setQuery(e.target.value)} /></div></div><div className="table-wrap"><table><thead><tr><th>Agent</th><th>Contact</th><th>Assigned RM</th><th>Applications</th><th>Status</th></tr></thead><tbody>{filteredAgents.map((a) => <tr key={a.id}><td><div className="agent-name"><span>{a.name[0]}</span><strong>{a.name}</strong></div></td><td><div>{a.email}</div><small>{a.phone || '—'}</small></td><td>{a.rm}</td><td><strong>{a.applications}</strong></td><td><span className={`status ${a.status.toLowerCase()}`}>{a.status}</span></td></tr>)}</tbody></table></div></section>
+    <section className="bottom-grid"><div className="content-card"><div className="card-heading"><div><h2>RM coverage</h2><p>Live agents assigned across your RM master.</p></div><Activity size={20} className="heading-icon" /></div><div className="coverage-list">{rms.map((rm, i) => <div className="coverage-row" key={rm.id || rm.name}><div className="rm-avatar">{rm.name.split(' ').map((n) => n[0]).join('')}</div><div className="coverage-info"><strong>{rm.name}</strong><span>{agents.filter((a) => a.rm === rm.name).length} agents assigned</span></div><div className="coverage-bar"><i style={{ width: `${[72, 55, 39, 25][i % 4]}%` }} /></div></div>)}</div></div><div className="content-card activity-card"><div className="card-heading"><div><h2>Recent activity</h2><p>Latest updates from your workspace.</p></div></div><div className="activity-item"><CheckCircle2 size={18} /><div><strong>Agent profile approved</strong><span>Bright Capital was approved · 24 min ago</span></div></div><div className="activity-item"><Users size={18} /><div><strong>RM assignment updated</strong><span>NorthStar Associates assigned to Priya Nair</span></div></div></div></section>
+  </div>;
 }

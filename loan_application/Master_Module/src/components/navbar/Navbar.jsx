@@ -10,7 +10,6 @@ import {
 import './Navbar.css';
 
 const MASTERS_MENU = [
-  { label: 'Company Configuration', path: '/company', icon: Building2 },
   { label: 'Interest Type', path: '/masters/interest-type', icon: Percent },
   { label: 'Title', path: '/masters/title', icon: Type },
   { label: 'Relationship', path: '/masters/relationship', icon: Users },

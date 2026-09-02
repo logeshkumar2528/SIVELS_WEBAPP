@@ -2,7 +2,7 @@ import { memo, useEffect } from 'react';
 import iconMap from '../../config/iconMap';
 import './Modal.css';
 
-const Modal = memo(function Modal({ show, onHide, title, children, footer, size = 'md' }) {
+const Modal = memo(function Modal({ show, onHide, title, children, footer, size = 'md', className = '' }) {
   const XIcon = iconMap['X'];
 
   useEffect(() => {
@@ -21,7 +21,7 @@ const Modal = memo(function Modal({ show, onHide, title, children, footer, size 
   return (
     <div className="modal-backdrop" onClick={onHide} aria-hidden="true">
       <div
-        className={`modal-container modal-container--${size}`}
+        className={`modal-container modal-container--${size} ${className}`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
