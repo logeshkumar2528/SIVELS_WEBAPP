@@ -9,6 +9,18 @@
   box-sizing: border-box;
 }
 
+.cr-required-star {
+  color: #dc2626;
+  margin-left: 2px;
+}
+
+.cr-optional-label {
+  color: var(--color-text-muted, #64748b);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: none;
+}
+
 .cr-topbar {
   display: flex;
   align-items: center;

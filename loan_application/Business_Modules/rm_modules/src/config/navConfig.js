@@ -63,14 +63,6 @@ export const NAV_ITEMS = [
   },
 
   {
-    id:       'add-agent',
-    label:    'Add Agent',
-    icon:     'UserPlus',
-    route:    ROUTES.ADD_AGENT,
-    badgeKey: null,
-    section:  'MANAGEMENT',
-  },
-  {
     id:       'my-agents',
     label:    'My Agents',
     icon:     'Users',

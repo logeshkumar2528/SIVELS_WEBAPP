@@ -132,6 +132,7 @@ export default function ApplicationDetails() {
   const [errorPopup, setErrorPopup] = useState(null);
   const [displayRecord, setDisplayRecord] = useState(null);
   const [agentBranch, setAgentBranch] = useState('');
+  const [agentInfo, setAgentInfo] = useState({ name: '', code: '' });
 
   const [sourcingChannelOptions, setSourcingChannelOptions] = useState([]);
   const [loanProductOptions, setLoanProductOptions] = useState([]);
@@ -164,6 +165,10 @@ export default function ApplicationDetails() {
         if (active && record) {
           setDisplayRecord(record);
           setAgentBranch('');
+          setAgentInfo({
+            name: record.agentName || record.AgentName || '',
+            code: record.agentCode || record.AgentCode || '',
+          });
           const currentStatus = normalizeApplicationStatus(record.status, record.statusName || record.StatusName);
           const isApprovedBeingEdited = currentStatus === 'Approved';
           saveApplication(appId, {
@@ -179,6 +184,7 @@ export default function ApplicationDetails() {
             createdDate: record.createdAt || record.createdDate || '',
             status: isApprovedBeingEdited ? 'Pending' : currentStatus,
             branch: record.branch || '',
+            agentCode: record.agentCode || record.AgentCode || '',
             purposeOfLoan: record.loanPurposeId || record.purposeOfLoan || '',
             loanAmount: record.expectedLoanAmount ?? '',
           });
@@ -201,9 +207,12 @@ export default function ApplicationDetails() {
                   ? agentData[0]
                   : (agentData?.value ? agentData.value[0] : agentData);
                 const branch = agentRecord?.branch || agentRecord?.Branch || '';
+                const name = agentRecord?.fullName || agentRecord?.FullName || agentRecord?.agentName || agentRecord?.AgentName || agentRecord?.name || agentRecord?.Name || record.agentName || record.AgentName || '';
+                const code = agentRecord?.agentCode || agentRecord?.AgentCode || agentRecord?.agentId || agentRecord?.AgentId || record.agentCode || record.AgentCode || agentId;
                 if (active) {
                   setAgentBranch(branch);
-                  saveApplication(appId, { branch });
+                  setAgentInfo({ name, code: String(code || '') });
+                  saveApplication(appId, { branch, agentName: name, agentCode: String(code || '') });
                 }
               }
             } catch (agentError) {
@@ -431,6 +440,8 @@ export default function ApplicationDetails() {
   const submittedTime = formatDateTime(displayRecord?.createdAt || appData.createdDate || '');
   const applicationDisplayId = buildApplicationDisplayId(displayRecord || appData, appId);
   const statusText = appData.status || '';
+  const sourcingAgentName = agentInfo.name || appData.agentName || displayRecord?.agentName || displayRecord?.AgentName || '';
+  const sourcingAgentCode = agentInfo.code || appData.agentCode || displayRecord?.agentCode || displayRecord?.AgentCode || displayRecord?.agentId || displayRecord?.AgentId || '';
 
   return (
     <div className="page-container ad-page-root compact-mode">
@@ -509,7 +520,7 @@ export default function ApplicationDetails() {
           <div className="panel ad-main-panel compact-panel">
             <div className="compact-panel-content">
               <div className="compact-section-title">Application Information</div>
-              <div className="compact-form-row">
+              <div className="compact-form-row sourcing-details-row">
                 <div className="compact-field sourcing-field">
                   <label className="compact-label">Sourcing Channel</label>
                   <div className="compact-input-wrapper">
@@ -524,6 +535,30 @@ export default function ApplicationDetails() {
                     />
                   </div>
                   {errors.sourcingChannel && <span className="ad-field-error">{errors.sourcingChannel}</span>}
+                </div>
+                <div className="compact-field sourcing-field">
+                  <label className="compact-label">Sourcing Name</label>
+                  <div className="compact-input-wrapper">
+                    <input
+                      className="compact-input"
+                      value={isLoadingApplication ? 'Loading...' : sourcingAgentName}
+                      readOnly
+                      aria-readonly="true"
+                      placeholder="Agent name"
+                    />
+                  </div>
+                </div>
+                <div className="compact-field sourcing-field">
+                  <label className="compact-label">Sourcing Code</label>
+                  <div className="compact-input-wrapper">
+                    <input
+                      className="compact-input"
+                      value={isLoadingApplication ? 'Loading...' : sourcingAgentCode}
+                      readOnly
+                      aria-readonly="true"
+                      placeholder="Agent code"
+                    />
+                  </div>
                 </div>
               </div>
 

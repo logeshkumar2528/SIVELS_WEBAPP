@@ -42,6 +42,7 @@ const GENDER_OPTIONS = [
 export default function AddAgent() {
   const navigate = useNavigate();
   const aadhaarInputRef = useRef(null);
+  const panInputRef = useRef(null);
   const profileImgInputRef = useRef(null);
 
   const getCurrentUser = () => {
@@ -98,6 +99,10 @@ export default function AddAgent() {
   const [aadhaarFile, setAadhaarFile] = useState(null);
   const [aadhaarPreviewUrl, setAadhaarPreviewUrl] = useState(null);
   const [isAadhaarPdf, setIsAadhaarPdf] = useState(false);
+
+  const [panFile, setPanFile] = useState(null);
+  const [panPreviewUrl, setPanPreviewUrl] = useState(null);
+  const [isPanPdf, setIsPanPdf] = useState(false);
 
   const [profileImage, setProfileImage] = useState(null);
   const [profilePreviewUrl, setProfilePreviewUrl] = useState(null);
@@ -200,6 +205,30 @@ export default function AddAgent() {
     setAadhaarPreviewUrl(null);
     setIsAadhaarPdf(false);
     if (aadhaarInputRef.current) aadhaarInputRef.current.value = '';
+  };
+
+  const handlePanUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (panPreviewUrl) {
+        URL.revokeObjectURL(panPreviewUrl);
+      }
+      setPanFile(file);
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      setIsPanPdf(isPdf);
+      setPanPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const handleRemovePan = (e) => {
+    e?.stopPropagation();
+    if (panPreviewUrl) {
+      URL.revokeObjectURL(panPreviewUrl);
+    }
+    setPanFile(null);
+    setPanPreviewUrl(null);
+    setIsPanPdf(false);
+    if (panInputRef.current) panInputRef.current.value = '';
   };
 
   const handleProfileImageUpload = (e) => {
@@ -387,7 +416,7 @@ export default function AddAgent() {
                 variant="secondary"
                 size="sm"
                 icon={<ArrowLeft size={15} />}
-                onClick={() => navigate(ROUTES.MY_AGENTS)}
+                onClick={() => window.location.assign('/master/dashboard')}
                 className="agent-creation-back-btn"
               >
                 Back to Agents
@@ -683,6 +712,96 @@ export default function AddAgent() {
                         type="button"
                         className="btn-action btn-action-remove"
                         onClick={handleRemoveAadhaar}
+                      >
+                        <Trash2 size={13} />
+                        <span>Remove</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* MIDDLE: PAN Card * */}
+              <div className="upload-box-container">
+                <div className="upload-box-header">
+                  <span className="upload-title">
+                    PAN Card <span className="required-star">*</span>
+                  </span>
+                  <span className="upload-subtitle">Upload clear image of PAN Card</span>
+                  <span className="upload-format-note">JPG, PNG or PDF (Max. 10MB)</span>
+                </div>
+
+                <input
+                  ref={panInputRef}
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  className="hidden-file-input"
+                  onChange={handlePanUpload}
+                />
+
+                {!panFile ? (
+                  <div
+                    className="upload-dropzone"
+                    onClick={() => panInputRef.current?.click()}
+                  >
+                    <div className="upload-icon-wrap">
+                      <FileText size={22} className="upload-icon" />
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={<Upload size={14} />}
+                      className="upload-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        panInputRef.current?.click();
+                      }}
+                    >
+                      Upload Document
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="upload-preview-box">
+                    <div className="preview-thumb-col">
+                      {isPanPdf ? (
+                        <div className="pdf-thumb-box">
+                          <FileText size={22} className="pdf-icon" />
+                          <span className="pdf-label">PDF</span>
+                        </div>
+                      ) : (
+                        <img
+                          src={panPreviewUrl}
+                          alt="PAN Card Thumbnail"
+                          className="img-thumb"
+                        />
+                      )}
+                    </div>
+
+                    <div className="preview-info-col">
+                      <div className="preview-name-row">
+                        <FileCheck size={14} className="check-icon" />
+                        <span className="preview-filename" title={panFile.name}>
+                          {panFile.name}
+                        </span>
+                      </div>
+                      <span className="preview-filesize">
+                        {formatFileSize(panFile.size)} • {isPanPdf ? 'PDF File' : 'Image'}
+                      </span>
+                    </div>
+
+                    <div className="preview-actions-col">
+                      <button
+                        type="button"
+                        className="btn-action btn-action-change"
+                        onClick={() => panInputRef.current?.click()}
+                      >
+                        <RefreshCw size={13} />
+                        <span>Change</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-action btn-action-remove"
+                        onClick={handleRemovePan}
                       >
                         <Trash2 size={13} />
                         <span>Remove</span>

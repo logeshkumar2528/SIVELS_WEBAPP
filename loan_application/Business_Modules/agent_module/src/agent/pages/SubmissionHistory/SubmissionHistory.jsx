@@ -98,7 +98,7 @@ function SubmissionHistory() {
         (item.mobileNumber || '').includes(searchTerm)
 
       const matchesStatus =
-        selectedStatus === 'All Status' || item.status === selectedStatus
+        selectedStatus === 'All Status' || String(item.status ?? '') === selectedStatus
 
       const matchesDate =
         !selectedDate || (item.createdAt && item.createdAt.startsWith(selectedDate))
@@ -123,7 +123,7 @@ function SubmissionHistory() {
   }
 
   const getStatusType = (status) => {
-    const s = (status || '').toLowerCase()
+    const s = String(status ?? '').toLowerCase()
     if (s.includes('pending')) return 'pending-rm'
     if (s.includes('review')) return 'under-review'
     if (s.includes('return') || s.includes('reject')) return 'returned-rm'

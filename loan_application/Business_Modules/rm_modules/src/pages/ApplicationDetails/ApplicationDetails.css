@@ -248,6 +248,12 @@
   display: flex;
 }
 
+.sourcing-details-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
 .compact-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -261,7 +267,7 @@
 }
 
 .sourcing-field {
-  width: 320px;
+  width: 100%;
 }
 
 /* 5. INPUT DESIGN */
@@ -328,6 +334,11 @@
   color: var(--color-text-muted);
 }
 
+.compact-input[readonly] {
+  background: #f7faf8;
+  cursor: default;
+}
+
 .ad-field-error {
   font-size: 10px;
   color: var(--color-danger);
@@ -361,6 +372,10 @@
 }
 
 @media (max-width: 1260px) {
+  .sourcing-details-row {
+    grid-template-columns: 1fr;
+  }
+
   .compact-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

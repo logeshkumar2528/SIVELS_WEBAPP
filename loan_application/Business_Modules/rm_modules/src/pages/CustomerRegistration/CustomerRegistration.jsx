@@ -47,6 +47,11 @@ function composeFullName(person = {}) {
     .join(' ');
 }
 
+function getAadhaarPreviewUrl(kycPerson = {}, side, personLabel) {
+  const document = kycPerson[`aadhaar${side}`];
+  return document?.preview || document?.url || kycPerson[`aadhaar${side}Url`] || `https://via.placeholder.com/400x250?text=${encodeURIComponent(`${personLabel}+Aadhaar+${side}+Not+Uploaded`)}`;
+}
+
 function createEmptyPerson(overrides = {}) {
   return {
     personalInformationId: overrides.personalInformationId || null,
@@ -139,7 +144,17 @@ function buildRegistrationPayload(form, baseData = {}) {
 }
 
 function validatePerson(person, { isCoApplicant = false } = {}) {
-  return {};
+  const errors = {};
+
+  if (!String(person.firstName || '').trim()) {
+    errors.firstName = 'First name is required';
+  }
+
+  if (!String(person.lastName || '').trim()) {
+    errors.lastName = 'Last name is required';
+  }
+
+  return errors;
 }
 
 function PersonCard({
@@ -154,7 +169,8 @@ function PersonCard({
   genderOptions = [],
   maritalStatusOptions = [],
   religionOptions = [],
-  isLoadingMasters = false
+  isLoadingMasters = false,
+  isCoApplicant = false
 }) {
   const handleChange = (field, value) => onChange(field, value);
 
@@ -162,8 +178,8 @@ function PersonCard({
     <div className="cr-person-card">
       <div className="cr-person-card__header">
         <div className="cr-person-card__title">{heading}</div>
-        <span className={`badge ${relationshipMode === 'readOnly' ? 'badge--success' : 'badge--warning'}`}>
-          {relationshipMode === 'readOnly' ? 'SELF' : 'CO-APPLICANT'}
+        <span className={`badge ${isCoApplicant ? 'badge--warning' : 'badge--success'}`}>
+          {isCoApplicant ? 'CO-APPLICANT' : 'APPLICANT'}
         </span>
       </div>
 
@@ -213,7 +229,7 @@ function PersonCard({
 
           <div className="cr-field">
             <label className="form-label">
-              First Name
+              First Name <span className="cr-required-star">*</span>
             </label>
             <div className="cr-input-wrapper">
               <User className="cr-input-icon" size={14} />
@@ -228,7 +244,9 @@ function PersonCard({
           </div>
 
           <div className="cr-field">
-            <label className="form-label">Middle Name</label>
+            <label className="form-label">
+              Middle Name <span className="cr-optional-label">(Optional)</span>
+            </label>
             <div className="cr-input-wrapper">
               <User className="cr-input-icon" size={14} />
               <input
@@ -242,7 +260,7 @@ function PersonCard({
 
           <div className="cr-field cr-field--full">
             <label className="form-label">
-              Last Name
+              Last Name <span className="cr-required-star">*</span>
             </label>
             <div className="cr-input-wrapper">
               <User className="cr-input-icon" size={14} />
@@ -684,8 +702,17 @@ export default function CustomerRegistration() {
   const applicant = form.applicant;
   const [showDocsModal, setShowDocsModal] = useState(false);
   const [fullViewImage, setFullViewImage] = useState(null);
-  const aadhaarFrontUrl = appData.sections?.kycDocuments?.applicant?.aadhaarFront?.preview || 'https://via.placeholder.com/400x250?text=Aadhaar+Front+Not+Uploaded';
-  const aadhaarBackUrl = appData.sections?.kycDocuments?.applicant?.aadhaarBack?.preview || 'https://via.placeholder.com/400x250?text=Aadhaar+Back+Not+Uploaded';
+  const kycDocuments = appData.sections?.kycDocuments || appData.kycDocuments || {};
+  const aadhaarDocumentPeople = [
+    {
+      label: 'Applicant',
+      kyc: kycDocuments.applicant || {},
+    },
+    ...form.coApplicants.map((_, index) => ({
+      label: `Co-Applicant ${index + 1}`,
+      kyc: kycDocuments.coApplicants?.[index] || {},
+    })),
+  ];
 
   return (
     <div className="page-container cr-page-root compact-mode">
@@ -777,6 +804,7 @@ export default function CustomerRegistration() {
             relationshipOptions={relationshipOptions}
             religionOptions={religionOptions}
             isLoadingMasters={isLoadingMasters}
+            isCoApplicant={false}
           />
 
           {coApplicantCount > 0 && (
@@ -807,6 +835,7 @@ export default function CustomerRegistration() {
               relationshipOptions={relationshipOptions}
               religionOptions={religionOptions}
               isLoadingMasters={isLoadingMasters}
+              isCoApplicant
             />
           ))}
         </div>
@@ -841,30 +870,42 @@ export default function CustomerRegistration() {
       <Modal 
         show={showDocsModal} 
         onHide={() => setShowDocsModal(false)} 
-        title="Applicant Aadhaar Document View"
+        title="Aadhaar Document View"
         size="lg"
       >
-        <div style={{ display: 'flex', flexDirection: 'row', gap: '16px', padding: '0 8px' }}>
-          <div style={{ flex: 1 }}>
-            <h4 style={{ marginBottom: '8px', fontSize: '14px', color: '#1e293b' }}>Aadhaar Front</h4>
-            <div 
-              style={{ width: '100%', height: '250px', backgroundColor: '#f1f5f9', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', cursor: 'pointer' }}
-              onClick={() => setFullViewImage(aadhaarFrontUrl)}
-              title="Click to view full size"
-            >
-              <img src={aadhaarFrontUrl} alt="Aadhaar Front" style={{ width: '100%', height: '100%', objectFit: 'contain', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'} onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'} />
-            </div>
-          </div>
-          <div style={{ flex: 1 }}>
-            <h4 style={{ marginBottom: '8px', fontSize: '14px', color: '#1e293b' }}>Aadhaar Back</h4>
-            <div 
-              style={{ width: '100%', height: '250px', backgroundColor: '#f1f5f9', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', cursor: 'pointer' }}
-              onClick={() => setFullViewImage(aadhaarBackUrl)}
-              title="Click to view full size"
-            >
-              <img src={aadhaarBackUrl} alt="Aadhaar Back" style={{ width: '100%', height: '100%', objectFit: 'contain', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'} onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'} />
-            </div>
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '0 8px' }}>
+          {aadhaarDocumentPeople.map((person) => {
+            const frontUrl = getAadhaarPreviewUrl(person.kyc, 'Front', person.label);
+            const backUrl = getAadhaarPreviewUrl(person.kyc, 'Back', person.label);
+
+            return (
+              <section key={person.label}>
+                <h4 style={{ margin: '0 0 10px', fontSize: '14px', color: '#1e293b' }}>{person.label}</h4>
+                <div style={{ display: 'flex', flexDirection: 'row', gap: '16px' }}>
+                  <div style={{ flex: 1 }}>
+                    <h5 style={{ margin: '0 0 8px', fontSize: '12px', color: '#475569' }}>Aadhaar Front</h5>
+                    <div
+                      style={{ width: '100%', height: '180px', backgroundColor: '#f1f5f9', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', cursor: 'pointer' }}
+                      onClick={() => setFullViewImage(frontUrl)}
+                      title="Click to view full size"
+                    >
+                      <img src={frontUrl} alt={`${person.label} Aadhaar Front`} style={{ width: '100%', height: '100%', objectFit: 'contain', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'} onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'} />
+                    </div>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <h5 style={{ margin: '0 0 8px', fontSize: '12px', color: '#475569' }}>Aadhaar Back</h5>
+                    <div
+                      style={{ width: '100%', height: '180px', backgroundColor: '#f1f5f9', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', cursor: 'pointer' }}
+                      onClick={() => setFullViewImage(backUrl)}
+                      title="Click to view full size"
+                    >
+                      <img src={backUrl} alt={`${person.label} Aadhaar Back`} style={{ width: '100%', height: '100%', objectFit: 'contain', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'} onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'} />
+                    </div>
+                  </div>
+                </div>
+              </section>
+            );
+          })}
         </div>
       </Modal>
 
