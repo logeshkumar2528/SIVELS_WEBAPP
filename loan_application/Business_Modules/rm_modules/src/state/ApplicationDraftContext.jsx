@@ -4,6 +4,12 @@ import {
   LOAN_PRODUCTS,
   LOAN_VARIATIONS,
 } from '../config/onboardingFlow';
+import {
+  mergeSectionData,
+  mergeEntityObject,
+  mergeApplicantArrays,
+  KNOWN_DB_ID_FIELDS,
+} from '../pages/applicationWizard/flowUtils';
 
 const STORAGE_KEY = 'sivels-rm-onboarding-drafts-v9';
 
@@ -107,6 +113,79 @@ function getLoanProductDisplay(code, variation = '') {
   return `${meta.label}${variationSuffix}`;
 }
 
+function deepMergeApplicationData(target = {}, source = {}) {
+  if (!target && !source) return {};
+  if (!target) return { ...source };
+  if (!source) return { ...target };
+
+  const result = { ...target };
+
+  for (const [key, value] of Object.entries(source)) {
+    if (key === 'sections') {
+      const targetSections = target.sections || {};
+      const sourceSections = value || {};
+      const mergedSections = { ...targetSections };
+
+      for (const [sKey, sVal] of Object.entries(sourceSections)) {
+        mergedSections[sKey] = mergeSectionData(targetSections[sKey], sVal);
+      }
+      result.sections = mergedSections;
+    } else if (
+      key === 'kycDocuments' ||
+      key === 'addressDetails' ||
+      key === 'employmentIncome' ||
+      key === 'bankExistingLoans' ||
+      key === 'collateral' ||
+      key === 'collateralDetails' ||
+      key === 'references' ||
+      key === 'sourcing' ||
+      key === 'scheduleCharges' ||
+      key === 'scheduleOfCharges' ||
+      key === 'documentChecklist' ||
+      key === 'declaration'
+    ) {
+      result[key] = mergeSectionData(target[key], value);
+    } else if (key === 'registration') {
+      const targetReg = target.registration || {};
+      const sourceReg = value || {};
+      result.registration = {
+        ...targetReg,
+        ...sourceReg,
+        personalInformation: mergeSectionData(
+          targetReg.personalInformation || targetReg,
+          sourceReg.personalInformation || sourceReg
+        ),
+        primaryApplicant: mergeEntityObject(
+          targetReg.primaryApplicant || targetReg.personalInformation?.applicant,
+          sourceReg.primaryApplicant || sourceReg.personalInformation?.applicant
+        ),
+        coApplicants: mergeApplicantArrays(
+          targetReg.coApplicants || targetReg.personalInformation?.coApplicants,
+          sourceReg.coApplicants || sourceReg.personalInformation?.coApplicants
+        ),
+      };
+    } else {
+      if (value !== undefined) {
+        result[key] = value;
+      }
+    }
+  }
+
+  // Preserve known database IDs at top-level
+  for (const idField of KNOWN_DB_ID_FIELDS) {
+    if (
+      target[idField] !== undefined &&
+      target[idField] !== null &&
+      target[idField] !== '' &&
+      (source[idField] === undefined || source[idField] === null || source[idField] === '')
+    ) {
+      result[idField] = target[idField];
+    }
+  }
+
+  return result;
+}
+
 function normalizeApplicationRecord(record = {}) {
   const loanProduct = record.loanProduct || inferLoanProductCode(record);
   const loanVariation = record.loanVariation !== undefined && record.loanVariation !== null ? record.loanVariation : '';
@@ -114,15 +193,91 @@ function normalizeApplicationRecord(record = {}) {
   const loanAmount = record.loanAmount !== undefined ? extractDigits(record.loanAmount) : '';
   const loanTenureMonths = extractDigits(record.loanTenureMonths);
   const roi = record.roi === '' || record.roi === undefined || record.roi === null ? '' : Number(record.roi);
-  const coApplicantsCount = record.coApplicantsCount === '' || record.coApplicantsCount === undefined || record.coApplicantsCount === null
-    ? 0
-    : Number(record.coApplicantsCount);
-  const distanceFromBranchKm = record.distanceFromBranchKm === '' || record.distanceFromBranchKm === undefined || record.distanceFromBranchKm === null
-    ? ''
-    : Number(record.distanceFromBranchKm);
+
+  // Compute coApplicantsCount accurately
+  const countFromSections = Math.max(
+    Number(record.sections?.personalInformation?.coApplicants?.length || 0),
+    Number(record.registration?.personalInformation?.coApplicants?.length || 0),
+    Number(record.registration?.coApplicants?.length || 0),
+    Number(record.personalInformation?.coApplicants?.length || 0),
+    Number(record.sections?.kycDocuments?.coApplicants?.length || 0),
+    Number(record.kycDocuments?.coApplicants?.length || 0),
+    Number(record.sections?.addressDetails?.coApplicants?.length || 0),
+    Number(record.addressDetails?.coApplicants?.length || 0),
+    Number(record.sections?.employmentIncome?.coApplicants?.length || 0),
+    Number(record.employmentIncome?.coApplicants?.length || 0),
+    Number(record.sections?.bankExistingLoans?.coApplicants?.length || 0),
+    Number(record.bankExistingLoans?.coApplicants?.length || 0),
+    Number(record.sections?.declaration?.coApplicants?.length || 0),
+    Number(record.declaration?.coApplicants?.length || 0)
+  );
+
+  const rawCoAppCount =
+    record.coApplicantsCount !== '' &&
+    record.coApplicantsCount !== undefined &&
+    record.coApplicantsCount !== null
+      ? Number(record.coApplicantsCount)
+      : null;
+
+  const coApplicantsCount =
+    rawCoAppCount !== null && Number.isFinite(rawCoAppCount)
+      ? Math.max(rawCoAppCount, countFromSections)
+      : countFromSections;
+
+  const distanceFromBranchKm =
+    record.distanceFromBranchKm === '' ||
+    record.distanceFromBranchKm === undefined ||
+    record.distanceFromBranchKm === null
+      ? ''
+      : Number(record.distanceFromBranchKm);
 
   const applicationNumber = record.applicationNumber || record.id || '';
   const loanProductDisplay = getLoanProductDisplay(loanProduct, loanVariation);
+
+  // Synchronize section objects and root keys
+  const sections = { ...(record.sections || {}) };
+
+  const personalInfo = mergeSectionData(
+    record.registration?.personalInformation || record.personalInformation || {},
+    sections.personalInformation || {}
+  );
+  sections.personalInformation = personalInfo;
+
+  const kycDocs = mergeSectionData(record.kycDocuments || {}, sections.kycDocuments || {});
+  sections.kycDocuments = kycDocs;
+
+  const address = mergeSectionData(record.addressDetails || {}, sections.addressDetails || {});
+  sections.addressDetails = address;
+
+  const employment = mergeSectionData(record.employmentIncome || {}, sections.employmentIncome || {});
+  sections.employmentIncome = employment;
+
+  const bankLoans = mergeSectionData(record.bankExistingLoans || {}, sections.bankExistingLoans || {});
+  sections.bankExistingLoans = bankLoans;
+
+  const collateral = mergeSectionData(
+    record.collateralDetails || record.collateral || {},
+    sections.collateralDetails || sections.collateral || {}
+  );
+  sections.collateral = collateral;
+
+  const references = mergeSectionData(record.references || {}, sections.references || {});
+  sections.references = references;
+
+  const sourcing = mergeSectionData(record.sourcing || {}, sections.sourcing || {});
+  sections.sourcing = sourcing;
+
+  const scheduleCharges = mergeSectionData(
+    record.scheduleCharges || record.scheduleOfCharges || {},
+    sections.scheduleCharges || sections.scheduleOfCharges || {}
+  );
+  sections.scheduleCharges = scheduleCharges;
+
+  const documentChecklist = mergeSectionData(record.documentChecklist || {}, sections.documentChecklist || {});
+  sections.documentChecklist = documentChecklist;
+
+  const declaration = mergeSectionData(record.declaration || {}, sections.declaration || {});
+  sections.declaration = declaration;
 
   return {
     ...record,
@@ -138,7 +293,7 @@ function normalizeApplicationRecord(record = {}) {
     purposeOfLoan,
     loanPurpose: purposeOfLoan,
     loanAmount,
-    loanAmountDisplay: loanAmount === '' ? (record.amount || '') : formatRupees(loanAmount),
+    loanAmountDisplay: loanAmount === '' ? record.amount || '' : formatRupees(loanAmount),
     loanTenureMonths,
     interestType: record.interestType || '',
     roi,
@@ -151,6 +306,27 @@ function normalizeApplicationRecord(record = {}) {
     locationDisplay: record.locationDisplay || inferLocation(record.address),
     sourcingChannelDisplay: record.sourcingChannelDisplay || record.sourcingChannel || '',
     createdDate: record.createdDate || '',
+
+    // Synchronized section structures
+    sections,
+    registration: {
+      ...(record.registration || {}),
+      personalInformation: personalInfo,
+      primaryApplicant: personalInfo.applicant || personalInfo.primaryApplicant || {},
+      coApplicants: personalInfo.coApplicants || [],
+      coApplicantsCount: personalInfo.coApplicants?.length || coApplicantsCount || 0,
+    },
+    kycDocuments: kycDocs,
+    addressDetails: address,
+    employmentIncome: employment,
+    bankExistingLoans: bankLoans,
+    collateralDetails: collateral,
+    collateral,
+    references,
+    sourcing,
+    scheduleCharges,
+    documentChecklist,
+    declaration,
   };
 }
 
@@ -325,7 +501,8 @@ export function ApplicationDraftProvider({ children }) {
   const ensureApplication = useCallback((applicationId, overrides = {}) => {
     setApplications((current) => {
       if (current[applicationId]) {
-        const next = normalizeApplicationRecord({ ...current[applicationId], ...overrides, id: applicationId });
+        const merged = deepMergeApplicationData(current[applicationId], overrides);
+        const next = normalizeApplicationRecord({ ...merged, id: applicationId });
         if (JSON.stringify(next) === JSON.stringify(current[applicationId])) {
           return current;
         }
@@ -335,11 +512,12 @@ export function ApplicationDraftProvider({ children }) {
         };
       }
 
+      const blank = buildBlankApplication(applicationId);
+      const merged = deepMergeApplicationData(blank, overrides);
       return {
         ...current,
         [applicationId]: normalizeApplicationRecord({
-          ...buildBlankApplication(applicationId),
-          ...overrides,
+          ...merged,
           id: applicationId,
         }),
       };
@@ -349,11 +527,11 @@ export function ApplicationDraftProvider({ children }) {
   const saveApplication = useCallback((applicationId, updates) => {
     setApplications((current) => {
       const currentRecord = current[applicationId] || APP_SEED_MAP[applicationId] || buildBlankApplication(applicationId);
+      const merged = deepMergeApplicationData(currentRecord, updates);
       return {
         ...current,
         [applicationId]: normalizeApplicationRecord({
-          ...currentRecord,
-          ...updates,
+          ...merged,
           id: applicationId,
         }),
       };

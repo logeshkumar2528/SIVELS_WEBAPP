@@ -42,6 +42,7 @@ function buildKycState(appData) {
 
   return {
     applicant: {
+      kycDocumentId: saved.applicant?.kycDocumentId || saved.applicant?.applicationKYCDocumentId || null,
       aadhaarLast4: saved.applicant?.aadhaarLast4 || last4FromValue(appData.aadhaarNo),
       panCardNo: saved.applicant?.panCardNo || appData.panCardNo || appData.panNumber || '',
       identityDocumentType: saved.applicant?.identityDocumentType || '',
@@ -53,6 +54,7 @@ function buildKycState(appData) {
       verificationStatus: saved.applicant?.verificationStatus || 'Pending',
     },
     coApplicants: createArray(count, (index) => ({
+      kycDocumentId: savedCoApplicants[index]?.kycDocumentId || savedCoApplicants[index]?.applicationKYCDocumentId || null,
       aadhaarLast4: savedCoApplicants[index]?.aadhaarLast4 || '',
       panCardNo: savedCoApplicants[index]?.panCardNo || '',
       identityDocumentType: savedCoApplicants[index]?.identityDocumentType || '',
@@ -285,25 +287,27 @@ function KycCard({
             </div>
           </div>
 
-          <div className="aw-field">
-            <label className="form-label">Attached Documents</label>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={onViewDocuments}
-              icon={<ImageIcon size={14} />}
-              style={{
-                width: '100%',
-                height: '38px',
-                justifyContent: 'center',
-                background: '#f8fafc',
-                border: '1px dashed #cbd5e1',
-                color: '#0f172a',
-              }}
-            >
-              View Documents
-            </Button>
-          </div>
+          {!isCoApplicant && (
+            <div className="aw-field">
+              <label className="form-label">Attached Documents</label>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onViewDocuments}
+                icon={<ImageIcon size={14} />}
+                style={{
+                  width: '100%',
+                  height: '38px',
+                  justifyContent: 'center',
+                  background: '#f8fafc',
+                  border: '1px dashed #cbd5e1',
+                  color: '#0f172a',
+                }}
+              >
+                View Documents
+              </Button>
+            </div>
+          )}
 
           <div className="aw-field">
             <label className="form-label">Verification Documents</label>
@@ -779,16 +783,15 @@ export default function KycDocuments() {
         if (savedId) person.kycDocumentId = savedId;
       }
 
-      saveApplication(appId, {
-        ...buildSectionUpdate(appData, 'kycDocuments', form),
-        kycDocuments: {
-          applicant: { ...form.applicant, kycDocumentId: allPersons[0].kycDocumentId },
-          coApplicants: form.coApplicants.map((co, i) => ({
-            ...co,
-            kycDocumentId: allPersons[i + 1]?.kycDocumentId || co.kycDocumentId,
-          })),
-        },
-      });
+      const updatedForm = {
+        applicant: { ...form.applicant, kycDocumentId: allPersons[0].kycDocumentId },
+        coApplicants: form.coApplicants.map((co, i) => ({
+          ...co,
+          kycDocumentId: allPersons[i + 1]?.kycDocumentId || co.kycDocumentId,
+        })),
+      };
+
+      saveApplication(appId, buildSectionUpdate(appData, 'kycDocuments', updatedForm));
 
       navigate(ROUTES.PERSONAL_INFORMATION.replace(':applicationId', appId));
     } catch (err) {
@@ -839,6 +842,7 @@ export default function KycDocuments() {
         <KycCard
           title="Applicant KYC"
           person={form.applicant}
+          isCoApplicant={false}
           onChange={(field, value) => updatePerson('applicant', field, value)}
           onViewDocuments={() => handleOpenDocsModal('applicant')}
           documentTypeOptions={documentTypeOptions}

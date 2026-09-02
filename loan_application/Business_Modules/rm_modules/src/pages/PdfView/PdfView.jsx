@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import { ROUTES } from '../../config/routeConfig';
+import { getApplicantCount } from '../applicationWizard/flowUtils';
 import Button from '../../components/Button/Button';
 import './PdfView.css';
 import LogoImage from '../../assets/logo/Navbar_logo/Logo.jpg';
@@ -53,6 +54,9 @@ export default function PdfView() {
     relationships: {},
     documentTypes: {},
     verifications: {},
+    banks: {},
+    properties: {},
+    employmentTypes: {},
   });
 
   const blobUrlsRef = useRef([]);
@@ -110,6 +114,9 @@ export default function PdfView() {
           religionMap,
           docTypeMap,
           verifMap,
+          bankMap,
+          propertyMap,
+          empTypeMap,
         ] = await Promise.allSettled([
           fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`).then((r) => (r.ok ? r.json() : null)),
           fetch(`${API_BASE}/RMMaster`).then((r) => (r.ok ? r.json() : null)),
@@ -124,6 +131,9 @@ export default function PdfView() {
           fetchMaster('masters/ReligionMaster', 'religionId', 'religionName'),
           fetchMaster('DocumentTypeMaster', 'documentTypeId', 'documentTypeName'),
           fetchMaster('VerificationMaster', 'verificationId', 'verificationName'),
+          fetchMaster('BankMaster', 'bankId', 'bankName'),
+          fetchMaster('PropertyMaster', 'propertyId', 'propertyName'),
+          fetchMaster('EmploymentTypeMaster', 'employmentTypeId', 'employmentTypeName'),
         ]);
 
         let resolvedCustomerId = applicationId;
@@ -162,6 +172,9 @@ export default function PdfView() {
             relationships: relMap.status === 'fulfilled' ? relMap.value : {},
             documentTypes: docTypeMap.status === 'fulfilled' ? docTypeMap.value : {},
             verifications: verifMap.status === 'fulfilled' ? verifMap.value : {},
+            banks: bankMap.status === 'fulfilled' ? bankMap.value : {},
+            properties: propertyMap.status === 'fulfilled' ? propertyMap.value : {},
+            employmentTypes: empTypeMap.status === 'fulfilled' ? empTypeMap.value : {},
           });
         }
 
@@ -351,21 +364,20 @@ export default function PdfView() {
   const resolveDocType = (val) => masterMaps.documentTypes[val] || val || '';
   const resolveVerification = (val) => masterMaps.verifications[val] || val || '';
 
-  // Section extractors
+  // Dynamic Co-Applicants Resolution using standard helper
+  const applicantCount = getApplicantCount(appData);
   const personalData = appData.registration?.personalInformation || appData.sections?.personalInformation || {};
   const applicant = personalData.applicant || {};
 
-  const rawCoApplicants = personalData.coApplicants || [];
-  const coApplicants = rawCoApplicants.filter(
-    (co) => co && (co.firstName || co.mobileNo || co.relationshipWithApplicant)
-  );
-  const hasCoApplicants = coApplicants.length > 0;
+  const rawCoApplicants = Array.isArray(personalData.coApplicants) ? personalData.coApplicants : [];
+  const coApplicants = Array.from({ length: applicantCount }, (_, i) => rawCoApplicants[i] || {});
+  const hasCoApplicants = applicantCount > 0;
 
   const kycData = appData.kycDocuments || appData.sections?.kycDocuments || {};
   const addressData = appData.addressDetails || appData.sections?.addressDetails || {};
   const empData = appData.employmentIncome || appData.sections?.employmentIncome || {};
   const bankData = appData.bankExistingLoans || appData.sections?.bankExistingLoans || {};
-  const colData = appData.collateral || appData.sections?.collateral || {};
+  const colData = appData.collateral || appData.sections?.collateral || appData.collateralDetails || {};
   const refData = appData.references || appData.sections?.references || {};
   const sourcingData = appData.sourcing || appData.sections?.sourcing || {};
   const chargesData = appData.scheduleCharges || appData.sections?.scheduleCharges || {};
@@ -528,7 +540,10 @@ export default function PdfView() {
               <tr>
                 <th className="pdf-row-header">Field</th>
                 <th>Applicant</th>
-                {hasCoApplicants && coApplicants.map((_, i) => <th key={i}>CoApplicant {i + 1}</th>)}
+                {hasCoApplicants &&
+                  coApplicants.map((_, i) => (
+                    <th key={i}>CoApplicant {applicantCount > 1 ? i + 1 : ''}</th>
+                  ))}
               </tr>
             </thead>
             <tbody>
@@ -602,7 +617,9 @@ export default function PdfView() {
                 <td>Relationship with Applicant</td>
                 <td>SELF</td>
                 {hasCoApplicants &&
-                  coApplicants.map((co, i) => <td key={i}>{resolveRelationship(co.relationshipWithApplicant) || '-'}</td>)}
+                  coApplicants.map((co, i) => (
+                    <td key={i}>{resolveRelationship(co.relationshipWithApplicant) || '-'}</td>
+                  ))}
               </tr>
             </tbody>
           </table>
@@ -614,7 +631,10 @@ export default function PdfView() {
               <tr>
                 <th className="pdf-row-header">Document</th>
                 <th>Applicant</th>
-                {hasCoApplicants && coApplicants.map((_, i) => <th key={i}>CoApplicant {i + 1}</th>)}
+                {hasCoApplicants &&
+                  coApplicants.map((_, i) => (
+                    <th key={i}>CoApplicant {applicantCount > 1 ? i + 1 : ''}</th>
+                  ))}
               </tr>
             </thead>
             <tbody>
@@ -653,7 +673,7 @@ export default function PdfView() {
                 <td>{resolveVerification(kycData.applicant?.verificationStatus) || '-'}</td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
-                    <td key={i}>{resolveVerification(kycData.coApplicants?.[i]?.verificationStatus) || '-'}</td>
+                    <td key={i}>{resolveVerification(kycData.coApplicants?.[i]?.verificationStatus) || 'Pending'}</td>
                   ))}
               </tr>
             </tbody>
@@ -804,7 +824,10 @@ export default function PdfView() {
               <tr>
                 <th className="pdf-row-header">Current Address</th>
                 <th>Applicant</th>
-                {hasCoApplicants && coApplicants.map((_, i) => <th key={i}>CoApplicant {i + 1}</th>)}
+                {hasCoApplicants &&
+                  coApplicants.map((_, i) => (
+                    <th key={i}>CoApplicant {applicantCount > 1 ? i + 1 : ''}</th>
+                  ))}
               </tr>
             </thead>
             <tbody>
@@ -863,8 +886,12 @@ export default function PdfView() {
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>
-                      {addressData.coApplicants?.[i]?.current?.city || addressData.coApplicants?.[i]?.city || '-'},{' '}
-                      {addressData.coApplicants?.[i]?.current?.state || addressData.coApplicants?.[i]?.state || '-'}
+                      {[
+                        addressData.coApplicants?.[i]?.current?.city || addressData.coApplicants?.[i]?.city,
+                        addressData.coApplicants?.[i]?.current?.state || addressData.coApplicants?.[i]?.state,
+                      ]
+                        .filter(Boolean)
+                        .join(', ') || '-'}
                     </td>
                   ))}
               </tr>
@@ -892,7 +919,10 @@ export default function PdfView() {
               <tr>
                 <th className="pdf-row-header">Employment Info</th>
                 <th>Applicant</th>
-                {hasCoApplicants && coApplicants.map((_, i) => <th key={i}>CoApplicant {i + 1}</th>)}
+                {hasCoApplicants &&
+                  coApplicants.map((_, i) => (
+                    <th key={i}>CoApplicant {applicantCount > 1 ? i + 1 : ''}</th>
+                  ))}
               </tr>
             </thead>
             <tbody>
@@ -900,19 +930,27 @@ export default function PdfView() {
                 <td>Occupation Category</td>
                 <td>{empData.applicant?.employmentType || '-'}</td>
                 {hasCoApplicants &&
-                  coApplicants.map((_, i) => <td key={i}>{empData.coApplicants?.[i]?.employmentType || '-'}</td>)}
+                  coApplicants.map((_, i) => (
+                    <td key={i}>
+                      {resolveEmploymentType(empData.coApplicants?.[i]?.employmentNature || empData.coApplicants?.[i]?.employmentType) || empData.coApplicants?.[i]?.employmentNature || '-'}
+                    </td>
+                  ))}
               </tr>
               <tr>
                 <td>Employer Name</td>
                 <td>{empData.applicant?.employerName || '-'}</td>
                 {hasCoApplicants &&
-                  coApplicants.map((_, i) => <td key={i}>{empData.coApplicants?.[i]?.employerName || '-'}</td>)}
+                  coApplicants.map((_, i) => (
+                    <td key={i}>{empData.coApplicants?.[i]?.employerBusinessName || empData.coApplicants?.[i]?.employerName || '-'}</td>
+                  ))}
               </tr>
               <tr>
                 <td>Designation</td>
                 <td>{empData.applicant?.designation || '-'}</td>
                 {hasCoApplicants &&
-                  coApplicants.map((_, i) => <td key={i}>{empData.coApplicants?.[i]?.designation || '-'}</td>)}
+                  coApplicants.map((_, i) => (
+                    <td key={i}>{empData.coApplicants?.[i]?.designationNatureOfBusiness || empData.coApplicants?.[i]?.designation || '-'}</td>
+                  ))}
               </tr>
               <tr>
                 <td>Industry Type</td>
@@ -926,7 +964,9 @@ export default function PdfView() {
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>
-                      {empData.coApplicants?.[i]?.totalExperience
+                      {empData.coApplicants?.[i]?.totalExperienceYears
+                        ? `${empData.coApplicants[i].totalExperienceYears} Years`
+                        : empData.coApplicants?.[i]?.totalExperience
                         ? `${empData.coApplicants[i].totalExperience} Years`
                         : '-'}
                     </td>
@@ -939,7 +979,7 @@ export default function PdfView() {
                   coApplicants.map((_, i) => (
                     <td key={i}>
                       {empData.coApplicants?.[i]?.grossMonthlyIncome
-                        ? `Rs. ${empData.coApplicants[i].grossMonthlyIncome}`
+                        ? `Rs. ${Number(empData.coApplicants[i].grossMonthlyIncome).toLocaleString('en-IN')}`
                         : '-'}
                     </td>
                   ))}
@@ -950,8 +990,10 @@ export default function PdfView() {
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>
-                      {empData.coApplicants?.[i]?.otherMonthlyIncome
-                        ? `Rs. ${empData.coApplicants[i].otherMonthlyIncome}`
+                      {empData.coApplicants?.[i]?.otherIncomeMonthly
+                        ? `Rs. ${Number(empData.coApplicants[i].otherIncomeMonthly).toLocaleString('en-IN')}`
+                        : empData.coApplicants?.[i]?.otherMonthlyIncome
+                        ? `Rs. ${Number(empData.coApplicants[i].otherMonthlyIncome).toLocaleString('en-IN')}`
                         : '-'}
                     </td>
                   ))}
@@ -963,7 +1005,7 @@ export default function PdfView() {
                   coApplicants.map((_, i) => (
                     <td key={i}>
                       {empData.coApplicants?.[i]?.netMonthlyIncome
-                        ? `Rs. ${empData.coApplicants[i].netMonthlyIncome}`
+                        ? `Rs. ${Number(empData.coApplicants[i].netMonthlyIncome).toLocaleString('en-IN')}`
                         : '-'}
                     </td>
                   ))}
@@ -981,7 +1023,7 @@ export default function PdfView() {
                 <th>Account Holder</th>
                 <th>Account No</th>
                 <th>IFSC Code</th>
-                <th>Total EMI (Rs.)</th>
+                <th>Active Loans</th>
               </tr>
             </thead>
             <tbody>
@@ -992,20 +1034,65 @@ export default function PdfView() {
                 <td>{bankData.applicant?.accounts?.[0]?.accountNumber || '-'}</td>
                 <td>{bankData.applicant?.accounts?.[0]?.ifscCode || '-'}</td>
                 <td>
-                  {bankData.applicant?.existingLoans?.[0]?.totalExistingEmi
-                    ? `Rs. ${bankData.applicant.existingLoans[0].totalExistingEmi}`
+                  {resolveBank(bankData.applicant?.primaryBank?.bankName || bankData.primaryBank?.bankName) ||
+                    bankData.applicant?.primaryBank?.bankName ||
+                    bankData.primaryBank?.bankName ||
+                    bankData.applicant?.accounts?.[0]?.bankName ||
+                    '-'}
+                </td>
+                <td>{bankData.applicant?.primaryBank?.accountHolderName || customerDisplayName}</td>
+                <td>
+                  {bankData.applicant?.primaryBank?.accountNumber ||
+                    bankData.primaryBank?.accountNumber ||
+                    bankData.applicant?.accounts?.[0]?.accountNumber ||
+                    '-'}
+                </td>
+                <td>
+                  {bankData.applicant?.primaryBank?.ifscCode ||
+                    bankData.primaryBank?.ifscCode ||
+                    bankData.applicant?.accounts?.[0]?.ifscCode ||
+                    '-'}
+                </td>
+                <td>
+                  {bankData.applicant?.primaryBank?.noOfActiveLoans !== undefined && bankData.applicant?.primaryBank?.noOfActiveLoans !== ''
+                    ? String(bankData.applicant.primaryBank.noOfActiveLoans)
+                    : bankData.applicant?.existingLoans?.[0]?.totalExistingEmi
+                    ? String(bankData.applicant.existingLoans[0].totalExistingEmi)
                     : '0'}
                 </td>
               </tr>
               {hasCoApplicants &&
-                coApplicants.map((_, i) => (
+                coApplicants.map((co, i) => (
                   <tr key={i}>
-                    <td>Co-Applicant {i + 1}</td>
-                    <td>{bankData.coApplicants?.[i]?.accounts?.[0]?.bankName || '-'}</td>
-                    <td>{bankData.coApplicants?.[i]?.accounts?.[0]?.accountHolderName || '-'}</td>
-                    <td>{bankData.coApplicants?.[i]?.accounts?.[0]?.accountNumber || '-'}</td>
-                    <td>{bankData.coApplicants?.[i]?.accounts?.[0]?.ifscCode || '-'}</td>
-                    <td>{bankData.coApplicants?.[i]?.existingLoans?.[0]?.totalExistingEmi || '-'}</td>
+                    <td>Co-Applicant {applicantCount > 1 ? i + 1 : ''}</td>
+                    <td>
+                      {resolveBank(bankData.coApplicants?.[i]?.primaryBank?.bankName) ||
+                        bankData.coApplicants?.[i]?.primaryBank?.bankName ||
+                        bankData.coApplicants?.[i]?.accounts?.[0]?.bankName ||
+                        '-'}
+                    </td>
+                    <td>
+                      {bankData.coApplicants?.[i]?.primaryBank?.accountHolderName ||
+                        composeFullName(co) ||
+                        '-'}
+                    </td>
+                    <td>
+                      {bankData.coApplicants?.[i]?.primaryBank?.accountNumber ||
+                        bankData.coApplicants?.[i]?.accounts?.[0]?.accountNumber ||
+                        '-'}
+                    </td>
+                    <td>
+                      {bankData.coApplicants?.[i]?.primaryBank?.ifscCode ||
+                        bankData.coApplicants?.[i]?.accounts?.[0]?.ifscCode ||
+                        '-'}
+                    </td>
+                    <td>
+                      {bankData.coApplicants?.[i]?.primaryBank?.noOfActiveLoans !== undefined && bankData.coApplicants?.[i]?.primaryBank?.noOfActiveLoans !== ''
+                        ? String(bankData.coApplicants[i].primaryBank.noOfActiveLoans)
+                        : bankData.coApplicants?.[i]?.existingLoans?.[0]?.totalExistingEmi
+                        ? String(bankData.coApplicants[i].existingLoans[0].totalExistingEmi)
+                        : '-'}
+                    </td>
                   </tr>
                 ))}
             </tbody>
@@ -1036,6 +1123,10 @@ export default function PdfView() {
                       : 'No'
                     : '-'}
                 </td>
+              </tr>
+              <tr>
+                <td className="pdf-row-header">Property Usage</td>
+                <td>{colData.propertyOne?.usage || colData.usage || '-'}</td>
               </tr>
             </tbody>
           </table>
@@ -1081,14 +1172,8 @@ export default function PdfView() {
               <tr>
                 <td className="pdf-row-header">Employee ID</td>
                 <td>{resolvedEmployeeId}</td>
-                <td className="pdf-row-header">Processing Fee</td>
-                <td>{chargesData.processingFee ? `Rs. ${chargesData.processingFee}` : 'Rs. 3500'}</td>
-              </tr>
-              <tr>
-                <td className="pdf-row-header">Valuation Fee</td>
-                <td>{chargesData.valuationFee ? `Rs. ${chargesData.valuationFee}` : 'Rs. 2500'}</td>
-                <td className="pdf-row-header">Legal Fee</td>
-                <td>{chargesData.legalFee ? `Rs. ${chargesData.legalFee}` : 'Rs. 2000'}</td>
+                <td className="pdf-row-header">Admin Fee Status</td>
+                <td>{chargesData.adminFeePaid ? 'Paid' : 'Pending / Not Applicable'}</td>
               </tr>
             </tbody>
           </table>
@@ -1122,6 +1207,8 @@ export default function PdfView() {
           <div
             style={{
               display: 'flex',
+              flexWrap: 'wrap',
+              gap: '16px',
               justifyContent: 'space-between',
               alignItems: 'flex-start',
               marginTop: '12px',
@@ -1141,6 +1228,32 @@ export default function PdfView() {
                 Date: {resolvedApplicantDate}
               </div>
             </div>
+
+            {hasCoApplicants &&
+              coApplicants.map((co, i) => {
+                const coSig =
+                  declarationData.coApplicants?.[i]?.signature ||
+                  (i === 0 ? declarationData.coApplicantSignature : '') ||
+                  composeFullName(co) ||
+                  `Co-Applicant ${applicantCount > 1 ? i + 1 : ''}`;
+                const coDate =
+                  declarationData.coApplicants?.[i]?.date ||
+                  (i === 0 ? declarationData.coApplicantDate : '') ||
+                  todayFormatted;
+                return (
+                  <div key={i}>
+                    <div style={{ fontWeight: '700', marginBottom: '4px', fontSize: '11px' }}>
+                      Co-Applicant {applicantCount > 1 ? i + 1 : ''} Signature:
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#0F7A4C', fontWeight: '700' }}>
+                      {coSig}
+                    </div>
+                    <div style={{ fontSize: '9.5px', color: '#64748b', marginTop: '3px' }}>
+                      Date: {coDate}
+                    </div>
+                  </div>
+                );
+              })}
 
             <div>
               <div style={{ fontWeight: '700', marginBottom: '4px', fontSize: '11px' }}>Received By (RM Sign):</div>

@@ -104,15 +104,35 @@ function normalizeApplicationStatus(status, statusName = '') {
   return 'New';
 }
 
-async function updateCustomerStatus(baseUrl, customerId, status) {
-  const response = await fetch(`${baseUrl}/AgentAddCustomer/${customerId}/status`, {
-    method: 'PATCH',
+async function updateCustomerStatusToInProgress(baseUrl, customerId, record) {
+  const currentStatus = Number(record.status ?? record.Status ?? 0);
+  // Progression protection: only update if status is 0 (Draft / Newly Created)
+  if (currentStatus >= 1) {
+    return; // Already in progress (1) or approved (2)
+  }
+
+  const payload = {
+    agentCustomerId: Number(record.agentCustomerId || record.AgentCustomerId || customerId),
+    agentId: Number(record.agentId ?? record.AgentId ?? 1),
+    fullName: record.fullName || record.FullName || record.customerName || '',
+    mobileNumber: record.mobileNumber || record.MobileNumber || record.mobile || '',
+    email: record.email || record.Email || record.emailAddress || '',
+    employmentTypeId: Number(record.employmentTypeId ?? record.EmploymentTypeId ?? 1),
+    loanPurposeId: Number(record.loanPurposeId ?? record.LoanPurposeId ?? 1),
+    expectedLoanAmount: Number(record.expectedLoanAmount ?? record.ExpectedLoanAmount ?? 0),
+    remarks: record.remarks || record.Remarks || '',
+    status: 1,
+    isActive: record.isActive !== undefined ? record.isActive : (record.IsActive !== undefined ? record.IsActive : true),
+  };
+
+  const response = await fetch(`${baseUrl}/AgentAddCustomer/${customerId}`, {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to update application status (${response.status})`);
+    console.error(`Failed to update customer status to in-progress (${response.status})`);
   }
 }
 
@@ -170,7 +190,17 @@ export default function ApplicationDetails() {
             code: record.agentCode || record.AgentCode || '',
           });
           const currentStatus = normalizeApplicationStatus(record.status, record.statusName || record.StatusName);
-          const isApprovedBeingEdited = currentStatus === 'Approved';
+
+          // Update status to 1 (In Progress) if newly created (status 0)
+          if (rawStatus === 0) {
+            try {
+              await updateCustomerStatusToInProgress(baseUrl, appId, record);
+              record.status = 1;
+            } catch (statusError) {
+              console.error('Failed to update status to 1 on Step 1 start:', statusError);
+            }
+          }
+
           saveApplication(appId, {
             agentCustomerId: record.agentCustomerId || record.AgentCustomerId || appId,
             agentId: record.agentId || record.AgentId || '',
@@ -182,20 +212,12 @@ export default function ApplicationDetails() {
             agentName: record.agentName || '',
             isAgentSourced: Boolean(record.agentId || record.AgentId),
             createdDate: record.createdAt || record.createdDate || '',
-            status: isApprovedBeingEdited ? 'Pending' : currentStatus,
+            status: record.status === 2 || currentStatus === 'Approved' ? 'Approved' : 'Pending',
             branch: record.branch || '',
             agentCode: record.agentCode || record.AgentCode || '',
             purposeOfLoan: record.loanPurposeId || record.purposeOfLoan || '',
             loanAmount: record.expectedLoanAmount ?? '',
           });
-
-          if (isApprovedBeingEdited) {
-            try {
-              await updateCustomerStatus(baseUrl, appId, 'Pending');
-            } catch (statusError) {
-              console.error('Failed to mark application as pending while editing:', statusError);
-            }
-          }
 
           const agentId = record.agentId || record.AgentId;
           if (agentId) {
