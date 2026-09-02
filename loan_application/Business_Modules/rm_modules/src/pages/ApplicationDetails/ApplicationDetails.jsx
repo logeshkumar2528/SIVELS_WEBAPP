@@ -91,6 +91,31 @@ function isFieldAgentChannel(option) {
     name.includes('field agent') || normalizedName.includes('fieldagent');
 }
 
+function normalizeApplicationStatus(status, statusName = '') {
+  const namedStatus = String(statusName || '').trim().toLowerCase();
+  if (namedStatus.includes('approved')) return 'Approved';
+  if (namedStatus.includes('pending')) return 'Pending';
+  if (namedStatus.includes('returned')) return 'Returned';
+  if (namedStatus.includes('review')) return 'Under Review';
+
+  const numericStatus = Number(status);
+  if (numericStatus === 2) return 'Approved';
+  if (numericStatus === 1) return 'Pending';
+  return 'New';
+}
+
+async function updateCustomerStatus(baseUrl, customerId, status) {
+  const response = await fetch(`${baseUrl}/AgentAddCustomer/${customerId}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to update application status (${response.status})`);
+  }
+}
+
 function validateApplication(record) {
   return {};
 }
@@ -139,6 +164,8 @@ export default function ApplicationDetails() {
         if (active && record) {
           setDisplayRecord(record);
           setAgentBranch('');
+          const currentStatus = normalizeApplicationStatus(record.status, record.statusName || record.StatusName);
+          const isApprovedBeingEdited = currentStatus === 'Approved';
           saveApplication(appId, {
             agentCustomerId: record.agentCustomerId || record.AgentCustomerId || appId,
             agentId: record.agentId || record.AgentId || '',
@@ -150,11 +177,19 @@ export default function ApplicationDetails() {
             agentName: record.agentName || '',
             isAgentSourced: Boolean(record.agentId || record.AgentId),
             createdDate: record.createdAt || record.createdDate || '',
-            status: record.status === 'Draft' ? 'New' : (record.status || 'New'),
+            status: isApprovedBeingEdited ? 'Pending' : currentStatus,
             branch: record.branch || '',
             purposeOfLoan: record.loanPurposeId || record.purposeOfLoan || '',
             loanAmount: record.expectedLoanAmount ?? '',
           });
+
+          if (isApprovedBeingEdited) {
+            try {
+              await updateCustomerStatus(baseUrl, appId, 'Pending');
+            } catch (statusError) {
+              console.error('Failed to mark application as pending while editing:', statusError);
+            }
+          }
 
           const agentId = record.agentId || record.AgentId;
           if (agentId) {
@@ -378,7 +413,6 @@ export default function ApplicationDetails() {
       }
 
       saveApplication(appId, { 
-        status: 'Pending Verification',
         applicationProductDetailsId: savedData.applicationProductDetailsId || savedData.ApplicationProductDetailsId || appData.applicationProductDetailsId
       });
       navigate(ROUTES.KYC_DOCUMENTS.replace(':applicationId', appId));

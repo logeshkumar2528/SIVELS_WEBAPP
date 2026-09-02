@@ -61,6 +61,19 @@ const resolveApiArray = (data) => {
 
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
 
+const normalizeApplicationStatus = (status, statusName = '') => {
+  const namedStatus = normalizeText(statusName);
+  if (namedStatus.includes('approved')) return 'Approved';
+  if (namedStatus.includes('pending')) return 'Pending';
+  if (namedStatus.includes('returned')) return 'Returned';
+  if (namedStatus.includes('review')) return 'Under Review';
+
+  const numericStatus = Number(status);
+  if (numericStatus === 2) return 'Approved';
+  if (numericStatus === 1) return 'Pending';
+  return 'New';
+};
+
 const getCurrentRMContext = () => {
   try {
     const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || 'null');
@@ -97,7 +110,7 @@ const getCurrentRMContext = () => {
 
 const mapBackendApplication = (item, index) => {
   const applicationId = item.applicationId || item.applicationNumber || item.agentCustomerId || item.customerId || `${index + 1}`;
-  const normalizedStatus = String(item.status || 'New').trim();
+  const normalizedStatus = normalizeApplicationStatus(item.status, item.statusName || item.StatusName);
   return {
     id: String(applicationId),
     customerName: item.fullName || item.customerName || '',
@@ -106,7 +119,7 @@ const mapBackendApplication = (item, index) => {
     amount: formatCurrency(item.expectedLoanAmount ?? item.amount),
     agentName: item.agentName || '',
     createdDate: formatDate(item.createdAt || item.createdDate),
-    status: normalizedStatus === 'Draft' ? 'New' : normalizedStatus,
+    status: normalizedStatus,
     rawStatus: normalizedStatus,
     agentCustomerId: item.agentCustomerId || item.customerId || null,
     agentId: item.agentId || item.AgentId || null,
@@ -343,7 +356,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
         </div>
 
         <div className="listing-table-flex">
-          <DataTable columns={columns} data={paginatedData} rowKeyField="id" />
+          <DataTable columns={columns} data={paginatedData} rowKeyField="id" className="rm-new-applications-table" />
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}

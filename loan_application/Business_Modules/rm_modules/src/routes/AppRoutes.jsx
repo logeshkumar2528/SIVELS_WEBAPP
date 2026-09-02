@@ -132,9 +132,25 @@ export default function AppRoutes() {
             </LayoutWrapper>
           }
         />
+        <Route
+          path={ROUTES.FIELD_VERIFICATION_FOR_APPLICATION}
+          element={
+            <LayoutWrapper title="Field Verification" subtitle="Step 1 of 2">
+              <FieldVerification />
+            </LayoutWrapper>
+          }
+        />
 
         <Route
           path={ROUTES.FIELD_VERIFICATION_STEP2}
+          element={
+            <LayoutWrapper title="Collateral Verification" subtitle="Step 2 of 2">
+              <FieldVerificationStep2 />
+            </LayoutWrapper>
+          }
+        />
+        <Route
+          path={ROUTES.FIELD_VERIFICATION_STEP2_FOR_APPLICATION}
           element={
             <LayoutWrapper title="Collateral Verification" subtitle="Step 2 of 2">
               <FieldVerificationStep2 />

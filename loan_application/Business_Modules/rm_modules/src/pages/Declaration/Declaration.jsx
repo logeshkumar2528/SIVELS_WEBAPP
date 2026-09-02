@@ -211,9 +211,24 @@ export default function Declaration() {
     setShowSubmitModal(true);
   };
 
-  const finalizeSubmit = () => {
-    saveApplication(appId, { status: 'Ready for Review' });
-    navigate('/rm/applications/field-verification');
+  const finalizeSubmit = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/AgentAddCustomer/${appId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'Approved' }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to approve application (${response.status})`);
+      }
+
+      saveApplication(appId, { status: 'Approved' });
+      navigate(ROUTES.APPROVED_APPLICATIONS);
+    } catch (error) {
+      console.error('Failed to approve application:', error);
+      window.alert('The application could not be approved. Please try again.');
+    }
   };
 
   const handleBack = () => {

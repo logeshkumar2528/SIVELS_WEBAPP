@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { MapPin, Map, Building2, Hash, HelpCircle, Upload, Image as ImageIcon } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
@@ -8,6 +8,7 @@ import { ROUTES } from '../../config/routeConfig';
 import { FIELD_VERIFICATION_STEPS } from '../../config/fieldVerificationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
+import { findFirstApplication, loadApplicationHeader } from '../../services/applicationApi';
 import Modal from '../../components/Modal/Modal';
 import {
   buildSectionUpdate,
@@ -207,14 +208,41 @@ function AddressCard({ title, address, onChange, errors, documents, onDocumentCh
 
 export default function FieldVerification() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { applicationId } = useParams();
-  const appId = applicationId || 'APP-2024-001';
+  const queryApplicationId = new URLSearchParams(location.search).get('applicationId');
+  const requestedApplicationId = applicationId || queryApplicationId || location.state?.applicationId || '';
+  const [resolvedApplicationId, setResolvedApplicationId] = useState(requestedApplicationId);
+  const appId = resolvedApplicationId || '__field-verification-loading__';
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildAddressState(getApplication(appId)));
   const [errors, setErrors] = useState({});
   const [geoModalData, setGeoModalData] = useState(null);
   const [localGeoTagData, setLocalGeoTagData] = useState(null);
   const [isFetchingGeo, setIsFetchingGeo] = useState(false);
+  const [isLoadingApplication, setIsLoadingApplication] = useState(true);
+  const [applicationError, setApplicationError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    async function loadHeader() {
+      try {
+        const id = requestedApplicationId || await findFirstApplication();
+        const header = await loadApplicationHeader(id);
+        if (!active) return;
+        setResolvedApplicationId(String(id));
+        ensureApplication(String(id), header);
+        saveApplication(String(id), header);
+        setApplicationError('');
+      } catch (error) {
+        if (active) setApplicationError(error.message || 'Unable to load application data');
+      } finally {
+        if (active) setIsLoadingApplication(false);
+      }
+    }
+    loadHeader();
+    return () => { active = false; };
+  }, [requestedApplicationId, ensureApplication, saveApplication]);
 
   const handleFetchGeo = () => {
     setIsFetchingGeo(true);
@@ -295,7 +323,7 @@ export default function FieldVerification() {
     }
 
     saveApplication(appId, buildSectionUpdate(appData, 'fieldVerification', form));
-    navigate(ROUTES.FIELD_VERIFICATION_STEP2);
+    navigate(ROUTES.FIELD_VERIFICATION_STEP2_FOR_APPLICATION.replace(':applicationId', encodeURIComponent(appId)));
   };
 
   const handleBack = () => {
@@ -314,7 +342,11 @@ export default function FieldVerification() {
       continueLabel="Save & Continue"
       onBack={handleBack}
       onContinue={handleContinue}
-      onStepClick={(step) => navigate(step.route.replace(':applicationId', appId))}
+      onStepClick={(step) => navigate(
+        step.id === 'collateral-verification'
+          ? ROUTES.FIELD_VERIFICATION_STEP2_FOR_APPLICATION.replace(':applicationId', encodeURIComponent(appId))
+          : ROUTES.FIELD_VERIFICATION_FOR_APPLICATION.replace(':applicationId', encodeURIComponent(appId)),
+      )}
       headerAction={
         <Button
           variant="secondary"
@@ -327,6 +359,8 @@ export default function FieldVerification() {
       }
       footerHint="Address details are stored against the same application ID."
     >
+      {isLoadingApplication && <div className="aw-inline-alert aw-inline-alert--amber">Loading applicant details from the API...</div>}
+      {applicationError && <div className="aw-inline-alert aw-inline-alert--red">{applicationError}</div>}
 
       <AddressCard
         title="Applicant Address"
