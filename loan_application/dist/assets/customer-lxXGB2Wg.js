@@ -1,0 +1,1 @@
+import{g as e,i as t,r as n,v as r,x as i}from"./chevron-right-CKaTMHhd.js";import{t as a}from"./App-DkqKoQHh.js";var o=i(r(),1),s=e(),c=n();(0,s.createRoot)(document.getElementById(`root`)).render((0,c.jsx)(o.StrictMode,{children:(0,c.jsx)(t,{children:(0,c.jsx)(a,{})})}));

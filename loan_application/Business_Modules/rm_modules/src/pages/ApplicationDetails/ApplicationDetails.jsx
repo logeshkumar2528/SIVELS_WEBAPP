@@ -79,6 +79,18 @@ function buildApplicationDisplayId(record = {}, fallbackId = '') {
   return serialTail ? `${prefix}-${serialTail}` : prefix;
 }
 
+function isFieldAgentChannel(option) {
+  const raw = option?.raw || {};
+  const code = String(
+    raw.sourcingChannelCode || raw.SourcingChannelCode || ''
+  ).trim().toLowerCase().replace(/[\s_-]/g, '');
+  const name = String(option?.label || '').trim().toLowerCase();
+  const normalizedName = name.replace(/[\s_-]/g, '');
+
+  return code === 'fa' || code === 'fieldagent' ||
+    name.includes('field agent') || normalizedName.includes('fieldagent');
+}
+
 function validateApplication(record) {
   return {};
 }
@@ -136,6 +148,7 @@ export default function ApplicationDetails() {
             loanType: record.loanPurposeName || record.loanType || '',
             amount: record.expectedLoanAmount !== undefined ? `Rs. ${Number(record.expectedLoanAmount).toLocaleString('en-IN')}` : (record.amount || ''),
             agentName: record.agentName || '',
+            isAgentSourced: Boolean(record.agentId || record.AgentId),
             createdDate: record.createdAt || record.createdDate || '',
             status: record.status === 'Draft' ? 'New' : (record.status || 'New'),
             branch: record.branch || '',
@@ -182,6 +195,32 @@ export default function ApplicationDetails() {
     };
   }, [appId, saveApplication]);
 
+  // Customers created by a field agent must always use the Field Agent
+  // sourcing channel. Resolve the ID from the master table instead of
+  // hard-coding a database identity.
+  const appData = getApplication(appId);
+
+  useEffect(() => {
+    const agentId = displayRecord?.agentId || displayRecord?.AgentId || appData.agentId;
+    if (!agentId || sourcingChannelOptions.length === 0) {
+      return;
+    }
+
+    const fieldAgentChannel = sourcingChannelOptions.find(isFieldAgentChannel);
+    if (!fieldAgentChannel) {
+      console.warn('Field Agent sourcing channel was not found in the master data.');
+      return;
+    }
+
+    if (String(appData.sourcingChannel) !== String(fieldAgentChannel.value)) {
+      saveApplication(appId, {
+        sourcingChannel: fieldAgentChannel.value,
+        sourcingChannelDisplay: fieldAgentChannel.label,
+        isAgentSourced: true,
+      });
+    }
+  }, [appId, appData.agentId, appData.sourcingChannel, displayRecord, saveApplication, sourcingChannelOptions]);
+
   useEffect(() => {
     async function fetchMasterData(endpoint, idField, nameField, setOptionsState) {
       try {
@@ -217,7 +256,6 @@ export default function ApplicationDetails() {
     loadAllMasters();
   }, []);
 
-  const appData = getApplication(appId);
   const selectedProduct = loanProductOptions.find(p => p.value === appData.loanProduct);
   const requiresVariation = selectedProduct?.raw?.productCode === 'HL' || selectedProduct?.raw?.productCode === 'LAP';
   const variationOptions = useMemo(
@@ -448,7 +486,7 @@ export default function ApplicationDetails() {
                       placeholder={isLoadingMasters ? "Loading..." : "Select sourcing channel"}
                       options={sourcingChannelOptions}
                       icon={<UserCheck size={16} />}
-                      disabled={isLoadingMasters}
+                      disabled={isLoadingMasters || Boolean(displayRecord?.agentId || displayRecord?.AgentId || appData.isAgentSourced)}
                     />
                   </div>
                   {errors.sourcingChannel && <span className="ad-field-error">{errors.sourcingChannel}</span>}
