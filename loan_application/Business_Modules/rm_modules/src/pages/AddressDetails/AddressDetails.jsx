@@ -290,8 +290,12 @@ export default function AddressDetails() {
     try {
       for (const person of allPersons) {
         const personalInfoId = person.isPrimary
-          ? appData.registration?.personalInformation?.applicant?.personalInformationId
-          : appData.registration?.personalInformation?.coApplicants?.[person.index]?.personalInformationId;
+          ? appData.registration?.personalInformation?.applicant?.personalInformationId ||
+            appData.sections?.personalInformation?.applicant?.personalInformationId ||
+            appData.personalInformation?.applicant?.personalInformationId
+          : appData.registration?.personalInformation?.coApplicants?.[person.index]?.personalInformationId ||
+            appData.sections?.personalInformation?.coApplicants?.[person.index]?.personalInformationId ||
+            appData.personalInformation?.coApplicants?.[person.index]?.personalInformationId;
 
         if (!personalInfoId) {
           console.warn('No Personal Information ID found, skipping Address Details API save');

@@ -442,7 +442,7 @@ function AddCustomer() {
           loanPurposeId: Number(formData.loanPurposeId),
           expectedLoanAmount: Number(formData.expectedAmount),
           remarks: formData.remarks,
-          status: "Draft",
+          status: 0,
           isActive: true,
           createdBy: Number(agentId) // using agentId as createdBy
         }
