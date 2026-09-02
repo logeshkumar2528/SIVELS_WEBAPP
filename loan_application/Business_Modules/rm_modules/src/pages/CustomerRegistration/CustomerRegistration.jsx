@@ -10,6 +10,7 @@ import DatePicker from '../../components/DatePicker/DatePicker';
 import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
+import { getApplicantCount } from '../applicationWizard/flowUtils';
 import Modal from '../../components/Modal/Modal';
 import './CustomerRegistration.css';
 
@@ -69,11 +70,11 @@ function createEmptyPerson(overrides = {}) {
 }
 
 function buildPersonalInformationState(appData) {
-  const saved = appData.registration?.personalInformation || appData.registration || {};
+  const saved = appData.registration?.personalInformation || appData.sections?.personalInformation || appData.registration || {};
   const savedApplicant = saved.applicant || saved.primaryApplicant || {};
   const savedCoApplicants = Array.isArray(saved.coApplicants) ? saved.coApplicants : [];
   const applicantNameParts = splitFullName(savedApplicant.firstName || savedApplicant.fullName || appData.customerName || '');
-  const coApplicantCount = Number(appData.coApplicantsCount ?? saved.coApplicantsCount ?? 0);
+  const coApplicantCount = getApplicantCount(appData);
 
   const applicant = createEmptyPerson({
     personalInformationId: savedApplicant.personalInformationId || null,
@@ -130,6 +131,9 @@ function buildRegistrationPayload(form, baseData = {}) {
       primaryApplicant: form.applicant,
       coApplicants: form.coApplicants,
       coApplicantsCount: form.coApplicants.length,
+    },
+    sections: {
+      personalInformation: form,
     },
     customerName: applicantName || baseData.customerName || '',
     mobile: form.applicant.mobileNo || baseData.mobile || '',
@@ -507,13 +511,14 @@ export default function CustomerRegistration() {
   }, []);
 
   const appData = useMemo(() => getApplication(appId), [getApplication, appId]);
-  const coApplicantCount = Number(appData.coApplicantsCount || 0);
+  const coApplicantCount = getApplicantCount(appData);
   const applicationSteps = useMemo(() => APPLICATION_WIZARD_STEPS, []);
 
   useEffect(() => {
-    setForm(buildPersonalInformationState(appData));
+    ensureApplication(appId);
+    setForm(buildPersonalInformationState(getApplication(appId)));
     setErrors({});
-  }, [appId, appData]);
+  }, [appId, ensureApplication, getApplication]);
 
   const ArrowRightIcon = iconMap['ArrowRight'];
   const ArrowLeftIcon = iconMap['ArrowLeft'];
@@ -521,8 +526,9 @@ export default function CustomerRegistration() {
 
   const syncForm = (nextForm) => {
     setForm(nextForm);
+    const currentAppData = getApplication(appId);
     saveApplication(appId, {
-      ...buildRegistrationPayload(nextForm, appData),
+      ...buildRegistrationPayload(nextForm, currentAppData),
     });
   };
 
@@ -544,9 +550,9 @@ export default function CustomerRegistration() {
       return;
     }
 
-    const nextCoApplicants = form.coApplicants.map((person, currentIndex) => (
+    const nextCoApplicants = form.coApplicants.map((person, currentIndex) =>
       currentIndex === index ? { ...person, [field]: value } : person
-    ));
+    );
     const nextForm = {
       ...form,
       coApplicants: nextCoApplicants,
@@ -596,8 +602,8 @@ export default function CustomerRegistration() {
       for (const person of allPersons) {
         // Find corresponding KYC doc ID
         const kycDocId = person.isPrimary 
-          ? appData.kycDocuments?.applicant?.kycDocumentId 
-          : appData.kycDocuments?.coApplicants?.[person.index]?.kycDocumentId;
+          ? appData.kycDocuments?.applicant?.kycDocumentId || appData.sections?.kycDocuments?.applicant?.kycDocumentId
+          : appData.kycDocuments?.coApplicants?.[person.index]?.kycDocumentId || appData.sections?.kycDocuments?.coApplicants?.[person.index]?.kycDocumentId;
 
         if (!kycDocId) {
           console.warn('No KYC Document ID found for person, skipping API save');
@@ -668,6 +674,11 @@ export default function CustomerRegistration() {
 
       saveApplication(appId, {
         ...buildRegistrationPayload(finalForm, appData),
+        personalInformation: finalForm,
+        sections: {
+          ...(appData?.sections || {}),
+          personalInformation: finalForm,
+        },
       });
 
       navigate(ROUTES.ADDRESS_DETAILS.replace(':applicationId', appId));
