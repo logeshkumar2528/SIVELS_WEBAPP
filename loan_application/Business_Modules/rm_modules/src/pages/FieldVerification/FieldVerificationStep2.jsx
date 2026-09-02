@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Home, UserCheck, MapPin, IndianRupee, Upload, Image as ImageIcon, CheckCircle } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
@@ -10,6 +10,7 @@ import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
 import Modal from '../../components/Modal/Modal';
 import { buildSectionUpdate, getSectionState } from '../applicationWizard/flowUtils';
+import { findFirstApplication, loadApplicationHeader } from '../../services/applicationApi';
 
 const PROPERTY_TYPES = ['Residential', 'Commercial', 'Industrial'];
 const USAGE_TYPES = ['Self-Occupied', 'Vacant', 'Rented'];
@@ -142,14 +143,41 @@ function CollateralForm({ title, value, onChange, onViewGeo, isFetchingGeo, onFe
 
 export default function FieldVerificationStep2() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { applicationId } = useParams();
-  const appId = applicationId || 'APP-2024-001';
+  const queryApplicationId = new URLSearchParams(location.search).get('applicationId');
+  const requestedApplicationId = applicationId || queryApplicationId || location.state?.applicationId || '';
+  const [resolvedApplicationId, setResolvedApplicationId] = useState(requestedApplicationId);
+  const appId = resolvedApplicationId || '__field-verification-loading__';
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildCollateralState(getApplication(appId)));
   const [geoModalData, setGeoModalData] = useState(null);
   const [localGeoTagDataMap, setLocalGeoTagDataMap] = useState({});
   const [isFetchingGeoMap, setIsFetchingGeoMap] = useState({});
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [isLoadingApplication, setIsLoadingApplication] = useState(true);
+  const [applicationError, setApplicationError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    async function loadHeader() {
+      try {
+        const id = requestedApplicationId || await findFirstApplication();
+        const header = await loadApplicationHeader(id);
+        if (!active) return;
+        setResolvedApplicationId(String(id));
+        ensureApplication(String(id), header);
+        saveApplication(String(id), header);
+        setApplicationError('');
+      } catch (error) {
+        if (active) setApplicationError(error.message || 'Unable to load application data');
+      } finally {
+        if (active) setIsLoadingApplication(false);
+      }
+    }
+    loadHeader();
+    return () => { active = false; };
+  }, [requestedApplicationId, ensureApplication, saveApplication]);
 
   const handleFetchGeo = (idx) => {
     setIsFetchingGeoMap(prev => ({ ...prev, [idx]: true }));
@@ -222,7 +250,7 @@ export default function FieldVerificationStep2() {
   };
 
   const handleBack = () => {
-    navigate(ROUTES.FIELD_VERIFICATION);
+    navigate(ROUTES.FIELD_VERIFICATION_FOR_APPLICATION.replace(':applicationId', encodeURIComponent(appId)));
   };
 
   return (
@@ -237,7 +265,11 @@ export default function FieldVerificationStep2() {
       continueLabel="Finish Verification"
       onBack={handleBack}
       onContinue={handleContinue}
-      onStepClick={(step) => navigate(step.route.replace(':applicationId', appId))}
+      onStepClick={(step) => navigate(
+        step.id === 'collateral-verification'
+          ? ROUTES.FIELD_VERIFICATION_STEP2_FOR_APPLICATION.replace(':applicationId', encodeURIComponent(appId))
+          : ROUTES.FIELD_VERIFICATION_FOR_APPLICATION.replace(':applicationId', encodeURIComponent(appId)),
+      )}
       headerAction={
         <Button
           variant="secondary"
@@ -249,6 +281,8 @@ export default function FieldVerificationStep2() {
         </Button>
       }
     >
+      {isLoadingApplication && <div className="aw-inline-alert aw-inline-alert--amber">Loading applicant details from the API...</div>}
+      {applicationError && <div className="aw-inline-alert aw-inline-alert--red">{applicationError}</div>}
       {!collateralApplicable ? (
         <div className="aw-inline-alert aw-inline-alert--amber">
           {InfoIcon && <InfoIcon size={14} />}

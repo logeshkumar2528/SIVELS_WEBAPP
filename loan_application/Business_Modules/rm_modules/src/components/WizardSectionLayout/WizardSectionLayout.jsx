@@ -12,6 +12,14 @@ function getPrimaryBranch(appData) {
   return 'Pending Branch';
 }
 
+function formatSubmittedDate(value) {
+  if (!value) return 'Not submitted';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true,
+  });
+}
+
 export default function WizardSectionLayout({
   appId,
   appData,
@@ -94,7 +102,7 @@ export default function WizardSectionLayout({
               <span className="ad-meta-label">Submitted</span>
               <div className="ad-meta-value-group">
                 {iconMap['Calendar'] && (() => { const Calendar = iconMap['Calendar']; return <Calendar size={14} />; })()}
-                <span className="ad-meta-value">{`${appData.createdDate || 'Today'}, 10:25 AM`}</span>
+                <span className="ad-meta-value">{formatSubmittedDate(appData.createdDate)}</span>
               </div>
             </div>
             {metaAction && (

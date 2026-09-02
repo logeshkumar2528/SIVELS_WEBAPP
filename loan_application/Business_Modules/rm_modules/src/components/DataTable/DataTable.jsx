@@ -9,11 +9,12 @@ const DataTable = memo(function DataTable({
   loading = false,
   emptyMessage = 'No records found.',
   rowKeyField = 'id',
+  className = '',
 }) {
   const isEmpty = !loading && data.length === 0;
 
   return (
-    <div className="data-table-wrapper" role="region" aria-label="Data table">
+    <div className={`data-table-wrapper ${className}`.trim()} role="region" aria-label="Data table">
       <div className="data-table-scroll">
         <table className="data-table">
           <thead className="data-table-head">

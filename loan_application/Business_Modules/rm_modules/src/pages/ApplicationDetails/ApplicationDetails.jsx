@@ -79,6 +79,43 @@ function buildApplicationDisplayId(record = {}, fallbackId = '') {
   return serialTail ? `${prefix}-${serialTail}` : prefix;
 }
 
+function isFieldAgentChannel(option) {
+  const raw = option?.raw || {};
+  const code = String(
+    raw.sourcingChannelCode || raw.SourcingChannelCode || ''
+  ).trim().toLowerCase().replace(/[\s_-]/g, '');
+  const name = String(option?.label || '').trim().toLowerCase();
+  const normalizedName = name.replace(/[\s_-]/g, '');
+
+  return code === 'fa' || code === 'fieldagent' ||
+    name.includes('field agent') || normalizedName.includes('fieldagent');
+}
+
+function normalizeApplicationStatus(status, statusName = '') {
+  const namedStatus = String(statusName || '').trim().toLowerCase();
+  if (namedStatus.includes('approved')) return 'Approved';
+  if (namedStatus.includes('pending')) return 'Pending';
+  if (namedStatus.includes('returned')) return 'Returned';
+  if (namedStatus.includes('review')) return 'Under Review';
+
+  const numericStatus = Number(status);
+  if (numericStatus === 2) return 'Approved';
+  if (numericStatus === 1) return 'Pending';
+  return 'New';
+}
+
+async function updateCustomerStatus(baseUrl, customerId, status) {
+  const response = await fetch(`${baseUrl}/AgentAddCustomer/${customerId}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to update application status (${response.status})`);
+  }
+}
+
 function validateApplication(record) {
   return {};
 }
@@ -127,6 +164,8 @@ export default function ApplicationDetails() {
         if (active && record) {
           setDisplayRecord(record);
           setAgentBranch('');
+          const currentStatus = normalizeApplicationStatus(record.status, record.statusName || record.StatusName);
+          const isApprovedBeingEdited = currentStatus === 'Approved';
           saveApplication(appId, {
             agentCustomerId: record.agentCustomerId || record.AgentCustomerId || appId,
             agentId: record.agentId || record.AgentId || '',
@@ -136,12 +175,21 @@ export default function ApplicationDetails() {
             loanType: record.loanPurposeName || record.loanType || '',
             amount: record.expectedLoanAmount !== undefined ? `Rs. ${Number(record.expectedLoanAmount).toLocaleString('en-IN')}` : (record.amount || ''),
             agentName: record.agentName || '',
+            isAgentSourced: Boolean(record.agentId || record.AgentId),
             createdDate: record.createdAt || record.createdDate || '',
-            status: record.status === 'Draft' ? 'New' : (record.status || 'New'),
+            status: isApprovedBeingEdited ? 'Pending' : currentStatus,
             branch: record.branch || '',
             purposeOfLoan: record.loanPurposeId || record.purposeOfLoan || '',
             loanAmount: record.expectedLoanAmount ?? '',
           });
+
+          if (isApprovedBeingEdited) {
+            try {
+              await updateCustomerStatus(baseUrl, appId, 'Pending');
+            } catch (statusError) {
+              console.error('Failed to mark application as pending while editing:', statusError);
+            }
+          }
 
           const agentId = record.agentId || record.AgentId;
           if (agentId) {
@@ -182,6 +230,32 @@ export default function ApplicationDetails() {
     };
   }, [appId, saveApplication]);
 
+  // Customers created by a field agent must always use the Field Agent
+  // sourcing channel. Resolve the ID from the master table instead of
+  // hard-coding a database identity.
+  const appData = getApplication(appId);
+
+  useEffect(() => {
+    const agentId = displayRecord?.agentId || displayRecord?.AgentId || appData.agentId;
+    if (!agentId || sourcingChannelOptions.length === 0) {
+      return;
+    }
+
+    const fieldAgentChannel = sourcingChannelOptions.find(isFieldAgentChannel);
+    if (!fieldAgentChannel) {
+      console.warn('Field Agent sourcing channel was not found in the master data.');
+      return;
+    }
+
+    if (String(appData.sourcingChannel) !== String(fieldAgentChannel.value)) {
+      saveApplication(appId, {
+        sourcingChannel: fieldAgentChannel.value,
+        sourcingChannelDisplay: fieldAgentChannel.label,
+        isAgentSourced: true,
+      });
+    }
+  }, [appId, appData.agentId, appData.sourcingChannel, displayRecord, saveApplication, sourcingChannelOptions]);
+
   useEffect(() => {
     async function fetchMasterData(endpoint, idField, nameField, setOptionsState) {
       try {
@@ -217,7 +291,6 @@ export default function ApplicationDetails() {
     loadAllMasters();
   }, []);
 
-  const appData = getApplication(appId);
   const selectedProduct = loanProductOptions.find(p => p.value === appData.loanProduct);
   const requiresVariation = selectedProduct?.raw?.productCode === 'HL' || selectedProduct?.raw?.productCode === 'LAP';
   const variationOptions = useMemo(
@@ -340,7 +413,6 @@ export default function ApplicationDetails() {
       }
 
       saveApplication(appId, { 
-        status: 'Pending Verification',
         applicationProductDetailsId: savedData.applicationProductDetailsId || savedData.ApplicationProductDetailsId || appData.applicationProductDetailsId
       });
       navigate(ROUTES.KYC_DOCUMENTS.replace(':applicationId', appId));
@@ -448,7 +520,7 @@ export default function ApplicationDetails() {
                       placeholder={isLoadingMasters ? "Loading..." : "Select sourcing channel"}
                       options={sourcingChannelOptions}
                       icon={<UserCheck size={16} />}
-                      disabled={isLoadingMasters}
+                      disabled={isLoadingMasters || Boolean(displayRecord?.agentId || displayRecord?.AgentId || appData.isAgentSourced)}
                     />
                   </div>
                   {errors.sourcingChannel && <span className="ad-field-error">{errors.sourcingChannel}</span>}
