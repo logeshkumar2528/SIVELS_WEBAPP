@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { Percent, Save } from 'lucide-react';
 import { MasterModal } from '../../../components/masters/MasterModal/MasterModal';
 import { createInterestType, updateInterestType, getInterestTypeById } from '../../../api/masters/interestTypeApi';
 import { getCurrentUserId } from '../../../utils/authHelper';
@@ -130,6 +131,8 @@ export function InterestTypeForm({ isOpen, onClose, onSuccess, initialData }) {
       isOpen={isOpen} 
       onClose={onClose} 
       title={isEdit ? 'Edit Interest Type' : 'Add Interest Type'}
+      subtitle="Enter the interest type details below."
+      icon={<Percent size={24} />}
     >
       <form onSubmit={handleSubmit} className="interest-type-form">
         <div className="form-group">
@@ -148,6 +151,7 @@ export function InterestTypeForm({ isOpen, onClose, onSuccess, initialData }) {
             placeholder="e.g. Fixed Rate"
             disabled={isSubmitting}
           />
+          {!error && <span className="form-helper-text">Enter a descriptive name for the interest type.</span>}
           {error && <span className="form-error-msg">{error}</span>}
         </div>
 
@@ -167,6 +171,7 @@ export function InterestTypeForm({ isOpen, onClose, onSuccess, initialData }) {
             placeholder="e.g. FI"
             disabled={isSubmitting}
           />
+          <span className="form-helper-text">Enter a short code for the interest type.</span>
         </div>
 
         <MasterStatusCheckbox 
@@ -181,6 +186,7 @@ export function InterestTypeForm({ isOpen, onClose, onSuccess, initialData }) {
             className="masters-btn-secondary" 
             onClick={onClose}
             disabled={isSubmitting}
+            style={{ padding: '0.625rem 1.5rem' }}
           >
             Cancel
           </button>
@@ -188,7 +194,9 @@ export function InterestTypeForm({ isOpen, onClose, onSuccess, initialData }) {
             type="submit" 
             className="masters-btn-primary"
             disabled={isSubmitting}
+            style={{ padding: '0.625rem 1.5rem' }}
           >
+            <Save size={18} />
             {isSubmitting ? 'Saving...' : 'Save'}
           </button>
         </div>

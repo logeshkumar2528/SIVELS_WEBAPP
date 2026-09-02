@@ -1,6 +1,15 @@
 import './MasterFilter.css';
 
-export function MasterFilter({ value, onChange, options }) {
+const DEFAULT_OPTIONS = [
+  { value: 'All', label: 'All Status' },
+  { value: 'Active', label: 'Active' },
+  { value: 'Inactive', label: 'Inactive' }
+];
+
+export function MasterFilter({ value, onChange, options = DEFAULT_OPTIONS }) {
+  // Ensure options is always an array
+  const safeOptions = Array.isArray(options) ? options : DEFAULT_OPTIONS;
+
   return (
     <div className="master-filter">
       <select
@@ -9,7 +18,7 @@ export function MasterFilter({ value, onChange, options }) {
         onChange={(e) => onChange(e.target.value)}
         aria-label="Filter status"
       >
-        {options.map((opt) => (
+        {safeOptions.map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}
           </option>

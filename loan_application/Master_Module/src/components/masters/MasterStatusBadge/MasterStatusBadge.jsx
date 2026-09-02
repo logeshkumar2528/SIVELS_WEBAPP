@@ -11,6 +11,7 @@ export function MasterStatusBadge({ status }) {
         'master-status-badge--inactive': !isActive,
       })}
     >
+      <span className="master-status-badge-dot"></span>
       {isActive ? 'Active' : 'Inactive'}
     </span>
   );

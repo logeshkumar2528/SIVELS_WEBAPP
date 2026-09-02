@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { MasterModal } from '../../../components/masters/MasterModal/MasterModal';
 import { createDocumentType, updateDocumentType, getDocumentTypeById } from '../../../api/masters/documentTypeApi';
+import { getEmploymentTypes } from '../../../api/masters/employmentTypeApi';
 import { getCurrentUserId } from '../../../utils/authHelper';
 import { getErrorMessage } from '../../../utils/errorHelper';
 import { MasterStatusCheckbox } from '../../../components/masters/MasterStatusCheckbox/MasterStatusCheckbox';
@@ -11,6 +12,7 @@ export function DocumentTypeForm({ isOpen, onClose, onSuccess, initialData }) {
   const defaultFormState = {
     documentTypeName: '',
     documentTypeCode: '',
+    employmentTypeId: '',
     isActive: true
   };
 
@@ -19,6 +21,7 @@ export function DocumentTypeForm({ isOpen, onClose, onSuccess, initialData }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [employmentTypes, setEmploymentTypes] = useState([]);
 
   const isEdit = Boolean(initialData);
 
@@ -42,6 +45,7 @@ export function DocumentTypeForm({ isOpen, onClose, onSuccess, initialData }) {
             setFormData({
               documentTypeName: record.documentTypeName || '',
               documentTypeCode: record.documentTypeCode || '',
+              employmentTypeId: record.employmentTypeId || initialData.employmentTypeId || '',
               isActive: record.isActive !== false
             });
           }
@@ -66,6 +70,28 @@ export function DocumentTypeForm({ isOpen, onClose, onSuccess, initialData }) {
       isMounted = false;
     };
   }, [isOpen, initialData, onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let isMounted = true;
+    const loadEmploymentTypes = async () => {
+      try {
+        const response = await getEmploymentTypes();
+        const records = Array.isArray(response) ? response : (response?.data || response?.value || []);
+        if (isMounted) setEmploymentTypes(records);
+      } catch (err) {
+        if (isMounted) {
+          const message = getErrorMessage(err, 'Unable to load employment types.');
+          setError(message);
+          toast.error(message);
+        }
+      }
+    };
+
+    loadEmploymentTypes();
+    return () => { isMounted = false; };
+  }, [isOpen]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -92,6 +118,11 @@ export function DocumentTypeForm({ isOpen, onClose, onSuccess, initialData }) {
       toast.error('Document Type Code is required');
       return;
     }
+    if (!formData.employmentTypeId) {
+      setError('Employment type is required.');
+      toast.error('Employment type is required.');
+      return;
+    }
 
     setError(null);
     setIsSubmitting(true);
@@ -102,6 +133,7 @@ export function DocumentTypeForm({ isOpen, onClose, onSuccess, initialData }) {
           documentTypeId: initialData.documentTypeId,
           documentTypeName: trimmedName,
           documentTypeCode: trimmedCode,
+          employmentTypeId: Number(formData.employmentTypeId),
           isActive: Boolean(formData.isActive),
           modifiedBy: Number(getCurrentUserId()) || 1
         };
@@ -112,6 +144,7 @@ export function DocumentTypeForm({ isOpen, onClose, onSuccess, initialData }) {
         const payload = {
           documentTypeCode: trimmedCode,
           documentTypeName: trimmedName,
+          employmentTypeId: Number(formData.employmentTypeId),
           isActive: Boolean(formData.isActive),
           createdBy: Number(getCurrentUserId()) || 1
         };
@@ -175,6 +208,29 @@ export function DocumentTypeForm({ isOpen, onClose, onSuccess, initialData }) {
             autoComplete="off"
           />
           {error && error.includes('Name') && <span className="form-error-msg">{error}</span>}
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="employmentTypeId" className="form-label">
+            Employment Type <span className="text-danger">*</span>
+          </label>
+          <select
+            id="employmentTypeId"
+            name="employmentTypeId"
+            className={`form-input ${error && error.toLowerCase().includes('employment') ? 'form-input-error' : ''}`}
+            value={formData.employmentTypeId}
+            onChange={handleChange}
+            disabled={isSubmitting || employmentTypes.length === 0}
+            required
+          >
+            <option value="">Select Employment Type</option>
+            {employmentTypes.map((item) => (
+              <option key={item.employmentTypeId} value={item.employmentTypeId}>
+                {item.employmentTypeName}
+              </option>
+            ))}
+          </select>
+          {error && error.toLowerCase().includes('employment') && <span className="form-error-msg">{error}</span>}
         </div>
 
         <div className="form-group">

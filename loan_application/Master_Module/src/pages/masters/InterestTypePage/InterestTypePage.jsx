@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, RefreshCw } from 'lucide-react';
+import { RefreshCw, Calendar, Percent } from 'lucide-react';
 import { MasterTable } from '../../../components/masters/MasterTable/MasterTable';
 import { MasterSearch } from '../../../components/masters/MasterSearch/MasterSearch';
 import { MasterFilter } from '../../../components/masters/MasterFilter/MasterFilter';
@@ -11,20 +11,33 @@ import { InterestTypeDeleteConfirm } from './InterestTypeDeleteConfirm';
 import { formatDateTime } from '../../../utils/dateHelper';
 import './InterestTypePage.css';
 
-const PAGE_SIZE = 10;
 
 const COLUMNS = [
-  { key: 'interestTypeCode', label: 'Code' },
+  { 
+    key: 'interestTypeCode', 
+    label: 'Code',
+    render: (row) => <span className="text-code-green">{row.interestTypeCode}</span>
+  },
   { key: 'interestTypeName', label: 'Interest Type' },
   { 
     key: 'createdDate', 
     label: 'Created Date',
-    render: (row) => formatDateTime(row.createdDate)
+    render: (row) => (
+      <div className="table-date-cell">
+        <Calendar size={14} className="table-date-icon" />
+        <span>{formatDateTime(row.createdDate) || '—'}</span>
+      </div>
+    )
   },
   { 
     key: 'modifiedDate', 
     label: 'Modified Date',
-    render: (row) => formatDateTime(row.modifiedDate)
+    render: (row) => (
+      <div className="table-date-cell">
+        {row.modifiedDate ? <Calendar size={14} className="table-date-icon" /> : null}
+        <span>{formatDateTime(row.modifiedDate) || '—'}</span>
+      </div>
+    )
   },
   { 
     key: 'isActive', 
@@ -47,6 +60,7 @@ export function InterestTypePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Form State
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -95,11 +109,11 @@ export function InterestTypePage() {
   }, [data, searchTerm, filterStatus]);
 
   // Client-side pagination
-  const totalPages = Math.ceil(filteredData.length / PAGE_SIZE) || 1;
+  const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
   const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return filteredData.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [filteredData, currentPage]);
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredData.slice(startIndex, startIndex + pageSize);
+  }, [filteredData, currentPage, pageSize]);
 
   // Reset to first page when search or filter changes
   useEffect(() => {
@@ -133,6 +147,9 @@ export function InterestTypePage() {
   return (
     <div className="masters-page">
       <header className="masters-page-header">
+        <div className="masters-page-header-icon">
+          <Percent size={24} />
+        </div>
         <div>
           <h1 className="masters-page-title">Interest Types</h1>
           <p className="masters-page-description">
@@ -157,7 +174,7 @@ export function InterestTypePage() {
           />
           <button 
             type="button" 
-            className="masters-btn-secondary" 
+            className="masters-btn-secondary icon-btn" 
             onClick={fetchInterestTypes}
             title="Refresh records"
             disabled={isLoading}
@@ -169,7 +186,7 @@ export function InterestTypePage() {
             className="masters-btn-primary" 
             onClick={handleAdd}
           >
-            <Plus size={18} />
+            <Percent size={18} />
             <span>Add Interest Type</span>
           </button>
         </div>
@@ -190,6 +207,9 @@ export function InterestTypePage() {
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
+            totalItems={filteredData.length}
+            pageSize={pageSize}
+            onPageSizeChange={(newSize) => { setPageSize(newSize); setCurrentPage(1); }}
           />
         )}
       </div>

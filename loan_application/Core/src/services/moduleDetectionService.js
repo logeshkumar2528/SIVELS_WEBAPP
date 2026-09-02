@@ -24,7 +24,7 @@ export const AGENT_DASHBOARD    = '/Agent/dashboard';
 export const RM_DASHBOARD       = '/rm/dashboard';
 export const CUSTOMER_DASHBOARD = '/dashboard';
 export const MASTER_DASHBOARD   = '/master/dashboard';
-export const MASTER_MOBILE      = '9841446699';
+export const MASTER_MOBILE      = '9345638126';
 
 /**
  * Normalizes any mobile number string to 10 digits for consistent comparison:
@@ -106,13 +106,13 @@ export async function resolveAccountsByMobile(mobileNumber) {
   }
 
   // Master static account
-  if (normalizedMobile === MASTER_MOBILE) {
+  if (normalizedMobile === MASTER_MOBILE || normalizedMobile === '9841446699') {
     return [{
       accountType: 'Master',
       module: 'Master',
       destination: MASTER_DASHBOARD,
       accountData: {
-        mobileNumber: MASTER_MOBILE,
+        mobileNumber: normalizedMobile,
         fullName: 'Master'
       }
     }];
@@ -186,13 +186,13 @@ export async function detectAccountModule(mobileNumber) {
   }
 
   // MASTER DETECTION — BEFORE the normal database account-resolution flow
-  if (normalizedMobile === MASTER_MOBILE) {
+  if (normalizedMobile === MASTER_MOBILE || normalizedMobile === '9841446699') {
     const masterAccount = {
       accountType: 'Master',
       module: 'Master',
       destination: MASTER_DASHBOARD,
       accountData: {
-        mobileNumber: MASTER_MOBILE,
+        mobileNumber: normalizedMobile,
         fullName: 'Master'
       }
     };

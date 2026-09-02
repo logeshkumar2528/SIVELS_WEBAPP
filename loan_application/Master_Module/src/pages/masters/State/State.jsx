@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, RefreshCw, Edit, Trash2 } from 'lucide-react';
+import { RefreshCw, Edit, Trash2, Map } from 'lucide-react';
 import { MasterTable } from '../../../components/masters/MasterTable/MasterTable';
 import { MasterSearch } from '../../../components/masters/MasterSearch/MasterSearch';
 import { MasterFilter } from '../../../components/masters/MasterFilter/MasterFilter';
@@ -12,7 +12,6 @@ import { StateDeleteConfirm } from './StateDeleteConfirm';
 import { formatDateTime } from '../../../utils/dateHelper';
 import './State.css';
 
-const PAGE_SIZE = 10;
 
 const COLUMNS = [
   { key: 'stateCode', label: 'State Code' },
@@ -49,6 +48,7 @@ export function State() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Form State
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -113,14 +113,14 @@ export function State() {
   }, [states, searchTerm, filterStatus]);
 
   // Client-side pagination
-  const totalPages = Math.ceil(filteredData.length / PAGE_SIZE) || 1;
+  const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
   const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return filteredData.slice(startIndex, startIndex + PAGE_SIZE).map(item => ({
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredData.slice(startIndex, startIndex + pageSize).map(item => ({
       ...item,
       id: item.stateId // Ensure MasterTable has an id prop
     }));
-  }, [filteredData, currentPage]);
+  }, [filteredData, currentPage, pageSize]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -152,7 +152,10 @@ export function State() {
   return (
     <div className="masters-page">
       <header className="masters-page-header">
-        <div>
+        <div className="masters-page-header-icon">
+            <Map size={24} />
+          </div>
+          <div>
           <h1 className="masters-page-title">State</h1>
           <p className="masters-page-description">
             Manage state configuration.
@@ -188,7 +191,7 @@ export function State() {
             className="masters-btn-primary" 
             onClick={handleAdd}
           >
-            <Plus size={18} />
+            <Map size={18} />
             <span>Add State</span>
           </button>
         </div>
@@ -209,6 +212,9 @@ export function State() {
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
+            totalItems={filteredData.length}
+            pageSize={pageSize}
+            onPageSizeChange={(newSize) => { setPageSize(newSize); setCurrentPage(1); }}
           />
         )}
       </div>

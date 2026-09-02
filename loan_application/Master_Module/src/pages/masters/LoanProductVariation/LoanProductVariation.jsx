@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Plus, RefreshCw } from 'lucide-react';
+import { RefreshCw, Layers } from 'lucide-react';
 import { MasterTable } from '../../../components/masters/MasterTable/MasterTable';
 import { MasterSearch } from '../../../components/masters/MasterSearch/MasterSearch';
 import { MasterFilter } from '../../../components/masters/MasterFilter/MasterFilter';
@@ -10,7 +10,6 @@ import { LoanProductVariationDeleteConfirm } from './LoanProductVariationDeleteC
 import { getLoanProductVariations } from '../../../api/masters/loanProductVariationApi';
 import { getLoanProducts } from '../../../api/masters/loanProductApi';
 
-const PAGE_SIZE = 10;
 
 const formatDisplayDate = (val) => {
   if (!val) return '—';
@@ -64,6 +63,7 @@ export function LoanProductVariation() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Form State
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -134,14 +134,14 @@ export function LoanProductVariation() {
   }, [data, searchTerm, filterStatus]);
 
   // Client-side pagination
-  const totalPages = Math.ceil(filteredData.length / PAGE_SIZE) || 1;
+  const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
   const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return filteredData.slice(startIndex, startIndex + PAGE_SIZE).map(item => ({
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredData.slice(startIndex, startIndex + pageSize).map(item => ({
       ...item,
       id: item.loanProductVariationId
     }));
-  }, [filteredData, currentPage]);
+  }, [filteredData, currentPage, pageSize]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -169,7 +169,10 @@ export function LoanProductVariation() {
   return (
     <div className="masters-page">
       <header className="masters-page-header">
-        <div>
+        <div className="masters-page-header-icon">
+            <Layers size={24} />
+          </div>
+          <div>
           <h1 className="masters-page-title">Loan Product Variations</h1>
           <p className="masters-page-description">
             Manage loan product variation configuration.
@@ -205,7 +208,7 @@ export function LoanProductVariation() {
             className="masters-btn-primary" 
             onClick={handleAdd}
           >
-            <Plus size={18} />
+            <Layers size={18} />
             <span>Add Variation</span>
           </button>
         </div>
@@ -230,10 +233,13 @@ export function LoanProductVariation() {
             
             {!isLoading && !isError && filteredData.length > 0 && (
               <MasterPagination 
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-              />
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={filteredData.length}
+            pageSize={pageSize}
+            onPageSizeChange={(newSize) => { setPageSize(newSize); setCurrentPage(1); }}
+          />
             )}
           </>
         )}

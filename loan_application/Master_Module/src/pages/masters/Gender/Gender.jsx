@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, RefreshCw, Edit, Trash2 } from 'lucide-react';
+import { RefreshCw, Edit, Trash2, User } from 'lucide-react';
 import { MasterTable } from '../../../components/masters/MasterTable/MasterTable';
 import { MasterSearch } from '../../../components/masters/MasterSearch/MasterSearch';
 import { MasterFilter } from '../../../components/masters/MasterFilter/MasterFilter';
@@ -11,7 +11,6 @@ import { GenderDeleteConfirm } from './GenderDeleteConfirm';
 import { formatDateTime } from '../../../utils/dateHelper';
 import './Gender.css';
 
-const PAGE_SIZE = 10;
 
 const COLUMNS = [
   { key: 'genderCode', label: 'Gender Code' },
@@ -47,6 +46,7 @@ export function Gender() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Form State
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -104,11 +104,11 @@ export function Gender() {
   }, [genders, searchTerm, filterStatus]);
 
   // Client-side pagination
-  const totalPages = Math.ceil(filteredGenders.length / PAGE_SIZE) || 1;
+  const totalPages = Math.ceil(filteredGenders.length / pageSize) || 1;
   const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return filteredGenders.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [filteredGenders, currentPage]);
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredGenders.slice(startIndex, startIndex + pageSize);
+  }, [filteredGenders, currentPage, pageSize]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -140,7 +140,10 @@ export function Gender() {
   return (
     <div className="masters-page">
       <header className="masters-page-header">
-        <div>
+        <div className="masters-page-header-icon">
+            <User size={24} />
+          </div>
+          <div>
           <h1 className="masters-page-title">Gender</h1>
           <p className="masters-page-description">
             Manage gender configuration.
@@ -176,7 +179,7 @@ export function Gender() {
             className="masters-btn-primary" 
             onClick={handleAdd}
           >
-            <Plus size={18} />
+            <User size={18} />
             <span>Add Gender</span>
           </button>
         </div>
@@ -250,6 +253,9 @@ export function Gender() {
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
+            totalItems={filteredGenders.length}
+            pageSize={pageSize}
+            onPageSizeChange={(newSize) => { setPageSize(newSize); setCurrentPage(1); }}
           />
         )}
       </div>

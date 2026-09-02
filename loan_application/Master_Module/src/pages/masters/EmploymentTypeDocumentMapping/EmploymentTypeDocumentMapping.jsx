@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { RefreshCw, Plus } from 'lucide-react';
+import { RefreshCw, Link } from 'lucide-react';
 import { MasterTable } from '../../../components/masters/MasterTable/MasterTable';
 import { MasterStatusBadge } from '../../../components/masters/MasterStatusBadge/MasterStatusBadge';
 import { getEmploymentTypes } from '../../../api/masters/employmentTypeApi';
@@ -114,7 +114,10 @@ export function EmploymentTypeDocumentMapping() {
   return (
     <div className="masters-page">
       <header className="masters-page-header">
-        <div>
+        <div className="masters-page-header-icon">
+            <Link size={24} />
+          </div>
+          <div>
           <h1 className="masters-page-title">Employment Type Document Mapping</h1>
           <p className="masters-page-description">
             Configure documents and verification requirements for each employment type.
@@ -154,7 +157,7 @@ export function EmploymentTypeDocumentMapping() {
             onClick={handleAdd}
             disabled={!selectedEmploymentTypeId}
           >
-            <Plus size={18} />
+            <Link size={18} />
             <span>Assign Document</span>
           </button>
         </div>

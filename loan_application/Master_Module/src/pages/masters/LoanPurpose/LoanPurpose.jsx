@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, RefreshCw } from 'lucide-react';
+import { RefreshCw, Target } from 'lucide-react';
 import { MasterTable } from '../../../components/masters/MasterTable/MasterTable';
 import { MasterSearch } from '../../../components/masters/MasterSearch/MasterSearch';
 import { MasterFilter } from '../../../components/masters/MasterFilter/MasterFilter';
@@ -12,7 +12,6 @@ import { LoanPurposeDeleteConfirm } from './LoanPurposeDeleteConfirm';
 import { formatDateTime } from '../../../utils/dateHelper';
 import './LoanPurpose.css';
 
-const PAGE_SIZE = 10;
 
 const FILTER_OPTIONS = [
   { value: 'All', label: 'All Status' },
@@ -29,6 +28,7 @@ export function LoanPurpose() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Form State
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -98,11 +98,11 @@ export function LoanPurpose() {
   }, [enrichedData, searchTerm, filterStatus]);
 
   // Client-side pagination
-  const totalPages = Math.ceil(filteredData.length / PAGE_SIZE) || 1;
+  const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
   const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return filteredData.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [filteredData, currentPage]);
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredData.slice(startIndex, startIndex + pageSize);
+  }, [filteredData, currentPage, pageSize]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -155,7 +155,10 @@ export function LoanPurpose() {
   return (
     <div className="masters-page">
       <header className="masters-page-header">
-        <div>
+        <div className="masters-page-header-icon">
+            <Target size={24} />
+          </div>
+          <div>
           <h1 className="masters-page-title">Loan Purposes</h1>
           <p className="masters-page-description">
             Manage loan purpose configuration.
@@ -191,7 +194,7 @@ export function LoanPurpose() {
             className="masters-btn-primary" 
             onClick={handleAdd}
           >
-            <Plus size={18} />
+            <Target size={18} />
             <span>Add Loan Purpose</span>
           </button>
         </div>
@@ -212,6 +215,9 @@ export function LoanPurpose() {
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
+            totalItems={filteredData.length}
+            pageSize={pageSize}
+            onPageSizeChange={(newSize) => { setPageSize(newSize); setCurrentPage(1); }}
           />
         )}
       </div>
