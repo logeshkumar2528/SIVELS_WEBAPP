@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Users, ClipboardList, Send, Banknote } from 'lucide-react'
+import { Users, ClipboardList, Send, Banknote, Building2 } from 'lucide-react'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import './StatCards.css'
@@ -30,8 +30,12 @@ function StatCards() {
   const today = new Date().toISOString().split('T')[0]
   const todayCustomers = customers.filter(c => (c.createdAt || '').startsWith(today)).length
   const pendingToRm = customers.filter(c => {
-    const s = (c.status || '').toLowerCase()
+    const s = String(c.status ?? '').toLowerCase()
     return s.includes('pending') || s.includes('draft')
+  }).length
+  const pendingToBackoffice = customers.filter(c => {
+    const status = String(c.status ?? '').toLowerCase()
+    return status.includes('approved') || status.includes('backoffice') || status.includes('back office')
   }).length
   const totalSubmitted = customers.length
 
@@ -41,7 +45,6 @@ function StatCards() {
       title: "Today's Customers",
       value: loading ? '...' : todayCustomers.toString(),
       label: 'Customers added today',
-      trend: 'Derived from API',
       theme: 'green',
       icon: Users,
     },
@@ -50,7 +53,6 @@ function StatCards() {
       title: 'Pending to RM',
       value: loading ? '...' : pendingToRm.toString(),
       label: 'Waiting for RM review',
-      trend: 'Derived from API',
       theme: 'yellow',
       icon: ClipboardList,
     },
@@ -59,18 +61,25 @@ function StatCards() {
       title: 'Total Submitted',
       value: loading ? '...' : totalSubmitted.toString(),
       label: 'Total customers submitted',
-      trend: 'Derived from API',
       theme: 'blue',
       icon: Send,
     },
     {
       id: 'pending-loans',
-      title: 'Pending Loans',
+      title: 'EMI Pending',
       value: '30', // Leave as is for now
       label: 'Loans pending collection',
       trend: '> View Details',
       theme: 'red',
       icon: Banknote,
+    },
+    {
+      id: 'pending-backoffice',
+      title: 'Pending to Backoffice',
+      value: loading ? '...' : pendingToBackoffice.toString(),
+      label: 'Waiting for Backoffice review',
+      theme: 'blue',
+      icon: Building2,
     },
   ]
 
@@ -90,9 +99,11 @@ function StatCards() {
               </div>
             </div>
             <div className="stat-card-label">{stat.label}</div>
-            <div className={`stat-card-trend stat-card-trend--${stat.theme}`}>
-              {stat.trend}
-            </div>
+            {stat.trend && (
+              <div className={`stat-card-trend stat-card-trend--${stat.theme}`}>
+                {stat.trend}
+              </div>
+            )}
           </div>
         )
       })}

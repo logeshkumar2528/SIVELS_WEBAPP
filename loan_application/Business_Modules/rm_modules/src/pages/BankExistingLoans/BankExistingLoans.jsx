@@ -226,7 +226,7 @@ export default function BankExistingLoans() {
     setTransientLoans(prev => {
       const currentLoans = prev[key] ? [...prev[key]] : [];
       if (!currentLoans[loanIndex]) {
-        currentLoans[loanIndex] = { purpose: '', totalAmount: '', pending: '', status: '' };
+        currentLoans[loanIndex] = { purpose: '', totalAmount: '', pending: '', emis: '', status: '' };
       }
       currentLoans[loanIndex] = { ...currentLoans[loanIndex], [field]: value };
       return { ...prev, [key]: currentLoans };
@@ -409,7 +409,7 @@ export default function BankExistingLoans() {
                   <div style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>Loan {i + 1}</div>
                   
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, textTransform: 'uppercase' }}>Purpose</span>
+                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, textTransform: 'uppercase' }}>Type Loan</span>
                     <input 
                       type="text"
                       className="form-input compact-input"
@@ -420,9 +420,9 @@ export default function BankExistingLoans() {
                     />
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, textTransform: 'uppercase' }}>Total Amount</span>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, textTransform: 'uppercase' }}>Total Loan Amount</span>
                       <input 
                         type="text"
                         className="form-input compact-input"
@@ -433,7 +433,7 @@ export default function BankExistingLoans() {
                       />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, textTransform: 'uppercase' }}>Pending</span>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, textTransform: 'uppercase' }}>Total Outstanding</span>
                       <input 
                         type="text"
                         className="form-input compact-input"
@@ -441,6 +441,17 @@ export default function BankExistingLoans() {
                         placeholder="₹"
                         value={loan.pending || ''}
                         onChange={(e) => updateLoanDetail(i, 'pending', e.target.value.replace(/\D/g, ''))}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, textTransform: 'uppercase' }}>EMIs</span>
+                      <input
+                        type="text"
+                        className="form-input compact-input"
+                        style={{ background: '#fff' }}
+                        placeholder="₹"
+                        value={loan.emis || ''}
+                        onChange={(e) => updateLoanDetail(i, 'emis', e.target.value.replace(/\D/g, ''))}
                       />
                     </div>
                   </div>
