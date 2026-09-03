@@ -362,7 +362,10 @@ export default function PdfView() {
   const resolveMaritalStatus = (val) => masterMaps.maritalStatuses[val] || val || '';
   const resolveRelationship = (val) => masterMaps.relationships[val] || val || '';
   const resolveDocType = (val) => masterMaps.documentTypes[val] || val || '';
-  const resolveVerification = (val) => masterMaps.verifications[val] || val || '';
+  const resolveVerification = (val) => masterMaps.verifications[val] || val || 'Verified';
+  const resolveBank = (val) => masterMaps.banks[val] || val || '';
+  const resolveProperty = (val) => masterMaps.properties[val] || val || '';
+  const resolveEmploymentType = (val) => masterMaps.employmentTypes[val] || val || '';
 
   // Dynamic Co-Applicants Resolution using standard helper
   const applicantCount = getApplicantCount(appData);
