@@ -123,6 +123,7 @@ export default function Declaration() {
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [otpStep, setOtpStep] = useState('initial');
   const [otpValue, setOtpValue] = useState('');
+  const [isFinalizing, setIsFinalizing] = useState(false);
 
   useEffect(() => {
     ensureApplication(appId);
@@ -212,22 +213,56 @@ export default function Declaration() {
   };
 
   const finalizeSubmit = async () => {
+    if (isFinalizing) return;
+    setIsFinalizing(true);
+
     try {
-      const response = await fetch(`${API_BASE}/AgentAddCustomer/${appId}/status`, {
-        method: 'PATCH',
+      // 1. Fetch latest customer record to ensure full payload
+      let customerRecord = null;
+      const getRes = await fetch(`${API_BASE}/AgentAddCustomer/${appId}`);
+      if (getRes.ok) {
+        const data = await getRes.json();
+        customerRecord = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
+      }
+
+      if (!customerRecord) {
+        throw new Error('Unable to retrieve customer record for status update.');
+      }
+
+      // 2. Build full payload with status: 2 (Approved / Completed)
+      const payload = {
+        agentCustomerId: Number(customerRecord.agentCustomerId || customerRecord.AgentCustomerId || appId),
+        agentId: Number(customerRecord.agentId ?? customerRecord.AgentId ?? 1),
+        fullName: customerRecord.fullName || customerRecord.FullName || customerRecord.customerName || appData.customerName || '',
+        mobileNumber: customerRecord.mobileNumber || customerRecord.MobileNumber || customerRecord.mobile || appData.mobile || '',
+        email: customerRecord.email || customerRecord.Email || customerRecord.emailAddress || appData.email || '',
+        employmentTypeId: Number(customerRecord.employmentTypeId ?? customerRecord.EmploymentTypeId ?? 1),
+        loanPurposeId: Number(customerRecord.loanPurposeId ?? customerRecord.LoanPurposeId ?? 1),
+        expectedLoanAmount: Number(customerRecord.expectedLoanAmount ?? customerRecord.ExpectedLoanAmount ?? 0),
+        remarks: customerRecord.remarks || customerRecord.Remarks || '',
+        status: 2,
+        isActive: customerRecord.isActive !== undefined ? customerRecord.isActive : (customerRecord.IsActive !== undefined ? customerRecord.IsActive : true),
+      };
+
+      // 3. Send PUT request
+      const putRes = await fetch(`${API_BASE}/AgentAddCustomer/${appId}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'Approved' }),
+        body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        throw new Error(`Failed to approve application (${response.status})`);
+      if (!putRes.ok) {
+        throw new Error(`Failed to update application status to Approved (${putRes.status})`);
       }
 
       saveApplication(appId, { status: 'Approved' });
+      setShowSubmitModal(false);
       navigate(ROUTES.APPROVED_APPLICATIONS);
-    } catch (error) {
-      console.error('Failed to approve application:', error);
-      window.alert('The application could not be approved. Please try again.');
+    } catch (err) {
+      console.error('Error finalizing application submission:', err);
+      alert(`The application could not be completed: ${err.message || 'Please try again.'}`);
+    } finally {
+      setIsFinalizing(false);
     }
   };
 
@@ -491,8 +526,9 @@ export default function Declaration() {
                 variant="primary"
                 style={{ width: '100%', justifyContent: 'center' }}
                 onClick={finalizeSubmit}
+                disabled={isFinalizing}
               >
-                Continue
+                {isFinalizing ? 'Completing...' : 'Continue'}
               </Button>
             </div>
           ) : (

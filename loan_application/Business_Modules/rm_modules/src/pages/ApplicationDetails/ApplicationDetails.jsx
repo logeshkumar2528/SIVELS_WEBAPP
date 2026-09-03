@@ -104,15 +104,35 @@ function normalizeApplicationStatus(status, statusName = '') {
   return 'New';
 }
 
-async function updateCustomerStatus(baseUrl, customerId, status) {
-  const response = await fetch(`${baseUrl}/AgentAddCustomer/${customerId}/status`, {
-    method: 'PATCH',
+async function updateCustomerStatusToInProgress(baseUrl, customerId, record) {
+  const currentStatus = Number(record.status ?? record.Status ?? 0);
+  // Progression protection: only update if status is 0 (Draft / Newly Created)
+  if (currentStatus >= 1) {
+    return; // Already in progress (1) or approved (2)
+  }
+
+  const payload = {
+    agentCustomerId: Number(record.agentCustomerId || record.AgentCustomerId || customerId),
+    agentId: Number(record.agentId ?? record.AgentId ?? 1),
+    fullName: record.fullName || record.FullName || record.customerName || '',
+    mobileNumber: record.mobileNumber || record.MobileNumber || record.mobile || '',
+    email: record.email || record.Email || record.emailAddress || '',
+    employmentTypeId: Number(record.employmentTypeId ?? record.EmploymentTypeId ?? 1),
+    loanPurposeId: Number(record.loanPurposeId ?? record.LoanPurposeId ?? 1),
+    expectedLoanAmount: Number(record.expectedLoanAmount ?? record.ExpectedLoanAmount ?? 0),
+    remarks: record.remarks || record.Remarks || '',
+    status: 1,
+    isActive: record.isActive !== undefined ? record.isActive : (record.IsActive !== undefined ? record.IsActive : true),
+  };
+
+  const response = await fetch(`${baseUrl}/AgentAddCustomer/${customerId}`, {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to update application status (${response.status})`);
+    console.error(`Failed to update customer status to in-progress (${response.status})`);
   }
 }
 
@@ -132,6 +152,7 @@ export default function ApplicationDetails() {
   const [errorPopup, setErrorPopup] = useState(null);
   const [displayRecord, setDisplayRecord] = useState(null);
   const [agentBranch, setAgentBranch] = useState('');
+  const [agentInfo, setAgentInfo] = useState({ name: '', code: '' });
 
   const [sourcingChannelOptions, setSourcingChannelOptions] = useState([]);
   const [loanProductOptions, setLoanProductOptions] = useState([]);
@@ -164,8 +185,19 @@ export default function ApplicationDetails() {
         if (active && record) {
           setDisplayRecord(record);
           setAgentBranch('');
+          const rawStatus = Number(record?.status ?? record?.Status ?? 0);
           const currentStatus = normalizeApplicationStatus(record.status, record.statusName || record.StatusName);
-          const isApprovedBeingEdited = currentStatus === 'Approved';
+
+          // Update status to 1 (In Progress) if newly created (status 0)
+          if (rawStatus === 0) {
+            try {
+              await updateCustomerStatusToInProgress(baseUrl, appId, record);
+              record.status = 1;
+            } catch (statusError) {
+              console.error('Failed to update status to 1 on Step 1 start:', statusError);
+            }
+          }
+
           saveApplication(appId, {
             agentCustomerId: record.agentCustomerId || record.AgentCustomerId || appId,
             agentId: record.agentId || record.AgentId || '',
@@ -177,19 +209,12 @@ export default function ApplicationDetails() {
             agentName: record.agentName || '',
             isAgentSourced: Boolean(record.agentId || record.AgentId),
             createdDate: record.createdAt || record.createdDate || '',
-            status: isApprovedBeingEdited ? 'Pending' : currentStatus,
+            status: record.status === 2 || currentStatus === 'Approved' ? 'Approved' : 'Pending',
             branch: record.branch || '',
+            agentCode: record.agentCode || record.AgentCode || '',
             purposeOfLoan: record.loanPurposeId || record.purposeOfLoan || '',
             loanAmount: record.expectedLoanAmount ?? '',
           });
-
-          if (isApprovedBeingEdited) {
-            try {
-              await updateCustomerStatus(baseUrl, appId, 'Pending');
-            } catch (statusError) {
-              console.error('Failed to mark application as pending while editing:', statusError);
-            }
-          }
 
           const agentId = record.agentId || record.AgentId;
           if (agentId) {
@@ -201,9 +226,12 @@ export default function ApplicationDetails() {
                   ? agentData[0]
                   : (agentData?.value ? agentData.value[0] : agentData);
                 const branch = agentRecord?.branch || agentRecord?.Branch || '';
+                const name = agentRecord?.fullName || agentRecord?.FullName || agentRecord?.agentName || agentRecord?.AgentName || agentRecord?.name || agentRecord?.Name || record.agentName || record.AgentName || '';
+                const code = agentRecord?.agentCode || agentRecord?.AgentCode || agentRecord?.agentId || agentRecord?.AgentId || record.agentCode || record.AgentCode || agentId;
                 if (active) {
                   setAgentBranch(branch);
-                  saveApplication(appId, { branch });
+                  setAgentInfo({ name, code: String(code || '') });
+                  saveApplication(appId, { branch, agentName: name, agentCode: String(code || '') });
                 }
               }
             } catch (agentError) {
@@ -431,6 +459,8 @@ export default function ApplicationDetails() {
   const submittedTime = formatDateTime(displayRecord?.createdAt || appData.createdDate || '');
   const applicationDisplayId = buildApplicationDisplayId(displayRecord || appData, appId);
   const statusText = appData.status || '';
+  const sourcingAgentName = agentInfo.name || appData.agentName || displayRecord?.agentName || displayRecord?.AgentName || '';
+  const sourcingAgentCode = agentInfo.code || appData.agentCode || displayRecord?.agentCode || displayRecord?.AgentCode || displayRecord?.agentId || displayRecord?.AgentId || '';
 
   return (
     <div className="page-container ad-page-root compact-mode">
@@ -509,7 +539,7 @@ export default function ApplicationDetails() {
           <div className="panel ad-main-panel compact-panel">
             <div className="compact-panel-content">
               <div className="compact-section-title">Application Information</div>
-              <div className="compact-form-row">
+              <div className="compact-form-row sourcing-details-row">
                 <div className="compact-field sourcing-field">
                   <label className="compact-label">Sourcing Channel</label>
                   <div className="compact-input-wrapper">
@@ -524,6 +554,30 @@ export default function ApplicationDetails() {
                     />
                   </div>
                   {errors.sourcingChannel && <span className="ad-field-error">{errors.sourcingChannel}</span>}
+                </div>
+                <div className="compact-field sourcing-field">
+                  <label className="compact-label">Sourcing Name</label>
+                  <div className="compact-input-wrapper">
+                    <input
+                      className="compact-input"
+                      value={isLoadingApplication ? 'Loading...' : sourcingAgentName}
+                      readOnly
+                      aria-readonly="true"
+                      placeholder="Agent name"
+                    />
+                  </div>
+                </div>
+                <div className="compact-field sourcing-field">
+                  <label className="compact-label">Sourcing Code</label>
+                  <div className="compact-input-wrapper">
+                    <input
+                      className="compact-input"
+                      value={isLoadingApplication ? 'Loading...' : sourcingAgentCode}
+                      readOnly
+                      aria-readonly="true"
+                      placeholder="Agent code"
+                    />
+                  </div>
                 </div>
               </div>
 
