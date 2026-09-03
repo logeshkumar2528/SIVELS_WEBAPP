@@ -135,7 +135,7 @@ export default function VerifyOTP() {
     const cleanMobile = normalizeMobileNumber(mobileNumber);
 
     // Special isolated condition ONLY for Master Mobile: 9345638126
-    if (cleanMobile === MASTER_MOBILE) {
+    if (cleanMobile === MASTER_MOBILE && moduleName === 'Master') {
       if (enteredOtp === MASTER_OTP) {
         setLoading(true);
         setErrorMessage('');

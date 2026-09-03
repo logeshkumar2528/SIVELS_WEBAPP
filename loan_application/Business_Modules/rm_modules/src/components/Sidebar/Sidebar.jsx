@@ -17,6 +17,15 @@ const NavItem = memo(function NavItem({ item, isActive, badgeCount, onNavigate }
 
   function handleClick(e) {
     e.preventDefault();
+    if (item.id === 'logout') {
+      localStorage.removeItem('sivels_currentUser');
+      localStorage.removeItem('sivels_permissions');
+      localStorage.removeItem('sivels_roles');
+      localStorage.removeItem('rmData');
+      localStorage.removeItem('rmId');
+      window.location.href = '/login';
+      return;
+    }
     onNavigate(item.route);
   }
 

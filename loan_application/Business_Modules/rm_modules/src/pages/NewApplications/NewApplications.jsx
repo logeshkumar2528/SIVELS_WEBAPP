@@ -182,7 +182,6 @@ export default function NewApplications({ initialFilter = 'All' }) {
         const agents = resolveApiArray(agentsData);
         const rows = resolveApiArray(customersData);
 
-        const rmBranch = normalizeText(rmContext.branch);
         const matchedAgents = agents.filter((agent) => {
           const agentRmId = Number(
             agent.rmId ||
@@ -194,7 +193,6 @@ export default function NewApplications({ initialFilter = 'All' }) {
             agent.reportManagerId ||
             0
           );
-          const agentBranch = normalizeText(agent.branch || agent.Branch);
           const agentCreatedBy = Number(agent.createdBy || agent.CreatedBy || 0);
 
           if (rmContext.rmId && (agentRmId || agentCreatedBy)) {
@@ -202,10 +200,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
             if (agentCreatedBy && Number(agentCreatedBy) === Number(rmContext.rmId)) return true;
           }
 
-          if (rmBranch && agentBranch) {
-            return agentBranch === rmBranch;
-          }
-
+          // Branch is not an ownership relation: multiple RMs may work in one branch.
           return false;
         });
 
@@ -220,13 +215,6 @@ export default function NewApplications({ initialFilter = 'All' }) {
           return agentIds.has(rowAgentId);
         });
 
-        // Defensive fallback: if the backend returned rows but the RM-agent join
-        // fields are incomplete, show the live data rather than an empty grid.
-        if (rows.length > 0 && filtered.length === 0) {
-          filtered = rows;
-          setErrorPopup('The RM-to-agent mapping is incomplete. The application list may not be accurate.');
-        }
-
         const mapped = filtered.map(mapBackendApplication);
 
         if (active) {
@@ -235,7 +223,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
       } catch (error) {
         console.error('Failed to fetch AgentAddCustomer:', error);
         if (active) {
-          setApplications(allNewApplications.map(mapBackendApplication));
+          setApplications([]);
           setErrorPopup('Unable to load live applications for this RM. Please try again.');
         }
       } finally {

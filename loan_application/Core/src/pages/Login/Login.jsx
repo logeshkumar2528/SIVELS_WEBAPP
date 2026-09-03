@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Smartphone, ShieldCheck, ArrowRight, ChevronDown } from 'lucide-react';
 import { detectAccountModule, normalizeMobileNumber } from '../../services/moduleDetectionService';
 import { authService } from '../../services/authService';
+import axiosInstance from '../../api/axiosInstance';
 import './Login.css';
 
 export default function Login() {
@@ -18,8 +19,17 @@ export default function Login() {
       setLoading(true);
       setError('');
       try {
-        // Special isolated condition ONLY for Master Mobile: 9345638126
-        if (cleanMobile === '9345638126') {
+        let matchingRm = null;
+        if (cleanMobile === '9345638126' || cleanMobile === '9841446699') {
+          try {
+            const response = await axiosInstance.get('/RMMaster');
+            const rows = response?.data?.value ?? response?.data ?? [];
+            matchingRm = (Array.isArray(rows) ? rows : [rows]).find((row) => normalizeMobileNumber(row?.mobileNumber ?? row?.MobileNumber ?? row?.mobile ?? row?.phone ?? row?.MobileNo) === cleanMobile);
+          } catch { /* Continue with the normal master flow if unavailable. */ }
+        }
+
+        // Special admin OTP applies only when the number is not an RM account.
+        if ((cleanMobile === '9345638126' || cleanMobile === '9841446699') && !matchingRm) {
           navigate('/verify', {
             state: {
               mobileNumber: cleanMobile,
@@ -37,7 +47,9 @@ export default function Login() {
         }
 
         const otpResponse = await authService.sendOtp(cleanMobile);
-        const detection = await detectAccountModule(cleanMobile);
+        const detection = matchingRm
+          ? { status: 'RM', module: 'RM', destination: '/rm/dashboard', accountData: matchingRm }
+          : await detectAccountModule(cleanMobile);
 
         if (detection.status === 'DUPLICATE') {
           setError(detection.error || 'Multiple accounts found with this mobile number. Please contact support.');

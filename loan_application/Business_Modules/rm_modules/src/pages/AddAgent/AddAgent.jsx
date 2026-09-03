@@ -39,7 +39,7 @@ const GENDER_OPTIONS = [
   { value: 3, label: 'Other' },
 ];
 
-export default function AddAgent() {
+export default function AddAgent({ onSuccessRedirect } = {}) {
   const navigate = useNavigate();
   const aadhaarInputRef = useRef(null);
   const profileImgInputRef = useRef(null);
@@ -331,7 +331,7 @@ export default function AddAgent() {
       setSubmittedSuccess(true);
       setTimeout(() => {
         setSubmittedSuccess(false);
-        navigate(ROUTES.MY_AGENTS);
+        navigate(onSuccessRedirect || ROUTES.MY_AGENTS);
       }, 1200);
     } catch (error) {
       console.error('Failed to create agent:', error);
@@ -387,7 +387,7 @@ export default function AddAgent() {
                 variant="secondary"
                 size="sm"
                 icon={<ArrowLeft size={15} />}
-                onClick={() => navigate(ROUTES.MY_AGENTS)}
+            onClick={() => navigate(onSuccessRedirect || ROUTES.MY_AGENTS)}
                 className="agent-creation-back-btn"
               >
                 Back to Agents
@@ -784,7 +784,7 @@ export default function AddAgent() {
             <Button
               variant="secondary"
               size="md"
-              onClick={() => navigate(ROUTES.MY_AGENTS)}
+              onClick={() => navigate(onSuccessRedirect || ROUTES.MY_AGENTS)}
               className="btn-footer-cancel"
               >
                 Cancel

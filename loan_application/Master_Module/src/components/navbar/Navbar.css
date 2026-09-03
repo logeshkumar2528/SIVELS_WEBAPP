@@ -258,3 +258,4 @@
     max-height: none;
   }
 }
+.navbar-logout{display:inline-flex;align-items:center;gap:7px;margin-left:auto;padding:9px 12px;border:1px solid #d9e2dc;border-radius:7px;background:#fff;color:#6f6f6f;font-size:13px;font-weight:600;cursor:pointer}.navbar-logout:hover{border-color:#24a148;color:#198038;background:#f5fbf7}@media(max-width:768px){.navbar-logout{margin-right:8px;padding:8px}.navbar-logout span{display:none}}
