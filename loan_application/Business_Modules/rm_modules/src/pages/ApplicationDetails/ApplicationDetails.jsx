@@ -184,7 +184,7 @@ export default function ApplicationDetails() {
         if (active && record) {
           setDisplayRecord(record);
           setAgentBranch('');
-          const rawStatus = Number(record.status ?? record.Status ?? 0);
+          const rawStatus = Number(record?.status ?? record?.Status ?? 0);
           const currentStatus = normalizeApplicationStatus(record.status, record.statusName || record.StatusName);
 
           // Update status to 1 (In Progress) if newly created (status 0)
