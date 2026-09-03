@@ -56,6 +56,7 @@ export default function PdfView() {
     verifications: {},
     banks: {},
     properties: {},
+    propertyUsages: {},
     employmentTypes: {},
   });
 
@@ -116,6 +117,7 @@ export default function PdfView() {
           verifMap,
           bankMap,
           propertyMap,
+          propertyUsageMap,
           empTypeMap,
         ] = await Promise.allSettled([
           fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`).then((r) => (r.ok ? r.json() : null)),
@@ -131,9 +133,10 @@ export default function PdfView() {
           fetchMaster('masters/ReligionMaster', 'religionId', 'religionName'),
           fetchMaster('DocumentTypeMaster', 'documentTypeId', 'documentTypeName'),
           fetchMaster('VerificationMaster', 'verificationId', 'verificationName'),
-          fetchMaster('BankMaster', 'bankId', 'bankName'),
+          fetchMaster('masters/bank/active', 'bankId', 'bankName'),
           fetchMaster('PropertyMaster', 'propertyId', 'propertyName'),
-          fetchMaster('EmploymentTypeMaster', 'employmentTypeId', 'employmentTypeName'),
+          fetchMaster('PropertyUsageMaster', 'propertyUsageId', 'propertyUsageName'),
+          fetchMaster('EmploymentType', 'employmentTypeId', 'employmentTypeName'),
         ]);
 
         let resolvedCustomerId = applicationId;
@@ -174,6 +177,7 @@ export default function PdfView() {
             verifications: verifMap.status === 'fulfilled' ? verifMap.value : {},
             banks: bankMap.status === 'fulfilled' ? bankMap.value : {},
             properties: propertyMap.status === 'fulfilled' ? propertyMap.value : {},
+            propertyUsages: propertyUsageMap.status === 'fulfilled' ? propertyUsageMap.value : {},
             employmentTypes: empTypeMap.status === 'fulfilled' ? empTypeMap.value : {},
           });
         }
@@ -363,9 +367,10 @@ export default function PdfView() {
   const resolveRelationship = (val) => masterMaps.relationships[val] || val || '';
   const resolveDocType = (val) => masterMaps.documentTypes[val] || val || '';
   const resolveVerification = (val) => masterMaps.verifications[val] || val || 'Verified';
-  const resolveBank = (val) => masterMaps.banks[val] || val || '';
-  const resolveProperty = (val) => masterMaps.properties[val] || val || '';
-  const resolveEmploymentType = (val) => masterMaps.employmentTypes[val] || val || '';
+  const resolveBank = (val) => (masterMaps.banks && masterMaps.banks[val]) || val || '';
+  const resolveProperty = (val) => (masterMaps.properties && masterMaps.properties[val]) || val || '';
+  const resolvePropertyUsage = (val) => (masterMaps.propertyUsages && masterMaps.propertyUsages[val]) || val || '';
+  const resolveEmploymentType = (val) => (masterMaps.employmentTypes && masterMaps.employmentTypes[val]) || val || '';
 
   // Dynamic Co-Applicants Resolution using standard helper
   const applicantCount = getApplicantCount(appData);
@@ -977,28 +982,21 @@ export default function PdfView() {
             <tbody>
               <tr>
                 <td>Applicant</td>
-                <td>{bankData.applicant?.accounts?.[0]?.bankName || '-'}</td>
-                <td>{bankData.applicant?.accounts?.[0]?.accountHolderName || customerDisplayName}</td>
-                <td>{bankData.applicant?.accounts?.[0]?.accountNumber || '-'}</td>
-                <td>{bankData.applicant?.accounts?.[0]?.ifscCode || '-'}</td>
                 <td>
                   {resolveBank(bankData.applicant?.primaryBank?.bankName || bankData.primaryBank?.bankName) ||
                     bankData.applicant?.primaryBank?.bankName ||
                     bankData.primaryBank?.bankName ||
-                    bankData.applicant?.accounts?.[0]?.bankName ||
                     '-'}
                 </td>
-                <td>{bankData.applicant?.primaryBank?.accountHolderName || customerDisplayName}</td>
+                <td>{bankData.applicant?.primaryBank?.accountHolderName || customerDisplayName || '-'}</td>
                 <td>
                   {bankData.applicant?.primaryBank?.accountNumber ||
                     bankData.primaryBank?.accountNumber ||
-                    bankData.applicant?.accounts?.[0]?.accountNumber ||
                     '-'}
                 </td>
                 <td>
                   {bankData.applicant?.primaryBank?.ifscCode ||
                     bankData.primaryBank?.ifscCode ||
-                    bankData.applicant?.accounts?.[0]?.ifscCode ||
                     '-'}
                 </td>
                 <td>
@@ -1016,7 +1014,6 @@ export default function PdfView() {
                     <td>
                       {resolveBank(bankData.coApplicants?.[i]?.primaryBank?.bankName) ||
                         bankData.coApplicants?.[i]?.primaryBank?.bankName ||
-                        bankData.coApplicants?.[i]?.accounts?.[0]?.bankName ||
                         '-'}
                     </td>
                     <td>
@@ -1026,12 +1023,10 @@ export default function PdfView() {
                     </td>
                     <td>
                       {bankData.coApplicants?.[i]?.primaryBank?.accountNumber ||
-                        bankData.coApplicants?.[i]?.accounts?.[0]?.accountNumber ||
                         '-'}
                     </td>
                     <td>
                       {bankData.coApplicants?.[i]?.primaryBank?.ifscCode ||
-                        bankData.coApplicants?.[i]?.accounts?.[0]?.ifscCode ||
                         '-'}
                     </td>
                     <td>
@@ -1052,29 +1047,37 @@ export default function PdfView() {
             <tbody>
               <tr>
                 <td className="pdf-row-header">Property Type</td>
-                <td>{colData.propertyType || '-'}</td>
+                <td>
+                  {resolveProperty(colData.propertyOne?.typeOfProperty) ||
+                    colData.propertyOne?.typeOfProperty ||
+                    resolveProperty(colData.propertyType) ||
+                    colData.propertyType ||
+                    '-'}
+                </td>
               </tr>
               <tr>
                 <td className="pdf-row-header">Property Address</td>
-                <td>{colData.propertyAddress || '-'}</td>
+                <td>{colData.propertyOne?.locationAddress || colData.propertyAddress || '-'}</td>
               </tr>
               <tr>
                 <td className="pdf-row-header">Estimated Market Value</td>
-                <td>Rs. {colData.estimatedMarketValue || '-'}</td>
-              </tr>
-              <tr>
-                <td className="pdf-row-header">Is Property Identified?</td>
                 <td>
-                  {colData.isPropertyIdentified !== undefined
-                    ? colData.isPropertyIdentified
-                      ? 'Yes'
-                      : 'No'
+                  {colData.propertyOne?.estimatedValue
+                    ? `Rs. ${Number(colData.propertyOne.estimatedValue).toLocaleString('en-IN')}`
+                    : colData.estimatedMarketValue
+                    ? `Rs. ${Number(colData.estimatedMarketValue).toLocaleString('en-IN')}`
                     : '-'}
                 </td>
               </tr>
               <tr>
                 <td className="pdf-row-header">Property Usage</td>
-                <td>{colData.propertyOne?.usage || colData.usage || '-'}</td>
+                <td>
+                  {resolvePropertyUsage(colData.propertyOne?.usage) ||
+                    resolvePropertyUsage(colData.usage) ||
+                    colData.propertyOne?.usage ||
+                    colData.usage ||
+                    '-'}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -1092,18 +1095,20 @@ export default function PdfView() {
               </tr>
             </thead>
             <tbody>
-              {(refData.references?.length > 0
-                ? refData.references
-                : []
-              ).map((ref, i) => (
-                <tr key={i}>
-                  <td>Reference {i + 1}</td>
-                  <td>{ref.fullName || '-'}</td>
-                  <td>{ref.relationship || '-'}</td>
-                  <td>{ref.mobileNo || '-'}</td>
-                  <td>{ref.address || '-'}</td>
-                </tr>
-              ))}
+              {[
+                refData.reference1 || (Array.isArray(refData.references) ? refData.references[0] : null),
+                refData.reference2 || (Array.isArray(refData.references) ? refData.references[1] : null),
+              ]
+                .filter(Boolean)
+                .map((ref, i) => (
+                  <tr key={i}>
+                    <td>Reference {i + 1}</td>
+                    <td>{ref.fullName || '-'}</td>
+                    <td>{resolveRelationship(ref.relationship) || ref.relationship || '-'}</td>
+                    <td>{ref.mobileNo || '-'}</td>
+                    <td>{ref.address || '-'}</td>
+                  </tr>
+                ))}
             </tbody>
           </table>
 

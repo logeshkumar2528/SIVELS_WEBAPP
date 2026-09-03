@@ -160,6 +160,7 @@ export default function ApplicationDetails() {
   const [interestTypeOptions, setInterestTypeOptions] = useState([]);
   const [loanPurposeOptions, setLoanPurposeOptions] = useState([]);
   const [loanVariationMaster, setLoanVariationMaster] = useState([]);
+  const [rateOfInterestMaster, setRateOfInterestMaster] = useState([]);
   const [isLoadingMasters, setIsLoadingMasters] = useState(false);
 
   useEffect(() => {
@@ -312,6 +313,7 @@ export default function ApplicationDetails() {
         fetchMasterData('InterestTypeMaster', 'interestTypeId', 'interestTypeName', setInterestTypeOptions),
         fetchMasterData('LoanPurposeMaster', 'loanPurposeId', 'purposeName', setLoanPurposeOptions),
         fetchMasterData('LoanProductVariationMaster', 'loanProductVariationId', 'variationName', setLoanVariationMaster),
+        fetchMasterData('RateOfInterestMaster', 'rateOfInterestId', 'interestCode', setRateOfInterestMaster),
       ]);
       setIsLoadingMasters(false);
     }
@@ -325,6 +327,20 @@ export default function ApplicationDetails() {
     () => loanVariationMaster.filter(opt => !opt.raw?.loanProductId || opt.raw?.loanProductId === appData.loanProduct),
     [loanVariationMaster, appData.loanProduct]
   );
+  const roiOptions = useMemo(() => {
+    if (!appData.loanProduct) return [];
+    return rateOfInterestMaster
+      .filter((opt) => {
+        const raw = opt.raw;
+        if (!raw || raw.isActive === false) return false;
+        return Number(raw.loanProductId) === Number(appData.loanProduct);
+      })
+      .map((opt) => ({
+        value: Number(opt.raw.interestRate),
+        label: `${opt.raw.interestCode} (${Number(opt.raw.interestRate).toFixed(2)}%)`,
+        raw: opt.raw,
+      }));
+  }, [rateOfInterestMaster, appData.loanProduct]);
   const activeStep = useMemo(() => getWizardActiveStepByPath(location.pathname, APPLICATION_WIZARD_STEPS), [location.pathname]);
 
   const updateField = (field, rawValue) => {
@@ -340,6 +356,7 @@ export default function ApplicationDetails() {
       if (!isVariationRequired) {
         updates.loanVariation = '';
       }
+      updates.roi = '';
     }
 
     saveApplication(appId, updates);
@@ -348,6 +365,7 @@ export default function ApplicationDetails() {
       delete nextErrors[field];
       if (field === 'loanProduct') {
         delete nextErrors.loanVariation;
+        delete nextErrors.roi;
       }
       return nextErrors;
     });
@@ -692,19 +710,20 @@ export default function ApplicationDetails() {
                 <div className="compact-field">
                   <label className="compact-label">ROI (%)</label>
                   <div className="compact-input-wrapper">
-                    <span className="compact-input-icon">
-                      <Percent size={16} />
-                    </span>
-                    <input
-                      className={`form-input compact-input compact-input--with-icon ${errors.roi ? 'ad-input--invalid' : ''}`}
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      inputMode="decimal"
-                      value={appData.roi ?? ''}
-                      onChange={(event) => updateField('roi', event.target.value)}
-                      placeholder="0.00"
+                    <Select
+                      error={!!errors.roi}
+                      value={appData.roi !== null && appData.roi !== undefined && appData.roi !== '' ? appData.roi : ''}
+                      onChange={(val) => updateField('roi', val)}
+                      placeholder={
+                        !appData.loanProduct
+                          ? "Select loan product first"
+                          : roiOptions.length === 0
+                          ? "No ROI configured for this loan product"
+                          : "Select ROI"
+                      }
+                      options={roiOptions}
+                      icon={<Percent size={16} />}
+                      disabled={isLoadingMasters || !appData.loanProduct || roiOptions.length === 0}
                     />
                   </div>
                   {errors.roi && <span className="ad-field-error">{errors.roi}</span>}
