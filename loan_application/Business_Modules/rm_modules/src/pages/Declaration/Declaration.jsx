@@ -8,7 +8,7 @@ import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
-import { buildSectionUpdate, getSectionState, getApplicantCount, createArray } from '../applicationWizard/flowUtils';
+import { buildSectionUpdate, getSectionState, getApplicantCount, createArray, resolveApplicantName } from '../applicationWizard/flowUtils';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
@@ -76,12 +76,8 @@ async function fetchLiveRMNameFromApi() {
 
 function buildDeclarationState(appData) {
   const saved = getSectionState(appData, 'declaration', {});
-  const applicant = appData.registration?.personalInformation?.applicant || {};
-  const applicantName =
-    appData.customerName ||
-    appData.fullName ||
-    [applicant.firstName, applicant.lastName].filter(Boolean).join(' ') ||
-    '';
+  const resolvedName = resolveApplicantName(appData);
+  const applicantName = resolvedName !== 'Applicant' ? resolvedName : '';
   const coApplicantCount = getApplicantCount(appData);
   const savedCoApplicants = Array.isArray(saved.coApplicants) ? saved.coApplicants : [];
   const today = getTodayDate();
@@ -270,11 +266,7 @@ export default function Declaration() {
     navigate(ROUTES.DOCUMENT_CHECKLIST.replace(':applicationId', appId));
   };
 
-  const displayCustomerName =
-    appData.customerName ||
-    appData.fullName ||
-    form.ackApplicantName ||
-    'Applicant';
+  const displayCustomerName = resolveApplicantName(appData);
 
   return (
     <WizardSectionLayout

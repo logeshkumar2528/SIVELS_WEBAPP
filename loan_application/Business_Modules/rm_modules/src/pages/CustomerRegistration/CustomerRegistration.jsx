@@ -10,7 +10,7 @@ import DatePicker from '../../components/DatePicker/DatePicker';
 import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
-import { getApplicantCount } from '../applicationWizard/flowUtils';
+import { getApplicantCount, resolveApplicantName } from '../applicationWizard/flowUtils';
 import Modal from '../../components/Modal/Modal';
 import './CustomerRegistration.css';
 
@@ -756,7 +756,7 @@ export default function CustomerRegistration() {
             <span className="ad-meta-label">Applicant</span>
             <div className="ad-meta-value-group highlight">
               {iconMap['User'] && (() => { const User = iconMap['User']; return <User size={14} />; })()}
-              <span className="ad-meta-value">{appData.customerName || appData.fullName || composeFullName(form.applicant) || 'Applicant'}</span>
+              <span className="ad-meta-value">{resolveApplicantName({ ...appData, registration: { personalInformation: form, primaryApplicant: form.applicant }, sections: { personalInformation: form } })}</span>
             </div>
           </div>
           <div className="ad-meta-divider" />

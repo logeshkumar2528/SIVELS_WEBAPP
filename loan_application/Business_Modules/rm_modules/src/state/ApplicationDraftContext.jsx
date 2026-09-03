@@ -9,6 +9,7 @@ import {
   mergeEntityObject,
   mergeApplicantArrays,
   KNOWN_DB_ID_FIELDS,
+  resolveApplicantName,
 } from '../pages/applicationWizard/flowUtils';
 
 const STORAGE_KEY = 'sivels-rm-onboarding-drafts-v9';
@@ -276,11 +277,24 @@ function normalizeApplicationRecord(record = {}) {
   const documentChecklist = mergeSectionData(record.documentChecklist || {}, sections.documentChecklist || {});
   sections.documentChecklist = documentChecklist;
 
-  const declaration = mergeSectionData(record.declaration || {}, sections.declaration || {});
-  sections.declaration = declaration;
+  const resolvedApplicant = resolveApplicantName({
+    ...record,
+    sections,
+    personalInformation: personalInfo,
+    registration: {
+      ...(record.registration || {}),
+      personalInformation: personalInfo,
+      primaryApplicant: personalInfo.applicant || personalInfo.primaryApplicant || {},
+    },
+  });
+
+  const customerName = resolvedApplicant !== 'Applicant'
+    ? resolvedApplicant
+    : (record.customerName || record.fullName || record.applicantName || '');
 
   return {
     ...record,
+    customerName,
     id: record.id || applicationNumber,
     applicationNumber,
     branch: record.branch || inferBranch(record.address),
@@ -429,8 +443,8 @@ function buildBlankApplication(applicationId) {
       reference2: { fullName: '', relationship: '', mobileNo: '', address: '' }
     },
     sourcing: {
-      sourcedBy: 'Karthik Raja',
-      employeeId: 'EMP1001'
+      sourcedBy: '',
+      employeeId: ''
     },
     scheduleCharges: {
       values: {}
@@ -446,14 +460,14 @@ function buildBlankApplication(applicationId) {
       ]
     },
     declaration: {
-      applicantSignature: 'Anil Kumar',
-      applicantDate: '2025-06-06',
+      applicantSignature: '',
+      applicantDate: '',
       coApplicantSignature: '',
       coApplicantDate: '',
-      ackApplicantName: 'Anil Kumar',
-      ackProduct: 'Personal Loan',
-      ackReceivedBy: 'Karthik Raja',
-      ackDate: '2025-06-06'
+      ackApplicantName: '',
+      ackProduct: '',
+      ackReceivedBy: '',
+      ackDate: ''
     }
   });
 }

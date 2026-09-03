@@ -489,10 +489,10 @@ export default function PdfView() {
 
   // Resolved Customer Header Info
   const customerDisplayName =
+    composeFullName(applicant) ||
     liveCustomer?.fullName ||
     liveCustomer?.customerName ||
     appData.customerName ||
-    composeFullName(applicant) ||
     '';
 
   const loanAmount = appData.loanAmount || liveCustomer?.expectedLoanAmount || '';
