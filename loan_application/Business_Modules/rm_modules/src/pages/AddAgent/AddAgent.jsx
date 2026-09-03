@@ -42,6 +42,7 @@ const GENDER_OPTIONS = [
 export default function AddAgent() {
   const navigate = useNavigate();
   const aadhaarInputRef = useRef(null);
+  const panInputRef = useRef(null);
   const profileImgInputRef = useRef(null);
 
   const getCurrentUser = () => {
@@ -57,6 +58,9 @@ export default function AddAgent() {
   const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || currentUser?.rmid || 0);
   const currentRmName = currentUser?.fullName || currentUser?.name || 'this RM';
   const currentBranch = currentUser?.branch || '';
+  const isAdmin = /admin|administrator|master/i.test(String(currentUser?.role || currentUser?.Role || currentUser?.userRole || ''));
+  const [rmOptions, setRmOptions] = useState([]);
+  const [selectedRmId, setSelectedRmId] = useState('');
 
   // Form State matching the OLD UI exact fields
   const [formData, setFormData] = useState({
@@ -96,6 +100,10 @@ export default function AddAgent() {
   const [aadhaarPreviewUrl, setAadhaarPreviewUrl] = useState(null);
   const [isAadhaarPdf, setIsAadhaarPdf] = useState(false);
 
+  const [panFile, setPanFile] = useState(null);
+  const [panPreviewUrl, setPanPreviewUrl] = useState(null);
+  const [isPanPdf, setIsPanPdf] = useState(false);
+
   const [profileImage, setProfileImage] = useState(null);
   const [profilePreviewUrl, setProfilePreviewUrl] = useState(null);
 
@@ -118,6 +126,25 @@ export default function AddAgent() {
     }
   }, [currentBranch, currentRmName, currentUser]);
 
+  useEffect(() => {
+    fetch(`${API_BASE}/RMMaster`)
+      .then((response) => response.ok ? response.json() : [])
+      .then((result) => {
+        const rows = Array.isArray(result) ? result : result?.data || [];
+        const options = rows.map((rm) => ({
+          id: rm.rmId || rm.RMId || rm.id,
+          name: rm.fullName || rm.name || rm.rmName || rm.RMName || `${rm.firstName || ''} ${rm.lastName || ''}`.trim(),
+          branch: rm.branch || rm.Branch || rm.branchName || rm.BranchName || rm.location || '',
+        })).filter((rm) => rm.id && rm.name);
+        setRmOptions(options);
+        const matchedRm = options.find((rm) => Number(rm.id) === currentRmId);
+        if (!isAdmin && matchedRm?.branch) {
+          setFormData((prev) => ({ ...prev, branch: matchedRm.branch }));
+        }
+      })
+      .catch(() => setRmOptions([]));
+  }, [isAdmin, currentRmId]);
+
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({
       ...prev,
@@ -129,7 +156,7 @@ export default function AddAgent() {
     fullName: formData.fullName.trim(),
     dateOfBirth: formData.dateOfBirth,
     genderId: Number(formData.genderId || 0),
-    rmId: currentRmId || Number(currentUser?.id || currentUser?.userId || 0),
+    rmId: isAdmin ? Number(selectedRmId || 0) : (currentRmId || Number(currentUser?.id || currentUser?.userId || 0)),
     address: formData.address.trim(),
     state: formData.state.trim(),
     pincode: formData.pincode.trim(),
@@ -178,6 +205,30 @@ export default function AddAgent() {
     setAadhaarPreviewUrl(null);
     setIsAadhaarPdf(false);
     if (aadhaarInputRef.current) aadhaarInputRef.current.value = '';
+  };
+
+  const handlePanUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (panPreviewUrl) {
+        URL.revokeObjectURL(panPreviewUrl);
+      }
+      setPanFile(file);
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      setIsPanPdf(isPdf);
+      setPanPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const handleRemovePan = (e) => {
+    e?.stopPropagation();
+    if (panPreviewUrl) {
+      URL.revokeObjectURL(panPreviewUrl);
+    }
+    setPanFile(null);
+    setPanPreviewUrl(null);
+    setIsPanPdf(false);
+    if (panInputRef.current) panInputRef.current.value = '';
   };
 
   const handleProfileImageUpload = (e) => {
@@ -247,7 +298,11 @@ export default function AddAgent() {
       return 'Please enter a valid IFSC code.';
     }
 
-    if (!currentRmId) {
+    if (isAdmin && !selectedRmId) {
+      return 'Please select a relationship manager.';
+    }
+
+    if (!isAdmin && !currentRmId) {
       return 'RM session was not found. Please log in again.';
     }
 
@@ -361,7 +416,7 @@ export default function AddAgent() {
                 variant="secondary"
                 size="sm"
                 icon={<ArrowLeft size={15} />}
-                onClick={() => navigate(ROUTES.MY_AGENTS)}
+                onClick={() => window.location.assign('/master/dashboard')}
                 className="agent-creation-back-btn"
               >
                 Back to Agents
@@ -414,13 +469,14 @@ export default function AddAgent() {
                 <label className="form-label">
                   Relationship Manager <span className="required-star">*</span>
                 </label>
-                <input
-                  type="text"
-                  className="form-control form-control-readonly"
-                  value={formData.relationshipManager}
-                  readOnly
-                  aria-readonly="true"
-                />
+                {isAdmin ? (
+                  <select className="form-control" value={selectedRmId} onChange={(e) => { const option = rmOptions.find((rm) => String(rm.id) === e.target.value); setSelectedRmId(e.target.value); handleInputChange('relationshipManager', option?.name || ''); handleInputChange('branch', option?.branch || ''); }} required>
+                    <option value="">Select relationship manager</option>
+                    {rmOptions.map((rm) => <option key={rm.id} value={rm.id}>{rm.name}</option>)}
+                  </select>
+                ) : (
+                  <input type="text" className="form-control form-control-readonly" value={formData.relationshipManager} readOnly aria-readonly="true" />
+                )}
               </div>
 
               {/* Row 3: Address * (Full Width) */}
@@ -665,6 +721,96 @@ export default function AddAgent() {
                 )}
               </div>
 
+              {/* MIDDLE: PAN Card * */}
+              <div className="upload-box-container">
+                <div className="upload-box-header">
+                  <span className="upload-title">
+                    PAN Card <span className="required-star">*</span>
+                  </span>
+                  <span className="upload-subtitle">Upload clear image of PAN Card</span>
+                  <span className="upload-format-note">JPG, PNG or PDF (Max. 10MB)</span>
+                </div>
+
+                <input
+                  ref={panInputRef}
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  className="hidden-file-input"
+                  onChange={handlePanUpload}
+                />
+
+                {!panFile ? (
+                  <div
+                    className="upload-dropzone"
+                    onClick={() => panInputRef.current?.click()}
+                  >
+                    <div className="upload-icon-wrap">
+                      <FileText size={22} className="upload-icon" />
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={<Upload size={14} />}
+                      className="upload-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        panInputRef.current?.click();
+                      }}
+                    >
+                      Upload Document
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="upload-preview-box">
+                    <div className="preview-thumb-col">
+                      {isPanPdf ? (
+                        <div className="pdf-thumb-box">
+                          <FileText size={22} className="pdf-icon" />
+                          <span className="pdf-label">PDF</span>
+                        </div>
+                      ) : (
+                        <img
+                          src={panPreviewUrl}
+                          alt="PAN Card Thumbnail"
+                          className="img-thumb"
+                        />
+                      )}
+                    </div>
+
+                    <div className="preview-info-col">
+                      <div className="preview-name-row">
+                        <FileCheck size={14} className="check-icon" />
+                        <span className="preview-filename" title={panFile.name}>
+                          {panFile.name}
+                        </span>
+                      </div>
+                      <span className="preview-filesize">
+                        {formatFileSize(panFile.size)} • {isPanPdf ? 'PDF File' : 'Image'}
+                      </span>
+                    </div>
+
+                    <div className="preview-actions-col">
+                      <button
+                        type="button"
+                        className="btn-action btn-action-change"
+                        onClick={() => panInputRef.current?.click()}
+                      >
+                        <RefreshCw size={13} />
+                        <span>Change</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-action btn-action-remove"
+                        onClick={handleRemovePan}
+                      >
+                        <Trash2 size={13} />
+                        <span>Remove</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* RIGHT: Profile Image * */}
               <div className="upload-box-container">
                 <div className="upload-box-header">
@@ -821,26 +967,21 @@ export default function AddAgent() {
         onHide={() => !isSaving && setConfirmModalOpen(false)}
         title="Confirm Agent Creation"
         size="md"
+        className="confirm-agent-modal"
         footer={(
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', width: '100%' }}>
-            <Button type="button" variant="secondary" onClick={() => setConfirmModalOpen(false)} disabled={isSaving}>
+            <Button type="button" variant="secondary" className="confirm-cancel-btn" onClick={() => setConfirmModalOpen(false)} disabled={isSaving}>
               Cancel
             </Button>
-            <Button type="button" variant="primary" onClick={confirmCreateAgent} disabled={isSaving}>
+            <Button type="button" variant="primary" className="confirm-create-btn" onClick={confirmCreateAgent} disabled={isSaving}>
               {isSaving ? 'Saving...' : 'Yes, Create Agent'}
             </Button>
           </div>
         )}
       >
         <div style={{ display: 'grid', gap: '10px' }}>
-          <p style={{ margin: 0, color: '#334155', lineHeight: 1.6 }}>
-            Are you sure you want to create an agent under <strong>{currentRmName}</strong>?
-          </p>
-          <div style={{ padding: '12px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#0f172a' }}>
-            <div><strong>Branch:</strong> {formData.branch || currentBranch || '-'}</div>
-            <div><strong>Agent:</strong> {formData.fullName || '-'}</div>
-            <div><strong>Mobile:</strong> {formData.mobileNumber || '-'}</div>
-          </div>
+          <div className="confirm-agent-intro"><div className="confirm-agent-icon"><CheckCircle2 size={22} /></div><div><strong>Ready to create this agent?</strong><span>The agent will be mapped to the selected relationship manager.</span></div></div>
+          <div className="confirm-agent-summary"><div><span>Agent</span><strong>{formData.fullName || '-'}</strong></div><div><span>Relationship manager</span><strong>{isAdmin ? (formData.relationshipManager || 'Not selected') : (formData.relationshipManager || currentRmName || '-')}</strong></div><div><span>Branch</span><strong>{formData.branch || currentBranch || '-'}</strong></div><div><span>Mobile</span><strong>{formData.mobileNumber || '-'}</strong></div></div>
         </div>
       </Modal>
     </div>

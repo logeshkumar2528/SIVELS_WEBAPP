@@ -154,8 +154,8 @@ export default function PdfView() {
             const matched = rows.find((r) => r.isActive !== false) || rows[0];
             if (matched) {
               setLiveRM({
-                name: matched.fullName || matched.name || 'Sivashanmugam M',
-                employeeId: matched.rmCode || `RM${String(matched.rmId || 1).padStart(3, '0')}`,
+                name: matched.fullName || matched.name || '',
+                employeeId: matched.rmCode || (matched.rmId ? `RM${String(matched.rmId).padStart(3, '0')}` : ''),
               });
             }
           }
@@ -210,7 +210,7 @@ export default function PdfView() {
             const loaded = await Promise.all(
               activeDocs.map(async (doc) => {
                 const docId = doc.agentCustomerDocumentId || doc.id;
-                const fileName = doc.fileName || 'document.jpg';
+                const fileName = doc.fileName || '';
                 const ext = fileName.split('.').pop()?.toLowerCase();
                 const isPdf = ext === 'pdf';
 
@@ -231,7 +231,7 @@ export default function PdfView() {
 
                     return {
                       agentCustomerDocumentId: docId,
-                      documentTypeName: doc.documentTypeName || doc.documentType || 'Uploaded Document',
+                      documentTypeName: doc.documentTypeName || doc.documentType || '',
                       fileName,
                       fileType: isPdf ? 'pdf' : 'image',
                       previewUrl,
@@ -243,7 +243,7 @@ export default function PdfView() {
 
                 return {
                   agentCustomerDocumentId: docId,
-                  documentTypeName: doc.documentTypeName || doc.documentType || 'Uploaded Document',
+                  documentTypeName: doc.documentTypeName || doc.documentType || '',
                   fileName,
                   fileType: isPdf ? 'pdf' : 'image',
                   previewUrl: null,
@@ -352,9 +352,9 @@ export default function PdfView() {
   };
 
   // Master resolvers
-  const resolveSourcingChannel = (val) => masterMaps.sourcingChannels[val] || val || 'Branch Walk-in';
-  const resolveLoanProduct = (val) => masterMaps.loanProducts[val] || appData.loanProductDisplay || val || 'Home Loan';
-  const resolveLoanPurpose = (val) => masterMaps.loanPurposes[val] || appData.loanType || val || 'Debt Consolidation';
+  const resolveSourcingChannel = (val) => masterMaps.sourcingChannels[val] || val || '';
+  const resolveLoanProduct = (val) => masterMaps.loanProducts[val] || appData.loanProductDisplay || val || '';
+  const resolveLoanPurpose = (val) => masterMaps.loanPurposes[val] || appData.loanType || val || '';
   const resolveTitle = (val) => masterMaps.titles[val] || val || '';
   const resolveGender = (val) => masterMaps.genders[val] || val || '';
   const resolveCategory = (val) => masterMaps.castes[val] || val || '';
@@ -362,10 +362,7 @@ export default function PdfView() {
   const resolveMaritalStatus = (val) => masterMaps.maritalStatuses[val] || val || '';
   const resolveRelationship = (val) => masterMaps.relationships[val] || val || '';
   const resolveDocType = (val) => masterMaps.documentTypes[val] || val || '';
-  const resolveVerification = (val) => masterMaps.verifications[val] || val || 'Verified';
-  const resolveBank = (val) => masterMaps.banks[val] || val || '';
-  const resolveProperty = (val) => masterMaps.properties[val] || val || '';
-  const resolveEmploymentType = (val) => masterMaps.employmentTypes[val] || val || '';
+  const resolveVerification = (val) => masterMaps.verifications[val] || val || '';
 
   // Dynamic Co-Applicants Resolution using standard helper
   const applicantCount = getApplicantCount(appData);
@@ -392,12 +389,12 @@ export default function PdfView() {
     liveCustomer?.customerName ||
     appData.customerName ||
     composeFullName(applicant) ||
-    'Applicant';
+    '';
 
-  const loanAmount = appData.loanAmount || liveCustomer?.expectedLoanAmount || '100000';
-  const loanTenure = appData.loanTenureMonths || '24';
-  const resolvedRMName = sourcingData.sourcedBy || liveRM?.name || 'Sivashanmugam M';
-  const resolvedEmployeeId = sourcingData.employeeId || liveRM?.employeeId || 'RM001';
+  const loanAmount = appData.loanAmount || liveCustomer?.expectedLoanAmount || '';
+  const loanTenure = appData.loanTenureMonths || '';
+  const resolvedRMName = sourcingData.sourcedBy || liveRM?.name || '';
+  const resolvedEmployeeId = sourcingData.employeeId || liveRM?.employeeId || '';
 
   const todayFormatted = new Date().toISOString().slice(0, 10);
 
@@ -423,31 +420,7 @@ export default function PdfView() {
       ? declarationData.ackDate
       : todayFormatted;
 
-  const DEFAULT_DOCUMENTS = [
-    {
-      agentCustomerDocumentId: 1,
-      documentTypeName: 'Aadhaar Card',
-      fileName: 'Aadhaar_Card_Front_Back.jpg',
-      fileType: 'image',
-      previewUrl: 'https://images.unsplash.com/photo-1633332755192-727a05c4013d?auto=format&fit=crop&w=400&h=250&q=80',
-    },
-    {
-      agentCustomerDocumentId: 2,
-      documentTypeName: 'PAN Card',
-      fileName: 'PAN_Card_Verified.jpg',
-      fileType: 'image',
-      previewUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&h=250&q=80',
-    },
-    {
-      agentCustomerDocumentId: 3,
-      documentTypeName: 'Bank Statement',
-      fileName: 'Bank_Statement_Latest.jpg',
-      fileType: 'image',
-      previewUrl: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=400&h=250&q=80',
-    },
-  ];
-
-  const effectiveDocs = downloadedDocs && downloadedDocs.length > 0 ? downloadedDocs : DEFAULT_DOCUMENTS;
+  const effectiveDocs = downloadedDocs;
 
   // Find client/profile photo if present in uploaded docs
   const clientPhotoDoc =
@@ -458,9 +431,7 @@ export default function PdfView() {
           d.documentTypeName?.toLowerCase().includes('photo') ||
           d.fileName?.toLowerCase().includes('client') ||
           d.fileName?.toLowerCase().includes('photo'))
-    ) || {
-      previewUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&h=200&q=80',
-    };
+    ) || {};
 
   return (
     <div className="pdf-view-wrapper">
@@ -527,14 +498,13 @@ export default function PdfView() {
             <div className="pdf-office-photos">
               <div className="pdf-photo-column">
                 <div className="pdf-photo-box">
-                  <img
-                    src={
-                      clientPhotoDoc?.previewUrl ||
-                      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&h=200&q=80'
-                    }
-                    alt="Applicant"
-                    style={{ objectFit: 'cover' }}
-                  />
+                  {clientPhotoDoc?.previewUrl ? (
+                    <img src={clientPhotoDoc.previewUrl} alt="Applicant" style={{ objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ color: '#64748b', fontSize: '10px', padding: '6px', textAlign: 'center' }}>
+                      No Photo
+                    </div>
+                  )}
                   <div className="pdf-photo-timestamp">Applicant</div>
                 </div>
                 <div className="pdf-geo-details">
@@ -548,11 +518,10 @@ export default function PdfView() {
                 coApplicants.map((_, i) => (
                   <div className="pdf-photo-column" key={i}>
                     <div className="pdf-photo-box">
-                      <img
-                        src={`https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&h=200&q=80`}
-                        alt="CoApp"
-                      />
-                      <div className="pdf-photo-timestamp">Co-Applicant {applicantCount > 1 ? i + 1 : ''}</div>
+                      <div style={{ color: '#64748b', fontSize: '10px', padding: '6px', textAlign: 'center' }}>
+                        No Photo
+                      </div>
+                      <div className="pdf-photo-timestamp">Co-Applicant {i + 1}</div>
                     </div>
                     <div className="pdf-geo-details">
                       Lat: 13.0827, Long: 80.2707
@@ -671,13 +640,13 @@ export default function PdfView() {
             <tbody>
               <tr>
                 <td>Aadhaar Last 4</td>
-                <td>{kycData.applicant?.aadhaarLast4 || (appData.aadhaarNo ? String(appData.aadhaarNo).slice(-4) : '-')}</td>
+                <td>{kycData.applicant?.aadhaarLast4 || '-'}</td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => <td key={i}>{kycData.coApplicants?.[i]?.aadhaarLast4 || '-'}</td>)}
               </tr>
               <tr>
                 <td>PAN Card No</td>
-                <td>{kycData.applicant?.panCardNo || applicant.panCardNo || appData.panCardNo || appData.panNumber || '-'}</td>
+                <td>{kycData.applicant?.panCardNo || applicant.panCardNo || '-'}</td>
                 {hasCoApplicants &&
                   coApplicants.map((co, i) => (
                     <td key={i}>{kycData.coApplicants?.[i]?.panCardNo || co.panCardNo || '-'}</td>
@@ -701,7 +670,7 @@ export default function PdfView() {
               </tr>
               <tr>
                 <td>Verification Status</td>
-                <td>{resolveVerification(kycData.applicant?.verificationStatus) || 'Pending'}</td>
+                <td>{resolveVerification(kycData.applicant?.verificationStatus) || '-'}</td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>{resolveVerification(kycData.coApplicants?.[i]?.verificationStatus) || 'Pending'}</td>
@@ -911,12 +880,8 @@ export default function PdfView() {
               <tr>
                 <td>City & State</td>
                 <td>
-                  {[
-                    addressData.applicant?.current?.city || addressData.applicant?.city,
-                    addressData.applicant?.current?.state || addressData.applicant?.state,
-                  ]
-                    .filter(Boolean)
-                    .join(', ') || '-'}
+                  {addressData.applicant?.current?.city || addressData.applicant?.city || '-'},{' '}
+                  {addressData.applicant?.current?.state || addressData.applicant?.state || '-'}
                 </td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
@@ -963,7 +928,7 @@ export default function PdfView() {
             <tbody>
               <tr>
                 <td>Occupation Category</td>
-                <td>{resolveEmploymentType(empData.applicant?.employmentNature || empData.applicant?.employmentType) || empData.applicant?.employmentNature || '-'}</td>
+                <td>{empData.applicant?.employmentType || '-'}</td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>
@@ -972,16 +937,16 @@ export default function PdfView() {
                   ))}
               </tr>
               <tr>
-                <td>Employer / Business Name</td>
-                <td>{empData.applicant?.employerBusinessName || empData.applicant?.employerName || '-'}</td>
+                <td>Employer Name</td>
+                <td>{empData.applicant?.employerName || '-'}</td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>{empData.coApplicants?.[i]?.employerBusinessName || empData.coApplicants?.[i]?.employerName || '-'}</td>
                   ))}
               </tr>
               <tr>
-                <td>Designation / Nature of Business</td>
-                <td>{empData.applicant?.designationNatureOfBusiness || empData.applicant?.designation || '-'}</td>
+                <td>Designation</td>
+                <td>{empData.applicant?.designation || '-'}</td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>{empData.coApplicants?.[i]?.designationNatureOfBusiness || empData.coApplicants?.[i]?.designation || '-'}</td>
@@ -995,13 +960,7 @@ export default function PdfView() {
               </tr>
               <tr>
                 <td>Total Experience</td>
-                <td>
-                  {empData.applicant?.totalExperienceYears
-                    ? `${empData.applicant.totalExperienceYears} Years`
-                    : empData.applicant?.totalExperience
-                    ? `${empData.applicant.totalExperience} Years`
-                    : '-'}
-                </td>
+                <td>{empData.applicant?.totalExperience ? `${empData.applicant.totalExperience} Years` : '-'}</td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>
@@ -1015,11 +974,7 @@ export default function PdfView() {
               </tr>
               <tr>
                 <td>Gross Monthly Income</td>
-                <td>
-                  {empData.applicant?.grossMonthlyIncome
-                    ? `Rs. ${Number(empData.applicant.grossMonthlyIncome).toLocaleString('en-IN')}`
-                    : '-'}
-                </td>
+                <td>{empData.applicant?.grossMonthlyIncome ? `Rs. ${empData.applicant.grossMonthlyIncome}` : '-'}</td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>
@@ -1031,13 +986,7 @@ export default function PdfView() {
               </tr>
               <tr>
                 <td>Other Monthly Income</td>
-                <td>
-                  {empData.applicant?.otherIncomeMonthly
-                    ? `Rs. ${Number(empData.applicant.otherIncomeMonthly).toLocaleString('en-IN')}`
-                    : empData.applicant?.otherMonthlyIncome
-                    ? `Rs. ${Number(empData.applicant.otherMonthlyIncome).toLocaleString('en-IN')}`
-                    : '-'}
-                </td>
+                <td>{empData.applicant?.otherMonthlyIncome ? `Rs. ${empData.applicant.otherMonthlyIncome}` : '-'}</td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>
@@ -1051,11 +1000,7 @@ export default function PdfView() {
               </tr>
               <tr>
                 <td>Net Monthly Income</td>
-                <td>
-                  {empData.applicant?.netMonthlyIncome
-                    ? `Rs. ${Number(empData.applicant.netMonthlyIncome).toLocaleString('en-IN')}`
-                    : '-'}
-                </td>
+                <td>{empData.applicant?.netMonthlyIncome ? `Rs. ${empData.applicant.netMonthlyIncome}` : '-'}</td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>
@@ -1084,6 +1029,10 @@ export default function PdfView() {
             <tbody>
               <tr>
                 <td>Applicant</td>
+                <td>{bankData.applicant?.accounts?.[0]?.bankName || '-'}</td>
+                <td>{bankData.applicant?.accounts?.[0]?.accountHolderName || customerDisplayName}</td>
+                <td>{bankData.applicant?.accounts?.[0]?.accountNumber || '-'}</td>
+                <td>{bankData.applicant?.accounts?.[0]?.ifscCode || '-'}</td>
                 <td>
                   {resolveBank(bankData.applicant?.primaryBank?.bankName || bankData.primaryBank?.bankName) ||
                     bankData.applicant?.primaryBank?.bankName ||
@@ -1155,24 +1104,23 @@ export default function PdfView() {
             <tbody>
               <tr>
                 <td className="pdf-row-header">Property Type</td>
-                <td>
-                  {resolveProperty(colData.propertyOne?.typeOfProperty) ||
-                    colData.propertyOne?.typeOfProperty ||
-                    colData.propertyType ||
-                    '-'}
-                </td>
+                <td>{colData.propertyType || '-'}</td>
               </tr>
               <tr>
                 <td className="pdf-row-header">Property Address</td>
-                <td>{colData.propertyOne?.locationAddress || colData.propertyAddress || '-'}</td>
+                <td>{colData.propertyAddress || '-'}</td>
               </tr>
               <tr>
                 <td className="pdf-row-header">Estimated Market Value</td>
+                <td>Rs. {colData.estimatedMarketValue || '-'}</td>
+              </tr>
+              <tr>
+                <td className="pdf-row-header">Is Property Identified?</td>
                 <td>
-                  {colData.propertyOne?.estimatedValue
-                    ? `Rs. ${Number(colData.propertyOne.estimatedValue).toLocaleString('en-IN')}`
-                    : colData.estimatedMarketValue
-                    ? `Rs. ${Number(colData.estimatedMarketValue).toLocaleString('en-IN')}`
+                  {colData.isPropertyIdentified !== undefined
+                    ? colData.isPropertyIdentified
+                      ? 'Yes'
+                      : 'No'
                     : '-'}
                 </td>
               </tr>
@@ -1196,20 +1144,18 @@ export default function PdfView() {
               </tr>
             </thead>
             <tbody>
-              {[
-                refData.reference1 || (Array.isArray(refData.references) ? refData.references[0] : null),
-                refData.reference2 || (Array.isArray(refData.references) ? refData.references[1] : null),
-              ]
-                .filter(Boolean)
-                .map((ref, i) => (
-                  <tr key={i}>
-                    <td>Reference {i + 1}</td>
-                    <td>{ref.fullName || '-'}</td>
-                    <td>{resolveRelationship(ref.relationship) || ref.relationship || '-'}</td>
-                    <td>{ref.mobileNo || '-'}</td>
-                    <td>{ref.address || '-'}</td>
-                  </tr>
-                ))}
+              {(refData.references?.length > 0
+                ? refData.references
+                : []
+              ).map((ref, i) => (
+                <tr key={i}>
+                  <td>Reference {i + 1}</td>
+                  <td>{ref.fullName || '-'}</td>
+                  <td>{ref.relationship || '-'}</td>
+                  <td>{ref.mobileNo || '-'}</td>
+                  <td>{ref.address || '-'}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
 
@@ -1238,13 +1184,12 @@ export default function PdfView() {
             <tbody>
               <tr>
                 <td className="pdf-row-header">FI Status</td>
-                <td>{appData.sections?.fieldVerification?.status || 'Verified'}</td>
+                <td>{appData.sections?.fieldVerification?.status || '-'}</td>
               </tr>
               <tr>
                 <td className="pdf-row-header">FI Remarks</td>
                 <td>
-                  {appData.sections?.fieldVerification?.remarks ||
-                    'Applicant residence and identity verified in person.'}
+                  {appData.sections?.fieldVerification?.remarks || '-'}
                 </td>
               </tr>
             </tbody>

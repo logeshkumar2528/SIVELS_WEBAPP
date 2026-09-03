@@ -408,6 +408,12 @@ function AddCustomer() {
       }
     }
 
+    // Remarks Validation
+    if (!formData.remarks?.trim()) {
+      newFieldErrors.remarks = 'Remarks are required.'
+      isValid = false
+    }
+
     // Document Validation
     for (const mapping of documentMappings) {
       if (mapping.isMandatory && !uploadedDocuments.includes(mapping.documentTypeId)) {
@@ -760,7 +766,7 @@ function AddCustomer() {
           <div className="form-grid-full">
             <div className="form-group">
               <label className="form-label" htmlFor="remarks">
-                Remarks (Optional)
+                Remarks <span className="required-star">*</span>
               </label>
               <textarea
                 id="remarks"
@@ -770,6 +776,7 @@ function AddCustomer() {
                 rows={3}
                 value={formData.remarks}
                 onChange={handleInputChange}
+                required
               />
               {fieldErrors.remarks && <div className="form-field-error">{fieldErrors.remarks}</div>}
             </div>

@@ -46,6 +46,10 @@ function buildKycState(appData) {
       aadhaarLast4: saved.applicant?.aadhaarLast4 || last4FromValue(appData.aadhaarNo),
       panCardNo: saved.applicant?.panCardNo || appData.panCardNo || appData.panNumber || '',
       identityDocumentType: saved.applicant?.identityDocumentType || '',
+      identityDocumentCount: saved.applicant?.identityDocumentCount || '',
+      identityDocumentFiles: Array.isArray(saved.applicant?.identityDocumentFiles)
+        ? saved.applicant.identityDocumentFiles
+        : [],
       identityDocumentNo: saved.applicant?.identityDocumentNo || '',
       verificationStatus: saved.applicant?.verificationStatus || 'Pending',
     },
@@ -54,6 +58,10 @@ function buildKycState(appData) {
       aadhaarLast4: savedCoApplicants[index]?.aadhaarLast4 || '',
       panCardNo: savedCoApplicants[index]?.panCardNo || '',
       identityDocumentType: savedCoApplicants[index]?.identityDocumentType || '',
+      identityDocumentCount: savedCoApplicants[index]?.identityDocumentCount || '',
+      identityDocumentFiles: Array.isArray(savedCoApplicants[index]?.identityDocumentFiles)
+        ? savedCoApplicants[index].identityDocumentFiles
+        : [],
       identityDocumentNo: savedCoApplicants[index]?.identityDocumentNo || '',
       verificationStatus: savedCoApplicants[index]?.verificationStatus || 'Pending',
     })),
@@ -77,7 +85,7 @@ function KycCard({
 }) {
   const [otpStep, setOtpStep] = useState(person.verificationStatus === 'Verified' ? 'verified' : 'idle');
   const [otpValue, setOtpValue] = useState('');
-  const fileInputRef = useRef(null);
+  const fileInputRefs = useRef([]);
 
   useEffect(() => {
     if (person.verificationStatus !== 'Verified' && otpStep === 'verified') {
@@ -99,10 +107,43 @@ function KycCard({
 
   const isAadhaarComplete = person.aadhaarLast4?.length === 4;
 
-  const handleRemoveFile = () => {
-    onChange('manualDocuments', '');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+  const documentCountOptions = [
+    { value: '1', label: '1' },
+    { value: '2', label: '2' },
+    { value: '3', label: '3' },
+  ];
+
+  const selectedDocumentCount = Number(person.identityDocumentCount) || 0;
+  const selectedDocumentFiles = Array.isArray(person.identityDocumentFiles) ? person.identityDocumentFiles : [];
+
+  const handleDocumentTypeChange = (value) => {
+    onChange('identityDocumentType', value);
+    if (!value) {
+      onChange('identityDocumentCount', '');
+      onChange('identityDocumentFiles', []);
+    }
+  };
+
+  const handleDocumentCountChange = (value) => {
+    const count = Number(value) || 0;
+    onChange('identityDocumentCount', value);
+    onChange('identityDocumentFiles', Array.from({ length: count }, (_, index) => selectedDocumentFiles[index] || ''));
+  };
+
+  const handleDocumentFileChange = (index, event) => {
+    const nextFiles = [...selectedDocumentFiles];
+    nextFiles[index] = event.target.files?.[0]?.name || '';
+    onChange('identityDocumentFiles', nextFiles);
+    onChange('manualDocuments', nextFiles.filter(Boolean).join(', '));
+  };
+
+  const handleRemoveFile = (index) => {
+    const nextFiles = [...selectedDocumentFiles];
+    nextFiles[index] = '';
+    onChange('identityDocumentFiles', nextFiles);
+    onChange('manualDocuments', nextFiles.filter(Boolean).join(', '));
+    if (fileInputRefs.current[index]) {
+      fileInputRefs.current[index].value = '';
     }
   };
 
@@ -219,21 +260,6 @@ function KycCard({
           </div>
 
           <div className="aw-field">
-            <label className="form-label">Passport / DL / Voter ID Type</label>
-            <div className="aw-input-wrapper">
-              <Select
-                value={person.identityDocumentType}
-                onChange={(val) => onChange('identityDocumentType', val)}
-                options={documentTypeOptions}
-                placeholder={isLoadingMasters ? 'Loading...' : 'Select document type'}
-                disabled={isLoadingMasters}
-                className={errors.identityDocumentType ? 'aw-input--invalid' : ''}
-              />
-            </div>
-            {errors.identityDocumentType && <span className="aw-field-error">{errors.identityDocumentType}</span>}
-          </div>
-
-          <div className="aw-field">
             <label className="form-label">Document Number</label>
             <div className="aw-input-wrapper">
               <input
@@ -284,45 +310,78 @@ function KycCard({
           )}
 
           <div className="aw-field">
-            <label className="form-label">Upload Manual Documents (ZIP/Images)</label>
+            <label className="form-label">Verification Documents</label>
             <div className="aw-input-wrapper">
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="form-input aw-input"
-                accept=".zip,image/*"
-                multiple
-                onChange={(e) => {
-                  if (e.target.files.length > 0) {
-                    onChange('manualDocuments', e.target.files[0].name);
-                  }
-                }}
-                style={{ padding: '6px', paddingRight: person.manualDocuments ? '30px' : '6px' }}
+              <Select
+                value={person.identityDocumentType}
+                onChange={handleDocumentTypeChange}
+                options={documentTypeOptions}
+                placeholder={isLoadingMasters ? 'Loading...' : 'Select document type'}
+                disabled={isLoadingMasters}
+                className={errors.identityDocumentType ? 'aw-input--invalid' : ''}
               />
-              {person.manualDocuments && (
-                <button
-                  type="button"
-                  onClick={handleRemoveFile}
-                  style={{
-                    position: 'absolute',
-                    right: '4px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    color: '#dc2626',
-                    cursor: 'pointer',
-                    padding: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                  title="Remove file"
-                >
-                  <X size={16} />
-                </button>
-              )}
             </div>
+            {errors.identityDocumentType && <span className="aw-field-error">{errors.identityDocumentType}</span>}
+          </div>
+
+          {person.identityDocumentType && (
+            <div className="aw-field">
+              <label className="form-label">Number of Documents</label>
+              <div className="aw-input-wrapper">
+                <Select
+                  value={person.identityDocumentCount}
+                  onChange={handleDocumentCountChange}
+                  options={documentCountOptions}
+                  placeholder="Select number"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="aw-field aw-upload-field">
+            <label className="form-label">Upload Manual Documents (ZIP/Images)</label>
+            {selectedDocumentCount > 0 ? (
+              <div className="aw-upload-list">
+                {Array.from({ length: selectedDocumentCount }, (_, index) => (
+                  <div className="aw-input-wrapper" key={`document-upload-${index}`}>
+                    <input
+                      ref={(element) => { fileInputRefs.current[index] = element; }}
+                      type="file"
+                      className="form-input aw-input"
+                      accept=".zip,image/*"
+                      aria-label={`Upload document ${index + 1}`}
+                      onChange={(event) => handleDocumentFileChange(index, event)}
+                      style={{ padding: '6px', paddingRight: selectedDocumentFiles[index] ? '30px' : '6px' }}
+                    />
+                    {selectedDocumentFiles[index] && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFile(index)}
+                        className="aw-upload-remove"
+                        title={`Remove document ${index + 1}`}
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="aw-input-wrapper">
+                <input
+                  type="file"
+                  className="form-input aw-input"
+                  accept=".zip,image/*"
+                  multiple
+                  onChange={(e) => {
+                    if (e.target.files.length > 0) {
+                      onChange('manualDocuments', e.target.files[0].name);
+                    }
+                  }}
+                  style={{ padding: '6px', paddingRight: person.manualDocuments ? '30px' : '6px' }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
