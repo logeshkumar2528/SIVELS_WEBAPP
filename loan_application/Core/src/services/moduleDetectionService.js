@@ -66,21 +66,21 @@ export const ACCOUNT_SOURCES = [
     module: 'Agent',
     endpoint: '/AgentMaster',
     destination: AGENT_DASHBOARD,
-    extractMobile: (record) => record?.mobileNumber ?? record?.MobileNumber,
+    extractMobile: (record) => record?.mobileNumber ?? record?.MobileNumber ?? record?.mobile ?? record?.phone ?? record?.MobileNo,
   },
   {
     accountType: 'RM',
     module: 'RM',
     endpoint: '/RMMaster',
     destination: RM_DASHBOARD,
-    extractMobile: (record) => record?.mobileNumber ?? record?.MobileNumber,
+    extractMobile: (record) => record?.mobileNumber ?? record?.MobileNumber ?? record?.mobile ?? record?.phone ?? record?.MobileNo,
   },
   {
     accountType: 'Customer',
     module: 'Customer',
     endpoint: '/AgentAddCustomer',
     destination: CUSTOMER_DASHBOARD,
-    extractMobile: (record) => record?.mobileNumber ?? record?.MobileNumber,
+    extractMobile: (record) => record?.mobileNumber ?? record?.MobileNumber ?? record?.mobile ?? record?.phone ?? record?.MobileNo,
   },
 ];
 

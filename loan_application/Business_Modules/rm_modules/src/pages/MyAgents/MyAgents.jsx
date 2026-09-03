@@ -286,7 +286,10 @@ export default function MyAgents() {
           const branchMatches = !matchedBranch || agentBranch === matchedBranch;
           const creatorMatches = currentRmId ? agentCreator === currentRmId : false;
           const nameMatches = matchedName ? agentName.includes(matchedName) : true;
-          return branchMatches || creatorMatches || nameMatches;
+          // An RM must only see agents assigned to that RM. Branch/name are
+          // fallback matches for legacy records without an rmId.
+          const hasAssignment = Boolean(agent.rmId || agent.RMId || agent.relationshipManagerId || agent.RelationshipManagerId || agent.createdBy);
+          return creatorMatches || (hasAssignment ? false : (branchMatches && nameMatches));
         });
 
         const rows = filteredAgents.map((agent, index) => buildRow(agent, customerRowsRaw, index));

@@ -136,17 +136,31 @@ export function useRmDashboardData() {
       setError('');
 
       try {
-        const [agentRes, customerRes] = await Promise.all([
+        const [agentRes, customerRes, rmRes] = await Promise.all([
           fetch(`${API_BASE}/AgentMaster`),
           fetch(`${API_BASE}/AgentAddCustomer`),
+          fetch(`${API_BASE}/RMMaster`),
         ]);
 
         if (!agentRes.ok) throw new Error(`Failed to load agents (${agentRes.status})`);
         if (!customerRes.ok) throw new Error(`Failed to load applications (${customerRes.status})`);
 
-        const [agentsData, customersData] = await Promise.all([agentRes.json(), customerRes.json()]);
-        const agents = resolveApiArray(agentsData);
-        const applications = resolveApiArray(customersData).map(mapApplication);
+        const [agentsData, customersData, rmsData] = await Promise.all([agentRes.json(), customerRes.json(), rmRes.ok ? rmRes.json() : Promise.resolve([])]);
+        const allAgents = resolveApiArray(agentsData);
+        const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || 'null');
+        const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || currentUser?.rmid || 0);
+        const currentMobile = normalizeText(currentUser?.mobileNumber || currentUser?.phone).replace(/\D/g, '').slice(-10);
+        const rmRows = resolveApiArray(rmsData);
+        const matchedRm = rmRows.find((rm) => currentRmId && Number(rm.rmId || rm.RMId || rm.id) === currentRmId) || rmRows.find((rm) => currentMobile && normalizeText(rm.mobileNumber || rm.MobileNumber || rm.mobile || rm.phone).replace(/\D/g, '').slice(-10) === currentMobile);
+        const rmId = currentRmId || Number(matchedRm?.rmId || matchedRm?.RMId || matchedRm?.id || 0);
+        const rmName = normalizeText(matchedRm?.fullName || currentUser?.fullName || currentUser?.name);
+        const agents = allAgents.filter((agent) => {
+          const agentRmId = Number(agent.rmId || agent.RMId || agent.relationshipManagerId || agent.RelationshipManagerId || agent.createdBy || 0);
+          const assignedName = normalizeText(agent.relationshipManager || agent.relationshipManagerName || agent.rmName || agent.rmFullName);
+          return (rmId && agentRmId === rmId) || (rmName && assignedName === rmName);
+        });
+        const allowedAgentIds = new Set(agents.map((agent) => Number(agent.agentId || agent.AgentId || 0)));
+        const applications = resolveApiArray(customersData).map(mapApplication).filter((application) => !application.agentId || allowedAgentIds.has(Number(application.agentId)));
 
         const statusSummaryData = buildStatusSummary(applications);
         const agentPerformanceData = buildAgentPerformance(applications, agents);

@@ -84,7 +84,11 @@ export default function SubmissionHistory() {
           if (id !== undefined && id !== null) result[String(id)] = agent;
           return result;
         }, {});
+        const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || 'null');
+        const rmId = Number(currentUser?.rmId || currentUser?.RMId || currentUser?.rmid || localStorage.getItem('rmId') || 0);
+        const assignedAgentIds = new Set(Object.values(agentsById).filter((agent) => Number(agent.rmId || agent.RMId || agent.relationshipManagerId || agent.RelationshipManagerId || agent.createdBy || 0) === rmId).map((agent) => String(agent.agentId || agent.AgentId)));
         const liveRows = resolveArray(customersData)
+          .filter((record) => assignedAgentIds.has(String(record.agentId || record.AgentId)))
           .map((record) => mapSubmission(record, agentsById))
           .filter((record) => record.id !== 'undefined');
         if (active) setSubmissions(liveRows);

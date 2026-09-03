@@ -5,7 +5,7 @@ import {
   Percent, Type, Users, Network, FileText,
   CreditCard, Package, Target, Repeat, User, Heart, Building, 
   Map, Building2, Briefcase, Landmark, Globe, MapPin, Link, 
-  Layers, ShieldCheck, Home, Key, GraduationCap, Star, Contact, Shield, TrendingUp
+  Layers, ShieldCheck, Home, Key, GraduationCap, Star, Contact, Shield, TrendingUp, LogOut
 } from 'lucide-react';
 import './Navbar.css';
 
@@ -46,6 +46,12 @@ export function Navbar() {
   const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef(null);
   const location = useLocation();
+  const handleLogout = () => {
+    localStorage.removeItem('sivels_currentUser');
+    localStorage.removeItem('sivels_permissions');
+    localStorage.removeItem('sivels_roles');
+    window.location.href = '/login';
+  };
 
   const isMastersActive = location.pathname.startsWith('/masters');
   const activeMaster = MASTERS_MENU.find(m => location.pathname.includes(m.path));
@@ -163,6 +169,7 @@ export function Navbar() {
             )}
           </div>
         </div>
+        <button className="navbar-logout" onClick={handleLogout}><LogOut size={17} /> <span>Logout</span></button>
       </div>
     </nav>
   );
