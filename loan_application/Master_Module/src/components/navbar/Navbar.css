@@ -15,7 +15,10 @@
   margin: 0 auto;
   padding: 0 var(--spacing-lg);
   height: 100%;
+  gap: var(--spacing-lg);
 }
+
+.navbar-left { flex: 0 0 auto; }
 
 .navbar-brand {
   font-size: 1.25rem;
@@ -28,6 +31,7 @@
   align-items: center;
   gap: var(--spacing-lg);
   height: 100%;
+  margin-right: auto;
 }
 
 .nav-link {
@@ -45,6 +49,17 @@
   cursor: pointer;
   transition: color 0.2s;
 }
+
+.nav-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+.nav-back:hover { color: var(--color-primary); }
 
 .nav-link:hover, .nav-link.active {
   color: var(--color-primary);
@@ -142,7 +157,9 @@
 }
 
 .master-mega-menu {
-  width: 600px; /* Wider for 2 columns */
+  width: min(620px, calc(100vw - 2rem));
+  left: 0;
+  right: auto;
   padding: 0;
   border-radius: 0.5rem;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
@@ -183,7 +200,7 @@
 
 .master-list-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.25rem 1rem;
   padding: 0.75rem 1rem;
   max-height: 400px;
@@ -237,6 +254,8 @@
     height: auto;
   }
 
+  .nav-back { padding: var(--spacing-sm) 0; }
+
   .nav-dropdown-container {
     width: 100%;
     height: auto;
@@ -256,6 +275,26 @@
     padding-left: var(--spacing-sm);
     margin-top: var(--spacing-xs);
     max-height: none;
+  }
+
+  .master-mega-menu {
+    width: 100%;
+  }
+
+  .master-list-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A flyout anchored to the trigger can extend past the viewport on tablets.
+   At that size it becomes a contained panel below the bar instead. */
+@media (min-width: 769px) and (max-width: 960px) {
+  .master-mega-menu {
+    position: fixed;
+    top: 64px;
+    left: 16px;
+    right: 16px;
+    width: auto;
   }
 }
 .navbar-logout{display:inline-flex;align-items:center;gap:7px;margin-left:auto;padding:9px 12px;border:1px solid #d9e2dc;border-radius:7px;background:#fff;color:#6f6f6f;font-size:13px;font-weight:600;cursor:pointer}.navbar-logout:hover{border-color:#24a148;color:#198038;background:#f5fbf7}@media(max-width:768px){.navbar-logout{margin-right:8px;padding:8px}.navbar-logout span{display:none}}

@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { 
   ChevronDown, Menu, X, Search, Check, Database,
   Percent, Type, Users, Network, FileText,
   CreditCard, Package, Target, Repeat, User, Heart, Building, 
   Map, Building2, Briefcase, Landmark, Globe, MapPin, Link, 
-  Layers, ShieldCheck, Home, Key, GraduationCap, Star, Contact, Shield, TrendingUp, LogOut
+  Layers, ShieldCheck, Home, Key, GraduationCap, Star, Contact, Shield, TrendingUp, LogOut, ArrowLeft
 } from 'lucide-react';
 import './Navbar.css';
 
@@ -46,6 +46,7 @@ export function Navbar() {
   const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef(null);
   const location = useLocation();
+  const navigate = useNavigate();
   const handleLogout = () => {
     localStorage.removeItem('sivels_currentUser');
     localStorage.removeItem('sivels_permissions');
@@ -89,6 +90,7 @@ export function Navbar() {
   const filteredMasters = MASTERS_MENU.filter(item => 
     item.label.toLowerCase().includes(searchTerm.toLowerCase())
   );
+  const goBack = () => window.history.length > 1 ? navigate(-1) : navigate('/dashboard');
 
   return (
     <nav className="top-navbar">
@@ -108,6 +110,7 @@ export function Navbar() {
         </button>
 
         <div className={`navbar-navigation ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+          {location.pathname !== '/dashboard' && <button className="nav-back" onClick={goBack}><ArrowLeft size={16} /> Back</button>}
           <NavLink 
             to="/dashboard" 
             className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
@@ -174,4 +177,3 @@ export function Navbar() {
     </nav>
   );
 }
-
