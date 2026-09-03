@@ -44,7 +44,7 @@ function ReferenceCard({
       <div className="aw-mini-card__body">
         <div className="aw-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
           <div className="aw-field">
-            <label className="form-label">Full Name</label>
+            <label className="form-label">Name</label>
             <div className="aw-input-wrapper">
               <User className="aw-input-icon" size={14} />
               <input className="form-input aw-input aw-input--with-icon" value={reference.fullName} onChange={(e) => onChange('fullName', e.target.value)} />

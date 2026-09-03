@@ -425,6 +425,45 @@ export default function PdfView() {
 
   const effectiveDocs = downloadedDocs;
 
+  const getCollectedDocumentNames = (person = {}, documents = []) => {
+    const names = [];
+    const addName = (name) => {
+      const normalized = String(name || '').trim();
+      if (normalized && !names.some((existing) => existing.toLowerCase() === normalized.toLowerCase())) {
+        names.push(normalized);
+      }
+    };
+
+    if (person.aadhaarLast4 || person.aadhaarNo) addName('Aadhaar');
+    if (person.panCardNo || person.panNumber) addName('PAN Card');
+
+    const identityDocumentType = resolveDocType(person.identityDocumentType);
+    if (identityDocumentType) addName(identityDocumentType);
+
+    if (!identityDocumentType && Array.isArray(person.identityDocumentFiles)) {
+      person.identityDocumentFiles.forEach((file) => {
+        addName(typeof file === 'string' ? file : file?.name || file?.fileName);
+      });
+    }
+
+    documents.forEach((document) => {
+      addName(document.documentTypeName || document.fileName);
+    });
+
+    return names;
+  };
+
+  const documentPeople = [
+    { label: 'Applicant', kyc: kycData.applicant || {}, documents: effectiveDocs },
+    ...(hasCoApplicants
+      ? coApplicants.map((_, index) => ({
+          label: `Co-Applicant ${index + 1}`,
+          kyc: kycData.coApplicants?.[index] || {},
+          documents: [],
+        }))
+      : []),
+  ];
+
   // Find client/profile photo if present in uploaded docs
   const clientPhotoDoc =
     downloadedDocs.find(
@@ -682,142 +721,48 @@ export default function PdfView() {
             </tbody>
           </table>
 
-          {/* DYNAMIC UPLOADED KYC DOCUMENTS WITH THEIR NAMES */}
-          <div className="pdf-section-title">KYC DOCUMENT IMAGES</div>
+          {/* DYNAMIC UPLOADED KYC DOCUMENT NAMES */}
+          <div className="pdf-section-title">KYC DOCUMENTS</div>
           <div
             style={{
-              display: 'grid',
-              gridTemplateColumns: effectiveDocs.length === 3 ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)',
-              gap: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
               marginTop: '10px',
               marginBottom: '14px',
             }}
           >
-            {effectiveDocs.length > 0 ? (
-              effectiveDocs.map((doc, idx) => (
+            {documentPeople.map((person) => {
+              const documentNames = getCollectedDocumentNames(person.kyc, person.documents);
+
+              return (
                 <div
-                  key={idx}
+                  key={person.label}
                   style={{
                     border: '1px solid #cbd5e1',
                     borderRadius: '6px',
-                    padding: '8px',
-                    backgroundColor: '#ffffff',
-                    boxSizing: 'border-box',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                    padding: '9px 12px',
+                    backgroundColor: '#f8fafc',
                   }}
                 >
-                  <div
-                    style={{
-                      backgroundColor: '#f8fafc',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '4px',
-                      padding: '4px 6px',
-                      width: '100%',
-                      marginBottom: '8px',
-                      textAlign: 'center',
-                      boxSizing: 'border-box',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontWeight: '700',
-                        fontSize: '10.5px',
-                        color: '#0f172a',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}
-                      title={doc.documentTypeName}
-                    >
-                      {doc.documentTypeName || `Document ${idx + 1}`}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '8.5px',
-                        color: '#64748b',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        marginTop: '1px',
-                      }}
-                      title={doc.fileName}
-                    >
-                      {doc.fileName}
-                    </div>
+                  <div style={{ fontWeight: '700', fontSize: '11px', color: '#0f172a', marginBottom: '6px' }}>
+                    {person.label}
                   </div>
-
-                  <div
-                    style={{
-                      width: '100%',
-                      height: '150px',
-                      backgroundColor: '#f8fafc',
-                      borderRadius: '4px',
-                      border: '1px solid #e2e8f0',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      overflow: 'hidden',
-                      padding: '4px',
-                      boxSizing: 'border-box',
-                    }}
-                  >
-                    {doc.fileType === 'pdf' ? (
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#dc2626',
-                          textAlign: 'center',
-                          padding: '6px',
-                        }}
-                      >
-                        <span style={{ fontWeight: 'bold', fontSize: '11px' }}>PDF Document</span>
-                        <span style={{ fontSize: '9px', marginTop: '4px', wordBreak: 'break-all' }}>{doc.fileName}</span>
-                      </div>
-                    ) : doc.previewUrl ? (
-                      <img
-                        src={doc.previewUrl}
-                        alt={doc.documentTypeName || doc.fileName}
-                        style={{
-                          maxWidth: '100%',
-                          maxHeight: '100%',
-                          objectFit: 'contain',
-                          display: 'block',
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          color: '#64748b',
-                          fontSize: '10px',
-                        }}
-                      >
-                        Preview Unavailable
-                      </div>
-                    )}
-                  </div>
+                  {documentNames.length > 0 ? (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px' }}>
+                      {documentNames.map((name) => (
+                        <span key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10.5px', color: '#334155' }}>
+                          <span aria-hidden="true" style={{ color: '#0F7A4C', fontWeight: '700', fontSize: '13px', lineHeight: 1 }}>✓</span>
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: '10px', color: '#64748b' }}>No KYC documents collected</span>
+                  )}
                 </div>
-              ))
-            ) : (
-              <div
-                style={{
-                  gridColumn: '1 / -1',
-                  padding: '20px',
-                  textAlign: 'center',
-                  color: '#64748b',
-                  border: '1px dashed #cbd5e1',
-                  borderRadius: '6px',
-                  backgroundColor: '#f8fafc',
-                }}
-              >
-                No uploaded KYC document images available for this customer.
-              </div>
-            )}
+              );
+            })}
           </div>
 
           {/* STEP 4: ADDRESS DETAILS */}
@@ -1198,13 +1143,17 @@ export default function PdfView() {
             </tbody>
           </table>
 
-          {/* STEP 12: DECLARATION & ACKNOWLEDGEMENT */}
+          {/* STEP 12: DECLARATION */}
           <div className="pdf-section-title" style={{ marginTop: '14px' }}>
-            DECLARATION & ACKNOWLEDGEMENT
+            12. DECLARATION
           </div>
           <p className="pdf-text-small pdf-text-justify" style={{ margin: '6px 0 12px 0' }}>
-            I/We declare that all the particulars and information given in this application form are true, correct and
-            complete to the best of my/our knowledge. I/We authorise Sivels Finance to verify all details furnished.
+            I/We declare that the information given in this application is true, correct and complete to the best of
+            my/our knowledge. I/We authorise Sivels Finance (a unit of Sivels Holding Pvt Ltd) and its representatives
+            to verify the details furnished, obtain credit bureau reports, and process my/our personal data for
+            evaluation, sanction and servicing of this loan, in accordance with applicable law. I/We understand that
+            the Admin Fee is non-refundable, and that submission of this form does not guarantee sanction of the loan
+            applied for.
           </p>
 
           <div
@@ -1266,6 +1215,27 @@ export default function PdfView() {
               <div style={{ fontSize: '9.5px', color: '#64748b', marginTop: '3px' }}>
                 Date: {resolvedRMDate}
               </div>
+            </div>
+          </div>
+
+          {/* CUSTOMER SUPPORT */}
+          <div className="pdf-section-title" style={{ marginTop: '14px' }}>
+            CUSTOMER SUPPORT
+          </div>
+          <div
+            style={{
+              padding: '10px 14px',
+              border: '1px solid #cbd5e1',
+              borderRadius: '6px',
+              backgroundColor: '#f8fafc',
+              textAlign: 'center',
+            }}
+          >
+            <div style={{ fontWeight: '700', fontSize: '11px', color: '#1e293b' }}>
+              For assistance, please contact Customer Support
+            </div>
+            <div style={{ marginTop: '4px', fontSize: '13px', color: '#0F7A4C', fontWeight: '700' }}>
+              1800-123-4567
             </div>
           </div>
         </div>
