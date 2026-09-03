@@ -41,6 +41,7 @@ export default function PdfView() {
 
   const [liveCustomer, setLiveCustomer] = useState(null);
   const [liveRM, setLiveRM] = useState(null);
+  const [liveEmployment, setLiveEmployment] = useState(null);
   const [downloadedDocs, setDownloadedDocs] = useState([]);
   const [masterMaps, setMasterMaps] = useState({
     sourcingChannels: {},
@@ -58,6 +59,7 @@ export default function PdfView() {
     properties: {},
     propertyUsages: {},
     employmentTypes: {},
+    educations: {},
   });
 
   const blobUrlsRef = useRef([]);
@@ -119,6 +121,10 @@ export default function PdfView() {
           propertyMap,
           propertyUsageMap,
           empTypeMap,
+          eduMap,
+          empDetailsRes,
+          addrDetailsRes,
+          persInfoRes,
         ] = await Promise.allSettled([
           fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`).then((r) => (r.ok ? r.json() : null)),
           fetch(`${API_BASE}/RMMaster`).then((r) => (r.ok ? r.json() : null)),
@@ -137,17 +143,74 @@ export default function PdfView() {
           fetchMaster('PropertyMaster', 'propertyId', 'propertyName'),
           fetchMaster('PropertyUsageMaster', 'propertyUsageId', 'propertyUsageName'),
           fetchMaster('EmploymentType', 'employmentTypeId', 'employmentTypeName'),
+          fetchMaster('EducationMaster', 'educationId', 'educationName'),
+          fetch(`${API_BASE}/ApplicationEmploymentIncomeDetails`).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${API_BASE}/ApplicationAddressDetails`).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${API_BASE}/ApplicationPersonalInformation`).then((r) => (r.ok ? r.json() : null)),
         ]);
 
         let resolvedCustomerId = applicationId;
 
         if (active) {
+          let currentCust = null;
           if (custRes.status === 'fulfilled' && custRes.value) {
             const data = custRes.value;
             const record = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
             if (record) {
               setLiveCustomer(record);
+              currentCust = record;
               resolvedCustomerId = record.agentCustomerId || record.AgentCustomerId || applicationId;
+            }
+          }
+
+          if (empDetailsRes.status === 'fulfilled' && empDetailsRes.value) {
+            console.log('RAW Employment & Income API Response:', empDetailsRes.value);
+            const empList = Array.isArray(empDetailsRes.value) ? empDetailsRes.value : [];
+            const addrList = addrDetailsRes.status === 'fulfilled' && Array.isArray(addrDetailsRes.value) ? addrDetailsRes.value : [];
+            const persList = persInfoRes.status === 'fulfilled' && Array.isArray(persInfoRes.value) ? persInfoRes.value : [];
+
+            const custName = (currentCust?.fullName || currentCust?.customerName || appData?.customerName || '').toLowerCase();
+            const custMobile = currentCust?.mobileNumber || currentCust?.mobile || appData?.mobile || '';
+
+            const matchedPers = persList.find((p) =>
+              (custMobile && p.mobileNumber === custMobile) ||
+              (custName && (p.firstName?.toLowerCase() === custName || p.lastName?.toLowerCase() === custName))
+            );
+
+            let matchedAddrId = null;
+            if (matchedPers) {
+              const matchedAddr = addrList.find((a) => a.personalInformationId === matchedPers.personalInformationId);
+              if (matchedAddr) matchedAddrId = matchedAddr.applicationAddressDetailsId;
+            }
+
+            const matchedEmp = (matchedAddrId && empList.find((e) => e.applicationAddressDetailsId === matchedAddrId)) ||
+              (appData.employmentIncome?.applicant?.employmentIncomeDetailsId && empList.find(e => e.applicationEmploymentIncomeDetailsId === appData.employmentIncome.applicant.employmentIncomeDetailsId)) ||
+              empList[empList.length - 1];
+
+            if (matchedEmp) {
+              const liveEmpObj = {
+                applicant: {
+                  employerBusinessName: matchedEmp.employerBusinessName || '',
+                  employerName: matchedEmp.employerBusinessName || '',
+                  designationNatureOfBusiness: matchedEmp.designationNatureOfBusiness || '',
+                  designation: matchedEmp.designationNatureOfBusiness || '',
+                  employmentNature: matchedEmp.employmentTypeId,
+                  employmentType: matchedEmp.employmentTypeId,
+                  employmentTypeId: matchedEmp.employmentTypeId,
+                  qualification: matchedEmp.educationId,
+                  educationId: matchedEmp.educationId,
+                  industryType: matchedEmp.industryType || '',
+                  totalExperienceYears: matchedEmp.totalExperience,
+                  totalExperience: matchedEmp.totalExperience,
+                  grossMonthlyIncome: matchedEmp.grossMonthlyIncome,
+                  otherIncomeMonthly: matchedEmp.otherMonthlyIncome,
+                  otherMonthlyIncome: matchedEmp.otherMonthlyIncome,
+                  netMonthlyIncome: matchedEmp.netMonthlyIncome,
+                  grossAnnualIncome: matchedEmp.grossAnnualIncome,
+                }
+              };
+              setLiveEmployment(liveEmpObj);
+              console.log('TRANSFORMED liveEmployment object:', liveEmpObj);
             }
           }
 
@@ -179,6 +242,7 @@ export default function PdfView() {
             properties: propertyMap.status === 'fulfilled' ? propertyMap.value : {},
             propertyUsages: propertyUsageMap.status === 'fulfilled' ? propertyUsageMap.value : {},
             employmentTypes: empTypeMap.status === 'fulfilled' ? empTypeMap.value : {},
+            educations: eduMap.status === 'fulfilled' ? eduMap.value : {},
           });
         }
 
@@ -371,6 +435,20 @@ export default function PdfView() {
   const resolveProperty = (val) => (masterMaps.properties && masterMaps.properties[val]) || val || '';
   const resolvePropertyUsage = (val) => (masterMaps.propertyUsages && masterMaps.propertyUsages[val]) || val || '';
   const resolveEmploymentType = (val) => (masterMaps.employmentTypes && masterMaps.employmentTypes[val]) || val || '';
+  const resolveEducation = (val) => (masterMaps.educations && masterMaps.educations[val]) || val || '';
+
+  const formatCurrencyOrDash = (val) => {
+    if (val === null || val === undefined || val === '') return '-';
+    const num = Number(val);
+    if (isNaN(num)) return val;
+    return `Rs. ${num.toLocaleString('en-IN')}`;
+  };
+
+  const formatExperience = (exp) => {
+    if (exp === null || exp === undefined || exp === '') return '-';
+    const num = Number(exp);
+    return !isNaN(num) ? `${num} Years` : `${exp} Years`;
+  };
 
   // Dynamic Co-Applicants Resolution using standard helper
   const applicantCount = getApplicantCount(appData);
@@ -383,7 +461,25 @@ export default function PdfView() {
 
   const kycData = appData.kycDocuments || appData.sections?.kycDocuments || {};
   const addressData = appData.addressDetails || appData.sections?.addressDetails || {};
-  const empData = appData.employmentIncome || appData.sections?.employmentIncome || {};
+  
+  const rawEmp = appData.employmentIncome || appData.sections?.employmentIncome || {};
+  const rawApplicant = rawEmp.applicant || {};
+  const liveApplicant = liveEmployment?.applicant || {};
+
+  const mergedApplicant = { ...liveApplicant };
+  Object.entries(rawApplicant).forEach(([k, v]) => {
+    if (v !== '' && v !== null && v !== undefined) {
+      mergedApplicant[k] = v;
+    }
+  });
+
+  const empData = {
+    applicant: mergedApplicant,
+    coApplicants: Array.isArray(rawEmp.coApplicants) && rawEmp.coApplicants.length > 0
+      ? rawEmp.coApplicants
+      : (liveEmployment?.coApplicants || []),
+  };
+
   const bankData = appData.bankExistingLoans || appData.sections?.bankExistingLoans || {};
   const colData = appData.collateral || appData.sections?.collateral || appData.collateralDetails || {};
   const refData = appData.references || appData.sections?.references || {};
@@ -881,17 +977,19 @@ export default function PdfView() {
             <tbody>
               <tr>
                 <td>Occupation Category</td>
-                <td>{empData.applicant?.employmentType || '-'}</td>
+                <td>
+                  {resolveEmploymentType(empData.applicant?.employmentNature || empData.applicant?.employmentType || empData.applicant?.employmentTypeId) || empData.applicant?.employmentNature || empData.applicant?.employmentType || '-'}
+                </td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>
-                      {resolveEmploymentType(empData.coApplicants?.[i]?.employmentNature || empData.coApplicants?.[i]?.employmentType) || empData.coApplicants?.[i]?.employmentNature || '-'}
+                      {resolveEmploymentType(empData.coApplicants?.[i]?.employmentNature || empData.coApplicants?.[i]?.employmentType || empData.coApplicants?.[i]?.employmentTypeId) || empData.coApplicants?.[i]?.employmentNature || empData.coApplicants?.[i]?.employmentType || '-'}
                     </td>
                   ))}
               </tr>
               <tr>
                 <td>Employer Name</td>
-                <td>{empData.applicant?.employerName || '-'}</td>
+                <td>{empData.applicant?.employerBusinessName || empData.applicant?.employerName || '-'}</td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>{empData.coApplicants?.[i]?.employerBusinessName || empData.coApplicants?.[i]?.employerName || '-'}</td>
@@ -899,10 +997,22 @@ export default function PdfView() {
               </tr>
               <tr>
                 <td>Designation</td>
-                <td>{empData.applicant?.designation || '-'}</td>
+                <td>{empData.applicant?.designationNatureOfBusiness || empData.applicant?.designation || '-'}</td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>{empData.coApplicants?.[i]?.designationNatureOfBusiness || empData.coApplicants?.[i]?.designation || '-'}</td>
+                  ))}
+              </tr>
+              <tr>
+                <td>Qualification</td>
+                <td>
+                  {resolveEducation(empData.applicant?.qualification || empData.applicant?.educationId) || empData.applicant?.qualification || '-'}
+                </td>
+                {hasCoApplicants &&
+                  coApplicants.map((_, i) => (
+                    <td key={i}>
+                      {resolveEducation(empData.coApplicants?.[i]?.qualification || empData.coApplicants?.[i]?.educationId) || empData.coApplicants?.[i]?.qualification || '-'}
+                    </td>
                   ))}
               </tr>
               <tr>
@@ -913,53 +1023,51 @@ export default function PdfView() {
               </tr>
               <tr>
                 <td>Total Experience</td>
-                <td>{empData.applicant?.totalExperience ? `${empData.applicant.totalExperience} Years` : '-'}</td>
+                <td>{formatExperience(empData.applicant?.totalExperienceYears ?? empData.applicant?.totalExperience)}</td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>
-                      {empData.coApplicants?.[i]?.totalExperienceYears
-                        ? `${empData.coApplicants[i].totalExperienceYears} Years`
-                        : empData.coApplicants?.[i]?.totalExperience
-                        ? `${empData.coApplicants[i].totalExperience} Years`
-                        : '-'}
+                      {formatExperience(empData.coApplicants?.[i]?.totalExperienceYears ?? empData.coApplicants?.[i]?.totalExperience)}
                     </td>
                   ))}
               </tr>
               <tr>
                 <td>Gross Monthly Income</td>
-                <td>{empData.applicant?.grossMonthlyIncome ? `Rs. ${empData.applicant.grossMonthlyIncome}` : '-'}</td>
+                <td>{formatCurrencyOrDash(empData.applicant?.grossMonthlyIncome)}</td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>
-                      {empData.coApplicants?.[i]?.grossMonthlyIncome
-                        ? `Rs. ${Number(empData.coApplicants[i].grossMonthlyIncome).toLocaleString('en-IN')}`
-                        : '-'}
+                      {formatCurrencyOrDash(empData.coApplicants?.[i]?.grossMonthlyIncome)}
                     </td>
                   ))}
               </tr>
               <tr>
                 <td>Other Monthly Income</td>
-                <td>{empData.applicant?.otherMonthlyIncome ? `Rs. ${empData.applicant.otherMonthlyIncome}` : '-'}</td>
+                <td>{formatCurrencyOrDash(empData.applicant?.otherIncomeMonthly ?? empData.applicant?.otherMonthlyIncome)}</td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>
-                      {empData.coApplicants?.[i]?.otherIncomeMonthly
-                        ? `Rs. ${Number(empData.coApplicants[i].otherIncomeMonthly).toLocaleString('en-IN')}`
-                        : empData.coApplicants?.[i]?.otherMonthlyIncome
-                        ? `Rs. ${Number(empData.coApplicants[i].otherMonthlyIncome).toLocaleString('en-IN')}`
-                        : '-'}
+                      {formatCurrencyOrDash(empData.coApplicants?.[i]?.otherIncomeMonthly ?? empData.coApplicants?.[i]?.otherMonthlyIncome)}
                     </td>
                   ))}
               </tr>
               <tr>
                 <td>Net Monthly Income</td>
-                <td>{empData.applicant?.netMonthlyIncome ? `Rs. ${empData.applicant.netMonthlyIncome}` : '-'}</td>
+                <td>{formatCurrencyOrDash(empData.applicant?.netMonthlyIncome)}</td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>
-                      {empData.coApplicants?.[i]?.netMonthlyIncome
-                        ? `Rs. ${Number(empData.coApplicants[i].netMonthlyIncome).toLocaleString('en-IN')}`
-                        : '-'}
+                      {formatCurrencyOrDash(empData.coApplicants?.[i]?.netMonthlyIncome)}
+                    </td>
+                  ))}
+              </tr>
+              <tr>
+                <td>Gross Annual Income</td>
+                <td>{formatCurrencyOrDash(empData.applicant?.grossAnnualIncome)}</td>
+                {hasCoApplicants &&
+                  coApplicants.map((_, i) => (
+                    <td key={i}>
+                      {formatCurrencyOrDash(empData.coApplicants?.[i]?.grossAnnualIncome)}
                     </td>
                   ))}
               </tr>
