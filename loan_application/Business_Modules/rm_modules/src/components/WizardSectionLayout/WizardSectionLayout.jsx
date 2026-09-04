@@ -6,6 +6,7 @@ import { useLocation, matchPath } from 'react-router-dom';
 import { useMemo, useEffect, useState } from 'react';
 import { resolveApplicantName } from '../../pages/applicationWizard/flowUtils';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
+import { formatDateTime } from '../../utils/dateHelper';
 import './WizardSectionLayout.css';
 
 function getPrimaryBranch(appData) {
@@ -15,11 +16,7 @@ function getPrimaryBranch(appData) {
 }
 
 function formatSubmittedDate(value) {
-  if (!value) return 'Not submitted';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true,
-  });
+  return formatDateTime(value, 'Not submitted');
 }
 
 export default function WizardSectionLayout({

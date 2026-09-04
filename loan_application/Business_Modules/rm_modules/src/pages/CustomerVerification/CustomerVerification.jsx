@@ -8,6 +8,7 @@ import Button from '../../components/Button/Button';
 import Modal from '../../components/Modal/Modal';
 import { ROUTES } from '../../config/routeConfig';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
+import { formatDateTime } from '../../utils/dateHelper';
 import './CustomerVerification.css';
 
 export default function CustomerVerification() {
@@ -37,7 +38,7 @@ export default function CustomerVerification() {
     address: appData.address || 'KK Nagar, Chennai - 600078',
     aadhaarNo: appData.aadhaarNo ? `XXXX XXXX ${appData.aadhaarNo.slice(-4)}` : 'XXXX XXXX 3210',
     agentName: appData.agentName || 'Karthik Raja',
-    createdDate: appData.createdDate || '05 Jun 2025',
+    createdDate: appData.createdDate || appData.createdAt || '',
     agentRemarks: appData.agentRemarks || 'Customer interested in business loan.',
   };
 
@@ -95,7 +96,7 @@ export default function CustomerVerification() {
             appId={customerData.appId}
             agentName={`${customerData.agentName} (AGT0001)`}
             branch={customerData.address ? customerData.address.split(',')[0] : 'KK Nagar'}
-            submittedTime={`${customerData.createdDate}, 10:25 AM`}
+            submittedTime={formatDateTime(customerData.createdDate || customerData.createdAt, 'Not submitted')}
             status={customerData.status}
           />
         </div>

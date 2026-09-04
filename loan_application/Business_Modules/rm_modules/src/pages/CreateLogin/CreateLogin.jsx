@@ -7,6 +7,7 @@ import CustomerSummary from '../../components/CustomerSummary/CustomerSummary';
 import Button from '../../components/Button/Button';
 import { ROUTES } from '../../config/routeConfig';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
+import { formatDateTime } from '../../utils/dateHelper';
 import '../CustomerVerification/CustomerVerification.css';
 import './CreateLogin.css';
 
@@ -90,7 +91,7 @@ export default function CreateLogin() {
             appId={customerData.appId}
             agentName={`${customerData.agentName} (AGT0001)`}
             branch={customerData.address ? customerData.address.split(',')[0] : 'KK Nagar'}
-            submittedTime={`${customerData.createdDate}, 10:25 AM`}
+            submittedTime={formatDateTime(customerData.createdDate || customerData.createdAt, 'Not submitted')}
             status={customerData.status}
           />
         </div>

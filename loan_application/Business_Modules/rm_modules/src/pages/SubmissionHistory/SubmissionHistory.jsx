@@ -7,53 +7,30 @@ import StatusBadge from '../../components/StatusBadge/StatusBadge';
 import Button from '../../components/Button/Button';
 import Pagination from '../../components/Pagination/Pagination';
 import { ROUTES } from '../../config/routeConfig';
+import { formatDate, formatTime, getDateTimestamp } from '../../utils/dateHelper';
+import {
+  buildAllowedAgentIdSet,
+  filterAgentsForRm,
+  getCurrentRMContext,
+  normalizeApplicationStatus,
+  resolveApiArray,
+} from '../../utils/rmContext';
+import './SubmissionHistory.css';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
 
-function resolveArray(data) {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.value)) return data.value;
-  if (Array.isArray(data?.items)) return data.items;
-  if (Array.isArray(data?.data)) return data.data;
-  return [];
-}
-
-function normalizeStatus(record) {
-  const name = String(record.statusName || record.StatusName || record.statusDescription || '').toLowerCase();
-  if (name.includes('approved') || name.includes('submitted')) return 'Approved';
-  if (name.includes('pending')) return 'Pending';
-  if (name.includes('returned')) return 'Returned';
-  const status = Number(record.status ?? record.Status);
-  if (status === 2) return 'Approved';
-  if (status === 1) return 'Pending';
-  return 'New';
-}
-
-function formatSubmittedDateTime(value) {
-  if (!value) return 'N/A';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-
-  const day = String(date.getDate()).padStart(2, '0');
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const month = months[date.getMonth()];
-  const year = date.getFullYear();
-
-  let hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const ampm = hours >= 12 ? 'pm' : 'am';
-  hours = hours % 12;
-  hours = hours ? hours : 12;
-  const hoursStr = String(hours).padStart(2, '0');
-
-  return `${day} ${month} ${year}, ${hoursStr}:${minutes} ${ampm}`;
+function getInitials(name = '') {
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 }
 
 function mapSubmission(record, agentsById) {
   const id = record.applicationId || record.applicationNumber || record.agentCustomerId || record.customerId;
   const agentId = record.agentId || record.AgentId;
   const agent = agentsById[String(agentId)] || {};
-  const submittedRaw = record.submittedAt || record.SubmittedAt || record.createdAt || record.CreatedAt || record.createdDate;
+  const submittedRaw = record.submittedAt || record.SubmittedAt || record.createdAt || record.CreatedAt || record.createdDate || '';
   return {
     id: String(id),
     customerName: record.fullName || record.FullName || record.customerName || 'Unknown',
@@ -62,11 +39,10 @@ function mapSubmission(record, agentsById) {
     amount: record.expectedLoanAmount == null ? (record.amount || 'N/A') : `Rs. ${Number(record.expectedLoanAmount).toLocaleString('en-IN')}`,
     agentName: record.agentName || record.AgentName || agent.fullName || agent.FullName || 'N/A',
     branch: agent.branch || agent.Branch || record.branch || record.Branch || 'N/A',
-    submitted: formatSubmittedDateTime(submittedRaw),
-    rawSubmitted: submittedRaw,
-    // Submission History uses the business-facing workflow label. The API
-    // status remains unchanged; only this page's display label is mapped.
-    status: 'Ready for Review',
+    submittedDate: formatDate(submittedRaw),
+    submittedTime: formatTime(submittedRaw),
+    submittedAt: submittedRaw,
+    status: normalizeApplicationStatus(record.status ?? record.Status, record.statusName || record.StatusName),
   };
 }
 
@@ -93,6 +69,11 @@ export default function SubmissionHistory() {
       setIsLoading(true);
       setError('');
       try {
+        const rmContext = getCurrentRMContext();
+        if (!rmContext.rmId) {
+          throw new Error('No RM context found in session. Please sign in again.');
+        }
+
         const [customersResponse, agentsResponse] = await Promise.all([
           fetch(`${API_BASE}/AgentAddCustomer`),
           fetch(`${API_BASE}/AgentMaster`),
@@ -100,18 +81,20 @@ export default function SubmissionHistory() {
         if (!customersResponse.ok) throw new Error(`Failed to load submissions (${customersResponse.status})`);
         if (!agentsResponse.ok) throw new Error(`Failed to load agents (${agentsResponse.status})`);
         const [customersData, agentsData] = await Promise.all([customersResponse.json(), agentsResponse.json()]);
-        const agentsById = resolveArray(agentsData).reduce((result, agent) => {
+
+        const matchedAgents = filterAgentsForRm(resolveApiArray(agentsData), rmContext.rmId);
+        const agentsById = matchedAgents.reduce((result, agent) => {
           const id = agent.agentId || agent.AgentId;
           if (id !== undefined && id !== null) result[String(id)] = agent;
           return result;
         }, {});
-        const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || 'null');
-        const rmId = Number(currentUser?.rmId || currentUser?.RMId || currentUser?.rmid || localStorage.getItem('rmId') || 0);
-        const assignedAgentIds = new Set(Object.values(agentsById).filter((agent) => Number(agent.rmId || agent.RMId || agent.relationshipManagerId || agent.RelationshipManagerId || agent.createdBy || 0) === rmId).map((agent) => String(agent.agentId || agent.AgentId)));
-        const liveRows = resolveArray(customersData)
-          .filter((record) => assignedAgentIds.has(String(record.agentId || record.AgentId)))
+        const assignedAgentIds = buildAllowedAgentIdSet(matchedAgents);
+
+        const liveRows = resolveApiArray(customersData)
+          .filter((record) => assignedAgentIds.has(Number(record.agentId || record.AgentId)))
           .map((record) => mapSubmission(record, agentsById))
-          .filter((record) => record.id !== 'undefined');
+          .filter((record) => record.id && record.id !== 'undefined');
+
         if (active) setSubmissions(liveRows);
       } catch (loadError) {
         if (active) {
@@ -129,13 +112,9 @@ export default function SubmissionHistory() {
   const filteredData = useMemo(() => {
     const searchLower = searchTerm.trim().toLowerCase();
     return submissions
-      .filter((row) => [row.customerName, row.id, row.mobile, row.loanType, row.branch, row.agentName]
-        .some((value) => String(value || '').toLowerCase().includes(searchLower)))
-      .sort((a, b) => {
-        const timeA = a.rawSubmitted ? new Date(a.rawSubmitted).getTime() : 0;
-        const timeB = b.rawSubmitted ? new Date(b.rawSubmitted).getTime() : 0;
-        return timeB - timeA;
-      });
+      .filter((row) => [row.customerName, row.id, row.mobile, row.loanType, row.branch]
+        .some((value) => String(value).toLowerCase().includes(searchLower)))
+      .sort((a, b) => getDateTimestamp(b.submittedAt) - getDateTimestamp(a.submittedAt));
   }, [submissions, searchTerm]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
@@ -153,44 +132,93 @@ export default function SubmissionHistory() {
 
   const columns = [
     { key: 'sno', label: 'S.NO' },
-    { key: 'id', label: 'APP ID' },
-    { key: 'customerName', label: 'CUSTOMER NAME' },
-    { key: 'mobile', label: 'MOBILE' },
-    { key: 'branch', label: 'BRANCH' },
-    { key: 'loanType', label: 'LOAN PURPOSE' },
-    { key: 'amount', label: 'AMOUNT' },
-    { key: 'submitted', label: 'SUBMITTED' },
-    { key: 'agentName', label: 'FIELD AGENT' },
-    { key: 'status', label: 'STATUS', render: (row) => <StatusBadge status={row.status} /> },
     {
-      key: 'action', label: 'ACTIONS',
+      key: 'id',
+      label: 'APP ID',
+      render: (row) => <span className="sh-app-id" title={row.id}>{row.id}</span>,
+    },
+    {
+      key: 'customerName',
+      label: 'CUSTOMER',
       render: (row) => (
-        <div className="sub-hist-actions-cell">
-          <button
-            type="button"
-            className="sub-hist-btn sub-hist-btn--view"
-            title="View Form"
-            aria-label="View Form"
+        <div className="sh-cell sh-cell--row">
+          <span className="sh-avatar" aria-hidden="true">{getInitials(row.customerName)}</span>
+          <div className="sh-cell">
+            <span className="sh-cell__primary" title={row.customerName}>{row.customerName}</span>
+            <span className="sh-cell__secondary" title={row.mobile}>{row.mobile}</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'loanType',
+      label: 'LOAN',
+      render: (row) => (
+        <div className="sh-cell">
+          <span className="sh-cell__primary" title={row.loanType}>{row.loanType}</span>
+          <span className="sh-cell__secondary sh-amount" title={row.amount}>{row.amount}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'branch',
+      label: 'BRANCH',
+      render: (row) => (
+        <div className="sh-cell">
+          <span className="sh-cell__primary" title={row.branch}>{row.branch}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'agentName',
+      label: 'FIELD AGENT',
+      render: (row) => (
+        <div className="sh-cell">
+          <span className="sh-cell__primary" title={row.agentName}>{row.agentName}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'submitted',
+      label: 'SUBMITTED',
+      render: (row) => (
+        <div className="sh-cell">
+          <span className="sh-cell__primary">{row.submittedDate}</span>
+          <span className="sh-cell__secondary">{row.submittedTime}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'STATUS',
+      render: (row) => <StatusBadge status={row.status} />,
+    },
+    {
+      key: 'action',
+      label: 'ACTIONS',
+      render: (row) => (
+        <div className="sh-actions">
+          <Button
+            size="sm"
+            variant="secondary"
             onClick={() => navigate(ROUTES.APPLICATION_PDF_VIEW.replace(':applicationId', row.id))}
           >
-            <Eye size={15} />
-          </button>
-          <button
-            type="button"
-            className="sub-hist-btn sub-hist-btn--edit"
-            title="Edit Form"
-            aria-label="Edit Form"
+            View
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
             onClick={() => navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', row.id))}
           >
-            <Pencil size={15} />
-          </button>
+            Edit
+          </Button>
         </div>
       ),
     },
   ];
 
   return (
-    <div className="listing-page-wrapper">
+    <div className="listing-page-wrapper rm-submission-history">
       <div className="panel listing-card-full">
         <div className="filter-bar">
           <div className="search-box">
@@ -209,11 +237,11 @@ export default function SubmissionHistory() {
         </div>
         <div className="listing-table-flex">
           {isLoading ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>Loading live submissions...</div>
+            <div className="listing-state">Loading live submissions...</div>
           ) : error ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#b91c1c' }}>{error}</div>
+            <div className="listing-state listing-state--error">{error}</div>
           ) : filteredData.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>No live applications found.</div>
+            <div className="listing-state">No live applications found for this RM.</div>
           ) : (
             <>
               <DataTable columns={columns} data={paginatedData} rowKeyField="id" className="rm-submission-history-table" />
@@ -222,9 +250,7 @@ export default function SubmissionHistory() {
                 totalPages={totalPages}
                 totalRecords={filteredData.length}
                 pageSize={pageSize}
-                pageSizeOptions={pageSizeOptions}
-                onPageSizeChange={handlePageSizeChange}
-                onPageChange={(newPage) => setCurrentPage(newPage)}
+                onPageChange={setCurrentPage}
               />
             </>
           )}

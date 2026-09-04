@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, ArrowUpRight, BriefcaseBusiness, CheckCircle2, Clock3, Eye, Pencil, Plus, RefreshCw, Search, Users, X } from 'lucide-react';
+import { Activity, ArrowUpRight, BriefcaseBusiness, CheckCircle2, Eye, FileText, Pencil, Plus, RefreshCw, Search, Users, X } from 'lucide-react';
+import { formatDateTime, formatDateTimeFriendly } from '../../utils/dateHelper';
 import './Dashboard.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -10,12 +11,35 @@ const status = (value, fallback = 'Active') => typeof value === 'boolean' ? (val
 const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'A';
 const money = (value) => Number(String(value ?? '').replace(/[^0-9.-]/g, '')) || 0;
 const formatAmount = (amount) => amount > 0 ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount) : '—';
+
+const normalizeApplicationStatus = (value, statusName = '') => {
+  const named = String(statusName || '').trim().toLowerCase();
+  if (named.includes('approved')) return 'Approved';
+  if (named.includes('returned') || named.includes('reject')) return 'Returned';
+  if (named.includes('review')) return 'Under Review';
+  if (named.includes('pending') || named.includes('progress')) return 'Pending';
+  if (named.includes('new') || named.includes('draft')) return 'New';
+  if (named.includes('disburs')) return 'Disbursed';
+
+  const numeric = Number(value);
+  if (numeric === 2) return 'Approved';
+  if (numeric === 1) return 'Pending';
+  if (numeric === 0) return 'New';
+
+  const raw = String(value || '').trim();
+  if (!raw || raw.toLowerCase() === 'draft') return 'New';
+  return raw.replace(/^./, (letter) => letter.toUpperCase());
+};
+
 const formatWhen = (value) => {
   const date = new Date(value);
   if (!value || Number.isNaN(date.getTime())) return 'Recently updated';
   const minutes = Math.max(1, Math.floor((Date.now() - date.getTime()) / 60000));
-  return minutes < 60 ? `${minutes} min ago` : minutes < 1440 ? `${Math.floor(minutes / 60)} hr ago` : `${Math.floor(minutes / 1440)} days ago`;
+  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 1440) return `${Math.floor(minutes / 60)} hr ago`;
+  return `${Math.floor(minutes / 1440)} days ago · ${formatDateTimeFriendly(value)}`;
 };
+
 const authHeaders = () => {
   const token = localStorage.getItem('authToken');
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -27,10 +51,13 @@ export function Dashboard() {
   const [applications, setApplications] = useState([]);
   const [rms, setRms] = useState([]);
   const [query, setQuery] = useState('');
+  const [applicationQuery, setApplicationQuery] = useState('');
+  const [applicationStatusFilter, setApplicationStatusFilter] = useState('All');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [updatedAt, setUpdatedAt] = useState(null);
   const [selectedPerson, setSelectedPerson] = useState(null);
+  const [selectedApplication, setSelectedApplication] = useState(null);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -55,19 +82,59 @@ export function Dashboard() {
         status: status(read(rm, ['status', 'isActive', 'IsActive'])),
       })).filter((rm) => rm.id && rm.name);
       const rmNames = new Map(liveRms.map((rm) => [String(rm.id), rm.name]));
+
+      const agentRows = agentResult.status === 'fulfilled' ? unwrap(agentResult.value) : [];
+      const agentLookup = new Map();
+      agentRows.forEach((agent) => {
+        const id = read(agent, ['agentId', 'AgentId', 'id']);
+        if (!id) return;
+        const rmId = read(agent, ['rmId', 'RMId', 'relationshipManagerId', 'RelationshipManagerId', 'createdBy']);
+        agentLookup.set(String(id), {
+          id,
+          name: read(agent, ['fullName', 'agentName', 'name'], 'Unnamed agent'),
+          email: read(agent, ['emailAddress', 'email']),
+          phone: read(agent, ['mobileNumber', 'phone']),
+          branch: read(agent, ['branch', 'Branch']),
+          rmId,
+          rmName: read(agent, ['rmName', 'RMName', 'relationshipManager']) || rmNames.get(String(rmId)) || 'Unassigned',
+        });
+      });
+
       const customerRows = applicationResult.status === 'fulfilled' ? unwrap(applicationResult.value) : [];
-      const liveApplications = customerRows.map((application) => ({
-        id: read(application, ['agentCustomerId', 'AgentCustomerId', 'applicationId', 'id']),
-        agentId: read(application, ['agentId', 'AgentId']),
-        status: status(read(application, ['status', 'applicationStatus', 'ApplicationStatus', 'isActive'], 'Pending'), 'Pending'),
-        amount: money(read(application, ['disbursedAmount', 'DisbursedAmount', 'loanAmount', 'LoanAmount', 'requestedAmount'])),
-        updatedAt: read(application, ['modifiedAt', 'updatedAt', 'createdAt', 'createdDate']),
-      }));
+      const liveApplications = customerRows.map((application) => {
+        const agentId = read(application, ['agentId', 'AgentId']);
+        const agent = agentLookup.get(String(agentId)) || {};
+        return {
+          id: read(application, ['agentCustomerId', 'AgentCustomerId', 'applicationId', 'id']),
+          agentId,
+          agentName: read(application, ['agentName', 'AgentName']) || agent.name || '—',
+          agentPhone: agent.phone || '—',
+          agentEmail: agent.email || '—',
+          rmId: agent.rmId || '',
+          rmName: agent.rmName || 'Unassigned',
+          customerName: read(application, ['fullName', 'customerName', 'FullName'], 'Unknown customer'),
+          mobile: read(application, ['mobileNumber', 'MobileNumber', 'mobile'], '—'),
+          email: read(application, ['email', 'Email', 'emailAddress'], '—'),
+          employmentType: read(application, ['employmentTypeName', 'EmploymentTypeName'], '—'),
+          loanPurpose: read(application, ['loanPurposeName', 'LoanPurposeName', 'loanType'], '—'),
+          amount: money(read(application, ['expectedLoanAmount', 'ExpectedLoanAmount', 'disbursedAmount', 'loanAmount', 'requestedAmount'])),
+          remarks: read(application, ['remarks', 'Remarks'], '—'),
+          status: normalizeApplicationStatus(
+            read(application, ['status', 'applicationStatus', 'ApplicationStatus'], '0'),
+            read(application, ['statusName', 'StatusName'])
+          ),
+          isActive: application.isActive ?? application.IsActive ?? true,
+          createdAt: read(application, ['createdAt', 'CreatedAt', 'createdDate']),
+          updatedAt: read(application, ['modifiedAt', 'ModifiedAt', 'updatedAt', 'createdAt', 'createdDate']),
+          branch: agent.branch || '—',
+        };
+      }).filter((application) => application.id);
+
       const applicationsByAgent = liveApplications.reduce(
         (map, application) => map.set(String(application.agentId || ''), (map.get(String(application.agentId || '')) || 0) + 1),
         new Map()
       );
-      const agentRows = agentResult.status === 'fulfilled' ? unwrap(agentResult.value) : [];
+
       const liveAgents = agentRows.map((agent) => {
         const rmId = read(agent, ['rmId', 'RMId', 'relationshipManagerId', 'RelationshipManagerId', 'createdBy']);
         const id = read(agent, ['agentId', 'AgentId', 'id']);
@@ -83,6 +150,7 @@ export function Dashboard() {
           updatedAt: read(agent, ['modifiedAt', 'updatedAt', 'createdAt', 'createdDate', 'dateJoined']),
         };
       }).filter((agent) => agent.id || agent.name);
+
       setAgents(liveAgents);
       setApplications(liveApplications);
       setRms(liveRms);
@@ -105,7 +173,27 @@ export function Dashboard() {
     () => agents.filter((agent) => `${agent.name} ${agent.email} ${agent.rm}`.toLowerCase().includes(query.toLowerCase())),
     [agents, query]
   );
+
+  const filteredApplications = useMemo(() => {
+    const search = applicationQuery.trim().toLowerCase();
+    return applications.filter((application) => {
+      const matchesStatus = applicationStatusFilter === 'All' || application.status === applicationStatusFilter;
+      if (!matchesStatus) return false;
+      if (!search) return true;
+      return [
+        application.id,
+        application.customerName,
+        application.mobile,
+        application.agentName,
+        application.rmName,
+        application.loanPurpose,
+        application.status,
+      ].some((value) => String(value || '').toLowerCase().includes(search));
+    });
+  }, [applications, applicationQuery, applicationStatusFilter]);
+
   const pending = applications.filter((application) => /pending|review|new|submitted/i.test(application.status));
+  const approved = applications.filter((application) => /approved/i.test(application.status));
   const disbursed = applications.filter((application) => /disburs/i.test(application.status));
   const coverage = rms.map((rm) => ({
     ...rm,
@@ -115,12 +203,12 @@ export function Dashboard() {
   const activity = [...agents, ...applications]
     .filter((item) => item.updatedAt)
     .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-    .slice(0, 3);
+    .slice(0, 5);
   const stats = [
     [Users, 'green', 'Relationship managers', rms.length, 'Live RM master'],
     [BriefcaseBusiness, 'blue', 'Total agents', agents.length, 'Live agent master'],
-    [Clock3, 'orange', 'Pending review', pending.length, 'Requires action'],
-    [CheckCircle2, 'purple', 'Disbursed amount', formatAmount(disbursed.reduce((total, application) => total + application.amount, 0)), disbursed.length ? `${disbursed.length} disbursed` : 'No disbursements recorded'],
+    [FileText, 'orange', 'Total applications', applications.length, `${pending.length} pending · ${approved.length} approved`],
+    [CheckCircle2, 'purple', 'Approved amount', formatAmount(approved.reduce((total, application) => total + application.amount, 0)), disbursed.length ? `${disbursed.length} disbursed` : `${approved.length} approved loans`],
   ];
 
   const openEdit = (person) => {
@@ -141,7 +229,7 @@ export function Dashboard() {
           <p className="dashboard-description">A live view of your lending network, applications, and RM coverage.</p>
           {updatedAt && (
             <p className="dashboard-meta">
-              Last synced {updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              Last synced {formatDateTimeFriendly(updatedAt)}
             </p>
           )}
         </div>
@@ -164,12 +252,108 @@ export function Dashboard() {
             <div>
               <span>{label}</span>
               <strong>{value}</strong>
-              <small className={label === 'Pending review' ? 'neutral' : ''}>
+              <small className={label === 'Total applications' ? 'neutral' : ''}>
                 <ArrowUpRight size={13} /> {note}
               </small>
             </div>
           </div>
         ))}
+      </section>
+
+      <section className="content-card agent-card">
+        <div className="card-heading">
+          <div>
+            <h2>Applications</h2>
+            <p>Live application list with full customer, agent, and RM details.</p>
+          </div>
+          <div className="application-filters">
+            <div className="search-box">
+              <Search size={17} />
+              <input
+                aria-label="Search applications"
+                placeholder="Search apps, customers, agents..."
+                value={applicationQuery}
+                onChange={(event) => setApplicationQuery(event.target.value)}
+              />
+            </div>
+            <select
+              className="status-filter"
+              aria-label="Filter application status"
+              value={applicationStatusFilter}
+              onChange={(event) => setApplicationStatusFilter(event.target.value)}
+            >
+              <option value="All">All statuses</option>
+              <option value="New">New</option>
+              <option value="Pending">Pending</option>
+              <option value="Under Review">Under Review</option>
+              <option value="Approved">Approved</option>
+              <option value="Returned">Returned</option>
+              <option value="Disbursed">Disbursed</option>
+            </select>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>App ID</th>
+                <th>Customer</th>
+                <th>Loan</th>
+                <th>Agent / RM</th>
+                <th>Submitted</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td className="empty-table" colSpan="7">Loading live applications…</td></tr>
+              ) : filteredApplications.length ? (
+                filteredApplications.map((application) => (
+                  <tr key={application.id}>
+                    <td><strong>#{application.id}</strong></td>
+                    <td>
+                      <div className="agent-name">
+                        <span>{initials(application.customerName)}</span>
+                        <div>
+                          <strong>{application.customerName}</strong>
+                          <small>{application.mobile}</small>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div>{application.loanPurpose}</div>
+                      <small>{formatAmount(application.amount)}</small>
+                    </td>
+                    <td>
+                      <div>{application.agentName}</div>
+                      <small>{application.rmName}</small>
+                    </td>
+                    <td>
+                      <div>{formatDateTimeFriendly(application.createdAt)}</div>
+                      <small>Updated {formatWhen(application.updatedAt)}</small>
+                    </td>
+                    <td>
+                      <span className={`status ${application.status.toLowerCase().replace(/\s+/g, '-')}`}>
+                        {application.status}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        className="details-button"
+                        onClick={() => setSelectedApplication(application)}
+                      >
+                        <Eye size={15} /> View details
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr><td className="empty-table" colSpan="7">No matching applications found.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="content-card agent-card">
@@ -304,7 +488,13 @@ export function Dashboard() {
               <div className="activity-item" key={`${record.id || index}-${record.updatedAt}`}>
                 <CheckCircle2 size={18} />
                 <div>
-                  <strong>{record.name ? `${record.name} updated` : `${record.status} application updated`}</strong>
+                  <strong>
+                    {record.customerName
+                      ? `${record.customerName} · ${record.status}`
+                      : record.name
+                        ? `${record.name} updated`
+                        : `${record.status} application updated`}
+                  </strong>
                   <span>{formatWhen(record.updatedAt)}</span>
                 </div>
               </div>
@@ -380,6 +570,90 @@ export function Dashboard() {
               </button>
               <button className="primary-button" onClick={() => openEdit(selectedPerson)}>
                 <Pencil size={16} /> Edit {selectedPerson.type === 'Agent' ? 'agent' : 'RM'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {selectedApplication && (
+        <div
+          className="person-dialog-backdrop"
+          role="presentation"
+          onMouseDown={() => setSelectedApplication(null)}
+        >
+          <section
+            className="person-dialog application-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Application details"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button
+              className="person-dialog-close"
+              onClick={() => setSelectedApplication(null)}
+              aria-label="Close application details"
+            >
+              <X size={18} />
+            </button>
+            <div className="person-dialog-avatar">{initials(selectedApplication.customerName)}</div>
+            <span className="eyebrow">Application #{selectedApplication.id}</span>
+            <h2>{selectedApplication.customerName}</h2>
+            <span className={`status ${selectedApplication.status.toLowerCase().replace(/\s+/g, '-')}`}>
+              {selectedApplication.status}
+            </span>
+            <dl className="person-detail-grid application-detail-grid">
+              <div>
+                <dt>Mobile</dt>
+                <dd>{selectedApplication.mobile}</dd>
+              </div>
+              <div>
+                <dt>Email</dt>
+                <dd>{selectedApplication.email}</dd>
+              </div>
+              <div>
+                <dt>Loan purpose</dt>
+                <dd>{selectedApplication.loanPurpose}</dd>
+              </div>
+              <div>
+                <dt>Expected amount</dt>
+                <dd>{formatAmount(selectedApplication.amount)}</dd>
+              </div>
+              <div>
+                <dt>Employment type</dt>
+                <dd>{selectedApplication.employmentType}</dd>
+              </div>
+              <div>
+                <dt>Branch</dt>
+                <dd>{selectedApplication.branch}</dd>
+              </div>
+              <div>
+                <dt>Field agent</dt>
+                <dd>
+                  {selectedApplication.agentName}
+                  <small>{selectedApplication.agentPhone}</small>
+                </dd>
+              </div>
+              <div>
+                <dt>Relationship manager</dt>
+                <dd>{selectedApplication.rmName}</dd>
+              </div>
+              <div>
+                <dt>Submitted (IST)</dt>
+                <dd>{formatDateTime(selectedApplication.createdAt)}</dd>
+              </div>
+              <div>
+                <dt>Last updated (IST)</dt>
+                <dd>{formatDateTime(selectedApplication.updatedAt)}</dd>
+              </div>
+              <div className="full-width">
+                <dt>Remarks</dt>
+                <dd>{selectedApplication.remarks}</dd>
+              </div>
+            </dl>
+            <div className="person-dialog-actions">
+              <button className="masters-btn-secondary" onClick={() => setSelectedApplication(null)}>
+                Close
               </button>
             </div>
           </section>

@@ -8,6 +8,7 @@ import Modal from '../../components/Modal/Modal';
 import CustomerSummary from '../../components/CustomerSummary/CustomerSummary';
 import { ROUTES } from '../../config/routeConfig';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
+import { formatDateTime } from '../../utils/dateHelper';
 import './AadhaarEkyc.css';
 
 export default function AadhaarEkyc() {
@@ -86,7 +87,7 @@ export default function AadhaarEkyc() {
             appId={appData.applicationNumber || appData.id}
             agentName={`${appData.agentName || 'Karthik Raja'} (AGT0001)`}
             branch={appData.branch || 'KK Nagar'}
-            submittedTime={`${appData.createdDate || '05 Jun 2025'}, 10:25 AM`}
+            submittedTime={formatDateTime(appData.createdDate || appData.createdAt, 'Not submitted')}
             status={appData.status || 'Pending Verification'}
           />
         </div>

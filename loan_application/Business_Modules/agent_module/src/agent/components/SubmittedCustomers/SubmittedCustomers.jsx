@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CheckCircle2, Clock, Eye, RefreshCw, RotateCcw } from 'lucide-react'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
+import { formatDateTime } from '../../../../../../Core/src/utils/dateHelper'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import ViewCustomerModal from '../ViewCustomerModal/ViewCustomerModal'
 import './SubmittedCustomers.css'
@@ -13,13 +14,7 @@ function extractArray(response) {
 }
 
 function formatDate(value) {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '-'
-  return date.toLocaleString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: 'numeric', minute: '2-digit', hour12: true,
-  })
+  return formatDateTime(value, '-')
 }
 
 function formatCurrency(value) {

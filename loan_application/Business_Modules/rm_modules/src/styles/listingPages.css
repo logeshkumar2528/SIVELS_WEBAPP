@@ -185,23 +185,7 @@
   border-bottom: 1px solid var(--color-border-light);
 }
 
-/* RM Applications Table Layout (New, Pending, Approved, Returned) */
-.rm-new-applications-table {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}
-
-.rm-new-applications-table .data-table-scroll {
-  overflow-x: hidden;
-  overflow-y: auto;
-  max-height: 456px;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
-
+/* New Applications table — keep columns from squeezing on mid-width screens. */
 .rm-new-applications-table .data-table {
   table-layout: fixed;
   width: 100%;
@@ -212,27 +196,13 @@
   height: auto;
 }
 
-.rm-new-applications-table .data-table-body {
-  height: auto;
-}
-
-.rm-new-applications-table .data-table-row {
-  height: 58px;
-  min-height: 58px;
-}
-
-.rm-new-applications-table .data-table-head {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background-color: var(--color-bg, #f8fafc);
+.rm-new-applications-table .data-table-scroll {
+  overflow-x: hidden;
+  overflow-y: visible;
+  flex: none;
 }
 
 .rm-new-applications-table .data-table-th {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background-color: var(--color-bg, #f8fafc);
   height: 46px;
   padding: 8px 6px;
   font-size: 11px;
@@ -246,7 +216,6 @@
 }
 
 .rm-new-applications-table .data-table-cell {
-  padding: 8px 6px;
   vertical-align: middle;
   font-size: 12px;
   color: var(--color-text-primary, #0f172a);
@@ -351,194 +320,6 @@
   display: flex;
   flex-direction: column;
   position: relative;
-}
-
-.rm-submission-history-table .data-table {
-  table-layout: fixed;
-  width: 100%;
-  min-width: 0;
-  border-collapse: separate;
-  border-spacing: 0;
-  flex: none;
-  height: auto;
-}
-
-.rm-submission-history-table .data-table-body {
-  height: auto;
-}
-
-.rm-submission-history-table .data-table-head {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background-color: var(--color-bg, #f8fafc);
-}
-
-.rm-submission-history-table .data-table-th {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background-color: var(--color-bg, #f8fafc);
-  height: 46px;
-  padding: 8px 6px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-text-secondary, #64748b);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  vertical-align: middle;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  border-bottom: 1px solid var(--color-border, #e2e8f0);
-}
-
-.rm-submission-history-table .data-table-row {
-  height: 58px;
-  min-height: 58px;
-}
-
-.rm-submission-history-table .data-table-row:last-child {
-  border-bottom: none;
-}
-
-.rm-submission-history-table .data-table-cell {
-  padding: 8px 6px;
-  vertical-align: middle;
-  font-size: 12px;
-  color: var(--color-text-primary, #0f172a);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  border-bottom: 1px solid var(--color-border-light, #f1f5f9);
-}
-
-/* Explicit Proportional Column Widths (Sum = 100%) */
-.rm-submission-history-table .data-table-th:nth-child(1),
-.rm-submission-history-table .data-table-cell:nth-child(1),
-.rm-submission-history-table .data-table-th--sno,
-.rm-submission-history-table .data-table-cell--sno {
-  width: 4.5% !important;
-  min-width: 0 !important;
-  text-align: center;
-  white-space: nowrap !important;
-}
-
-.rm-submission-history-table .data-table-th:nth-child(2),
-.rm-submission-history-table .data-table-cell:nth-child(2) {
-  width: 5.5% !important;
-  white-space: nowrap;
-}
-
-.rm-submission-history-table .data-table-th:nth-child(3),
-.rm-submission-history-table .data-table-cell:nth-child(3) {
-  width: 12% !important;
-  font-weight: 600;
-  color: #0f172a;
-}
-
-.rm-submission-history-table .data-table-th:nth-child(4),
-.rm-submission-history-table .data-table-cell:nth-child(4) {
-  width: 8.5% !important;
-  white-space: nowrap;
-}
-
-.rm-submission-history-table .data-table-th:nth-child(5),
-.rm-submission-history-table .data-table-cell:nth-child(5) {
-  width: 9% !important;
-  font-size: 11.5px;
-}
-
-.rm-submission-history-table .data-table-th:nth-child(6),
-.rm-submission-history-table .data-table-cell:nth-child(6) {
-  width: 9% !important;
-  font-size: 11.5px;
-}
-
-.rm-submission-history-table .data-table-th:nth-child(7),
-.rm-submission-history-table .data-table-cell:nth-child(7) {
-  width: 8.5% !important;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.rm-submission-history-table .data-table-th:nth-child(8),
-.rm-submission-history-table .data-table-cell:nth-child(8) {
-  width: 13.5% !important;
-  font-size: 11px;
-  color: #64748b;
-  white-space: nowrap;
-}
-
-.rm-submission-history-table .data-table-th:nth-child(9),
-.rm-submission-history-table .data-table-cell:nth-child(9) {
-  width: 9.5% !important;
-  font-size: 11.5px;
-}
-
-.rm-submission-history-table .data-table-th:nth-child(10),
-.rm-submission-history-table .data-table-cell:nth-child(10) {
-  width: 11% !important;
-  text-align: center;
-}
-
-.rm-submission-history-table .data-table-th:nth-child(11),
-.rm-submission-history-table .data-table-cell:nth-child(11) {
-  width: 9% !important;
-  min-width: 0 !important;
-  text-align: center;
-}
-
-.sub-hist-actions-cell {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 6px !important;
-  white-space: nowrap !important;
-}
-
-.sub-hist-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border-radius: 5px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s ease;
-  box-sizing: border-box;
-}
-
-.sub-hist-btn:focus-visible {
-  outline: 2px solid var(--color-primary, #0f7a4b);
-  outline-offset: 1px;
-}
-
-.sub-hist-btn--view {
-  background-color: var(--color-surface, #ffffff);
-  color: var(--color-text-secondary, #475569);
-  border: 1px solid var(--color-border, #cbd5e1);
-}
-
-.sub-hist-btn--view:hover {
-  background-color: var(--color-bg, #f1f5f9);
-  color: var(--color-text-primary, #0f172a);
-  border-color: #94a3b8;
-}
-
-.sub-hist-btn--edit {
-  background-color: transparent;
-  color: var(--color-primary, #0f7a4b);
-  border: 1px solid var(--color-primary, #0f7a4b);
-}
-
-.sub-hist-btn--edit:hover {
-  background-color: var(--color-primary-light, #eaf5ee);
-  color: var(--color-primary-dark, #0b5e39);
-  border-color: var(--color-primary-dark, #0b5e39);
 }
 
 @media (max-width: 1200px) {

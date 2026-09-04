@@ -5,7 +5,7 @@ import StatusBadge from '../../components/StatusBadge/StatusBadge';
 import Button from '../../components/Button/Button';
 import Modal from '../../components/Modal/Modal';
 import Select from '../../components/Select/Select';
-import Pagination from '../../components/Pagination/Pagination';
+import { formatDate } from '../../utils/dateHelper';
 import './MyAgents.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -25,17 +25,6 @@ function normalizeText(value = '') {
 
 function normalizePhone(value = '') {
   return String(value || '').replace(/\D/g, '');
-}
-
-function formatDate(value) {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
 }
 
 function formatCurrency(value) {
@@ -90,7 +79,7 @@ function buildRow(agent, customerRows = []) {
     customersAdded: rowsForAgent.length,
     totalLoanAmount: rowsForAgent.reduce((sum, row) => sum + Number(row.expectedLoanAmount || row.loanAmount || 0), 0),
     status: recordStatus,
-    joinDate: formatDate(agent.createdAt || agent.dateJoined || agent.createdDate),
+    joinDate: formatDate(agent.createdAt || agent.dateJoined || agent.createdDate, '-'),
     avatarUrl: buildAvatar(agent.fullName || agent.agentName || agent.name || 'Agent'),
     raw: agent,
     records: rowsForAgent,
@@ -710,7 +699,7 @@ export default function MyAgents() {
               </div>
               <div className="agent-detail-stat">
                 <span className="agent-detail-stat-label">Joined</span>
-                <span className="agent-detail-stat-value">{formatDate(safeAgentDetails.dateJoined || safeAgentDetails.createdAt || safeSelectedAgent.joinDate)}</span>
+                <span className="agent-detail-stat-value">{formatDate(safeAgentDetails.dateJoined || safeAgentDetails.createdAt || safeSelectedAgent.joinDate, '-')}</span>
               </div>
               <div className="agent-detail-stat">
                 <span className="agent-detail-stat-label">Status</span>
