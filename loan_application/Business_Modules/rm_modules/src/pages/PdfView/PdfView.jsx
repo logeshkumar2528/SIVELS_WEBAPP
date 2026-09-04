@@ -35,7 +35,7 @@ function isObsoleteMock(val) {
 export default function PdfView() {
   const { applicationId } = useParams();
   const navigate = useNavigate();
-  const { applications, getApplication } = useApplicationDraftStore();
+  const { applications, getApplication, loadApplicationFromBackend } = useApplicationDraftStore();
   const appData = applications[applicationId] || getApplication(applicationId) || {};
   const pdfRef = useRef();
 
@@ -60,6 +60,8 @@ export default function PdfView() {
     propertyUsages: {},
     employmentTypes: {},
     educations: {},
+    cities: {},
+    states: {},
   });
 
   const blobUrlsRef = useRef([]);
@@ -83,6 +85,13 @@ export default function PdfView() {
 
     async function loadAllData() {
       try {
+        // Hydrate full application data into draft context first
+        try {
+          await loadApplicationFromBackend(applicationId);
+        } catch (hErr) {
+          console.warn('Hydration in PdfView:', hErr);
+        }
+
         const fetchMaster = async (endpoint, idField, nameField) => {
           try {
             const res = await fetch(`${API_BASE}/${endpoint}`);
@@ -122,6 +131,8 @@ export default function PdfView() {
           propertyUsageMap,
           empTypeMap,
           eduMap,
+          cityMap,
+          stateMap,
           empDetailsRes,
           addrDetailsRes,
           persInfoRes,
@@ -144,6 +155,8 @@ export default function PdfView() {
           fetchMaster('PropertyUsageMaster', 'propertyUsageId', 'propertyUsageName'),
           fetchMaster('EmploymentType', 'employmentTypeId', 'employmentTypeName'),
           fetchMaster('EducationMaster', 'educationId', 'educationName'),
+          fetchMaster('City', 'cityId', 'cityName'),
+          fetchMaster('State', 'stateId', 'stateName'),
           fetch(`${API_BASE}/ApplicationEmploymentIncomeDetails`).then((r) => (r.ok ? r.json() : null)),
           fetch(`${API_BASE}/ApplicationAddressDetails`).then((r) => (r.ok ? r.json() : null)),
           fetch(`${API_BASE}/ApplicationPersonalInformation`).then((r) => (r.ok ? r.json() : null)),
@@ -243,6 +256,8 @@ export default function PdfView() {
             propertyUsages: propertyUsageMap.status === 'fulfilled' ? propertyUsageMap.value : {},
             employmentTypes: empTypeMap.status === 'fulfilled' ? empTypeMap.value : {},
             educations: eduMap.status === 'fulfilled' ? eduMap.value : {},
+            cities: cityMap.status === 'fulfilled' ? cityMap.value : {},
+            states: stateMap.status === 'fulfilled' ? stateMap.value : {},
           });
         }
 
@@ -436,6 +451,8 @@ export default function PdfView() {
   const resolvePropertyUsage = (val) => (masterMaps.propertyUsages && masterMaps.propertyUsages[val]) || val || '';
   const resolveEmploymentType = (val) => (masterMaps.employmentTypes && masterMaps.employmentTypes[val]) || val || '';
   const resolveEducation = (val) => (masterMaps.educations && masterMaps.educations[val]) || val || '';
+  const resolveCity = (val) => (masterMaps.cities && masterMaps.cities[val]) || val || '';
+  const resolveState = (val) => (masterMaps.states && masterMaps.states[val]) || val || '';
 
   const formatCurrencyOrDash = (val) => {
     if (val === null || val === undefined || val === '') return '-';
@@ -929,15 +946,19 @@ export default function PdfView() {
               <tr>
                 <td>City & State</td>
                 <td>
-                  {addressData.applicant?.current?.city || addressData.applicant?.city || '-'},{' '}
-                  {addressData.applicant?.current?.state || addressData.applicant?.state || '-'}
+                  {[
+                    resolveCity(addressData.applicant?.current?.city || addressData.applicant?.city),
+                    resolveState(addressData.applicant?.current?.state || addressData.applicant?.state),
+                  ]
+                    .filter(Boolean)
+                    .join(', ') || '-'}
                 </td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>
                       {[
-                        addressData.coApplicants?.[i]?.current?.city || addressData.coApplicants?.[i]?.city,
-                        addressData.coApplicants?.[i]?.current?.state || addressData.coApplicants?.[i]?.state,
+                        resolveCity(addressData.coApplicants?.[i]?.current?.city || addressData.coApplicants?.[i]?.city),
+                        resolveState(addressData.coApplicants?.[i]?.current?.state || addressData.coApplicants?.[i]?.state),
                       ]
                         .filter(Boolean)
                         .join(', ') || '-'}

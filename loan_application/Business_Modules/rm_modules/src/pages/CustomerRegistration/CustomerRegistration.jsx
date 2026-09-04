@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { User, Users, FileText, Calendar, Phone, Mail, UserCheck } from 'lucide-react';
 import iconMap from '../../config/iconMap';
@@ -78,26 +78,30 @@ function buildPersonalInformationState(appData) {
   const saved = appData.registration?.personalInformation || appData.sections?.personalInformation || appData.registration || {};
   const savedApplicant = saved.applicant || saved.primaryApplicant || {};
   const savedCoApplicants = Array.isArray(saved.coApplicants) ? saved.coApplicants : [];
-  const applicantNameParts = splitFullName(savedApplicant.firstName || savedApplicant.fullName || appData.customerName || '');
+  const rawCustomerName = appData.customerName || appData.fullName || savedApplicant.fullName || '';
+  const existingFirstName = savedApplicant.firstName || '';
+  const applicantNameParts = splitFullName(existingFirstName || rawCustomerName || '');
   const coApplicantCount = getApplicantCount(appData);
+
+  const initialFirstName = existingFirstName || applicantNameParts.firstName || rawCustomerName || '';
 
   const applicant = createEmptyPerson({
     personalInformationId: savedApplicant.personalInformationId || null,
-    relationshipWithApplicant: savedApplicant.relationshipWithApplicant ?? '',
+    relationshipWithApplicant: savedApplicant.relationshipWithApplicant || 'SELF',
     title: savedApplicant.title ?? '',
-    firstName: savedApplicant.firstName ?? applicantNameParts.firstName,
-    middleName: savedApplicant.middleName ?? applicantNameParts.middleName,
-    lastName: savedApplicant.lastName ?? applicantNameParts.lastName,
-    fatherOrSpouseName: savedApplicant.fatherOrSpouseName ?? '',
-    mothersMaidenName: savedApplicant.mothersMaidenName ?? '',
-    dateOfBirth: savedApplicant.dateOfBirth ?? savedApplicant.dob ?? '',
+    firstName: initialFirstName,
+    middleName: savedApplicant.middleName || applicantNameParts.middleName || '',
+    lastName: savedApplicant.lastName || applicantNameParts.lastName || '',
+    fatherOrSpouseName: savedApplicant.fatherOrSpouseName || '',
+    mothersMaidenName: savedApplicant.mothersMaidenName || '',
+    dateOfBirth: savedApplicant.dateOfBirth || savedApplicant.dob || '',
     religion: savedApplicant.religion ?? '',
     category: savedApplicant.category ?? '',
-    gender: savedApplicant.gender ?? appData.gender ?? '',
+    gender: savedApplicant.gender || appData.gender || '',
     maritalStatus: savedApplicant.maritalStatus ?? '',
-    mobileNo: savedApplicant.mobileNo ?? appData.mobile ?? '',
-    emailId: savedApplicant.emailId ?? appData.email ?? '',
-    panCardNo: savedApplicant.panCardNo ?? appData.panNumber ?? '',
+    mobileNo: savedApplicant.mobileNo || appData.mobile || appData.mobileNumber || '',
+    emailId: savedApplicant.emailId || appData.email || '',
+    panCardNo: savedApplicant.panCardNo || appData.panNumber || '',
   });
 
   const coApplicants = Array.from({ length: coApplicantCount }, (_, index) => {
@@ -430,6 +434,8 @@ export default function CustomerRegistration() {
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildPersonalInformationState(getApplication(appId)));
   const [errors, setErrors] = useState({});
+  const hasUserEditedRef = useRef(false);
+  const prevAppIdRef = useRef(appId);
 
   const [isLoadingMasters, setIsLoadingMasters] = useState(false);
   const [titleOptions, setTitleOptions] = useState([]);
@@ -447,6 +453,11 @@ export default function CustomerRegistration() {
     let active = true;
     async function fetchCustomerDetails() {
       if (!appId) return;
+      const currentAppData = getApplication(appId);
+      // Skip redundant API call if customer name is already present in hydrated state
+      if (currentAppData?.customerName || currentAppData?.fullName || currentAppData?.applicantName) {
+        return;
+      }
       try {
         const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
         const res = await fetch(`${baseUrl}/AgentAddCustomer/${appId}`);
@@ -464,22 +475,24 @@ export default function CustomerRegistration() {
               createdDate: record.createdAt || record.createdDate,
               agentName: record.agentName,
             });
-            setForm((prev) => {
-              const currentName = composeFullName(prev.applicant);
-              if (!currentName || currentName === 'Anil Kumar') {
-                return {
-                  ...prev,
-                  applicant: {
-                    ...prev.applicant,
-                    firstName: parts.firstName || prev.applicant.firstName,
-                    middleName: parts.middleName || prev.applicant.middleName,
-                    lastName: parts.lastName || prev.applicant.lastName,
-                    mobileNo: record.mobileNumber || record.mobile || prev.applicant.mobileNo,
-                  }
-                };
-              }
-              return prev;
-            });
+            if (!hasUserEditedRef.current) {
+              setForm((prev) => {
+                const currentFirstName = prev.applicant.firstName;
+                if (!currentFirstName || currentFirstName === 'Anil') {
+                  return {
+                    ...prev,
+                    applicant: {
+                      ...prev.applicant,
+                      firstName: parts.firstName || custName || prev.applicant.firstName,
+                      middleName: parts.middleName || prev.applicant.middleName,
+                      lastName: parts.lastName || prev.applicant.lastName,
+                      mobileNo: record.mobileNumber || record.mobile || prev.applicant.mobileNo,
+                    }
+                  };
+                }
+                return prev;
+              });
+            }
           }
         }
       } catch (err) {
@@ -492,7 +505,7 @@ export default function CustomerRegistration() {
     return () => {
       active = false;
     };
-  }, [appId]);
+  }, [appId, getApplication, saveApplication]);
 
   useEffect(() => {
     async function fetchMaster(endpoint, idField, nameField, setState, uniqueValues = false) {
@@ -532,11 +545,40 @@ export default function CustomerRegistration() {
   const coApplicantCount = getApplicantCount(appData);
   const applicationSteps = useMemo(() => APPLICATION_WIZARD_STEPS, []);
 
+  // Handle application switch or initial load
   useEffect(() => {
-    ensureApplication(appId);
-    setForm(buildPersonalInformationState(getApplication(appId)));
-    setErrors({});
+    if (prevAppIdRef.current !== appId) {
+      prevAppIdRef.current = appId;
+      hasUserEditedRef.current = false;
+      ensureApplication(appId);
+      setForm(buildPersonalInformationState(getApplication(appId)));
+      setErrors({});
+    }
   }, [appId, ensureApplication, getApplication]);
+
+  // Synchronize when hydrated customer data becomes available if user hasn't typed
+  useEffect(() => {
+    if (!hasUserEditedRef.current) {
+      const currentData = getApplication(appId);
+      const built = buildPersonalInformationState(currentData);
+      if (built.applicant.firstName) {
+        setForm((prev) => {
+          if (!prev.applicant.firstName) {
+            return {
+              ...prev,
+              applicant: {
+                ...prev.applicant,
+                firstName: built.applicant.firstName,
+                middleName: prev.applicant.middleName || built.applicant.middleName,
+                lastName: prev.applicant.lastName || built.applicant.lastName,
+              },
+            };
+          }
+          return prev;
+        });
+      }
+    }
+  }, [appId, appData?.customerName, appData?.fullName, getApplication]);
 
   const ArrowRightIcon = iconMap['ArrowRight'];
   const ArrowLeftIcon = iconMap['ArrowLeft'];
@@ -551,6 +593,7 @@ export default function CustomerRegistration() {
   };
 
   const updatePersonField = (scope, field, value, index = null) => {
+    hasUserEditedRef.current = true;
     if (scope === 'applicant') {
       const nextForm = {
         ...form,

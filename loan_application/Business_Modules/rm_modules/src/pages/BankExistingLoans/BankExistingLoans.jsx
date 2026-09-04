@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Building2, MapPin, Hash, List, CreditCard, Files } from 'lucide-react';
 import iconMap from '../../config/iconMap';
@@ -163,57 +163,58 @@ export default function BankExistingLoans() {
     loadMasters();
   }, []);
 
+  const prevAppIdRef = useRef(appId);
+
   useEffect(() => {
     ensureApplication(appId);
-  }, [appId, ensureApplication]);
+    if (prevAppIdRef.current !== appId) {
+      prevAppIdRef.current = appId;
+      setForm(buildBankState(getApplication(appId)));
+    }
+  }, [appId, ensureApplication, getApplication]);
 
-  const appData = getApplication(appId);
+  const appData = useMemo(() => getApplication(appId), [getApplication, appId]);
   const activeCount = useMemo(() => getApplicantCount(appData), [appData]);
   const ArrowLeftIcon = iconMap['ArrowLeft'];
 
-  useEffect(() => {
-    setForm(buildBankState(getApplication(appId)));
-  }, [appId, getApplication]);
-
   const persist = (nextForm) => {
     setForm(nextForm);
-    saveApplication(appId, buildSectionUpdate(appData, 'bankExistingLoans', nextForm));
+    const currentAppData = getApplication(appId);
+    saveApplication(appId, buildSectionUpdate(currentAppData, 'bankExistingLoans', nextForm));
   };
 
   const updateApplicantBank = (scope, fieldOrObj, value) => {
-    setForm(prevForm => {
-      const updates = typeof fieldOrObj === 'object' ? fieldOrObj : { [fieldOrObj]: value };
-      const nextForm = {
-        ...prevForm,
-        applicant: {
-          ...prevForm.applicant,
-          [scope]: {
-            ...prevForm.applicant[scope],
-            ...updates,
-          },
+    const updates = typeof fieldOrObj === 'object' ? fieldOrObj : { [fieldOrObj]: value };
+    const nextForm = {
+      ...form,
+      applicant: {
+        ...form.applicant,
+        [scope]: {
+          ...form.applicant[scope],
+          ...updates,
         },
-      };
-      saveApplication(appId, buildSectionUpdate(appData, 'bankExistingLoans', nextForm));
-      return nextForm;
-    });
+      },
+    };
+    persist(nextForm);
   };
 
   const updateCoApplicantBank = (index, scope, fieldOrObj, value) => {
-    setForm(prevForm => {
-      const updates = typeof fieldOrObj === 'object' ? fieldOrObj : { [fieldOrObj]: value };
-      const nextForm = {
-        ...prevForm,
-        coApplicants: prevForm.coApplicants.map((ca, i) => i === index ? {
-          ...ca,
-          [scope]: {
-            ...ca[scope],
-            ...updates,
-          },
-        } : ca),
-      };
-      saveApplication(appId, buildSectionUpdate(appData, 'bankExistingLoans', nextForm));
-      return nextForm;
-    });
+    const updates = typeof fieldOrObj === 'object' ? fieldOrObj : { [fieldOrObj]: value };
+    const nextForm = {
+      ...form,
+      coApplicants: form.coApplicants.map((ca, i) =>
+        i === index
+          ? {
+              ...ca,
+              [scope]: {
+                ...ca[scope],
+                ...updates,
+              },
+            }
+          : ca
+      ),
+    };
+    persist(nextForm);
   };
 
   const updateLoanDetail = (loanIndex, field, value) => {
