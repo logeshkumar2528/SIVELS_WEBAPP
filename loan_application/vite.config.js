@@ -18,6 +18,7 @@ const moduleMap = [
   { prefix: '/credit',     dir: 'Business_Modules/credit_manager'  },
   { prefix: '/company',    dir: 'Business_Modules/company details'  },
   { prefix: '/master',     dir: 'Master_Module'                   },
+  { prefix: '/Master_Module', dir: 'Master_Module'                },
   // Auth routes → Core (common entry point)
   { prefix: '/login',      dir: 'Core' },
   { prefix: '/verify',     dir: 'Core' },

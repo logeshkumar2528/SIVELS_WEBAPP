@@ -39,13 +39,31 @@ import AddAgent from '../../Business_Modules/rm_modules/src/pages/AddAgent/AddAg
 import RelationshipManagerCreate from './pages/RelationshipManager/RelationshipManagerCreate';
 import CreateUser from './pages/CreateUser/CreateUser';
 
+const routerBasename = (() => {
+  const configuredBase = import.meta.env.BASE_URL?.replace(/\/$/, '') || '/';
+  if (configuredBase !== '/') {
+    return configuredBase;
+  }
+
+  const pathname = window.location.pathname;
+  if (pathname.startsWith('/Master_Module')) {
+    return '/Master_Module';
+  }
+
+  if (pathname.startsWith('/master')) {
+    return '/master';
+  }
+
+  return '/';
+})();
+
 function App() {
   return (
-    <BrowserRouter basename="/master">
+    <BrowserRouter basename={routerBasename}>
       <Toaster position="top-right" />
       <Routes>
         <Route path="/" element={<AppLayout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="create-user" element={<CreateUser />} />
           <Route path="add-agent" element={<AddAgent onSuccessRedirect="/dashboard" />} />
