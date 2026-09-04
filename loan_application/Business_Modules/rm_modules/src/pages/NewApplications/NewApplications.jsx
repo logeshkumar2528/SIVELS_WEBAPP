@@ -52,6 +52,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState(initialFilter);
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(7);
   const [applications, setApplications] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorPopup, setErrorPopup] = useState('');
@@ -150,6 +151,14 @@ export default function NewApplications({ initialFilter = 'All' }) {
     });
   }, [applications, searchTerm, statusFilter]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [currentPage, totalPages]);
+
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredData.slice(start, start + pageSize).map((row, index) => ({
@@ -157,8 +166,6 @@ export default function NewApplications({ initialFilter = 'All' }) {
       sno: start + index + 1
     }));
   }, [filteredData, currentPage, pageSize]);
-
-  const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
 
   const columns = [
     { key: 'sno', label: 'S.NO' },

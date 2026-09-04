@@ -68,7 +68,7 @@ const buildStatusSummary = (applications) => {
   ];
 
   const counts = applications.reduce((acc, app) => {
-    const status = app.status === 'Pending' ? 'Pending Verification' : (app.status || 'New');
+    const status = app.status || 'New';
     acc[status] = (acc[status] || 0) + 1;
     return acc;
   }, {});
@@ -135,15 +135,41 @@ export function useRmDashboardData() {
           throw new Error('No RM context found in session.');
         }
 
-        const [agentRes, customerRes] = await Promise.all([
+        const [agentRes, customerRes, rmRes] = await Promise.all([
           fetch(`${API_BASE}/AgentMaster`),
           fetch(`${API_BASE}/AgentAddCustomer`),
+          fetch(`${API_BASE}/RMMaster`),
         ]);
 
         if (!agentRes.ok) throw new Error(`Failed to load agents (${agentRes.status})`);
         if (!customerRes.ok) throw new Error(`Failed to load applications (${customerRes.status})`);
 
-        const [agentsData, customersData] = await Promise.all([agentRes.json(), customerRes.json()]);
+        const [agentsData, customersData, rmsData] = await Promise.all([
+          agentRes.json(),
+          customerRes.json(),
+          rmRes.ok ? rmRes.json() : Promise.resolve([]),
+        ]);
+
+        const matchedRm =
+          resolveApiArray(rmsData).find(
+            (rm) => Number(rm.rmId || rm.RMId || rm.id) === Number(rmContext.rmId)
+          ) || null;
+
+        const rmProfile = {
+          rmCode:
+            matchedRm?.rmCode ||
+            `RM${String(rmContext.rmId).padStart(4, '0')}`,
+          fullName:
+            matchedRm?.fullName ||
+            rmContext.fullName ||
+            'Relationship Manager',
+          branch:
+            matchedRm?.branch ||
+            matchedRm?.cityName ||
+            rmContext.branch ||
+            'Branch Details & Targets',
+        };
+
         const agents = filterAgentsForRm(resolveApiArray(agentsData), rmContext.rmId);
         const allowedAgentIds = buildAllowedAgentIdSet(agents);
         const applications = resolveApiArray(customersData)
@@ -170,6 +196,7 @@ export function useRmDashboardData() {
           newApplications: applications.filter((app) => normalizeText(app.status) === 'new').length,
           verification: applications.filter((app) => normalizeText(app.status) === 'pending').length,
           returned: applications.filter((app) => normalizeText(app.status) === 'returned').length,
+          approved: applications.filter((app) => normalizeText(app.status) === 'approved').length,
         };
 
         const approvedLoansCount = badgeCounts.approved;

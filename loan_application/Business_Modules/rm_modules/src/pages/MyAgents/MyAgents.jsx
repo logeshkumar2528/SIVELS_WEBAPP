@@ -5,6 +5,7 @@ import StatusBadge from '../../components/StatusBadge/StatusBadge';
 import Button from '../../components/Button/Button';
 import Modal from '../../components/Modal/Modal';
 import Select from '../../components/Select/Select';
+import Pagination from '../../components/Pagination/Pagination';
 import { formatDate } from '../../utils/dateHelper';
 import './MyAgents.css';
 
