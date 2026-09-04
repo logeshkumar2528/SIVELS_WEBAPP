@@ -23,6 +23,15 @@
   transform: translateY(-1px);
 }
 
+.stat-card--clickable {
+  cursor: pointer;
+}
+
+.stat-card--clickable:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.3);
+  outline-offset: 2px;
+}
+
 /* Card Themes */
 .stat-card--green {
   background-color: #F0FDF4;

@@ -4,7 +4,7 @@ import { agentCustomerService } from '../../../../../../Core/src/services/agentC
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import './StatCards.css'
 
-function StatCards() {
+function StatCards({ onTotalSubmittedClick }) {
   const { agentId, loadingAgent } = useAgentIdentity()
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -88,7 +88,17 @@ function StatCards() {
       {stats.map((stat) => {
         const Icon = stat.icon
         return (
-          <div key={stat.id} className={`stat-card stat-card--${stat.theme}`}>
+          <div
+            key={stat.id}
+            className={`stat-card stat-card--${stat.theme} ${stat.id === 'submitted' ? 'stat-card--clickable' : ''}`}
+            onClick={stat.id === 'submitted' ? onTotalSubmittedClick : undefined}
+            onKeyDown={stat.id === 'submitted' ? (event) => {
+              if (event.key === 'Enter' || event.key === ' ') onTotalSubmittedClick?.()
+            } : undefined}
+            role={stat.id === 'submitted' ? 'button' : undefined}
+            tabIndex={stat.id === 'submitted' ? 0 : undefined}
+            aria-label={stat.id === 'submitted' ? 'Show submitted customers' : undefined}
+          >
             <div className="stat-card-header">
               <div className={`stat-card-icon-circle stat-card-icon-circle--${stat.theme}`}>
                 <Icon size={20} strokeWidth={2} color="#FFFFFF" />
