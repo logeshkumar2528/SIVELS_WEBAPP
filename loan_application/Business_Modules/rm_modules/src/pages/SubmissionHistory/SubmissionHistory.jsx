@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Eye, Pencil } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import DataTable from '../../components/DataTable/DataTable';
 import StatusBadge from '../../components/StatusBadge/StatusBadge';
@@ -50,9 +51,16 @@ export default function SubmissionHistory() {
   const [submissions, setSubmissions] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(7);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const pageSize = 10;
+  const pageSizeOptions = [7, 10, 15, 20];
+
+  const handlePageSizeChange = (newSize) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+  };
+
   const SearchIcon = iconMap['Search'];
 
   useEffect(() => {
@@ -109,10 +117,18 @@ export default function SubmissionHistory() {
       .sort((a, b) => getDateTimestamp(b.submittedAt) - getDateTimestamp(a.submittedAt));
   }, [submissions, searchTerm]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [currentPage, totalPages]);
+
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredData.slice(start, start + pageSize).map((row, index) => ({ ...row, sno: start + index + 1 }));
-  }, [filteredData, currentPage]);
+  }, [filteredData, currentPage, pageSize]);
 
   const columns = [
     { key: 'sno', label: 'S.NO' },
@@ -200,8 +216,6 @@ export default function SubmissionHistory() {
       ),
     },
   ];
-
-  const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
 
   return (
     <div className="listing-page-wrapper rm-submission-history">

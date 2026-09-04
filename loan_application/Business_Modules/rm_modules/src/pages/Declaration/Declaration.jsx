@@ -382,7 +382,7 @@ export default function Declaration() {
                 <div key={index} className="aw-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
                   <div className="aw-field">
                     <label className="form-label">
-                      Signature of Co-Applicant {coApplicantCount > 1 ? index + 1 : ''}
+                      Signature of Co-Applicant {index + 1}
                     </label>
                     <div className="aw-input-wrapper">
                       <PenTool className="aw-input-icon" size={14} />

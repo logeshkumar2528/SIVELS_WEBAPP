@@ -314,6 +314,7 @@ export default function AddressDetails() {
           Landmark: person.landmark || null,
           CityId: person.city ? Number(person.city) : 1, // Defaulting if not set properly
           StateId: person.state ? Number(person.state) : 1,
+          Pincode: person.pincode || person.postalCode || person.Pincode || '',
           MailingAsCurrent: person.mailingSameAsCurrent === 'Yes',
           CreatedBy: 1
         };

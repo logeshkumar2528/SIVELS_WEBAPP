@@ -16,27 +16,99 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [selectedAgent, setSelectedAgent] = useState(null);
   const {
-    dashboardStats,
+    badgeCounts = { newApplications: 0, verification: 0, returned: 0, approved: 0 },
+    dashboardStats = [],
     recentApplicationsData,
-    agentPerformanceData,
+    agentPerformanceData = [],
     statusSummaryData,
-    totalApplications,
+    totalApplications = 0,
+    activeAgentsCount = 0,
+    inProgressCount = 0,
+    approvedLoansCount = 0,
+    submissionHistoryCount = 0,
+    rmProfile = { rmCode: 'RM0001', fullName: 'Relationship Manager', branch: 'Branch Details & Targets' },
     isLoading,
     error,
   } = useRmDashboardData();
 
-  const FilePlusIcon = iconMap['FilePlus'];
-  const ShieldCheckIcon = iconMap['ShieldCheck'];
-  const UsersIcon = iconMap['Users'];
-  const UserCircleIcon = iconMap['UserCircle'];
-  const ArrowRightIcon = iconMap['ArrowRight'];
+  const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || 'null');
+  const displayRmCode = rmProfile?.rmCode || currentUser?.rmCode || rmProfile?.fullName || currentUser?.fullName || currentUser?.name || 'RM Profile';
+  const displayBranch = rmProfile?.branch || currentUser?.branch || 'Branch Details & Targets';
 
-  const statsIconMap = {
-    'new-apps': iconMap['FilePlus'] ? <iconMap.FilePlus size={22} /> : null,
-    'pending-verif': iconMap['Clock'] ? <iconMap.Clock size={22} /> : null,
-    'approved-apps': iconMap['CheckCircle'] ? <iconMap.CheckCircle size={22} /> : null,
-    'total-agents': iconMap['Users'] ? <iconMap.Users size={22} /> : null,
-  };
+  const dashboardCards = [
+    {
+      id: 'total-applications',
+      title: 'Total Applications',
+      value: String(totalApplications),
+      description: 'All Customer Files',
+      variant: 'default',
+      icon: iconMap['FileText'] ? <iconMap.FileText size={22} /> : null,
+      onClick: () => navigate(ROUTES.NEW_APPLICATIONS),
+    },
+    {
+      id: 'new-applications',
+      title: 'New Applications',
+      value: String(badgeCounts.newApplications),
+      description: 'Requires Verification',
+      variant: 'info',
+      icon: iconMap['FilePlus'] ? <iconMap.FilePlus size={22} /> : null,
+      onClick: () => navigate(ROUTES.NEW_APPLICATIONS),
+    },
+    {
+      id: 'pending-applications',
+      title: 'Pending Applications',
+      value: String(badgeCounts.verification),
+      description: 'Awaiting RM Action',
+      variant: 'warning',
+      icon: iconMap['Clock'] ? <iconMap.Clock size={22} /> : null,
+      onClick: () => navigate(ROUTES.PENDING_APPLICATIONS),
+    },
+    {
+      id: 'in-progress',
+      title: 'In Progress',
+      value: String(inProgressCount),
+      description: 'Under Verification',
+      variant: 'warning',
+      icon: iconMap['RefreshCw'] ? <iconMap.RefreshCw size={22} /> : null,
+      onClick: () => navigate(ROUTES.PENDING_APPLICATIONS),
+    },
+    {
+      id: 'login-to-ho',
+      title: 'Login to HO',
+      value: String(approvedLoansCount),
+      description: 'Ready for HO Credit',
+      variant: 'success',
+      icon: iconMap['Send'] ? <iconMap.Send size={22} /> : null,
+      onClick: () => navigate(ROUTES.APPROVED_APPLICATIONS),
+    },
+    {
+      id: 'active-agents',
+      title: 'Active Agents',
+      value: String(activeAgentsCount),
+      description: 'Reporting to RM',
+      variant: 'default',
+      icon: iconMap['Users'] ? <iconMap.Users size={22} /> : null,
+      onClick: () => navigate(ROUTES.MY_AGENTS),
+    },
+    {
+      id: 'my-profile',
+      title: 'My Profile',
+      value: displayRmCode,
+      description: displayBranch,
+      variant: 'default',
+      icon: iconMap['UserCircle'] ? <iconMap.UserCircle size={22} /> : null,
+      onClick: () => navigate(ROUTES.PROFILE),
+    },
+    {
+      id: 'submission-history',
+      title: 'Submission History',
+      value: String(submissionHistoryCount),
+      description: 'Submitted Applications',
+      variant: 'success',
+      icon: iconMap['History'] ? <iconMap.History size={22} /> : null,
+      onClick: () => navigate(ROUTES.SUBMISSION_HISTORY),
+    },
+  ];
 
   const columns = [
     { key: 'id', label: 'App ID' },
@@ -84,68 +156,19 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* KPI Stats Grid */}
-      <div className="stats-grid">
-        {dashboardStats.map((st) => (
+      {/* 8 RM Dashboard Cards Grid */}
+      <div className="dashboard-cards-grid">
+        {dashboardCards.map((card) => (
           <StatCard
-            key={st.id}
-            title={st.title}
-            value={st.value}
-            description={st.description}
-            trend={st.trend}
-            trendDirection={st.trendDirection}
-            variant={st.variant}
-            icon={statsIconMap[st.id]}
-            onClick={() => navigate(ROUTES.NEW_APPLICATIONS)}
+            key={card.id}
+            title={card.title}
+            value={card.value}
+            description={card.description}
+            variant={card.variant}
+            icon={card.icon}
+            onClick={card.onClick}
           />
         ))}
-      </div>
-
-      {/* Quick Action Cards */}
-      <div className="quick-actions-row">
-        <div className="quick-action-card" onClick={() => navigate(ROUTES.NEW_APPLICATIONS)}>
-          <div className="quick-action-icon bg-green">
-            {FilePlusIcon && <FilePlusIcon size={20} />}
-          </div>
-          <div className="quick-action-info">
-            <span className="quick-action-title">New Applications</span>
-            <span className="quick-action-desc">Process pending verification list</span>
-          </div>
-          {ArrowRightIcon && <ArrowRightIcon size={16} className="quick-action-arrow" />}
-        </div>
-
-        <div className="quick-action-card" onClick={() => navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', 'APP-2024-001'))}>
-          <div className="quick-action-icon bg-amber">
-            {ShieldCheckIcon && <ShieldCheckIcon size={20} />}
-          </div>
-          <div className="quick-action-info">
-            <span className="quick-action-title">Start Verification</span>
-            <span className="quick-action-desc">Launch 5-step customer wizard</span>
-          </div>
-          {ArrowRightIcon && <ArrowRightIcon size={16} className="quick-action-arrow" />}
-        </div>
-
-        <div className="quick-action-card" onClick={() => navigate(ROUTES.MY_AGENTS)}>
-          <div className="quick-action-icon bg-blue">
-            {UsersIcon && <UsersIcon size={20} />}
-          </div>
-          <div className="quick-action-info">
-            <span className="quick-action-title">Manage Agents</span>
-            <span className="quick-action-desc">View active team & performance</span>
-          </div>
-          {ArrowRightIcon && <ArrowRightIcon size={16} className="quick-action-arrow" />}
-        </div>
-
-        <div className="quick-action-card" onClick={() => navigate(ROUTES.PROFILE)}>
-          <div className="quick-action-icon bg-purple">
-            {UserCircleIcon && <UserCircleIcon size={20} />}
-          </div>
-          <div className="quick-action-info">
-            <span className="quick-action-title">My RM Profile</span>
-            <span className="quick-action-desc">Branch details & monthly target</span>
-          </div>
-          {ArrowRightIcon && <ArrowRightIcon size={16} className="quick-action-arrow" />}
-        </div>
       </div>
 
       {/* Main Table + Donut Summary Section */}

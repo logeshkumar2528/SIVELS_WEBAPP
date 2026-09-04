@@ -703,7 +703,7 @@ export default function PdfView() {
                 <th>Applicant</th>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
-                    <th key={i}>CoApplicant {applicantCount > 1 ? i + 1 : ''}</th>
+                    <th key={i}>Co-Applicant {i + 1}</th>
                   ))}
               </tr>
             </thead>
@@ -794,7 +794,7 @@ export default function PdfView() {
                 <th>Applicant</th>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
-                    <th key={i}>CoApplicant {applicantCount > 1 ? i + 1 : ''}</th>
+                    <th key={i}>Co-Applicant {i + 1}</th>
                   ))}
               </tr>
             </thead>
@@ -893,7 +893,7 @@ export default function PdfView() {
                 <th>Applicant</th>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
-                    <th key={i}>CoApplicant {applicantCount > 1 ? i + 1 : ''}</th>
+                    <th key={i}>Co-Applicant {i + 1}</th>
                   ))}
               </tr>
             </thead>
@@ -969,13 +969,23 @@ export default function PdfView() {
               <tr>
                 <td>Pincode</td>
                 <td>
-                  {addressData.applicant?.current?.pincode || addressData.applicant?.pincode || '-'}
+                  {addressData.applicant?.current?.pincode ||
+                    addressData.applicant?.pincode ||
+                    addressData.applicant?.current?.postalCode ||
+                    addressData.applicant?.postalCode ||
+                    addressData.applicant?.current?.Pincode ||
+                    addressData.applicant?.Pincode ||
+                    '-'}
                 </td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>
                       {addressData.coApplicants?.[i]?.current?.pincode ||
                         addressData.coApplicants?.[i]?.pincode ||
+                        addressData.coApplicants?.[i]?.current?.postalCode ||
+                        addressData.coApplicants?.[i]?.postalCode ||
+                        addressData.coApplicants?.[i]?.current?.Pincode ||
+                        addressData.coApplicants?.[i]?.Pincode ||
                         '-'}
                     </td>
                   ))}
@@ -992,7 +1002,7 @@ export default function PdfView() {
                 <th>Applicant</th>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
-                    <th key={i}>CoApplicant {applicantCount > 1 ? i + 1 : ''}</th>
+                    <th key={i}>Co-Applicant {i + 1}</th>
                   ))}
               </tr>
             </thead>
@@ -1140,7 +1150,7 @@ export default function PdfView() {
               {hasCoApplicants &&
                 coApplicants.map((co, i) => (
                   <tr key={i}>
-                    <td>Co-Applicant {applicantCount > 1 ? i + 1 : ''}</td>
+                    <td>Co-Applicant {i + 1}</td>
                     <td>
                       {resolveBank(bankData.coApplicants?.[i]?.primaryBank?.bankName) ||
                         bankData.coApplicants?.[i]?.primaryBank?.bankName ||
@@ -1322,7 +1332,7 @@ export default function PdfView() {
                   declarationData.coApplicants?.[i]?.signature ||
                   (i === 0 ? declarationData.coApplicantSignature : '') ||
                   composeFullName(co) ||
-                  `Co-Applicant ${applicantCount > 1 ? i + 1 : ''}`;
+                  `Co-Applicant ${i + 1}`;
                 const coDate =
                   declarationData.coApplicants?.[i]?.date ||
                   (i === 0 ? declarationData.coApplicantDate : '') ||
@@ -1330,7 +1340,7 @@ export default function PdfView() {
                 return (
                   <div key={i}>
                     <div style={{ fontWeight: '700', marginBottom: '4px', fontSize: '11px' }}>
-                      Co-Applicant {applicantCount > 1 ? i + 1 : ''} Signature:
+                      Co-Applicant {i + 1} Signature:
                     </div>
                     <div style={{ fontSize: '13px', color: '#0F7A4C', fontWeight: '700' }}>
                       {coSig}

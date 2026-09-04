@@ -11,12 +11,17 @@ import {
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
 const EMPTY_DASHBOARD = {
-  badgeCounts: { newApplications: 0, verification: 0, returned: 0 },
+  badgeCounts: { newApplications: 0, verification: 0, returned: 0, approved: 0 },
   dashboardStats: [],
   recentApplicationsData: [],
   agentPerformanceData: [],
   statusSummaryData: [],
   totalApplications: 0,
+  activeAgentsCount: 0,
+  inProgressCount: 0,
+  approvedLoansCount: 0,
+  submissionHistoryCount: 0,
+  rmProfile: { rmCode: 'RM0001', fullName: 'Relationship Manager', branch: 'Branch Details & Targets' },
 };
 
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
@@ -63,7 +68,7 @@ const buildStatusSummary = (applications) => {
   ];
 
   const counts = applications.reduce((acc, app) => {
-    const status = app.status || 'New';
+    const status = app.status === 'Pending' ? 'Pending Verification' : (app.status || 'New');
     acc[status] = (acc[status] || 0) + 1;
     return acc;
   }, {});
@@ -145,14 +150,75 @@ export function useRmDashboardData() {
           .map(mapApplication)
           .filter((application) => application.agentId && allowedAgentIds.has(Number(application.agentId)));
 
-        const statusSummaryData = buildStatusSummary(applications);
-        const agentPerformanceData = buildAgentPerformance(applications, agents);
+        // Filter active agents (not marked inactive or disabled)
+        const activeAgents = agents.filter((agent) => {
+          const statusStr = normalizeText(agent.status ?? agent.isActive ?? agent.IsActive);
+          const isInactive =
+            statusStr === '0' ||
+            statusStr === 'false' ||
+            statusStr === 'inactive' ||
+            statusStr === 'disabled' ||
+            statusStr === 'deactive' ||
+            agent.isActive === false;
+          return !isInactive;
+        });
+        const activeAgentsCount = activeAgents.length;
+
+        const allowedAgentIds = new Set(
+          agents.map((agent) => Number(agent.agentId || agent.AgentId || 0)).filter((v) => Number.isFinite(v) && v > 0)
+        );
+
+        // Scope applications strictly to assigned agents
+        const rawCustomerRows = resolveApiArray(customersData);
+        const applications = rawCustomerRows
+          .filter((item) => {
+            const rowAgentId = Number(item.agentId || item.AgentId);
+            return allowedAgentIds.has(rowAgentId);
+          })
+          .map(mapApplication);
+
         const totalApplications = applications.length;
+
         const badgeCounts = {
           newApplications: applications.filter((app) => normalizeText(app.status) === 'new').length,
           verification: applications.filter((app) => normalizeText(app.status) === 'pending').length,
           returned: applications.filter((app) => normalizeText(app.status) === 'returned').length,
         };
+
+        const approvedLoansCount = badgeCounts.approved;
+        const submissionHistoryCount = totalApplications;
+
+        // Calculate genuine In-Progress drafts from localStorage without duplicating Pending
+        let inProgressCount = 0;
+        try {
+          const storedDraftsRaw = localStorage.getItem('sivels-rm-onboarding-drafts-v9');
+          if (storedDraftsRaw) {
+            const storedDrafts = JSON.parse(storedDraftsRaw);
+            const draftValues = Object.values(storedDrafts);
+            inProgressCount = draftValues.filter((draft) => {
+              if (!draft) return false;
+              const isApproved = normalizeText(draft.status) === 'approved' || draft.rawStatus === 2 || draft.rawStatus === '2';
+              if (isApproved) return false;
+              if (draft.agentId && allowedAgentIds.size > 0 && !allowedAgentIds.has(Number(draft.agentId))) {
+                return false;
+              }
+              const hasProgress = Boolean(
+                draft.sections?.personalInformation?.applicant?.firstName ||
+                draft.personalInformation?.applicant?.firstName ||
+                draft.sections?.addressDetails?.applicant?.addressLine1 ||
+                draft.addressDetails?.applicant?.addressLine1 ||
+                draft.applicationProductDetailsId ||
+                (draft._isHydrated && draft.status !== 'New')
+              );
+              return hasProgress;
+            }).length;
+          }
+        } catch {
+          inProgressCount = 0;
+        }
+
+        const statusSummaryData = buildStatusSummary(applications);
+        const agentPerformanceData = buildAgentPerformance(applications, agents);
 
         const dashboardStats = [
           {
@@ -166,18 +232,18 @@ export function useRmDashboardData() {
           },
           {
             id: 'pending-verif',
-            title: 'Pending Verification',
+            title: 'Pending Applications',
             value: String(badgeCounts.verification),
-            description: 'In Progress',
+            description: 'Awaiting RM Action',
             trend: 'Live from API',
             trendDirection: 'neutral',
             variant: 'warning',
           },
           {
             id: 'approved-apps',
-            title: 'Approved Loans',
-            value: String(applications.filter((app) => normalizeText(app.status) === 'approved').length),
-            description: 'Current Records',
+            title: 'Login to HO',
+            value: String(approvedLoansCount),
+            description: 'Ready for HO Credit',
             trend: 'Live from API',
             trendDirection: 'neutral',
             variant: 'success',
@@ -185,7 +251,7 @@ export function useRmDashboardData() {
           {
             id: 'total-agents',
             title: 'Active Agents',
-            value: String(agents.length),
+            value: String(activeAgentsCount),
             description: 'Reporting to RM',
             trend: 'Live from API',
             trendDirection: 'neutral',
@@ -209,6 +275,11 @@ export function useRmDashboardData() {
             agentPerformanceData,
             statusSummaryData,
             totalApplications,
+            activeAgentsCount,
+            inProgressCount,
+            approvedLoansCount,
+            submissionHistoryCount,
+            rmProfile,
           });
         }
       } catch (err) {
