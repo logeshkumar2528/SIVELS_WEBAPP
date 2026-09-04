@@ -12,6 +12,7 @@ import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import { getApplicantCount } from '../applicationWizard/flowUtils';
 import Modal from '../../components/Modal/Modal';
+import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { formatDateTime, toIstDateInput } from '../../utils/dateHelper';
 import './CustomerRegistration.css';
 
@@ -435,6 +436,7 @@ export default function CustomerRegistration() {
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildPersonalInformationState(getApplication(appId)));
   const [errors, setErrors] = useState({});
+  const [errorPopup, setErrorPopup] = useState(null);
   const hasUserEditedRef = useRef(false);
   const prevAppIdRef = useRef(appId);
 
@@ -746,7 +748,11 @@ export default function CustomerRegistration() {
       navigate(ROUTES.ADDRESS_DETAILS.replace(':applicationId', appId));
     } catch (err) {
       console.error('Error saving Personal Information:', err);
-      alert('Network error while saving personal information.');
+      setErrorPopup({
+        title: 'Connection error',
+        message: 'Network error while saving personal information. Please try again.',
+        variant: 'error',
+      });
     }
   };
 
@@ -771,6 +777,14 @@ export default function CustomerRegistration() {
 
   return (
     <div className="page-container cr-page-root compact-mode">
+      <ErrorPopup
+        show={!!errorPopup}
+        title={errorPopup?.title}
+        message={errorPopup?.message}
+        details={errorPopup?.details}
+        variant={errorPopup?.variant}
+        onClose={() => setErrorPopup(null)}
+      />
       <header className="ad-premium-header">
         <div className="ad-premium-header-top">
           <div className="ad-title-group">

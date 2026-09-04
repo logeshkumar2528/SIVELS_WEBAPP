@@ -8,6 +8,7 @@ import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
+import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import {
   buildSectionUpdate,
   createArray,
@@ -223,6 +224,7 @@ export default function EmploymentIncome() {
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildEmploymentState(getApplication(appId)));
   const [errors, setErrors] = useState({});
+  const [errorPopup, setErrorPopup] = useState(null);
 
   const [isLoadingMasters, setIsLoadingMasters] = useState(false);
   const [qualificationOptions, setQualificationOptions] = useState([]);
@@ -380,7 +382,11 @@ export default function EmploymentIncome() {
       navigate(ROUTES.BANK_EXISTING_LOANS.replace(':applicationId', appId));
     } catch (err) {
       console.error('Error saving Employment Details:', err);
-      alert('Network error while saving employment details.');
+      setErrorPopup({
+        title: 'Connection error',
+        message: 'Network error while saving employment details. Please try again.',
+        variant: 'error',
+      });
     }
   };
 
@@ -389,7 +395,16 @@ export default function EmploymentIncome() {
   };
 
   return (
-    <WizardSectionLayout
+    <>
+      <ErrorPopup
+        show={!!errorPopup}
+        title={errorPopup?.title}
+        message={errorPopup?.message}
+        details={errorPopup?.details}
+        variant={errorPopup?.variant}
+        onClose={() => setErrorPopup(null)}
+      />
+      <WizardSectionLayout
       appId={appId}
       appData={appData}
       steps={APPLICATION_WIZARD_STEPS}
@@ -445,5 +460,6 @@ export default function EmploymentIncome() {
         />
       ))}
     </WizardSectionLayout>
+    </>
   );
 }

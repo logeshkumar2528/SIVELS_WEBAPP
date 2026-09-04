@@ -16,6 +16,7 @@ function ViewCustomerModal({ customer, onClose }) {
   const [modalImage, setModalImage] = useState(null)
   const [documents, setDocuments] = useState([])
   const [loadingDocs, setLoadingDocs] = useState(true)
+  const [viewError, setViewError] = useState('')
   
   // Masters for name lookup if backend only returned IDs
   const [loanPurposes, setLoanPurposes] = useState([])
@@ -140,13 +141,13 @@ function ViewCustomerModal({ customer, onClose }) {
     } catch (err) {
       console.error("Failed to view document", err)
       if (!err.response) {
-        alert("Unable to connect to document server.")
+        setViewError("Unable to connect to document server.")
       } else if (err.response.status === 404) {
-        alert("Document file not found.")
+        setViewError("Document file not found.")
       } else if (err.response.status >= 500) {
-        alert("Unable to retrieve document from server.")
+        setViewError("Unable to retrieve document from server.")
       } else {
-        alert("Unable to view document.")
+        setViewError("Unable to view document.")
       }
     }
   }
@@ -181,6 +182,23 @@ function ViewCustomerModal({ customer, onClose }) {
 
           {/* Drawer Scrollable Content Body */}
           <div className="drawer-body">
+            {viewError ? (
+              <div
+                role="alert"
+                style={{
+                  marginBottom: '12px',
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  border: '1px solid #fecaca',
+                  background: '#fef2f2',
+                  color: '#b91c1c',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                }}
+              >
+                {viewError}
+              </div>
+            ) : null}
             {/* Section 1: Basic Details */}
             <div className="drawer-section-card">
               <div className="drawer-section-title">

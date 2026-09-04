@@ -27,6 +27,10 @@ export const STATUS_CONFIG = {
     label: 'Active',
     variant: 'approved',
   },
+  'Inactive': {
+    label: 'Inactive',
+    variant: 'inactive',
+  },
   'Disbursed': {
     label: 'Disbursed',
     variant: 'disbursed',

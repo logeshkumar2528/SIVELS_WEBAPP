@@ -33,16 +33,6 @@ function formatCurrency(value) {
   return amount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
 }
 
-function buildInitials(name = '') {
-  return String(name)
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() || '')
-    .join('') || 'A';
-}
-
 function buildAvatar(name = '') {
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Agent')}&background=0f7a4b&color=fff&bold=true`;
 }
@@ -96,9 +86,6 @@ export default function MyAgents() {
   const [selectedAgentDetails, setSelectedAgentDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState('');
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const [deleteError, setDeleteError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(7);
   const [isLoading, setIsLoading] = useState(true);
@@ -118,7 +105,6 @@ export default function MyAgents() {
   const IndianRupeeIcon = iconMap['IndianRupee'];
   const DownloadIcon = iconMap['Download'];
   const EyeIcon = iconMap['Eye'];
-  const TrashIcon = iconMap['XCircle'];
 
   const getAuthHeaders = () => {
     const headers = {};
@@ -158,75 +144,6 @@ export default function MyAgents() {
       setDetailsError(error.message || 'Failed to load agent details.');
     } finally {
       setDetailsLoading(false);
-    }
-  };
-
-  const openDeleteConfirm = (row) => {
-    setDeleteTarget(row);
-    setDeleteError('');
-  };
-
-  const closeDeleteConfirm = () => {
-    if (deleteLoading) return;
-    setDeleteTarget(null);
-    setDeleteError('');
-  };
-
-  const markAgentInactive = async () => {
-    const row = deleteTarget;
-    if (!row) return;
-
-    setDeleteLoading(true);
-    setDeleteError('');
-
-    try {
-      const agentId = row?.raw?.agentId || row?.raw?.AgentId || row?.agentId || row?.raw?.agentCode || row?.id;
-      if (!agentId) {
-        throw new Error('Agent ID not found.');
-      }
-
-      const payload = {
-        ...row.raw,
-        isActive: false,
-        status: 'Inactive',
-      };
-
-      const response = await fetch(`${API_BASE}/AgentMaster/${agentId}`, {
-        method: 'PUT',
-        headers: {
-          ...getAuthHeaders(),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to deactivate agent (${response.status})`);
-      }
-
-      setAgentRows((current) =>
-        current.map((agent) => {
-          if (agent.agentId === row.agentId || agent.id === row.id) {
-            return {
-              ...agent,
-              status: 'Inactive',
-              raw: {
-                ...agent.raw,
-                isActive: false,
-                status: 'Inactive',
-              },
-            };
-          }
-          return agent;
-        })
-      );
-
-      setDeleteTarget(null);
-    } catch (error) {
-      console.error('Failed to deactivate agent:', error);
-      setDeleteError(error.message || 'Failed to deactivate agent.');
-    } finally {
-      setDeleteLoading(false);
     }
   };
 
@@ -375,7 +292,7 @@ export default function MyAgents() {
   const columns = [
     {
       key: 'name',
-      label: 'AGENT NAME',
+      label: 'AGENT',
       render: (row) => (
         <div className="ag-cell-name">
           <img
@@ -385,9 +302,7 @@ export default function MyAgents() {
           />
           <div className="ag-cell-name-info">
             <span className="ag-cell-name-title">{row.name}</span>
-            <span className="ag-cell-name-sub">
-              {buildInitials(row.name)} • {row.email || 'No email'}
-            </span>
+            <span className="ag-cell-name-sub">{row.phone}</span>
           </div>
         </div>
       ),
@@ -395,66 +310,49 @@ export default function MyAgents() {
     {
       key: 'id',
       label: 'AGENT ID',
-      render: (row) => <span style={{ color: '#475569' }}>{row.id}</span>,
+      render: (row) => <span className="ag-cell-muted">{row.id}</span>,
     },
     {
       key: 'assignedArea',
       label: 'AREA / BRANCH',
-      render: (row) => <span style={{ color: '#475569' }}>{row.assignedArea}</span>,
-    },
-    {
-      key: 'phone',
-      label: 'MOBILE NUMBER',
-      render: (row) => <span style={{ color: '#475569' }}>{row.phone}</span>,
+      render: (row) => <span className="ag-cell-muted">{row.assignedArea}</span>,
     },
     {
       key: 'customersAdded',
-      label: 'CUSTOMERS ADDED',
+      label: 'CUSTOMERS',
       render: (row) => (
-        <div style={{ textAlign: 'center', width: '100%' }}>
-          <span style={{ color: '#475569', fontWeight: 500 }}>{row.customersAdded}</span>
-        </div>
+        <span className="ag-cell-metric">{row.customersAdded}</span>
       ),
     },
     {
       key: 'activeCustomers',
-      label: 'ACTIVE CUSTOMERS',
+      label: 'ACTIVE',
       render: (row) => (
-        <div style={{ textAlign: 'center', width: '100%' }}>
-          <span style={{ color: '#16a34a', fontWeight: 600 }}>{row.activeCustomers}</span>
-        </div>
+        <span className="ag-cell-metric ag-cell-metric--success">{row.activeCustomers}</span>
       ),
     },
     {
       key: 'pendingVerification',
-      label: 'PENDING VERIFICATION',
+      label: 'PENDING',
       render: (row) => (
-        <div style={{ textAlign: 'center', width: '100%' }}>
-          <span style={{ color: '#ea580c', fontWeight: 600 }}>{row.pendingVerification}</span>
-        </div>
+        <span className="ag-cell-metric ag-cell-metric--warning">{row.pendingVerification}</span>
       ),
     },
     {
       key: 'pendingCollections',
-      label: 'PENDING COLLECTIONS',
+      label: 'COLLECTIONS',
       render: (row) => (
-        <div style={{ textAlign: 'center', width: '100%' }}>
-          <span style={{ color: '#dc2626', fontWeight: 600 }}>{row.pendingCollections}</span>
-        </div>
+        <span className="ag-cell-metric ag-cell-metric--danger">{row.pendingCollections}</span>
       ),
     },
     {
       key: 'status',
       label: 'STATUS',
-      render: (row) => (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-          <StatusBadge status={row.status} />
-        </div>
-      ),
+      render: (row) => <StatusBadge status={row.status} />,
     },
     {
       key: 'action',
-      label: 'ACTION',
+      label: 'ACTIONS',
       render: (row) => (
         <div className="ag-row-actions">
           <button
@@ -465,15 +363,7 @@ export default function MyAgents() {
             title="View Details"
           >
             {EyeIcon ? <EyeIcon size={14} /> : null}
-          </button>
-          <button
-            type="button"
-            className="sub-hist-btn ag-btn--delete"
-            onClick={() => openDeleteConfirm(row)}
-            aria-label={`Delete ${row.name}`}
-            title="Delete"
-          >
-            {TrashIcon ? <TrashIcon size={14} /> : null}
+            <span>View</span>
           </button>
         </div>
       ),
@@ -481,7 +371,7 @@ export default function MyAgents() {
   ];
 
   return (
-    <div className="listing-page-wrapper" style={{ gap: '16px' }}>
+    <div className="listing-page-wrapper ag-page" style={{ gap: '16px' }}>
       {loadError && (
         <div className="alert alert-warning" style={{ marginBottom: '0' }}>
           {loadError}
@@ -649,8 +539,8 @@ export default function MyAgents() {
                   {safeSelectedAgent.id || safeAgentDetails.agentCode || '-'} <span>•</span> {safeSelectedAgent.assignedArea || safeAgentDetails.branch || '-'}
                 </div>
                 <div className="agent-detail-badges">
-                  <span className={`agent-detail-pill ${String(safeAgentDetails.isActive ?? safeSelectedAgent.raw?.isActive ?? true).toLowerCase() === 'true' ? 'is-active' : 'is-inactive'}`}>
-                    {(safeAgentDetails.isActive ?? safeSelectedAgent.raw?.isActive ?? true) ? 'Active' : 'Inactive'}
+                  <span className={`agent-detail-pill ${String(safeAgentDetails.isActive ?? safeSelectedAgent.raw?.isActive ?? true).toLowerCase() === 'true' || safeSelectedAgent.status === 'Active' ? 'is-active' : 'is-inactive'}`}>
+                    {safeSelectedAgent.status || ((safeAgentDetails.isActive ?? safeSelectedAgent.raw?.isActive ?? true) ? 'Active' : 'Inactive')}
                   </span>
                   <span className="agent-detail-pill agent-detail-pill--outline">
                     {safeAgentDetails.role || 'Agent'}
@@ -758,34 +648,6 @@ export default function MyAgents() {
               </div>
             </div>
           </div>
-      </Modal>
-
-      <Modal
-        show={!!deleteTarget}
-        onHide={closeDeleteConfirm}
-        title="Deactivate Agent"
-        size="sm"
-        footer={(
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', width: '100%' }}>
-            <Button type="button" variant="secondary" onClick={closeDeleteConfirm} disabled={deleteLoading}>
-              Cancel
-            </Button>
-            <Button type="button" variant="danger" onClick={markAgentInactive} disabled={deleteLoading}>
-              {deleteLoading ? 'Updating...' : 'Set Inactive'}
-            </Button>
-          </div>
-        )}
-      >
-        <div style={{ display: 'grid', gap: '10px' }}>
-          <p style={{ margin: 0, color: '#334155', lineHeight: 1.6 }}>
-            This will mark <strong>{deleteTarget?.name || 'this agent'}</strong> as inactive. The record will remain in the system.
-          </p>
-          {deleteError && (
-            <div style={{ padding: '10px 12px', borderRadius: '10px', background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c' }}>
-              {deleteError}
-            </div>
-          )}
-        </div>
       </Modal>
     </div>
   );

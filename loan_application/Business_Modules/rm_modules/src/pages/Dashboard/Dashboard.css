@@ -17,6 +17,96 @@
   }
 }
 
+.dashboard-main-grid > .panel {
+  min-width: 0;
+}
+
+.dashboard-recent-panel {
+  overflow: hidden;
+}
+
+/* Fit recent applications table in panel — no horizontal scroll */
+.rm-dashboard-recent-table {
+  width: 100%;
+  min-width: 0;
+}
+
+.rm-dashboard-recent-table .data-table-scroll {
+  overflow-x: hidden !important;
+  overflow-y: visible;
+  width: 100%;
+}
+
+.rm-dashboard-recent-table .data-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 0;
+}
+
+.rm-dashboard-recent-table .data-table-th,
+.rm-dashboard-recent-table .data-table-cell {
+  padding: 10px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  font-size: 12px;
+}
+
+.rm-dashboard-recent-table .data-table-th {
+  letter-spacing: 0.3px;
+}
+
+.rm-dashboard-recent-table .data-table-th:nth-child(1),
+.rm-dashboard-recent-table .data-table-cell:nth-child(1) {
+  width: 11%;
+}
+
+.rm-dashboard-recent-table .data-table-th:nth-child(2),
+.rm-dashboard-recent-table .data-table-cell:nth-child(2) {
+  width: 16%;
+}
+
+.rm-dashboard-recent-table .data-table-th:nth-child(3),
+.rm-dashboard-recent-table .data-table-cell:nth-child(3) {
+  width: 11%;
+}
+
+.rm-dashboard-recent-table .data-table-th:nth-child(4),
+.rm-dashboard-recent-table .data-table-cell:nth-child(4) {
+  width: 12%;
+}
+
+.rm-dashboard-recent-table .data-table-th:nth-child(5),
+.rm-dashboard-recent-table .data-table-cell:nth-child(5) {
+  width: 12%;
+}
+
+.rm-dashboard-recent-table .data-table-th:nth-child(6),
+.rm-dashboard-recent-table .data-table-cell:nth-child(6) {
+  width: 12%;
+}
+
+.rm-dashboard-recent-table .data-table-th:nth-child(7),
+.rm-dashboard-recent-table .data-table-cell:nth-child(7) {
+  width: 12%;
+  text-align: center;
+}
+
+.rm-dashboard-recent-table .data-table-th:nth-child(8),
+.rm-dashboard-recent-table .data-table-cell:nth-child(8) {
+  width: 14%;
+  text-align: center;
+}
+
+.rm-dashboard-recent-table .data-table-cell .btn,
+.rm-dashboard-recent-table .data-table-cell button {
+  max-width: 100%;
+  white-space: nowrap;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
 .quick-actions-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -166,4 +256,10 @@
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
+}
+
+@media (max-width: 1024px) {
+  .dashboard-main-grid.three-col-grid > .dashboard-recent-panel {
+    grid-column: span 1 !important;
+  }
 }

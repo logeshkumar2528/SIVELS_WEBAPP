@@ -6,6 +6,7 @@ import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import { ROUTES } from '../../config/routeConfig';
 import { getApplicantCount } from '../applicationWizard/flowUtils';
 import Button from '../../components/Button/Button';
+import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { formatDateTime, toIstDateInput } from '../../utils/dateHelper';
 import './PdfView.css';
 import LogoImage from '../../assets/logo/Navbar_logo/Logo.jpg';
@@ -355,6 +356,7 @@ export default function PdfView() {
   }, [applicationId]);
 
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [errorPopup, setErrorPopup] = useState(null);
 
   // Generate continuous single long page PDF
   const handleDownloadPdf = async () => {
@@ -429,7 +431,11 @@ export default function PdfView() {
       pdf.save(`Loan_Application_${applicationId}.pdf`);
     } catch (err) {
       console.error('Error generating PDF:', err);
-      alert('Failed to generate PDF. Please try again.');
+      setErrorPopup({
+        title: 'PDF generation failed',
+        message: 'Failed to generate PDF. Please try again.',
+        variant: 'error',
+      });
     } finally {
       setIsGeneratingPdf(false);
     }
@@ -596,6 +602,14 @@ export default function PdfView() {
 
   return (
     <div className="pdf-view-wrapper">
+      <ErrorPopup
+        show={!!errorPopup}
+        title={errorPopup?.title}
+        message={errorPopup?.message}
+        details={errorPopup?.details}
+        variant={errorPopup?.variant}
+        onClose={() => setErrorPopup(null)}
+      />
       <div className="pdf-controls">
         <Button variant="secondary" onClick={() => navigate(ROUTES.SUBMISSION_HISTORY)}>
           Back

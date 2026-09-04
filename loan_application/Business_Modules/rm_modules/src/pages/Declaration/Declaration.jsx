@@ -8,6 +8,7 @@ import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
+import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { buildSectionUpdate, getSectionState, getApplicantCount, createArray, resolveApplicantName } from '../applicationWizard/flowUtils';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -120,6 +121,7 @@ export default function Declaration() {
   const [otpStep, setOtpStep] = useState('initial');
   const [otpValue, setOtpValue] = useState('');
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [errorPopup, setErrorPopup] = useState(null);
 
   useEffect(() => {
     ensureApplication(appId);
@@ -256,7 +258,11 @@ export default function Declaration() {
       navigate(ROUTES.APPROVED_APPLICATIONS);
     } catch (err) {
       console.error('Error finalizing application submission:', err);
-      alert(`The application could not be completed: ${err.message || 'Please try again.'}`);
+      setErrorPopup({
+        title: 'Could not complete application',
+        message: err.message || 'The application could not be completed. Please try again.',
+        variant: 'error',
+      });
     } finally {
       setIsFinalizing(false);
     }
@@ -269,7 +275,16 @@ export default function Declaration() {
   const displayCustomerName = resolveApplicantName(appData);
 
   return (
-    <WizardSectionLayout
+    <>
+      <ErrorPopup
+        show={!!errorPopup}
+        title={errorPopup?.title}
+        message={errorPopup?.message}
+        details={errorPopup?.details}
+        variant={errorPopup?.variant}
+        onClose={() => setErrorPopup(null)}
+      />
+      <WizardSectionLayout
       appId={appId}
       appData={appData}
       steps={APPLICATION_WIZARD_STEPS}
@@ -702,5 +717,6 @@ export default function Declaration() {
         )}
       </Modal>
     </WizardSectionLayout>
+    </>
   );
 }

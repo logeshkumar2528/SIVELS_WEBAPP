@@ -26,6 +26,8 @@ import {
   getApplicantCount,
   getSectionState,
 } from '../applicationWizard/flowUtils';
+import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
+import { parseApiErrorBody } from '../../utils/formatUserFacingError';
 import './KycDocuments.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -396,6 +398,7 @@ export default function KycDocuments() {
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildKycState(getApplication(appId)));
   const [errors, setErrors] = useState({});
+  const [errorPopup, setErrorPopup] = useState(null);
 
   // Document viewing state
   const [viewingDocsFor, setViewingDocsFor] = useState(null); // 'applicant' | number (coApplicant index)
@@ -718,7 +721,11 @@ export default function KycDocuments() {
     const applicationProductDetailsId = appData.applicationProductDetailsId;
 
     if (!applicationProductDetailsId) {
-      alert('Application product details not saved yet. Please go back and save Application Details first.');
+      setErrorPopup({
+        title: 'Missing application details',
+        message: 'Application product details are not saved yet. Please go back and save Application Details first.',
+        variant: 'validation',
+      });
       return;
     }
 
@@ -762,9 +769,13 @@ export default function KycDocuments() {
 
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
-          let msg = errData.Message || errData.title || 'Unknown error';
-          if (errData.errors) msg += '\n' + JSON.stringify(errData.errors, null, 2);
-          alert(`Failed to save KYC:\n${msg}`);
+          const parsed = parseApiErrorBody(errData, 'Unable to save KYC documents. Please check the form and try again.');
+          setErrorPopup({
+            title: 'Could not save KYC',
+            message: parsed.message,
+            details: parsed.items,
+            variant: parsed.variant,
+          });
           return;
         }
 
@@ -796,7 +807,11 @@ export default function KycDocuments() {
       navigate(ROUTES.PERSONAL_INFORMATION.replace(':applicationId', appId));
     } catch (err) {
       console.error('Error saving KYC:', err);
-      alert('Network error while saving KYC documents.');
+      setErrorPopup({
+        title: 'Connection error',
+        message: 'Network error while saving KYC documents. Please try again.',
+        variant: 'error',
+      });
     }
   };
 
@@ -813,6 +828,14 @@ export default function KycDocuments() {
 
   return (
     <>
+      <ErrorPopup
+        show={!!errorPopup}
+        title={errorPopup?.title}
+        message={errorPopup?.message}
+        details={errorPopup?.details}
+        variant={errorPopup?.variant}
+        onClose={() => setErrorPopup(null)}
+      />
       <WizardSectionLayout
         appId={appId}
         appData={appData}

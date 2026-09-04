@@ -21,8 +21,8 @@ class ErrorBoundary extends React.Component {
         <ErrorPopup
           show
           title="Application Error"
-          message="The application encountered an unexpected error."
-          details={this.state.error?.stack || this.state.error?.toString()}
+          message="The application encountered an unexpected error. Please reload the page and try again."
+          variant="error"
           onClose={() => window.location.reload()}
         />
       );

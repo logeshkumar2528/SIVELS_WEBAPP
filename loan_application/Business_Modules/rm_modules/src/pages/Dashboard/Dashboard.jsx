@@ -111,27 +111,27 @@ export default function Dashboard() {
   ];
 
   const columns = [
-    { key: 'id', label: 'App ID' },
-    { key: 'customerName', label: 'Customer Name' },
-    { key: 'mobile', label: 'Mobile' },
-    { key: 'loanType', label: 'Loan Purpose' },
-    { key: 'amount', label: 'Requested Amount' },
-    { key: 'agentName', label: 'Agent' },
+    { key: 'id', label: 'APP ID' },
+    { key: 'customerName', label: 'CUSTOMER' },
+    { key: 'mobile', label: 'MOBILE' },
+    { key: 'loanType', label: 'PURPOSE' },
+    { key: 'amount', label: 'AMOUNT' },
+    { key: 'agentName', label: 'AGENT' },
     {
       key: 'status',
-      label: 'Status',
+      label: 'STATUS',
       render: (row) => <StatusBadge status={row.status} />,
     },
     {
       key: 'action',
-      label: 'Action',
+      label: 'ACTION',
       render: (row) => (
         <Button
           size="sm"
           variant="outline"
           onClick={() => navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', row.id))}
         >
-          Verify Customer
+          Verify
         </Button>
       ),
     },
@@ -172,15 +172,20 @@ export default function Dashboard() {
       </div>
 
       {/* Main Table + Donut Summary Section */}
-      <div className="three-col-grid">
-        <div className="panel" style={{ gridColumn: 'span 2' }}>
+      <div className="three-col-grid dashboard-main-grid">
+        <div className="panel dashboard-recent-panel" style={{ gridColumn: 'span 2' }}>
           <div className="panel-header">
             <h3 className="panel-title">Recent Applications Requiring Action</h3>
             <Button size="sm" variant="secondary" onClick={() => navigate(ROUTES.NEW_APPLICATIONS)}>
               View All
             </Button>
           </div>
-          <DataTable columns={columns} data={recentApplicationsData} rowKeyField="id" />
+          <DataTable
+            columns={columns}
+            data={recentApplicationsData}
+            rowKeyField="id"
+            className="rm-dashboard-recent-table"
+          />
         </div>
 
         <div className="panel">

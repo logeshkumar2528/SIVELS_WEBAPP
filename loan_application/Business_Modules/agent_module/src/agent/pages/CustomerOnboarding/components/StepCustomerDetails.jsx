@@ -1,22 +1,43 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 
 const StepCustomerDetails = ({ formData, handleChange, masters, onNext }) => {
+  const [error, setError] = useState('');
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.firstName || !formData.lastName || !formData.mobileNumber || !formData.dateOfBirth || !formData.gender || !formData.maritalStatus) {
-      alert("Please fill in all required fields.");
+      setError('Please fill in all required fields.');
       return;
     }
     if (formData.mobileNumber.length !== 10 || !/^\d{10}$/.test(formData.mobileNumber)) {
-      alert("Please enter a valid 10-digit mobile number.");
+      setError('Please enter a valid 10-digit mobile number.');
       return;
     }
+    setError('');
     onNext();
   };
 
   return (
     <form onSubmit={handleSubmit}>
+      {error ? (
+        <div
+          role="alert"
+          style={{
+            marginBottom: '1rem',
+            padding: '10px 12px',
+            borderRadius: '10px',
+            border: '1px solid #fed7aa',
+            background: '#fffbeb',
+            color: '#9a3412',
+            fontSize: '13px',
+            fontWeight: 500,
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
+
       <div className="std-grid-cols-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
         
         <div className="form-group" style={{ marginBottom: '1rem' }}>

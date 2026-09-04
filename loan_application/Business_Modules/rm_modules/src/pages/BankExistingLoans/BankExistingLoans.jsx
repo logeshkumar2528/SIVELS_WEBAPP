@@ -9,6 +9,7 @@ import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
 import Modal from '../../components/Modal/Modal';
+import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import {
   buildSectionUpdate,
   getApplicantCount,
@@ -131,6 +132,7 @@ export default function BankExistingLoans() {
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildBankState(getApplication(appId)));
+  const [errorPopup, setErrorPopup] = useState(null);
   const [viewingLoansFor, setViewingLoansFor] = useState(null);
   const [transientLoans, setTransientLoans] = useState({});
   const [isLoadingMasters, setIsLoadingMasters] = useState(false);
@@ -307,7 +309,11 @@ export default function BankExistingLoans() {
       navigate(ROUTES.COLLATERAL.replace(':applicationId', appId));
     } catch (err) {
       console.error('Error saving Bank Details:', err);
-      alert('Network error while saving bank details.');
+      setErrorPopup({
+        title: 'Connection error',
+        message: 'Network error while saving bank details. Please try again.',
+        variant: 'error',
+      });
     }
   };
 
@@ -316,7 +322,16 @@ export default function BankExistingLoans() {
   };
 
   return (
-    <WizardSectionLayout
+    <>
+      <ErrorPopup
+        show={!!errorPopup}
+        title={errorPopup?.title}
+        message={errorPopup?.message}
+        details={errorPopup?.details}
+        variant={errorPopup?.variant}
+        onClose={() => setErrorPopup(null)}
+      />
+      <WizardSectionLayout
       appId={appId}
       appData={appData}
       steps={APPLICATION_WIZARD_STEPS}
@@ -479,5 +494,6 @@ export default function BankExistingLoans() {
         </div>
       </Modal>
     </WizardSectionLayout>
+    </>
   );
 }

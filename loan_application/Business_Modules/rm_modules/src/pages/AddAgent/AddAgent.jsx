@@ -28,6 +28,7 @@ import Select from '../../components/Select/Select';
 import DatePicker from '../../components/DatePicker/DatePicker';
 import Modal from '../../components/Modal/Modal';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
+import { extractErrorItems, parseApiErrorBody } from '../../utils/formatUserFacingError';
 import { ROUTES } from '../../config/routeConfig';
 import './AddAgent.css';
 
@@ -438,8 +439,12 @@ export default function AddAgent({ onSuccessRedirect, agentId: agentIdProp } = {
       }, 1200);
     } catch (error) {
       console.error('Failed to save agent:', error);
-      setErrorMessage(error.message || `Failed to ${isEditMode ? 'update' : 'create'} agent.`);
-      setErrorDetails(error.details || null);
+      const parsed = parseApiErrorBody(
+        error.details,
+        error.message || `Failed to ${isEditMode ? 'update' : 'create'} agent.`
+      );
+      setErrorMessage(parsed.message || error.message || `Failed to ${isEditMode ? 'update' : 'create'} agent.`);
+      setErrorDetails(parsed.items.length ? parsed.items : null);
     } finally {
       setIsSaving(false);
     }
@@ -452,6 +457,7 @@ export default function AddAgent({ onSuccessRedirect, agentId: agentIdProp } = {
         title={isEditMode ? 'Could not update agent' : 'Could not save agent'}
         message={errorMessage}
         details={errorDetails}
+        variant={extractErrorItems(errorDetails).length ? 'validation' : 'error'}
         onClose={() => {
           setErrorMessage('');
           setErrorDetails(null);

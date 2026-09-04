@@ -8,6 +8,7 @@ import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
+import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { buildSectionUpdate, getSectionState } from '../applicationWizard/flowUtils';
 
 function buildReferenceState(appData) {
@@ -89,6 +90,7 @@ export default function ReferenceDetails() {
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildReferenceState(getApplication(appId)));
+  const [errorPopup, setErrorPopup] = useState(null);
 
   const [isLoadingMasters, setIsLoadingMasters] = useState(false);
   const [relationshipOptions, setRelationshipOptions] = useState([]);
@@ -194,7 +196,11 @@ export default function ReferenceDetails() {
         }
       } catch (err) {
         console.error('Error saving Reference Details:', err);
-        alert('Network error while saving reference details.');
+        setErrorPopup({
+          title: 'Connection error',
+          message: 'Network error while saving reference details. Please try again.',
+          variant: 'error',
+        });
         return; // Halt continuation on error
       }
     }
@@ -208,7 +214,16 @@ export default function ReferenceDetails() {
   };
 
   return (
-    <WizardSectionLayout
+    <>
+      <ErrorPopup
+        show={!!errorPopup}
+        title={errorPopup?.title}
+        message={errorPopup?.message}
+        details={errorPopup?.details}
+        variant={errorPopup?.variant}
+        onClose={() => setErrorPopup(null)}
+      />
+      <WizardSectionLayout
       appId={appId}
       appData={appData}
       steps={APPLICATION_WIZARD_STEPS}
@@ -248,5 +263,6 @@ export default function ReferenceDetails() {
         />
       </div>
     </WizardSectionLayout>
+    </>
   );
 }

@@ -8,6 +8,7 @@ import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
+import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { buildSectionUpdate, getSectionState } from '../applicationWizard/flowUtils';
 
 function buildCollateralState(appData) {
@@ -97,6 +98,7 @@ export default function CollateralDetails() {
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildCollateralState(getApplication(appId)));
+  const [errorPopup, setErrorPopup] = useState(null);
   const [isLoadingMasters, setIsLoadingMasters] = useState(false);
   const [propertyOptions, setPropertyOptions] = useState([]);
   const [usageOptions, setUsageOptions] = useState([]);
@@ -207,7 +209,11 @@ export default function CollateralDetails() {
         }
       } catch (err) {
         console.error('Error saving Collateral Details:', err);
-        alert('Network error while saving collateral details.');
+        setErrorPopup({
+          title: 'Connection error',
+          message: 'Network error while saving collateral details. Please try again.',
+          variant: 'error',
+        });
         return; // Halt continuation on error
       }
     }
@@ -221,7 +227,16 @@ export default function CollateralDetails() {
   };
 
   return (
-    <WizardSectionLayout
+    <>
+      <ErrorPopup
+        show={!!errorPopup}
+        title={errorPopup?.title}
+        message={errorPopup?.message}
+        details={errorPopup?.details}
+        variant={errorPopup?.variant}
+        onClose={() => setErrorPopup(null)}
+      />
+      <WizardSectionLayout
       appId={appId}
       appData={appData}
       steps={APPLICATION_WIZARD_STEPS}
@@ -276,5 +291,6 @@ export default function CollateralDetails() {
         </>
       )}
     </WizardSectionLayout>
+    </>
   );
 }

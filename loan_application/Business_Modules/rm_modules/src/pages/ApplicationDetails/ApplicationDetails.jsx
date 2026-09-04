@@ -25,6 +25,7 @@ import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS, getWizardActiveStepByPath } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import { formatDateTimeSeconds as formatDateTime } from '../../utils/dateHelper';
+import { buildValidationPopup, parseApiErrorBody } from '../../utils/formatUserFacingError';
 import { resolveApplicantName } from '../applicationWizard/flowUtils';
 import './ApplicationDetails.css';
 
@@ -354,11 +355,10 @@ export default function ApplicationDetails() {
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) {
-      setErrorPopup({
-        title: 'Please complete the application',
-        message: 'The application cannot continue until the highlighted fields are corrected.',
-        details: validationErrors,
-      });
+      setErrorPopup(buildValidationPopup(
+        validationErrors,
+        'The application cannot continue until the highlighted fields are corrected.'
+      ));
       return;
     }
 
@@ -417,11 +417,21 @@ export default function ApplicationDetails() {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('Failed to save to database:', errorData);
-        let errorMsg = errorData.Message || errorData.title || 'Unknown error';
-        if (errorData.errors) {
-            errorMsg += '\n' + JSON.stringify(errorData.errors, null, 2);
+        const parsed = parseApiErrorBody(errorData, 'Unable to save application details. Please check the form and try again.');
+        if (errorData?.errors && typeof errorData.errors === 'object') {
+          const fieldMap = {};
+          Object.entries(errorData.errors).forEach(([key, value]) => {
+            const camelKey = key.charAt(0).toLowerCase() + key.slice(1);
+            fieldMap[camelKey] = Array.isArray(value) ? value[0] : value;
+          });
+          setErrors((current) => ({ ...current, ...fieldMap }));
         }
-        setErrorPopup({ title: 'Application Save Failed', message: errorMsg, details: errorData });
+        setErrorPopup({
+          title: 'Could not save application',
+          message: parsed.message,
+          details: parsed.items,
+          variant: parsed.variant,
+        });
         return;
       }
 
@@ -443,7 +453,11 @@ export default function ApplicationDetails() {
       navigate(ROUTES.KYC_DOCUMENTS.replace(':applicationId', appId));
     } catch (error) {
       console.error('Error saving application:', error);
-      setErrorPopup({ title: 'Network Error', message: 'Network error while saving application. Please try again.', details: error.message });
+      setErrorPopup({
+        title: 'Connection error',
+        message: 'Network error while saving application. Please try again.',
+        variant: 'error',
+      });
     }
   };
 
@@ -470,6 +484,7 @@ export default function ApplicationDetails() {
           title={errorPopup?.title}
           message={errorPopup?.message}
           details={errorPopup?.details}
+          variant={errorPopup?.variant}
           onClose={() => setErrorPopup(null)}
         />
         <header className="ad-premium-header">

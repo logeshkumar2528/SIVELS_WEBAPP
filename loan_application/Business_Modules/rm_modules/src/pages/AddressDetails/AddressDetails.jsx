@@ -9,6 +9,7 @@ import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
 import Modal from '../../components/Modal/Modal';
+import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import {
   buildSectionUpdate,
   createAddressTemplate,
@@ -171,6 +172,7 @@ export default function AddressDetails() {
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildAddressState(getApplication(appId)));
   const [errors, setErrors] = useState({});
+  const [errorPopup, setErrorPopup] = useState(null);
 
   const [isLoadingMasters, setIsLoadingMasters] = useState(false);
   const [stateOptions, setStateOptions] = useState([]);
@@ -358,7 +360,11 @@ export default function AddressDetails() {
       navigate(ROUTES.EMPLOYMENT_INCOME.replace(':applicationId', appId));
     } catch (err) {
       console.error('Error saving Address Details:', err);
-      alert('Network error while saving address details.');
+      setErrorPopup({
+        title: 'Connection error',
+        message: 'Network error while saving address details. Please try again.',
+        variant: 'error',
+      });
     }
   };
 
@@ -368,6 +374,14 @@ export default function AddressDetails() {
 
   return (
     <>
+    <ErrorPopup
+      show={!!errorPopup}
+      title={errorPopup?.title}
+      message={errorPopup?.message}
+      details={errorPopup?.details}
+      variant={errorPopup?.variant}
+      onClose={() => setErrorPopup(null)}
+    />
     <WizardSectionLayout
       appId={appId}
       appData={appData}

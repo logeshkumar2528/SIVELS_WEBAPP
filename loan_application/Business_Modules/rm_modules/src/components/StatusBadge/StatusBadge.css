@@ -43,3 +43,6 @@
 
 .status-badge--disbursed { background: var(--color-status-disbursed-bg); color: var(--color-status-disbursed-text); }
 .status-badge--disbursed .status-badge-dot { background: var(--color-status-disbursed-text); }
+
+.status-badge--inactive { background: #f1f5f9; color: #64748b; }
+.status-badge--inactive .status-badge-dot { background: #94a3b8; }

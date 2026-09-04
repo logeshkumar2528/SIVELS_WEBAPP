@@ -1,13 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 
 const StepEmployment = ({ formData, handleChange, masters, onNext, onBack }) => {
+  const [error, setError] = useState('');
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.employmentTypeId) {
-      alert("Please select an Employment Type.");
+      setError('Please select an Employment Type.');
       return;
     }
+    setError('');
     onNext();
   };
 
@@ -22,6 +25,24 @@ const StepEmployment = ({ formData, handleChange, masters, onNext, onBack }) => 
 
   return (
     <form onSubmit={handleSubmit}>
+      {error ? (
+        <div
+          role="alert"
+          style={{
+            marginBottom: '1rem',
+            padding: '10px 12px',
+            borderRadius: '10px',
+            border: '1px solid #fed7aa',
+            background: '#fffbeb',
+            color: '#9a3412',
+            fontSize: '13px',
+            fontWeight: 500,
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
+
       <div className="form-group" style={{ marginBottom: '1.5rem' }}>
         <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Employment Type <span style={{color: 'red'}}>*</span></label>
         <select name="employmentTypeId" value={formData.employmentTypeId} onChange={handleChange} required style={{ width: '100%', maxWidth: '400px', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}>

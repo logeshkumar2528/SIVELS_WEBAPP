@@ -266,11 +266,11 @@ function AddCustomer() {
     const maxSize = 10 * 1024 * 1024 // 10 MB
 
     if (!allowedExtensions.includes(file.type) && !file.name.match(/\.(pdf|jpg|jpeg|png)$/i)) {
-      alert(`Invalid file type for ${file.name}. Only PDF, JPG, JPEG and PNG files are allowed.`)
+      setGlobalError(`Invalid file type for ${file.name}. Only PDF, JPG, JPEG and PNG files are allowed.`)
       return false
     }
     if (file.size > maxSize) {
-      alert(`File size must not exceed 10 MB for ${file.name}.`)
+      setGlobalError(`File size must not exceed 10 MB for ${file.name}.`)
       return false
     }
     return true
