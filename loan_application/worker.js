@@ -11,6 +11,7 @@ const routes = [
   { prefix: "/credit", file: "/Business_Modules/credit_manager/index.html" },
   { prefix: "/company", file: "/Business_Modules/company details/index.html" },
   { prefix: "/master", file: "/Master_Module/index.html" },
+  { prefix: "/Master_Module", file: "/Master_Module/index.html" },
   { prefix: "/login", file: "/Core/index.html" },
   { prefix: "/verify", file: "/Core/index.html" },
   { prefix: "/signup", file: "/Core/index.html" },
