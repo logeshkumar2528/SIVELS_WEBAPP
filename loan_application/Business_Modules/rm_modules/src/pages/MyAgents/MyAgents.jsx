@@ -268,31 +268,46 @@ export default function MyAgents() {
         const agentRowsRaw = Array.isArray(agentsData) ? agentsData : (Array.isArray(agentsData?.value) ? agentsData.value : []);
         const customerRowsRaw = Array.isArray(customersData) ? customersData : (Array.isArray(customersData?.value) ? customersData.value : []);
 
-        const currentMobile = normalizePhone(currentUser?.mobileNumber || currentUser?.phone);
-        const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || 0);
+        const currentMobile = normalizePhone(currentUser?.mobileNumber || currentUser?.phone).slice(-10);
+        const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || currentUser?.rmid || 0);
         const matchedRm =
-          rmRows.find((row) => Number(row.rmId || row.RMId) === currentRmId) ||
-          rmRows.find((row) => normalizePhone(row.mobileNumber) === currentMobile) ||
-          rmRows[0] ||
+          rmRows.find((row) => currentRmId && Number(row.rmId || row.RMId || row.id) === currentRmId) ||
+          rmRows.find((row) => currentMobile && normalizePhone(row.mobileNumber || row.MobileNumber || row.phone).slice(-10) === currentMobile) ||
           null;
 
-        const matchedBranch = normalizeText(matchedRm?.branch || currentUser?.branch || '');
-        const matchedName = normalizeText(matchedRm?.fullName || currentUser?.fullName || currentUser?.name || '');
+        const resolvedRmId = currentRmId || Number(matchedRm?.rmId || matchedRm?.RMId || matchedRm?.id || 0);
+        const matchedRmName = normalizeText(matchedRm?.fullName || currentUser?.fullName || currentUser?.name || '');
+        const matchedRmNameFromApi = normalizeText(matchedRm?.fullName || '');
 
         const filteredAgents = agentRowsRaw.filter((agent) => {
-          const agentBranch = normalizeText(agent.branch || agent.branchName || '');
+          const agentRmId = Number(
+            agent.rmId ||
+            agent.RMId ||
+            agent.relationshipManagerId ||
+            agent.RelationshipManagerId ||
+            0
+          );
           const agentCreator = Number(agent.createdBy || agent.createdby || 0);
-          const agentName = normalizeText(agent.fullName || agent.agentName || agent.name || '');
-          const branchMatches = !matchedBranch || agentBranch === matchedBranch;
-          const creatorMatches = currentRmId ? agentCreator === currentRmId : false;
-          const nameMatches = matchedName ? agentName.includes(matchedName) : true;
-          // An RM must only see agents assigned to that RM. Branch/name are
-          // fallback matches for legacy records without an rmId.
-          const hasAssignment = Boolean(agent.rmId || agent.RMId || agent.relationshipManagerId || agent.RelationshipManagerId || agent.createdBy);
-          return creatorMatches || (hasAssignment ? false : (branchMatches && nameMatches));
+          const assignedRmName = normalizeText(
+            agent.rmName ||
+            agent.RMName ||
+            agent.relationshipManager ||
+            agent.relationshipManagerName ||
+            ''
+          );
+
+          // Primary: agents assigned to this RM via rmId
+          if (resolvedRmId && agentRmId === resolvedRmId) return true;
+          // Secondary: legacy createdBy mapping
+          if (resolvedRmId && agentCreator === resolvedRmId) return true;
+          // Fallback: match by RM name when rmId is missing
+          if (!agentRmId && matchedRmName && (assignedRmName === matchedRmName || assignedRmName === matchedRmNameFromApi)) {
+            return true;
+          }
+          return false;
         });
 
-        const rows = filteredAgents.map((agent, index) => buildRow(agent, customerRowsRaw, index));
+        const rows = filteredAgents.map((agent) => buildRow(agent, customerRowsRaw));
 
         if (active) {
           setAgentRows(rows);
