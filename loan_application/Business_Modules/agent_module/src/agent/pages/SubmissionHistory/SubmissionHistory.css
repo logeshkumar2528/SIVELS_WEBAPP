@@ -214,9 +214,18 @@
 .index-col {
   color: var(--color-text-muted);
   font-weight: 600;
-  width: 56px;
-  min-width: 56px;
-  text-align: left;
+  width: 76px;
+  min-width: 76px;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.history-table th.index-col,
+.history-table td.index-col {
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
 }
 
 /* Customer Avatar Circle Colors */

@@ -276,3 +276,49 @@ export function createAddressTemplate(overrides = {}) {
     mailingSameAsCurrent: overrides.mailingSameAsCurrent || 'No',
   };
 }
+
+export function resolveApplicantName(appData = {}) {
+  if (!appData) return 'Applicant';
+
+  // Priority A: Structured Personal Information applicant name
+  const personalApplicant =
+    appData.registration?.personalInformation?.applicant ||
+    appData.registration?.primaryApplicant ||
+    appData.sections?.personalInformation?.applicant ||
+    appData.personalInformation?.applicant ||
+    appData.sections?.registration?.personalInformation?.applicant;
+
+  if (personalApplicant && typeof personalApplicant === 'object') {
+    const parts = [
+      personalApplicant.firstName,
+      personalApplicant.middleName,
+      personalApplicant.lastName,
+    ]
+      .map((part) => String(part || '').trim())
+      .filter(Boolean);
+
+    if (parts.length > 0) {
+      return parts.join(' ');
+    }
+  }
+
+  // Priority B: Direct customer / applicant string fields
+  const directCustomerName = String(appData.customerName || '').trim();
+  if (directCustomerName && directCustomerName !== 'Applicant') {
+    return directCustomerName;
+  }
+
+  const directFullName = String(appData.fullName || '').trim();
+  if (directFullName && directFullName !== 'Applicant') {
+    return directFullName;
+  }
+
+  const directApplicantName = String(appData.applicantName || '').trim();
+  if (directApplicantName && directApplicantName !== 'Applicant') {
+    return directApplicantName;
+  }
+
+  // Priority C: Final fallback (NEVER agentName)
+  return 'Applicant';
+}
+

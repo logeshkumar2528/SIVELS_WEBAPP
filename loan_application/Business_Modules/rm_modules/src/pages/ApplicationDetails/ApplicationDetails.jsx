@@ -24,6 +24,7 @@ import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS, getWizardActiveStepByPath } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
+import { resolveApplicantName } from '../applicationWizard/flowUtils';
 import './ApplicationDetails.css';
 
 function isEmptyValue(value) {
@@ -472,7 +473,10 @@ export default function ApplicationDetails() {
     navigate(ROUTES.NEW_APPLICATIONS);
   };
 
-  const applicantName = appData.customerName || displayRecord?.fullName || displayRecord?.customerName || '';
+  const applicantName = resolveApplicantName({
+    ...appData,
+    customerName: appData.customerName || displayRecord?.fullName || displayRecord?.customerName || '',
+  });
   const branchName = agentBranch || appData.branch || '';
   const submittedTime = formatDateTime(displayRecord?.createdAt || appData.createdDate || '');
   const applicationDisplayId = buildApplicationDisplayId(displayRecord || appData, appId);
@@ -520,7 +524,7 @@ export default function ApplicationDetails() {
               <span className="ad-meta-label">Applicant</span>
               <div className="ad-meta-value-group highlight">
                 <User size={14} />
-                <span className="ad-meta-value">{isLoadingApplication ? 'Loading...' : applicantName}</span>
+                <span className="ad-meta-value">{isLoadingApplication && applicantName === 'Applicant' ? 'Loading...' : applicantName}</span>
               </div>
             </div>
             <div className="ad-meta-divider" />

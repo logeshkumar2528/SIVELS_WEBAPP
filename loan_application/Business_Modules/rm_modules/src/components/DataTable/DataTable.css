@@ -66,3 +66,12 @@
   padding: var(--spacing-8);
   color: var(--color-text-muted);
 }
+
+.data-table-th--sno,
+.data-table-cell--sno {
+  width: 76px;
+  min-width: 76px;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+}

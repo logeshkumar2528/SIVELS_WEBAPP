@@ -262,7 +262,7 @@ function SubmissionHistory() {
             <table className="history-table">
               <thead>
                 <tr>
-                  <th className="index-col">S.No</th>
+                  <th className="index-col">S.NO</th>
                   <th>Customer Name</th>
                   <th>Mobile Number</th>
                   <th>Expected Loan Amount</th>
