@@ -277,6 +277,9 @@ function normalizeApplicationRecord(record = {}) {
   const documentChecklist = mergeSectionData(record.documentChecklist || {}, sections.documentChecklist || {});
   sections.documentChecklist = documentChecklist;
 
+  const declaration = mergeSectionData(record.declaration || {}, sections.declaration || {});
+  sections.declaration = declaration;
+
   const resolvedApplicant = resolveApplicantName({
     ...record,
     sections,
