@@ -1,4 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { formatDate } from '../utils/dateHelper';
+import {
+  buildAllowedAgentIdSet,
+  filterAgentsForRm,
+  getCurrentRMContext,
+  normalizeApplicationStatus,
+  resolveApiArray,
+} from '../utils/rmContext';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
@@ -13,30 +21,11 @@ const EMPTY_DASHBOARD = {
 
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
 
-const resolveApiArray = (data) => {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.value)) return data.value;
-  if (Array.isArray(data?.items)) return data.items;
-  if (Array.isArray(data?.data)) return data.data;
-  return [];
-};
-
 const formatCurrency = (value) => {
   if (value === null || value === undefined || value === '') return '';
   const numericValue = Number(value);
   if (Number.isNaN(numericValue)) return String(value);
   return `₹${numericValue.toLocaleString('en-IN')}`;
-};
-
-const formatDate = (value) => {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
 };
 
 const mapApplication = (item, index) => {
@@ -46,7 +35,7 @@ const mapApplication = (item, index) => {
     item.agentCustomerId ||
     item.customerId ||
     `${index + 1}`;
-  const normalizedStatus = String(item.status || 'New').trim();
+  const normalizedStatus = normalizeApplicationStatus(item.status, item.statusName || item.StatusName);
 
   return {
     id: String(applicationId),
@@ -57,7 +46,7 @@ const mapApplication = (item, index) => {
     agentName: item.agentName || '',
     createdDate: formatDate(item.createdAt || item.createdDate),
     rawCreatedAt: item.createdAt || item.createdDate || '',
-    status: normalizedStatus === 'Draft' ? 'New' : normalizedStatus,
+    status: normalizedStatus,
     rawStatus: normalizedStatus,
     agentCustomerId: item.agentCustomerId || item.customerId || null,
     agentId: item.agentId || item.AgentId || null,
@@ -67,7 +56,7 @@ const mapApplication = (item, index) => {
 const buildStatusSummary = (applications) => {
   const groups = [
     { label: 'New', color: '#0284C7' },
-    { label: 'Pending Verification', color: '#F59E0B' },
+    { label: 'Pending', color: '#F59E0B' },
     { label: 'Under Review', color: '#A855F7' },
     { label: 'Approved', color: '#22C55E' },
     { label: 'Returned', color: '#EF4444' },
@@ -112,7 +101,7 @@ const buildAgentPerformance = (applications, agents) => {
     if (!record) return;
 
     record.totalCustomers += 1;
-    if (normalizeText(app.status) === 'pending verification') record.pendingVerification += 1;
+    if (normalizeText(app.status) === 'pending') record.pendingVerification += 1;
     if (normalizeText(app.status) === 'approved') record.submitted += 1;
     if (normalizeText(app.status) !== 'returned') record.activeCustomers += 1;
   });
@@ -136,38 +125,32 @@ export function useRmDashboardData() {
       setError('');
 
       try {
-        const [agentRes, customerRes, rmRes] = await Promise.all([
+        const rmContext = getCurrentRMContext();
+        if (!rmContext.rmId) {
+          throw new Error('No RM context found in session.');
+        }
+
+        const [agentRes, customerRes] = await Promise.all([
           fetch(`${API_BASE}/AgentMaster`),
           fetch(`${API_BASE}/AgentAddCustomer`),
-          fetch(`${API_BASE}/RMMaster`),
         ]);
 
         if (!agentRes.ok) throw new Error(`Failed to load agents (${agentRes.status})`);
         if (!customerRes.ok) throw new Error(`Failed to load applications (${customerRes.status})`);
 
-        const [agentsData, customersData, rmsData] = await Promise.all([agentRes.json(), customerRes.json(), rmRes.ok ? rmRes.json() : Promise.resolve([])]);
-        const allAgents = resolveApiArray(agentsData);
-        const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || 'null');
-        const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || currentUser?.rmid || 0);
-        const currentMobile = normalizeText(currentUser?.mobileNumber || currentUser?.phone).replace(/\D/g, '').slice(-10);
-        const rmRows = resolveApiArray(rmsData);
-        const matchedRm = rmRows.find((rm) => currentRmId && Number(rm.rmId || rm.RMId || rm.id) === currentRmId) || rmRows.find((rm) => currentMobile && normalizeText(rm.mobileNumber || rm.MobileNumber || rm.mobile || rm.phone).replace(/\D/g, '').slice(-10) === currentMobile);
-        const rmId = currentRmId || Number(matchedRm?.rmId || matchedRm?.RMId || matchedRm?.id || 0);
-        const rmName = normalizeText(matchedRm?.fullName || currentUser?.fullName || currentUser?.name);
-        const agents = allAgents.filter((agent) => {
-          const agentRmId = Number(agent.rmId || agent.RMId || agent.relationshipManagerId || agent.RelationshipManagerId || agent.createdBy || 0);
-          const assignedName = normalizeText(agent.relationshipManager || agent.relationshipManagerName || agent.rmName || agent.rmFullName);
-          return (rmId && agentRmId === rmId) || (rmName && assignedName === rmName);
-        });
-        const allowedAgentIds = new Set(agents.map((agent) => Number(agent.agentId || agent.AgentId || 0)));
-        const applications = resolveApiArray(customersData).map(mapApplication).filter((application) => !application.agentId || allowedAgentIds.has(Number(application.agentId)));
+        const [agentsData, customersData] = await Promise.all([agentRes.json(), customerRes.json()]);
+        const agents = filterAgentsForRm(resolveApiArray(agentsData), rmContext.rmId);
+        const allowedAgentIds = buildAllowedAgentIdSet(agents);
+        const applications = resolveApiArray(customersData)
+          .map(mapApplication)
+          .filter((application) => application.agentId && allowedAgentIds.has(Number(application.agentId)));
 
         const statusSummaryData = buildStatusSummary(applications);
         const agentPerformanceData = buildAgentPerformance(applications, agents);
         const totalApplications = applications.length;
         const badgeCounts = {
           newApplications: applications.filter((app) => normalizeText(app.status) === 'new').length,
-          verification: applications.filter((app) => normalizeText(app.status) === 'pending verification').length,
+          verification: applications.filter((app) => normalizeText(app.status) === 'pending').length,
           returned: applications.filter((app) => normalizeText(app.status) === 'returned').length,
         };
 

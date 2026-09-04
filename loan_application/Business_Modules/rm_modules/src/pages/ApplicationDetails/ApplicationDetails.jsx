@@ -24,6 +24,7 @@ import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS, getWizardActiveStepByPath } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
+import { formatDateTimeSeconds as formatDateTime } from '../../utils/dateHelper';
 import { resolveApplicantName } from '../applicationWizard/flowUtils';
 import './ApplicationDetails.css';
 
@@ -42,21 +43,6 @@ function formatRupeeValue(value) {
   }
 
   return `₹${Number(digits).toLocaleString('en-IN')}`;
-}
-
-function formatDateTime(value) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true,
-  });
 }
 
 function getCustomerInitials(name = '') {

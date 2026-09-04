@@ -7,7 +7,7 @@ const InfoBar = memo(function InfoBar({
   appId = 'APP25060500024',
   agentName = 'Thiru (AGT0001)',
   branch = 'KK Nagar',
-  submittedTime = '05 Jun 2025, 10:25 AM',
+  submittedTime = 'Not submitted',
   status = 'New',
 }) {
   const FileTextIcon = iconMap['FileText'];

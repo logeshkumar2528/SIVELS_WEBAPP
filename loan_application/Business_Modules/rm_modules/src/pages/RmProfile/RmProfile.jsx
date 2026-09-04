@@ -2,23 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import iconMap from '../../config/iconMap';
 import Breadcrumb from '../../components/Breadcrumb/Breadcrumb';
 import Button from '../../components/Button/Button';
+import { formatDateTime } from '../../utils/dateHelper';
 import './RmProfile.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-
-function formatDateTime(value) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
 
 function getInitials(name = '') {
   return String(name)

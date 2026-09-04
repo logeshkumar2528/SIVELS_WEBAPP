@@ -12,6 +12,7 @@ import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import { getApplicantCount, resolveApplicantName } from '../applicationWizard/flowUtils';
 import Modal from '../../components/Modal/Modal';
+import { formatDateTime, toIstDateInput } from '../../utils/dateHelper';
 import './CustomerRegistration.css';
 
 function digitsOnly(value) {
@@ -319,7 +320,7 @@ function PersonCard({
               <DatePicker
                 error={!!errors.dateOfBirth}
                 value={person.dateOfBirth}
-                max={new Date().toISOString().slice(0, 10)}
+                max={toIstDateInput()}
                 onChange={(val) => handleChange('dateOfBirth', val)}
                 placeholder="DD/MM/YYYY"
               />
@@ -823,7 +824,7 @@ export default function CustomerRegistration() {
               <span className="ad-meta-label">Submitted</span>
               <div className="ad-meta-value-group">
                 {iconMap['Calendar'] && (() => { const Calendar = iconMap['Calendar']; return <Calendar size={14} />; })()}
-                <span className="ad-meta-value">{`${appData.createdDate || 'Today'}, 10:25 AM`}</span>
+                <span className="ad-meta-value">{formatDateTime(appData.createdDate || appData.createdAt, 'Not submitted')}</span>
               </div>
             </div>
             <div className="ad-meta-divider" />

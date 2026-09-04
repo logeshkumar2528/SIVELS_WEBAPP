@@ -11,6 +11,7 @@ import {
   KNOWN_DB_ID_FIELDS,
   resolveApplicantName,
 } from '../pages/applicationWizard/flowUtils';
+import { toIstDateInput } from '../utils/dateHelper';
 
 const STORAGE_KEY = 'sivels-rm-onboarding-drafts-v9';
 
@@ -801,13 +802,13 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   // 10. Declaration & Other Sections
   const declaration = existingDraft.declaration || {
     applicantSignature: customerName,
-    applicantDate: createdDate ? createdDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
+    applicantDate: createdDate ? toIstDateInput(createdDate) : toIstDateInput(),
     coApplicantSignature: '',
     coApplicantDate: '',
     ackApplicantName: customerName,
     ackProduct: '',
     ackReceivedBy: customer.agentName || '',
-    ackDate: createdDate ? createdDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
+    ackDate: createdDate ? toIstDateInput(createdDate) : toIstDateInput(),
   };
 
   const scheduleCharges = existingDraft.scheduleCharges || existingDraft.scheduleOfCharges || { values: {} };

@@ -191,33 +191,28 @@
   border-bottom: 1px solid var(--color-border-light);
 }
 
-/* Keep the two RM application listings aligned while allowing them to scroll
-   horizontally on smaller screens instead of squeezing action cells. */
-.rm-new-applications-table .data-table,
-.rm-submission-history-table .data-table {
+/* New Applications table — keep columns from squeezing on mid-width screens. */
+.rm-new-applications-table .data-table {
   table-layout: fixed;
   width: 100%;
   min-width: 0;
   flex: none;
 }
 
-.rm-new-applications-table .data-table-scroll,
-.rm-submission-history-table .data-table-scroll {
+.rm-new-applications-table .data-table-scroll {
   overflow-x: hidden;
   overflow-y: visible;
   flex: none;
 }
 
-.rm-new-applications-table .data-table-th,
-.rm-submission-history-table .data-table-th {
+.rm-new-applications-table .data-table-th {
   height: 46px;
   vertical-align: middle;
   white-space: normal;
   overflow-wrap: anywhere;
 }
 
-.rm-new-applications-table .data-table-cell,
-.rm-submission-history-table .data-table-cell {
+.rm-new-applications-table .data-table-cell {
   vertical-align: middle;
   white-space: normal;
   line-height: 1.35;
@@ -234,51 +229,12 @@
 .rm-new-applications-table .data-table-th:nth-child(10),
 .rm-new-applications-table .data-table-cell:nth-child(10) { width: 150px; }
 
-.rm-submission-history-table .data-table-th:nth-child(1),
-.rm-submission-history-table .data-table-cell:nth-child(1) { width: 4%; }
-.rm-submission-history-table .data-table-th:nth-child(2),
-.rm-submission-history-table .data-table-cell:nth-child(2) { width: 7%; }
-.rm-submission-history-table .data-table-th:nth-child(3),
-.rm-submission-history-table .data-table-cell:nth-child(3) { width: 11%; }
-.rm-submission-history-table .data-table-th:nth-child(4),
-.rm-submission-history-table .data-table-cell:nth-child(4) { width: 9%; }
-.rm-submission-history-table .data-table-th:nth-child(5),
-.rm-submission-history-table .data-table-cell:nth-child(5) { width: 8%; }
-.rm-submission-history-table .data-table-th:nth-child(6),
-.rm-submission-history-table .data-table-cell:nth-child(6) { width: 9%; }
-.rm-submission-history-table .data-table-th:nth-child(7),
-.rm-submission-history-table .data-table-cell:nth-child(7) { width: 8%; }
-.rm-submission-history-table .data-table-th:nth-child(8),
-.rm-submission-history-table .data-table-cell:nth-child(8) { width: 11%; }
-.rm-submission-history-table .data-table-th:nth-child(9),
-.rm-submission-history-table .data-table-cell:nth-child(9) { width: 9%; }
-.rm-submission-history-table .data-table-th:nth-child(10),
-.rm-submission-history-table .data-table-cell:nth-child(10) { width: 7%; }
-.rm-submission-history-table .data-table-th:nth-child(11),
-.rm-submission-history-table .data-table-cell:nth-child(11) { width: 17%; }
-
-.rm-submission-history-table .data-table-cell:nth-child(11) > div {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  white-space: nowrap;
-}
-
 @media (max-width: 1200px) {
   .rm-new-applications-table .data-table-th,
-  .rm-new-applications-table .data-table-cell,
-  .rm-submission-history-table .data-table-th,
-  .rm-submission-history-table .data-table-cell {
+  .rm-new-applications-table .data-table-cell {
     padding-left: 8px;
     padding-right: 8px;
     font-size: 11px;
-  }
-
-  .rm-submission-history-table .data-table-cell:nth-child(11) > div {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
   }
 }
 

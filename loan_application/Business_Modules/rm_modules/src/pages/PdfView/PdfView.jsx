@@ -6,6 +6,7 @@ import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import { ROUTES } from '../../config/routeConfig';
 import { getApplicantCount } from '../applicationWizard/flowUtils';
 import Button from '../../components/Button/Button';
+import { formatDateTime, toIstDateInput } from '../../utils/dateHelper';
 import './PdfView.css';
 import LogoImage from '../../assets/logo/Navbar_logo/Logo.jpg';
 
@@ -517,7 +518,7 @@ export default function PdfView() {
   const resolvedRMName = sourcingData.sourcedBy || liveRM?.name || '';
   const resolvedEmployeeId = sourcingData.employeeId || liveRM?.employeeId || '';
 
-  const todayFormatted = new Date().toISOString().slice(0, 10);
+  const todayFormatted = toIstDateInput();
 
   // Resolved Applicant Signature & Date
   const resolvedApplicantSignature =
@@ -670,7 +671,7 @@ export default function PdfView() {
                 <div className="pdf-geo-details">
                   Lat: 13.0827, Long: 80.2707
                   <br />
-                  {new Date().toISOString().slice(0, 10)} {new Date().toLocaleTimeString()}
+                  {formatDateTime(new Date())}
                 </div>
               </div>
 
@@ -686,7 +687,7 @@ export default function PdfView() {
                     <div className="pdf-geo-details">
                       Lat: 13.0827, Long: 80.2707
                       <br />
-                      {new Date().toISOString().slice(0, 10)} {new Date().toLocaleTimeString()}
+                      {formatDateTime(new Date())}
                     </div>
                   </div>
                 ))}

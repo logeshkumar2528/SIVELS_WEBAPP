@@ -14,6 +14,7 @@ import ViewCustomerModal from '../../components/ViewCustomerModal/ViewCustomerMo
 import CustomSelect from '../AddCustomer/CustomSelect'
 import DatePicker from '../../components/DatePicker/DatePicker'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
+import { formatDateTime } from '../../../../../../Core/src/utils/dateHelper'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import './SubmissionHistory.css'
 
@@ -173,14 +174,7 @@ function SubmissionHistory() {
     }
   }
 
-  const formatDate = (dateString) => {
-    if (!dateString) return '-'
-    const d = new Date(dateString)
-    return d.toLocaleString('en-IN', {
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: 'numeric', minute: '2-digit', hour12: true
-    })
-  }
+  const formatDate = (dateString) => formatDateTime(dateString, '-')
 
   const formatCurrency = (amount) => {
     if (amount === null || amount === undefined) return '-'
