@@ -42,7 +42,25 @@ const CHECKLIST_ITEMS = [
   },
 ];
 
-function checkItemFilled(itemName, appData, apiData = {}) {
+function extractLoanTypeText(loanType) {
+  if (!loanType) return '';
+  if (typeof loanType === 'string') return loanType;
+  if (typeof loanType === 'number') return String(loanType);
+  if (typeof loanType === 'object') {
+    return (
+      loanType.name ||
+      loanType.label ||
+      loanType.loanType ||
+      loanType.loanTypeName ||
+      loanType.productName ||
+      loanType.value ||
+      ''
+    );
+  }
+  return String(loanType || '');
+}
+
+function checkItemFilled(itemName, appData = {}, apiData = {}) {
   switch (itemName) {
     case 'Application Form':
       return Boolean(
@@ -98,7 +116,9 @@ function checkItemFilled(itemName, appData, apiData = {}) {
         (Array.isArray(appData.bankExistingLoans?.banks) && appData.bankExistingLoans.banks.length > 0)
       );
 
-    case 'Property Title Documents':
+    case 'Property Title Documents': {
+      const rawLoanType = extractLoanTypeText(appData?.loanType) || extractLoanTypeText(appData?.loanProduct) || '';
+      const normalizedLoanType = typeof rawLoanType === 'string' ? rawLoanType.toLowerCase() : '';
       return Boolean(
         apiData.hasCollateral ||
         appData.collateralDetails?.propertyType ||
@@ -108,10 +128,11 @@ function checkItemFilled(itemName, appData, apiData = {}) {
         (Array.isArray(appData.collateralDetails?.properties) && appData.collateralDetails.properties.length > 0) ||
         appData.loanProduct === 'PL' ||
         appData.loanProduct === 'ML' ||
-        appData.loanType?.toLowerCase().includes('personal') ||
-        appData.loanType?.toLowerCase().includes('micro') ||
+        normalizedLoanType.includes('personal') ||
+        normalizedLoanType.includes('micro') ||
         true
       );
+    }
 
     default:
       return true;

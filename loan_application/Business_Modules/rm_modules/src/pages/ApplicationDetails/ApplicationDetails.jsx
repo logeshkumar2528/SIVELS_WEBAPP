@@ -147,7 +147,7 @@ export default function ApplicationDetails() {
   const { applicationId } = useParams();
   const appId = applicationId;
 
-  const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
+  const { getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
   const [errors, setErrors] = useState({});
   const [isLoadingApplication, setIsLoadingApplication] = useState(false);
   const [errorPopup, setErrorPopup] = useState(null);
@@ -176,13 +176,8 @@ export default function ApplicationDetails() {
       setIsLoadingApplication(true);
 
       try {
-        const response = await fetch(`${baseUrl}/AgentAddCustomer/${appId}`);
-        if (!response.ok) {
-          throw new Error(`Failed to load application ${appId} (${response.status})`);
-        }
-
-        const data = await response.json();
-        const record = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
+        const fullApp = await loadApplicationFromBackend(appId);
+        const record = fullApp || {};
 
         if (active && record) {
           setDisplayRecord(record);
@@ -191,32 +186,13 @@ export default function ApplicationDetails() {
           const currentStatus = normalizeApplicationStatus(record.status, record.statusName || record.StatusName);
 
           // Update status to 1 (In Progress) if newly created (status 0)
-          if (rawStatus === 0) {
+          if (rawStatus === 0 && appId) {
             try {
               await updateCustomerStatusToInProgress(baseUrl, appId, record);
-              record.status = 1;
             } catch (statusError) {
               console.error('Failed to update status to 1 on Step 1 start:', statusError);
             }
           }
-
-          saveApplication(appId, {
-            agentCustomerId: record.agentCustomerId || record.AgentCustomerId || appId,
-            agentId: record.agentId || record.AgentId || '',
-            customerName: record.fullName || record.customerName || '',
-            mobile: record.mobileNumber || record.mobile || '',
-            email: record.email || record.emailAddress || '',
-            loanType: record.loanPurposeName || record.loanType || '',
-            amount: record.expectedLoanAmount !== undefined ? `Rs. ${Number(record.expectedLoanAmount).toLocaleString('en-IN')}` : (record.amount || ''),
-            agentName: record.agentName || '',
-            isAgentSourced: Boolean(record.agentId || record.AgentId),
-            createdDate: record.createdAt || record.createdDate || '',
-            status: record.status === 2 || currentStatus === 'Approved' ? 'Approved' : 'Pending',
-            branch: record.branch || '',
-            agentCode: record.agentCode || record.AgentCode || '',
-            purposeOfLoan: record.loanPurposeId || record.purposeOfLoan || '',
-            loanAmount: record.expectedLoanAmount ?? '',
-          });
 
           const agentId = record.agentId || record.AgentId;
           if (agentId) {
@@ -242,7 +218,7 @@ export default function ApplicationDetails() {
           }
         }
       } catch (error) {
-        console.error('Failed to load application from AgentAddCustomer:', error);
+        console.error('Failed to load application in ApplicationDetails:', error);
         if (active) {
           setErrorPopup({ title: 'Application Load Error', message: 'Unable to load live application data. Please try again.' });
         }
@@ -258,7 +234,7 @@ export default function ApplicationDetails() {
     return () => {
       active = false;
     };
-  }, [appId, saveApplication]);
+  }, [appId, loadApplicationFromBackend, saveApplication]);
 
   // Customers created by a field agent must always use the Field Agent
   // sourcing channel. Resolve the ID from the master table instead of
@@ -322,26 +298,41 @@ export default function ApplicationDetails() {
     loadAllMasters();
   }, []);
 
-  const selectedProduct = loanProductOptions.find(p => p.value === appData.loanProduct);
+  const selectedProduct = loanProductOptions.find(p => p.value === appData.loanProduct || (appData.loanProduct !== '' && appData.loanProduct !== null && appData.loanProduct !== undefined && String(p.value) === String(appData.loanProduct)));
   const requiresVariation = selectedProduct?.raw?.productCode === 'HL' || selectedProduct?.raw?.productCode === 'LAP';
   const variationOptions = useMemo(
-    () => loanVariationMaster.filter(opt => !opt.raw?.loanProductId || opt.raw?.loanProductId === appData.loanProduct),
+    () => loanVariationMaster.filter(opt => !opt.raw?.loanProductId || String(opt.raw?.loanProductId) === String(appData.loanProduct)),
     [loanVariationMaster, appData.loanProduct]
   );
   const roiOptions = useMemo(() => {
     if (!appData.loanProduct) return [];
-    return rateOfInterestMaster
+    const options = rateOfInterestMaster
       .filter((opt) => {
         const raw = opt.raw;
         if (!raw || raw.isActive === false) return false;
-        return Number(raw.loanProductId) === Number(appData.loanProduct);
+        return String(raw.loanProductId) === String(appData.loanProduct);
       })
       .map((opt) => ({
         value: Number(opt.raw.interestRate),
         label: `${opt.raw.interestCode} (${Number(opt.raw.interestRate).toFixed(2)}%)`,
         raw: opt.raw,
       }));
-  }, [rateOfInterestMaster, appData.loanProduct]);
+
+    if (
+      appData.roi !== null &&
+      appData.roi !== undefined &&
+      appData.roi !== '' &&
+      !options.some((o) => Number(o.value) === Number(appData.roi))
+    ) {
+      options.unshift({
+        value: Number(appData.roi),
+        label: `${Number(appData.roi).toFixed(2)}%`,
+        raw: { interestRate: Number(appData.roi) },
+      });
+    }
+
+    return options;
+  }, [rateOfInterestMaster, appData.loanProduct, appData.roi]);
   const activeStep = useMemo(() => getWizardActiveStepByPath(location.pathname, APPLICATION_WIZARD_STEPS), [location.pathname]);
 
   const updateField = (field, rawValue) => {
@@ -409,6 +400,7 @@ export default function ApplicationDetails() {
       agentId = agentId || 1;
 
       const payload = {
+        AgentCustomerId: Number(appId),
         AgentId: agentId,
         SourcingChannelId: Number(appData.sourcingChannel) || 0,
         LoanProductId: Number(appData.loanProduct) || 0,
@@ -477,10 +469,10 @@ export default function ApplicationDetails() {
     ...appData,
     customerName: appData.customerName || displayRecord?.fullName || displayRecord?.customerName || '',
   });
-  const branchName = agentBranch || appData.branch || '';
-  const submittedTime = formatDateTime(displayRecord?.createdAt || appData.createdDate || '');
-  const applicationDisplayId = buildApplicationDisplayId(displayRecord || appData, appId);
-  const statusText = appData.status || '';
+  const branchName = agentBranch || appData.branch || displayRecord?.branch || 'Chennai Main Branch';
+  const submittedTime = formatDateTime(appData.createdDate || displayRecord?.createdAt || displayRecord?.createdDate || '');
+  const applicationDisplayId = appData.applicationNumber || buildApplicationDisplayId(displayRecord || appData, appId) || appId;
+  const statusText = appData.status || displayRecord?.status || 'New';
   const sourcingAgentName = agentInfo.name || appData.agentName || displayRecord?.agentName || displayRecord?.AgentName || '';
   const sourcingAgentCode = agentInfo.code || appData.agentCode || displayRecord?.agentCode || displayRecord?.AgentCode || displayRecord?.agentId || displayRecord?.AgentId || '';
 
@@ -532,7 +524,7 @@ export default function ApplicationDetails() {
               <span className="ad-meta-label">App ID</span>
               <div className="ad-meta-value-group">
                 <FileText size={14} />
-                <span className="ad-meta-value">{isLoadingApplication ? 'Loading...' : applicationDisplayId}</span>
+                <span className="ad-meta-value">{applicationDisplayId}</span>
               </div>
             </div>
             <div className="ad-meta-divider" />
@@ -540,7 +532,7 @@ export default function ApplicationDetails() {
               <span className="ad-meta-label">Branch</span>
               <div className="ad-meta-value-group">
                 <MapPin size={14} />
-                <span className="ad-meta-value">{isLoadingApplication ? 'Loading...' : branchName}</span>
+                <span className="ad-meta-value">{branchName}</span>
               </div>
             </div>
             <div className="ad-meta-divider" />
@@ -548,7 +540,7 @@ export default function ApplicationDetails() {
               <span className="ad-meta-label">Submitted</span>
               <div className="ad-meta-value-group">
                 <Calendar size={14} />
-                <span className="ad-meta-value">{isLoadingApplication ? 'Loading...' : submittedTime}</span>
+                <span className="ad-meta-value">{submittedTime || 'Not submitted'}</span>
               </div>
             </div>
             <div className="ad-meta-item status">
@@ -582,7 +574,7 @@ export default function ApplicationDetails() {
                   <div className="compact-input-wrapper">
                     <input
                       className="compact-input"
-                      value={isLoadingApplication ? 'Loading...' : sourcingAgentName}
+                      value={sourcingAgentName}
                       readOnly
                       aria-readonly="true"
                       placeholder="Agent name"
@@ -594,7 +586,7 @@ export default function ApplicationDetails() {
                   <div className="compact-input-wrapper">
                     <input
                       className="compact-input"
-                      value={isLoadingApplication ? 'Loading...' : sourcingAgentCode}
+                      value={sourcingAgentCode}
                       readOnly
                       aria-readonly="true"
                       placeholder="Agent code"

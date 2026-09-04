@@ -11,7 +11,7 @@ import './WizardSectionLayout.css';
 function getPrimaryBranch(appData) {
   if (appData?.branch) return appData.branch;
   if (appData?.addressDetails?.applicant?.city) return appData.addressDetails.applicant.city;
-  return 'Pending Branch';
+  return 'Chennai Main Branch';
 }
 
 function formatSubmittedDate(value) {
@@ -49,17 +49,17 @@ export default function WizardSectionLayout({
   const ArrowLeftIcon = iconMap['ArrowLeft'];
   const ClockIcon = iconMap['Clock'];
   const location = useLocation();
-  const { saveApplication } = useApplicationDraftStore();
+  const { saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
 
   const applicantName = useMemo(() => resolveApplicantName(appData), [appData]);
-  const [isHydrating, setIsHydrating] = useState(() => applicantName === 'Applicant' && Boolean(appId));
+  const [isHydrating, setIsHydrating] = useState(() => (!appData?._isHydrated || applicantName === 'Applicant') && Boolean(appId));
 
-  // Safe backend hydration for refresh/direct navigation if applicant data is missing
+  // Safe backend hydration for refresh/direct navigation if applicant data is missing or not hydrated
   useEffect(() => {
     let isMounted = true;
 
     async function hydrateCustomerIfNeeded() {
-      if (applicantName !== 'Applicant') {
+      if (appData?._isHydrated && applicantName !== 'Applicant') {
         if (isMounted) setIsHydrating(false);
         return;
       }
@@ -70,37 +70,7 @@ export default function WizardSectionLayout({
 
       setIsHydrating(true);
       try {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-        const res = await fetch(`${baseUrl}/AgentAddCustomer/${appId}`);
-        if (res.ok && isMounted) {
-          const data = await res.json();
-          const record = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
-          if (record && isMounted) {
-            const fetchedCustomerName = record.fullName || record.FullName || record.customerName || record.CustomerName || '';
-            const updates = {};
-            if (fetchedCustomerName) {
-              updates.customerName = fetchedCustomerName;
-            }
-            if (record.branch || record.Branch) {
-              updates.branch = record.branch || record.Branch;
-            }
-            if (record.createdAt || record.createdDate) {
-              updates.createdDate = record.createdAt || record.createdDate;
-            }
-            if (record.agentCustomerId || record.AgentCustomerId) {
-              updates.agentCustomerId = record.agentCustomerId || record.AgentCustomerId;
-            }
-            if (record.agentName || record.AgentName) {
-              updates.agentName = record.agentName || record.AgentName;
-            }
-            if (record.mobileNumber || record.mobile) {
-              updates.mobile = record.mobileNumber || record.mobile;
-            }
-            if (Object.keys(updates).length > 0) {
-              saveApplication(appId, updates);
-            }
-          }
-        }
+        await loadApplicationFromBackend(appId);
       } catch (err) {
         console.warn('Silent hydration of customer record in WizardSectionLayout:', err);
       } finally {
@@ -115,7 +85,7 @@ export default function WizardSectionLayout({
     return () => {
       isMounted = false;
     };
-  }, [appId, applicantName, saveApplication]);
+  }, [appId, appData?._isHydrated, applicantName, loadApplicationFromBackend]);
 
   const resolvedActiveStep = useMemo(() => {
     const matchedIndex = steps.findIndex((step) => matchPath({ path: step.route, end: true }, location.pathname));
