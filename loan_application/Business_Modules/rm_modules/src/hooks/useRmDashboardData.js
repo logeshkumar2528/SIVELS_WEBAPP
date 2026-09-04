@@ -3,12 +3,17 @@ import { useEffect, useMemo, useState } from 'react';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
 const EMPTY_DASHBOARD = {
-  badgeCounts: { newApplications: 0, verification: 0, returned: 0 },
+  badgeCounts: { newApplications: 0, verification: 0, returned: 0, approved: 0 },
   dashboardStats: [],
   recentApplicationsData: [],
   agentPerformanceData: [],
   statusSummaryData: [],
   totalApplications: 0,
+  activeAgentsCount: 0,
+  inProgressCount: 0,
+  approvedLoansCount: 0,
+  submissionHistoryCount: 0,
+  rmProfile: { rmCode: 'RM0001', fullName: 'Relationship Manager', branch: 'Branch Details & Targets' },
 };
 
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
@@ -39,6 +44,19 @@ const formatDate = (value) => {
   });
 };
 
+const normalizeApplicationStatus = (status, statusName = '') => {
+  const namedStatus = normalizeText(statusName);
+  if (namedStatus.includes('approved') || namedStatus.includes('submitted')) return 'Approved';
+  if (namedStatus.includes('pending')) return 'Pending';
+  if (namedStatus.includes('returned')) return 'Returned';
+  if (namedStatus.includes('review')) return 'Under Review';
+
+  const numericStatus = Number(status);
+  if (numericStatus === 2) return 'Approved';
+  if (numericStatus === 1) return 'Pending';
+  return 'New';
+};
+
 const mapApplication = (item, index) => {
   const applicationId =
     item.applicationId ||
@@ -46,7 +64,7 @@ const mapApplication = (item, index) => {
     item.agentCustomerId ||
     item.customerId ||
     `${index + 1}`;
-  const normalizedStatus = String(item.status || 'New').trim();
+  const normalizedStatus = normalizeApplicationStatus(item.status, item.statusName || item.StatusName);
 
   return {
     id: String(applicationId),
@@ -57,8 +75,8 @@ const mapApplication = (item, index) => {
     agentName: item.agentName || '',
     createdDate: formatDate(item.createdAt || item.createdDate),
     rawCreatedAt: item.createdAt || item.createdDate || '',
-    status: normalizedStatus === 'Draft' ? 'New' : normalizedStatus,
-    rawStatus: normalizedStatus,
+    status: normalizedStatus,
+    rawStatus: String(item.status ?? '').trim(),
     agentCustomerId: item.agentCustomerId || item.customerId || null,
     agentId: item.agentId || item.AgentId || null,
   };
@@ -74,7 +92,7 @@ const buildStatusSummary = (applications) => {
   ];
 
   const counts = applications.reduce((acc, app) => {
-    const status = app.status || 'New';
+    const status = app.status === 'Pending' ? 'Pending Verification' : (app.status || 'New');
     acc[status] = (acc[status] || 0) + 1;
     return acc;
   }, {});
@@ -112,7 +130,9 @@ const buildAgentPerformance = (applications, agents) => {
     if (!record) return;
 
     record.totalCustomers += 1;
-    if (normalizeText(app.status) === 'pending verification') record.pendingVerification += 1;
+    if (normalizeText(app.status) === 'pending' || normalizeText(app.status) === 'pending verification') {
+      record.pendingVerification += 1;
+    }
     if (normalizeText(app.status) === 'approved') record.submitted += 1;
     if (normalizeText(app.status) !== 'returned') record.activeCustomers += 1;
   });
@@ -145,31 +165,121 @@ export function useRmDashboardData() {
         if (!agentRes.ok) throw new Error(`Failed to load agents (${agentRes.status})`);
         if (!customerRes.ok) throw new Error(`Failed to load applications (${customerRes.status})`);
 
-        const [agentsData, customersData, rmsData] = await Promise.all([agentRes.json(), customerRes.json(), rmRes.ok ? rmRes.json() : Promise.resolve([])]);
+        const [agentsData, customersData, rmsData] = await Promise.all([
+          agentRes.json(),
+          customerRes.json(),
+          rmRes.ok ? rmRes.json() : Promise.resolve([]),
+        ]);
+
         const allAgents = resolveApiArray(agentsData);
         const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || 'null');
-        const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || currentUser?.rmid || 0);
+        const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || currentUser?.rmid || localStorage.getItem('rmId') || 0);
         const currentMobile = normalizeText(currentUser?.mobileNumber || currentUser?.phone).replace(/\D/g, '').slice(-10);
         const rmRows = resolveApiArray(rmsData);
-        const matchedRm = rmRows.find((rm) => currentRmId && Number(rm.rmId || rm.RMId || rm.id) === currentRmId) || rmRows.find((rm) => currentMobile && normalizeText(rm.mobileNumber || rm.MobileNumber || rm.mobile || rm.phone).replace(/\D/g, '').slice(-10) === currentMobile);
+
+        const matchedRm =
+          rmRows.find((rm) => currentRmId && Number(rm.rmId || rm.RMId || rm.id) === currentRmId) ||
+          rmRows.find((rm) => currentMobile && normalizeText(rm.mobileNumber || rm.MobileNumber || rm.mobile || rm.phone).replace(/\D/g, '').slice(-10) === currentMobile) ||
+          null;
+
         const rmId = currentRmId || Number(matchedRm?.rmId || matchedRm?.RMId || matchedRm?.id || 0);
         const rmName = normalizeText(matchedRm?.fullName || currentUser?.fullName || currentUser?.name);
+
+        const rmProfile = {
+          rmCode: matchedRm?.rmCode || currentUser?.rmCode || (rmId ? `RM${String(rmId).padStart(4, '0')}` : 'RM0001'),
+          fullName: matchedRm?.fullName || currentUser?.fullName || currentUser?.name || 'Relationship Manager',
+          branch: matchedRm?.branch || currentUser?.branch || 'Branch Details & Targets',
+        };
+
+        // Filter agents reporting strictly to this RM
         const agents = allAgents.filter((agent) => {
-          const agentRmId = Number(agent.rmId || agent.RMId || agent.relationshipManagerId || agent.RelationshipManagerId || agent.createdBy || 0);
-          const assignedName = normalizeText(agent.relationshipManager || agent.relationshipManagerName || agent.rmName || agent.rmFullName);
-          return (rmId && agentRmId === rmId) || (rmName && assignedName === rmName);
+          const agentRmId = Number(
+            agent.rmId ||
+            agent.RMId ||
+            agent.relationshipManagerId ||
+            agent.RelationshipManagerId ||
+            0
+          );
+          const agentCreatedBy = Number(agent.createdBy || agent.CreatedBy || 0);
+          const assignedName = normalizeText(
+            agent.relationshipManager || agent.relationshipManagerName || agent.rmName || agent.rmFullName
+          );
+
+          if (rmId && (agentRmId === rmId || agentCreatedBy === rmId)) return true;
+          if (!rmId && rmName && (assignedName === rmName || assignedName === normalizeText(matchedRm?.fullName))) return true;
+          return false;
         });
-        const allowedAgentIds = new Set(agents.map((agent) => Number(agent.agentId || agent.AgentId || 0)));
-        const applications = resolveApiArray(customersData).map(mapApplication).filter((application) => !application.agentId || allowedAgentIds.has(Number(application.agentId)));
+
+        // Filter active agents (not marked inactive or disabled)
+        const activeAgents = agents.filter((agent) => {
+          const statusStr = normalizeText(agent.status ?? agent.isActive ?? agent.IsActive);
+          const isInactive =
+            statusStr === '0' ||
+            statusStr === 'false' ||
+            statusStr === 'inactive' ||
+            statusStr === 'disabled' ||
+            statusStr === 'deactive' ||
+            agent.isActive === false;
+          return !isInactive;
+        });
+        const activeAgentsCount = activeAgents.length;
+
+        const allowedAgentIds = new Set(
+          agents.map((agent) => Number(agent.agentId || agent.AgentId || 0)).filter((v) => Number.isFinite(v) && v > 0)
+        );
+
+        // Scope applications strictly to assigned agents
+        const rawCustomerRows = resolveApiArray(customersData);
+        const applications = rawCustomerRows
+          .filter((item) => {
+            const rowAgentId = Number(item.agentId || item.AgentId);
+            return allowedAgentIds.has(rowAgentId);
+          })
+          .map(mapApplication);
+
+        const totalApplications = applications.length;
+
+        const badgeCounts = {
+          newApplications: applications.filter((app) => app.status === 'New').length,
+          verification: applications.filter((app) => app.status === 'Pending').length,
+          returned: applications.filter((app) => app.status === 'Returned').length,
+          approved: applications.filter((app) => app.status === 'Approved').length,
+        };
+
+        const approvedLoansCount = badgeCounts.approved;
+        const submissionHistoryCount = totalApplications;
+
+        // Calculate genuine In-Progress drafts from localStorage without duplicating Pending
+        let inProgressCount = 0;
+        try {
+          const storedDraftsRaw = localStorage.getItem('sivels-rm-onboarding-drafts-v9');
+          if (storedDraftsRaw) {
+            const storedDrafts = JSON.parse(storedDraftsRaw);
+            const draftValues = Object.values(storedDrafts);
+            inProgressCount = draftValues.filter((draft) => {
+              if (!draft) return false;
+              const isApproved = normalizeText(draft.status) === 'approved' || draft.rawStatus === 2 || draft.rawStatus === '2';
+              if (isApproved) return false;
+              if (draft.agentId && allowedAgentIds.size > 0 && !allowedAgentIds.has(Number(draft.agentId))) {
+                return false;
+              }
+              const hasProgress = Boolean(
+                draft.sections?.personalInformation?.applicant?.firstName ||
+                draft.personalInformation?.applicant?.firstName ||
+                draft.sections?.addressDetails?.applicant?.addressLine1 ||
+                draft.addressDetails?.applicant?.addressLine1 ||
+                draft.applicationProductDetailsId ||
+                (draft._isHydrated && draft.status !== 'New')
+              );
+              return hasProgress;
+            }).length;
+          }
+        } catch {
+          inProgressCount = 0;
+        }
 
         const statusSummaryData = buildStatusSummary(applications);
         const agentPerformanceData = buildAgentPerformance(applications, agents);
-        const totalApplications = applications.length;
-        const badgeCounts = {
-          newApplications: applications.filter((app) => normalizeText(app.status) === 'new').length,
-          verification: applications.filter((app) => normalizeText(app.status) === 'pending verification').length,
-          returned: applications.filter((app) => normalizeText(app.status) === 'returned').length,
-        };
 
         const dashboardStats = [
           {
@@ -183,18 +293,18 @@ export function useRmDashboardData() {
           },
           {
             id: 'pending-verif',
-            title: 'Pending Verification',
+            title: 'Pending Applications',
             value: String(badgeCounts.verification),
-            description: 'In Progress',
+            description: 'Awaiting RM Action',
             trend: 'Live from API',
             trendDirection: 'neutral',
             variant: 'warning',
           },
           {
             id: 'approved-apps',
-            title: 'Approved Loans',
-            value: String(applications.filter((app) => normalizeText(app.status) === 'approved').length),
-            description: 'Current Records',
+            title: 'Login to HO',
+            value: String(approvedLoansCount),
+            description: 'Ready for HO Credit',
             trend: 'Live from API',
             trendDirection: 'neutral',
             variant: 'success',
@@ -202,7 +312,7 @@ export function useRmDashboardData() {
           {
             id: 'total-agents',
             title: 'Active Agents',
-            value: String(agents.length),
+            value: String(activeAgentsCount),
             description: 'Reporting to RM',
             trend: 'Live from API',
             trendDirection: 'neutral',
@@ -226,6 +336,11 @@ export function useRmDashboardData() {
             agentPerformanceData,
             statusSummaryData,
             totalApplications,
+            activeAgentsCount,
+            inProgressCount,
+            approvedLoansCount,
+            submissionHistoryCount,
+            rmProfile,
           });
         }
       } catch (err) {

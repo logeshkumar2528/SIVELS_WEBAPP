@@ -1,18 +1,32 @@
 .status-badge {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-1) var(--spacing-3);
-  border-radius: var(--radius-full);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  line-height: 1;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full, 9999px);
+  font-size: var(--font-size-xs, 11px);
+  font-weight: var(--font-weight-semibold, 600);
+  line-height: 1.2;
+  white-space: nowrap;
+  vertical-align: middle;
+  box-sizing: border-box;
 }
 
 .status-badge-dot {
+  display: inline-block;
   width: 6px;
   height: 6px;
-  border-radius: var(--radius-full);
+  min-width: 6px;
+  min-height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-badge-text {
+  display: inline-block;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .status-badge--new { background: var(--color-status-new-bg); color: var(--color-status-new-text); }

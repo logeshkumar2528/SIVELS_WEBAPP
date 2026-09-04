@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Eye, Pencil } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import DataTable from '../../components/DataTable/DataTable';
 import StatusBadge from '../../components/StatusBadge/StatusBadge';
@@ -28,19 +29,31 @@ function normalizeStatus(record) {
   return 'New';
 }
 
-function formatDate(value) {
+function formatSubmittedDateTime(value) {
   if (!value) return 'N/A';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true,
-  });
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[date.getMonth()];
+  const year = date.getFullYear();
+
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'pm' : 'am';
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  const hoursStr = String(hours).padStart(2, '0');
+
+  return `${day} ${month} ${year}, ${hoursStr}:${minutes} ${ampm}`;
 }
 
 function mapSubmission(record, agentsById) {
   const id = record.applicationId || record.applicationNumber || record.agentCustomerId || record.customerId;
   const agentId = record.agentId || record.AgentId;
   const agent = agentsById[String(agentId)] || {};
+  const submittedRaw = record.submittedAt || record.SubmittedAt || record.createdAt || record.CreatedAt || record.createdDate;
   return {
     id: String(id),
     customerName: record.fullName || record.FullName || record.customerName || 'Unknown',
@@ -49,7 +62,8 @@ function mapSubmission(record, agentsById) {
     amount: record.expectedLoanAmount == null ? (record.amount || 'N/A') : `Rs. ${Number(record.expectedLoanAmount).toLocaleString('en-IN')}`,
     agentName: record.agentName || record.AgentName || agent.fullName || agent.FullName || 'N/A',
     branch: agent.branch || agent.Branch || record.branch || record.Branch || 'N/A',
-    submitted: formatDate(record.submittedAt || record.SubmittedAt || record.createdAt || record.CreatedAt || record.createdDate),
+    submitted: formatSubmittedDateTime(submittedRaw),
+    rawSubmitted: submittedRaw,
     // Submission History uses the business-facing workflow label. The API
     // status remains unchanged; only this page's display label is mapped.
     status: 'Ready for Review',
@@ -61,9 +75,16 @@ export default function SubmissionHistory() {
   const [submissions, setSubmissions] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(7);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const pageSize = 10;
+  const pageSizeOptions = [7, 10, 15, 20];
+
+  const handlePageSizeChange = (newSize) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+  };
+
   const SearchIcon = iconMap['Search'];
 
   useEffect(() => {
@@ -108,15 +129,27 @@ export default function SubmissionHistory() {
   const filteredData = useMemo(() => {
     const searchLower = searchTerm.trim().toLowerCase();
     return submissions
-      .filter((row) => [row.customerName, row.id, row.mobile, row.loanType, row.branch]
-        .some((value) => String(value).toLowerCase().includes(searchLower)))
-      .sort((a, b) => new Date(b.submitted) - new Date(a.submitted));
+      .filter((row) => [row.customerName, row.id, row.mobile, row.loanType, row.branch, row.agentName]
+        .some((value) => String(value || '').toLowerCase().includes(searchLower)))
+      .sort((a, b) => {
+        const timeA = a.rawSubmitted ? new Date(a.rawSubmitted).getTime() : 0;
+        const timeB = b.rawSubmitted ? new Date(b.rawSubmitted).getTime() : 0;
+        return timeB - timeA;
+      });
   }, [submissions, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [currentPage, totalPages]);
 
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredData.slice(start, start + pageSize).map((row, index) => ({ ...row, sno: start + index + 1 }));
-  }, [filteredData, currentPage]);
+  }, [filteredData, currentPage, pageSize]);
 
   const columns = [
     { key: 'sno', label: 'S.NO' },
@@ -132,15 +165,29 @@ export default function SubmissionHistory() {
     {
       key: 'action', label: 'ACTIONS',
       render: (row) => (
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <Button size="sm" variant="secondary" onClick={() => navigate(ROUTES.APPLICATION_PDF_VIEW.replace(':applicationId', row.id))}>View Form</Button>
-          <Button size="sm" variant="outline" onClick={() => navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', row.id))}>Edit Form</Button>
+        <div className="sub-hist-actions-cell">
+          <button
+            type="button"
+            className="sub-hist-btn sub-hist-btn--view"
+            title="View Form"
+            aria-label="View Form"
+            onClick={() => navigate(ROUTES.APPLICATION_PDF_VIEW.replace(':applicationId', row.id))}
+          >
+            <Eye size={15} />
+          </button>
+          <button
+            type="button"
+            className="sub-hist-btn sub-hist-btn--edit"
+            title="Edit Form"
+            aria-label="Edit Form"
+            onClick={() => navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', row.id))}
+          >
+            <Pencil size={15} />
+          </button>
         </div>
       ),
     },
   ];
-
-  const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
 
   return (
     <div className="listing-page-wrapper">
@@ -148,7 +195,16 @@ export default function SubmissionHistory() {
         <div className="filter-bar">
           <div className="search-box">
             {SearchIcon && <SearchIcon size={16} className="search-icon" />}
-            <input type="text" className="form-input" placeholder="Search by ID, Customer or Mobile..." value={searchTerm} onChange={(event) => { setSearchTerm(event.target.value); setCurrentPage(1); }} />
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Search by ID, Customer or Mobile..."
+              value={searchTerm}
+              onChange={(event) => {
+                setSearchTerm(event.target.value);
+                setCurrentPage(1);
+              }}
+            />
           </div>
         </div>
         <div className="listing-table-flex">
@@ -161,7 +217,15 @@ export default function SubmissionHistory() {
           ) : (
             <>
               <DataTable columns={columns} data={paginatedData} rowKeyField="id" className="rm-submission-history-table" />
-              <Pagination currentPage={currentPage} totalPages={totalPages} totalRecords={filteredData.length} pageSize={pageSize} onPageChange={setCurrentPage} />
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalRecords={filteredData.length}
+                pageSize={pageSize}
+                pageSizeOptions={pageSizeOptions}
+                onPageSizeChange={handlePageSizeChange}
+                onPageChange={(newPage) => setCurrentPage(newPage)}
+              />
             </>
           )}
         </div>

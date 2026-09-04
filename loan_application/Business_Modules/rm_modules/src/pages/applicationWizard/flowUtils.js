@@ -272,7 +272,7 @@ export function createAddressTemplate(overrides = {}) {
     landmark: overrides.landmark || '',
     city: overrides.city || '',
     state: overrides.state || '',
-    pincode: overrides.pincode || '',
+    pincode: overrides.pincode || overrides.Pincode || overrides.postalCode || overrides.PostalCode || overrides.pinCode || overrides.PinCode || '',
     mailingSameAsCurrent: overrides.mailingSameAsCurrent || 'No',
   };
 }

@@ -56,9 +56,9 @@
 .ag-main-panel {
   display: flex;
   flex-direction: column;
-  flex: 1;
   padding: 0 !important;
   overflow: hidden;
+  width: 100%;
 }
 
 .ag-filter-bar {
@@ -67,12 +67,15 @@
   justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid var(--color-border);
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .ag-filter-dropdowns {
   display: flex;
   align-items: flex-end;
-  gap: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .ag-filter-label {
@@ -90,131 +93,224 @@
   padding: 0 12px;
 }
 
-.ag-table-container {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 0 20px;
-}
-
-/* Custom Table Styles for MyAgents */
-.ag-table-container table {
+/* RM My Agents Table Layout - 100% width, NO horizontal scrollbar */
+.rm-my-agents-table {
+  display: flex;
+  flex-direction: column;
   width: 100%;
+}
+
+.rm-my-agents-table .data-table-scroll {
+  overflow-x: hidden !important;
+  overflow-y: auto;
+  max-height: 456px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.rm-my-agents-table .data-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 0;
   border-collapse: separate;
-  border-spacing: 0 6px;
+  border-spacing: 0;
+  flex: none;
+  height: auto;
 }
 
-.ag-table-container th {
-  padding: 10px 8px;
-  font-size: 10.5px;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: capitalize;
-  border-bottom: 1px solid #e2e8f0;
+.rm-my-agents-table .data-table-body {
+  height: auto;
 }
 
-.ag-table-container td {
-  padding: 10px 8px;
-  font-size: 11.5px;
-  border-bottom: 1px solid #f1f5f9;
-  background: white;
+.rm-my-agents-table .data-table-head {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--color-bg, #f8fafc);
 }
 
-.ag-pagination-footer {
-  padding: 12px 20px;
-  border-top: 1px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: white;
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+.rm-my-agents-table .data-table-th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--color-bg, #f8fafc);
+  height: 46px;
+  padding: 8px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
 }
 
-.ag-page-info {
+.rm-my-agents-table .data-table-row {
+  height: 58px;
+  min-height: 58px;
+}
+
+.rm-my-agents-table .data-table-row:last-child {
+  border-bottom: none;
+}
+
+.rm-my-agents-table .data-table-cell {
+  padding: 8px 6px;
+  vertical-align: middle;
   font-size: 12px;
-  color: #64748b;
+  color: var(--color-text-primary, #0f172a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid var(--color-border-light, #f1f5f9);
 }
 
-.ag-page-controls {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+/* Explicit Proportional Column Widths (Sum = 100%) */
+.rm-my-agents-table .data-table-th:nth-child(1),
+.rm-my-agents-table .data-table-cell:nth-child(1) {
+  width: 21% !important;
+  overflow: hidden;
 }
 
-.ag-page-btn {
-  width: 28px;
-  height: 28px;
-  border: 1px solid #e2e8f0;
-  background: white;
+.rm-my-agents-table .data-table-th:nth-child(2),
+.rm-my-agents-table .data-table-cell:nth-child(2) {
+  width: 8% !important;
   color: #475569;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
 }
 
-.ag-page-btn:hover {
+.rm-my-agents-table .data-table-th:nth-child(3),
+.rm-my-agents-table .data-table-cell:nth-child(3) {
+  width: 14% !important;
+  color: #475569;
+}
+
+.rm-my-agents-table .data-table-th:nth-child(4),
+.rm-my-agents-table .data-table-cell:nth-child(4) {
+  width: 9% !important;
+  color: #475569;
+}
+
+.rm-my-agents-table .data-table-th:nth-child(5),
+.rm-my-agents-table .data-table-cell:nth-child(5) {
+  width: 8% !important;
+  text-align: center;
+}
+
+.rm-my-agents-table .data-table-th:nth-child(6),
+.rm-my-agents-table .data-table-cell:nth-child(6) {
+  width: 8% !important;
+  text-align: center;
+}
+
+.rm-my-agents-table .data-table-th:nth-child(7),
+.rm-my-agents-table .data-table-cell:nth-child(7) {
+  width: 9% !important;
+  text-align: center;
+}
+
+.rm-my-agents-table .data-table-th:nth-child(8),
+.rm-my-agents-table .data-table-cell:nth-child(8) {
+  width: 9% !important;
+  text-align: center;
+}
+
+.rm-my-agents-table .data-table-th:nth-child(9),
+.rm-my-agents-table .data-table-cell:nth-child(9) {
+  width: 8% !important;
+  text-align: center;
+}
+
+.rm-my-agents-table .data-table-th:nth-child(10),
+.rm-my-agents-table .data-table-cell:nth-child(10) {
+  width: 6% !important;
+  text-align: center;
+}
+
+.rm-my-agents-table .data-table-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.rm-my-agents-table .data-table-scroll::-webkit-scrollbar-track {
   background: #f8fafc;
+  border-radius: 4px;
 }
 
-.ag-page-btn.active {
-  background: #0f5132;
-  color: white;
-  border-color: #0f5132;
+.rm-my-agents-table .data-table-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
 }
 
-.ag-page-rows {
+.rm-my-agents-table .data-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Agent Name Cell layout */
+.ag-cell-name {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  overflow: hidden;
 }
 
+.ag-cell-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.ag-cell-name-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ag-cell-name-title {
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+
+.ag-cell-name-sub {
+  font-size: 11px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Row Actions */
 .ag-row-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
   flex-wrap: nowrap;
   white-space: nowrap;
 }
 
-.ag-icon-btn {
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
-  padding: 0 !important;
-  border-radius: 10px !important;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ag-icon-btn .btn-icon {
-  margin-right: 0;
-}
-
-.ag-icon-btn--view {
-  background: #ffffff;
-  border-color: #cbd5e1;
-  color: #0f7a4c;
-}
-
-.ag-icon-btn--view:hover:not(:disabled) {
-  background: #eaf5ee;
-  border-color: #0f7a4c;
-}
-
-.ag-icon-btn--delete {
-  background: #fff1f2;
-  border-color: #fecaca;
+.ag-btn--delete {
+  background-color: #fff1f2;
   color: #dc2626;
+  border: 1px solid #fecaca;
 }
 
-.ag-icon-btn--delete:hover:not(:disabled) {
-  background: #ffe4e6;
+.ag-btn--delete:hover:not(:disabled) {
+  background-color: #ffe4e6;
   border-color: #f87171;
+  color: #b91c1c;
 }
 
 /* Agent Details Modal */
