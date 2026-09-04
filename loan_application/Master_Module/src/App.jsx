@@ -48,8 +48,10 @@ function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="create-user" element={<CreateUser />} />
-          <Route path="add-agent" element={<AddAgent />} />
+          <Route path="add-agent" element={<AddAgent onSuccessRedirect="/dashboard" />} />
+          <Route path="edit-agent/:agentId" element={<AddAgent onSuccessRedirect="/dashboard" />} />
           <Route path="create-relationship-manager" element={<RelationshipManagerCreate />} />
+          <Route path="edit-relationship-manager/:rmId" element={<RelationshipManagerCreate />} />
           <Route path="company" element={<CompanyConfiguration />} />
           
           <Route path="masters">

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   User,
   Phone,
@@ -39,11 +39,16 @@ const GENDER_OPTIONS = [
   { value: 3, label: 'Other' },
 ];
 
-export default function AddAgent({ onSuccessRedirect } = {}) {
+export default function AddAgent({ onSuccessRedirect, agentId: agentIdProp } = {}) {
   const navigate = useNavigate();
+  const { agentId: agentIdParam } = useParams();
+  const editAgentId = agentIdProp || agentIdParam || null;
+  const isEditMode = Boolean(editAgentId);
   const aadhaarInputRef = useRef(null);
   const panInputRef = useRef(null);
   const profileImgInputRef = useRef(null);
+  const [existingAgent, setExistingAgent] = useState(null);
+  const [loadingAgent, setLoadingAgent] = useState(Boolean(editAgentId));
 
   const getCurrentUser = () => {
     try {
@@ -116,7 +121,7 @@ export default function AddAgent({ onSuccessRedirect } = {}) {
   const [errorDetails, setErrorDetails] = useState(null);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && !isEditMode) {
       setFormData((prev) => ({
         ...prev,
         relationshipManager: currentRmName,
@@ -124,7 +129,7 @@ export default function AddAgent({ onSuccessRedirect } = {}) {
         role: prev.role || 'Agent',
       }));
     }
-  }, [currentBranch, currentRmName, currentUser]);
+  }, [currentBranch, currentRmName, currentUser, isEditMode]);
 
   useEffect(() => {
     fetch(`${API_BASE}/RMMaster`)
@@ -138,12 +143,66 @@ export default function AddAgent({ onSuccessRedirect } = {}) {
         })).filter((rm) => rm.id && rm.name);
         setRmOptions(options);
         const matchedRm = options.find((rm) => Number(rm.id) === currentRmId);
-        if (!isAdmin && matchedRm?.branch) {
+        if (!isAdmin && matchedRm?.branch && !isEditMode) {
           setFormData((prev) => ({ ...prev, branch: matchedRm.branch }));
         }
       })
       .catch(() => setRmOptions([]));
-  }, [isAdmin, currentRmId]);
+  }, [isAdmin, currentRmId, isEditMode]);
+
+  useEffect(() => {
+    if (!editAgentId) return undefined;
+    let active = true;
+
+    async function loadAgent() {
+      setLoadingAgent(true);
+      setErrorMessage('');
+      try {
+        const response = await fetch(`${API_BASE}/AgentMaster/${editAgentId}`, {
+          headers: getAuthHeaders(),
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to load agent (${response.status})`);
+        }
+        const details = await response.json();
+        const record = Array.isArray(details)
+          ? details[0]
+          : (details?.value?.[0] || details?.data || details);
+        if (!active || !record) return;
+
+        const rmIdValue = record.rmId || record.RMId || '';
+        setExistingAgent(record);
+        setSelectedRmId(rmIdValue ? String(rmIdValue) : '');
+        setFormData({
+          fullName: record.fullName || record.agentName || record.name || '',
+          dateOfBirth: record.dateOfBirth ? String(record.dateOfBirth).slice(0, 10) : '',
+          genderId: record.genderId ?? '',
+          relationshipManager: record.rmName || record.relationshipManager || '',
+          address: record.address || '',
+          state: record.state || '',
+          pincode: record.pincode || '',
+          mobileNumber: record.mobileNumber || record.phone || '',
+          emailAddress: record.emailAddress || record.email || '',
+          dateJoined: record.dateJoined ? String(record.dateJoined).slice(0, 10) : new Date().toISOString().split('T')[0],
+          role: record.role || 'Agent',
+          branch: record.branch || record.branchName || '',
+          bankAccountNumber: record.bankAccountNumber || '',
+          ifscCode: record.ifscCode || '',
+        });
+      } catch (error) {
+        if (active) {
+          setErrorMessage(error.message || 'Failed to load agent details.');
+        }
+      } finally {
+        if (active) setLoadingAgent(false);
+      }
+    }
+
+    loadAgent();
+    return () => {
+      active = false;
+    };
+  }, [editAgentId]);
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({
@@ -153,6 +212,8 @@ export default function AddAgent({ onSuccessRedirect } = {}) {
   };
 
   const buildPayload = () => ({
+    ...(existingAgent || {}),
+    ...(isEditMode ? { agentId: Number(editAgentId) } : {}),
     fullName: formData.fullName.trim(),
     dateOfBirth: formData.dateOfBirth,
     genderId: Number(formData.genderId || 0),
@@ -165,10 +226,11 @@ export default function AddAgent({ onSuccessRedirect } = {}) {
     dateJoined: formData.dateJoined,
     role: formData.role.trim(),
     branch: formData.branch.trim() || currentBranch || '',
-    isActive: true,
+    isActive: existingAgent?.isActive ?? true,
     bankAccountNumber: formData.bankAccountNumber.trim(),
     ifscCode: formData.ifscCode.trim().toUpperCase(),
-    createdBy: currentRmId || Number(currentUser?.id || currentUser?.userId || 0),
+    createdBy: existingAgent?.createdBy ?? (currentRmId || Number(currentUser?.id || currentUser?.userId || 0)),
+    modifiedBy: currentRmId || Number(currentUser?.id || currentUser?.userId || 0) || 1,
   });
 
   const getAuthHeaders = () => {
@@ -270,8 +332,14 @@ export default function AddAgent({ onSuccessRedirect } = {}) {
   const validateForm = () => {
     const requiredFields = [
       ['fullName', 'full name'],
+      ['dateOfBirth', 'date of birth'],
+      ['genderId', 'gender'],
+      ['address', 'address'],
+      ['state', 'state'],
       ['pincode', 'pincode'],
       ['mobileNumber', 'mobile number'],
+      ['dateJoined', 'date joined'],
+      ['branch', 'branch'],
       ['bankAccountNumber', 'bank account number'],
       ['ifscCode', 'ifsc code'],
     ];
@@ -306,6 +374,11 @@ export default function AddAgent({ onSuccessRedirect } = {}) {
       return 'RM session was not found. Please log in again.';
     }
 
+    // PAN card is mandatory when creating a new agent
+    if (!isEditMode && !panFile) {
+      return 'Please upload the PAN card. PAN is mandatory for agent creation.';
+    }
+
     return '';
   };
 
@@ -329,10 +402,11 @@ export default function AddAgent({ onSuccessRedirect } = {}) {
 
     try {
       const payload = buildPayload();
-      console.log('Creating agent with payload:', payload);
-
-      const response = await fetch(`${API_BASE}/AgentMaster`, {
-        method: 'POST',
+      const endpoint = isEditMode
+        ? `${API_BASE}/AgentMaster/${editAgentId}`
+        : `${API_BASE}/AgentMaster`;
+      const response = await fetch(endpoint, {
+        method: isEditMode ? 'PUT' : 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(payload),
       });
@@ -360,11 +434,11 @@ export default function AddAgent({ onSuccessRedirect } = {}) {
       setSubmittedSuccess(true);
       setTimeout(() => {
         setSubmittedSuccess(false);
-        navigate(onSuccessRedirect || ROUTES.MY_AGENTS);
+        navigate(onSuccessRedirect || (isEditMode ? '/dashboard' : ROUTES.MY_AGENTS));
       }, 1200);
     } catch (error) {
-      console.error('Failed to create agent:', error);
-      setErrorMessage(error.message || 'Failed to create agent.');
+      console.error('Failed to save agent:', error);
+      setErrorMessage(error.message || `Failed to ${isEditMode ? 'update' : 'create'} agent.`);
       setErrorDetails(error.details || null);
     } finally {
       setIsSaving(false);
@@ -375,7 +449,7 @@ export default function AddAgent({ onSuccessRedirect } = {}) {
     <div className="agent-creation-page">
       <ErrorPopup
         show={!!errorMessage}
-        title="Could not save agent"
+        title={isEditMode ? 'Could not update agent' : 'Could not save agent'}
         message={errorMessage}
         details={errorDetails}
         onClose={() => {
@@ -384,12 +458,22 @@ export default function AddAgent({ onSuccessRedirect } = {}) {
         }}
       />
 
+      {loadingAgent && (
+        <div className="agent-creation-toast" role="status">
+          <RefreshCw size={18} className="toast-icon" />
+          <div className="toast-content">
+            <span className="toast-title">Loading agent details...</span>
+            <span className="toast-desc">Please wait while we fetch the agent record.</span>
+          </div>
+        </div>
+      )}
+
       {submittedSuccess && (
         <div className="agent-creation-toast" role="alert">
           <CheckCircle2 size={18} className="toast-icon" />
           <div className="toast-content">
-            <span className="toast-title">Agent created successfully</span>
-            <span className="toast-desc">The agent has been saved to the database.</span>
+            <span className="toast-title">{isEditMode ? 'Agent updated successfully' : 'Agent created successfully'}</span>
+            <span className="toast-desc">{isEditMode ? 'The agent details have been saved.' : 'The agent has been saved to the database.'}</span>
           </div>
           <button
             type="button"
@@ -411,15 +495,15 @@ export default function AddAgent({ onSuccessRedirect } = {}) {
           {/* SECTION 1: AGENT INFORMATION */}
           <div className="form-section">
             <div className="section-header-row">
-              <h2 className="section-heading">Agent Information</h2>
+              <h2 className="section-heading">{isEditMode ? 'Edit Agent' : 'Agent Information'}</h2>
               <Button
                 variant="secondary"
                 size="sm"
                 icon={<ArrowLeft size={15} />}
-            onClick={() => navigate(onSuccessRedirect || ROUTES.MY_AGENTS)}
+            onClick={() => navigate(onSuccessRedirect || (isEditMode ? '/dashboard' : ROUTES.MY_AGENTS))}
                 className="agent-creation-back-btn"
               >
-                Back to Agents
+                {isEditMode ? 'Back to Dashboard' : 'Back to Agents'}
               </Button>
             </div>
             <div className="section-divider" />
@@ -727,7 +811,11 @@ export default function AddAgent({ onSuccessRedirect } = {}) {
                   <span className="upload-title">
                     PAN Card <span className="required-star">*</span>
                   </span>
-                  <span className="upload-subtitle">Upload clear image of PAN Card</span>
+                  <span className="upload-subtitle">
+                    {isEditMode
+                      ? 'Upload a new PAN card image to replace the existing one (optional on edit)'
+                      : 'Upload clear image of PAN Card (mandatory)'}
+                  </span>
                   <span className="upload-format-note">JPG, PNG or PDF (Max. 10MB)</span>
                 </div>
 
@@ -965,7 +1053,7 @@ export default function AddAgent({ onSuccessRedirect } = {}) {
       <Modal
         show={confirmModalOpen}
         onHide={() => !isSaving && setConfirmModalOpen(false)}
-        title="Confirm Agent Creation"
+        title={isEditMode ? 'Confirm Agent Update' : 'Confirm Agent Creation'}
         size="md"
         className="confirm-agent-modal"
         footer={(
@@ -974,13 +1062,13 @@ export default function AddAgent({ onSuccessRedirect } = {}) {
               Cancel
             </Button>
             <Button type="button" variant="primary" className="confirm-create-btn" onClick={confirmCreateAgent} disabled={isSaving}>
-              {isSaving ? 'Saving...' : 'Yes, Create Agent'}
+              {isSaving ? 'Saving...' : (isEditMode ? 'Yes, Update Agent' : 'Yes, Create Agent')}
             </Button>
           </div>
         )}
       >
         <div style={{ display: 'grid', gap: '10px' }}>
-          <div className="confirm-agent-intro"><div className="confirm-agent-icon"><CheckCircle2 size={22} /></div><div><strong>Ready to create this agent?</strong><span>The agent will be mapped to the selected relationship manager.</span></div></div>
+          <div className="confirm-agent-intro"><div className="confirm-agent-icon"><CheckCircle2 size={22} /></div><div><strong>{isEditMode ? 'Ready to update this agent?' : 'Ready to create this agent?'}</strong><span>{isEditMode ? 'The agent details and RM assignment will be updated.' : 'The agent will be mapped to the selected relationship manager.'}</span></div></div>
           <div className="confirm-agent-summary"><div><span>Agent</span><strong>{formData.fullName || '-'}</strong></div><div><span>Relationship manager</span><strong>{isAdmin ? (formData.relationshipManager || 'Not selected') : (formData.relationshipManager || currentRmName || '-')}</strong></div><div><span>Branch</span><strong>{formData.branch || currentBranch || '-'}</strong></div><div><span>Mobile</span><strong>{formData.mobileNumber || '-'}</strong></div></div>
         </div>
       </Modal>

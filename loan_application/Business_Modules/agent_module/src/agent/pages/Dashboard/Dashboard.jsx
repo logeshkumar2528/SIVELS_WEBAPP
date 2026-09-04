@@ -1,13 +1,16 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { UserCheck, MapPin, Calendar, Clock } from 'lucide-react'
 import StatCards from '../../components/StatCards/StatCards'
 import PendingLoans from '../../components/PendingLoans/PendingLoans'
+import SubmittedCustomers from '../../components/SubmittedCustomers/SubmittedCustomers'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import './Dashboard.css'
 
 function Dashboard() {
   const navigate = useNavigate()
   const { agentData, loadingAgent } = useAgentIdentity()
+  const [showSubmittedCustomers, setShowSubmittedCustomers] = useState(false)
 
   if (loadingAgent) {
     return (
@@ -45,7 +48,9 @@ function Dashboard() {
       </div>
 
       {/* 4 Stat Cards */}
-      <StatCards />
+      <StatCards onTotalSubmittedClick={() => setShowSubmittedCustomers((isOpen) => !isOpen)} />
+
+      {showSubmittedCustomers && <SubmittedCustomers />}
 
       {/* Pending Loans Table */}
       <PendingLoans />

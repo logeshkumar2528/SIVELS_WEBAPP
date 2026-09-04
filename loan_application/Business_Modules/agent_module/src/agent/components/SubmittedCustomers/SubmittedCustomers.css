@@ -1,0 +1,75 @@
+.submitted-customers {
+  flex-shrink: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.submitted-customers-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.submitted-customers-header h2 {
+  color: var(--color-text-primary);
+  font-size: 16px;
+  font-weight: 750;
+}
+
+.submitted-customers-header p {
+  margin-top: 3px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.submitted-customers-count {
+  color: #0284C7;
+  background: #E0F2FE;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.submitted-customers-table-wrapper { overflow-x: auto; max-height: 330px; overflow-y: auto; }
+.submitted-customers-table { width: 100%; border-collapse: collapse; min-width: 850px; }
+.submitted-customers-table th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--color-bg); color: var(--color-text-secondary);
+  padding: 11px 14px; border-bottom: 1px solid var(--color-border);
+  font-size: 11px; text-align: left; white-space: nowrap;
+}
+.submitted-customers-table td {
+  padding: 12px 14px; border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-text-primary); font-size: 12px; white-space: nowrap;
+}
+.submitted-customers-table tbody tr:hover { background: var(--color-surface-hover); }
+.submitted-customer-name { display: flex; align-items: center; gap: 9px; font-weight: 650; }
+.submitted-customer-name span {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: #E0F2FE; color: #075985; font-size: 12px; font-weight: 750;
+}
+.submitted-status { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 650; }
+.submitted-status--pending { color: #B45309; }
+.submitted-status--review { color: #2563EB; }
+.submitted-status--returned { color: #DC2626; }
+.submitted-status--approved, .submitted-status--submitted { color: #15803D; }
+.submitted-view-button {
+  display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent;
+  color: var(--color-primary); cursor: pointer; font-size: 12px; font-weight: 650;
+}
+.submitted-view-button:hover { text-decoration: underline; }
+.submitted-customers-message { padding: 30px 20px; text-align: center; color: var(--color-text-muted); font-size: 13px; }
+.submitted-customers-message--error { color: #DC2626; }
+
+@media (max-width: 600px) {
+  .submitted-customers-header { align-items: flex-start; flex-direction: column; }
+}
