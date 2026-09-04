@@ -164,19 +164,6 @@ export function useRmDashboardData() {
         });
         const activeAgentsCount = activeAgents.length;
 
-        const allowedAgentIds = new Set(
-          agents.map((agent) => Number(agent.agentId || agent.AgentId || 0)).filter((v) => Number.isFinite(v) && v > 0)
-        );
-
-        // Scope applications strictly to assigned agents
-        const rawCustomerRows = resolveApiArray(customersData);
-        const applications = rawCustomerRows
-          .filter((item) => {
-            const rowAgentId = Number(item.agentId || item.AgentId);
-            return allowedAgentIds.has(rowAgentId);
-          })
-          .map(mapApplication);
-
         const totalApplications = applications.length;
 
         const badgeCounts = {
