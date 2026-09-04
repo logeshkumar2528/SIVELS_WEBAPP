@@ -5,6 +5,7 @@ import StatusBadge from '../../components/StatusBadge/StatusBadge';
 import Button from '../../components/Button/Button';
 import Modal from '../../components/Modal/Modal';
 import Select from '../../components/Select/Select';
+import Pagination from '../../components/Pagination/Pagination';
 import './MyAgents.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -99,6 +100,8 @@ function buildRow(agent, customerRows = []) {
 export default function MyAgents() {
   const currentUser = useMemo(() => getStoredUser(), []);
   const [searchTerm, setSearchTerm] = useState('');
+  const [areaFilter, setAreaFilter] = useState('All Areas');
+  const [statusFilter, setStatusFilter] = useState('All Status');
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [selectedAgentDetails, setSelectedAgentDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -107,10 +110,17 @@ export default function MyAgents() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [pageSize, setPageSize] = useState(7);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [agentRows, setAgentRows] = useState([]);
+
+  const pageSizeOptions = [7, 10, 15, 20];
+
+  const handlePageSizeChange = (newSize) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+  };
 
   const SearchIcon = iconMap['Search'];
   const UsersIcon = iconMap['Users'];
@@ -119,8 +129,6 @@ export default function MyAgents() {
   const DownloadIcon = iconMap['Download'];
   const EyeIcon = iconMap['Eye'];
   const TrashIcon = iconMap['XCircle'];
-  const ChevronLeftIcon = iconMap['ChevronLeft'];
-  const ChevronRightIcon = iconMap['ChevronRight'];
 
   const getAuthHeaders = () => {
     const headers = {};
@@ -279,7 +287,7 @@ export default function MyAgents() {
         const matchedRmName = normalizeText(matchedRm?.fullName || currentUser?.fullName || currentUser?.name || '');
         const matchedRmNameFromApi = normalizeText(matchedRm?.fullName || '');
 
-        const filteredAgents = agentRowsRaw.filter((agent) => {
+        const filteredAgentsList = agentRowsRaw.filter((agent) => {
           const agentRmId = Number(
             agent.rmId ||
             agent.RMId ||
@@ -296,18 +304,15 @@ export default function MyAgents() {
             ''
           );
 
-          // Primary: agents assigned to this RM via rmId
           if (resolvedRmId && agentRmId === resolvedRmId) return true;
-          // Secondary: legacy createdBy mapping
           if (resolvedRmId && agentCreator === resolvedRmId) return true;
-          // Fallback: match by RM name when rmId is missing
           if (!agentRmId && matchedRmName && (assignedRmName === matchedRmName || assignedRmName === matchedRmNameFromApi)) {
             return true;
           }
           return false;
         });
 
-        const rows = filteredAgents.map((agent) => buildRow(agent, customerRowsRaw));
+        const rows = filteredAgentsList.map((agent) => buildRow(agent, customerRowsRaw));
 
         if (active) {
           setAgentRows(rows);
@@ -343,21 +348,26 @@ export default function MyAgents() {
         ag.assignedArea,
         ag.status,
       ].join(' ');
-      return normalizeText(searchBlob).includes(term);
+      const matchesSearch = normalizeText(searchBlob).includes(term);
+      const matchesArea = areaFilter === 'All Areas' || ag.assignedArea === areaFilter;
+      const matchesStatus = statusFilter === 'All Status' || ag.status === statusFilter;
+      return matchesSearch && matchesArea && matchesStatus;
     });
-  }, [agentRows, searchTerm]);
-
-  useEffect(() => {
-    if (currentPage > Math.max(1, Math.ceil(filteredAgents.length / rowsPerPage))) {
-      setCurrentPage(1);
-    }
-  }, [currentPage, filteredAgents.length, rowsPerPage]);
+  }, [agentRows, searchTerm, areaFilter, statusFilter]);
 
   const totalRecords = filteredAgents.length;
-  const totalPages = Math.max(1, Math.ceil(totalRecords / rowsPerPage));
-  const startIndex = (currentPage - 1) * rowsPerPage;
-  const endIndex = Math.min(startIndex + rowsPerPage, totalRecords);
-  const currentRecords = filteredAgents.slice(startIndex, endIndex);
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [currentPage, totalPages]);
+
+  const currentRecords = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredAgents.slice(start, start + pageSize);
+  }, [filteredAgents, currentPage, pageSize]);
 
   const totals = useMemo(() => {
     return agentRows.reduce(
@@ -375,42 +385,100 @@ export default function MyAgents() {
   const columns = [
     {
       key: 'name',
-      label: 'Agent Name',
+      label: 'AGENT NAME',
       render: (row) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <img src={row.avatarUrl} alt={row.name} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontWeight: 600, color: '#0f172a' }}>{row.name}</span>
-            <span style={{ fontSize: '12px', color: '#64748b' }}>{buildInitials(row.name)} • {row.email || 'No email'}</span>
+        <div className="ag-cell-name">
+          <img
+            src={row.avatarUrl}
+            alt={row.name}
+            className="ag-cell-avatar"
+          />
+          <div className="ag-cell-name-info">
+            <span className="ag-cell-name-title">{row.name}</span>
+            <span className="ag-cell-name-sub">
+              {buildInitials(row.name)} • {row.email || 'No email'}
+            </span>
           </div>
         </div>
       ),
     },
-    { key: 'id', label: 'Agent ID', render: (row) => <span style={{ color: '#475569' }}>{row.id}</span> },
-    { key: 'assignedArea', label: 'Area / Branch', render: (row) => <span style={{ color: '#475569' }}>{row.assignedArea}</span> },
-    { key: 'phone', label: 'Mobile Number', render: (row) => <span style={{ color: '#475569' }}>{row.phone}</span> },
-    { key: 'customersAdded', label: 'Customers Added', render: (row) => <span style={{ color: '#475569', fontWeight: 500 }}>{row.customersAdded}</span> },
-    { key: 'activeCustomers', label: 'Active Customers', render: (row) => <span style={{ color: '#16a34a', fontWeight: 600 }}>{row.activeCustomers}</span> },
-    { key: 'pendingVerification', label: 'Pending Verification', render: (row) => <span style={{ color: '#ea580c', fontWeight: 600 }}>{row.pendingVerification}</span> },
-    { key: 'pendingCollections', label: 'Pending Collections', render: (row) => <span style={{ color: '#dc2626', fontWeight: 600 }}>{row.pendingCollections}</span> },
-    { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    {
+      key: 'id',
+      label: 'AGENT ID',
+      render: (row) => <span style={{ color: '#475569' }}>{row.id}</span>,
+    },
+    {
+      key: 'assignedArea',
+      label: 'AREA / BRANCH',
+      render: (row) => <span style={{ color: '#475569' }}>{row.assignedArea}</span>,
+    },
+    {
+      key: 'phone',
+      label: 'MOBILE NUMBER',
+      render: (row) => <span style={{ color: '#475569' }}>{row.phone}</span>,
+    },
+    {
+      key: 'customersAdded',
+      label: 'CUSTOMERS ADDED',
+      render: (row) => (
+        <div style={{ textAlign: 'center', width: '100%' }}>
+          <span style={{ color: '#475569', fontWeight: 500 }}>{row.customersAdded}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'activeCustomers',
+      label: 'ACTIVE CUSTOMERS',
+      render: (row) => (
+        <div style={{ textAlign: 'center', width: '100%' }}>
+          <span style={{ color: '#16a34a', fontWeight: 600 }}>{row.activeCustomers}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'pendingVerification',
+      label: 'PENDING VERIFICATION',
+      render: (row) => (
+        <div style={{ textAlign: 'center', width: '100%' }}>
+          <span style={{ color: '#ea580c', fontWeight: 600 }}>{row.pendingVerification}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'pendingCollections',
+      label: 'PENDING COLLECTIONS',
+      render: (row) => (
+        <div style={{ textAlign: 'center', width: '100%' }}>
+          <span style={{ color: '#dc2626', fontWeight: 600 }}>{row.pendingCollections}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'STATUS',
+      render: (row) => (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+          <StatusBadge status={row.status} />
+        </div>
+      ),
+    },
     {
       key: 'action',
-      label: 'Action',
+      label: 'ACTION',
       render: (row) => (
         <div className="ag-row-actions">
-          <Button
-            variant="outline"
-            size="sm"
-            className="ag-icon-btn ag-icon-btn--view"
-            icon={EyeIcon ? <EyeIcon size={14} /> : null}
+          <button
+            type="button"
+            className="sub-hist-btn sub-hist-btn--view"
             onClick={() => openAgentDetails(row)}
             aria-label={`View details for ${row.name}`}
             title="View Details"
-          />
+          >
+            {EyeIcon ? <EyeIcon size={14} /> : null}
+          </button>
           <button
             type="button"
-            className="ag-icon-btn ag-icon-btn--delete"
+            className="sub-hist-btn ag-btn--delete"
             onClick={() => openDeleteConfirm(row)}
             aria-label={`Delete ${row.name}`}
             title="Delete"
@@ -423,7 +491,7 @@ export default function MyAgents() {
   ];
 
   return (
-    <div className="page-container--no-scroll" style={{ gap: '20px' }}>
+    <div className="listing-page-wrapper" style={{ gap: '16px' }}>
       {loadError && (
         <div className="alert alert-warning" style={{ marginBottom: '0' }}>
           {loadError}
@@ -487,7 +555,7 @@ export default function MyAgents() {
         </div>
       </div>
 
-      <div className="panel ag-main-panel">
+      <div className="panel listing-card-full ag-main-panel">
         <div className="ag-filter-bar">
           <div className="search-box" style={{ width: '300px' }}>
             {SearchIcon && <SearchIcon size={16} className="search-icon" />}
@@ -516,8 +584,11 @@ export default function MyAgents() {
                   })),
                 ]}
                 className="ag-select"
-                value="All Areas"
-                onChange={() => {}}
+                value={areaFilter}
+                onChange={(val) => {
+                  setAreaFilter(val);
+                  setCurrentPage(1);
+                }}
               />
             </div>
 
@@ -533,8 +604,11 @@ export default function MyAgents() {
                   })),
                 ]}
                 className="ag-select"
-                value="All Status"
-                onChange={() => {}}
+                value={statusFilter}
+                onChange={(val) => {
+                  setStatusFilter(val);
+                  setCurrentPage(1);
+                }}
               />
             </div>
 
@@ -549,62 +623,23 @@ export default function MyAgents() {
           </div>
         </div>
 
-        <div className="ag-table-container">
-          <DataTable columns={columns} data={currentRecords} loading={isLoading} rowKeyField="agentId" />
-        </div>
-
-        <div className="ag-pagination-footer">
-          <span className="ag-page-info">
-            {totalRecords > 0 ? `Showing ${startIndex + 1} to ${endIndex} of ${totalRecords} agents` : 'No agents found'}
-          </span>
-
-          <div className="ag-page-controls">
-            <button
-              className={`ag-page-btn ${currentPage === 1 ? 'disabled' : ''}`}
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-            >
-              {ChevronLeftIcon ? <ChevronLeftIcon size={14} /> : '<'}
-            </button>
-
-            {Array.from({ length: totalPages }).map((_, i) => (
-              <button
-                key={i + 1}
-                className={`ag-page-btn ${currentPage === i + 1 ? 'active' : ''}`}
-                onClick={() => setCurrentPage(i + 1)}
-              >
-                {i + 1}
-              </button>
-            ))}
-
-            <button
-              className={`ag-page-btn ${currentPage === totalPages || totalPages === 0 ? 'disabled' : ''}`}
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages || totalPages === 0}
-            >
-              {ChevronRightIcon ? <ChevronRightIcon size={14} /> : '>'}
-            </button>
-          </div>
-
-          <div className="ag-page-rows">
-            <span style={{ fontSize: '12px', color: '#64748b' }}>Rows per page</span>
-            <div style={{ width: '70px' }}>
-              <Select
-                className="ag-select"
-                value={rowsPerPage}
-                onChange={(val) => {
-                  setRowsPerPage(Number(val));
-                  setCurrentPage(1);
-                }}
-                options={[
-                  { value: 5, label: '5' },
-                  { value: 10, label: '10' },
-                  { value: 20, label: '20' },
-                ]}
-                placeholder={null}
-              />
-            </div>
-          </div>
+        <div className="listing-table-flex">
+          <DataTable
+            columns={columns}
+            data={currentRecords}
+            loading={isLoading}
+            rowKeyField="id"
+            className="rm-my-agents-table"
+          />
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalRecords={totalRecords}
+            pageSize={pageSize}
+            pageSizeOptions={pageSizeOptions}
+            onPageSizeChange={handlePageSizeChange}
+            onPageChange={(newPage) => setCurrentPage(newPage)}
+          />
         </div>
       </div>
 

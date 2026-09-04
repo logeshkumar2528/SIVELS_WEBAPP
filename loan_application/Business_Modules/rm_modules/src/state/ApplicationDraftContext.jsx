@@ -626,7 +626,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
       landmark: applicantAddr.landmark || existingDraft.addressDetails?.applicant?.landmark || '',
       city: applicantAddr.cityId || existingDraft.addressDetails?.applicant?.city || '',
       state: applicantAddr.stateId || existingDraft.addressDetails?.applicant?.state || '',
-      pincode: applicantAddr.pincode || existingDraft.addressDetails?.applicant?.pincode || '',
+      pincode: applicantAddr.pincode || applicantAddr.Pincode || applicantAddr.postalCode || applicantAddr.PostalCode || applicantAddr.pinCode || applicantAddr.PinCode || existingDraft.addressDetails?.applicant?.pincode || '',
       mailingSameAsCurrent: applicantAddr.mailingAsCurrent !== undefined ? (applicantAddr.mailingAsCurrent ? 'Yes' : 'No') : (existingDraft.addressDetails?.applicant?.mailingSameAsCurrent || 'No'),
       current: {
         addressLine1: applicantAddr.addressLine1 || existingDraft.addressDetails?.applicant?.current?.addressLine1 || '',
@@ -634,7 +634,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
         landmark: applicantAddr.landmark || existingDraft.addressDetails?.applicant?.current?.landmark || '',
         city: applicantAddr.cityId || existingDraft.addressDetails?.applicant?.current?.city || '',
         state: applicantAddr.stateId || existingDraft.addressDetails?.applicant?.current?.state || '',
-        pincode: applicantAddr.pincode || existingDraft.addressDetails?.applicant?.current?.pincode || '',
+        pincode: applicantAddr.pincode || applicantAddr.Pincode || applicantAddr.postalCode || applicantAddr.PostalCode || applicantAddr.pinCode || applicantAddr.PinCode || existingDraft.addressDetails?.applicant?.current?.pincode || existingDraft.addressDetails?.applicant?.pincode || '',
       },
     },
     coApplicants: coApplicantAddrs.map((coAddr, idx) => {
@@ -647,7 +647,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
         landmark: coAddr.landmark || draftCo.landmark || '',
         city: coAddr.cityId || draftCo.city || '',
         state: coAddr.stateId || draftCo.state || '',
-        pincode: coAddr.pincode || draftCo.pincode || '',
+        pincode: coAddr.pincode || coAddr.Pincode || coAddr.postalCode || coAddr.PostalCode || coAddr.pinCode || coAddr.PinCode || draftCo.pincode || '',
         mailingSameAsCurrent: coAddr.mailingAsCurrent !== undefined ? (coAddr.mailingAsCurrent ? 'Yes' : 'No') : (draftCo.mailingSameAsCurrent || 'No'),
         current: {
           addressLine1: coAddr.addressLine1 || draftCo.current?.addressLine1 || '',
@@ -655,7 +655,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
           landmark: coAddr.landmark || draftCo.current?.landmark || '',
           city: coAddr.cityId || draftCo.current?.city || '',
           state: coAddr.stateId || draftCo.current?.state || '',
-          pincode: coAddr.pincode || draftCo.current?.pincode || '',
+          pincode: coAddr.pincode || coAddr.Pincode || coAddr.postalCode || coAddr.PostalCode || coAddr.pinCode || coAddr.PinCode || draftCo.current?.pincode || draftCo.pincode || '',
         },
       };
     }),

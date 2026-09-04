@@ -132,10 +132,16 @@ export default function NewApplications({ initialFilter = 'All' }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState(initialFilter);
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(7);
   const [applications, setApplications] = useState(allNewApplications.map(mapBackendApplication));
   const [isLoading, setIsLoading] = useState(false);
   const [errorPopup, setErrorPopup] = useState('');
-  const pageSize = 10;
+  const pageSizeOptions = [7, 10, 15, 20];
+
+  const handlePageSizeChange = (newSize) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+  };
 
   const SearchIcon = iconMap['Search'];
   const FilterIcon = iconMap['Filter'];
@@ -257,7 +263,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
       ...row,
       sno: start + index + 1
     }));
-  }, [filteredData, currentPage]);
+  }, [filteredData, currentPage, pageSize]);
 
   const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
 
@@ -273,7 +279,14 @@ export default function NewApplications({ initialFilter = 'All' }) {
     {
       key: 'status',
       label: 'STATUS',
-      render: (row) => <StatusBadge status={row.status} />,
+      render: (row) => (
+        <div className="new-apps-status-cell">
+          <StatusBadge
+            status={row.status}
+            label={row.status === 'Approved' ? 'Submitted to HO' : undefined}
+          />
+        </div>
+      ),
     },
     {
       key: 'action',
@@ -285,13 +298,15 @@ export default function NewApplications({ initialFilter = 'All' }) {
         const applicationId = row.agentCustomerId || row.id;
 
         return (
-          <Button
-            size="sm"
-            variant="primary"
-            onClick={() => navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId))}
-          >
-            {btnText}
-          </Button>
+          <div className="new-apps-actions-cell">
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId))}
+            >
+              {btnText}
+            </Button>
+          </div>
         );
       },
     },
@@ -330,12 +345,12 @@ export default function NewApplications({ initialFilter = 'All' }) {
                 value={statusFilter}
                 onChange={(val) => setStatusFilter(val)}
                 options={[
-                  {value: "All", label: "All Statuses"},
-                  {value: "New", label: "New"},
-                  {value: "Pending", label: "Pending"},
-                  {value: "Under Review", label: "Under Review"},
-                  {value: "Approved", label: "Approved"},
-                  {value: "Returned", label: "Returned"}
+                  { value: 'All', label: 'All Statuses' },
+                  { value: 'New', label: 'New' },
+                  { value: 'Pending', label: 'Pending' },
+                  { value: 'Under Review', label: 'Under Review' },
+                  { value: 'Approved', label: 'Submitted to HO' },
+                  { value: 'Returned', label: 'Returned' },
                 ]}
                 placeholder={null}
               />
@@ -350,6 +365,8 @@ export default function NewApplications({ initialFilter = 'All' }) {
             totalPages={totalPages}
             totalRecords={filteredData.length}
             pageSize={pageSize}
+            pageSizeOptions={pageSizeOptions}
+            onPageSizeChange={handlePageSizeChange}
             onPageChange={(p) => setCurrentPage(p)}
           />
         </div>
