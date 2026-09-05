@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
@@ -8,6 +8,7 @@ import { getApplicantCount } from '../applicationWizard/flowUtils';
 import Button from '../../components/Button/Button';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { formatDateTime, toIstDateInput } from '../../utils/dateHelper';
+import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
 import './PdfView.css';
 import LogoImage from '../../assets/logo/Navbar_logo/Logo.jpg';
 
@@ -37,8 +38,10 @@ function isObsoleteMock(val) {
 export default function PdfView() {
   const { applicationId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { applications, getApplication, loadApplicationFromBackend } = useApplicationDraftStore();
   const appData = applications[applicationId] || getApplication(applicationId) || {};
+  const applicationDisplayId = buildApplicationDisplayId(appData, applicationId);
   const pdfRef = useRef();
 
   const [liveCustomer, setLiveCustomer] = useState(null);
@@ -611,8 +614,8 @@ export default function PdfView() {
         onClose={() => setErrorPopup(null)}
       />
       <div className="pdf-controls">
-        <Button variant="secondary" onClick={() => navigate(ROUTES.SUBMISSION_HISTORY)}>
-          Back
+        <Button variant="secondary" onClick={() => navigate(location.state?.closeTo || ROUTES.SUBMISSION_HISTORY)}>
+          {location.state?.closeTo ? 'Close PDF' : 'Back'}
         </Button>
         <Button onClick={handleDownloadPdf} disabled={isGeneratingPdf}>
           {isGeneratingPdf ? 'Generating PDF...' : 'Download PDF'}
@@ -630,7 +633,7 @@ export default function PdfView() {
               <h1>
                 LOAN APPLICATION FORM :-
                 <br />
-                {applicationId}
+                {applicationDisplayId}
               </h1>
               <p>(Please Read the Guidelines on the last page)</p>
             </div>

@@ -85,14 +85,14 @@ export function buildAllowedAgentIdSet(agents) {
 
 export function normalizeApplicationStatus(status, statusName = '') {
   const namedStatus = String(statusName || '').trim().toLowerCase();
-  if (namedStatus.includes('approved')) return 'Approved';
+  if (namedStatus.includes('approved') || namedStatus.includes('logged to ho')) return 'Logged to HO';
   if (namedStatus.includes('returned') || namedStatus.includes('reject')) return 'Returned';
   if (namedStatus.includes('review')) return 'Under Review';
   if (namedStatus.includes('pending') || namedStatus.includes('progress')) return 'Pending';
   if (namedStatus.includes('new') || namedStatus.includes('draft')) return 'New';
 
   const numericStatus = Number(status);
-  if (numericStatus === 2) return 'Approved';
+  if (numericStatus === 2) return 'Logged to HO';
   if (numericStatus === 1) return 'Pending';
   if (numericStatus === 0) return 'New';
 

@@ -33,6 +33,7 @@ function buildBankState(appData) {
     noOfActiveLoans: source.noOfActiveLoans || '',
     noOfActiveCreditCards: source.noOfActiveCreditCards || '',
     activeLoansDetails: Array.isArray(source.activeLoansDetails) ? source.activeLoansDetails : [],
+    activeCreditCardsDetails: Array.isArray(source.activeCreditCardsDetails) ? source.activeCreditCardsDetails : [],
   });
 
   return {
@@ -52,6 +53,7 @@ function BankCard({
   bank, 
   onChange, 
   onViewLoans,
+  onViewCreditCards,
   bankOptions = [],
   branchOptions = [],
   isLoadingMasters = false 
@@ -115,9 +117,10 @@ function BankCard({
           </div>
           <div className="aw-field">
             <label className="form-label">No. of Active Credit Cards</label>
-            <div className="aw-input-wrapper">
+            <div className="aw-input-wrapper" style={{ position: 'relative' }}>
               <CreditCard className="aw-input-icon" size={14} />
-              <input className="form-input aw-input aw-input--with-icon" type="number" min="0" step="1" value={bank.noOfActiveCreditCards} onChange={(e) => onChange('noOfActiveCreditCards', e.target.value)} />
+              <input className="form-input aw-input aw-input--with-icon" type="number" min="0" step="1" value={bank.noOfActiveCreditCards} onChange={(e) => onChange('noOfActiveCreditCards', e.target.value)} style={{ paddingRight: parseInt(bank.noOfActiveCreditCards) > 0 ? '55px' : '32px' }} />
+              {parseInt(bank.noOfActiveCreditCards) > 0 && <button type="button" onClick={onViewCreditCards} style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: '#e0f2fe', color: '#0369a1', border: '1px solid #7dd3fc', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>View</button>}
             </div>
           </div>
         </div>
@@ -135,6 +138,8 @@ export default function BankExistingLoans() {
   const [errorPopup, setErrorPopup] = useState(null);
   const [viewingLoansFor, setViewingLoansFor] = useState(null);
   const [transientLoans, setTransientLoans] = useState({});
+  const [viewingCardsFor, setViewingCardsFor] = useState(null);
+  const [transientCards, setTransientCards] = useState({});
   const [isLoadingMasters, setIsLoadingMasters] = useState(false);
   const [bankOptions, setBankOptions] = useState([]);
   const [branchOptions, setBranchOptions] = useState([]);
@@ -234,6 +239,29 @@ export default function BankExistingLoans() {
       currentLoans[loanIndex] = { ...currentLoans[loanIndex], [field]: value };
       return { ...prev, [key]: currentLoans };
     });
+  };
+
+  const updateCardDetail = (cardIndex, field, value) => {
+    if (!viewingCardsFor) return;
+    const key = viewingCardsFor.type === 'applicant'
+      ? `applicant-${viewingCardsFor.scope}`
+      : `coApplicant-${viewingCardsFor.index}-${viewingCardsFor.scope}`;
+    setTransientCards((prev) => {
+      const cards = prev[key] ? [...prev[key]] : [];
+      cards[cardIndex] = { ...(cards[cardIndex] || {}), [field]: value };
+      return { ...prev, [key]: cards };
+    });
+  };
+
+  const saveCardDetails = () => {
+    if (!viewingCardsFor) return;
+    const key = viewingCardsFor.type === 'applicant'
+      ? `applicant-${viewingCardsFor.scope}`
+      : `coApplicant-${viewingCardsFor.index}-${viewingCardsFor.scope}`;
+    const cards = transientCards[key] || [];
+    if (viewingCardsFor.type === 'applicant') updateApplicantBank(viewingCardsFor.scope, 'activeCreditCardsDetails', cards);
+    else updateCoApplicantBank(viewingCardsFor.index, viewingCardsFor.scope, 'activeCreditCardsDetails', cards);
+    setViewingCardsFor(null);
   };
 
   const handleContinue = async () => {
@@ -362,6 +390,7 @@ export default function BankExistingLoans() {
           bank={form.applicant.primaryBank}
           onChange={(field, value) => updateApplicantBank('primaryBank', field, value)}
           onViewLoans={() => setViewingLoansFor({ type: 'applicant', scope: 'primaryBank' })}
+          onViewCreditCards={() => setViewingCardsFor({ type: 'applicant', scope: 'primaryBank' })}
           bankOptions={bankOptions}
           branchOptions={branchOptions}
           isLoadingMasters={isLoadingMasters}
@@ -371,6 +400,7 @@ export default function BankExistingLoans() {
           bank={form.applicant.otherBank}
           onChange={(field, value) => updateApplicantBank('otherBank', field, value)}
           onViewLoans={() => setViewingLoansFor({ type: 'applicant', scope: 'otherBank' })}
+          onViewCreditCards={() => setViewingCardsFor({ type: 'applicant', scope: 'otherBank' })}
           bankOptions={bankOptions}
           branchOptions={branchOptions}
           isLoadingMasters={isLoadingMasters}
@@ -388,6 +418,7 @@ export default function BankExistingLoans() {
               bank={coApp.primaryBank}
               onChange={(field, value) => updateCoApplicantBank(index, 'primaryBank', field, value)}
               onViewLoans={() => setViewingLoansFor({ type: 'coApplicant', index, scope: 'primaryBank' })}
+              onViewCreditCards={() => setViewingCardsFor({ type: 'coApplicant', index, scope: 'primaryBank' })}
               bankOptions={bankOptions}
               branchOptions={branchOptions}
               isLoadingMasters={isLoadingMasters}
@@ -397,6 +428,7 @@ export default function BankExistingLoans() {
               bank={coApp.otherBank}
               onChange={(field, value) => updateCoApplicantBank(index, 'otherBank', field, value)}
               onViewLoans={() => setViewingLoansFor({ type: 'coApplicant', index, scope: 'otherBank' })}
+              onViewCreditCards={() => setViewingCardsFor({ type: 'coApplicant', index, scope: 'otherBank' })}
               bankOptions={bankOptions}
               branchOptions={branchOptions}
               isLoadingMasters={isLoadingMasters}
@@ -404,6 +436,26 @@ export default function BankExistingLoans() {
           </div>
         </div>
       ))}
+
+      <Modal show={viewingCardsFor !== null} onHide={() => setViewingCardsFor(null)} title={`${viewingCardsFor?.scope === 'primaryBank' ? 'Primary Bank' : 'Other Bank'} - Active Credit Card Details`} size="lg">
+        {viewingCardsFor && (() => {
+          const bank = viewingCardsFor.type === 'applicant' ? form.applicant[viewingCardsFor.scope] : form.coApplicants[viewingCardsFor.index][viewingCardsFor.scope];
+          const count = parseInt(bank.noOfActiveCreditCards) || 0;
+          const key = viewingCardsFor.type === 'applicant' ? `applicant-${viewingCardsFor.scope}` : `coApplicant-${viewingCardsFor.index}-${viewingCardsFor.scope}`;
+          const cards = transientCards[key] || bank.activeCreditCardsDetails || [];
+          return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+            {Array.from({ length: count }).map((_, i) => {
+              const card = cards[i] || {};
+              return <div key={i} style={{ padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a' }}>Credit Card {i + 1}</div>
+                <input className="form-input compact-input" placeholder="Card Name" value={card.cardName || ''} onChange={(e) => updateCardDetail(i, 'cardName', e.target.value)} />
+                <input className="form-input compact-input" placeholder="Card Number" inputMode="numeric" value={card.cardNumber || ''} onChange={(e) => updateCardDetail(i, 'cardNumber', e.target.value.replace(/\D/g, '').slice(0, 19))} />
+              </div>;
+            })}
+          </div>;
+        })()}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #edf2f7' }}><Button variant="primary" onClick={saveCardDetails}>Done</Button></div>
+      </Modal>
 
       <Modal show={viewingLoansFor !== null} onHide={() => setViewingLoansFor(null)} title={`${viewingLoansFor?.scope === 'primaryBank' ? 'Primary Bank' : 'Other Bank'} - Active Loans Details`} size="lg">
         {viewingLoansFor && (() => {

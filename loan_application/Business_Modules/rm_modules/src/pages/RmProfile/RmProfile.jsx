@@ -219,7 +219,7 @@ export default function RmProfile() {
               {CheckCircle2Icon && <CheckCircle2Icon size={20} />}
             </div>
             <div className="rm-kpi-value">{profile.stats.approved}</div>
-            <div className="rm-kpi-label">Approved</div>
+            <div className="rm-kpi-label">Logged to HO</div>
             <div className="rm-kpi-sub text-primary">{profile.stats.approvedPct}</div>
           </div>
 
@@ -299,7 +299,7 @@ export default function RmProfile() {
                   </div>
                   <div className="rm-stat-pill" style={{ background: '#eff6ff' }}>
                     <span className="rm-pill-val text-primary">{profile.stats.approved}</span>
-                    <span className="rm-pill-label">Approved ({profile.stats.approvedPct})</span>
+                    <span className="rm-pill-label">Logged to HO ({profile.stats.approvedPct})</span>
                   </div>
                   <div className="rm-stat-pill" style={{ background: '#fff7ed' }}>
                     <span className="rm-pill-val text-warning">{profile.stats.pending}</span>

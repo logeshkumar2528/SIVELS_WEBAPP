@@ -7,6 +7,7 @@ import {
   normalizeApplicationStatus,
   resolveApiArray,
 } from '../utils/rmContext';
+import { buildApplicationDisplayId } from '../pages/applicationWizard/flowUtils';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
@@ -44,6 +45,7 @@ const mapApplication = (item, index) => {
 
   return {
     id: String(applicationId),
+    displayId: buildApplicationDisplayId(item, applicationId),
     customerName: item.fullName || item.customerName || 'Unknown Customer',
     mobile: String(item.mobileNumber || item.mobile || ''),
     loanType: item.loanPurposeName || item.loanType || '',
@@ -63,7 +65,7 @@ const buildStatusSummary = (applications) => {
     { label: 'New', color: '#0284C7' },
     { label: 'Pending', color: '#F59E0B' },
     { label: 'Under Review', color: '#A855F7' },
-    { label: 'Approved', color: '#22C55E' },
+    { label: 'Logged to HO', color: '#22C55E' },
     { label: 'Returned', color: '#EF4444' },
   ];
 
@@ -107,7 +109,7 @@ const buildAgentPerformance = (applications, agents) => {
 
     record.totalCustomers += 1;
     if (normalizeText(app.status) === 'pending') record.pendingVerification += 1;
-    if (normalizeText(app.status) === 'approved') record.submitted += 1;
+    if (normalizeText(app.status) === 'logged to ho') record.submitted += 1;
     if (normalizeText(app.status) !== 'returned') record.activeCustomers += 1;
   });
 
@@ -196,7 +198,7 @@ export function useRmDashboardData() {
           newApplications: applications.filter((app) => normalizeText(app.status) === 'new').length,
           verification: applications.filter((app) => normalizeText(app.status) === 'pending').length,
           returned: applications.filter((app) => normalizeText(app.status) === 'returned').length,
-          approved: applications.filter((app) => normalizeText(app.status) === 'approved').length,
+          approved: applications.filter((app) => normalizeText(app.status) === 'logged to ho').length,
         };
 
         const approvedLoansCount = badgeCounts.approved;
@@ -211,7 +213,11 @@ export function useRmDashboardData() {
             const draftValues = Object.values(storedDrafts);
             inProgressCount = draftValues.filter((draft) => {
               if (!draft) return false;
-              const isApproved = normalizeText(draft.status) === 'approved' || draft.rawStatus === 2 || draft.rawStatus === '2';
+              const isApproved =
+                normalizeText(draft.status) === 'approved' ||
+                normalizeText(draft.status) === 'logged to ho' ||
+                draft.rawStatus === 2 ||
+                draft.rawStatus === '2';
               if (isApproved) return false;
               if (draft.agentId && allowedAgentIds.size > 0 && !allowedAgentIds.has(Number(draft.agentId))) {
                 return false;
@@ -255,7 +261,7 @@ export function useRmDashboardData() {
           },
           {
             id: 'approved-apps',
-            title: 'Login to HO',
+            title: 'Logged to HO',
             value: String(approvedLoansCount),
             description: 'Ready for HO Credit',
             trend: 'Live from API',

@@ -109,7 +109,9 @@ export default function SourcingDetails() {
 
   const handleContinue = () => {
     saveApplication(appId, buildSectionUpdate(appData, 'sourcing', form));
-    navigate(ROUTES.SCHEDULE_CHARGES.replace(':applicationId', appId));
+    navigate(ROUTES.APPLICATION_PDF_VIEW.replace(':applicationId', appId), {
+      state: { closeTo: ROUTES.SCHEDULE_CHARGES.replace(':applicationId', appId) },
+    });
   };
 
   const handleBack = () => {
@@ -156,7 +158,7 @@ export default function SourcingDetails() {
                 <input
                   className="form-input aw-input aw-input--with-icon"
                   value={isLoading ? 'Loading...' : form.sourcedBy}
-                  onChange={(e) => persist({ ...form, sourcedBy: e.target.value })}
+                  readOnly
                   placeholder="Enter RM Name"
                 />
               </div>
@@ -168,7 +170,7 @@ export default function SourcingDetails() {
                 <input
                   className="form-input aw-input aw-input--with-icon"
                   value={isLoading ? 'Loading...' : form.employeeId}
-                  onChange={(e) => persist({ ...form, employeeId: e.target.value })}
+                  readOnly
                   placeholder="Enter Employee ID (e.g. RM001)"
                 />
               </div>

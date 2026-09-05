@@ -31,7 +31,7 @@ export const NAV_ITEMS = [
   },
   {
     id:       'approved-applications',
-    label:    'Approved Applications',
+    label:    'Logged to HO',
     icon:     'CheckCircle',
     route:    ROUTES.APPROVED_APPLICATIONS,
     badgeKey: null,
@@ -42,14 +42,6 @@ export const NAV_ITEMS = [
     label:    'Returned Applications',
     icon:     'RotateCcw',
     route:    ROUTES.RETURNED_APPLICATIONS,
-    badgeKey: null,
-    section:  'APPLICATIONS',
-  },
-  {
-    id:       'field-verification',
-    label:    'Field Verification',
-    icon:     'MapPin',
-    route:    ROUTES.FIELD_VERIFICATION,
     badgeKey: null,
     section:  'APPLICATIONS',
   },

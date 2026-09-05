@@ -17,6 +17,7 @@ import {
   resolveApiArray,
 } from '../../utils/rmContext';
 import './NewApplications.css';
+import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
@@ -34,6 +35,7 @@ const mapBackendApplication = (item, index, agentsById = {}) => {
   const normalizedStatus = normalizeApplicationStatus(item.status, item.statusName || item.StatusName);
   return {
     id: String(applicationId),
+    displayId: buildApplicationDisplayId(item, applicationId),
     customerName: item.fullName || item.customerName || '',
     mobile: normalizeMobile(item.mobileNumber || item.mobile || ''),
     loanType: item.loanPurposeName || item.loanType || '',
@@ -169,7 +171,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
 
   const columns = [
     { key: 'sno', label: 'S.NO' },
-    { key: 'id', label: 'APP ID' },
+    { key: 'displayId', label: 'APP ID' },
     { key: 'customerName', label: 'CUSTOMER NAME' },
     { key: 'mobile', label: 'MOBILE' },
     { key: 'loanType', label: 'LOAN PURPOSE' },
@@ -183,7 +185,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
         <div className="new-apps-status-cell">
           <StatusBadge
             status={row.status}
-            label={row.status === 'Approved' ? 'Submitted to HO' : undefined}
+            label={row.status === 'Logged to HO' ? 'Logged to HO' : undefined}
           />
         </div>
       ),
@@ -193,7 +195,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
       label: 'ACTIONS',
       render: (row) => {
         let btnText = 'Verify Now';
-        if (row.status === 'Approved') btnText = 'View Details';
+        if (row.status === 'Logged to HO') btnText = 'View Details';
         if (row.status === 'Returned') btnText = 'Review Return';
         const applicationId = row.agentCustomerId || row.id;
 
@@ -249,7 +251,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
                   { value: 'New', label: 'New' },
                   { value: 'Pending', label: 'Pending' },
                   { value: 'Under Review', label: 'Under Review' },
-                  { value: 'Approved', label: 'Submitted to HO' },
+                  { value: 'Logged to HO', label: 'Logged to HO' },
                   { value: 'Returned', label: 'Returned' },
                 ]}
                 placeholder={null}

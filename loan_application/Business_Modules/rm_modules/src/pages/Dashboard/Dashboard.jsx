@@ -74,7 +74,7 @@ export default function Dashboard() {
     },
     {
       id: 'login-to-ho',
-      title: 'Login to HO',
+      title: 'Logged to HO',
       value: String(approvedLoansCount),
       description: 'Ready for HO Credit',
       variant: 'success',
@@ -111,7 +111,7 @@ export default function Dashboard() {
   ];
 
   const columns = [
-    { key: 'id', label: 'APP ID' },
+    { key: 'displayId', label: 'APP ID' },
     { key: 'customerName', label: 'CUSTOMER' },
     { key: 'mobile', label: 'MOBILE' },
     { key: 'loanType', label: 'PURPOSE' },

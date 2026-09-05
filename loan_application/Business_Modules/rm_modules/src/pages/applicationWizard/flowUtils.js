@@ -280,6 +280,11 @@ export function createAddressTemplate(overrides = {}) {
 export function resolveApplicantName(appData = {}) {
   if (!appData) return 'Applicant';
 
+  const applicantDisplayName = String(appData.applicantDisplayName || '').trim();
+  if (applicantDisplayName && applicantDisplayName !== 'Applicant') {
+    return applicantDisplayName;
+  }
+
   // Priority A: Structured Personal Information applicant name
   const personalApplicant =
     appData.registration?.personalInformation?.applicant ||
@@ -322,3 +327,18 @@ export function resolveApplicantName(appData = {}) {
   return 'Applicant';
 }
 
+export function buildApplicationDisplayId(record = {}, fallbackId = '') {
+  const applicant = record.registration?.personalInformation?.applicant ||
+    record.sections?.personalInformation?.applicant || record.personalInformation?.applicant ||
+    record.applicant || record.Applicant || {};
+  const firstName = String(applicant.firstName || applicant.FirstName || record.firstName || record.FirstName || record.fullName || record.FullName || record.customerName || record.CustomerName || '')
+    .trim().split(/\s+/)[0] || '';
+  const initials = firstName.slice(0, 2).toUpperCase().padEnd(2, 'X');
+  const applicationDate = record.applicationDate || record.ApplicationDate || record.createdDate || record.CreatedDate ||
+    record.createdAt || record.CreatedAt || record.submittedAt || record.SubmittedAt || '';
+  const dateMatch = String(applicationDate).match(/^(?:\d{4}[-/]\d{2}[-/](\d{2})|\d{2}[-/]\d{2}[-/]\d{4})/);
+  const applicationDay = dateMatch ? dateMatch[1] || String(applicationDate).slice(0, 2) : '00';
+  const mobile = String(applicant.mobileNo || applicant.MobileNo || applicant.mobileNumber || applicant.MobileNumber || record.mobileNumber || record.MobileNumber || record.mobile || record.Mobile || '').replace(/\D/g, '');
+  const mobileTail = mobile.slice(-3).padStart(3, '0');
+  return `${initials}-${applicationDay}-${mobileTail}`;
+}

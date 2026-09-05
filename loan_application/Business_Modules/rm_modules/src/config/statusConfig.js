@@ -20,7 +20,11 @@ export const STATUS_CONFIG = {
     variant: 'returned',
   },
   'Approved': {
-    label: 'Approved',
+    label: 'Logged to HO',
+    variant: 'approved',
+  },
+  'Logged to HO': {
+    label: 'Logged to HO',
     variant: 'approved',
   },
   'Active': {
