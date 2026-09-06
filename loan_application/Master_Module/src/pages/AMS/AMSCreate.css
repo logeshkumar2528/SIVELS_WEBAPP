@@ -1,0 +1,18 @@
+.ams-create-page .rm-hero-icon{background:linear-gradient(145deg,#0f7a4c,#24a148)}
+.ams-create-page .rm-hero p{max-width:760px}
+.ams-district-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px}
+.ams-district-toolbar strong{color:#172033;font-size:14px}
+.ams-district-actions{display:flex;gap:10px;flex-wrap:wrap}
+.ams-chip-button{min-height:36px;padding:0 12px;border:1px solid #d5e1d8;border-radius:999px;background:#f8fcf9;color:#14532d;font-size:12px;font-weight:700;transition:.18s ease}
+.ams-chip-button:hover{border-color:#24a148;background:#eef9f1}
+.ams-district-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.ams-district-card{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:48px;padding:0 14px;border:1px solid #dbe3ef;border-radius:10px;background:#fbfdff;color:#172033;font-size:13px;font-weight:700;text-align:left;transition:.18s ease}
+.ams-district-card:hover{border-color:#9fd4b1;transform:translateY(-1px)}
+.ams-district-card.is-selected{border-color:#24a148;background:#f2fbf5;box-shadow:0 0 0 3px #24a14814;color:#14532d}
+.ams-district-card svg{color:#94a3b8}.ams-district-card.is-selected svg{color:#24a148}
+.ams-selection-summary{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.ams-summary-pill{display:inline-flex;align-items:center;min-height:30px;padding:0 10px;border-radius:999px;background:#defbe6;color:#14532d;font-size:12px;font-weight:700}
+.ams-summary-empty{color:#94a3b8;font-size:12px}.ams-create-page .masters-btn-primary:disabled{opacity:.65;cursor:not-allowed}
+@media(max-width:1100px){.ams-district-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:800px){.ams-district-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.ams-district-toolbar{align-items:flex-start;flex-direction:column}.ams-district-grid{grid-template-columns:1fr}}
