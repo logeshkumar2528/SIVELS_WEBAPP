@@ -74,7 +74,7 @@ export default function Dashboard() {
     },
     {
       id: 'login-to-ho',
-      title: 'Login to HO',
+      title: 'Logged to HO',
       value: String(approvedLoansCount),
       description: 'Ready for HO Credit',
       variant: 'success',
@@ -120,7 +120,12 @@ export default function Dashboard() {
     {
       key: 'status',
       label: 'STATUS',
-      render: (row) => <StatusBadge status={row.status} />,
+      render: (row) => (
+        <StatusBadge
+          status={row.status}
+          label={row.status === 'Approved' ? 'Logged to HO' : undefined}
+        />
+      ),
     },
     {
       key: 'action',

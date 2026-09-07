@@ -255,7 +255,7 @@ export function useRmDashboardData() {
           },
           {
             id: 'approved-apps',
-            title: 'Login to HO',
+            title: 'Logged to HO',
             value: String(approvedLoansCount),
             description: 'Ready for HO Credit',
             trend: 'Live from API',

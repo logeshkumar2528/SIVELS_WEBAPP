@@ -64,7 +64,7 @@
 
 .rm-dashboard-recent-table .data-table-th:nth-child(2),
 .rm-dashboard-recent-table .data-table-cell:nth-child(2) {
-  width: 16%;
+  width: 15%;
 }
 
 .rm-dashboard-recent-table .data-table-th:nth-child(3),
@@ -84,18 +84,18 @@
 
 .rm-dashboard-recent-table .data-table-th:nth-child(6),
 .rm-dashboard-recent-table .data-table-cell:nth-child(6) {
-  width: 12%;
+  width: 11%;
 }
 
 .rm-dashboard-recent-table .data-table-th:nth-child(7),
 .rm-dashboard-recent-table .data-table-cell:nth-child(7) {
-  width: 12%;
+  width: 15%;
   text-align: center;
 }
 
 .rm-dashboard-recent-table .data-table-th:nth-child(8),
 .rm-dashboard-recent-table .data-table-cell:nth-child(8) {
-  width: 14%;
+  width: 13%;
   text-align: center;
 }
 
