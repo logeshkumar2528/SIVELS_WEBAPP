@@ -378,6 +378,12 @@ export function Dashboard() {
     navigate(`/edit-relationship-manager/${person.id}`);
   };
 
+  const openEditAms = (ams) => {
+    const targetId = ams?.id || ams?.amsId || ams?.AmsId;
+    if (!targetId) return;
+    navigate(`/edit-ams/${targetId}`);
+  };
+
   const handleOpenAmsDetails = async (ams) => {
     setSelectedAms(ams);
     setLoadingAmsModal(true);
@@ -757,6 +763,13 @@ export function Dashboard() {
                       onClick={() => handleOpenAmsDetails(ams)}
                     >
                       <Eye size={14} /> View
+                    </button>
+                    <button
+                      type="button"
+                      className="details-button edit-button"
+                      onClick={() => openEditAms(ams)}
+                    >
+                      <Pencil size={14} /> Edit
                     </button>
                   </div>
                 );
@@ -1190,6 +1203,9 @@ export function Dashboard() {
             <div className="person-dialog-actions">
               <button className="masters-btn-secondary" onClick={() => setSelectedAms(null)}>
                 Close
+              </button>
+              <button className="primary-button" onClick={() => openEditAms(selectedAms)}>
+                <Pencil size={16} /> Edit AMS
               </button>
             </div>
           </section>
