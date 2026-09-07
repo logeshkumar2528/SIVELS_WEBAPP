@@ -36,6 +36,8 @@ export function IndustryTypeDeleteConfirm({ isOpen, onClose, onSuccess, record }
 
   if (!record) return null;
 
+  const displayName = record.industryType || record.industryTypeName || record.IndustryTypeName || record.industryCode || 'this record';
+
   return (
     <MasterModal 
       isOpen={isOpen} 
@@ -45,7 +47,7 @@ export function IndustryTypeDeleteConfirm({ isOpen, onClose, onSuccess, record }
       <div style={{ padding: 'var(--spacing-md) 0' }}>
         <p style={{ marginBottom: 'var(--spacing-md)' }}>
           Are you sure you want to delete <br />
-          <strong>"{record.industryTypeName || record.IndustryTypeName}"</strong>?
+          <strong>"{displayName}"</strong>?
         </p>
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>
           This action cannot be undone.

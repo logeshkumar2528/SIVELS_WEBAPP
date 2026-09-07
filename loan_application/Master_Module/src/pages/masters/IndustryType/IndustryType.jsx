@@ -12,8 +12,16 @@ import { formatDateTime } from '../../../utils/dateHelper';
 import './IndustryType.css';
 
 const COLUMNS = [
-  { key: 'industryTypeCode', label: 'Industry Code' },
-  { key: 'industryTypeName', label: 'Industry Type Name' },
+  {
+    key: 'industryCode',
+    label: 'Industry Code',
+    render: (row) => row.industryCode || row.industryTypeCode || '-'
+  },
+  {
+    key: 'industryType',
+    label: 'Industry Type',
+    render: (row) => row.industryType || row.industryTypeName || '-'
+  },
   { 
     key: 'createdAt', 
     label: 'Created Date',
@@ -60,10 +68,16 @@ export function IndustryType() {
     setIsError(false);
     try {
       const response = await getIndustryTypes();
-      const records = Array.isArray(response) ? response : (response?.data || response?.value || response?.result || []);
+      console.log("Industry Type API response:", response?.data !== undefined ? response.data : response);
+      
+      const rawData = response?.data !== undefined ? response.data : response;
+      const records = Array.isArray(rawData) 
+        ? rawData 
+        : (rawData?.value ?? rawData?.items ?? rawData?.data ?? rawData?.result ?? []);
+      
       setData(records);
     } catch (error) {
-      console.error('Failed to fetch industry types:', error);
+      console.error("Industry Type API error:", error);
       setIsError(true);
     } finally {
       setIsLoading(false);
@@ -80,10 +94,11 @@ export function IndustryType() {
     
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
-      result = result.filter(item => 
-        item.industryTypeName?.toLowerCase().includes(lowerSearch) ||
-        item.industryTypeCode?.toLowerCase().includes(lowerSearch)
-      );
+      result = result.filter(item => {
+        const typeName = String(item.industryType || item.industryTypeName || '').toLowerCase();
+        const code = String(item.industryCode || item.industryTypeCode || '').toLowerCase();
+        return typeName.includes(lowerSearch) || code.includes(lowerSearch);
+      });
     }
 
     if (filterStatus !== 'All') {

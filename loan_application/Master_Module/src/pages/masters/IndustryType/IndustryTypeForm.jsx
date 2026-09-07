@@ -34,8 +34,8 @@ export function IndustryTypeForm({ isOpen, onClose, onSuccess, initialData }) {
           const response = await getIndustryTypeById(id);
           const record = response?.data || response?.value || response;
           if (isMounted) {
-            setIndustryTypeName(record.industryTypeName || record.IndustryTypeName || '');
-            setIndustryTypeCode(record.industryTypeCode || record.IndustryTypeCode || '');
+            setIndustryTypeName(record.industryType || record.industryTypeName || record.IndustryTypeName || '');
+            setIndustryTypeCode(record.industryCode || record.industryTypeCode || record.IndustryTypeCode || '');
             setIsActive(record.isActive !== false);
           }
         } catch (err) {
@@ -86,8 +86,10 @@ export function IndustryTypeForm({ isOpen, onClose, onSuccess, initialData }) {
       if (isEdit) {
         const payload = {
           industryTypeId: recordId,
-          industryTypeName: trimmedName,
+          industryCode: trimmedCode,
           industryTypeCode: trimmedCode,
+          industryType: trimmedName,
+          industryTypeName: trimmedName,
           modifiedBy: getCurrentUserId(),
           isActive
         };
@@ -95,8 +97,10 @@ export function IndustryTypeForm({ isOpen, onClose, onSuccess, initialData }) {
         toast.success('Updated successfully');
       } else {
         const payload = {
-          industryTypeName: trimmedName,
+          industryCode: trimmedCode,
           industryTypeCode: trimmedCode,
+          industryType: trimmedName,
+          industryTypeName: trimmedName,
           createdBy: getCurrentUserId(),
           isActive
         };
