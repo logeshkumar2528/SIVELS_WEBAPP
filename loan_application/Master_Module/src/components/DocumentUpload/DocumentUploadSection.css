@@ -1,0 +1,440 @@
+/* ==========================================================================
+   Master Module - Document Upload Section & Cards
+   ========================================================================== */
+
+.doc-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .doc-upload-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .doc-upload-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.doc-upload-card-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.doc-upload-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.doc-upload-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.doc-required-star {
+  color: #dc2626;
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+.doc-upload-subtitle {
+  font-size: 11.5px;
+  color: #475569;
+}
+
+.doc-upload-note {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.doc-hidden-input {
+  display: none;
+}
+
+/* ==========================================================================
+   EMPTY STATE: Dropzone
+   ========================================================================== */
+.doc-empty-dropzone {
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background-color: #fafbfb;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 105px;
+  box-sizing: border-box;
+}
+
+.doc-empty-dropzone:hover {
+  border-color: #0f7a4c;
+  background-color: #f0fdf4;
+  box-shadow: 0 2px 8px rgba(15, 122, 76, 0.06);
+}
+
+.doc-icon-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #eaf5ee;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+}
+
+.doc-empty-dropzone:hover .doc-icon-circle {
+  transform: scale(1.06);
+  background-color: #dcfce7;
+}
+
+.doc-drop-icon {
+  color: #0f7a4c;
+}
+
+.doc-upload-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.doc-empty-dropzone:hover .doc-upload-action-btn {
+  border-color: #0f7a4c;
+  color: #0f7a4c;
+  background-color: #ffffff;
+}
+
+/* ==========================================================================
+   UPLOADED STATE: Compact Horizontal Layout (Reference Design)
+   ========================================================================== */
+.doc-uploaded-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background-color: #f8fafc;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  min-height: 76px;
+  box-sizing: border-box;
+  animation: docFadeIn 0.25s ease-out;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.doc-uploaded-box:hover {
+  border-color: #86efac;
+  box-shadow: 0 2px 6px rgba(15, 122, 76, 0.08);
+}
+
+@keyframes docFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Thumbnail on Left */
+.doc-uploaded-left {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.doc-pdf-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background-color: #fee2e2;
+  border: 1px solid #fca5a5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.doc-pdf-icon {
+  color: #dc2626;
+}
+
+.doc-pdf-badge-text {
+  font-size: 8.5px;
+  font-weight: 800;
+  color: #b91c1c;
+  line-height: 1;
+  letter-spacing: 0.04em;
+}
+
+.doc-img-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid #cbd5e1;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.doc-img-thumb:hover {
+  transform: scale(1.05);
+}
+
+.doc-profile-thumb {
+  border-radius: 50%;
+  border: 2px solid #0f7a4c;
+}
+
+/* Info Column in Center */
+.doc-uploaded-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-filename-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.doc-success-check {
+  color: #16a34a;
+  flex-shrink: 0;
+}
+
+.doc-filename {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 170px;
+}
+
+.doc-meta-text {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* Actions Column on Right */
+.doc-uploaded-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.doc-btn-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+  background-color: #ffffff;
+}
+
+.doc-btn-view {
+  border-color: #cbd5e1;
+  color: #0f7a4c;
+}
+
+.doc-btn-view:hover {
+  background-color: #eaf5ee;
+  border-color: #0f7a4c;
+  color: #0a5c36;
+}
+
+.doc-btn-remove {
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+.doc-btn-remove:hover {
+  background-color: #fee2e2;
+  border-color: #f87171;
+  color: #b91c1c;
+}
+
+/* ==========================================================================
+   DOCUMENT PREVIEW MODAL
+   ========================================================================== */
+.doc-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1050;
+  padding: 16px;
+  animation: docBackdropFade 0.2s ease-out;
+}
+
+@keyframes docBackdropFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.doc-modal-dialog {
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+  width: 100%;
+  max-width: 720px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: docDialogZoom 0.2s ease-out;
+}
+
+@keyframes docDialogZoom {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.doc-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  background-color: #f8fafc;
+}
+
+.doc-modal-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.doc-modal-close-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.doc-modal-close-btn:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+.doc-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+}
+
+.doc-modal-pdf-container {
+  width: 100%;
+  height: 500px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.doc-modal-iframe {
+  width: 100%;
+  height: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+}
+
+.doc-modal-fallback-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background-color: #f1f5f9;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.doc-external-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #0f7a4c;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.doc-external-link:hover {
+  text-decoration: underline;
+}
+
+.doc-modal-img-container {
+  max-width: 100%;
+  max-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.doc-modal-img {
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}

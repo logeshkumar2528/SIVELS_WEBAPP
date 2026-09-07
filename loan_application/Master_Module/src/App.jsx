@@ -35,7 +35,7 @@ import { Caste } from './pages/masters/Caste/Caste';
 import { LoanProductCollateral } from './pages/masters/LoanProductCollateral/LoanProductCollateral';
 import { RateOfInterest } from './pages/masters/RateOfInterest/RateOfInterest';
 import { CompanyConfiguration } from './features/company/CompanyConfiguration';
-import AddAgent from '../../Business_Modules/rm_modules/src/pages/AddAgent/AddAgent';
+import AgentCreate from './pages/Agent/AgentCreate';
 import RelationshipManagerCreate from './pages/RelationshipManager/RelationshipManagerCreate';
 import CreateUser from './pages/CreateUser/CreateUser';
 import AMSDashboard from './pages/AMSDashboard/AMSDashboard';
@@ -68,8 +68,8 @@ function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="ams-dashboard" element={<AMSDashboard />} />
           <Route path="create-user" element={<CreateUser />} />
-          <Route path="add-agent" element={<AddAgent onSuccessRedirect="/dashboard" />} />
-          <Route path="edit-agent/:agentId" element={<AddAgent onSuccessRedirect="/dashboard" />} />
+          <Route path="add-agent" element={<AgentCreate onSuccessRedirect="/dashboard" />} />
+          <Route path="edit-agent/:agentId" element={<AgentCreate onSuccessRedirect="/dashboard" />} />
           <Route path="create-relationship-manager" element={<RelationshipManagerCreate />} />
           <Route path="edit-relationship-manager/:rmId" element={<RelationshipManagerCreate />} />
           <Route path="company" element={<CompanyConfiguration />} />

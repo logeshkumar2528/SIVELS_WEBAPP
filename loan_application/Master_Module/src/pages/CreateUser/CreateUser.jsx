@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowLeft, BriefcaseBusiness, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import AddAgent from '../../../../Business_Modules/rm_modules/src/pages/AddAgent/AddAgent';
+import AgentCreate from '../Agent/AgentCreate';
 import RelationshipManagerCreate from '../RelationshipManager/RelationshipManagerCreate';
 import AMSCreate from '../AMS/AMSCreate';
 import './CreateUser.css';
@@ -55,7 +55,7 @@ export default function CreateUser() {
       );
     }
 
-    if (userType === 'agent') return <AddAgent onSuccessRedirect="/dashboard" />;
+    if (userType === 'agent') return <AgentCreate onSuccessRedirect="/dashboard" />;
     if (userType === 'rm') return <RelationshipManagerCreate />;
     return <AMSCreate />;
   };
