@@ -57,14 +57,13 @@ function getCustomerInitials(name = '') {
 }
 
 function buildApplicationDisplayId(record = {}, fallbackId = '') {
-  const initials = getCustomerInitials(record.fullName || record.customerName || '');
-  const mobile = String(record.mobileNumber || record.mobile || '').replace(/\D/g, '');
-  const mobileTail = mobile.slice(-2).padStart(2, '0');
-  const serial = String(record.agentCustomerId || record.customerId || fallbackId || '').replace(/\D/g, '');
-  const serialTail = serial ? serial : String(fallbackId || '').replace(/\D/g, '');
-
-  const prefix = initials ? `${initials}${mobileTail}` : `APP${mobileTail}`;
-  return serialTail ? `${prefix}-${serialTail}` : prefix;
+  const applicant = record.registration?.personalInformation?.applicant || record.sections?.personalInformation?.applicant || {};
+  const firstName = String(applicant.firstName || record.firstName || record.fullName || record.customerName || '').trim().split(/\s+/)[0] || '';
+  const initials = firstName.slice(0, 2).toUpperCase().padEnd(2, 'X');
+  const dob = String(applicant.dateOfBirth || applicant.dob || record.dateOfBirth || record.dob || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const formattedDob = dob ? `${dob[3]}${dob[2]}${dob[1]}` : '00000000';
+  const mobile = String(applicant.mobileNo || record.mobileNumber || record.mobile || '').replace(/\D/g, '');
+  return `${initials}-${formattedDob}-${mobile.slice(-3).padStart(3, '0')}`;
 }
 
 function isFieldAgentChannel(option) {
@@ -81,13 +80,13 @@ function isFieldAgentChannel(option) {
 
 function normalizeApplicationStatus(status, statusName = '') {
   const namedStatus = String(statusName || '').trim().toLowerCase();
-  if (namedStatus.includes('approved')) return 'Approved';
+  if (namedStatus.includes('approved') || namedStatus.includes('logged to ho')) return 'Logged to HO';
   if (namedStatus.includes('pending')) return 'Pending';
   if (namedStatus.includes('returned')) return 'Returned';
   if (namedStatus.includes('review')) return 'Under Review';
 
   const numericStatus = Number(status);
-  if (numericStatus === 2) return 'Approved';
+  if (numericStatus === 2) return 'Logged to HO';
   if (numericStatus === 1) return 'Pending';
   return 'New';
 }
@@ -817,4 +816,3 @@ export default function ApplicationDetails() {
     </div>
   );
 }
-

@@ -15,6 +15,7 @@ import {
   normalizeApplicationStatus,
   resolveApiArray,
 } from '../../utils/rmContext';
+import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
 import './SubmissionHistory.css';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
@@ -32,7 +33,8 @@ function mapSubmission(record, agentsById) {
   const agent = agentsById[String(agentId)] || {};
   const submittedRaw = record.submittedAt || record.SubmittedAt || record.createdAt || record.CreatedAt || record.createdDate || '';
   return {
-    id: String(id),
+    internalId: String(id),
+    id: buildApplicationDisplayId(record, id),
     customerName: record.fullName || record.FullName || record.customerName || 'Unknown',
     mobile: record.mobileNumber || record.MobileNumber || record.mobile || 'N/A',
     loanType: record.loanPurposeName || record.LoanPurposeName || record.loanType || 'N/A',
@@ -161,15 +163,6 @@ export default function SubmissionHistory() {
       ),
     },
     {
-      key: 'branch',
-      label: 'BRANCH',
-      render: (row) => (
-        <div className="sh-cell">
-          <span className="sh-cell__primary" title={row.branch}>{row.branch}</span>
-        </div>
-      ),
-    },
-    {
       key: 'agentName',
       label: 'FIELD AGENT',
       render: (row) => (
@@ -201,14 +194,14 @@ export default function SubmissionHistory() {
           <Button
             size="sm"
             variant="secondary"
-            onClick={() => navigate(ROUTES.APPLICATION_PDF_VIEW.replace(':applicationId', row.id))}
+            onClick={() => navigate(ROUTES.APPLICATION_PDF_VIEW.replace(':applicationId', row.internalId))}
           >
             View
           </Button>
           <Button
             size="sm"
             variant="outline"
-            onClick={() => navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', row.id))}
+            onClick={() => navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', row.internalId))}
           >
             Edit
           </Button>

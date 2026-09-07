@@ -4,7 +4,7 @@ import WizardProgress from '../WizardProgress/WizardProgress';
 import iconMap from '../../config/iconMap';
 import { useLocation, matchPath } from 'react-router-dom';
 import { useMemo, useEffect, useState } from 'react';
-import { resolveApplicantName } from '../../pages/applicationWizard/flowUtils';
+import { buildApplicationDisplayId, resolveApplicantName } from '../../pages/applicationWizard/flowUtils';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import { formatDateTime } from '../../utils/dateHelper';
 import './WizardSectionLayout.css';
@@ -49,6 +49,7 @@ export default function WizardSectionLayout({
   const { saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
 
   const applicantName = useMemo(() => resolveApplicantName(appData), [appData]);
+  const applicationDisplayId = useMemo(() => buildApplicationDisplayId(appData, appId), [appData, appId]);
   const [isHydrating, setIsHydrating] = useState(() => (!appData?._isHydrated || applicantName === 'Applicant') && Boolean(appId));
 
   // Safe backend hydration for refresh/direct navigation if applicant data is missing or not hydrated
@@ -122,7 +123,7 @@ export default function WizardSectionLayout({
               <span className="ad-meta-label">App ID</span>
               <div className="ad-meta-value-group">
                 {iconMap['FileText'] && (() => { const FileText = iconMap['FileText']; return <FileText size={14} />; })()}
-                <span className="ad-meta-value">{appData.applicationNumber || appId}</span>
+                <span className="ad-meta-value">{applicationDisplayId}</span>
               </div>
             </div>
             <div className="ad-meta-divider" />

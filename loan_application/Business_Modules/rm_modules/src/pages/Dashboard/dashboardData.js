@@ -19,7 +19,7 @@ export const dashboardStats = [
   },
   {
     id: 'approved-apps',
-    title: 'Approved Loans',
+    title: 'Logged to HO',
     value: '42',
     description: 'This Month',
     trend: '+18% vs last month',
@@ -76,7 +76,7 @@ export const recentApplicationsData = [
     amount: '₹2,00,000',
     agentName: 'Saravanan M',
     createdDate: '03 Jun 2025',
-    status: 'Approved',
+    status: 'Logged to HO',
   },
   {
     id: 'APP-2024-005',
@@ -102,6 +102,6 @@ export const statusSummaryData = [
   { label: 'New', value: 35, percent: 19, color: '#0284C7' },
   { label: 'Pending Verification', value: 28, percent: 15, color: '#F59E0B' },
   { label: 'Under Review', value: 45, percent: 25, color: '#A855F7' },
-  { label: 'Approved', value: 58, percent: 32, color: '#22C55E' },
+  { label: 'Logged to HO', value: 58, percent: 32, color: '#22C55E' },
   { label: 'Returned', value: 16, percent: 9, color: '#EF4444' },
 ];

@@ -120,6 +120,7 @@ export default function AddAgent({ onSuccessRedirect, agentId: agentIdProp } = {
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [errorDetails, setErrorDetails] = useState(null);
+  const [createdAgentId, setCreatedAgentId] = useState(null);
 
   useEffect(() => {
     if (currentUser && !isEditMode) {
@@ -376,8 +377,29 @@ export default function AddAgent({ onSuccessRedirect, agentId: agentIdProp } = {
     }
 
     // PAN card is mandatory when creating a new agent
-    if (!isEditMode && !panFile) {
+    if (!isEditMode && !createdAgentId && !panFile) {
       return 'Please upload the PAN card. PAN is mandatory for agent creation.';
+    }
+
+    if (panFile) {
+      const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png'];
+      const fileName = panFile.name.toLowerCase();
+      const isAllowedExt = allowedExtensions.some((ext) => fileName.endsWith(ext));
+      const isAllowedMime = [
+        'application/pdf',
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+      ].includes(panFile.type?.toLowerCase());
+
+      if (!isAllowedExt && !isAllowedMime) {
+        return 'Please upload PAN card in PDF, JPG, JPEG, or PNG format only.';
+      }
+
+      const maxSizeBytes = 10 * 1024 * 1024; // 10MB
+      if (panFile.size > maxSizeBytes) {
+        return 'PAN card file size must not exceed 10MB.';
+      }
     }
 
     return '';
@@ -402,33 +424,105 @@ export default function AddAgent({ onSuccessRedirect, agentId: agentIdProp } = {
     setErrorDetails(null);
 
     try {
-      const payload = buildPayload();
-      const endpoint = isEditMode
-        ? `${API_BASE}/AgentMaster/${editAgentId}`
-        : `${API_BASE}/AgentMaster`;
-      const response = await fetch(endpoint, {
-        method: isEditMode ? 'PUT' : 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
-      });
+      let targetAgentId = isEditMode ? Number(editAgentId) : createdAgentId;
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorDetailsFromApi = errorText;
-        try {
-          errorDetailsFromApi = errorText ? JSON.parse(errorText) : null;
-        } catch {
-          // Keep plain-text API errors as-is.
+      // Step 1: Create or update agent if not already created
+      if (!targetAgentId || isEditMode) {
+        const payload = buildPayload();
+        const endpoint = isEditMode
+          ? `${API_BASE}/AgentMaster/${editAgentId}`
+          : `${API_BASE}/AgentMaster`;
+        const response = await fetch(endpoint, {
+          method: isEditMode ? 'PUT' : 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          let errorDetailsFromApi = errorText;
+          try {
+            errorDetailsFromApi = errorText ? JSON.parse(errorText) : null;
+          } catch {
+            // Keep plain-text API errors as-is.
+          }
+          const error = new Error(
+            errorDetailsFromApi?.message ||
+            errorDetailsFromApi?.Message ||
+            errorDetailsFromApi?.title ||
+            errorText ||
+            `Failed to save agent (${response.status})`
+          );
+          error.details = errorDetailsFromApi;
+          throw error;
         }
-        const error = new Error(
-          errorDetailsFromApi?.message ||
-          errorDetailsFromApi?.Message ||
-          errorDetailsFromApi?.title ||
-          errorText ||
-          `Failed to save agent (${response.status})`
-        );
-        error.details = errorDetailsFromApi;
-        throw error;
+
+        let responseData = null;
+        try {
+          responseData = await response.json();
+        } catch {
+          // If response body is empty or non-JSON
+        }
+
+        console.log('AgentMaster response:', responseData);
+
+        const extractedId =
+          responseData?.agentId ||
+          responseData?.AgentId ||
+          responseData?.id ||
+          responseData?.Id ||
+          responseData?.data?.agentId ||
+          responseData?.data?.AgentId ||
+          responseData?.data?.id ||
+          responseData?.value?.[0]?.agentId ||
+          responseData?.value?.[0]?.AgentId ||
+          (typeof responseData === 'number' ? responseData : null) ||
+          (isEditMode ? Number(editAgentId) : null);
+
+        targetAgentId = extractedId;
+        if (!isEditMode && extractedId) {
+          setCreatedAgentId(extractedId);
+        }
+      }
+
+      if (!targetAgentId) {
+        throw new Error('Agent saved, but failed to retrieve Agent ID from server response.');
+      }
+
+      // Step 2: Upload PAN card if file is selected
+      if (panFile) {
+        const formDataUpload = new FormData();
+        formDataUpload.append('file', panFile);
+
+        const token = localStorage.getItem('authToken');
+        const uploadHeaders = {};
+        if (token) {
+          uploadHeaders.Authorization = `Bearer ${token}`;
+        }
+        // NOTE: Do not set Content-Type header so browser automatically sets multipart/form-data boundary
+
+        const uploadEndpoint = `${API_BASE}/AgentMaster/${encodeURIComponent(targetAgentId)}/upload-pan`;
+        const uploadResponse = await fetch(uploadEndpoint, {
+          method: 'POST',
+          headers: uploadHeaders,
+          body: formDataUpload,
+        });
+
+        if (!uploadResponse.ok) {
+          const uploadErrorText = await uploadResponse.text().catch(() => '');
+          let uploadErrorJson = null;
+          try {
+            uploadErrorJson = uploadErrorText ? JSON.parse(uploadErrorText) : null;
+          } catch {
+            // Keep plain text
+          }
+          console.error('Agent PAN upload failed:', uploadResponse.status, uploadErrorText);
+
+          const panError = new Error('Agent was created successfully, but PAN card upload failed.');
+          panError.details = uploadErrorJson || uploadErrorText;
+          panError.isPanUploadFailure = true;
+          throw panError;
+        }
       }
 
       setConfirmModalOpen(false);
@@ -438,13 +532,19 @@ export default function AddAgent({ onSuccessRedirect, agentId: agentIdProp } = {
         navigate(onSuccessRedirect || (isEditMode ? '/dashboard' : ROUTES.MY_AGENTS));
       }, 1200);
     } catch (error) {
-      console.error('Failed to save agent:', error);
-      const parsed = parseApiErrorBody(
-        error.details,
-        error.message || `Failed to ${isEditMode ? 'update' : 'create'} agent.`
-      );
-      setErrorMessage(parsed.message || error.message || `Failed to ${isEditMode ? 'update' : 'create'} agent.`);
-      setErrorDetails(parsed.items.length ? parsed.items : null);
+      console.error('Failed to save agent / upload PAN:', error);
+      if (error.isPanUploadFailure) {
+        setConfirmModalOpen(false);
+        setErrorMessage(error.message || 'Agent was created successfully, but PAN card upload failed.');
+        setErrorDetails(error.details || null);
+      } else {
+        const parsed = parseApiErrorBody(
+          error.details,
+          error.message || `Failed to ${isEditMode ? 'update' : 'create'} agent.`
+        );
+        setErrorMessage(parsed.message || error.message || `Failed to ${isEditMode ? 'update' : 'create'} agent.`);
+        setErrorDetails(parsed.items.length ? parsed.items : null);
+      }
     } finally {
       setIsSaving(false);
     }

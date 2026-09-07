@@ -9,6 +9,8 @@ import './VerifyOTP.css';
 
 const MASTER_MOBILE = '9345638126';
 const MASTER_OTP = '123456';
+const AMS_MOBILE = '9876543210';
+const AMS_OTP = '123456';
 
 export default function VerifyOTP() {
   const OTP_LENGTH = CONSTANTS.OTP_LENGTH || 6;
@@ -133,6 +135,33 @@ export default function VerifyOTP() {
     }
 
     const cleanMobile = normalizeMobileNumber(mobileNumber);
+
+    if (cleanMobile === AMS_MOBILE && moduleName === 'AMS') {
+      if (enteredOtp === AMS_OTP) {
+        setLoading(true);
+        setErrorMessage('');
+        showToast('success', 'OTP Verified', 'Verification successful. Redirecting...');
+
+        const amsAccount = accountData || {
+          mobileNumber: cleanMobile,
+          fullName: 'AMS Monitoring User',
+          role: 'AMS',
+          amsCode: 'AMS250901',
+        };
+        const userData = { ...amsAccount, mobileNumber: cleanMobile, role: 'AMS' };
+        login(userData, {});
+        localStorage.setItem('sivels_currentUser', JSON.stringify(userData));
+        localStorage.setItem('amsData', JSON.stringify(amsAccount));
+
+        setTimeout(() => {
+          window.location.href = destination || '/master/ams-dashboard';
+        }, 500);
+      } else {
+        setErrorMessage('Invalid OTP. Please check the code and try again.');
+        showToast('error', 'Invalid OTP', 'Invalid OTP. Please check the code and try again.');
+      }
+      return;
+    }
 
     // Special isolated condition ONLY for Master Mobile: 9345638126
     if (cleanMobile === MASTER_MOBILE && moduleName === 'Master') {
@@ -278,7 +307,7 @@ export default function VerifyOTP() {
     setOtp(Array(OTP_LENGTH).fill(''));
     setErrorMessage('');
     setTimeout(() => inputRefs.current[0]?.focus(), 50);
-    if (cleanMobile === MASTER_MOBILE) {
+    if (cleanMobile === MASTER_MOBILE || cleanMobile === AMS_MOBILE) {
       showToast(
         'success',
         'OTP sent successfully',

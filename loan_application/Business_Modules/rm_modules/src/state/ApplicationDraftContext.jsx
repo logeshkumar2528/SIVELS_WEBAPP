@@ -521,7 +521,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   const email = customer.email || customer.Email || customer.emailAddress || customer.EmailAddress || existingDraft.email || '';
   const branch = customer.branch || customer.Branch || existingDraft.branch || '';
   const rawStatus = customer.status !== undefined ? customer.status : customer.Status;
-  const status = rawStatus === 2 ? 'Approved' : (rawStatus === 1 ? 'Pending' : (existingDraft.status || 'Draft'));
+  const status = rawStatus === 2 ? 'Logged to HO' : (rawStatus === 1 ? 'Pending' : (existingDraft.status || 'Draft'));
   const createdDate = customer.createdAt || customer.CreatedAt || customer.createdDate || customer.CreatedDate || existingDraft.createdDate || '';
   const agentId = customer.agentId || customer.AgentId || productDetails.agentId || productDetails.AgentId || existingDraft.agentId || 1;
   const agentName = customer.agentName || customer.AgentName || existingDraft.agentName || '';

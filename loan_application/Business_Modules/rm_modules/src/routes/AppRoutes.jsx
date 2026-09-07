@@ -90,8 +90,8 @@ export default function AppRoutes() {
         <Route
           path={ROUTES.APPROVED_APPLICATIONS}
           element={
-            <LayoutWrapper title="Approved Applications" subtitle="Fully processed and approved applications">
-              <NewApplications initialFilter="Approved" />
+            <LayoutWrapper title="Logged to HO Applications" subtitle="Fully processed and logged to HO applications">
+              <NewApplications initialFilter="Logged to HO" />
             </LayoutWrapper>
           }
         />

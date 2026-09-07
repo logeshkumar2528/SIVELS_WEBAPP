@@ -9,7 +9,7 @@ import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
-import { buildSectionUpdate, getSectionState, getApplicantCount, createArray, resolveApplicantName } from '../applicationWizard/flowUtils';
+import { buildApplicationDisplayId, buildSectionUpdate, getSectionState, getApplicantCount, createArray, resolveApplicantName } from '../applicationWizard/flowUtils';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
@@ -128,6 +128,7 @@ export default function Declaration() {
   }, [appId, ensureApplication]);
 
   const appData = getApplication(appId);
+  const applicationDisplayId = buildApplicationDisplayId(appData, appId);
   const coApplicantCount = getApplicantCount(appData);
   const ArrowLeftIcon = iconMap['ArrowLeft'];
 
@@ -227,7 +228,7 @@ export default function Declaration() {
         throw new Error('Unable to retrieve customer record for status update.');
       }
 
-      // 2. Build full payload with status: 2 (Approved / Completed)
+      // 2. Build full payload with status: 2 (Logged to HO / Completed)
       const payload = {
         agentCustomerId: Number(customerRecord.agentCustomerId || customerRecord.AgentCustomerId || appId),
         agentId: Number(customerRecord.agentId ?? customerRecord.AgentId ?? 1),
@@ -250,10 +251,10 @@ export default function Declaration() {
       });
 
       if (!putRes.ok) {
-        throw new Error(`Failed to update application status to Approved (${putRes.status})`);
+        throw new Error(`Failed to update application status to Logged to HO (${putRes.status})`);
       }
 
-      saveApplication(appId, { status: 'Approved' });
+      saveApplication(appId, { status: 'Logged to HO' });
       setShowSubmitModal(false);
       navigate(ROUTES.APPROVED_APPLICATIONS);
     } catch (err) {
@@ -346,6 +347,7 @@ export default function Declaration() {
                   <input
                     className="form-input aw-input aw-input--with-icon"
                     value={form.applicantSignature}
+                    readOnly
                     onChange={(e) => persist({ ...form, applicantSignature: e.target.value })}
                     placeholder="Enter applicant signature"
                   />
@@ -359,6 +361,7 @@ export default function Declaration() {
                     type="date"
                     className="form-input aw-input aw-input--with-icon"
                     value={form.applicantDate}
+                    readOnly
                     onChange={(e) => persist({ ...form, applicantDate: e.target.value })}
                   />
                 </div>
@@ -374,6 +377,7 @@ export default function Declaration() {
                     <input
                       className="form-input aw-input aw-input--with-icon"
                       value={form.applicantSignature}
+                      readOnly
                       onChange={(e) => persist({ ...form, applicantSignature: e.target.value })}
                       placeholder="Enter applicant signature"
                     />
@@ -387,6 +391,7 @@ export default function Declaration() {
                       type="date"
                       className="form-input aw-input aw-input--with-icon"
                       value={form.applicantDate}
+                      readOnly
                       onChange={(e) => persist({ ...form, applicantDate: e.target.value })}
                     />
                   </div>
@@ -404,6 +409,7 @@ export default function Declaration() {
                       <input
                         className="form-input aw-input aw-input--with-icon"
                         value={coApp.signature}
+                        readOnly
                         onChange={(e) => {
                           const updated = [...form.coApplicants];
                           updated[index] = { ...updated[index], signature: e.target.value };
@@ -425,6 +431,7 @@ export default function Declaration() {
                         type="date"
                         className="form-input aw-input aw-input--with-icon"
                         value={coApp.date}
+                        readOnly
                         onChange={(e) => {
                           const updated = [...form.coApplicants];
                           updated[index] = { ...updated[index], date: e.target.value };
@@ -461,6 +468,7 @@ export default function Declaration() {
                 <input
                   className="form-input aw-input aw-input--with-icon"
                   value={form.ackApplicantName}
+                  readOnly
                   placeholder="Enter applicant name"
                   onChange={(e) => persist({ ...form, ackApplicantName: e.target.value })}
                 />
@@ -474,6 +482,7 @@ export default function Declaration() {
                 <input
                   className="form-input aw-input aw-input--with-icon"
                   value={form.ackProduct}
+                  readOnly
                   placeholder="Enter product applied for"
                   onChange={(e) => persist({ ...form, ackProduct: e.target.value })}
                 />
@@ -487,6 +496,7 @@ export default function Declaration() {
                 <input
                   className="form-input aw-input aw-input--with-icon"
                   value={form.ackReceivedBy}
+                  readOnly
                   placeholder="Enter RM Name & Sign"
                   onChange={(e) => persist({ ...form, ackReceivedBy: e.target.value })}
                 />
@@ -501,6 +511,7 @@ export default function Declaration() {
                   type="date"
                   className="form-input aw-input aw-input--with-icon"
                   value={form.ackDate}
+                  readOnly
                   onChange={(e) => persist({ ...form, ackDate: e.target.value })}
                 />
               </div>
@@ -601,7 +612,7 @@ export default function Declaration() {
             >
               Are you sure you want to submit application for <strong>{displayCustomerName}</strong>
               <br />
-              (ID: <strong>{appId}</strong>)?
+              (ID: <strong>{applicationDisplayId}</strong>)?
             </p>
           </div>
         ) : (

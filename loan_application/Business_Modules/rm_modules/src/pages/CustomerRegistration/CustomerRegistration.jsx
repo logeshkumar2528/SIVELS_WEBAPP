@@ -11,6 +11,7 @@ import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import { getApplicantCount } from '../applicationWizard/flowUtils';
+import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
 import Modal from '../../components/Modal/Modal';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { formatDateTime, toIstDateInput } from '../../utils/dateHelper';
@@ -134,7 +135,7 @@ function buildPersonalInformationState(appData) {
   };
 }
 
-function buildRegistrationPayload(form, baseData = {}) {
+function buildRegistrationPayload(form, baseData = {}, applicantDisplayName = '') {
   const applicantName = composeFullName(form.applicant);
   return {
     registration: {
@@ -146,6 +147,7 @@ function buildRegistrationPayload(form, baseData = {}) {
     sections: {
       personalInformation: form,
     },
+    applicantDisplayName: applicantDisplayName || baseData.applicantDisplayName || baseData.customerName || baseData.fullName || '',
     customerName: applicantName || baseData.customerName || '',
     mobile: form.applicant.mobileNo || baseData.mobile || '',
     gender: form.applicant.gender || baseData.gender || '',
@@ -435,6 +437,10 @@ export default function CustomerRegistration() {
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildPersonalInformationState(getApplication(appId)));
+  const [applicantHeaderName, setApplicantHeaderName] = useState(() => {
+    const initialData = getApplication(appId);
+    return initialData.customerName || initialData.fullName || initialData.applicantName || 'Applicant';
+  });
   const [errors, setErrors] = useState({});
   const [errorPopup, setErrorPopup] = useState(null);
   const hasUserEditedRef = useRef(false);
@@ -554,7 +560,9 @@ export default function CustomerRegistration() {
       prevAppIdRef.current = appId;
       hasUserEditedRef.current = false;
       ensureApplication(appId);
-      setForm(buildPersonalInformationState(getApplication(appId)));
+      const nextApplication = getApplication(appId);
+      setForm(buildPersonalInformationState(nextApplication));
+      setApplicantHeaderName(nextApplication.customerName || nextApplication.fullName || nextApplication.applicantName || 'Applicant');
       setErrors({});
     }
   }, [appId, ensureApplication, getApplication]);
@@ -583,6 +591,12 @@ export default function CustomerRegistration() {
     }
   }, [appId, appData?.customerName, appData?.fullName, getApplication]);
 
+  useEffect(() => {
+    if (hasUserEditedRef.current || applicantHeaderName !== 'Applicant') return;
+    const loadedName = appData.customerName || appData.fullName || appData.applicantName;
+    if (loadedName) setApplicantHeaderName(loadedName);
+  }, [appData, applicantHeaderName]);
+
   const ArrowRightIcon = iconMap['ArrowRight'];
   const ArrowLeftIcon = iconMap['ArrowLeft'];
   const InfoIcon = iconMap['Info'];
@@ -591,7 +605,7 @@ export default function CustomerRegistration() {
     setForm(nextForm);
     const currentAppData = getApplication(appId);
     saveApplication(appId, {
-      ...buildRegistrationPayload(nextForm, currentAppData),
+      ...buildRegistrationPayload(nextForm, currentAppData, applicantHeaderName),
     });
   };
 
@@ -737,7 +751,7 @@ export default function CustomerRegistration() {
       };
 
       saveApplication(appId, {
-        ...buildRegistrationPayload(finalForm, appData),
+        ...buildRegistrationPayload(finalForm, appData, applicantHeaderName),
         personalInformation: finalForm,
         sections: {
           ...(appData?.sections || {}),
@@ -814,7 +828,7 @@ export default function CustomerRegistration() {
             <span className="ad-meta-label">Applicant</span>
             <div className="ad-meta-value-group highlight">
               {iconMap['User'] && (() => { const User = iconMap['User']; return <User size={14} />; })()}
-              <span className="ad-meta-value">{form.applicant?.firstName || appData.customerName || appData.fullName || 'Applicant'}</span>
+              <span className="ad-meta-value">{applicantHeaderName}</span>
             </div>
           </div>
           <div className="ad-meta-divider" />
@@ -822,7 +836,7 @@ export default function CustomerRegistration() {
             <span className="ad-meta-label">App ID</span>
             <div className="ad-meta-value-group">
               {iconMap['FileText'] && (() => { const FileText = iconMap['FileText']; return <FileText size={14} />; })()}
-              <span className="ad-meta-value">{appData.applicationNumber || appId}</span>
+              <span className="ad-meta-value">{buildApplicationDisplayId(appData, appId)}</span>
             </div>
           </div>
           <div className="ad-meta-divider" />
