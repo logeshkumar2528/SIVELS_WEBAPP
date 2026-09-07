@@ -38,6 +38,7 @@ import { CompanyConfiguration } from './features/company/CompanyConfiguration';
 import AddAgent from '../../Business_Modules/rm_modules/src/pages/AddAgent/AddAgent';
 import RelationshipManagerCreate from './pages/RelationshipManager/RelationshipManagerCreate';
 import CreateUser from './pages/CreateUser/CreateUser';
+import AMSDashboard from './pages/AMSDashboard/AMSDashboard';
 
 const routerBasename = (() => {
   const configuredBase = import.meta.env.BASE_URL?.replace(/\/$/, '') || '/';
@@ -65,6 +66,7 @@ function App() {
         <Route path="/" element={<AppLayout />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="ams-dashboard" element={<AMSDashboard />} />
           <Route path="create-user" element={<CreateUser />} />
           <Route path="add-agent" element={<AddAgent onSuccessRedirect="/dashboard" />} />
           <Route path="edit-agent/:agentId" element={<AddAgent onSuccessRedirect="/dashboard" />} />

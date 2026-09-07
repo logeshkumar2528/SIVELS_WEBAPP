@@ -6,6 +6,8 @@ import { authService } from '../../services/authService';
 import axiosInstance from '../../api/axiosInstance';
 import './Login.css';
 
+const AMS_MOBILE = '9876543210';
+
 export default function Login() {
   const [mobileNumber, setMobileNumber] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,6 +21,24 @@ export default function Login() {
       setLoading(true);
       setError('');
       try {
+        if (cleanMobile === AMS_MOBILE) {
+          navigate('/verify', {
+            state: {
+              mobileNumber: cleanMobile,
+              module: 'AMS',
+              destination: '/master/ams-dashboard',
+              accountData: {
+                mobileNumber: cleanMobile,
+                fullName: 'AMS Monitoring User',
+                role: 'AMS',
+                amsCode: 'AMS250901',
+              },
+              otpResponse: { success: true, message: 'OTP sent successfully' },
+            },
+          });
+          return;
+        }
+
         let matchingRm = null;
         if (cleanMobile === '9345638126' || cleanMobile === '9841446699') {
           try {

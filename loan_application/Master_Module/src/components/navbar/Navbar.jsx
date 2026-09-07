@@ -47,6 +47,14 @@ export function Navbar() {
   const dropdownRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
+  const currentUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('sivels_currentUser') || 'null');
+    } catch {
+      return null;
+    }
+  })();
+  const isAmsUser = currentUser?.role === 'AMS';
   const handleLogout = () => {
     localStorage.removeItem('sivels_currentUser');
     localStorage.removeItem('sivels_permissions');
@@ -110,16 +118,16 @@ export function Navbar() {
         </button>
 
         <div className={`navbar-navigation ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
-          {location.pathname !== '/dashboard' && <button className="nav-back" onClick={goBack}><ArrowLeft size={16} /> Back</button>}
-          <NavLink 
-            to="/dashboard" 
+          {location.pathname !== (isAmsUser ? '/ams-dashboard' : '/dashboard') && !isAmsUser && <button className="nav-back" onClick={goBack}><ArrowLeft size={16} /> Back</button>}
+          <NavLink
+            to={isAmsUser ? '/ams-dashboard' : '/dashboard'}
             className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
             onClick={closeMenus}
           >
-            Dashboard
+            {isAmsUser ? 'Monitoring dashboard' : 'Dashboard'}
           </NavLink>
 
-          <div className="nav-dropdown-container" ref={dropdownRef}>
+          {!isAmsUser && <div className="nav-dropdown-container" ref={dropdownRef}>
             <button 
               className={`nav-link dropdown-toggle master-dropdown-trigger ${isMastersActive || isMastersOpen ? 'active' : ''}`}
               onClick={() => setIsMastersOpen(!isMastersOpen)}
@@ -170,7 +178,7 @@ export function Navbar() {
                 </div>
               </div>
             )}
-          </div>
+          </div>}
         </div>
         <button className="navbar-logout" onClick={handleLogout}><LogOut size={17} /> <span>Logout</span></button>
       </div>
