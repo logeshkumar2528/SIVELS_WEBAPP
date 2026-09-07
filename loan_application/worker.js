@@ -23,21 +23,14 @@ export default {
     const url = new URL(request.url);
     const pathname = url.pathname;
 
-    // Let real static assets/files be served directly.
-    const assetResponse = await env.ASSETS.fetch(request);
-
-    if (assetResponse.status !== 404) {
-      return assetResponse;
-    }
-
-    // Root URL → Core application.
+    // Root URL → Core application
     if (pathname === "/") {
       return env.ASSETS.fetch(
         new Request(new URL("/Core/index.html", request.url), request)
       );
     }
 
-    // Application routes → corresponding module index.html.
+    // Application routes FIRST
     for (const route of routes) {
       if (
         pathname === route.prefix ||
@@ -49,6 +42,7 @@ export default {
       }
     }
 
-    return new Response("Not Found", { status: 404 });
+    // Static assets/files
+    return env.ASSETS.fetch(request);
   }
 };
