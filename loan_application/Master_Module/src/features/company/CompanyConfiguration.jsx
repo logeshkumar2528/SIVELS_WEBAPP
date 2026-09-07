@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, LoaderCircle, Plus, RefreshCw, Search, SquarePen, Trash2, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, LoaderCircle, Plus, RefreshCw, Search, SquarePen, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../utils/errorHelper';
+import { getBanks } from '../../api/masters/bankApi';
+import { getBankBranches } from '../../api/masters/bankBranchApi';
+import { getCities } from '../../api/masters/cityApi';
+import { getStates } from '../../api/masters/stateApi';
+import { getDistricts } from '../../api/masters/districtApi';
+import { getCountries } from '../../api/masters/countryApi';
 import { companyApis } from './companyApi';
 import { AUDIT_KEYS, COMPANY_CONFIG, COMPANY_GROUPS, SENSITIVE_KEYS, getDisplayValue, getRecordId } from './companyConfig';
 import './CompanyConfiguration.css';
@@ -15,12 +21,34 @@ const unwrap = (value) => {
   return value ? [value] : [];
 };
 
+const toApiValue = (field, value) => {
+  if (field.type === 'number') return Number(value);
+  if (field.name === 'dispStatus') return Number(value);
+  if (field.type === 'select' && field.name !== 'companyTypeId') return Number(value);
+  if (field.type === 'static-select' && field.options.some((option) => option.value === 0 || option.value === 1)) {
+    return value === true || value === 1 || value === '1';
+  }
+  return value;
+};
+
 const cleanPayload = (values, fields) => Object.fromEntries(
-  fields.map((field) => [field.name, values[field.name]])
+  fields.map((field) => [field, values[field.name]])
+    .filter(([, value]) => value !== '' && value !== null && value !== undefined)
+    .map(([field, value]) => [field.name, toApiValue(field, value)])
     .filter(([key, value]) => !AUDIT_KEYS.has(key) && !SENSITIVE_KEYS.has(key) && value !== '' && value !== null && value !== undefined)
 );
 
-const makeInitialValues = (section) => Object.fromEntries(section.fields.map((field) => [field.name, '']));
+const normalizeInputValue = (field, value) => {
+  if (value === undefined || value === null) return '';
+  if (field.type === 'date') return String(value).slice(0, 10);
+  if (field.type === 'datetime-local') return String(value).slice(0, 16);
+  if (field.type === 'static-select' && (value === true || value === false)) return value ? 1 : 0;
+  return value;
+};
+
+const makeInitialValues = (section, record) => Object.fromEntries(
+  section.fields.map((field) => [field.name, normalizeInputValue(field, record?.[field.name])])
+);
 
 const getCompanyErrorMessage = (error, fallback) => {
   const data = error?.response?.data;
@@ -40,7 +68,7 @@ function StatusBadge({ value }) {
 }
 
 function CompanyForm({ section, record, lookups, busy, serverError, onClose, onSubmit }) {
-  const [values, setValues] = useState(() => ({ ...makeInitialValues(section), ...(record || {}) }));
+  const [values, setValues] = useState(() => makeInitialValues(section, record));
   const [validation, setValidation] = useState('');
 
   const submit = (event) => {
@@ -52,7 +80,11 @@ function CompanyForm({ section, record, lookups, busy, serverError, onClose, onS
     }
     setValidation('');
     const payload = cleanPayload(values, section.fields);
-    if (payload.isActive === undefined) payload.isActive = values.isActive ?? true;
+    if (section.apiKey === 'accountingDetail' && payload.cUsrId === undefined) {
+      payload.cUsrId = record?.cUsrId || 'SYSTEM';
+    }
+    if (section.fields.some((field) => field.name === 'status') && payload.status === undefined) payload.status = values.status === '' ? true : values.status;
+    if (section.fields.some((field) => field.name === 'isActive') && payload.isActive === undefined) payload.isActive = values.isActive === '' ? true : values.isActive;
     onSubmit(payload);
   };
 
@@ -69,12 +101,30 @@ function CompanyForm({ section, record, lookups, busy, serverError, onClose, onS
           {section.fields.map((field) => (
             <div className="company-field" key={field.name}>
               <label htmlFor={`company-${field.name}`}>{field.label}{field.required ? ' *' : ''}</label>
-              {field.type === 'select' ? (
-                <select id={`company-${field.name}`} value={values[field.name] ?? ''} onChange={(event) => setValues({ ...values, [field.name]: event.target.value })}>
+              {field.type === 'select' || field.type === 'static-select' ? (
+                <select
+                  id={`company-${field.name}`}
+                  value={values[field.name] ?? ''}
+                  disabled={field.options === 'bankBranches' && !values.bankId}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    setValues((current) => ({
+                      ...current,
+                      [field.name]: nextValue,
+                      ...(field.name === 'bankId' ? { bankBranchId: '' } : {}),
+                    }));
+                  }}
+                >
                   <option value="">Select {field.label.toLowerCase()}</option>
-                  {(field.options === 'companies' ? lookups.companies : field.options === 'addressTypes' ? lookups.addressTypes : lookups.companyTypes).map((option) => (
-                    <option key={getRecordId(option, field.options === 'companies' ? 'company' : field.options === 'addressTypes' ? 'addressType' : 'companyType')} value={getRecordId(option, field.options === 'companies' ? 'company' : field.options === 'addressTypes' ? 'addressType' : 'companyType')}>{getDisplayValue(option, field.options === 'companies' ? 'companyName' : field.options === 'addressTypes' ? 'companyAddressTypeName' : 'companyTypeName')}</option>
-                  ))}
+                  {(field.type === 'static-select'
+                    ? field.options
+                    : (lookups[field.options] || []).filter((option) => field.options !== 'bankBranches' || String(option.bankId) === String(values.bankId)))
+                    .map((option, optionIndex) => {
+                    const resource = field.options === 'companies' ? 'company' : field.options === 'addressTypes' ? 'addressType' : field.options === 'companyTypes' ? 'companyType' : field.options === 'banks' ? 'bank' : field.options === 'bankBranches' ? 'bankBranch' : field.options === 'cities' ? 'city' : field.options === 'districts' ? 'district' : field.options === 'countries' ? 'country' : field.options === 'accountingDetails' ? 'accountingDetail' : 'state';
+                    const optionValue = field.type === 'static-select' ? option.value : field.name === 'companyTypeId' ? (option.companyTypeCode ?? option.companyTypeId ?? getRecordId(option, resource)) : getRecordId(option, resource);
+                    const optionLabel = field.type === 'static-select' ? option.label : field.options === 'accountingDetails' ? `${option.yrId ?? ''} (${option.cUsrId ?? option.compYId ?? ''})` : getDisplayValue(option, field.options === 'companies' ? 'companyName' : field.options === 'addressTypes' ? 'companyAddressTypeName' : field.options === 'banks' ? 'bankName' : field.options === 'bankBranches' ? 'branchName' : field.options === 'cities' ? 'cityName' : field.options === 'districts' ? 'districtName' : field.options === 'countries' ? 'countryName' : field.options === 'states' ? 'stateName' : 'companyTypeName');
+                    return <option key={`${field.options}-${String(optionValue)}-${optionIndex}`} value={optionValue}>{optionLabel}</option>;
+                  })}
                 </select>
               ) : (
                 <input id={`company-${field.name}`} type={field.type} value={values[field.name] ?? ''} onChange={(event) => setValues({ ...values, [field.name]: event.target.value })} />
@@ -94,7 +144,7 @@ function CompanyForm({ section, record, lookups, busy, serverError, onClose, onS
 export function CompanyConfiguration() {
   const [activeKey, setActiveKey] = useState('companyType');
   const [records, setRecords] = useState([]);
-  const [lookups, setLookups] = useState({ companies: [], addressTypes: [], companyTypes: [] });
+  const [lookups, setLookups] = useState({ companies: [], addressTypes: [], companyTypes: [], banks: [], bankBranches: [], cities: [], districts: [], states: [], countries: [], accountingDetails: [] });
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -115,6 +165,13 @@ export function CompanyConfiguration() {
     } catch { /* Main screen errors remain visible when a lookup is unavailable. */ }
   };
 
+  const loadExternalLookup = async (loader, target) => {
+    try {
+      const response = await loader();
+      setLookups((current) => ({ ...current, [target]: unwrap(response) }));
+    } catch { /* The bank-account form remains usable when an optional lookup is unavailable. */ }
+  };
+
   const loadRecords = async () => {
     setLoading(true); setError('');
     try {
@@ -125,7 +182,18 @@ export function CompanyConfiguration() {
   };
 
   useEffect(() => { loadRecords(); }, [activeKey, lookups.selectedCompanyId]);
-  useEffect(() => { loadLookup('company', 'companies'); loadLookup('addressType', 'addressTypes'); loadLookup('companyType', 'companyTypes'); }, []);
+  useEffect(() => {
+    loadLookup('company', 'companies');
+    loadLookup('addressType', 'addressTypes');
+    loadLookup('companyType', 'companyTypes');
+    loadLookup('accountingDetail', 'accountingDetails');
+    loadExternalLookup(getBanks, 'banks');
+    loadExternalLookup(getBankBranches, 'bankBranches');
+    loadExternalLookup(getCities, 'cities');
+    loadExternalLookup(getDistricts, 'districts');
+    loadExternalLookup(getStates, 'states');
+    loadExternalLookup(getCountries, 'countries');
+  }, []);
 
   const filteredRecords = useMemo(() => records.filter((record) => JSON.stringify(record).toLowerCase().includes(searchTerm.toLowerCase())), [records, searchTerm]);
   const sortedRecords = useMemo(() => {
@@ -139,6 +207,14 @@ export function CompanyConfiguration() {
   }, [filteredRecords, sortConfig]);
   const totalPages = Math.max(1, Math.ceil(sortedRecords.length / pageSize));
   const paginatedRecords = sortedRecords.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const getCellValue = (record, column) => {
+    if (column === 'companyName' && !record.companyName && record.companyId !== undefined) {
+      const company = lookups.companies.find((item) => String(getRecordId(item, 'company')) === String(record.companyId));
+      return company ? getDisplayValue(company, 'companyName') : '-';
+    }
+    return getDisplayValue(record, column);
+  };
 
   useEffect(() => { setCurrentPage(1); }, [activeKey, searchTerm, lookups.selectedCompanyId, pageSize]);
   const handleSubmit = async (payload) => {
@@ -173,15 +249,10 @@ export function CompanyConfiguration() {
     }));
   };
 
-  const sortIcon = (key) => {
-    if (sortConfig.key !== key) return <ArrowUpDown size={14} />;
-    return sortConfig.direction === 'ascending' ? <ArrowUp size={14} /> : <ArrowDown size={14} />;
-  };
-
   return (
     <main className="company-config-page">
       <header className="company-config-hero">
-        <div><p className="company-config-eyebrow">Sivels / Company</p><h1 className="company-config-title">Company configuration</h1></div>
+        <div><p className="company-config-eyebrow">Section / Module</p><h1 className="company-config-title">Company configuration</h1></div>
       </header>
       <div className="company-config-layout">
         <aside className="company-config-sidebar" aria-label="Company configuration sections">
@@ -196,13 +267,13 @@ export function CompanyConfiguration() {
           })}
         </aside>
         <section className="company-config-panel">
-          <div className="company-panel-heading"><div><h2>{section.title}</h2></div><div className="company-actions"><button className="company-button ghost" onClick={loadRecords} disabled={loading}><RefreshCw size={16} />Refresh</button><button className="company-button primary" onClick={() => { setFormError(''); setFormRecord({}); }}><Plus size={17} />Add {section.singular}</button></div></div>
+          <div className="company-panel-heading"><div><h2>{section.title}</h2></div><div className="company-actions"><button className="company-button ghost" onClick={loadRecords} disabled={loading}><RefreshCw size={16} />Refresh</button><button className="company-button primary" onClick={() => { setFormError(''); setFormRecord(section.child && lookups.selectedCompanyId ? { companyId: lookups.selectedCompanyId } : {}); }}><Plus size={17} />Add {section.singular}</button></div></div>
           <div className={`company-toolbar ${section.child ? 'company-toolbar-child' : ''}`}>
             {section.child && <select className="company-company-filter" aria-label="Filter by company" value={lookups.selectedCompanyId || ''} onChange={(event) => setLookups({ ...lookups, selectedCompanyId: event.target.value })}><option value="">All companies</option>{lookups.companies.map((company) => <option key={getRecordId(company, 'company')} value={getRecordId(company, 'company')}>{getDisplayValue(company, 'companyName')}</option>)}</select>}
             <div className="company-search"><Search size={17} /><input className="company-search-input" aria-label="Search records" placeholder="Search records..." value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} /></div>
           </div>
           {error && <div className="company-error">{error}</div>}
-          {loading ? <div className="company-state"><LoaderCircle className="company-spin" size={24} /> Loading {section.title.toLowerCase()}...</div> : paginatedRecords.length === 0 ? <div className="company-state"><strong>No {section.title.toLowerCase()} found</strong><span>Try adjusting your search or create a new record.</span></div> : <div className="company-table-wrap"><table className="company-table"><thead><tr>{section.columns.map((column) => <th key={column}><button type="button" className="company-sort-button" onClick={() => toggleSort(column)}>{column.replace(/([A-Z])/g, ' $1')}{sortIcon(column)}</button></th>)}<th>Actions</th></tr></thead><tbody>{paginatedRecords.map((record, index) => <tr key={getRecordId(record, section.apiKey) ?? index}>{section.columns.map((column) => <td key={column}>{column === 'isActive' ? <StatusBadge value={record[column]} /> : getDisplayValue(record, column)}</td>)}<td><div className="company-row-actions"><button className="company-icon-button" onClick={() => setFormRecord(record)} aria-label={`Edit ${section.singular}`}><SquarePen size={18} /></button><button className="company-icon-button delete" onClick={() => handleDelete(record)} disabled={deleting === getRecordId(record, section.apiKey)} aria-label={`Delete ${section.singular}`}>{deleting === getRecordId(record, section.apiKey) ? <LoaderCircle className="company-spin" size={18} /> : <Trash2 size={18} />}</button></div></td></tr>)}</tbody></table></div>}
+          {loading ? <div className="company-state"><LoaderCircle className="company-spin" size={24} /> Loading {section.title.toLowerCase()}...</div> : paginatedRecords.length === 0 ? <div className="company-state"><strong>No {section.title.toLowerCase()} found</strong><span>Try adjusting your search or create a new record.</span></div> : <div className="company-table-wrap"><table className="company-table"><thead><tr>{section.columns.map((column) => <th key={column}><button type="button" className="company-sort-button" onClick={() => toggleSort(column)}>{section.apiKey === 'accountingDetail' && column === 'yrId' ? 'Year' : section.apiKey === 'accountingDetail' && column === 'dispStatus' ? 'Status' : column.replace(/([A-Z])/g, ' $1')}</button></th>)}<th>Actions</th></tr></thead><tbody>{paginatedRecords.map((record, index) => <tr key={getRecordId(record, section.apiKey) ?? index}>{section.columns.map((column) => <td key={column}>{column === 'isActive' || column === 'status' || (section.apiKey === 'accountingDetail' && column === 'dispStatus') ? <StatusBadge value={record[column]} /> : getCellValue(record, column)}</td>)}<td><div className="company-row-actions"><button className="company-icon-button" onClick={() => setFormRecord(record)} aria-label={`Edit ${section.singular}`}><SquarePen size={18} /></button><button className="company-icon-button delete" onClick={() => handleDelete(record)} disabled={deleting === getRecordId(record, section.apiKey)} aria-label={`Delete ${section.singular}`}>{deleting === getRecordId(record, section.apiKey) ? <LoaderCircle className="company-spin" size={18} /> : <Trash2 size={18} />}</button></div></td></tr>)}</tbody></table></div>}
           {!loading && sortedRecords.length > 0 && <footer className="company-table-footer"><span>Showing {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, sortedRecords.length)} of {sortedRecords.length} records</span><div className="company-pagination"><label htmlFor="company-page-size">Rows</label><select id="company-page-size" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}><option value="10">10</option><option value="25">25</option><option value="50">50</option></select><button type="button" className="company-page-button" disabled={currentPage === 1} onClick={() => setCurrentPage((page) => page - 1)} aria-label="Previous page">Previous</button><span>Page {currentPage} of {totalPages}</span><button type="button" className="company-page-button" disabled={currentPage === totalPages} onClick={() => setCurrentPage((page) => page + 1)} aria-label="Next page">Next</button></div></footer>}
         </section>
       </div>

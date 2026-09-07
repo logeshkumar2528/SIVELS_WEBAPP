@@ -37,7 +37,8 @@ const MASTERS_MENU = [
   { label: 'Religion', path: '/masters/religion', icon: Star },
   { label: 'Caste', path: '/masters/caste', icon: Contact },
   { label: 'Loan Product Collateral', path: '/masters/loan-product-collateral', icon: Shield },
-  { label: 'Rate Of Interest', path: '/masters/rate-of-interest', icon: TrendingUp }
+  { label: 'Rate Of Interest', path: '/masters/rate-of-interest', icon: TrendingUp },
+  { label: 'Company Configuration', path: '/company', icon: Building2 }
 ];
 
 export function Navbar() {
