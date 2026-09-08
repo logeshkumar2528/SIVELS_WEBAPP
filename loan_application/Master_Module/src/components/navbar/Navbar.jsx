@@ -39,6 +39,7 @@ const MASTERS_MENU = [
   { label: 'Caste', path: '/masters/caste', icon: Contact },
   { label: 'Loan Product Collateral', path: '/masters/loan-product-collateral', icon: Shield },
   { label: 'Rate Of Interest', path: '/masters/rate-of-interest', icon: TrendingUp },
+  { label: 'FOIR', path: '/masters/foir', icon: Percent },
   { label: 'Industry Type', path: '/masters/industry-type', icon: Factory },
   { label: 'Loan Product Tenure', path: '/masters/loan-product-tenure', icon: Clock },
   { label: 'Company Configuration', path: '/company', icon: Building2 }
