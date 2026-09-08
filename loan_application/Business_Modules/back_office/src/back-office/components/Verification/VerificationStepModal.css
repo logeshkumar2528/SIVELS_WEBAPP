@@ -7,8 +7,8 @@
 .bo-vmodal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.65);
-  backdrop-filter: blur(4px);
+  background: rgba(26, 35, 32, 0.58);
+  backdrop-filter: blur(7px);
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -19,13 +19,14 @@
 
 .bo-vmodal-window {
   background: #ffffff;
-  border-radius: 14px;
+  border: 1px solid var(--color-border, #e4ede7);
+  border-radius: 16px;
   width: 100%;
-  max-width: 780px;
-  max-height: 88vh;
+  max-width: 860px;
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 24px 60px rgba(26, 35, 32, 0.22), 0 8px 20px rgba(15, 122, 76, 0.08);
   overflow: hidden;
   animation: boScaleIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -42,12 +43,21 @@
 
 /* Modal Header */
 .bo-vmodal-header {
-  padding: 18px 24px;
+  padding: 20px 24px;
   border-bottom: 1px solid var(--color-border, #e2e8f0);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #f8fafc;
+  background: linear-gradient(135deg, var(--color-primary-light, #eaf5ee), #ffffff 70%);
+  position: relative;
+}
+
+.bo-vmodal-header::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--color-primary, #0f7a4c);
 }
 
 .bo-vmodal-title-group {
@@ -66,13 +76,14 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--color-primary, #0F7A4C);
-  background: var(--color-primary-light, #eaf5ee);
-  padding: 2px 8px;
-  border-radius: 4px;
+  background: #ffffff;
+  border: 1px solid var(--color-primary-muted, #a8d5b5);
+  padding: 4px 9px;
+  border-radius: 999px;
 }
 
 .bo-vmodal-title {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--color-text-primary, #0f172a);
   margin: 2px 0 0 0;
@@ -81,7 +92,7 @@
 .bo-vmodal-subtitle {
   font-size: 12px;
   color: var(--color-text-muted, #64748b);
-  margin-top: 2px;
+  margin-top: 5px;
 }
 
 .bo-vmodal-header-actions {
@@ -104,9 +115,9 @@
 }
 
 .bo-vmodal-status-badge.is-submitted {
-  background: #eff6ff;
-  color: #1d4ed8;
-  border: 1px solid #bfdbfe;
+  background: var(--color-primary-light, #eaf5ee);
+  color: var(--color-primary, #0f7a4c);
+  border: 1px solid var(--color-primary-muted, #a8d5b5);
 }
 
 .bo-vmodal-status-badge.is-attention {
@@ -135,24 +146,25 @@
 }
 
 .bo-vmodal-close-btn:hover {
-  background: #e2e8f0;
-  color: #0f172a;
+  background: var(--color-primary-light, #eaf5ee);
+  color: var(--color-primary, #0f7a4c);
 }
 
 /* Modal Content Scroll Area */
 .bo-vmodal-content {
-  padding: 20px 24px;
+  padding: 24px;
+  background: var(--color-bg, #f4f7f5);
   overflow-y: auto;
   flex: 1;
 }
 
 /* Info Banner */
 .bo-modal-info-banner {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 20px;
+  background: var(--color-primary-light, #eaf5ee);
+  border: 1px solid var(--color-primary-muted, #a8d5b5);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 22px;
 }
 
 .bo-banner-kicker {
@@ -220,9 +232,9 @@
 }
 
 .bo-v-purpose-box {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
+  background: var(--color-bg, #f4f7f5);
+  border: 1px solid var(--color-border, #e4ede7);
+  border-radius: 7px;
   padding: 10px 14px;
   font-size: 13px;
   color: #334155;
@@ -899,8 +911,8 @@
 /* Modal Footer */
 .bo-vmodal-footer {
   padding: 14px 24px;
-  border-top: 1px solid var(--color-border, #e2e8f0);
-  background: #f8fafc;
+  border-top: 1px solid var(--color-border, #e4ede7);
+  background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -931,13 +943,13 @@
 
 .bo-btn--outline {
   background: #ffffff;
-  border: 1px solid #cbd5e1;
-  color: #475569;
+  border: 1px solid var(--color-primary-muted, #a8d5b5);
+  color: var(--color-primary, #0f7a4c);
 }
 
 .bo-btn--outline:hover {
-  background: #f1f5f9;
-  color: #0f172a;
+  background: var(--color-primary-light, #eaf5ee);
+  color: var(--color-primary-hover, #15692f);
 }
 
 .bo-btn--warning {

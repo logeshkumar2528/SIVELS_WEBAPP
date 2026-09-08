@@ -30,6 +30,8 @@ function isObsoleteMock(val) {
     s === 'rajesh kumar' ||
     s === 'dineshkumar' ||
     s === 'dinesh kumar' ||
+    s === 'sivashanmugam m' ||
+    s === 'rm001' ||
     s === '2025-06-06' ||
     s === '06-06-2025'
   );
@@ -291,7 +293,32 @@ export default function PdfView() {
           if (rmRes.status === 'fulfilled' && rmRes.value) {
             const data = rmRes.value;
             const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);
-            const matched = rows.find((r) => r.isActive !== false) || rows[0];
+
+            // Resolve the RM assigned to this application/customer first. The
+            // previous fallback selected the first active RM, which could put
+            // another RM's name on the generated PDF.
+            const rmIdFromRecord = Number(
+              currentCust?.rmId ||
+              currentCust?.RMId ||
+              currentCust?.relationshipManagerId ||
+              currentCust?.RelationshipManagerId ||
+              currentCust?.assignedRmId ||
+              currentCust?.AssignedRmId ||
+              0
+            );
+
+            let currentUser = {};
+            try {
+              currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || '{}');
+            } catch {
+              // Ignore malformed session data and rely on application data.
+            }
+            const sessionRmId = Number(currentUser?.rmId || currentUser?.RMId || 0);
+            const matched =
+              rows.find((r) => Number(r.rmId || r.RMId || r.id) === rmIdFromRecord && rmIdFromRecord > 0) ||
+              rows.find((r) => Number(r.rmId || r.RMId || r.id) === sessionRmId && sessionRmId > 0) ||
+              null;
+
             if (matched) {
               setLiveRM({
                 name: matched.fullName || matched.name || '',
@@ -673,8 +700,8 @@ export default function PdfView() {
 
   const loanAmount = appData.loanAmount || liveCustomer?.expectedLoanAmount || '';
   const loanTenure = appData.loanTenureMonths || '';
-  const resolvedRMName = sourcingData.sourcedBy || liveRM?.name || '';
-  const resolvedEmployeeId = sourcingData.employeeId || liveRM?.employeeId || '';
+  const resolvedRMName = liveRM?.name || (isObsoleteMock(sourcingData.sourcedBy) ? '' : sourcingData.sourcedBy) || '';
+  const resolvedEmployeeId = liveRM?.employeeId || (isObsoleteMock(sourcingData.employeeId) ? '' : sourcingData.employeeId) || '';
 
   const todayFormatted = toIstDateInput();
 
@@ -693,7 +720,7 @@ export default function PdfView() {
   const resolvedRMSignature =
     !isObsoleteMock(declarationData.ackReceivedBy)
       ? declarationData.ackReceivedBy
-      : (liveRM?.name || resolvedRMName);
+      : resolvedRMName;
 
   const resolvedRMDate =
     !isObsoleteMock(declarationData.ackDate)
