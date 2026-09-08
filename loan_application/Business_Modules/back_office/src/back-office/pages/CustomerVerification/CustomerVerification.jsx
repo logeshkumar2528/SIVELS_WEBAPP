@@ -6,81 +6,238 @@
  * Route: /backoffice/customers/:customerId/verify
  *
  * Architecture:
- * - Standalone full-page underwriting workspace without the standard Back Office sidebar.
+ * - Phase 3 Real API Integration: Connected to `GET /ApplicationFullDetails/:agentCustomerId`
+ *   and `/AgentCustomerDocument/bycustomer/:agentCustomerId` via `useVerificationWorkspace`.
+ * - Zero Dummy Data Dependencies: `getVerificationData` and `verificationDummyData` removed completely.
+ * - Standalone full-page underwriting workspace without the standard Back Office dashboard sidebar.
  * - Compact Verification Header (Customer Name, App ID, Product, Amount, Status summary).
  * - Left Sidebar: Dedicated "Application Steps" (12 RM Modules, View-Only).
- * - Right Area: Credit Bureau / PAN / CIBIL Verification Workspace.
+ * - Right Area: Credit Bureau / PAN / CIBIL Verification Workspace (Frontend Simulation).
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import iconMap from '../../config/iconMap';
 import { ROUTES } from '../../config/routeConfig';
-import {
-  VERIFICATION_STEP_DEFINITIONS,
-  getVerificationData,
-  getCreditReport,
-} from '../../data/verificationDummyData';
+import { VERIFICATION_STEP_DEFINITIONS } from '../../config/verificationSteps';
+import { useVerificationWorkspace } from '../../hooks/useVerificationWorkspace';
 import VerificationStepModal from '../../components/Verification/VerificationStepModal';
 import './CustomerVerification.css';
 
 function formatCurrency(amount) {
-  if (amount === null || amount === undefined || isNaN(amount)) return '₹0';
+  if (amount === null || amount === undefined || isNaN(amount) || amount === 0) return '₹0';
   return `₹${Number(amount).toLocaleString('en-IN')}`;
 }
 
 const STAGES = [
-  { id: 0, label: 'Checking PAN details (ABCDE1234F)...' },
-  { id: 1, label: 'Connecting to Credit Bureau (CIBIL / Experian)...' },
+  { id: 0, label: 'Checking PAN details & Tax identification records...' },
+  { id: 1, label: 'Connecting to Credit Bureau (TransUnion CIBIL / Experian)...' },
   { id: 2, label: 'Fetching credit history & active loan facilities...' },
-  { id: 3, label: 'Analyzing repayment records & credit score...' },
+  { id: 3, label: 'Analyzing repayment records & credit score rating...' },
   { id: 4, label: 'Credit Bureau Report Successfully Retrieved' },
 ];
+
+/**
+ * Builds simulated Credit Bureau report dynamically from customer verification data.
+ */
+function createBureauReport(customerData) {
+  const pan = customerData?.personalInformation?.panNumber || 'ABCDE1234F';
+  const score = 748;
+  const rating = 'EXCELLENT';
+  const customerName = customerData?.customerName || 'Customer';
+  const loanAmount = customerData?.applicationDetails?.loanAmount || 450000;
+
+  return {
+    customerId: customerData?.customerId,
+    customerName,
+    panNumber: pan,
+    bureauName: 'TransUnion CIBIL & Experian Credit Information',
+    reportId: `CIR-2026-${String(customerData?.customerId || '').replace(/\D/g, '').padStart(4, '0')}89`,
+    reportDate: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+    reportTimestamp: 'Just Now',
+    creditScore: score,
+    scoreRating: rating,
+    scoreRange: '300 - 900',
+    creditVintage: '8 Years Credit History',
+    reportStatus: 'Successfully Retrieved & Verified',
+
+    summaryMetrics: {
+      activeLoansCount: 2,
+      closedLoansCount: 3,
+      creditCardsCount: 2,
+      totalCreditCardLimit: 350000,
+      totalOutstandingAmount: Math.round(loanAmount * 0.75),
+      monthlyEmiObligation: Math.round(loanAmount * 0.05),
+      paymentHistoryPercentage: '98% On-Time',
+      zeroDefaultsNote: '0 Major Defaults',
+    },
+
+    activeLoans: [
+      {
+        id: 'ACT_01',
+        loanType: 'Personal Loan',
+        lender: 'HDFC Bank',
+        originalAmount: 500000,
+        outstanding: 210000,
+        emi: 12500,
+        status: 'Active',
+      },
+      {
+        id: 'ACT_02',
+        loanType: 'Vehicle Loan',
+        lender: 'ICICI Bank',
+        originalAmount: 800000,
+        outstanding: 135000,
+        emi: 20200,
+        status: 'Active',
+      },
+    ],
+
+    closedLoans: [
+      {
+        id: 'CLS_01',
+        loanType: 'Home Improvement Loan',
+        lender: 'Axis Bank',
+        loanAmount: 300000,
+        closedDate: '15 Mar 2024',
+        paymentRecord: 'Closed Successfully',
+      },
+      {
+        id: 'CLS_02',
+        loanType: 'Consumer Durable Loan',
+        lender: 'Bajaj Finance',
+        loanAmount: 80000,
+        loanAmountFormatted: '₹80,000',
+        closedDate: '10 Jan 2023',
+        paymentRecord: 'Closed Successfully',
+      },
+      {
+        id: 'CLS_03',
+        loanType: 'Education Loan',
+        lender: 'State Bank of India',
+        loanAmount: 250000,
+        closedDate: '20 Aug 2022',
+        paymentRecord: 'Closed Successfully',
+      },
+    ],
+
+    creditCards: [
+      {
+        id: 'CC_01',
+        cardName: 'HDFC Bank Credit Card',
+        lender: 'HDFC Bank',
+        creditLimit: 200000,
+        currentOutstanding: 45000,
+        utilizationPercent: 22,
+        status: 'Active',
+      },
+      {
+        id: 'CC_02',
+        cardName: 'ICICI Bank Credit Card',
+        lender: 'ICICI Bank',
+        creditLimit: 150000,
+        currentOutstanding: 25000,
+        utilizationPercent: 16,
+        status: 'Active',
+      },
+    ],
+
+    creditUtilization: {
+      totalLimit: 350000,
+      usedCredit: 70000,
+      availableCredit: 280000,
+      utilizationPercent: 20,
+    },
+
+    repaymentBehaviour: {
+      onTimePayments: '98%',
+      delayedPayments: '2%',
+      currentDpd: '0 Days',
+      maximumDpd: '15 Days',
+      recentDefaults: 'None',
+    },
+
+    underwritingAssessment: {
+      riskAssessment: 'LOW',
+      recommendedDecision: 'Eligible for Underwriting Sign-off',
+      highlights: [
+        { type: 'check', text: 'Strong repayment history with zero recent 90+ DPD default' },
+        { type: 'check', text: 'Healthy revolving credit utilization below 25%' },
+        { type: 'check', text: 'Clean banking conduct and active tax compliance' },
+        { type: 'warning', text: 'Existing debt obligations should be factored into FOIR' },
+      ],
+    },
+  };
+}
+
+/**
+ * Resolves standard status badge text and class.
+ */
+function getStatusInfo(status) {
+  if (status === null || status === undefined) {
+    return { label: 'Pending', className: 'bo-cv-pill-pending' };
+  }
+
+  if (typeof status === 'number') {
+    switch (status) {
+      case 4:
+        return { label: 'Approved', className: 'bo-cv-pill-verified' };
+      case 2:
+      case 3:
+        return { label: 'Under Review', className: 'bo-cv-pill-fetching' };
+      case 5:
+      case 6:
+        return { label: 'Rejected', className: 'bo-cv-pill-unverified' };
+      case 1:
+      case 0:
+      default:
+        return { label: 'Pending', className: 'bo-cv-pill-pending' };
+    }
+  }
+
+  const s = String(status).toLowerCase();
+  if (s.includes('approved')) return { label: 'Approved', className: 'bo-cv-pill-verified' };
+  if (s.includes('review') || s.includes('logged to ho')) return { label: 'Under Review', className: 'bo-cv-pill-fetching' };
+  if (s.includes('reject') || s.includes('return')) return { label: 'Rejected', className: 'bo-cv-pill-unverified' };
+  return { label: 'Pending', className: 'bo-cv-pill-pending' };
+}
 
 export default function CustomerVerification() {
   const { customerId } = useParams();
   const navigate = useNavigate();
 
-  // Retrieve centralized customer verification data
-  const customerData = useMemo(() => {
-    return getVerificationData(customerId);
-  }, [customerId]);
+  // 1. Fetch Real Application from Backend via Phase 1/3 Hook
+  const { verificationData, loading, error, refetch } = useVerificationWorkspace(customerId);
 
-  // Credit Bureau Verification State: 'idle' | 'loading' | 'success'
+  // 2. Credit Bureau Verification Simulation State: 'idle' | 'loading' | 'success'
   const [bureauState, setBureauState] = useState('idle');
   const [loadingStage, setLoadingStage] = useState(0);
 
-  // Step modal state (view-only inspection of 12 RM steps)
+  // 3. Step modal state (view-only inspection of 12 RM steps)
   const [selectedStepNumber, setSelectedStepNumber] = useState(null);
 
-  // Icons
+  // 4. Icons
   const ArrowLeftIcon = iconMap['ArrowLeft'];
   const ArrowRightIcon = iconMap['ArrowRight'];
   const ShieldCheckIcon = iconMap['ShieldCheck'];
   const CheckCircleIcon = iconMap['CheckCircle2'] || iconMap['Check'];
-  const ClockIcon = iconMap['Clock'];
   const AlertTriangleIcon = iconMap['AlertTriangle'];
-  const FileTextIcon = iconMap['FileText'];
-  const BuildingIcon = iconMap['Building2'] || iconMap['Landmark'];
   const RefreshCwIcon = iconMap['RefreshCw'];
-  const CreditCardIcon = iconMap['CreditCard'] || iconMap['Landmark'];
   const LockIcon = iconMap['Lock'] || iconMap['ShieldCheck'];
   const EyeIcon = iconMap['Eye'] || iconMap['FileText'];
-  const TrendingUpIcon = iconMap['TrendingUp'];
-  const CheckIcon = iconMap['Check'] || iconMap['CheckCircle2'];
 
-  // Staged loading effect (approx 2.4s simulation)
+  // Staged loading effect for CIBIL simulation (approx 2.3s)
   useEffect(() => {
     let t1, t2, t3, t4;
     if (bureauState === 'loading') {
       setLoadingStage(0);
-      t1 = setTimeout(() => setLoadingStage(1), 500);
-      t2 = setTimeout(() => setLoadingStage(2), 1100);
-      t3 = setTimeout(() => setLoadingStage(3), 1700);
+      t1 = setTimeout(() => setLoadingStage(1), 450);
+      t2 = setTimeout(() => setLoadingStage(2), 1000);
+      t3 = setTimeout(() => setLoadingStage(3), 1600);
       t4 = setTimeout(() => {
         setLoadingStage(4);
         setBureauState('success');
-      }, 2300);
+      }, 2200);
     }
     return () => {
       clearTimeout(t1);
@@ -90,10 +247,11 @@ export default function CustomerVerification() {
     };
   }, [bureauState]);
 
-  // Credit Report Data (retrieved from centralized store)
+  // Credit Report Data (built dynamically from real verificationData)
   const creditReport = useMemo(() => {
-    return getCreditReport(customerId);
-  }, [customerId]);
+    if (!verificationData) return null;
+    return createBureauReport(verificationData);
+  }, [verificationData]);
 
   // Handlers
   const handleFetchCreditReport = () => {
@@ -121,15 +279,78 @@ export default function CustomerVerification() {
   };
 
   // ----------------------------------------------------
-  // Invalid Customer ID Fallback View
+  // 1. Loading State View
   // ----------------------------------------------------
-  if (!customerData) {
+  if (loading) {
+    return (
+      <div className="bo-cv-page-wrap">
+        <header className="bo-cv-header">
+          <div className="bo-cv-header-left">
+            <button type="button" className="bo-cv-back-btn" onClick={handleBack}>
+              {ArrowLeftIcon && <ArrowLeftIcon size={14} />}
+              <span>Back to Customers</span>
+            </button>
+          </div>
+        </header>
+        <div className="bo-cv-loading-fullscreen" role="status" aria-live="polite">
+          <div className="bo-cv-loading-spinner" aria-hidden="true" />
+          <h2>Loading Customer Application</h2>
+          <p>Fetching application and verification details for Customer #{customerId}...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ----------------------------------------------------
+  // 2. Error State View (With Retry Action)
+  // ----------------------------------------------------
+  if (error && !verificationData) {
+    return (
+      <div className="bo-cv-page-wrap">
+        <header className="bo-cv-header">
+          <div className="bo-cv-header-left">
+            <button type="button" className="bo-cv-back-btn" onClick={handleBack}>
+              {ArrowLeftIcon && <ArrowLeftIcon size={14} />}
+              <span>Back to Customers</span>
+            </button>
+          </div>
+        </header>
+        <div className="bo-cv-error-fullscreen" role="alert">
+          <div className="bo-cv-error-card">
+            <div className="bo-cv-error-icon">
+              {AlertTriangleIcon && <AlertTriangleIcon size={32} />}
+            </div>
+            <h2>Unable to Load Customer Verification Details</h2>
+            <p>{error}</p>
+            <div className="bo-cv-error-actions">
+              <button type="button" className="bo-btn bo-btn--primary" onClick={refetch}>
+                {RefreshCwIcon && <RefreshCwIcon size={14} />}
+                <span>Retry</span>
+              </button>
+              <button
+                type="button"
+                className="bo-btn bo-btn--outline"
+                onClick={() => navigate(ROUTES.CUSTOMERS)}
+              >
+                <span>Back to Customer Monitoring</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ----------------------------------------------------
+  // 3. Not Found View
+  // ----------------------------------------------------
+  if (!verificationData) {
     return (
       <div className="bo-cv-page-wrap">
         <header className="bo-cv-header">
           <div className="bo-cv-header-left">
             <button type="button" className="bo-cv-back-btn" onClick={() => navigate(ROUTES.CUSTOMERS)}>
-              {ArrowLeftIcon && <ArrowLeftIcon size={15} />}
+              {ArrowLeftIcon && <ArrowLeftIcon size={14} />}
               <span>Back to Customers</span>
             </button>
           </div>
@@ -141,8 +362,8 @@ export default function CustomerVerification() {
             </div>
             <h2>Customer Verification Record Not Found</h2>
             <p>
-              No active application or customer profile was found matching ID: <strong>{customerId}</strong>.
-              Please return to the customer queue and select a valid application.
+              No active application was found matching Customer ID: <strong>{customerId}</strong>.
+              Please return to Customer Monitoring and select a valid application.
             </p>
             <button
               type="button"
@@ -162,12 +383,13 @@ export default function CustomerVerification() {
     ? VERIFICATION_STEP_DEFINITIONS.find((s) => s.number === selectedStepNumber)
     : null;
 
-  const appDetails = customerData.applicationDetails || {};
-  const panNumber = customerData.personalInformation?.panNumber || 'ABCDE1234F';
+  const appDetails = verificationData.applicationDetails || {};
+  const panNumber = verificationData.personalInformation?.panNumber || 'Not Available';
+  const statusInfo = getStatusInfo(verificationData.overallStatus);
 
   return (
     <div className="bo-cv-page-wrap">
-      {/* ── 1. Compact Verification Header ────────────────────────────── */}
+      {/* ── 1. Compact Verification Header (Real API Data) ──────────────── */}
       <header className="bo-cv-header">
         {/* Left: Back button */}
         <div className="bo-cv-header-left">
@@ -185,9 +407,9 @@ export default function CustomerVerification() {
         {/* Center / Main Information */}
         <div className="bo-cv-header-center">
           <div className="bo-cv-lead-info">
-            <h1 className="bo-cv-cust-title">{customerData.customerName}</h1>
+            <h1 className="bo-cv-cust-title">{verificationData.customerName}</h1>
             <div className="bo-cv-meta-inline">
-              <span className="bo-cv-app-id">Application: {customerData.applicationId}</span>
+              <span className="bo-cv-app-id">{verificationData.applicationId}</span>
               <span className="bo-cv-dot">&bull;</span>
               <span className="bo-cv-product-amount">
                 {appDetails.loanProduct} &bull; <strong>{formatCurrency(appDetails.loanAmount)}</strong>
@@ -196,11 +418,11 @@ export default function CustomerVerification() {
           </div>
         </div>
 
-        {/* Right: Small verification status summary */}
+        {/* Right: Verification status summary badges */}
         <div className="bo-cv-header-right">
           <div className="bo-cv-status-badge-item">
             <span className="bo-cv-status-lbl">Application:</span>
-            <span className="bo-cv-pill-pending">Pending</span>
+            <span className={statusInfo.className}>{statusInfo.label}</span>
           </div>
 
           <div className="bo-cv-status-badge-item">
@@ -223,7 +445,7 @@ export default function CustomerVerification() {
 
       {/* ── 2. Dedicated 2-Column Workspace Body ──────────────────────── */}
       <div className="bo-cv-workspace-body">
-        {/* ── LEFT SIDEBAR: ONLY 12 RM APPLICATION STEPS ──────────────── */}
+        {/* ── LEFT SIDEBAR: ONLY 12 RM APPLICATION STEPS (SIVELS DEEP GREEN) ── */}
         <aside className="bo-cv-left-sidebar" aria-label="12 RM Application Steps">
           <div className="bo-cv-sidebar-header">
             <h2 className="bo-cv-sidebar-title">Application Steps</h2>
@@ -300,7 +522,7 @@ export default function CustomerVerification() {
 
                   <div className="bo-cv-applicant-col">
                     <label className="bo-cv-field-lbl">Applicant Name</label>
-                    <strong className="bo-cv-applicant-name">{customerData.customerName}</strong>
+                    <strong className="bo-cv-applicant-name">{verificationData.customerName}</strong>
                   </div>
                 </div>
 
@@ -323,7 +545,7 @@ export default function CustomerVerification() {
             </div>
           )}
 
-          {/* ── STATE 2: DUMMY CREDIT REPORT FETCH INTERACTION (LOADING) */}
+          {/* ── STATE 2: CREDIT REPORT FETCH INTERACTION (LOADING SIMULATION) */}
           {bureauState === 'loading' && (
             <div className="bo-cv-loading-section">
               <div className="bo-cv-bureau-card bo-cv-loading-card">
@@ -371,7 +593,7 @@ export default function CustomerVerification() {
             </div>
           )}
 
-          {/* ── STATE 3: AFTER FETCH – CIBIL SCORE DASHBOARD (SUCCESS) ─── */}
+          {/* ── STATE 3: AFTER FETCH – CIBIL SCORE DASHBOARD (SUCCESS SIMULATION) */}
           {bureauState === 'success' && creditReport && (
             <div className="bo-cv-dashboard">
               {/* 1. Top Section: CIBIL Score & Credit Health Summary */}
@@ -408,7 +630,7 @@ export default function CustomerVerification() {
                 </div>
               </div>
 
-              {/* 2. Section 10: Credit Summary Cards (6 Compact Cards) */}
+              {/* 2. Credit Summary KPI Cards */}
               <div className="bo-cv-kpi-grid">
                 <div className="bo-cv-kpi-card">
                   <span className="bo-cv-kpi-title">Active Loan Accounts</span>
@@ -431,7 +653,7 @@ export default function CustomerVerification() {
                 <div className="bo-cv-kpi-card">
                   <span className="bo-cv-kpi-title">Total Outstanding</span>
                   <strong className="bo-cv-kpi-val">{formatCurrency(creditReport.summaryMetrics.totalOutstandingAmount)}</strong>
-                  <span className="bo-cv-kpi-sub">Across Active Credit Facilities</span>
+                  <span className="bo-cv-kpi-sub">Across Active Facilities</span>
                 </div>
 
                 <div className="bo-cv-kpi-card">
@@ -447,7 +669,7 @@ export default function CustomerVerification() {
                 </div>
               </div>
 
-              {/* 3. Section 11: Active Loans Section */}
+              {/* 3. Active Loans Section */}
               <div className="bo-cv-section-box">
                 <div className="bo-cv-section-head">
                   <h3 className="bo-cv-section-title">Active Loan Accounts</h3>
@@ -484,7 +706,7 @@ export default function CustomerVerification() {
                 </div>
               </div>
 
-              {/* 4. Section 12: Closed Loans Section */}
+              {/* 4. Closed Loans Section */}
               <div className="bo-cv-section-box">
                 <div className="bo-cv-section-head">
                   <h3 className="bo-cv-section-title">Closed Loan Accounts</h3>
@@ -519,7 +741,7 @@ export default function CustomerVerification() {
                 </div>
               </div>
 
-              {/* 5. Section 13: Credit Card Exposure */}
+              {/* 5. Credit Card Exposure */}
               <div className="bo-cv-section-box">
                 <div className="bo-cv-section-head">
                   <h3 className="bo-cv-section-title">Credit Card Exposure</h3>
@@ -560,7 +782,7 @@ export default function CustomerVerification() {
                 </div>
               </div>
 
-              {/* 6. Section 14: Credit Utilization */}
+              {/* 6. Credit Utilization */}
               <div className="bo-cv-section-box">
                 <div className="bo-cv-section-head">
                   <h3 className="bo-cv-section-title">Credit Utilization</h3>
@@ -594,7 +816,7 @@ export default function CustomerVerification() {
                 </div>
               </div>
 
-              {/* 7. Section 15: Repayment Behaviour */}
+              {/* 7. Repayment Behaviour */}
               <div className="bo-cv-section-box">
                 <div className="bo-cv-section-head">
                   <h3 className="bo-cv-section-title">Repayment Behaviour</h3>
@@ -625,7 +847,7 @@ export default function CustomerVerification() {
                 </div>
               </div>
 
-              {/* 8. Section 16: Underwriting Risk Insight */}
+              {/* 8. Underwriting Risk Insight */}
               <div className="bo-cv-insight-box">
                 <div className="bo-cv-insight-head">
                   <div className="bo-cv-insight-title-group">
@@ -659,12 +881,12 @@ export default function CustomerVerification() {
         </main>
       </div>
 
-      {/* ── View-Only 12-Step Inspection Modal ──────────────────────────── */}
+      {/* ── View-Only 12-Step Inspection Modal (Single-Fetch Shared Data) ── */}
       {selectedStepNumber && selectedStepDef && (
         <VerificationStepModal
           stepNumber={selectedStepNumber}
           stepDefinition={selectedStepDef}
-          customerData={customerData}
+          customerData={verificationData}
           onClose={handleCloseModal}
         />
       )}

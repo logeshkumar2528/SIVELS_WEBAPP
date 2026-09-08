@@ -3,23 +3,68 @@ import { useNavigate } from 'react-router-dom';
 import StatCard from '../../components/StatCard/StatCard';
 import iconMap from '../../config/iconMap';
 import { ROUTES, buildRoute } from '../../config/routeConfig';
-import { getKPIs, getAllDistricts, formatCurrency } from '../../data/backOfficeDummyData';
+import { useDashboardData } from '../../hooks/useDashboardData';
 import './Dashboard.css';
+
+/**
+ * Currency formatter for loan amounts.
+ */
+function formatCurrency(amount) {
+  const num = Number(amount);
+  if (!amount || isNaN(num) || num === 0) return '₹0';
+  if (num >= 10000000) return `₹${(num / 10000000).toFixed(2)} Cr`;
+  if (num >= 100000) return `₹${(num / 100000).toFixed(2)} L`;
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(num);
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const kpis = getKPIs();
-  const districts = getAllDistricts();
 
+  // 1. Live Data Hook
+  const {
+    districts,
+    rms,
+    agents,
+    customers,
+    metrics,
+    loading,
+    error,
+    refetch,
+  } = useDashboardData();
+
+  // 2. Resolved Icons
   const MapPinIcon = iconMap['MapPin'] || iconMap['Building2'];
   const UsersIcon = iconMap['Users'];
   const UserCheckIcon = iconMap['UserCheck'] || iconMap['UserRound'];
   const FileTextIcon = iconMap['FileText'];
   const ArrowRightIcon = iconMap['ArrowRight'];
   const WalletIcon = iconMap['Wallet'] || iconMap['BadgeIndianRupee'];
+  const AlertCircleIcon = iconMap['AlertCircle'] || iconMap['AlertTriangle'];
+  const RefreshCwIcon = iconMap['RefreshCw'] || iconMap['RotateCcw'];
 
   return (
     <div className="bo-dashboard">
+      {/* Error State Banner */}
+      {error && (
+        <div className="bo-table-error-container" role="alert">
+          <div className="bo-error-flex">
+            {AlertCircleIcon && <AlertCircleIcon size={24} className="bo-error-icon" />}
+            <div className="bo-error-content">
+              <h4>Unable to Load Dashboard Data</h4>
+              <p>{error}</p>
+            </div>
+          </div>
+          <button type="button" className="bo-btn-retry" onClick={refetch}>
+            {RefreshCwIcon && <RefreshCwIcon size={13} />}
+            <span>Retry</span>
+          </button>
+        </div>
+      )}
+
       {/* ==========================================
           SECTION 1 — 4 KPI METRIC CARDS
       ========================================== */}
@@ -27,45 +72,49 @@ export default function Dashboard() {
         <StatCard
           icon={MapPinIcon && <MapPinIcon size={22} strokeWidth={1.8} />}
           title="Total Districts"
-          value={kpis.totalDistricts}
+          value={metrics.totalDistricts}
           description="Operational Territories"
-          trend="6 Active Districts"
+          trend={`${metrics.totalDistricts} Active Districts`}
           trendDirection="neutral"
           variant="default"
           onClick={() => navigate(ROUTES.DISTRICTS)}
+          loading={loading}
         />
 
         <StatCard
           icon={UsersIcon && <UsersIcon size={22} strokeWidth={1.8} />}
           title="Total RMs"
-          value={kpis.totalRMs}
+          value={metrics.totalRMs}
           description="Relationship Managers"
-          trend="24 Active Staff"
+          trend={`${metrics.totalRMs} Active Staff`}
           trendDirection="up"
           variant="success"
           onClick={() => navigate(ROUTES.RMS)}
+          loading={loading}
         />
 
         <StatCard
           icon={UserCheckIcon && <UserCheckIcon size={22} strokeWidth={1.8} />}
           title="Total Agents"
-          value={kpis.totalAgents}
+          value={metrics.totalAgents}
           description="Field Agents in Network"
-          trend="88 Field Agents"
+          trend={`${metrics.totalAgents} Field Agents`}
           trendDirection="up"
           variant="info"
           onClick={() => navigate(ROUTES.AGENTS)}
+          loading={loading}
         />
 
         <StatCard
           icon={FileTextIcon && <FileTextIcon size={22} strokeWidth={1.8} />}
           title="Total Customers"
-          value={kpis.totalCustomers}
+          value={metrics.totalCustomers}
           description="Loan Applications"
-          trend="₹18.45 Cr Portfolio"
+          trend={`${formatCurrency(metrics.totalPortfolio)} Portfolio`}
           trendDirection="up"
           variant="warning"
           onClick={() => navigate(ROUTES.CUSTOMERS)}
+          loading={loading}
         />
       </section>
 
@@ -88,81 +137,105 @@ export default function Dashboard() {
           </button>
         </div>
 
-        <div className="bo-district-grid">
-          {districts.map((district) => (
-            <div
-              key={district.id}
-              className="bo-district-card bo-district-card--interactive"
-              role="button"
-              tabIndex={0}
-              onClick={() => navigate(buildRoute.districtDetail(district.id))}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  navigate(buildRoute.districtDetail(district.id));
-                }
-              }}
-              aria-label={`View operations for ${district.name} district`}
-            >
-              <div className="bo-district-card-header">
-                <div className="bo-district-badge">
-                  {MapPinIcon && <MapPinIcon size={14} />}
-                  <span>{district.code}</span>
-                </div>
-                <span className="bo-district-zone">{district.zone}</span>
-              </div>
+        {loading && districts.length === 0 ? (
+          <div className="bo-table-loading-container" aria-live="polite">
+            <div className="bo-loading-spinner" aria-hidden="true" />
+            <p className="bo-loading-text">Loading district operations overview...</p>
+          </div>
+        ) : (
+          <div className="bo-district-grid">
+            {districts.map((district) => {
+              const targetId = district.districtId || district.id;
+              const code = district.code || district.districtCode || (district.name ? district.name.substring(0, 3).toUpperCase() : 'DST');
+              const zone = district.zone || 'Tamil Nadu Zone';
+              const hq = district.headquarters || `${district.name} Main Branch`;
+              const completionRate = district.completionRate || 0;
+              const pendingCount = district.pendingCount || 0;
 
-              <h3 className="bo-district-name">{district.name}</h3>
-              <p className="bo-district-hq">{district.headquarters}</p>
-
-              <div className="bo-district-stats-grid">
-                <div className="bo-stat-box">
-                  <span className="bo-stat-box-label">RMs</span>
-                  <strong className="bo-stat-box-value">{district.rmCount}</strong>
-                </div>
-                <div className="bo-stat-box">
-                  <span className="bo-stat-box-label">Agents</span>
-                  <strong className="bo-stat-box-value">{district.agentCount}</strong>
-                </div>
-                <div className="bo-stat-box">
-                  <span className="bo-stat-box-label">Customers</span>
-                  <strong className="bo-stat-box-value">{district.customerCount}</strong>
-                </div>
-              </div>
-
-              <div className="bo-district-portfolio">
-                <div className="bo-portfolio-row">
-                  <span>Portfolio Volume</span>
-                  <strong>{formatCurrency(district.totalPortfolio)}</strong>
-                </div>
-                <div className="bo-progress-track">
-                  <div
-                    className="bo-progress-fill"
-                    style={{ width: `${district.completionRate}%` }}
-                  />
-                </div>
-                <div className="bo-portfolio-footer">
-                  <span>{district.completionRate}% Disbursed</span>
-                  <span>{district.pendingCount} Pending</span>
-                </div>
-              </div>
-
-              <div className="bo-district-card-footer">
-                <button
-                  type="button"
-                  className="bo-district-action-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(buildRoute.districtDetail(district.id));
+              return (
+                <div
+                  key={targetId}
+                  className="bo-district-card bo-district-card--interactive"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    if (targetId) {
+                      navigate(buildRoute.districtDetail(targetId));
+                    }
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (targetId) {
+                        navigate(buildRoute.districtDetail(targetId));
+                      }
+                    }
+                  }}
+                  aria-label={`View operations for ${district.name} district`}
                 >
-                  <span>View District Details</span>
-                  {ArrowRightIcon && <ArrowRightIcon size={14} />}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+                  <div className="bo-district-card-header">
+                    <div className="bo-district-badge">
+                      {MapPinIcon && <MapPinIcon size={14} />}
+                      <span>{code}</span>
+                    </div>
+                    <span className="bo-district-zone">{zone}</span>
+                  </div>
+
+                  <h3 className="bo-district-name">{district.name}</h3>
+                  <p className="bo-district-hq">{hq}</p>
+
+                  <div className="bo-district-stats-grid">
+                    <div className="bo-stat-box">
+                      <span className="bo-stat-box-label">RMs</span>
+                      <strong className="bo-stat-box-value">{district.rmCount ?? 0}</strong>
+                    </div>
+                    <div className="bo-stat-box">
+                      <span className="bo-stat-box-label">Agents</span>
+                      <strong className="bo-stat-box-value">{district.agentCount ?? 0}</strong>
+                    </div>
+                    <div className="bo-stat-box">
+                      <span className="bo-stat-box-label">Customers</span>
+                      <strong className="bo-stat-box-value">{district.customerCount ?? 0}</strong>
+                    </div>
+                  </div>
+
+                  <div className="bo-district-portfolio">
+                    <div className="bo-portfolio-row">
+                      <span>Portfolio Volume</span>
+                      <strong>{formatCurrency(district.totalPortfolio)}</strong>
+                    </div>
+                    <div className="bo-progress-track">
+                      <div
+                        className="bo-progress-fill"
+                        style={{ width: `${Math.min(100, Math.max(0, completionRate))}%` }}
+                      />
+                    </div>
+                    <div className="bo-portfolio-footer">
+                      <span>{completionRate}% Disbursed</span>
+                      <span>{pendingCount} Pending</span>
+                    </div>
+                  </div>
+
+                  <div className="bo-district-card-footer">
+                    <button
+                      type="button"
+                      className="bo-district-action-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (targetId) {
+                          navigate(buildRoute.districtDetail(targetId));
+                        }
+                      }}
+                    >
+                      <span>View District Details</span>
+                      {ArrowRightIcon && <ArrowRightIcon size={14} />}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* ==========================================
@@ -182,15 +255,15 @@ export default function Dashboard() {
           <div className="bo-summary-amounts">
             <div className="bo-amount-item">
               <small>Total Pipeline</small>
-              <strong>{formatCurrency(kpis.totalPortfolio)}</strong>
+              <strong>{formatCurrency(metrics.totalPortfolio)}</strong>
             </div>
             <div className="bo-amount-item is-success">
               <small>Disbursed Amount</small>
-              <strong>{formatCurrency(kpis.totalDisbursed)}</strong>
+              <strong>{formatCurrency(metrics.disbursedAmount || metrics.totalDisbursed)}</strong>
             </div>
             <div className="bo-amount-item is-warning">
               <small>Pending Applications</small>
-              <strong>{formatCurrency(kpis.totalPending)}</strong>
+              <strong>{formatCurrency(metrics.pendingPipelineAmount || metrics.totalPending)}</strong>
             </div>
           </div>
         </div>
@@ -209,7 +282,7 @@ export default function Dashboard() {
               </div>
               <div className="bo-qa-text">
                 <strong>RM Monitoring Console</strong>
-                <small>Track performance of 24 Relationship Managers</small>
+                <small>Track performance of {metrics.totalRMs || 0} Relationship Managers</small>
               </div>
               {ArrowRightIcon && <ArrowRightIcon size={16} className="bo-qa-arrow" />}
             </button>
@@ -224,7 +297,7 @@ export default function Dashboard() {
               </div>
               <div className="bo-qa-text">
                 <strong>Agent Network Operations</strong>
-                <small>Monitor 88 field agents across Tamil Nadu districts</small>
+                <small>Monitor {metrics.totalAgents || 0} field agents across Tamil Nadu districts</small>
               </div>
               {ArrowRightIcon && <ArrowRightIcon size={16} className="bo-qa-arrow" />}
             </button>
@@ -239,7 +312,7 @@ export default function Dashboard() {
               </div>
               <div className="bo-qa-text">
                 <strong>Customer Applications Queue</strong>
-                <small>Manage 412 loan applications and verification flow</small>
+                <small>Manage {metrics.totalCustomers || 0} loan applications and verification flow</small>
               </div>
               {ArrowRightIcon && <ArrowRightIcon size={16} className="bo-qa-arrow" />}
             </button>
@@ -249,3 +322,4 @@ export default function Dashboard() {
     </div>
   );
 }
+

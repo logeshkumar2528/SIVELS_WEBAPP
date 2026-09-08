@@ -81,6 +81,15 @@ export function isMobileMatch(recordMobile, inputMobile) {
  */
 export const ACCOUNT_SOURCES = [
   {
+    role: 'BackOffice',
+    module: 'BackOffice',
+    endpoint: '/BackOfficeMaster',
+    destination: BACKOFFICE_DASHBOARD,
+    idKey: 'backOfficeId',
+    storageKey: 'backOfficeData',
+    idStorageKey: 'backOfficeId',
+  },
+  {
     role: 'AMS',
     module: 'AMS',
     endpoint: '/AMSMaster',
@@ -128,7 +137,7 @@ function unwrapResponse(settledRes) {
 }
 
 /**
- * Detects whether the entered mobile number belongs to an AMS, RM, Agent, or Customer account.
+ * Detects whether the entered mobile number belongs to a BackOffice, AMS, RM, Agent, or Customer account.
  *
  * @param {string} mobileNumber - The entered mobile number
  * @returns {Promise<{
@@ -156,13 +165,14 @@ export async function detectAccountModule(mobileNumber) {
   }
 
   // Fetch all master APIs concurrently
-  let agentRes, rmRes, amsRes, customerRes;
+  let agentRes, rmRes, amsRes, customerRes, backOfficeRes;
   try {
-    [agentRes, rmRes, amsRes, customerRes] = await Promise.allSettled([
+    [agentRes, rmRes, amsRes, customerRes, backOfficeRes] = await Promise.allSettled([
       axiosInstance.get('/AgentMaster'),
       axiosInstance.get('/RMMaster'),
       axiosInstance.get('/AMSMaster'),
       axiosInstance.get('/AgentAddCustomer'),
+      axiosInstance.get('/BackOfficeMaster'),
     ]);
   } catch (err) {
     console.error('[ModuleDetection] Network error fetching masters:', err);
@@ -180,13 +190,15 @@ export async function detectAccountModule(mobileNumber) {
   const rmData = unwrapResponse(rmRes);
   const amsData = unwrapResponse(amsRes);
   const customerData = unwrapResponse(customerRes);
+  const backOfficeData = unwrapResponse(backOfficeRes);
 
+  console.log("BackOffice API response:", backOfficeData);
   console.log("Agent API response:", agentData);
   console.log("RM API response:", rmData);
   console.log("AMS API response:", amsData);
 
   // Check if all master lookups failed to connect
-  const anyFulfilled = [agentRes, rmRes, amsRes, customerRes].some((r) => r.status === 'fulfilled');
+  const anyFulfilled = [agentRes, rmRes, amsRes, customerRes, backOfficeRes].some((r) => r.status === 'fulfilled');
   if (!anyFulfilled) {
     if (normalizedMobile === '1234567890') {
       return {
@@ -230,6 +242,7 @@ export async function detectAccountModule(mobileNumber) {
   }
 
   const sourcesMap = {
+    BackOffice: backOfficeData,
     AMS: amsData,
     RM: rmData,
     Agent: agentData,
