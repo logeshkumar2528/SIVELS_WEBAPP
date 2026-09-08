@@ -34,9 +34,8 @@ import { ROUTES } from './routeConfig';
 
 /** @type {NavItem[]} */
 export const NAV_ITEMS = [
-
   /* ==========================================
-     TOP LEVEL (no section heading)
+     MAIN OPERATIONS & MONITORING
   ========================================== */
   {
     id:       'dashboard',
@@ -46,75 +45,41 @@ export const NAV_ITEMS = [
     badgeKey: null,
     section:  null,
   },
-
-  /* ==========================================
-     APPLICATIONS
-  ========================================== */
   {
-    id:       'new-applications',
-    label:    'New Applications',
-    icon:     'FilePlus',
-    route:    ROUTES.NEW_APPLICATIONS,
-    badgeKey: 'newApplications',
-    section:  'APPLICATIONS',
-  },
-  {
-    id:       'returned',
-    label:    'Returned',
-    icon:     'RotateCcw',
-    route:    ROUTES.RETURNED,
-    badgeKey: 'returned',
-    section:  'APPLICATIONS',
-  },
-  {
-    id:       'pending-applications',
-    label:    'Pending',
-    icon:     'Clock',
-    route:    ROUTES.PENDING_APPLICATIONS,
-    badgeKey: 'pendingApplications',
-    section:  'APPLICATIONS',
-  },
-  {
-    id:       'rejected',
-    label:    'Rejected',
-    icon:     'XCircle',
-    route:    ROUTES.REJECTED_APPLICATIONS,
-    badgeKey: 'rejected',
-    section:  'APPLICATIONS',
-  },
-  {
-    id:       'approved',
-    label:    'Approved',
-    icon:     'CheckCircle',
-    route:    ROUTES.APPROVED,
-    badgeKey: 'approved',
-    section:  'APPLICATIONS',
-  },
-  {
-    id:       'disbursement-history',
-    label:    'Disbursement History',
-    icon:     'History',
-    route:    ROUTES.DISBURSEMENT_HISTORY,
+    id:       'districts',
+    label:    'District Overview',
+    icon:     'MapPin',
+    route:    ROUTES.DISTRICTS,
     badgeKey: null,
-    section:  'APPLICATIONS',
+    section:  'OPERATIONS',
   },
-
-  /* ==========================================
-     REPORTS
-  ========================================== */
   {
-    id:       'reports-analytics',
-    label:    'Reports & Analytics',
-    icon:     'BarChart2',
-    route:    ROUTES.REPORTS_ANALYTICS,
+    id:       'rms',
+    label:    'RM Monitoring',
+    icon:     'Users',
+    route:    ROUTES.RMS,
     badgeKey: null,
-    section:  'REPORTS',
+    section:  'OPERATIONS',
+  },
+  {
+    id:       'agents',
+    label:    'Agent Monitoring',
+    icon:     'UserCheck',
+    route:    ROUTES.AGENTS,
+    badgeKey: null,
+    section:  'OPERATIONS',
+  },
+  {
+    id:       'customers',
+    label:    'Customer Monitoring',
+    icon:     'FileText',
+    route:    ROUTES.CUSTOMERS,
+    badgeKey: null,
+    section:  'OPERATIONS',
   },
 
   /* ==========================================
      BOTTOM (pinned — Profile, Logout)
-     section: 'BOTTOM' tells Sidebar to render
-     these outside the scrollable nav area.
   ========================================== */
   {
     id:       'profile',

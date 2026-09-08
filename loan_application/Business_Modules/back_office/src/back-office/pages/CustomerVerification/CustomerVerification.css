@@ -1,0 +1,1254 @@
+/**
+ * CustomerVerification.css
+ * --------------------
+ * Dedicated Full-Screen Customer Verification Workspace Styles.
+ * Professional, clean banking underwriting layout for Sivels Finance.
+ */
+
+/* ── Full-Screen Page Wrapper ──────────────────────────────────────── */
+.bo-cv-page-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+  background: #f8fafc;
+  color: #0f172a;
+  font-family: inherit;
+}
+
+/* ── 1. Compact Verification Header ────────────────────────────────── */
+.bo-cv-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: 60px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  gap: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.bo-cv-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.bo-cv-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.bo-cv-back-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+/* Center / Main Header Info */
+.bo-cv-header-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.bo-cv-lead-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bo-cv-cust-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.bo-cv-meta-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.bo-cv-app-id {
+  font-family: monospace;
+  font-weight: 600;
+  color: #475569;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.bo-cv-dot {
+  color: #cbd5e1;
+}
+
+.bo-cv-product-amount {
+  color: #334155;
+}
+
+.bo-cv-product-amount strong {
+  color: var(--color-primary, #0F7A4C);
+}
+
+/* Right: Verification Status Badges */
+.bo-cv-header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.bo-cv-status-badge-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.bo-cv-status-lbl {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.bo-cv-pill-pending {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.bo-cv-pan-badge {
+  font-family: monospace;
+  font-weight: 700;
+  font-size: 12px;
+  color: #0f172a;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.bo-cv-pill-verified {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.bo-cv-pill-fetching {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.bo-cv-pill-unverified {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+/* ── 2. Dedicated 2-Column Body ────────────────────────────────────── */
+.bo-cv-workspace-body {
+  display: flex;
+  flex: 1;
+  min-height: calc(100vh - 60px);
+}
+
+/* ── LEFT SIDEBAR: ONLY 12 RM APPLICATION STEPS (SIVELS DEEP GREEN) ── */
+.bo-cv-left-sidebar {
+  width: 290px;
+  min-width: 290px;
+  background-color: var(--color-sidebar-bg, #162219);
+  border-right: 1px solid var(--color-sidebar-border, #243B28);
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 60px);
+  position: sticky;
+  top: 60px;
+  overflow: hidden; /* Scrollbar removed completely, sidebar will NOT scroll */
+  scrollbar-width: none;
+}
+
+.bo-cv-left-sidebar::-webkit-scrollbar {
+  display: none;
+}
+
+.bo-cv-sidebar-header {
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--color-sidebar-border, #243B28);
+  background: rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+}
+
+.bo-cv-sidebar-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.bo-cv-sidebar-subtitle {
+  font-size: 10px;
+  color: var(--color-sidebar-text, #8DB89A);
+  display: block;
+  margin-top: 1px;
+  font-weight: 500;
+}
+
+.bo-cv-steps-nav {
+  padding: 6px 8px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.bo-cv-steps-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  gap: 2px;
+}
+
+.bo-cv-step-item {
+  list-style: none;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.bo-cv-step-card {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.12s ease;
+  font-family: inherit;
+}
+
+.bo-cv-step-card:hover {
+  background: var(--color-sidebar-item-hover, #1E2E22);
+  border-color: rgba(74, 222, 128, 0.2);
+  transform: translateX(2px);
+}
+
+.bo-cv-step-card.is-active {
+  background: var(--color-sidebar-item-active, #243B28);
+  border-color: var(--color-primary, #0F7A4C);
+  box-shadow: inset 2px 0 0 #4ADE80;
+}
+
+.bo-cv-step-num-box {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border-radius: 4px;
+  background: #1E2E22;
+  color: #A8D5B5;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid #243B28;
+}
+
+.bo-cv-step-card:hover .bo-cv-step-num-box {
+  background: #243B28;
+  color: #FFFFFF;
+}
+
+.bo-cv-step-card.is-active .bo-cv-step-num-box {
+  background: var(--color-primary, #0F7A4C);
+  color: #ffffff;
+  border-color: #4ADE80;
+}
+
+.bo-cv-step-details {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  line-height: 1.15;
+}
+
+.bo-cv-step-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #FFFFFF;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bo-cv-step-card.is-active .bo-cv-step-name {
+  color: #4ADE80;
+}
+
+.bo-cv-step-desc {
+  font-size: 9.5px;
+  color: var(--color-sidebar-text, #8DB89A);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.bo-cv-step-action {
+  flex-shrink: 0;
+}
+
+.bo-cv-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(15, 122, 76, 0.25);
+  color: #4ADE80;
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  transition: all 0.12s ease;
+}
+
+.bo-cv-step-card:hover .bo-cv-view-btn {
+  background: var(--color-primary, #0F7A4C);
+  color: #ffffff;
+  border-color: #4ADE80;
+}
+
+/* ── RIGHT MAIN WORKSPACE ──────────────────────────────────────────── */
+.bo-cv-main-content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+/* ── STATE 1: IDLE PAN Verification Card ───────────────────────────── */
+.bo-cv-idle-section {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.bo-cv-bureau-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.bo-cv-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.bo-cv-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: var(--color-primary-light, #eaf5ee);
+  color: var(--color-primary, #0F7A4C);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid var(--color-primary-muted, #a8d5b5);
+}
+
+.bo-cv-card-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 4px 0;
+}
+
+.bo-cv-card-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+
+.bo-cv-pan-field-group {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.bo-cv-pan-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bo-cv-field-lbl {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.bo-cv-pan-display-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bo-cv-pan-box-lead {
+  font-family: monospace;
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  padding: 4px 12px;
+  border-radius: 6px;
+  letter-spacing: 0.08em;
+}
+
+.bo-cv-auto-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #15803d;
+  font-weight: 600;
+  background: #dcfce7;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.bo-cv-applicant-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: right;
+}
+
+.bo-cv-applicant-name {
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.bo-cv-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 16px;
+}
+
+.bo-cv-fetch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-primary, #0F7A4C);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 22px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  box-shadow: 0 2px 6px rgba(15, 122, 76, 0.25);
+}
+
+.bo-cv-fetch-btn:hover {
+  background: #15803d;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(15, 122, 76, 0.35);
+}
+
+.bo-cv-secure-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* ── STATE 2: LOADING Simulation ───────────────────────────────────── */
+.bo-cv-loading-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.bo-cv-loading-card {
+  gap: 18px;
+}
+
+.bo-cv-loading-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.bo-cv-spinner-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--color-primary-light, #eaf5ee);
+  color: var(--color-primary, #0F7A4C);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bo-cv-spin {
+  animation: boCvSpin 1s linear infinite;
+}
+
+@keyframes boCvSpin {
+  100% { transform: rotate(360deg); }
+}
+
+.bo-cv-progress-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.bo-cv-progress-bar-fill {
+  height: 100%;
+  background: var(--color-primary, #0F7A4C);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.bo-cv-stages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bo-cv-stage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 12px;
+}
+
+.bo-cv-stage-row.is-done {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.bo-cv-stage-row.is-active {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.bo-cv-stage-row.is-pending {
+  color: #94a3b8;
+}
+
+.bo-cv-stage-indicator {
+  font-weight: 800;
+  margin-right: 10px;
+}
+
+.bo-cv-stage-text {
+  flex: 1;
+  font-weight: 600;
+}
+
+.bo-cv-stage-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.bo-cv-stage-row.is-done .bo-cv-stage-badge {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.bo-cv-stage-row.is-active .bo-cv-stage-badge {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+/* ── STATE 3: SUCCESS Credit Report Dashboard ──────────────────────── */
+.bo-cv-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* 1. Score Section Card */
+.bo-cv-score-section-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.bo-cv-score-left {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex: 1;
+}
+
+.bo-cv-score-circle {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  border: 4px solid var(--color-primary, #0F7A4C);
+  background: var(--color-primary-light, #eaf5ee);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  text-align: center;
+  box-shadow: 0 0 10px rgba(15, 122, 76, 0.15);
+}
+
+.bo-cv-score-kicker {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #64748b;
+}
+
+.bo-cv-score-val {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--color-primary, #0F7A4C);
+  line-height: 1;
+  margin: 1px 0;
+}
+
+.bo-cv-score-rating-pill {
+  font-size: 9px;
+  font-weight: 700;
+  background: #15803d;
+  color: #ffffff;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.bo-cv-score-range {
+  font-size: 8px;
+  color: #64748b;
+  margin-top: 1px;
+}
+
+.bo-cv-score-info {
+  flex: 1;
+}
+
+.bo-cv-health-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.bo-cv-health-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.bo-cv-risk-tag {
+  font-size: 11px;
+  font-weight: 700;
+  background: #dcfce7;
+  color: #15803d;
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid #bbf7d0;
+}
+
+.bo-cv-health-desc {
+  font-size: 13px;
+  color: #475569;
+  margin: 0;
+  line-height: 1.45;
+  max-width: 600px;
+}
+
+.bo-cv-score-right-action {
+  flex-shrink: 0;
+}
+
+.bo-cv-refetch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.bo-cv-refetch-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+/* 2. Section 10: Credit Summary Cards (6 Compact Cards Grid) */
+.bo-cv-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.bo-cv-kpi-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.bo-cv-kpi-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.bo-cv-kpi-val {
+  font-size: 17px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.bo-cv-kpi-sub {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* 3. Section Box (Shared Container for tables and sub-sections) */
+.bo-cv-section-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.bo-cv-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 10px;
+}
+
+.bo-cv-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.bo-cv-count-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.bo-cv-util-pct-badge {
+  font-size: 11px;
+  font-weight: 700;
+  background: #dcfce7;
+  color: #15803d;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+/* Tables */
+.bo-cv-table-wrap {
+  overflow-x: auto;
+}
+
+.bo-cv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.bo-cv-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 700;
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 11px;
+}
+
+.bo-cv-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+  vertical-align: middle;
+}
+
+.bo-cv-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.bo-cv-badge-active {
+  font-size: 10px;
+  font-weight: 700;
+  background: #dcfce7;
+  color: #15803d;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.bo-cv-badge-closed {
+  font-size: 10px;
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #15803d;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* 4. Credit Card Exposure Grid */
+.bo-cv-cc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.bo-cv-cc-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bo-cv-cc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bo-cv-cc-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.bo-cv-cc-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.bo-cv-cc-metrics small {
+  font-size: 10px;
+  color: #64748b;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.bo-cv-cc-metrics strong {
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.bo-cv-cc-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.bo-cv-cc-bar-fill {
+  height: 100%;
+  background: var(--color-primary, #0F7A4C);
+  border-radius: 3px;
+}
+
+/* 5. Credit Utilization Metrics */
+.bo-cv-util-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.bo-cv-util-cell small {
+  font-size: 10px;
+  color: #64748b;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.bo-cv-util-cell strong {
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.bo-cv-util-progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.bo-cv-util-progress-fill {
+  height: 100%;
+  background: #16a34a;
+  border-radius: 4px;
+}
+
+/* 6. Repayment Behaviour Grid */
+.bo-cv-repay-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+
+.bo-cv-repay-cell small {
+  font-size: 10px;
+  color: #64748b;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.bo-cv-repay-cell strong,
+.bo-cv-repay-cell span {
+  font-size: 13px;
+  color: #0f172a;
+}
+
+/* 7. Underwriting Risk Insight Box */
+.bo-cv-insight-box {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bo-cv-insight-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #dcfce7;
+  padding-bottom: 10px;
+}
+
+.bo-cv-insight-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bo-cv-insight-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f5132;
+  margin: 0;
+}
+
+.bo-cv-risk-assess-tag {
+  font-size: 12px;
+  color: #166534;
+}
+
+.bo-cv-risk-assess-tag strong {
+  font-weight: 800;
+  color: #15803d;
+}
+
+.bo-cv-decision-tag {
+  font-size: 12px;
+  font-weight: 700;
+  color: #15803d;
+  background: #ffffff;
+  border: 1px solid #86efac;
+  padding: 4px 12px;
+  border-radius: 12px;
+}
+
+.bo-cv-highlights-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bo-cv-highlight-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.bo-cv-highlight-item.is-check {
+  color: #14532d;
+}
+
+.bo-cv-highlight-item.is-warning {
+  color: #92400e;
+}
+
+.bo-cv-highlight-icon {
+  font-weight: 800;
+}
+
+/* ── Fallback Not Found View ───────────────────────────────────────── */
+.bo-cv-not-found-container {
+  padding: 60px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bo-cv-not-found-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 32px;
+  max-width: 480px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.bo-cv-not-found-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #fef3c7;
+  color: #d97706;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bo-cv-not-found-card h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.bo-cv-not-found-card p {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Utilities ─────────────────────────────────────────────────────── */
+.text-primary { color: var(--color-primary, #0F7A4C) !important; }
+.text-success { color: #15803d !important; }
+.font-semibold { font-weight: 600 !important; }
+
+/* ── Responsive Rules ──────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .bo-cv-left-sidebar {
+    width: 260px;
+    min-width: 260px;
+  }
+
+  .bo-cv-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .bo-cv-repay-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .bo-cv-util-metrics-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .bo-cv-header {
+    height: auto;
+    padding: 12px 16px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .bo-cv-workspace-body {
+    flex-direction: column;
+  }
+
+  .bo-cv-left-sidebar {
+    width: 100%;
+    min-width: 100%;
+    height: auto;
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .bo-cv-main-content {
+    padding: 16px;
+  }
+
+  .bo-cv-pan-field-group {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .bo-cv-applicant-col {
+    text-align: left;
+  }
+
+  .bo-cv-card-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .bo-cv-fetch-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .bo-cv-score-section-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .bo-cv-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bo-cv-cc-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bo-cv-repay-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bo-cv-util-metrics-row {
+    grid-template-columns: 1fr;
+  }
+
+  .bo-cv-insight-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

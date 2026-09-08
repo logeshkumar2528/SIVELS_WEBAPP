@@ -108,10 +108,27 @@ function MainLayout({
     navigate(route);
   }, [navigate]);
 
+  const getCurrentUser = useCallback(() => {
+    try {
+      const raw = localStorage.getItem('sivels_currentUser') || localStorage.getItem('backOfficeData');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return {
+          name: parsed.fullName || parsed.name || 'Back Office Executive',
+          role: parsed.role || 'Operations Team',
+        };
+      }
+      return { name: 'Back Office Executive', role: 'Operations Team' };
+    } catch {
+      return { name: 'Back Office Executive', role: 'Operations Team' };
+    }
+  }, []);
+
   /* ------------------------------------------
      Computed values
   ------------------------------------------ */
   const todayDate = formatHeaderDate(new Date());
+  const resolvedUser = user?.name ? user : getCurrentUser();
 
   return (
     <div className={['layout', sidebarOpen ? 'layout--sidebar-open' : ''].join(' ').trim()}>
@@ -135,7 +152,7 @@ function MainLayout({
           subtitle={subtitle}
           date={todayDate}
           notificationCount={notificationCount}
-          user={user}
+          user={resolvedUser}
           onMenuToggle={handleMenuToggle}
           onNotificationsClick={onNotificationsClick}
           onUserMenuClick={onUserMenuClick}

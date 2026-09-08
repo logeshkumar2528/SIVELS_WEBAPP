@@ -52,6 +52,7 @@ import {
 
   /* ---- Table / Actions ---- */
   Eye,
+  EyeOff,
   Search,
   Filter,
   Download,
@@ -70,6 +71,10 @@ import {
   Building2,
   Banknote,
   Users,
+  MapPin,
+  Map,
+  UserCheck,
+  UserRound,
 
   /* ---- Misc ---- */
   X,
@@ -79,7 +84,7 @@ import {
   ArrowDownRight,
   Zap,
 
-  /* ---- Document Verification & Profile ---- */
+  /* ---- Document Verification & Profile / Auth ---- */
   Check,
   ZoomIn,
   Expand,
@@ -97,6 +102,8 @@ import {
   Mail,
   Phone,
   Edit3,
+  LogIn,
+  KeyRound,
 } from 'lucide-react';
 
 /* ==========================================
@@ -123,6 +130,10 @@ const iconMap = {
   ClipboardList,
   UserCircle,
   LogOut,
+  MapPin,
+  Map,
+  UserCheck,
+  UserRound,
 
   /* Layout / Header */
   Menu,
@@ -141,6 +152,7 @@ const iconMap = {
 
   /* Table / Actions */
   Eye,
+  EyeOff,
   Search,
   Filter,
   Download,
@@ -168,7 +180,7 @@ const iconMap = {
   ArrowDownRight,
   Zap,
 
-  /* Document Verification & Profile */
+  /* Document Verification & Profile / Auth */
   Check,
   ZoomIn,
   Expand,
@@ -186,6 +198,8 @@ const iconMap = {
   Mail,
   Phone,
   Edit3,
+  LogIn,
+  KeyRound,
 };
 
 export default iconMap;

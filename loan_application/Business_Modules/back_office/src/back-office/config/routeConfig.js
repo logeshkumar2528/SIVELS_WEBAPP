@@ -1,11 +1,11 @@
 /**
  * routeConfig.js
- *
- * Centralised route path constants for the Back Office module.
+ * --------------------
+ * Centralised route path constants and dynamic route builders for the Back Office module.
  *
  * Rules:
  *  - Never hardcode path strings inside components or config files.
- *  - Always import from here: import { ROUTES } from '../config/routeConfig'
+ *  - Always import from here: import { ROUTES, buildRoute } from '../config/routeConfig'
  *  - Changing a URL means editing only this file.
  *  - All routes are prefixed with /backoffice as the base path.
  */
@@ -14,43 +14,40 @@ const BASE = '/backoffice';
 
 export const ROUTES = {
   /* ==========================================
-     MAIN
+     MAIN OPERATIONS & MONITORING
   ========================================== */
   DASHBOARD:            `${BASE}/dashboard`,
+  DISTRICTS:            `${BASE}/districts`,
+  DISTRICT_DETAIL:      `${BASE}/districts/:districtId`,
+  RMS:                  `${BASE}/rms`,
+  RM_DETAIL:            `${BASE}/rms/:rmId`,
+  AGENTS:               `${BASE}/agents`,
+  AGENT_DETAIL:         `${BASE}/agents/:agentId`,
+  CUSTOMERS:            `${BASE}/customers`,
+  CUSTOMER_DETAIL:      `${BASE}/customers/:customerId`,
+  CUSTOMER_VERIFICATION: `${BASE}/customers/:customerId/verify`,
 
   /* ==========================================
-     APPLICATIONS
-  ========================================== */
-  NEW_APPLICATIONS:      `${BASE}/applications/new`,
-  DOCUMENT_VERIFICATION: `${BASE}/applications/new/:id/document-verification`,
-  IN_REVIEW:             `${BASE}/applications/in-review`,
-  RETURNED:              `${BASE}/applications/returned`,
-  PENDING_APPLICATIONS:  `${BASE}/applications/pending`,
-  REJECTED_APPLICATIONS: `${BASE}/applications/rejected`,
-  APPROVED:              `${BASE}/applications/approved`,
-  DISBURSED:             `${BASE}/applications/disbursed`,
-  REJECT_APPLICATION:    `${BASE}/applications/new/:id/reject`,
-
-  /* ==========================================
-     LOAN PROCESS
-  ========================================== */
-  PAN_VERIFICATION:     `${BASE}/applications/new/:id/pan-verification`,
-  CIBIL_ELIGIBILITY:    `${BASE}/loan/cibil-eligibility`,
-  BANK_VERIFICATION:    `${BASE}/applications/new/:id/bank-verification`,
-  LOAN_DOCUMENTS:       `${BASE}/applications/new/:id/loan-documents`,
-  FINAL_APPROVAL:       `${BASE}/applications/new/:id/final-approval`,
-  DISBURSEMENT:         `${BASE}/applications/new/:id/disbursement`,
-  DISBURSEMENT_HISTORY: `${BASE}/loan/disbursement-history`,
-
-  /* ==========================================
-     REPORTS
-  ========================================== */
-  REPORTS_ANALYTICS:    `${BASE}/reports/analytics`,
-  AUDIT_TRAIL:          `${BASE}/reports/audit-trail`,
-
-  /* ==========================================
-     ACCOUNT
+     ACCOUNT & SYSTEM
   ========================================== */
   PROFILE:              `${BASE}/profile`,
   LOGOUT:               `${BASE}/logout`,
+};
+
+/**
+ * Reusable dynamic route builders for ID-based navigation.
+ */
+export const buildRoute = {
+  dashboard: () => ROUTES.DASHBOARD,
+  districts: () => ROUTES.DISTRICTS,
+  districtDetail: (districtId) => `${BASE}/districts/${districtId}`,
+  rms: () => ROUTES.RMS,
+  rmDetail: (rmId) => `${BASE}/rms/${rmId}`,
+  agents: () => ROUTES.AGENTS,
+  agentDetail: (agentId) => `${BASE}/agents/${agentId}`,
+  customers: () => ROUTES.CUSTOMERS,
+  customerDetail: (customerId) => `${BASE}/customers/${customerId}`,
+  customerVerification: (customerId) => `${BASE}/customers/${customerId}/verify`,
+  profile: () => ROUTES.PROFILE,
+  logout: () => ROUTES.LOGOUT,
 };
