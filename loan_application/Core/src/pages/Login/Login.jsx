@@ -3,10 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Smartphone, ShieldCheck, ArrowRight, ChevronDown } from 'lucide-react';
 import { detectAccountModule, normalizeMobileNumber } from '../../services/moduleDetectionService';
 import { authService } from '../../services/authService';
-import axiosInstance from '../../api/axiosInstance';
 import './Login.css';
-
-const AMS_MOBILE = '9876543210';
 
 export default function Login() {
   const [mobileNumber, setMobileNumber] = useState('');
@@ -21,60 +18,8 @@ export default function Login() {
       setLoading(true);
       setError('');
       try {
-        if (cleanMobile === AMS_MOBILE) {
-          navigate('/verify', {
-            state: {
-              mobileNumber: cleanMobile,
-              module: 'AMS',
-              destination: '/master/ams-dashboard',
-              accountData: {
-                mobileNumber: cleanMobile,
-                fullName: 'AMS Monitoring User',
-                role: 'AMS',
-                amsCode: 'AMS250901',
-              },
-              otpResponse: { success: true, message: 'OTP sent successfully' },
-            },
-          });
-          return;
-        }
-
-        let matchingRm = null;
-        if (cleanMobile === '9345638126' || cleanMobile === '9841446699') {
-          try {
-            const response = await axiosInstance.get('/RMMaster');
-            const rows = response?.data?.value ?? response?.data ?? [];
-            matchingRm = (Array.isArray(rows) ? rows : [rows]).find((row) => normalizeMobileNumber(row?.mobileNumber ?? row?.MobileNumber ?? row?.mobile ?? row?.phone ?? row?.MobileNo) === cleanMobile);
-          } catch { /* Continue with the normal master flow if unavailable. */ }
-        }
-
-        // Special admin OTP applies only when the number is not an RM account.
-        if ((cleanMobile === '9345638126' || cleanMobile === '9841446699') && !matchingRm) {
-          navigate('/verify', {
-            state: {
-              mobileNumber: cleanMobile,
-              module: 'Master',
-              destination: '/master/dashboard',
-              accountData: {
-                mobileNumber: cleanMobile,
-                fullName: 'Master Admin',
-                role: 'Master',
-              },
-              otpResponse: { success: true, message: 'OTP sent successfully' },
-            }
-          });
-          return;
-        }
-
-        const otpResponse = await authService.sendOtp(cleanMobile);
-        const detection = matchingRm
-          ? { status: 'RM', module: 'RM', destination: '/rm/dashboard', accountData: matchingRm }
-          : await detectAccountModule(cleanMobile);
-
-        if (detection.status === 'DUPLICATE') {
-          setError(detection.error || 'Multiple accounts found with this mobile number. Please contact support.');
-          return;
-        }
+        // Step 1: Detect account and role dynamically from Master APIs
+        const detection = await detectAccountModule(cleanMobile);
 
         if (detection.status === 'NOT_FOUND') {
           setError(detection.error || 'No account found with this mobile number');
@@ -86,19 +31,27 @@ export default function Login() {
           return;
         }
 
-        if (detection.destination) {
-          navigate('/verify', {
-            state: {
-              mobileNumber: cleanMobile,
-              module: detection.module,
-              destination: detection.destination,
-              accountData: detection.accountData,
-              otpResponse,
-            }
-          });
+        // Step 2: Trigger OTP send after account is confirmed
+        let otpResponse = null;
+        try {
+          otpResponse = await authService.sendOtp(cleanMobile);
+        } catch (otpErr) {
+          console.warn('[Login] OTP send returned notice:', otpErr?.message || otpErr);
+          otpResponse = { success: false, message: otpErr?.message || 'OTP triggered' };
         }
+
+        // Step 3: Navigate to Verify OTP with detected role and account state
+        navigate('/verify', {
+          state: {
+            mobileNumber: cleanMobile,
+            module: detection.role || detection.module,
+            destination: detection.destination,
+            accountData: detection.accountData,
+            otpResponse,
+          },
+        });
       } catch (err) {
-        setError(err.message || 'Failed to send OTP. Please check your connection and try again.');
+        setError(err.message || 'Failed to process login. Please check your connection and try again.');
       } finally {
         setLoading(false);
       }
