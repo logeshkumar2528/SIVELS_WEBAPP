@@ -16,16 +16,16 @@ import DatePicker from '../../components/DatePicker/DatePicker'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
 import { formatDateTime } from '../../../../../../Core/src/utils/dateHelper'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
+import { normalizeApplicationStatus } from '../../../../../rm_modules/src/utils/rmContext'
 import './SubmissionHistory.css'
 
 const STATUS_OPTIONS = [
   { value: 'All Status', label: 'All Status' },
-  { value: 'Draft', label: 'Draft' },
-  { value: 'Pending RM Review', label: 'Pending RM Review' },
+  { value: 'New', label: 'New' },
+  { value: 'Pending', label: 'Pending' },
   { value: 'Under Review', label: 'Under Review' },
-  { value: 'Submitted', label: 'Submitted' },
-  { value: 'Returned by RM', label: 'Returned by RM' },
-  { value: 'Approved by RM', label: 'Approved by RM' },
+  { value: 'Returned', label: 'Returned' },
+  { value: 'Logged to HO', label: 'Logged to HO' },
 ]
 
 function SubmissionHistory() {
@@ -76,7 +76,13 @@ function SubmissionHistory() {
       // Sort DESC by CreatedAt
       myCustomers.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
       
-      setSubmissions(myCustomers)
+      setSubmissions(myCustomers.map((customer) => ({
+        ...customer,
+        status: normalizeApplicationStatus(
+          customer.status ?? customer.Status,
+          customer.statusName ?? customer.StatusName
+        ),
+      })))
     } catch (err) {
       console.error("Failed to load submissions", err)
       setError("Unable to load submission history")
@@ -128,7 +134,7 @@ function SubmissionHistory() {
     if (s.includes('pending')) return 'pending-rm'
     if (s.includes('review')) return 'under-review'
     if (s.includes('return') || s.includes('reject')) return 'returned-rm'
-    if (s.includes('approve') || s.includes('success')) return 'approved-rm'
+    if (s.includes('approve') || s.includes('success') || s.includes('logged to ho')) return 'approved-rm'
     if (s.includes('submit')) return 'submitted'
     if (s.includes('draft')) return 'pending-rm'
     return 'default'
