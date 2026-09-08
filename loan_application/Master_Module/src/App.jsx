@@ -34,6 +34,7 @@ import { Religion } from './pages/masters/Religion/Religion';
 import { Caste } from './pages/masters/Caste/Caste';
 import { LoanProductCollateral } from './pages/masters/LoanProductCollateral/LoanProductCollateral';
 import { RateOfInterest } from './pages/masters/RateOfInterest/RateOfInterest';
+import { FOIR } from './pages/masters/FOIR/FOIR';
 import { IndustryType } from './pages/masters/IndustryType/IndustryType';
 import { LoanProductTenure } from './pages/masters/LoanProductTenure/LoanProductTenure';
 import { CompanyConfiguration } from './features/company/CompanyConfiguration';
@@ -112,6 +113,7 @@ function App() {
             <Route path="caste" element={<Caste />} />
             <Route path="loan-product-collateral" element={<LoanProductCollateral />} />
             <Route path="rate-of-interest" element={<RateOfInterest />} />
+            <Route path="foir" element={<FOIR />} />
             <Route path="industry-type" element={<IndustryType />} />
             <Route path="loan-product-tenure" element={<LoanProductTenure />} />
           </Route>
