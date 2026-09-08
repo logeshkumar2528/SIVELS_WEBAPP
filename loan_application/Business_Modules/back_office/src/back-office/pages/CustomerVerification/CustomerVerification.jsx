@@ -435,7 +435,7 @@ export default function CustomerVerification() {
             {bureauState === 'success' ? (
               <span className="bo-cv-pill-verified">Verified ✓</span>
             ) : bureauState === 'loading' ? (
-              <span className="bo-cv-pill-fetching">Fetching...</span>
+              <span className="bo-cv-pill-fetching">Pending</span>
             ) : (
               <span className="bo-cv-pill-unverified">Not Verified</span>
             )}
@@ -446,15 +446,20 @@ export default function CustomerVerification() {
       {/* ── 2. Dedicated 2-Column Workspace Body ──────────────────────── */}
       <div className="bo-cv-workspace-body">
         {/* ── LEFT SIDEBAR: ONLY 12 RM APPLICATION STEPS (SIVELS DEEP GREEN) ── */}
-        <aside className="bo-cv-left-sidebar" aria-label="12 RM Application Steps">
+        <aside className="bo-cv-left-sidebar" aria-label="Application Steps">
           <div className="bo-cv-sidebar-header">
-            <h2 className="bo-cv-sidebar-title">Application Steps</h2>
-            <span className="bo-cv-sidebar-subtitle">12 Application Modules</span>
+            <div className="bo-cv-sidebar-heading-row">
+              <div>
+                <h2 className="bo-cv-sidebar-title">Application Steps</h2>
+                <span className="bo-cv-sidebar-subtitle">Verification checklist</span>
+              </div>
+              <span className="bo-cv-step-count">08</span>
+            </div>
           </div>
 
           <nav className="bo-cv-steps-nav">
             <ul className="bo-cv-steps-list" role="list">
-              {VERIFICATION_STEP_DEFINITIONS.map((step) => {
+              {VERIFICATION_STEP_DEFINITIONS.filter((step) => step.number <= 8).map((step) => {
                 const stepNum = step.number;
                 const isSelected = selectedStepNumber === stepNum;
                 const formattedNum = String(stepNum).padStart(2, '0');
@@ -467,7 +472,7 @@ export default function CustomerVerification() {
                       onClick={() => handleOpenStep(stepNum)}
                       aria-label={`Step ${stepNum}: ${step.name}. Click to view details.`}
                     >
-                      <div className="bo-cv-step-num-box">
+                      <div className="bo-cv-step-num-box" aria-hidden="true">
                         {formattedNum}
                       </div>
 
@@ -561,11 +566,24 @@ export default function CustomerVerification() {
                   </div>
                 </div>
 
+                <div className="bo-cv-loading-summary">
+                  <div>
+                    <span className="bo-cv-loading-kicker">SECURE BUREAU CHECK</span>
+                    <strong>{STAGES[loadingStage]?.label}</strong>
+                  </div>
+                  <span className="bo-cv-loading-count">{loadingStage + 1} of {STAGES.length}</span>
+                </div>
+
                 <div className="bo-cv-progress-bar-bg">
                   <div
                     className="bo-cv-progress-bar-fill"
                     style={{ width: `${((loadingStage + 1) / STAGES.length) * 100}%` }}
                   />
+                </div>
+
+                <div className="bo-cv-progress-caption">
+                  <span>Verifying applicant credit profile</span>
+                  <strong>{Math.round(((loadingStage + 1) / STAGES.length) * 100)}%</strong>
                 </div>
 
                 <div className="bo-cv-stages-list">

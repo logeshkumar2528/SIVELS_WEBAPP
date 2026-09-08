@@ -768,7 +768,7 @@ export default function VerificationStepModal({
         <div className="bo-vmodal-header">
           <div className="bo-vmodal-title-group">
             <div className="bo-vmodal-step-badge">
-              <span>Step {stepNumber} of 12</span>
+              <span>Verification step {String(stepNumber).padStart(2, '0')}</span>
             </div>
             <h3 className="bo-vmodal-title">{stepDefinition.name}</h3>
             <span className="bo-vmodal-subtitle">{customerData.customerName} &bull; {customerData.applicationId}</span>
