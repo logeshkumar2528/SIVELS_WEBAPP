@@ -39,6 +39,7 @@ import { LoanProductTenure } from './pages/masters/LoanProductTenure/LoanProduct
 import { CompanyConfiguration } from './features/company/CompanyConfiguration';
 import AgentCreate from './pages/Agent/AgentCreate';
 import RelationshipManagerCreate from './pages/RelationshipManager/RelationshipManagerCreate';
+import AMSCreate from './pages/AMS/AMSCreate';
 import CreateUser from './pages/CreateUser/CreateUser';
 import AMSDashboard from './pages/AMSDashboard/AMSDashboard';
 
@@ -74,6 +75,7 @@ function App() {
           <Route path="edit-agent/:agentId" element={<AgentCreate onSuccessRedirect="/dashboard" />} />
           <Route path="create-relationship-manager" element={<RelationshipManagerCreate />} />
           <Route path="edit-relationship-manager/:rmId" element={<RelationshipManagerCreate />} />
+          <Route path="edit-ams/:amsId" element={<AMSCreate />} />
           <Route path="company" element={<CompanyConfiguration />} />
           
           <Route path="masters">

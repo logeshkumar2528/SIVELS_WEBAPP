@@ -1,8 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, CheckSquare2, Landmark, MapPin, MapPinned, Save, ShieldCheck, UserRound, Building2, LoaderCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { createAMS, uploadAMSPAN, uploadAMSAadhaar, uploadAMSProfile, extractAmsId, saveAMSDistrictMapping } from '../../api/amsApi';
+import {
+  createAMS,
+  getAMSById,
+  getAMSDistrictsByAmsId,
+  updateAMS,
+  uploadAMSPAN,
+  uploadAMSAadhaar,
+  uploadAMSProfile,
+  extractAmsId,
+  saveAMSDistrictMapping,
+} from '../../api/amsApi';
 import { getBankBranches } from '../../api/masters/bankBranchApi';
 import { masterService } from '../../../../Core/src/services/masterService';
 import { getCurrentUserId } from '../../utils/authHelper';
@@ -68,6 +78,9 @@ const FIELD_GROUPS = [
 
 export default function AMSCreate() {
   const navigate = useNavigate();
+  const { amsId: amsIdParam } = useParams();
+  const editAmsId = amsIdParam || null;
+  const isEditMode = Boolean(editAmsId);
   const [form, setForm] = useState(createInitialForm);
   const [selectedDistrictIds, setSelectedDistrictIds] = useState([]);
   const [isActive, setIsActive] = useState(true);
@@ -75,6 +88,7 @@ export default function AMSCreate() {
   const [saving, setSaving] = useState(false);
   const [submittingStep, setSubmittingStep] = useState('');
   const [createdAmsId, setCreatedAmsId] = useState(null);
+  const [loadingRecord, setLoadingRecord] = useState(isEditMode);
 
   // Master data states
   const [genders, setGenders] = useState([]);
@@ -139,6 +153,104 @@ export default function AMSCreate() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isEditMode) return undefined;
+
+    let active = true;
+    setLoadingRecord(true);
+
+    const extractDistrictIds = (response) => {
+      const rows = Array.isArray(response)
+        ? response
+        : response?.data?.value || response?.data || response?.value || [];
+
+      return rows
+        .map((row) => {
+          if (typeof row === 'number' || typeof row === 'string') return Number(row);
+          return Number(
+            row?.districtId ??
+            row?.DistrictId ??
+            row?.id ??
+            row?.districtID ??
+            row?.DistrictID
+          );
+        })
+        .filter(Boolean);
+    };
+
+    const loadRecord = async () => {
+      try {
+        const [recordResponse, districtResponse] = await Promise.allSettled([
+          getAMSById(editAmsId),
+          getAMSDistrictsByAmsId(editAmsId),
+        ]);
+
+        const recordValue =
+          recordResponse.status === 'fulfilled'
+            ? recordResponse.value
+            : null;
+        const record = Array.isArray(recordValue)
+          ? recordValue[0]
+          : recordValue?.data?.value?.[0] || recordValue?.data || recordValue?.value?.[0] || recordValue;
+
+        if (!active || !record) {
+          throw new Error('AMS record not found.');
+        }
+
+        setForm({
+          amsCode: record.amsCode || record.AmsCode || record.code || '',
+          fullName: record.fullName || record.FullName || record.name || '',
+          dateOfBirth: record.dateOfBirth ? String(record.dateOfBirth).slice(0, 10) : '',
+          genderId: record.genderId ?? record.GenderId ?? '',
+          address: record.address || record.Address || '',
+          stateId: record.stateId ?? record.StateId ?? '',
+          cityId: record.cityId ?? record.CityId ?? '',
+          pincode: record.pincode || record.Pincode || '',
+          mobileNumber: record.mobileNumber || record.MobileNumber || record.phone || '',
+          emailAddress: record.emailAddress || record.EmailAddress || record.email || '',
+          branch: record.branch || record.Branch || record.branchName || '',
+          dateJoined: record.dateJoined ? String(record.dateJoined).slice(0, 10) : new Date().toISOString().slice(0, 10),
+          accountNumber: record.accountNumber || record.AccountNumber || '',
+          ifscCode: record.ifscCode || record.IfscCode || '',
+        });
+        setIsActive(record.isActive !== false && record.IsActive !== false);
+
+        const mappedDistrictIds =
+          districtResponse.status === 'fulfilled'
+            ? extractDistrictIds(districtResponse.value)
+            : extractDistrictIds(record.districtIds || record.districts || record.amsDistricts || []);
+
+        if (mappedDistrictIds.length > 0) {
+          setSelectedDistrictIds(mappedDistrictIds);
+        } else {
+          const fallbackDistricts = Array.isArray(record.districts || record.districtNames || record.amsDistricts)
+            ? (record.districts || record.districtNames || record.amsDistricts)
+            : [];
+          setSelectedDistrictIds(
+            fallbackDistricts
+              .map((district) => {
+                if (typeof district === 'number' || typeof district === 'string') return Number(district);
+                return Number(district?.districtId ?? district?.DistrictId ?? district?.id);
+              })
+              .filter(Boolean)
+          );
+        }
+      } catch (error) {
+        if (active) {
+          console.error('Failed to load AMS details:', error);
+          toast.error(error?.response?.data?.message || error.message || 'Unable to load AMS details.');
+        }
+      } finally {
+        if (active) setLoadingRecord(false);
+      }
+    };
+
+    loadRecord();
+    return () => {
+      active = false;
+    };
+  }, [editAmsId, isEditMode]);
 
   const selectedStateId = String(form.stateId || '');
 
@@ -279,7 +391,7 @@ export default function AMSCreate() {
   const update = (key, value) => {
     setForm((current) => {
       const next = { ...current, [key]: value };
-      if (key === 'fullName' || key === 'dateOfBirth' || key === 'mobileNumber') {
+      if (!isEditMode && (key === 'fullName' || key === 'dateOfBirth' || key === 'mobileNumber')) {
         next.amsCode = generateUserCode(next.fullName, next.dateOfBirth, next.mobileNumber);
       }
       return next;
@@ -376,31 +488,37 @@ export default function AMSCreate() {
 
     setSaving(true);
     try {
-      let targetAmsId = createdAmsId;
+      const payload = {
+        amsCode: form.amsCode.trim(),
+        fullName: form.fullName.trim(),
+        dateOfBirth: form.dateOfBirth,
+        genderId: Number(form.genderId),
+        address: form.address.trim(),
+        stateId: Number(form.stateId),
+        cityId: Number(form.cityId),
+        pincode: form.pincode.trim(),
+        mobileNumber: form.mobileNumber.trim(),
+        emailAddress: form.emailAddress.trim(),
+        branch: form.branch.trim(),
+        dateJoined: form.dateJoined,
+        accountNumber: form.accountNumber.trim(),
+        ifscCode: form.ifscCode.trim().toUpperCase(),
+        isActive,
+        createdBy: getCurrentUserId() || 1,
+        modifiedBy: getCurrentUserId() || 1,
+        districtIds: selectedDistrictIds,
+      };
 
-      if (!targetAmsId) {
+      let targetAmsId = editAmsId || createdAmsId;
+
+      if (isEditMode) {
+        setSubmittingStep('Updating AMS...');
+        await updateAMS(targetAmsId, {
+          ...payload,
+          amsId: Number(targetAmsId),
+        });
+      } else {
         setSubmittingStep('Creating AMS...');
-        const payload = {
-          amsCode: form.amsCode.trim(),
-          fullName: form.fullName.trim(),
-          dateOfBirth: form.dateOfBirth,
-          genderId: Number(form.genderId),
-          address: form.address.trim(),
-          stateId: Number(form.stateId),
-          cityId: Number(form.cityId),
-          pincode: form.pincode.trim(),
-          mobileNumber: form.mobileNumber.trim(),
-          emailAddress: form.emailAddress.trim(),
-          branch: form.branch.trim(),
-          dateJoined: form.dateJoined,
-          accountNumber: form.accountNumber.trim(),
-          ifscCode: form.ifscCode.trim().toUpperCase(),
-          isActive,
-          createdBy: getCurrentUserId() || 1,
-          modifiedBy: getCurrentUserId() || 1,
-          districtIds: selectedDistrictIds,
-        };
-
         const response = await createAMS(payload);
         const extractedId = extractAmsId(response);
 
@@ -420,7 +538,7 @@ export default function AMSCreate() {
         } catch (err) {
           console.error('Failed to save AMS district mappings:', err);
           const msg = err.response?.data?.message || err.message || 'District mapping failed';
-          throw new Error(`AMS was created successfully, but District Mapping failed: ${msg}`);
+          throw new Error(`AMS was ${isEditMode ? 'updated' : 'created'} successfully, but District Mapping failed: ${msg}`);
         }
       }
 
@@ -431,7 +549,7 @@ export default function AMSCreate() {
           await uploadAMSAadhaar(targetAmsId, aadhaarFile);
         } catch (err) {
           const msg = err.response?.data?.message || err.message || 'Aadhaar upload failed';
-          throw new Error(`AMS was created successfully, but Aadhaar Card upload failed: ${msg}`);
+          throw new Error(`AMS was ${isEditMode ? 'updated' : 'created'} successfully, but Aadhaar Card upload failed: ${msg}`);
         }
       }
 
@@ -441,7 +559,7 @@ export default function AMSCreate() {
           await uploadAMSPAN(targetAmsId, panFile);
         } catch (err) {
           const msg = err.response?.data?.message || err.message || 'PAN upload failed';
-          throw new Error(`AMS was created successfully, but PAN Card upload failed: ${msg}`);
+          throw new Error(`AMS was ${isEditMode ? 'updated' : 'created'} successfully, but PAN Card upload failed: ${msg}`);
         }
       }
 
@@ -451,18 +569,18 @@ export default function AMSCreate() {
           await uploadAMSProfile(targetAmsId, profileImage);
         } catch (err) {
           const msg = err.response?.data?.message || err.message || 'Profile Image upload failed';
-          throw new Error(`AMS was created successfully, but Profile Image upload failed: ${msg}`);
+          throw new Error(`AMS was ${isEditMode ? 'updated' : 'created'} successfully, but Profile Image upload failed: ${msg}`);
         }
       }
 
-      toast.success('AMS created successfully!');
+      toast.success(isEditMode ? 'AMS updated successfully!' : 'AMS created successfully!');
       navigate('/dashboard');
     } catch (err) {
-      console.error('Error in AMS creation flow:', err);
+      console.error('Error in AMS save flow:', err);
       const message =
         err.response?.data?.message ||
         err.message ||
-        'Unable to create AMS. Please check details and try again.';
+        `Unable to ${isEditMode ? 'update' : 'create'} AMS. Please check details and try again.`;
       toast.error(message);
     } finally {
       setSaving(false);
@@ -570,12 +688,26 @@ export default function AMSCreate() {
         </div>
         <div>
           <span className="rm-eyebrow">TEAM MANAGEMENT</span>
-          <h1>Create AMS</h1>
-          <p>Set up a new area management specialist with the same personal, contact, and banking details as an RM.</p>
+          <h1>{isEditMode ? 'Edit AMS' : 'Create AMS'}</h1>
+          <p>
+            {isEditMode
+              ? 'Update the area management specialist profile, district mapping, and documents.'
+              : 'Set up a new area management specialist with the same personal, contact, and banking details as an RM.'}
+          </p>
         </div>
       </header>
 
-      <form className="rm-create-card" onSubmit={handleSubmit}>
+      {(loadingMasterData || loadingRecord) && (
+        <div className="rm-create-card" style={{ display: 'grid', placeItems: 'center', minHeight: '280px' }}>
+          <LoaderCircle size={22} className="rm-spinner" />
+          <p style={{ marginTop: '10px', color: '#64748b' }}>
+            {loadingRecord ? 'Loading AMS details…' : 'Loading master options…'}
+          </p>
+        </div>
+      )}
+
+      {!loadingMasterData && !loadingRecord && (
+        <form className="rm-create-card" onSubmit={handleSubmit}>
         {FIELD_GROUPS.map(({ title, description, icon: Icon, fields }) => (
           <section className="rm-section" key={title}>
             <div className="rm-section-heading">
@@ -754,16 +886,17 @@ export default function AMSCreate() {
           <button type="submit" className="masters-btn-primary" disabled={saving}>
             {saving ? (
               <>
-                <LoaderCircle size={17} className="rm-spinner" /> {submittingStep || 'Creating AMS...'}
+                <LoaderCircle size={17} className="rm-spinner" /> {submittingStep || (isEditMode ? 'Updating AMS...' : 'Creating AMS...')}
               </>
             ) : (
               <>
-                <Save size={17} /> Create AMS
+                <Save size={17} /> {isEditMode ? 'Update AMS' : 'Create AMS'}
               </>
             )}
           </button>
         </div>
-      </form>
+        </form>
+      )}
       <DocumentPreviewModal
         isOpen={Boolean(previewDoc)}
         onClose={() => setPreviewDoc(null)}
