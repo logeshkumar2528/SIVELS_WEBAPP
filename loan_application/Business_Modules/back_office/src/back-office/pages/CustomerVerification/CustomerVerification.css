@@ -1419,3 +1419,250 @@
     align-items: flex-start;
   }
 }
+
+/* ── 9. FOIR ELIGIBILITY CALCULATION SECTION ──────────────────────── */
+.bo-cv-foir-section {
+  margin-top: 10px;
+  width: 100%;
+}
+
+.bo-cv-foir-idle-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 20px 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.bo-cv-foir-idle-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.bo-cv-foir-idle-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: #eafbf1;
+  color: var(--color-primary, #0F7A4C);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bo-cv-calc-foir-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  background: var(--color-primary, #0F7A4C);
+  color: #ffffff;
+  border: none;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.bo-cv-calc-foir-btn:hover:not(:disabled) {
+  background: var(--color-primary-dark, #0b5a38);
+  box-shadow: 0 2px 6px rgba(15, 122, 76, 0.3);
+}
+
+.bo-cv-calc-foir-btn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.bo-cv-foir-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.bo-cv-foir-loading-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+}
+
+.bo-cv-foir-loading-inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.bo-cv-foir-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 16px;
+}
+
+.bo-cv-foir-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bo-cv-foir-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bo-cv-foir-badge-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: #eafbf1;
+  color: var(--color-primary, #0F7A4C);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bo-cv-foir-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.bo-cv-foir-subtitle {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+
+.bo-cv-foir-status-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.bo-cv-foir-status-badge.is-eligible {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.bo-cv-foir-status-badge.is-not-eligible {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.bo-cv-foir-recalc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.bo-cv-foir-recalc-btn:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.bo-cv-foir-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 1200px) {
+  .bo-cv-foir-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .bo-cv-foir-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .bo-cv-foir-idle-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .bo-cv-calc-foir-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+.bo-cv-foir-cell {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bo-cv-foir-cell-lbl {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.bo-cv-foir-cell-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.bo-cv-foir-status-pill {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.bo-cv-foir-status-pill.is-eligible {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.bo-cv-foir-status-pill.is-not-eligible {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}

@@ -509,7 +509,9 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   const addressList = Array.isArray(backendData.addressDetails || backendData.AddressDetails) ? (backendData.addressDetails || backendData.AddressDetails) : [];
   const empList = Array.isArray(backendData.employmentIncome || backendData.EmploymentIncome) ? (backendData.employmentIncome || backendData.EmploymentIncome) : [];
   const bankList = Array.isArray(backendData.bankExistingLoans || backendData.BankExistingLoans) ? (backendData.bankExistingLoans || backendData.BankExistingLoans) : [];
-  const colList = Array.isArray(backendData.collateral || backendData.Collateral) ? (backendData.collateral || backendData.Collateral) : [];
+  const colList = Array.isArray(backendData.collateral || backendData.Collateral || backendData.collateralDetails || backendData.CollateralDetails || backendData.applicationCollateralDetails || backendData.ApplicationCollateralDetails) 
+    ? (backendData.collateral || backendData.Collateral || backendData.collateralDetails || backendData.CollateralDetails || backendData.applicationCollateralDetails || backendData.ApplicationCollateralDetails) 
+    : [];
   const refList = Array.isArray(backendData.references || backendData.References) ? (backendData.references || backendData.References) : [];
 
   const agentCustomerId = customer.agentCustomerId || customer.AgentCustomerId || productDetails.agentCustomerId || productDetails.AgentCustomerId || existingDraft.agentCustomerId || existingDraft.id;
@@ -757,18 +759,18 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   const prop2 = colList[1] || {};
   const collateralDetails = {
     propertyOne: {
-      applicationCollateralDetailsId: prop1.applicationCollateralDetailsId || existingDraft.collateralDetails?.propertyOne?.applicationCollateralDetailsId || null,
-      typeOfProperty: prop1.propertyId || existingDraft.collateralDetails?.propertyOne?.typeOfProperty || '',
-      usage: prop1.propertyUsageId || existingDraft.collateralDetails?.propertyOne?.usage || '',
-      locationAddress: prop1.locationAddress || existingDraft.collateralDetails?.propertyOne?.locationAddress || '',
-      estimatedValue: prop1.estimatedValue !== undefined && prop1.estimatedValue !== null ? prop1.estimatedValue : (existingDraft.collateralDetails?.propertyOne?.estimatedValue || ''),
+      applicationCollateralDetailsId: prop1.applicationCollateralDetailsId || prop1.ApplicationCollateralDetailsId || existingDraft.collateralDetails?.propertyOne?.applicationCollateralDetailsId || null,
+      typeOfProperty: prop1.typeOfProperty ?? prop1.propertyId ?? prop1.PropertyId ?? prop1.propertyType ?? prop1.PropertyType ?? existingDraft.collateralDetails?.propertyOne?.typeOfProperty ?? '',
+      usage: prop1.usage ?? prop1.propertyUsageId ?? prop1.PropertyUsageId ?? prop1.propertyUsage ?? prop1.PropertyUsage ?? existingDraft.collateralDetails?.propertyOne?.usage ?? '',
+      locationAddress: prop1.locationAddress || prop1.LocationAddress || prop1.propertyAddress || prop1.PropertyAddress || existingDraft.collateralDetails?.propertyOne?.locationAddress || '',
+      estimatedValue: prop1.estimatedValue !== undefined && prop1.estimatedValue !== null ? prop1.estimatedValue : (prop1.EstimatedValue !== undefined && prop1.EstimatedValue !== null ? prop1.EstimatedValue : (existingDraft.collateralDetails?.propertyOne?.estimatedValue || '')),
     },
     propertyTwo: {
-      applicationCollateralDetailsId: prop2.applicationCollateralDetailsId || existingDraft.collateralDetails?.propertyTwo?.applicationCollateralDetailsId || null,
-      typeOfProperty: prop2.propertyId || existingDraft.collateralDetails?.propertyTwo?.typeOfProperty || '',
-      usage: prop2.propertyUsageId || existingDraft.collateralDetails?.propertyTwo?.usage || '',
-      locationAddress: prop2.locationAddress || existingDraft.collateralDetails?.propertyTwo?.locationAddress || '',
-      estimatedValue: prop2.estimatedValue !== undefined && prop2.estimatedValue !== null ? prop2.estimatedValue : (existingDraft.collateralDetails?.propertyTwo?.estimatedValue || ''),
+      applicationCollateralDetailsId: prop2.applicationCollateralDetailsId || prop2.ApplicationCollateralDetailsId || existingDraft.collateralDetails?.propertyTwo?.applicationCollateralDetailsId || null,
+      typeOfProperty: prop2.typeOfProperty ?? prop2.propertyId ?? prop2.PropertyId ?? prop2.propertyType ?? prop2.PropertyType ?? existingDraft.collateralDetails?.propertyTwo?.typeOfProperty ?? '',
+      usage: prop2.usage ?? prop2.propertyUsageId ?? prop2.PropertyUsageId ?? prop2.propertyUsage ?? prop2.PropertyUsage ?? existingDraft.collateralDetails?.propertyTwo?.usage ?? '',
+      locationAddress: prop2.locationAddress || prop2.LocationAddress || prop2.propertyAddress || prop2.PropertyAddress || existingDraft.collateralDetails?.propertyTwo?.locationAddress || '',
+      estimatedValue: prop2.estimatedValue !== undefined && prop2.estimatedValue !== null ? prop2.estimatedValue : (prop2.EstimatedValue !== undefined && prop2.EstimatedValue !== null ? prop2.EstimatedValue : (existingDraft.collateralDetails?.propertyTwo?.estimatedValue || '')),
     },
   };
 

@@ -49,6 +49,7 @@ export default function PdfView() {
   const [liveCustomer, setLiveCustomer] = useState(null);
   const [liveRM, setLiveRM] = useState(null);
   const [liveEmployment, setLiveEmployment] = useState(null);
+  const [liveCollateral, setLiveCollateral] = useState(null);
   const [downloadedDocs, setDownloadedDocs] = useState([]);
   const [masterMaps, setMasterMaps] = useState({
     sourcingChannels: {},
@@ -104,12 +105,15 @@ export default function PdfView() {
             const res = await fetch(`${API_BASE}/${endpoint}`);
             if (res.ok) {
               const data = await res.json();
-              const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);
+              const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : (data?.data || []));
               const map = {};
               rows.forEach((r) => {
-                const id = r[idField];
-                const name = r[nameField];
-                if (id !== undefined) map[id] = name;
+                const id = r[idField] ?? r[idField.charAt(0).toUpperCase() + idField.slice(1)] ?? r[idField.toLowerCase()];
+                const name = r[nameField] ?? r[nameField.charAt(0).toUpperCase() + nameField.slice(1)] ?? r[nameField.toLowerCase()];
+                if (id !== undefined && id !== null) {
+                  map[id] = name;
+                  map[String(id)] = name;
+                }
               });
               return map;
             }
@@ -143,6 +147,8 @@ export default function PdfView() {
           empDetailsRes,
           addrDetailsRes,
           persInfoRes,
+          collateralDetailsRes,
+          productDetailsRes,
         ] = await Promise.allSettled([
           fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`).then((r) => (r.ok ? r.json() : null)),
           fetch(`${API_BASE}/RMMaster`).then((r) => (r.ok ? r.json() : null)),
@@ -167,6 +173,8 @@ export default function PdfView() {
           fetch(`${API_BASE}/ApplicationEmploymentIncomeDetails`).then((r) => (r.ok ? r.json() : null)),
           fetch(`${API_BASE}/ApplicationAddressDetails`).then((r) => (r.ok ? r.json() : null)),
           fetch(`${API_BASE}/ApplicationPersonalInformation`).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${API_BASE}/ApplicationCollateralDetails`).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${API_BASE}/ApplicationProductDetails`).then((r) => (r.ok ? r.json() : null)),
         ]);
 
         let resolvedCustomerId = applicationId;
@@ -231,6 +239,54 @@ export default function PdfView() {
               };
               setLiveEmployment(liveEmpObj);
               console.log('TRANSFORMED liveEmployment object:', liveEmpObj);
+            }
+          }
+
+          if (collateralDetailsRes.status === 'fulfilled' && collateralDetailsRes.value) {
+            const rawColList = Array.isArray(collateralDetailsRes.value)
+              ? collateralDetailsRes.value
+              : (collateralDetailsRes.value?.value || collateralDetailsRes.value?.data || []);
+
+            const prodList = productDetailsRes.status === 'fulfilled' && Array.isArray(productDetailsRes.value)
+              ? productDetailsRes.value
+              : (productDetailsRes.value?.value || productDetailsRes.value?.data || []);
+
+            // 1. Find product details record for this customer
+            const matchedProduct = prodList.find(
+              (p) =>
+                String(p.agentCustomerId ?? p.AgentCustomerId) === String(resolvedCustomerId) ||
+                String(p.agentCustomerId ?? p.AgentCustomerId) === String(applicationId)
+            );
+            const targetProdId =
+              matchedProduct?.applicationProductDetailsId ??
+              matchedProduct?.ApplicationProductDetailsId ??
+              appData.applicationProductDetailsId;
+
+            // 2. Filter collateral records for this product
+            let matchedCollaterals = [];
+            if (targetProdId) {
+              matchedCollaterals = rawColList.filter(
+                (c) => String(c.applicationProductDetailsId ?? c.ApplicationProductDetailsId) === String(targetProdId)
+              );
+            }
+
+            if (matchedCollaterals.length === 0 && appData.applicationCollateralDetailsId) {
+              matchedCollaterals = rawColList.filter(
+                (c) => String(c.applicationCollateralDetailsId ?? c.ApplicationCollateralDetailsId) === String(appData.applicationCollateralDetailsId)
+              );
+            }
+
+            if (matchedCollaterals.length > 0) {
+              const liveList = matchedCollaterals.map((c) => ({
+                applicationCollateralDetailsId: c.applicationCollateralDetailsId ?? c.ApplicationCollateralDetailsId,
+                typeOfProperty: c.propertyId ?? c.PropertyId ?? c.typeOfProperty ?? c.propertyType ?? '',
+                usage: c.propertyUsageId ?? c.PropertyUsageId ?? c.usage ?? c.propertyUsage ?? '',
+                locationAddress: c.locationAddress || c.LocationAddress || c.propertyAddress || c.PropertyAddress || '',
+                estimatedValue: c.estimatedValue ?? c.EstimatedValue ?? '',
+                propertyName: c.propertyName ?? c.PropertyName ?? '',
+                propertyUsageName: c.propertyUsageName ?? c.PropertyUsageName ?? '',
+              }));
+              setLiveCollateral(liveList);
             }
           }
 
@@ -483,9 +539,38 @@ export default function PdfView() {
   const resolveRelationship = (val) => masterMaps.relationships[val] || val || '';
   const resolveDocType = (val) => masterMaps.documentTypes[val] || val || '';
   const resolveVerification = (val) => masterMaps.verifications[val] || val || 'Verified';
-  const resolveBank = (val) => (masterMaps.banks && masterMaps.banks[val]) || val || '';
-  const resolveProperty = (val) => (masterMaps.properties && masterMaps.properties[val]) || val || '';
-  const resolvePropertyUsage = (val) => (masterMaps.propertyUsages && masterMaps.propertyUsages[val]) || val || '';
+  const resolveBank = (val) => {
+    if (val === null || val === undefined || val === '') return '';
+    if (masterMaps.banks && masterMaps.banks[val] !== undefined) {
+      return masterMaps.banks[val];
+    }
+    if (masterMaps.banks && masterMaps.banks[String(val)] !== undefined) {
+      return masterMaps.banks[String(val)];
+    }
+    return val;
+  };
+  const resolveProperty = (val) => {
+    if (val === null || val === undefined || val === '') return '';
+    if (masterMaps.properties && masterMaps.properties[val] !== undefined) {
+      return masterMaps.properties[val];
+    }
+    if (masterMaps.properties && masterMaps.properties[String(val)] !== undefined) {
+      return masterMaps.properties[String(val)];
+    }
+    return val;
+  };
+
+  const resolvePropertyUsage = (val) => {
+    if (val === null || val === undefined || val === '') return '';
+    if (masterMaps.propertyUsages && masterMaps.propertyUsages[val] !== undefined) {
+      return masterMaps.propertyUsages[val];
+    }
+    if (masterMaps.propertyUsages && masterMaps.propertyUsages[String(val)] !== undefined) {
+      return masterMaps.propertyUsages[String(val)];
+    }
+    return val;
+  };
+
   const resolveEmploymentType = (val) => (masterMaps.employmentTypes && masterMaps.employmentTypes[val]) || val || '';
   const resolveEducation = (val) => (masterMaps.educations && masterMaps.educations[val]) || val || '';
   const resolveCity = (val) => (masterMaps.cities && masterMaps.cities[val]) || val || '';
@@ -535,7 +620,71 @@ export default function PdfView() {
   };
 
   const bankData = appData.bankExistingLoans || appData.sections?.bankExistingLoans || {};
-  const colData = appData.collateral || appData.sections?.collateral || appData.collateralDetails || {};
+  const colData = appData.collateral || appData.sections?.collateral || appData.collateralDetails || appData.sections?.collateralDetails || {};
+
+  const resolveCollateralList = () => {
+    // 1. Live collateral from API if available
+    if (Array.isArray(liveCollateral) && liveCollateral.length > 0) {
+      return liveCollateral;
+    }
+
+    // 2. Extract from local / hydrated draft store
+    const colSource = appData.collateral || appData.sections?.collateral || appData.collateralDetails || appData.sections?.collateralDetails || {};
+
+    const rawList = [];
+
+    const hasP1 =
+      colSource.propertyOne &&
+      (colSource.propertyOne.typeOfProperty ||
+        colSource.propertyOne.propertyId ||
+        colSource.propertyOne.locationAddress ||
+        colSource.propertyOne.estimatedValue);
+    if (hasP1) {
+      rawList.push(colSource.propertyOne);
+    }
+
+    const hasP2 =
+      colSource.propertyTwo &&
+      (colSource.propertyTwo.typeOfProperty ||
+        colSource.propertyTwo.propertyId ||
+        colSource.propertyTwo.locationAddress ||
+        colSource.propertyTwo.estimatedValue);
+    if (hasP2) {
+      rawList.push(colSource.propertyTwo);
+    }
+
+    if (Array.isArray(colSource.properties) && colSource.properties.length > 0) {
+      colSource.properties.forEach((p) => rawList.push(p));
+    }
+    if (Array.isArray(colSource) && colSource.length > 0) {
+      colSource.forEach((p) => rawList.push(p));
+    }
+
+    if (
+      rawList.length === 0 &&
+      (colSource.propertyType ||
+        colSource.typeOfProperty ||
+        colSource.propertyId ||
+        colSource.locationAddress ||
+        colSource.propertyAddress ||
+        colSource.estimatedValue ||
+        colSource.estimatedMarketValue)
+    ) {
+      rawList.push(colSource);
+    }
+
+    return rawList.map((item) => ({
+      applicationCollateralDetailsId: item.applicationCollateralDetailsId ?? item.ApplicationCollateralDetailsId ?? null,
+      typeOfProperty: item.typeOfProperty ?? item.propertyId ?? item.PropertyId ?? item.propertyType ?? item.PropertyType ?? '',
+      usage: item.usage ?? item.propertyUsageId ?? item.PropertyUsageId ?? item.propertyUsage ?? item.PropertyUsage ?? '',
+      locationAddress: item.locationAddress || item.LocationAddress || item.propertyAddress || item.PropertyAddress || '',
+      estimatedValue: item.estimatedValue ?? item.EstimatedValue ?? item.estimatedMarketValue ?? item.EstimatedMarketValue ?? '',
+      propertyName: item.propertyName ?? item.PropertyName ?? '',
+      propertyUsageName: item.propertyUsageName ?? item.PropertyUsageName ?? '',
+    }));
+  };
+
+  const collateralList = resolveCollateralList();
   const refData = appData.references || appData.sections?.references || {};
   const sourcingData = appData.sourcing || appData.sections?.sourcing || {};
   const chargesData = appData.scheduleCharges || appData.sections?.scheduleCharges || {};
@@ -1155,12 +1304,11 @@ export default function PdfView() {
           <table className="pdf-table">
             <thead>
               <tr>
-                <th>Applicant Type</th>
-                <th>Bank Name</th>
-                <th>Account Holder</th>
-                <th>Account No</th>
-                <th>IFSC Code</th>
-                <th>Active Loans</th>
+                <th style={{ width: '18%' }}>Applicant Type</th>
+                <th style={{ width: '22%' }}>Bank Name</th>
+                <th style={{ width: '24%' }}>Account Holder</th>
+                <th style={{ width: '22%' }}>Account No</th>
+                <th style={{ width: '14%' }}>Active Loans</th>
               </tr>
             </thead>
             <tbody>
@@ -1176,11 +1324,6 @@ export default function PdfView() {
                 <td>
                   {bankData.applicant?.primaryBank?.accountNumber ||
                     bankData.primaryBank?.accountNumber ||
-                    '-'}
-                </td>
-                <td>
-                  {bankData.applicant?.primaryBank?.ifscCode ||
-                    bankData.primaryBank?.ifscCode ||
                     '-'}
                 </td>
                 <td>
@@ -1210,10 +1353,6 @@ export default function PdfView() {
                         '-'}
                     </td>
                     <td>
-                      {bankData.coApplicants?.[i]?.primaryBank?.ifscCode ||
-                        '-'}
-                    </td>
-                    <td>
                       {bankData.coApplicants?.[i]?.primaryBank?.noOfActiveLoans !== undefined && bankData.coApplicants?.[i]?.primaryBank?.noOfActiveLoans !== ''
                         ? String(bankData.coApplicants[i].primaryBank.noOfActiveLoans)
                         : bankData.coApplicants?.[i]?.existingLoans?.[0]?.totalExistingEmi
@@ -1227,44 +1366,79 @@ export default function PdfView() {
 
           {/* STEP 7: COLLATERAL DETAILS */}
           <div className="pdf-section-title">COLLATERAL DETAILS</div>
-          <table className="pdf-table">
-            <tbody>
-              <tr>
-                <td className="pdf-row-header">Property Type</td>
-                <td>
-                  {resolveProperty(colData.propertyOne?.typeOfProperty) ||
-                    colData.propertyOne?.typeOfProperty ||
-                    resolveProperty(colData.propertyType) ||
-                    colData.propertyType ||
-                    '-'}
-                </td>
-              </tr>
-              <tr>
-                <td className="pdf-row-header">Property Address</td>
-                <td>{colData.propertyOne?.locationAddress || colData.propertyAddress || '-'}</td>
-              </tr>
-              <tr>
-                <td className="pdf-row-header">Estimated Market Value</td>
-                <td>
-                  {colData.propertyOne?.estimatedValue
-                    ? `Rs. ${Number(colData.propertyOne.estimatedValue).toLocaleString('en-IN')}`
-                    : colData.estimatedMarketValue
-                    ? `Rs. ${Number(colData.estimatedMarketValue).toLocaleString('en-IN')}`
-                    : '-'}
-                </td>
-              </tr>
-              <tr>
-                <td className="pdf-row-header">Property Usage</td>
-                <td>
-                  {resolvePropertyUsage(colData.propertyOne?.usage) ||
-                    resolvePropertyUsage(colData.usage) ||
-                    colData.propertyOne?.usage ||
-                    colData.usage ||
-                    '-'}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          {collateralList.length > 1 ? (
+            <table className="pdf-table">
+              <thead>
+                <tr>
+                  <th className="pdf-row-header">Field</th>
+                  {collateralList.map((_, i) => (
+                    <th key={i}>Property {i + 1}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="pdf-row-header">Property Type</td>
+                  {collateralList.map((prop, i) => (
+                    <td key={i}>
+                      {resolveProperty(prop.typeOfProperty) || prop.propertyName || prop.typeOfProperty || '-'}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="pdf-row-header">Property Address</td>
+                  {collateralList.map((prop, i) => (
+                    <td key={i}>{prop.locationAddress || '-'}</td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="pdf-row-header">Estimated Market Value</td>
+                  {collateralList.map((prop, i) => (
+                    <td key={i}>{formatCurrencyOrDash(prop.estimatedValue)}</td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="pdf-row-header">Property Usage</td>
+                  {collateralList.map((prop, i) => (
+                    <td key={i}>
+                      {resolvePropertyUsage(prop.usage) || prop.propertyUsageName || prop.usage || '-'}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          ) : (
+            <table className="pdf-table">
+              <tbody>
+                <tr>
+                  <td className="pdf-row-header">Property Type</td>
+                  <td>
+                    {resolveProperty(collateralList[0]?.typeOfProperty) ||
+                      collateralList[0]?.propertyName ||
+                      collateralList[0]?.typeOfProperty ||
+                      '-'}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="pdf-row-header">Property Address</td>
+                  <td>{collateralList[0]?.locationAddress || '-'}</td>
+                </tr>
+                <tr>
+                  <td className="pdf-row-header">Estimated Market Value</td>
+                  <td>{formatCurrencyOrDash(collateralList[0]?.estimatedValue)}</td>
+                </tr>
+                <tr>
+                  <td className="pdf-row-header">Property Usage</td>
+                  <td>
+                    {resolvePropertyUsage(collateralList[0]?.usage) ||
+                      collateralList[0]?.propertyUsageName ||
+                      collateralList[0]?.usage ||
+                      '-'}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          )}
 
           {/* STEP 8: REFERENCE DETAILS */}
           <div className="pdf-section-title">REFERENCE DETAILS</div>

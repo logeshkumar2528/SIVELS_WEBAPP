@@ -21,12 +21,67 @@ import iconMap from '../../config/iconMap';
 import { ROUTES } from '../../config/routeConfig';
 import { VERIFICATION_STEP_DEFINITIONS } from '../../config/verificationSteps';
 import { useVerificationWorkspace } from '../../hooks/useVerificationWorkspace';
+import backOfficeService from '../../api/backOfficeService';
 import VerificationStepModal from '../../components/Verification/VerificationStepModal';
 import './CustomerVerification.css';
 
 function formatCurrency(amount) {
   if (amount === null || amount === undefined || isNaN(amount) || amount === 0) return '₹0';
   return `₹${Number(amount).toLocaleString('en-IN')}`;
+}
+
+function formatFoirCurrency(amount) {
+  if (amount === null || amount === undefined || isNaN(amount) || amount === '') return '—';
+  const num = Number(amount);
+  return num % 1 === 0
+    ? `₹${num.toLocaleString('en-IN')}`
+    : `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/**
+ * Matches the current applicant to FOIR calculation records from backend.
+ * Uses agentCustomerId, applicationEmploymentIncomeDetailsId, and applicationProductDetailsId.
+ * Sorts matching records descending by calculationId/createdAt.
+ */
+function findMatchingFoirCalculation(records = [], { agentCustomerId, employmentIncomeId, productDetailsId }) {
+  if (!Array.isArray(records) || records.length === 0) return null;
+
+  const validAgentId = agentCustomerId != null && agentCustomerId !== '' ? String(agentCustomerId) : null;
+  const validEmpId = employmentIncomeId != null && employmentIncomeId !== '' ? String(employmentIncomeId) : null;
+  const validProdId = productDetailsId != null && productDetailsId !== '' ? String(productDetailsId) : null;
+
+  const matches = records.filter((item) => {
+    const itemAgentId = item.agentCustomerId ?? item.AgentCustomerId;
+    const itemEmpId = item.applicationEmploymentIncomeDetailsId ?? item.ApplicationEmploymentIncomeDetailsId;
+    const itemProdId = item.applicationProductDetailsId ?? item.ApplicationProductDetailsId;
+
+    if (validAgentId && itemAgentId != null && String(itemAgentId) === validAgentId) {
+      return true;
+    }
+    if (validEmpId && itemEmpId != null && String(itemEmpId) === validEmpId) {
+      return true;
+    }
+    if (validProdId && itemProdId != null && String(itemProdId) === validProdId) {
+      return true;
+    }
+    return false;
+  });
+
+  if (matches.length === 0) return null;
+
+  // Sort descending by calculationId or createdAt (latest first)
+  matches.sort((a, b) => {
+    const calcIdA = Number(a.calculationId ?? a.CalculationId ?? a.id ?? a.Id ?? 0);
+    const calcIdB = Number(b.calculationId ?? b.CalculationId ?? b.id ?? b.Id ?? 0);
+    if (calcIdA !== calcIdB) {
+      return calcIdB - calcIdA;
+    }
+    const dateA = new Date(a.createdAt || a.CreatedAt || 0).getTime();
+    const dateB = new Date(b.createdAt || b.CreatedAt || 0).getTime();
+    return dateB - dateA;
+  });
+
+  return matches[0];
 }
 
 const STAGES = [
@@ -225,6 +280,66 @@ export default function CustomerVerification() {
   const RefreshCwIcon = iconMap['RefreshCw'];
   const LockIcon = iconMap['Lock'] || iconMap['ShieldCheck'];
   const EyeIcon = iconMap['Eye'] || iconMap['FileText'];
+  const BadgeIndianRupeeIcon = iconMap['BadgeIndianRupee'] || iconMap['Wallet'];
+  const FileCheckIcon = iconMap['FileCheck'] || iconMap['FileText'];
+
+  // 5. FOIR Calculation State: 'idle' | 'loading' | 'success' | 'empty' | 'error'
+  const [foirState, setFoirState] = useState('idle');
+  const [foirData, setFoirData] = useState(null);
+  const [foirError, setFoirError] = useState(null);
+
+  const handleCalculateFoir = async () => {
+    setFoirState('loading');
+    setFoirError(null);
+
+    try {
+      const res = await backOfficeService.getFoirEligibilityCalculations();
+      const records = Array.isArray(res) ? res : (res?.value ?? res?.data ?? res?.result ?? []);
+
+      // Resolve application IDs from current verification data
+      const rawCustomer = verificationData?.raw?.customer || verificationData?.customer || {};
+      const rawCust = Array.isArray(rawCustomer) ? rawCustomer[0] : rawCustomer;
+      const rawEmp = verificationData?.raw?.employmentIncome || verificationData?.employmentIncome?.raw || {};
+      const rawEmpItem = Array.isArray(rawEmp) ? rawEmp[0] : rawEmp;
+      const rawProd = verificationData?.raw?.productDetails || verificationData?.applicationDetails?.raw || {};
+      const rawProdItem = Array.isArray(rawProd) ? rawProd[0] : rawProd;
+
+      const agentCustId =
+        verificationData?.customerId ||
+        rawCust?.agentCustomerId ||
+        rawCust?.AgentCustomerId ||
+        verificationData?.raw?.agentCustomerId ||
+        verificationData?.raw?.AgentCustomerId;
+
+      const empIncomeId =
+        rawEmpItem?.applicationEmploymentIncomeDetailsId ||
+        rawEmpItem?.ApplicationEmploymentIncomeDetailsId ||
+        verificationData?.employmentIncome?.employmentIncomeDetailsId;
+
+      const prodDetailsId =
+        rawProdItem?.applicationProductDetailsId ||
+        rawProdItem?.ApplicationProductDetailsId ||
+        verificationData?.applicationDetails?.productDetailsId;
+
+      const matched = findMatchingFoirCalculation(records, {
+        agentCustomerId: agentCustId,
+        employmentIncomeId: empIncomeId,
+        productDetailsId: prodDetailsId,
+      });
+
+      if (matched) {
+        setFoirData(matched);
+        setFoirState('success');
+      } else {
+        setFoirData(null);
+        setFoirState('empty');
+      }
+    } catch (err) {
+      console.error('Error fetching FOIR calculation:', err);
+      setFoirError(err?.response?.data?.message || err?.message || 'Unable to connect to FOIR calculation service.');
+      setFoirState('error');
+    }
+  };
 
   // Staged loading effect for CIBIL simulation (approx 2.3s)
   useEffect(() => {
@@ -896,6 +1011,221 @@ export default function CustomerVerification() {
               </div>
             </div>
           )}
+
+          {/* ── 9. FOIR ELIGIBILITY CALCULATION SECTION ─────────────────── */}
+          <div className="bo-cv-foir-section" id="foir-calculation-section">
+            {foirState === 'idle' && (
+              <div className="bo-cv-foir-idle-card">
+                <div className="bo-cv-foir-idle-content">
+                  <div className="bo-cv-foir-idle-icon">
+                    {BadgeIndianRupeeIcon ? <BadgeIndianRupeeIcon size={22} /> : <FileCheckIcon size={22} />}
+                  </div>
+                  <div>
+                    <h3 className="bo-cv-foir-title">FOIR Eligibility Calculation</h3>
+                    <p className="bo-cv-foir-subtitle">
+                      Calculate Fixed Obligation to Income Ratio and evaluate applicant loan eligibility.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="bo-btn bo-btn--primary bo-cv-calc-foir-btn"
+                  onClick={handleCalculateFoir}
+                >
+                  {RefreshCwIcon && <RefreshCwIcon size={14} />}
+                  <span>Calculate FOIR</span>
+                </button>
+              </div>
+            )}
+
+            {foirState === 'loading' && (
+              <div className="bo-cv-foir-card bo-cv-foir-loading-card">
+                <div className="bo-cv-foir-loading-inner">
+                  <div className="bo-cv-spinner-box">
+                    {RefreshCwIcon && <RefreshCwIcon size={22} className="bo-cv-spin" />}
+                  </div>
+                  <div>
+                    <h4 className="bo-cv-foir-title">Calculating FOIR Eligibility...</h4>
+                    <p className="bo-cv-foir-subtitle">
+                      Querying FOIREligibilityCalculation for applicant #{verificationData?.customerId}...
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="bo-btn bo-btn--primary bo-cv-calc-foir-btn"
+                  disabled
+                >
+                  {RefreshCwIcon && <RefreshCwIcon size={14} className="bo-cv-spin" />}
+                  <span>Calculating...</span>
+                </button>
+              </div>
+            )}
+
+            {foirState === 'error' && (
+              <div className="bo-cv-foir-card bo-cv-foir-error-card">
+                <div className="bo-cv-foir-header">
+                  <div className="bo-cv-foir-title-group">
+                    <h3 className="bo-cv-foir-title text-danger">FOIR Calculation Failed</h3>
+                    <p className="bo-cv-foir-subtitle">{foirError}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="bo-btn bo-btn--outline bo-cv-foir-recalc-btn"
+                    onClick={handleCalculateFoir}
+                  >
+                    {RefreshCwIcon && <RefreshCwIcon size={13} />}
+                    <span>Retry Calculation</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {foirState === 'empty' && (
+              <div className="bo-cv-foir-card bo-cv-foir-empty-card">
+                <div className="bo-cv-foir-header">
+                  <div className="bo-cv-foir-title-group">
+                    <h3 className="bo-cv-foir-title">FOIR Calculation Result</h3>
+                    <p className="bo-cv-foir-subtitle">
+                      No matching FOIR calculation record was found for this applicant (Customer #{verificationData?.customerId}).
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="bo-btn bo-btn--primary bo-cv-calc-foir-btn"
+                    onClick={handleCalculateFoir}
+                  >
+                    {RefreshCwIcon && <RefreshCwIcon size={13} />}
+                    <span>Calculate Again</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {foirState === 'success' && foirData && (() => {
+              const monthlyIncome = foirData.monthlyIncome ?? foirData.MonthlyIncome;
+              const existingEMI = foirData.existingEMI ?? foirData.ExistingEMI ?? foirData.existingEmi ?? foirData.ExistingEmi ?? 0;
+              const eligibleIncome = foirData.eligibleIncome ?? foirData.EligibleIncome;
+              const netServiceableIncome = foirData.netServiceableIncome ?? foirData.NetServiceableIncome;
+              const foirPercentApplied = foirData.foirPercentApplied ?? foirData.FoirPercentApplied ?? foirData.proposedFOIR ?? foirData.ProposedFOIR;
+              const actualFOIR = foirData.actualFOIR ?? foirData.ActualFOIR ?? foirData.actualFoir ?? foirData.ActualFoir;
+              const requestedLoanAmount = foirData.requestedLoanAmount ?? foirData.RequestedLoanAmount;
+              const proposedTenureMonths = foirData.proposedTenureMonths ?? foirData.ProposedTenureMonths ?? foirData.tenureMonths;
+              const emiFactor = foirData.emiFactor ?? foirData.EmiFactor;
+              const loanEligibilityAmount = foirData.loanEligibilityAmount ?? foirData.LoanEligibilityAmount;
+              const status = foirData.status ?? foirData.Status ?? 'Under Review';
+              const isEligible = String(status).trim().toLowerCase() === 'eligible';
+
+              return (
+                <div className="bo-cv-foir-card bo-cv-foir-success-card">
+                  <div className="bo-cv-foir-header">
+                    <div className="bo-cv-foir-title-group">
+                      <div className="bo-cv-foir-title-row">
+                        <div className="bo-cv-foir-badge-icon">
+                          {BadgeIndianRupeeIcon ? <BadgeIndianRupeeIcon size={18} /> : <FileCheckIcon size={18} />}
+                        </div>
+                        <h3 className="bo-cv-foir-title">FOIR Calculation Result</h3>
+                        <span className={`bo-cv-foir-status-badge ${isEligible ? 'is-eligible' : 'is-not-eligible'}`}>
+                          {status}
+                        </span>
+                      </div>
+                      <p className="bo-cv-foir-subtitle">
+                        Fixed Obligation to Income Ratio analysis based on applicant income and existing debt obligations.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="bo-btn bo-btn--outline bo-cv-foir-recalc-btn"
+                      onClick={handleCalculateFoir}
+                      title="Re-run FOIR calculation"
+                    >
+                      {RefreshCwIcon && <RefreshCwIcon size={13} />}
+                      <span>Re-calculate FOIR</span>
+                    </button>
+                  </div>
+
+                  <div className="bo-cv-foir-grid">
+                    {/* 1. Monthly Income */}
+                    <div className="bo-cv-foir-cell">
+                      <span className="bo-cv-foir-cell-lbl">Monthly Income</span>
+                      <strong className="bo-cv-foir-cell-val text-primary">{formatFoirCurrency(monthlyIncome)}</strong>
+                    </div>
+
+                    {/* 2. Existing EMI */}
+                    <div className="bo-cv-foir-cell">
+                      <span className="bo-cv-foir-cell-lbl">Existing EMI</span>
+                      <strong className="bo-cv-foir-cell-val">{formatFoirCurrency(existingEMI)}</strong>
+                    </div>
+
+                    {/* 3. Eligible Income */}
+                    <div className="bo-cv-foir-cell">
+                      <span className="bo-cv-foir-cell-lbl">Eligible Income</span>
+                      <strong className="bo-cv-foir-cell-val text-success">{formatFoirCurrency(eligibleIncome)}</strong>
+                    </div>
+
+                    {/* 4. Net Serviceable Income */}
+                    <div className="bo-cv-foir-cell">
+                      <span className="bo-cv-foir-cell-lbl">Net Serviceable Income</span>
+                      <strong className="bo-cv-foir-cell-val text-success">{formatFoirCurrency(netServiceableIncome)}</strong>
+                    </div>
+
+                    {/* 5. FOIR % */}
+                    <div className="bo-cv-foir-cell">
+                      <span className="bo-cv-foir-cell-lbl">FOIR %</span>
+                      <strong className="bo-cv-foir-cell-val">
+                        {foirPercentApplied !== undefined && foirPercentApplied !== null && foirPercentApplied !== '' ? `${foirPercentApplied}%` : '—'}
+                      </strong>
+                    </div>
+
+                    {/* 6. Actual FOIR */}
+                    <div className="bo-cv-foir-cell">
+                      <span className="bo-cv-foir-cell-lbl">Actual FOIR</span>
+                      <strong className="bo-cv-foir-cell-val">{formatFoirCurrency(actualFOIR)}</strong>
+                    </div>
+
+                    {/* 7. Requested Loan Amount */}
+                    <div className="bo-cv-foir-cell">
+                      <span className="bo-cv-foir-cell-lbl">Requested Loan Amount</span>
+                      <strong className="bo-cv-foir-cell-val">{formatFoirCurrency(requestedLoanAmount)}</strong>
+                    </div>
+
+                    {/* 8. Proposed Tenure (Months) */}
+                    <div className="bo-cv-foir-cell">
+                      <span className="bo-cv-foir-cell-lbl">Proposed Tenure (Months)</span>
+                      <strong className="bo-cv-foir-cell-val">
+                        {proposedTenureMonths !== undefined && proposedTenureMonths !== null && proposedTenureMonths !== '' ? `${proposedTenureMonths} Months` : '—'}
+                      </strong>
+                    </div>
+
+                    {/* 9. EMI Factor */}
+                    <div className="bo-cv-foir-cell">
+                      <span className="bo-cv-foir-cell-lbl">EMI Factor</span>
+                      <strong className="bo-cv-foir-cell-val">
+                        {emiFactor !== undefined && emiFactor !== null && emiFactor !== '' ? Number(emiFactor).toLocaleString('en-IN', { maximumFractionDigits: 4 }) : '—'}
+                      </strong>
+                    </div>
+
+                    {/* 10. Loan Eligibility Amount */}
+                    <div className="bo-cv-foir-cell">
+                      <span className="bo-cv-foir-cell-lbl">Loan Eligibility Amount</span>
+                      <strong className={`bo-cv-foir-cell-val ${isEligible ? 'text-success' : 'text-danger'}`}>
+                        {formatFoirCurrency(loanEligibilityAmount)}
+                      </strong>
+                    </div>
+
+                    {/* 11. Status */}
+                    <div className="bo-cv-foir-cell">
+                      <span className="bo-cv-foir-cell-lbl">Status</span>
+                      <span className={`bo-cv-foir-status-pill ${isEligible ? 'is-eligible' : 'is-not-eligible'}`}>
+                        {status}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
         </main>
       </div>
 
