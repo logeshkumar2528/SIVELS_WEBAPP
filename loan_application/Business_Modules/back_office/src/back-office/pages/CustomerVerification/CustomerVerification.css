@@ -1110,6 +1110,93 @@
   font-weight: 800;
 }
 
+/* ── Fullscreen Loading & Error States ─────────────────────────────── */
+.bo-cv-loading-fullscreen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  gap: 16px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.bo-cv-loading-spinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid #e2e8f0;
+  border-top-color: var(--color-primary, #0F7A4C);
+  border-radius: 50%;
+  animation: boCvSpin 0.8s linear infinite;
+}
+
+.bo-cv-loading-fullscreen h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.bo-cv-loading-fullscreen p {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+
+.bo-cv-error-fullscreen {
+  padding: 60px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bo-cv-error-card {
+  background: #ffffff;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  padding: 32px;
+  max-width: 480px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.bo-cv-error-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #fef2f2;
+  color: #dc2626;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bo-cv-error-card h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #991b1b;
+  margin: 0;
+}
+
+.bo-cv-error-card p {
+  font-size: 13px;
+  color: #b91c1c;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.bo-cv-error-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
 /* ── Fallback Not Found View ───────────────────────────────────────── */
 .bo-cv-not-found-container {
   padding: 60px 20px;

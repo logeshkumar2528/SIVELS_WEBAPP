@@ -26,6 +26,9 @@ export default function VerificationStepModal({
   const FileTextIcon = iconMap['FileText'];
   const EyeIcon = iconMap['Eye'];
 
+  // Local simulated PAN verification state for Step 2
+  const [panState, setPanState] = useState('verified'); // 'idle' | 'verifying' | 'verified'
+
   if (!stepDefinition || !customerData) return null;
 
   const renderStepContent = () => {
@@ -45,56 +48,62 @@ export default function VerificationStepModal({
             <div className="bo-v-grid-2">
               <div className="bo-v-field">
                 <label>Application ID</label>
-                <strong className="bo-text-primary">{customerData.applicationId}</strong>
+                <strong className="bo-text-primary">{customerData.applicationId || 'Not Available'}</strong>
               </div>
               <div className="bo-v-field">
                 <label>Loan Product</label>
-                <span>{d.loanProduct}</span>
+                <span>{d.loanProduct || 'Not Available'}</span>
               </div>
               <div className="bo-v-field">
                 <label>Requested Loan Amount</label>
-                <strong className="bo-amount-lead">{formatCurrency(d.loanAmount)}</strong>
+                <strong className="bo-amount-lead">{d.loanAmount ? formatCurrency(d.loanAmount) : 'Not Available'}</strong>
               </div>
               <div className="bo-v-field">
                 <label>Loan Tenure</label>
-                <span>{d.loanTenure}</span>
+                <span>{d.loanTenure || 'Not Available'}</span>
               </div>
               <div className="bo-v-field">
                 <label>Rate of Interest</label>
-                <span>{d.interestRate}</span>
+                <span>{d.interestRate || 'Not Available'}</span>
               </div>
               <div className="bo-v-field">
                 <label>Repayment Frequency</label>
-                <span>{d.repaymentFrequency}</span>
+                <span>{d.repaymentFrequency || 'Monthly'}</span>
               </div>
               <div className="bo-v-field">
                 <label>Transaction Type</label>
-                <span>{d.transactionType}</span>
+                <span>{d.transactionType || 'Not Available'}</span>
               </div>
               <div className="bo-v-field">
                 <label>Co-Applicants</label>
-                <span>{d.coApplicantCount} Co-Applicant(s)</span>
+                <span>{d.coApplicantCount ?? 0} Co-Applicant(s)</span>
               </div>
               <div className="bo-v-field">
                 <label>Sourcing Branch</label>
-                <span>{d.sourcingBranch}</span>
+                <span>{d.sourcingBranch || 'Not Available'}</span>
               </div>
               <div className="bo-v-field">
                 <label>Applied Date</label>
-                <span>{d.appliedDate}</span>
+                <span>{d.appliedDate || 'Not Available'}</span>
               </div>
+              {d.distanceFromBranch && (
+                <div className="bo-v-field">
+                  <label>Distance From Branch</label>
+                  <span>{d.distanceFromBranch} km</span>
+                </div>
+              )}
             </div>
 
             <div className="bo-v-full-field">
               <label>Purpose of Loan</label>
-              <div className="bo-v-purpose-box">{d.purposeOfLoan}</div>
+              <div className="bo-v-purpose-box">{d.purposeOfLoan || 'Not Available'}</div>
             </div>
           </div>
         );
       }
 
       // ----------------------------------------------------
-      // Step 2: Personal Information (With PAN Verification)
+      // Step 2: Personal Information (With PAN Verification Simulation)
       // ----------------------------------------------------
       case 2: {
         const p = customerData.personalInformation || {};
@@ -108,74 +117,80 @@ export default function VerificationStepModal({
             <div className="bo-v-grid-2">
               <div className="bo-v-field">
                 <label>Full Name</label>
-                <strong>{p.fullName}</strong>
+                <strong>{p.fullName || 'Not Available'}</strong>
               </div>
               <div className="bo-v-field">
                 <label>Father / Spouse Name</label>
-                <span>{p.fatherOrSpouseName}</span>
+                <span>{p.fatherOrSpouseName || 'Not Available'}</span>
               </div>
               <div className="bo-v-field">
                 <label>Date of Birth &amp; Age</label>
-                <span>{p.dob} ({p.age} Years)</span>
+                <span>{p.dob || 'Not Available'} {p.age ? `(${p.age} Years)` : ''}</span>
               </div>
               <div className="bo-v-field">
                 <label>Gender &amp; Marital Status</label>
-                <span>{p.gender} &bull; {p.maritalStatus}</span>
+                <span>{p.gender || '—'} &bull; {p.maritalStatus || '—'}</span>
               </div>
               <div className="bo-v-field">
                 <label>Primary Mobile Number</label>
-                <span>+91 {p.mobile}</span>
+                <span>{p.mobile && p.mobile !== 'Not Available' ? `+91 ${p.mobile}` : 'Not Available'}</span>
               </div>
               <div className="bo-v-field">
                 <label>Email Address</label>
-                <span>{p.email}</span>
+                <span>{p.email || 'Not Available'}</span>
               </div>
               <div className="bo-v-field">
                 <label>Aadhaar Number (Masked)</label>
-                <span>{p.aadhaarNumber}</span>
+                <span>{p.aadhaarNumber || 'Not Available'}</span>
               </div>
               <div className="bo-v-field">
                 <label>Education &amp; Dependents</label>
-                <span>{p.education} ({p.dependents} Dependents)</span>
+                <span>{p.education || '—'} ({p.dependents ?? 0} Dependents)</span>
               </div>
             </div>
 
-            {/* View-Only PAN Verification Box */}
+            {/* PAN Verification UI (Frontend Simulation) */}
             <div className="bo-pan-verification-card">
               <div className="bo-pan-header">
                 <div>
                   <span className="bo-pan-kicker">TAX IDENTIFICATION (SUBMITTED)</span>
                   <h4>Permanent Account Number (PAN)</h4>
                 </div>
-                <strong className="bo-pan-number">{p.panNumber}</strong>
+                <strong className="bo-pan-number">{p.panNumber || 'Not Available'}</strong>
               </div>
 
               <div className="bo-pan-result-area">
-                <div className="bo-pan-verified-box">
-                  <div className="bo-pan-verified-header">
-                    <div className="bo-pan-badge-row">
-                      <span className="bo-pan-success-pill">
-                        ✓ PAN Verified
-                      </span>
-                      <span className="bo-pan-meta-pill">Status: Active</span>
-                      <span className="bo-pan-meta-pill">Name Matched: Yes</span>
+                {p.panNumber && p.panNumber !== 'Not Available' ? (
+                  <div className="bo-pan-verified-box">
+                    <div className="bo-pan-verified-header">
+                      <div className="bo-pan-badge-row">
+                        <span className="bo-pan-success-pill">
+                          ✓ PAN Verified
+                        </span>
+                        <span className="bo-pan-meta-pill">Status: Active</span>
+                        <span className="bo-pan-meta-pill">Name Matched: Yes</span>
+                      </div>
+                    </div>
+                    <div className="bo-pan-details-grid">
+                      <div>
+                        <small>PAN Holder Name</small>
+                        <strong>{p.fullName || 'Not Available'}</strong>
+                      </div>
+                      <div>
+                        <small>PAN Category</small>
+                        <span>Individual / Proprietor</span>
+                      </div>
+                      <div>
+                        <small>Verification Match</small>
+                        <span className="text-success font-semibold">100% Identity Match</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="bo-pan-details-grid">
-                    <div>
-                      <small>PAN Holder Name</small>
-                      <strong>{p.fullName}</strong>
-                    </div>
-                    <div>
-                      <small>PAN Category</small>
-                      <span>Individual / Proprietor</span>
-                    </div>
-                    <div>
-                      <small>Verification Match</small>
-                      <span className="text-success font-semibold">100% Identity Match</span>
-                    </div>
+                ) : (
+                  <div className="bo-empty-step-state">
+                    <p>PAN number not provided in application submission.</p>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -204,11 +219,11 @@ export default function VerificationStepModal({
                   <span className="bo-addr-type-pill">{curr.residenceType || 'Owned'}</span>
                 </div>
                 <div className="bo-addr-content">
-                  <p><strong>Door &amp; Street:</strong> {curr.doorNo}, {curr.streetName}</p>
-                  <p><strong>Landmark:</strong> {curr.landmark}</p>
-                  <p><strong>City &amp; District:</strong> {curr.city}, {curr.district}</p>
-                  <p><strong>State &amp; Pincode:</strong> {curr.state} - {curr.pincode}</p>
-                  <p><strong>Vintage at Address:</strong> {curr.yearsAtAddress} Years</p>
+                  <p><strong>Door &amp; Street:</strong> {curr.doorNo || 'Not Available'}, {curr.streetName || 'Not Available'}</p>
+                  <p><strong>Landmark:</strong> {curr.landmark || 'Not Available'}</p>
+                  <p><strong>City &amp; District:</strong> {curr.city || 'Not Available'}, {curr.district || 'Not Available'}</p>
+                  <p><strong>State &amp; Pincode:</strong> {curr.state || 'Tamil Nadu'} - {curr.pincode || 'Not Available'}</p>
+                  <p><strong>Vintage at Address:</strong> {curr.yearsAtAddress ? `${curr.yearsAtAddress} Years` : 'Not Available'}</p>
                 </div>
               </div>
 
@@ -218,11 +233,11 @@ export default function VerificationStepModal({
                   <span className="bo-addr-type-pill">Permanent Record</span>
                 </div>
                 <div className="bo-addr-content">
-                  <p><strong>Door &amp; Street:</strong> {perm.doorNo}, {perm.streetName}</p>
-                  <p><strong>Landmark:</strong> {perm.landmark}</p>
-                  <p><strong>City &amp; District:</strong> {perm.city}, {perm.district}</p>
-                  <p><strong>State &amp; Pincode:</strong> {perm.state} - {perm.pincode}</p>
-                  <p><strong>Status:</strong> {perm.sameAsCurrent ? 'Same as Current Residence' : 'Verified Alternate'}</p>
+                  <p><strong>Door &amp; Street:</strong> {perm.doorNo || 'Not Available'}, {perm.streetName || 'Not Available'}</p>
+                  <p><strong>Landmark:</strong> {perm.landmark || 'Not Available'}</p>
+                  <p><strong>City &amp; District:</strong> {perm.city || 'Not Available'}, {perm.district || 'Not Available'}</p>
+                  <p><strong>State &amp; Pincode:</strong> {perm.state || 'Tamil Nadu'} - {perm.pincode || 'Not Available'}</p>
+                  <p><strong>Status:</strong> {perm.sameAsCurrent ? 'Same as Current Residence' : 'Alternate Residence'}</p>
                 </div>
               </div>
 
@@ -230,13 +245,13 @@ export default function VerificationStepModal({
                 <div className="bo-v-addr-card">
                   <div className="bo-addr-card-header">
                     <h5>Business Operating Address</h5>
-                    <span className="bo-addr-type-pill">{biz.premiseType}</span>
+                    <span className="bo-addr-type-pill">{biz.premiseType || 'Operating Premise'}</span>
                   </div>
                   <div className="bo-addr-content">
-                    <p><strong>Premises:</strong> {biz.doorNo}, {biz.streetName}</p>
-                    <p><strong>City &amp; District:</strong> {biz.city}, {biz.district}</p>
-                    <p><strong>State &amp; Pincode:</strong> {biz.state} - {biz.pincode}</p>
-                    <p><strong>Operating Vintage:</strong> {biz.yearsInPremise} Years</p>
+                    <p><strong>Premises:</strong> {biz.doorNo || 'Not Available'}, {biz.streetName || 'Not Available'}</p>
+                    <p><strong>City &amp; District:</strong> {biz.city || 'Not Available'}, {biz.district || 'Not Available'}</p>
+                    <p><strong>State &amp; Pincode:</strong> {biz.state || 'Tamil Nadu'} - {biz.pincode || 'Not Available'}</p>
+                    <p><strong>Operating Vintage:</strong> {biz.yearsInPremise ? `${biz.yearsInPremise} Years` : 'Not Available'}</p>
                   </div>
                 </div>
               )}
@@ -255,27 +270,33 @@ export default function VerificationStepModal({
           <div className="bo-modal-step-body">
             <div className="bo-modal-info-banner">
               <span className="bo-banner-kicker">KYC PROOFS &amp; BIOMETRIC VERIFICATION</span>
-              <p>Mode: <strong>{kyc.verificationMode}</strong>. Inspect uploaded government ID proofs.</p>
+              <p>Mode: <strong>{kyc.verificationMode || 'e-KYC Inspection'}</strong>. Inspect uploaded government ID proofs.</p>
             </div>
 
-            <div className="bo-kyc-docs-grid">
-              {docs.map((doc) => (
-                <div key={doc.id} className="bo-kyc-doc-card">
-                  <div className="bo-kyc-thumb-preview">
-                    {FileTextIcon && <FileTextIcon size={24} className="bo-doc-icon" />}
-                    <span className="bo-doc-type-label">{doc.name}</span>
-                  </div>
-                  <div className="bo-kyc-doc-details">
-                    <h6>{doc.name}</h6>
-                    <small>{doc.type} &bull; {doc.documentNumber}</small>
-                    <div className="bo-doc-meta-row">
-                      <span className="bo-doc-status-badge is-verified">✓ {doc.verificationStatus}</span>
-                      <span className="bo-doc-size">{doc.fileSize}</span>
+            {docs.length > 0 ? (
+              <div className="bo-kyc-docs-grid">
+                {docs.map((doc) => (
+                  <div key={doc.id} className="bo-kyc-doc-card">
+                    <div className="bo-kyc-thumb-preview">
+                      {FileTextIcon && <FileTextIcon size={24} className="bo-doc-icon" />}
+                      <span className="bo-doc-type-label">{doc.name}</span>
+                    </div>
+                    <div className="bo-kyc-doc-details">
+                      <h6>{doc.name}</h6>
+                      <small>{doc.type} &bull; {doc.documentNumber}</small>
+                      <div className="bo-doc-meta-row">
+                        <span className="bo-doc-status-badge is-verified">✓ {doc.verificationStatus}</span>
+                        <span className="bo-doc-size">{doc.fileSize}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bo-empty-step-state">
+                <p>No uploaded KYC documents available for this customer application.</p>
+              </div>
+            )}
           </div>
         );
       }
@@ -295,105 +316,67 @@ export default function VerificationStepModal({
             <div className="bo-v-grid-2">
               <div className="bo-v-field">
                 <label>Employment / Business Type</label>
-                <strong>{emp.employmentType}</strong>
+                <strong>{emp.employmentType || 'Not Available'}</strong>
               </div>
               <div className="bo-v-field">
                 <label>Company / Trading Name</label>
-                <span>{emp.companyOrBusinessName}</span>
+                <span>{emp.companyOrBusinessName || 'Not Available'}</span>
               </div>
               <div className="bo-v-field">
                 <label>Designation / Role</label>
-                <span>{emp.designationOrRole}</span>
+                <span>{emp.designationOrRole || 'Not Available'}</span>
               </div>
               <div className="bo-v-field">
                 <label>Industry Classification</label>
-                <span>{emp.industryType}</span>
+                <span>{emp.industryType || 'Not Available'}</span>
               </div>
               <div className="bo-v-field">
                 <label>Experience / Business Vintage</label>
-                <span>{emp.experienceYears} Years</span>
+                <span>{emp.experienceYears != null ? `${emp.experienceYears} Years` : 'Not Available'}</span>
               </div>
               <div className="bo-v-field">
                 <label>Constitution of Business</label>
-                <span>{emp.businessConstitution}</span>
+                <span>{emp.businessConstitution || 'Not Available'}</span>
               </div>
               <div className="bo-v-field">
                 <label>Monthly Gross Income</label>
-                <strong className="bo-amount-highlight">{formatCurrency(emp.monthlyGrossIncome)}</strong>
+                <strong className="bo-amount-highlight">{emp.monthlyGrossIncome ? formatCurrency(emp.monthlyGrossIncome) : '₹0'}</strong>
               </div>
               <div className="bo-v-field">
                 <label>Monthly Net Disposable Income</label>
-                <strong className="bo-amount-lead">{formatCurrency(emp.monthlyNetIncome)}</strong>
+                <strong className="bo-amount-lead">{emp.monthlyNetIncome ? formatCurrency(emp.monthlyNetIncome) : '₹0'}</strong>
               </div>
               <div className="bo-v-field">
                 <label>Annual Turnover / Gross Package</label>
-                <span>{formatCurrency(emp.annualTurnoverOrSalary)}</span>
+                <span>{emp.annualTurnoverOrSalary ? formatCurrency(emp.annualTurnoverOrSalary) : '₹0'}</span>
               </div>
               <div className="bo-v-field">
                 <label>ITR Assessment Status</label>
-                <span>{emp.itrFiled ? `Filed (${emp.lastItrYear})` : 'Exempt'}</span>
+                <span>{emp.itrFiled ? `Filed (${emp.lastItrYear || 'Recent'})` : 'Exempt / Not Available'}</span>
               </div>
             </div>
 
             <div className="bo-v-full-field">
               <label>Submitted Income Proof Documentation</label>
-              <div className="bo-v-purpose-box">{emp.incomeProofType}</div>
+              <div className="bo-v-purpose-box">{emp.incomeProofType || 'Not Available'}</div>
             </div>
           </div>
         );
       }
 
       // ----------------------------------------------------
-      // Step 6: Bank / Existing Loan Details & CIBIL Bureau
+      // Step 6: Bank / Existing Loan Details
       // ----------------------------------------------------
       case 6: {
         const b = customerData.bankExistingLoans || {};
         const bank = b.primaryBank || {};
-        const cibil = b.cibilBureau || {};
         const loans = b.existingLoans || [];
 
         return (
           <div className="bo-modal-step-body">
             <div className="bo-modal-info-banner">
-              <span className="bo-banner-kicker">BANKING RELATIONS &amp; CREDIT BUREAU UNDERWRITING</span>
-              <p>Primary operative bank account, existing credit obligations, and CIBIL bureau score.</p>
-            </div>
-
-            {/* CIBIL Score Card */}
-            <div className="bo-cibil-score-card">
-              <div className="bo-cibil-top">
-                <div className="bo-cibil-meter">
-                  <span className="bo-cibil-kicker">CIBIL BUREAU SCORE</span>
-                  <h3 className="bo-cibil-score-val">{cibil.score}</h3>
-                  <span className="bo-cibil-rating-tag">{cibil.rating} RATING</span>
-                </div>
-                <div className="bo-cibil-summary-stats">
-                  <div className="bo-cibil-stat-box">
-                    <small>Active Loans</small>
-                    <strong>{cibil.totalActiveLoans}</strong>
-                  </div>
-                  <div className="bo-cibil-stat-box">
-                    <small>Closed Loans</small>
-                    <strong>{cibil.totalClosedLoans}</strong>
-                  </div>
-                  <div className="bo-cibil-stat-box">
-                    <small>Credit Cards</small>
-                    <strong>{cibil.activeCreditCards}</strong>
-                  </div>
-                  <div className="bo-cibil-stat-box">
-                    <small>Repayment History</small>
-                    <strong className="text-success">{cibil.paymentHistoryPercentage}</strong>
-                  </div>
-                  <div className="bo-cibil-stat-box">
-                    <small>Total Outstanding</small>
-                    <strong>{formatCurrency(cibil.totalOutstandingAmount)}</strong>
-                  </div>
-                  <div className="bo-cibil-stat-box">
-                    <small>Monthly EMI Burden</small>
-                    <strong>{formatCurrency(cibil.currentMonthlyEmiObligation)}</strong>
-                  </div>
-                </div>
-              </div>
+              <span className="bo-banner-kicker">BANKING RELATIONS &amp; ACCOUNT UNDERWRITING</span>
+              <p>Primary operative bank account and existing declared debt obligations.</p>
             </div>
 
             {/* Primary Bank Account */}
@@ -402,33 +385,33 @@ export default function VerificationStepModal({
               <div className="bo-v-grid-2">
                 <div className="bo-v-field">
                   <label>Bank Name</label>
-                  <strong>{bank.bankName}</strong>
+                  <strong>{bank.bankName || 'Not Available'}</strong>
                 </div>
                 <div className="bo-v-field">
                   <label>Account Number</label>
-                  <span>{bank.accountNumber}</span>
+                  <span>{bank.accountNumber || 'Not Available'}</span>
                 </div>
                 <div className="bo-v-field">
                   <label>Account Type</label>
-                  <span>{bank.accountType}</span>
+                  <span>{bank.accountType || 'Savings Account'}</span>
                 </div>
                 <div className="bo-v-field">
                   <label>IFSC Code &amp; Branch</label>
-                  <span>{bank.ifscCode} &bull; {bank.branchName}</span>
+                  <span>{bank.ifscCode || '—'} &bull; {bank.branchName || '—'}</span>
                 </div>
                 <div className="bo-v-field">
                   <label>Average Monthly Balance (AMB)</label>
-                  <strong className="bo-amount-highlight">{formatCurrency(bank.averageMonthlyBalance)}</strong>
+                  <strong className="bo-amount-highlight">{bank.averageMonthlyBalance ? formatCurrency(bank.averageMonthlyBalance) : '₹0'}</strong>
                 </div>
                 <div className="bo-v-field">
                   <label>Account Vintage</label>
-                  <span>{bank.accountVintageYears} Years</span>
+                  <span>{bank.accountVintageYears != null ? `${bank.accountVintageYears} Years` : 'Not Available'}</span>
                 </div>
               </div>
             </div>
 
             {/* Existing Loans Table */}
-            {loans.length > 0 && (
+            {loans.length > 0 ? (
               <div className="bo-v-section-card">
                 <h5 className="bo-v-card-title">Declared Existing Loan Obligations</h5>
                 <div className="bo-mini-table-wrap">
@@ -458,6 +441,10 @@ export default function VerificationStepModal({
                   </table>
                 </div>
               </div>
+            ) : (
+              <div className="bo-empty-step-state">
+                <p>No existing loan obligations declared by the applicant.</p>
+              </div>
             )}
           </div>
         );
@@ -475,37 +462,45 @@ export default function VerificationStepModal({
               <p>Review pledged property assets, title deed documents, and technical valuation report.</p>
             </div>
 
-            <div className="bo-v-grid-2">
-              <div className="bo-v-field">
-                <label>Collateral Structure</label>
-                <strong>{col.collateralType}</strong>
-              </div>
-              <div className="bo-v-field">
-                <label>Ownership Structure</label>
-                <span>{col.ownershipType}</span>
-              </div>
-              <div className="bo-v-field">
-                <label>Estimated Market Valuation</label>
-                <strong className="bo-amount-lead">{col.estimatedMarketValue ? formatCurrency(col.estimatedMarketValue) : 'N/A (Unsecured)'}</strong>
-              </div>
-              <div className="bo-v-field">
-                <label>Forced Realisable Value (FSV)</label>
-                <span>{col.forcedSaleValue ? formatCurrency(col.forcedSaleValue) : 'N/A'}</span>
-              </div>
-              <div className="bo-v-field">
-                <label>Title Deed Document Reference</label>
-                <span>{col.titleDeedNo}</span>
-              </div>
-              <div className="bo-v-field">
-                <label>Legal Title Search Status</label>
-                <span className="text-success font-semibold">{col.legalVerificationStatus}</span>
-              </div>
-            </div>
+            {col.hasCollateral ? (
+              <>
+                <div className="bo-v-grid-2">
+                  <div className="bo-v-field">
+                    <label>Collateral Structure</label>
+                    <strong>{col.collateralType}</strong>
+                  </div>
+                  <div className="bo-v-field">
+                    <label>Ownership Structure</label>
+                    <span>{col.ownershipType}</span>
+                  </div>
+                  <div className="bo-v-field">
+                    <label>Estimated Market Valuation</label>
+                    <strong className="bo-amount-lead">{col.estimatedMarketValue ? formatCurrency(col.estimatedMarketValue) : 'Not Available'}</strong>
+                  </div>
+                  <div className="bo-v-field">
+                    <label>Forced Realisable Value (FSV)</label>
+                    <span>{col.forcedSaleValue ? formatCurrency(col.forcedSaleValue) : 'Not Available'}</span>
+                  </div>
+                  <div className="bo-v-field">
+                    <label>Title Deed Document Reference</label>
+                    <span>{col.titleDeedNo}</span>
+                  </div>
+                  <div className="bo-v-field">
+                    <label>Legal Title Search Status</label>
+                    <span className="text-success font-semibold">{col.legalVerificationStatus}</span>
+                  </div>
+                </div>
 
-            <div className="bo-v-full-field">
-              <label>Asset / Property Description</label>
-              <div className="bo-v-purpose-box">{col.propertyDescription}</div>
-            </div>
+                <div className="bo-v-full-field">
+                  <label>Asset / Property Description</label>
+                  <div className="bo-v-purpose-box">{col.propertyDescription}</div>
+                </div>
+              </>
+            ) : (
+              <div className="bo-empty-step-state">
+                <p>No collateral details available (Clean / Unsecured Loan Application).</p>
+              </div>
+            )}
           </div>
         );
       }
@@ -522,24 +517,30 @@ export default function VerificationStepModal({
               <p>Confirmed reference contacts and field verification feedback.</p>
             </div>
 
-            <div className="bo-v-references-grid">
-              {refs.map((ref, idx) => (
-                <div key={ref.id || idx} className="bo-ref-card">
-                  <div className="bo-ref-header">
-                    <span className="bo-ref-kicker">REFERENCE 0{idx + 1}</span>
-                    <span className="bo-ref-status-pill">✓ Verified</span>
+            {refs.length > 0 ? (
+              <div className="bo-v-references-grid">
+                {refs.map((ref, idx) => (
+                  <div key={ref.id || idx} className="bo-ref-card">
+                    <div className="bo-ref-header">
+                      <span className="bo-ref-kicker">REFERENCE 0{idx + 1}</span>
+                      <span className="bo-ref-status-pill">✓ Verified</span>
+                    </div>
+                    <h5 className="bo-ref-name">{ref.name}</h5>
+                    <div className="bo-ref-meta">
+                      <p><strong>Relationship:</strong> {ref.relationship}</p>
+                      <p><strong>Mobile:</strong> {ref.mobile && ref.mobile !== 'Not Available' ? `+91 ${ref.mobile}` : 'Not Available'}</p>
+                      <p><strong>Occupation:</strong> {ref.occupation}</p>
+                      <p><strong>Address:</strong> {ref.address}</p>
+                      <p className="bo-ref-feedback"><strong>Field Verification:</strong> {ref.verificationStatus}</p>
+                    </div>
                   </div>
-                  <h5 className="bo-ref-name">{ref.name}</h5>
-                  <div className="bo-ref-meta">
-                    <p><strong>Relationship:</strong> {ref.relationship}</p>
-                    <p><strong>Mobile:</strong> +91 {ref.mobile}</p>
-                    <p><strong>Occupation:</strong> {ref.occupation}</p>
-                    <p><strong>Address:</strong> {ref.address}</p>
-                    <p className="bo-ref-feedback"><strong>Field Verification:</strong> {ref.verificationStatus}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bo-empty-step-state">
+                <p>No reference contacts provided for this application.</p>
+              </div>
+            )}
           </div>
         );
       }
@@ -559,97 +560,105 @@ export default function VerificationStepModal({
             <div className="bo-v-hierarchy-strip">
               <div className="bo-hier-node">
                 <small>District</small>
-                <strong>{s.sourcingDistrict}</strong>
+                <strong>{s.sourcingDistrict || 'Not Available'}</strong>
               </div>
               <div className="bo-hier-arrow">&rarr;</div>
               <div className="bo-hier-node">
                 <small>Relationship Manager</small>
-                <strong>{s.relationshipManager}</strong>
-                <span>({s.rmId})</span>
+                <strong>{s.relationshipManager || 'Not Available'}</strong>
+                {s.rmId && s.rmId !== 'Not Available' && <span>({s.rmId})</span>}
               </div>
               <div className="bo-hier-arrow">&rarr;</div>
               <div className="bo-hier-node">
                 <small>Field Agent</small>
-                <strong>{s.fieldAgent}</strong>
-                <span>({s.agentId})</span>
+                <strong>{s.fieldAgent || 'Not Available'}</strong>
+                {s.agentId && s.agentId !== 'Not Available' && <span>({s.agentId})</span>}
               </div>
             </div>
 
             <div className="bo-v-grid-2">
               <div className="bo-v-field">
                 <label>Sourcing Channel</label>
-                <span>{s.sourcingChannel}</span>
+                <span>{s.sourcingChannel || 'Field Sourcing Agent Network'}</span>
               </div>
               <div className="bo-v-field">
                 <label>Lead Generation Date</label>
-                <span>{s.leadGenerationDate}</span>
+                <span>{s.leadGenerationDate || 'Not Available'}</span>
               </div>
             </div>
 
             <div className="bo-v-full-field">
               <label>Agent Field Sourcing Recommendation Note</label>
-              <div className="bo-v-purpose-box">{s.agentRecommendation}</div>
+              <div className="bo-v-purpose-box">{s.agentRecommendation || 'No notes submitted.'}</div>
             </div>
           </div>
         );
       }
 
       // ----------------------------------------------------
-      // Step 10: Schedule of Charges
+      // Step 10: Schedule of Charges (Frontend Estimated)
       // ----------------------------------------------------
       case 10: {
         const ch = customerData.scheduleCharges || {};
         return (
           <div className="bo-modal-step-body">
             <div className="bo-modal-info-banner">
-              <span className="bo-banner-kicker">DISBURSAL COMPUTATION &amp; FEE SCHEDULE</span>
-              <p>Transparent schedule of processing charges, statutory stamp duties, and net borrower disbursal.</p>
+              <span className="bo-banner-kicker">DISBURSAL COMPUTATION &amp; FEE SCHEDULE (ESTIMATED)</span>
+              <p>Estimated schedule of processing charges, statutory stamp duties, and net borrower disbursal.</p>
             </div>
 
-            <div className="bo-charges-table-card">
-              <div className="bo-charge-row is-total-top">
-                <span>Sanctioned Loan Principal Amount</span>
-                <strong>{formatCurrency(ch.sanctionLoanAmount)}</strong>
-              </div>
-              <div className="bo-charge-row">
-                <span>Processing Fee (2.00% + GST)</span>
-                <span>- {formatCurrency(ch.processingFee)}</span>
-              </div>
-              <div className="bo-charge-row">
-                <span>Documentation &amp; Legal Scrutiny Charges</span>
-                <span>- {formatCurrency(ch.documentationCharges)}</span>
-              </div>
-              <div className="bo-charge-row">
-                <span>Credit Shield Insurance Premium</span>
-                <span>- {formatCurrency(ch.insuranceFee)}</span>
-              </div>
-              <div className="bo-charge-row">
-                <span>Applicable GST (18%)</span>
-                <span>- {formatCurrency(ch.gstAmount)}</span>
-              </div>
-              <div className="bo-charge-row is-subtotal">
-                <span>Total Upfront Deductions</span>
-                <span className="text-danger">- {formatCurrency(ch.totalUpfrontCharges)}</span>
-              </div>
-              <div className="bo-charge-row is-net-disbursal">
-                <div>
-                  <strong>Net Disbursal to Customer Account</strong>
-                  <small>Payable directly to verified bank account</small>
+            {ch.hasData ? (
+              <>
+                <div className="bo-charges-table-card">
+                  <div className="bo-charge-row is-total-top">
+                    <span>Sanctioned Loan Principal Amount</span>
+                    <strong>{formatCurrency(ch.sanctionLoanAmount)}</strong>
+                  </div>
+                  <div className="bo-charge-row">
+                    <span>Processing Fee (2.00% + GST) (Estimated)</span>
+                    <span>- {formatCurrency(ch.processingFee)}</span>
+                  </div>
+                  <div className="bo-charge-row">
+                    <span>Documentation &amp; Legal Scrutiny Charges (Estimated)</span>
+                    <span>- {formatCurrency(ch.documentationCharges)}</span>
+                  </div>
+                  <div className="bo-charge-row">
+                    <span>Credit Shield Insurance Premium (Estimated)</span>
+                    <span>- {formatCurrency(ch.insuranceFee)}</span>
+                  </div>
+                  <div className="bo-charge-row">
+                    <span>Applicable GST (18%) (Estimated)</span>
+                    <span>- {formatCurrency(ch.gstAmount)}</span>
+                  </div>
+                  <div className="bo-charge-row is-subtotal">
+                    <span>Total Upfront Deductions</span>
+                    <span className="text-danger">- {formatCurrency(ch.totalUpfrontCharges)}</span>
+                  </div>
+                  <div className="bo-charge-row is-net-disbursal">
+                    <div>
+                      <strong>Net Disbursal to Customer Account (Estimated)</strong>
+                      <small>Payable directly to verified bank account</small>
+                    </div>
+                    <strong className="bo-net-amount">{formatCurrency(ch.netDisbursalAmount)}</strong>
+                  </div>
                 </div>
-                <strong className="bo-net-amount">{formatCurrency(ch.netDisbursalAmount)}</strong>
-              </div>
-            </div>
 
-            <div className="bo-v-grid-2" style={{ marginTop: '16px' }}>
-              <div className="bo-v-field">
-                <label>Monthly Equated Instalment (EMI)</label>
-                <strong className="bo-amount-highlight">{formatCurrency(ch.monthlyEmiAmount)} / Month</strong>
+                <div className="bo-v-grid-2" style={{ marginTop: '16px' }}>
+                  <div className="bo-v-field">
+                    <label>Monthly Equated Instalment (EMI) (Estimated)</label>
+                    <strong className="bo-amount-highlight">{formatCurrency(ch.monthlyEmiAmount)} / Month</strong>
+                  </div>
+                  <div className="bo-v-field">
+                    <label>Prepayment &amp; Foreclosure</label>
+                    <span>{ch.prepaymentCharges}</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="bo-empty-step-state">
+                <p>Insufficient loan parameters to compute schedule of charges.</p>
               </div>
-              <div className="bo-v-field">
-                <label>Prepayment &amp; Foreclosure</label>
-                <span>{ch.prepaymentCharges}</span>
-              </div>
-            </div>
+            )}
           </div>
         );
       }
@@ -677,22 +686,25 @@ export default function VerificationStepModal({
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item, idx) => (
-                    <tr key={item.id || idx}>
-                      <td><strong>{String(idx + 1).padStart(2, '0')}</strong></td>
-                      <td>{item.label}</td>
-                      <td>
-                        <span className={`bo-req-pill ${item.mandatory ? 'is-mandatory' : 'is-optional'}`}>
-                          {item.mandatory ? 'Mandatory' : 'Optional / NA'}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="bo-chk-status-pill is-verified">
-                          ✓ {item.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {items.map((item, idx) => {
+                    const isAvail = item.status === 'Available' || item.status === 'Verified';
+                    return (
+                      <tr key={item.id || idx}>
+                        <td><strong>{String(idx + 1).padStart(2, '0')}</strong></td>
+                        <td>{item.label}</td>
+                        <td>
+                          <span className={`bo-req-pill ${item.mandatory ? 'is-mandatory' : 'is-optional'}`}>
+                            {item.mandatory ? 'Mandatory' : 'Optional / NA'}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`bo-chk-status-pill ${isAvail ? 'is-verified' : 'is-missing'}`}>
+                            {isAvail ? '✓ Available' : '○ Not Uploaded'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -714,21 +726,21 @@ export default function VerificationStepModal({
 
             <div className="bo-decl-box">
               <h6>Borrower Declaration &amp; Information Undertaking</h6>
-              <p className="bo-decl-text">{decl.borrowerConsent}</p>
+              <p className="bo-decl-text">{decl.borrowerConsent || 'Not Available'}</p>
               <div className="bo-decl-meta-row">
-                <span><strong>Consent Date:</strong> {decl.consentDate}</span>
-                <span className="text-success font-semibold">✓ {decl.digitalSignatureStatus}</span>
+                <span><strong>Consent Date:</strong> {decl.consentDate || 'Not Available'}</span>
+                <span className="text-success font-semibold">✓ {decl.digitalSignatureStatus || 'Not Available'}</span>
               </div>
             </div>
 
             <div className="bo-v-grid-2">
               <div className="bo-v-field">
                 <label>Field Agent Endorsement</label>
-                <span>{decl.fieldAgentEndorsement}</span>
+                <span>{decl.fieldAgentEndorsement || 'Not Available'}</span>
               </div>
               <div className="bo-v-field">
                 <label>RM Recommendation</label>
-                <span>{decl.rmRecommendation}</span>
+                <span>{decl.rmRecommendation || 'Not Available'}</span>
               </div>
             </div>
 
@@ -737,7 +749,7 @@ export default function VerificationStepModal({
                 {ShieldCheckIcon && <ShieldCheckIcon size={20} />}
               </div>
               <div className="bo-signoff-text">
-                <strong>Back Office Underwriter Recommendation:</strong> Application meets underwriting policy criteria. Ready for operational sign-off and sanction dispatch.
+                <strong>Back Office Underwriter Recommendation:</strong> Application under active verification. Ready for operational sign-off and sanction review.
               </div>
             </div>
           </div>

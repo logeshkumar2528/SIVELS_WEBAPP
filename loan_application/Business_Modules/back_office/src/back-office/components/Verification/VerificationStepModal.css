@@ -820,6 +820,27 @@
   color: #15803d;
 }
 
+.bo-chk-status-pill.is-missing {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.bo-empty-step-state {
+  padding: 24px 16px;
+  text-align: center;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  margin: 10px 0;
+}
+
+.bo-empty-step-state p {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+
 /* Declaration Box */
 .bo-decl-box {
   background: #f8fafc;

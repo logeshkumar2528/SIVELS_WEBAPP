@@ -230,12 +230,22 @@ export default function VerifyOTP() {
         }
       } else if (resolvedModule === 'Master') {
         localStorage.setItem('masterData', JSON.stringify(resolvedAccount));
-      } else if (resolvedModule === 'BackOffice' || resolvedModule === 'Back Office' || resolvedModule === 'Operations') {
-        localStorage.setItem('backOfficeData', JSON.stringify(resolvedAccount));
+      } else if (
+        resolvedModule === 'BackOffice' ||
+        resolvedModule === 'Back Office' ||
+        resolvedModule === 'Operations' ||
+        String(result?.role || '').toLowerCase() === 'backoffice'
+      ) {
+        const boAccount = result?.backOffice || resolvedAccount || {};
+        localStorage.setItem('backOfficeData', JSON.stringify(boAccount));
+        const boId = boAccount?.backOfficeId ?? boAccount?.BackOfficeId ?? boAccount?.id ?? result?.userId;
+        if (boId) {
+          localStorage.setItem('backOfficeId', String(boId));
+        }
         localStorage.setItem('backOfficeAuth', JSON.stringify({
           isAuthenticated: true,
-          name: resolvedAccount?.fullName || resolvedAccount?.name || 'Back Office Executive',
-          role: resolvedAccount?.role || 'Operations Team',
+          name: boAccount?.fullName || boAccount?.name || 'Back Office Executive',
+          role: boAccount?.role || 'Operations Team',
           mobile: cleanMobile,
           loginTimestamp: new Date().toISOString(),
         }));

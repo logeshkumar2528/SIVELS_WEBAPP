@@ -20,7 +20,7 @@ export const DUMMY_CREDENTIALS = {
 
 /**
  * Retrieve current Back Office auth state.
- * Checks dedicated 'backOfficeAuth' key as well as common 'sivels_currentUser'.
+ * Checks dedicated 'backOfficeAuth' key, 'backOfficeData', as well as 'sivels_currentUser'.
  */
 export function getBackOfficeAuth() {
   try {
@@ -28,6 +28,21 @@ export function getBackOfficeAuth() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.isAuthenticated) return parsed;
+    }
+
+    const boDataRaw = localStorage.getItem('backOfficeData');
+    if (boDataRaw) {
+      const bo = JSON.parse(boDataRaw);
+      if (bo && typeof bo === 'object') {
+        return {
+          isAuthenticated: true,
+          name: bo.fullName || bo.name || DUMMY_CREDENTIALS.name,
+          role: bo.role || DUMMY_CREDENTIALS.role,
+          mobile: bo.mobileNumber || bo.mobile || DUMMY_CREDENTIALS.mobile,
+          id: bo.backOfficeId || bo.id || null,
+          loginTimestamp: new Date().toISOString(),
+        };
+      }
     }
 
     const userRaw = localStorage.getItem('sivels_currentUser');
@@ -45,9 +60,12 @@ export function getBackOfficeAuth() {
           name: user.fullName || user.name || DUMMY_CREDENTIALS.name,
           role: user.role || DUMMY_CREDENTIALS.role,
           mobile: user.mobileNumber || user.mobile || DUMMY_CREDENTIALS.mobile,
+          id: user.backOfficeId || user.userId || user.id || null,
           loginTimestamp: new Date().toISOString(),
         };
       }
+      // Explicitly non-BackOffice user logged in
+      return null;
     }
     return null;
   } catch {
@@ -65,6 +83,7 @@ export function setBackOfficeAuth(authData) {
       name: authData?.name || authData?.fullName || DUMMY_CREDENTIALS.name,
       role: authData?.role || DUMMY_CREDENTIALS.role,
       mobile: authData?.mobile || authData?.mobileNumber || DUMMY_CREDENTIALS.mobile,
+      id: authData?.id || authData?.backOfficeId || null,
       loginTimestamp: new Date().toISOString(),
     };
     localStorage.setItem(BACK_OFFICE_AUTH_KEY, JSON.stringify(payload));
@@ -82,6 +101,7 @@ export function removeBackOfficeAuth() {
   try {
     localStorage.removeItem(BACK_OFFICE_AUTH_KEY);
     localStorage.removeItem('backOfficeData');
+    localStorage.removeItem('backOfficeId');
 
     const userRaw = localStorage.getItem('sivels_currentUser');
     if (userRaw) {

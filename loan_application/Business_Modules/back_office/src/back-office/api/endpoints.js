@@ -1,0 +1,43 @@
+/**
+ * endpoints.js
+ * --------------------
+ * Purpose:
+ *   Centralized backend API endpoint definitions for the Sivels Finance Back Office module.
+ *
+ * Rules:
+ *   - Do NOT hardcode baseURL; axiosInstance handles baseURL and Bearer token injection.
+ *   - Use parameterized endpoint builders for ID-based lookups.
+ *   - Strict URI encoding on dynamic parameters to prevent injection.
+ */
+
+export const BACK_OFFICE_ENDPOINTS = {
+  // Master Data
+  DISTRICTS: '/District',
+  DISTRICT_BY_ID: (id) => `/District/${encodeURIComponent(id)}`,
+
+  RMS: '/RMMaster',
+  RM_BY_ID: (id) => `/RMMaster/${encodeURIComponent(id)}`,
+
+  AGENTS: '/AgentMaster',
+  AGENT_BY_ID: (id) => `/AgentMaster/${encodeURIComponent(id)}`,
+
+  // Customer / Lead Ingestion
+  CUSTOMERS: '/AgentAddCustomer',
+  CUSTOMER_BY_ID: (id) => `/AgentAddCustomer/${encodeURIComponent(id)}`,
+
+  // Full RM 12-Step Underwriting Application
+  APPLICATION_FULL_DETAILS: (agentCustomerId) =>
+    `/ApplicationFullDetails/${encodeURIComponent(agentCustomerId)}`,
+
+  // Customer Uploaded Documents
+  CUSTOMER_DOCUMENTS: (agentCustomerId) =>
+    `/AgentCustomerDocument/bycustomer/${encodeURIComponent(agentCustomerId)}`,
+
+  DOCUMENT_DOWNLOAD: (documentId) =>
+    `/AgentCustomerDocument/download/${encodeURIComponent(documentId)}`,
+
+  // Back Office Operator Master & Profile
+  BACK_OFFICE_MASTER: '/BackOfficeMaster',
+  BACK_OFFICE_BY_ID: (id) =>
+    `/BackOfficeMaster/${encodeURIComponent(id)}`,
+};
