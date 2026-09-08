@@ -148,6 +148,8 @@ export default function ApplicationDetails() {
   const [loanPurposeOptions, setLoanPurposeOptions] = useState([]);
   const [loanVariationMaster, setLoanVariationMaster] = useState([]);
   const [rateOfInterestMaster, setRateOfInterestMaster] = useState([]);
+  const [loanTenureOptions, setLoanTenureOptions] = useState([]);
+  const [isLoadingTenures, setIsLoadingTenures] = useState(false);
   const [isLoadingMasters, setIsLoadingMasters] = useState(false);
 
   useEffect(() => {
@@ -319,6 +321,52 @@ export default function ApplicationDetails() {
 
     return options;
   }, [rateOfInterestMaster, appData.loanProduct, appData.roi]);
+
+  useEffect(() => {
+    const productId = appData.loanProduct;
+    if (!productId) {
+      setLoanTenureOptions([]);
+      setIsLoadingTenures(false);
+      return;
+    }
+
+    let isMounted = true;
+    async function fetchTenuresForProduct() {
+      setIsLoadingTenures(true);
+      try {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+        const response = await fetch(`${baseUrl}/masters/LoanProductTenureMaster/product/${encodeURIComponent(productId)}`);
+        if (response.ok) {
+          const data = await response.json();
+          const records = Array.isArray(data) ? data : (data?.data || data?.value || data?.result || (data ? [data] : []));
+          const activeTenures = records.filter(item => item.isActive !== false);
+          const options = activeTenures.map(item => {
+            const val = Number(item.tenureValue !== undefined && item.tenureValue !== null ? item.tenureValue : item.TenureValue);
+            const unit = item.tenureUnit || item.TenureUnit || 'Months';
+            return {
+              value: val,
+              label: `${val} ${unit}`,
+              raw: item
+            };
+          });
+          if (isMounted) {
+            setLoanTenureOptions(options);
+          }
+        } else {
+          if (isMounted) setLoanTenureOptions([]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch loan product tenures:', err);
+        if (isMounted) setLoanTenureOptions([]);
+      } finally {
+        if (isMounted) setIsLoadingTenures(false);
+      }
+    }
+
+    fetchTenuresForProduct();
+    return () => { isMounted = false; };
+  }, [appData.loanProduct]);
+
   const activeStep = useMemo(() => getWizardActiveStepByPath(location.pathname, APPLICATION_WIZARD_STEPS), [location.pathname]);
 
   const updateField = (field, rawValue) => {
@@ -335,6 +383,7 @@ export default function ApplicationDetails() {
         updates.loanVariation = '';
       }
       updates.roi = '';
+      updates.loanTenureMonths = '';
     }
 
     saveApplication(appId, updates);
@@ -344,6 +393,7 @@ export default function ApplicationDetails() {
       if (field === 'loanProduct') {
         delete nextErrors.loanVariation;
         delete nextErrors.roi;
+        delete nextErrors.loanTenureMonths;
       }
       return nextErrors;
     });
@@ -670,18 +720,22 @@ export default function ApplicationDetails() {
                 <div className="compact-field">
                   <label className="compact-label">Loan Tenure (Months)</label>
                   <div className="compact-input-wrapper">
-                    <span className="compact-input-icon">
-                      <Calendar size={16} />
-                    </span>
-                    <input
-                      className={`form-input compact-input compact-input--with-icon ${errors.loanTenureMonths ? 'ad-input--invalid' : ''}`}
-                      type="number"
-                      min="1"
-                      step="1"
-                      inputMode="numeric"
-                      value={appData.loanTenureMonths ?? ''}
-                      onChange={(event) => updateField('loanTenureMonths', event.target.value)}
-                      placeholder="0"
+                    <Select
+                      error={!!errors.loanTenureMonths}
+                      value={appData.loanTenureMonths !== null && appData.loanTenureMonths !== undefined && appData.loanTenureMonths !== '' ? appData.loanTenureMonths : ''}
+                      onChange={(val) => updateField('loanTenureMonths', val)}
+                      placeholder={
+                        !appData.loanProduct
+                          ? "Select loan product first"
+                          : isLoadingTenures
+                          ? "Loading tenures..."
+                          : loanTenureOptions.length === 0
+                          ? "No tenure configured for this loan product"
+                          : "Select loan tenure"
+                      }
+                      options={loanTenureOptions}
+                      icon={<Calendar size={16} />}
+                      disabled={isLoadingMasters || !appData.loanProduct || isLoadingTenures || loanTenureOptions.length === 0}
                     />
                   </div>
                   {errors.loanTenureMonths && <span className="ad-field-error">{errors.loanTenureMonths}</span>}

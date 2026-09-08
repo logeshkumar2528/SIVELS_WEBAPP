@@ -1,38 +1,18 @@
-/**
- * moduleDetectionService.js
- *
- * Future-proof common mobile login and account resolution service for Sivels Finance.
- *
- * Resolves an entered mobile number against valid login account sources using an extensible
- * account source registry. When exactly one account exists, it provides the account details
- * and routing destination for the OTP flow. When multiple accounts exist, it halts login
- * with a duplicate account error.
- *
- * Current Account Sources:
- *  1. AgentMaster        -> Agent account    -> /Agent/dashboard
- *  2. RMMaster           -> RM account       -> /rm/dashboard
- *  3. AgentAddCustomer   -> Customer account -> /dashboard
- *
- * Extensibility:
- *  Future modules can be registered in ACCOUNT_SOURCES without modifying Login.jsx
- *  or creating separate module login pages.
- */
-
 import axiosInstance from '../api/axiosInstance';
 
 export const AGENT_DASHBOARD    = '/Agent/dashboard';
 export const RM_DASHBOARD       = '/rm/dashboard';
+export const AMS_DASHBOARD      = '/master/ams-dashboard';
 export const CUSTOMER_DASHBOARD = '/dashboard';
 export const MASTER_DASHBOARD   = '/master/dashboard';
-export const MASTER_MOBILE      = '9345638126';
 
 /**
  * Normalizes any mobile number string to 10 digits for consistent comparison:
- *  - Trims spaces and strips internal whitespace, dashes, parens
+ *  - Trims spaces and strips internal whitespace, dashes, parens, dots
  *  - Strips '+91' country code prefix
  *  - Strips leading '91' when string is 12 digits
  *  - Strips leading '0' when string is 11 digits
- *  - Extracts the 10-digit mobile number
+ *  - Extracts the last 10 digits
  *
  * @param {string|number} val
  * @returns {string} 10-digit mobile number or empty string
@@ -57,205 +37,221 @@ export function normalizeMobileNumber(val) {
 }
 
 /**
- * Registry of valid login account sources.
- * Future account types can be added here without rewriting Login.jsx.
+ * Extracts mobile number from record, handling multiple backend naming variations safely.
+ *
+ * @param {object} record
+ * @returns {string}
+ */
+export function extractRecordMobile(record) {
+  if (!record || typeof record !== 'object') return '';
+  return (
+    record.mobileNumber ??
+    record.MobileNumber ??
+    record.phoneNumber ??
+    record.PhoneNumber ??
+    record.mobile ??
+    record.Mobile ??
+    record.contactNumber ??
+    record.ContactNumber ??
+    record.contactNo ??
+    record.ContactNo ??
+    record.phone ??
+    record.Phone ??
+    record.MobileNo ??
+    ''
+  );
+}
+
+/**
+ * Compares two mobile numbers after full 10-digit normalization.
+ *
+ * @param {string|number} recordMobile
+ * @param {string|number} inputMobile
+ * @returns {boolean}
+ */
+export function isMobileMatch(recordMobile, inputMobile) {
+  const normRecord = normalizeMobileNumber(recordMobile);
+  const normInput = normalizeMobileNumber(inputMobile);
+  return normRecord.length === 10 && normRecord === normInput;
+}
+
+/**
+ * Registry of valid login account sources and master APIs.
  */
 export const ACCOUNT_SOURCES = [
   {
-    accountType: 'Agent',
-    module: 'Agent',
-    endpoint: '/AgentMaster',
-    destination: AGENT_DASHBOARD,
-    extractMobile: (record) => record?.mobileNumber ?? record?.MobileNumber ?? record?.mobile ?? record?.phone ?? record?.MobileNo,
+    role: 'AMS',
+    module: 'AMS',
+    endpoint: '/AMSMaster',
+    destination: AMS_DASHBOARD,
+    idKey: 'amsId',
+    storageKey: 'amsData',
+    idStorageKey: 'amsId',
   },
   {
-    accountType: 'RM',
+    role: 'RM',
     module: 'RM',
     endpoint: '/RMMaster',
     destination: RM_DASHBOARD,
-    extractMobile: (record) => record?.mobileNumber ?? record?.MobileNumber ?? record?.mobile ?? record?.phone ?? record?.MobileNo,
+    idKey: 'rmId',
+    storageKey: 'rmData',
+    idStorageKey: 'rmId',
   },
   {
-    accountType: 'Customer',
+    role: 'Agent',
+    module: 'Agent',
+    endpoint: '/AgentMaster',
+    destination: AGENT_DASHBOARD,
+    idKey: 'agentId',
+    storageKey: 'agentData',
+    idStorageKey: 'agentId',
+  },
+  {
+    role: 'Customer',
     module: 'Customer',
     endpoint: '/AgentAddCustomer',
     destination: CUSTOMER_DASHBOARD,
-    extractMobile: (record) => record?.mobileNumber ?? record?.MobileNumber ?? record?.mobile ?? record?.phone ?? record?.MobileNo,
+    idKey: 'agentCustomerId',
+    storageKey: 'customerData',
+    idStorageKey: 'customerId',
   },
 ];
 
 /**
- * Resolves ALL matching valid login accounts across all registered account sources
- * for the specified mobile number.
- *
- * Uses .filter() to collect all matching accounts. Never truncates via .find() or [0].
- * Does NOT swallow API errors; errors propagate so they can be handled as network/API errors.
- *
- * @param {string} mobileNumber - entered mobile number (will be normalized)
- * @returns {Promise<Array<{
- *   accountType: string,
- *   module: string,
- *   destination: string,
- *   accountData: object
- * }>>}
+ * Safely unwrap API response arrays
  */
-export async function resolveAccountsByMobile(mobileNumber) {
-  const normalizedMobile = normalizeMobileNumber(mobileNumber);
-  if (!normalizedMobile || normalizedMobile.length !== 10) {
-    return [];
-  }
-
-  // Master static account
-  if (normalizedMobile === MASTER_MOBILE || normalizedMobile === '9841446699') {
-    return [{
-      accountType: 'Master',
-      module: 'Master',
-      destination: MASTER_DASHBOARD,
-      accountData: {
-        mobileNumber: normalizedMobile,
-        fullName: 'Master'
-      }
-    }];
-  }
-
-  // Query all registered account source APIs concurrently without swallowing errors
-  const responses = await Promise.all(
-    ACCOUNT_SOURCES.map((source) => axiosInstance.get(source.endpoint))
-  );
-
-  const allMatchingAccounts = [];
-
-  ACCOUNT_SOURCES.forEach((source, index) => {
-    const res = responses[index];
-    const rawData = res?.data?.value ?? res?.data ?? [];
-    const items = Array.isArray(rawData) ? rawData : (rawData ? [rawData] : []);
-
-    // Filter ALL matching accounts for this source
-    const matches = items
-      .filter((record) => {
-        const mobile = source.extractMobile(record);
-        return normalizeMobileNumber(mobile) === normalizedMobile;
-      })
-      .map((record) => ({
-        accountType: source.accountType,
-        module: source.module,
-        destination: source.destination,
-        accountData: record
-      }));
-
-    allMatchingAccounts.push(...matches);
-  });
-
-  return allMatchingAccounts;
+function unwrapResponse(settledRes) {
+  if (settledRes.status !== 'fulfilled') return [];
+  const raw = settledRes.value?.data?.value ?? settledRes.value?.data ?? [];
+  return Array.isArray(raw) ? raw : (raw ? [raw] : []);
 }
 
-// Backward-compatible alias
-export const findAccountsByMobile = resolveAccountsByMobile;
-
 /**
- * Detects whether the entered mobile number belongs to 0, 1, or 2+ valid login accounts.
- *
- * RULES:
- *  - accounts.length === 0 -> status: 'NOT_FOUND', "No account found with this mobile number"
- *  - accounts.length === 1 -> status: singleAccount.accountType.toUpperCase(), existing OTP flow
- *  - accounts.length > 1   -> status: 'DUPLICATE', "Multiple accounts found with this mobile number. Please contact support."
- *  - API / network error   -> status: 'ERROR', "Failed to verify account. Please check your connection and try again."
+ * Detects whether the entered mobile number belongs to an AMS, RM, Agent, or Customer account.
  *
  * @param {string} mobileNumber - The entered mobile number
  * @returns {Promise<{
- *   status: string,
+ *   status: 'FOUND' | 'NOT_FOUND' | 'ERROR',
+ *   role: string | null,
  *   module: string | null,
  *   destination: string | null,
  *   accountData: object | null,
- *   accounts?: Array<object>,
  *   error: string | null
  * }>}
  */
 export async function detectAccountModule(mobileNumber) {
   const normalizedMobile = normalizeMobileNumber(mobileNumber);
+  console.log("Checking mobile:", normalizedMobile);
 
   if (!normalizedMobile || normalizedMobile.length !== 10) {
     return {
       status: 'NOT_FOUND',
+      role: null,
       module: null,
       destination: null,
       accountData: null,
-      accounts: [],
       error: 'Please enter a valid 10-digit mobile number'
     };
   }
 
-  // MASTER DETECTION — BEFORE the normal database account-resolution flow
-  if (normalizedMobile === MASTER_MOBILE || normalizedMobile === '9841446699') {
-    const masterAccount = {
-      accountType: 'Master',
-      module: 'Master',
-      destination: MASTER_DASHBOARD,
-      accountData: {
-        mobileNumber: normalizedMobile,
-        fullName: 'Master'
-      }
-    };
-    return {
-      status: 'MASTER',
-      accountType: 'Master',
-      module: masterAccount.module,
-      destination: masterAccount.destination,
-      accountData: masterAccount.accountData,
-      accounts: [masterAccount],
-      error: null
-    };
-  }
-
-  let accounts;
+  // Fetch all master APIs concurrently
+  let agentRes, rmRes, amsRes, customerRes;
   try {
-    accounts = await resolveAccountsByMobile(normalizedMobile);
+    [agentRes, rmRes, amsRes, customerRes] = await Promise.allSettled([
+      axiosInstance.get('/AgentMaster'),
+      axiosInstance.get('/RMMaster'),
+      axiosInstance.get('/AMSMaster'),
+      axiosInstance.get('/AgentAddCustomer'),
+    ]);
   } catch (err) {
-    console.error('[ModuleDetection] Error verifying account:', err?.message || err);
+    console.error('[ModuleDetection] Network error fetching masters:', err);
     return {
       status: 'ERROR',
+      role: null,
       module: null,
       destination: null,
       accountData: null,
-      accounts: [],
       error: 'Failed to verify account. Please check your connection and try again.'
     };
   }
 
-  // CASE 1 — ZERO MATCHING ACCOUNTS
-  if (accounts.length === 0) {
+  const agentData = unwrapResponse(agentRes);
+  const rmData = unwrapResponse(rmRes);
+  const amsData = unwrapResponse(amsRes);
+  const customerData = unwrapResponse(customerRes);
+
+  console.log("Agent API response:", agentData);
+  console.log("RM API response:", rmData);
+  console.log("AMS API response:", amsData);
+
+  // Check if all master lookups failed to connect
+  const anyFulfilled = [agentRes, rmRes, amsRes, customerRes].some((r) => r.status === 'fulfilled');
+  if (!anyFulfilled) {
     return {
-      status: 'NOT_FOUND',
+      status: 'ERROR',
+      role: null,
       module: null,
       destination: null,
       accountData: null,
-      accounts: [],
+      error: 'Failed to verify account. Please check your connection and try again.'
+    };
+  }
+
+  const sourcesMap = {
+    AMS: amsData,
+    RM: rmData,
+    Agent: agentData,
+    Customer: customerData,
+  };
+
+  let detectedUser = null;
+  let detectedRole = null;
+  let destination = null;
+
+  // Search each source in defined order
+  for (const source of ACCOUNT_SOURCES) {
+    const list = sourcesMap[source.role] || [];
+    const match = list.find((item) => isMobileMatch(extractRecordMobile(item), normalizedMobile));
+    if (match) {
+      detectedUser = match;
+      detectedRole = source.role;
+      destination = source.destination;
+      break;
+    }
+  }
+
+  // Fallback for Master Admin if not in DB
+  if (!detectedUser && (normalizedMobile === '9345638126' || normalizedMobile === '9841446699')) {
+    detectedUser = {
+      mobileNumber: normalizedMobile,
+      fullName: 'Master Admin',
+      role: 'Master',
+    };
+    detectedRole = 'Master';
+    destination = MASTER_DASHBOARD;
+  }
+
+  console.log("Detected user:", detectedUser);
+  console.log("Detected role:", detectedRole);
+
+  if (!detectedRole || !detectedUser) {
+    return {
+      status: 'NOT_FOUND',
+      role: null,
+      module: null,
+      destination: null,
+      accountData: null,
       error: 'No account found with this mobile number'
     };
   }
 
-  // CASE 3 — MORE THAN ONE MATCHING ACCOUNT
-  // Must NOT choose first/last account, must NOT decide by role or ID, must NOT send OTP
-  if (accounts.length > 1) {
-    return {
-      status: 'DUPLICATE',
-      module: null,
-      destination: null,
-      accountData: null,
-      accounts,
-      error: 'Multiple accounts found with this mobile number. Please contact support.'
-    };
-  }
-
-  // CASE 2 — EXACTLY ONE MATCHING ACCOUNT
-  const singleAccount = accounts[0];
   return {
-    status: singleAccount.accountType.toUpperCase(),
-    module: singleAccount.module,
-    destination: singleAccount.destination,
-    accountData: singleAccount.accountData,
-    accounts,
-    error: null
+    status: 'FOUND',
+    role: detectedRole,
+    module: detectedRole,
+    destination,
+    accountData: detectedUser,
+    error: null,
   };
 }
 

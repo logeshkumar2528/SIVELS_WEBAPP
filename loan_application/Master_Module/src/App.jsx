@@ -34,9 +34,12 @@ import { Religion } from './pages/masters/Religion/Religion';
 import { Caste } from './pages/masters/Caste/Caste';
 import { LoanProductCollateral } from './pages/masters/LoanProductCollateral/LoanProductCollateral';
 import { RateOfInterest } from './pages/masters/RateOfInterest/RateOfInterest';
+import { IndustryType } from './pages/masters/IndustryType/IndustryType';
+import { LoanProductTenure } from './pages/masters/LoanProductTenure/LoanProductTenure';
 import { CompanyConfiguration } from './features/company/CompanyConfiguration';
-import AddAgent from '../../Business_Modules/rm_modules/src/pages/AddAgent/AddAgent';
+import AgentCreate from './pages/Agent/AgentCreate';
 import RelationshipManagerCreate from './pages/RelationshipManager/RelationshipManagerCreate';
+import AMSCreate from './pages/AMS/AMSCreate';
 import CreateUser from './pages/CreateUser/CreateUser';
 import AMSDashboard from './pages/AMSDashboard/AMSDashboard';
 
@@ -68,10 +71,11 @@ function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="ams-dashboard" element={<AMSDashboard />} />
           <Route path="create-user" element={<CreateUser />} />
-          <Route path="add-agent" element={<AddAgent onSuccessRedirect="/dashboard" />} />
-          <Route path="edit-agent/:agentId" element={<AddAgent onSuccessRedirect="/dashboard" />} />
+          <Route path="add-agent" element={<AgentCreate onSuccessRedirect="/dashboard" />} />
+          <Route path="edit-agent/:agentId" element={<AgentCreate onSuccessRedirect="/dashboard" />} />
           <Route path="create-relationship-manager" element={<RelationshipManagerCreate />} />
           <Route path="edit-relationship-manager/:rmId" element={<RelationshipManagerCreate />} />
+          <Route path="edit-ams/:amsId" element={<AMSCreate />} />
           <Route path="company" element={<CompanyConfiguration />} />
           
           <Route path="masters">
@@ -106,6 +110,8 @@ function App() {
             <Route path="caste" element={<Caste />} />
             <Route path="loan-product-collateral" element={<LoanProductCollateral />} />
             <Route path="rate-of-interest" element={<RateOfInterest />} />
+            <Route path="industry-type" element={<IndustryType />} />
+            <Route path="loan-product-tenure" element={<LoanProductTenure />} />
           </Route>
         </Route>
       </Routes>

@@ -4,6 +4,7 @@
   "compatibility_date": "2026-09-03",
   "assets": {
     "directory": "./dist",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    "html_handling": "none"
   }
 }

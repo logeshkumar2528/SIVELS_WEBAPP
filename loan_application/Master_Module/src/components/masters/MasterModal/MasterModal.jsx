@@ -1,12 +1,12 @@
 import { X } from 'lucide-react';
 import './MasterModal.css';
 
-export function MasterModal({ isOpen, onClose, title, subtitle, icon, children }) {
+export function MasterModal({ isOpen, onClose, title, subtitle, icon, children, className = '' }) {
   if (!isOpen) return null;
 
   return (
     <div className="master-modal-overlay">
-      <div className="master-modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div className={`master-modal-content ${className}`.trim()} role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div className="master-modal-header">
           <div className="master-modal-header-left">
             {icon && <div className="master-modal-icon">{icon}</div>}

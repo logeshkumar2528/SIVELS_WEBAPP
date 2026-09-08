@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Save, UserRound, MapPin, Landmark, LoaderCircle } from 'lucide-react';
+import { ArrowLeft, Save, UserRound, MapPin, Landmark, LoaderCircle, Building2 } from 'lucide-react';
 import { createRelationshipManager, getRelationshipManager, updateRelationshipManager } from '../../api/rmApi';
 import { getBankBranches } from '../../api/masters/bankBranchApi';
 import { masterService } from '../../../../Core/src/services/masterService';
 import { getCurrentUserId } from '../../utils/authHelper';
+import { generateUserCode } from '../../utils/codeGenerator';
+import { DocumentUploadCard, DocumentPreviewModal } from '../../components/DocumentUpload/DocumentUploadSection';
 import './RelationshipManagerCreate.css';
 
 const fields = [
@@ -16,16 +18,11 @@ const fields = [
   ['accountNumber', 'Account Number', 'text'], ['ifscCode', 'IFSC Code', 'text'],
 ];
 
-const generateRmCode = () => {
-  const datePart = new Date().toISOString().slice(2, 10).replace(/-/g, '');
-  const sequencePart = String(Math.floor(1000 + Math.random() * 9000));
-  return `RM${datePart}${sequencePart}`;
-};
 const applicationDate = () => new Date().toISOString().slice(0, 10);
 
 const emptyForm = () => ({
   ...Object.fromEntries(fields.map(([key]) => [key, ''])),
-  rmCode: generateRmCode(),
+  rmCode: '',
   dateJoined: applicationDate(),
   genderId: '',
 });
@@ -46,6 +43,71 @@ export default function RelationshipManagerCreate() {
   const [loadingGenders, setLoadingGenders] = useState(true);
   const [fieldErrors, setFieldErrors] = useState({});
   const [existingRecord, setExistingRecord] = useState(null);
+
+  // Document states
+  const [aadhaarFile, setAadhaarFile] = useState(null);
+  const [aadhaarPreviewUrl, setAadhaarPreviewUrl] = useState(null);
+  const [isAadhaarPdf, setIsAadhaarPdf] = useState(false);
+
+  const [panFile, setPanFile] = useState(null);
+  const [panPreviewUrl, setPanPreviewUrl] = useState(null);
+  const [isPanPdf, setIsPanPdf] = useState(false);
+
+  const [profileImage, setProfileImage] = useState(null);
+  const [profilePreviewUrl, setProfilePreviewUrl] = useState(null);
+
+  const [previewDoc, setPreviewDoc] = useState(null);
+
+  const handleAadhaarUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (aadhaarPreviewUrl) URL.revokeObjectURL(aadhaarPreviewUrl);
+      setAadhaarFile(file);
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      setIsAadhaarPdf(isPdf);
+      setAadhaarPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const handleRemoveAadhaar = () => {
+    if (aadhaarPreviewUrl) URL.revokeObjectURL(aadhaarPreviewUrl);
+    setAadhaarFile(null);
+    setAadhaarPreviewUrl(null);
+    setIsAadhaarPdf(false);
+  };
+
+  const handlePanUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (panPreviewUrl) URL.revokeObjectURL(panPreviewUrl);
+      setPanFile(file);
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      setIsPanPdf(isPdf);
+      setPanPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const handleRemovePan = () => {
+    if (panPreviewUrl) URL.revokeObjectURL(panPreviewUrl);
+    setPanFile(null);
+    setPanPreviewUrl(null);
+    setIsPanPdf(false);
+  };
+
+  const handleProfileImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (profilePreviewUrl) URL.revokeObjectURL(profilePreviewUrl);
+      setProfileImage(file);
+      setProfilePreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const handleRemoveProfileImg = () => {
+    if (profilePreviewUrl) URL.revokeObjectURL(profilePreviewUrl);
+    setProfileImage(null);
+    setProfilePreviewUrl(null);
+  };
 
   useEffect(() => {
     Promise.all([masterService.getGenders(), masterService.getStates(), masterService.getCities(), getBankBranches()])
@@ -107,7 +169,13 @@ export default function RelationshipManagerCreate() {
   }, [isEditMode, rmId]);
 
   const update = (key, value) => {
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => {
+      const next = { ...current, [key]: value };
+      if (!isEditMode && (key === 'fullName' || key === 'dateOfBirth' || key === 'mobileNumber')) {
+        next.rmCode = generateUserCode(next.fullName, next.dateOfBirth, next.mobileNumber);
+      }
+      return next;
+    });
     setError('');
     setFieldErrors((current) => ({ ...current, [key]: '' }));
   };
@@ -288,6 +356,74 @@ export default function RelationshipManagerCreate() {
           </div>
           <div className="rm-form-grid">{fields.slice(10).map(renderField)}</div>
         </section>
+        <section className="rm-section">
+          <div className="rm-section-heading">
+            <Building2 size={19} />
+            <div>
+              <h2>Required Documents</h2>
+              <p>Upload identification documents and photographs for this relationship manager.</p>
+            </div>
+          </div>
+          <div className="doc-upload-grid">
+            <DocumentUploadCard
+              title="Aadhaar Card"
+              subtitle="Upload clear image of Aadhaar Card"
+              note="JPG, PNG or PDF (Max. 10MB)"
+              accept=".pdf,.jpg,.jpeg,.png"
+              icon="document"
+              file={aadhaarFile}
+              previewUrl={aadhaarPreviewUrl}
+              isPdf={isAadhaarPdf}
+              onUpload={handleAadhaarUpload}
+              onRemove={handleRemoveAadhaar}
+              onView={() =>
+                setPreviewDoc({
+                  name: aadhaarFile?.name || 'Aadhaar Card',
+                  url: aadhaarPreviewUrl,
+                  isPdf: isAadhaarPdf,
+                })
+              }
+            />
+            <DocumentUploadCard
+              title="PAN Card"
+              subtitle="Upload clear image of PAN Card"
+              note="JPG, PNG or PDF (Max. 10MB)"
+              accept=".pdf,.jpg,.jpeg,.png"
+              icon="document"
+              file={panFile}
+              previewUrl={panPreviewUrl}
+              isPdf={isPanPdf}
+              onUpload={handlePanUpload}
+              onRemove={handleRemovePan}
+              onView={() =>
+                setPreviewDoc({
+                  name: panFile?.name || 'PAN Card',
+                  url: panPreviewUrl,
+                  isPdf: isPanPdf,
+                })
+              }
+            />
+            <DocumentUploadCard
+              title="Profile Image"
+              subtitle="Upload clear image of Profile Image"
+              note="JPG, PNG (Max. 5MB)"
+              accept=".jpg,.jpeg,.png"
+              icon="camera"
+              file={profileImage}
+              previewUrl={profilePreviewUrl}
+              isProfile
+              onUpload={handleProfileImageUpload}
+              onRemove={handleRemoveProfileImg}
+              onView={() =>
+                setPreviewDoc({
+                  name: profileImage?.name || 'Profile Image',
+                  url: profilePreviewUrl,
+                  isPdf: false,
+                })
+              }
+            />
+          </div>
+        </section>
         <label className="rm-active">
           <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} disabled={saving || loadingRecord} />
           <span>
@@ -307,6 +443,11 @@ export default function RelationshipManagerCreate() {
           </button>
         </div>
       </form>
+      <DocumentPreviewModal
+        isOpen={Boolean(previewDoc)}
+        onClose={() => setPreviewDoc(null)}
+        doc={previewDoc}
+      />
     </div>
   );
 }

@@ -1,7 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, ArrowUpRight, BriefcaseBusiness, CheckCircle2, Eye, FileText, Pencil, Plus, RefreshCw, Search, Users, X } from 'lucide-react';
+import {
+  Activity,
+  ArrowUpRight,
+  BriefcaseBusiness,
+  Building2,
+  Camera,
+  CheckCircle2,
+  Eye,
+  FileText,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Users,
+  X,
+} from 'lucide-react';
 import { formatDateTime, formatDateTimeFriendly } from '../../utils/dateHelper';
+import { getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
 import './Dashboard.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -11,6 +28,106 @@ const status = (value, fallback = 'Active') => typeof value === 'boolean' ? (val
 const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'A';
 const money = (value) => Number(String(value ?? '').replace(/[^0-9.-]/g, '')) || 0;
 const formatAmount = (amount) => amount > 0 ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount) : '—';
+
+export const getFileUrl = (path) => {
+  if (!path) return null;
+
+  const cleanPath = String(path).trim();
+
+  if (!cleanPath) return null;
+
+  if (
+    cleanPath.startsWith('http://') ||
+    cleanPath.startsWith('https://') ||
+    cleanPath.startsWith('blob:') ||
+    cleanPath.startsWith('data:')
+  ) {
+    return cleanPath;
+  }
+
+  const normalizedPath = cleanPath
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '');
+
+  const rawBase = (
+    import.meta.env.VITE_API_BASE_URL ||
+    'https://fusiontecsoftware.com/sivels/api'
+  ).replace(/\/+$/, '');
+
+  // Remove API route prefix for static uploaded files
+  const staticBase = rawBase.replace(/\/api$/i, '');
+
+  return `${staticBase}/${normalizedPath}`;
+};
+
+export const getAadhaarPath = (record) =>
+  read(record, [
+    'aadhaarDocumentPath',
+    'AadhaarDocumentPath',
+    'aadharDocumentPath',
+    'AadharDocumentPath',
+    'aadhaarPath',
+    'AadhaarPath',
+    'aadharPath',
+    'AadharPath',
+    'aadhaarCardPath',
+    'AadhaarCardPath',
+  ]);
+
+export const getPanPath = (record) =>
+  read(record, [
+    'panCardPath',
+    'PanCardPath',
+    'panDocumentPath',
+    'PanDocumentPath',
+    'panPath',
+    'PanPath',
+  ]);
+
+export const getProfilePath = (record) =>
+  read(record, [
+    'profileImagePath',
+    'ProfileImagePath',
+    'profilePath',
+    'ProfilePath',
+    'profileImage',
+    'ProfileImage',
+    'profilePicturePath',
+    'ProfilePicturePath',
+  ]);
+
+export const isPdfFile = (urlOrPath = '') => {
+  if (!urlOrPath) return false;
+  return /\.pdf(\?.*)?$/i.test(String(urlOrPath));
+};
+
+export const formatDistrictList = (districts) => {
+  if (!districts || !Array.isArray(districts) || districts.length === 0) {
+    return 'No districts assigned';
+  }
+  const names = districts
+    .map((d) => {
+      if (typeof d === 'string') return d.trim();
+      if (typeof d === 'object' && d !== null) {
+        return (d.districtName || d.name || d.district || `District #${d.districtId || ''}`).trim();
+      }
+      return String(d || '').trim();
+    })
+    .filter(Boolean);
+
+  return names.length > 0 ? names.join(', ') : 'No districts assigned';
+};
+
+const formatDob = (dob) => {
+  if (!dob) return '—';
+  try {
+    const d = new Date(dob);
+    if (isNaN(d.getTime())) return String(dob).slice(0, 10);
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return String(dob);
+  }
+};
 
 const normalizeApplicationStatus = (value, statusName = '') => {
   const named = String(statusName || '').trim().toLowerCase();
@@ -50,6 +167,7 @@ export function Dashboard() {
   const [agents, setAgents] = useState([]);
   const [applications, setApplications] = useState([]);
   const [rms, setRms] = useState([]);
+  const [amsList, setAmsList] = useState([]);
   const [query, setQuery] = useState('');
   const [applicationQuery, setApplicationQuery] = useState('');
   const [applicationStatusFilter, setApplicationStatusFilter] = useState('All');
@@ -58,20 +176,26 @@ export function Dashboard() {
   const [updatedAt, setUpdatedAt] = useState(null);
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [selectedApplication, setSelectedApplication] = useState(null);
+  const [selectedAms, setSelectedAms] = useState(null);
+  const [loadingAmsModal, setLoadingAmsModal] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState(null);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const headers = authHeaders();
-      const [agentResult, applicationResult, rmResult] = await Promise.allSettled([
+      const [agentResult, applicationResult, rmResult, amsResult] = await Promise.allSettled([
         fetch(`${API_BASE}/AgentMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Agents request failed'))),
         fetch(`${API_BASE}/AgentAddCustomer`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Applications request failed'))),
         fetch(`${API_BASE}/RMMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('RM request failed'))),
+        fetch(`${API_BASE}/AMSMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('AMS request failed'))),
       ]);
-      if ([agentResult, applicationResult, rmResult].some((result) => result.status === 'rejected')) {
+
+      if ([agentResult, applicationResult, rmResult, amsResult].some((result) => result.status === 'rejected')) {
         setError('Some live records could not be loaded. Available data is shown below.');
       }
+
       const rmRows = rmResult.status === 'fulfilled' ? unwrap(rmResult.value) : [];
       const liveRms = rmRows.map((rm) => ({
         id: read(rm, ['rmId', 'RMId', 'id']),
@@ -151,15 +275,50 @@ export function Dashboard() {
         };
       }).filter((agent) => agent.id || agent.name);
 
+      const amsRows = amsResult.status === 'fulfilled' ? unwrap(amsResult.value) : [];
+      const liveAms = amsRows.map((item) => {
+        const id = read(item, ['amsId', 'AmsId', 'id']);
+        return {
+          id,
+          amsId: id,
+          amsCode: read(item, ['amsCode', 'AmsCode', 'code']),
+          fullName: read(item, ['fullName', 'FullName', 'name'], 'Unnamed AMS'),
+          genderId: item.genderId ?? item.GenderId,
+          genderName: read(item, ['genderName', 'GenderName', 'gender', 'Gender']),
+          dateOfBirth: read(item, ['dateOfBirth', 'DateOfBirth', 'dob']),
+          address: read(item, ['address', 'Address']),
+          stateId: item.stateId ?? item.StateId,
+          stateName: read(item, ['stateName', 'StateName', 'state']),
+          cityId: item.cityId ?? item.CityId,
+          cityName: read(item, ['cityName', 'CityName', 'city']),
+          pincode: read(item, ['pincode', 'Pincode']),
+          mobileNumber: read(item, ['mobileNumber', 'MobileNumber', 'phone']),
+          emailAddress: read(item, ['emailAddress', 'EmailAddress', 'email']),
+          branch: read(item, ['branch', 'Branch', 'branchName']),
+          dateJoined: read(item, ['dateJoined', 'DateJoined']),
+          isActive: item.isActive ?? item.IsActive ?? true,
+          accountNumber: read(item, ['accountNumber', 'AccountNumber']),
+          ifscCode: read(item, ['ifscCode', 'IfscCode']),
+          aadhaarDocumentPath: getAadhaarPath(item),
+          panCardPath: getPanPath(item),
+          profileImagePath: getProfilePath(item),
+          districtNames: Array.isArray(item.districtNames || item.districts || item.amsDistricts)
+            ? item.districtNames || item.districts || item.amsDistricts
+            : [],
+        };
+      }).filter((a) => a.id || a.fullName);
+
       setAgents(liveAgents);
       setApplications(liveApplications);
       setRms(liveRms);
+      setAmsList(liveAms);
       setUpdatedAt(new Date());
     } catch {
       setError('Live dashboard data is unavailable. Check your connection and try again.');
       setAgents([]);
       setApplications([]);
       setRms([]);
+      setAmsList([]);
     } finally {
       setLoading(false);
     }
@@ -200,13 +359,12 @@ export function Dashboard() {
     agents: agents.filter((agent) => String(agent.rmId) === String(rm.id) || agent.rm === rm.name).length,
   }));
   const maxCoverage = Math.max(...coverage.map((rm) => rm.agents), 1);
-  const activity = [...agents, ...applications]
-    .filter((item) => item.updatedAt)
-    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-    .slice(0, 5);
+
+  // 5 Stats Cards: RM, Agents, AMS, Applications, Approved Amount
   const stats = [
     [Users, 'green', 'Relationship managers', rms.length, 'Live RM master'],
     [BriefcaseBusiness, 'blue', 'Total agents', agents.length, 'Live agent master'],
+    [ShieldCheck, 'teal', 'Total AMS', amsList.length, 'Live AMS master'],
     [FileText, 'orange', 'Total applications', applications.length, `${pending.length} pending · ${approved.length} approved`],
     [CheckCircle2, 'purple', 'Approved amount', formatAmount(approved.reduce((total, application) => total + application.amount, 0)), disbursed.length ? `${disbursed.length} disbursed` : `${approved.length} approved loans`],
   ];
@@ -218,6 +376,83 @@ export function Dashboard() {
       return;
     }
     navigate(`/edit-relationship-manager/${person.id}`);
+  };
+
+  const openEditAms = (ams) => {
+    const targetId = ams?.id || ams?.amsId || ams?.AmsId;
+    if (!targetId) return;
+    navigate(`/edit-ams/${targetId}`);
+  };
+
+  const handleOpenAmsDetails = async (ams) => {
+    setSelectedAms(ams);
+    setLoadingAmsModal(true);
+    try {
+      const targetId = ams.id || ams.amsId || ams.AmsId;
+      if (targetId) {
+        const [fullDataResult, districtDataResult] = await Promise.allSettled([
+          getAMSById(targetId),
+          getAMSDistrictsByAmsId(targetId),
+        ]);
+
+        const fullData = fullDataResult.status === 'fulfilled' ? fullDataResult.value : null;
+        const record = Array.isArray(fullData) ? fullData[0] : (fullData?.data || fullData?.value?.[0] || fullData);
+
+        let mappedDistricts = [];
+        if (districtDataResult.status === 'fulfilled' && districtDataResult.value) {
+          const rawDistricts = districtDataResult.value;
+          mappedDistricts = Array.isArray(rawDistricts)
+            ? rawDistricts
+            : (rawDistricts?.data || rawDistricts?.value || []);
+        }
+
+        setSelectedAms((prev) => {
+          const currentRecord = record || {};
+          const fallbackDistricts = Array.isArray(currentRecord.districtNames || currentRecord.districts || currentRecord.amsDistricts)
+            ? currentRecord.districtNames || currentRecord.districts || currentRecord.amsDistricts
+            : (prev?.districts || prev?.districtNames || []);
+
+          const finalDistricts = mappedDistricts.length > 0 ? mappedDistricts : fallbackDistricts;
+
+          return {
+            ...prev,
+            ...currentRecord,
+            id: currentRecord.amsId || currentRecord.id || prev.id,
+            fullName: currentRecord.fullName || prev.fullName,
+            amsCode: currentRecord.amsCode || prev.amsCode,
+            genderName: currentRecord.genderName || prev.genderName,
+            stateName: currentRecord.stateName || prev.stateName,
+            cityName: currentRecord.cityName || prev.cityName,
+            branch: currentRecord.branch || prev.branch,
+            accountNumber: currentRecord.accountNumber || prev.accountNumber,
+            ifscCode: currentRecord.ifscCode || prev.ifscCode,
+            aadhaarDocumentPath: getAadhaarPath(currentRecord) || prev.aadhaarDocumentPath,
+            panCardPath: getPanPath(currentRecord) || prev.panCardPath,
+            profileImagePath: getProfilePath(currentRecord) || prev.profileImagePath,
+            districts: finalDistricts,
+            districtNames: finalDistricts,
+          };
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load full AMS details:', err);
+    } finally {
+      setLoadingAmsModal(false);
+    }
+  };
+
+  const handlePreviewDocument = (title, rawPath) => {
+    if (!rawPath) return;
+    const fullUrl = getFileUrl(rawPath);
+    if (!fullUrl) return;
+    const isPdf = isPdfFile(fullUrl) || isPdfFile(rawPath);
+    setPreviewDoc({
+      title,
+      name: title,
+      url: fullUrl,
+      rawPath,
+      isPdf,
+    });
   };
 
   return (
@@ -245,6 +480,7 @@ export function Dashboard() {
 
       {error && <div className="dashboard-error" role="status">{error}</div>}
 
+      {/* 5 Top Summary Cards */}
       <section className="stat-grid">
         {stats.map(([Icon, color, label, value, note]) => (
           <div className="stat-card" key={label}>
@@ -260,6 +496,7 @@ export function Dashboard() {
         ))}
       </section>
 
+      {/* Applications Table */}
       <section className="content-card agent-card">
         <div className="card-heading">
           <div>
@@ -356,6 +593,7 @@ export function Dashboard() {
         </div>
       </section>
 
+      {/* Agents Table */}
       <section className="content-card agent-card">
         <div className="card-heading">
           <div>
@@ -433,7 +671,9 @@ export function Dashboard() {
         </div>
       </section>
 
+      {/* Bottom Grid: Relationship Managers & Area Management Specialists */}
       <section className="bottom-grid">
+        {/* Left: Relationship Managers */}
         <div className="content-card">
           <div className="card-heading">
             <div>
@@ -476,35 +716,72 @@ export function Dashboard() {
           )}
         </div>
 
-        <div className="content-card activity-card">
+        {/* Right: Area Management Specialists */}
+        <div className="content-card">
           <div className="card-heading">
             <div>
-              <h2>Recent activity</h2>
-              <p>Latest changes reported by the live records.</p>
+              <h2>Area Management Specialists</h2>
+              <p>Select an AMS to view their complete details.</p>
             </div>
+            <ShieldCheck size={20} className="heading-icon" />
           </div>
-          {activity.length ? (
-            activity.map((record, index) => (
-              <div className="activity-item" key={`${record.id || index}-${record.updatedAt}`}>
-                <CheckCircle2 size={18} />
-                <div>
-                  <strong>
-                    {record.customerName
-                      ? `${record.customerName} · ${record.status}`
-                      : record.name
-                        ? `${record.name} updated`
-                        : `${record.status} application updated`}
-                  </strong>
-                  <span>{formatWhen(record.updatedAt)}</span>
-                </div>
-              </div>
-            ))
+          {loading ? (
+            <p className="loading-line">Loading Area Management Specialists…</p>
+          ) : amsList.length ? (
+            <div className="coverage-list ams-list">
+              {amsList.map((ams) => {
+                const displayName = ams.fullName || 'Unnamed AMS';
+                const genderLabel = ams.genderName || (ams.genderId === 1 ? 'Male' : ams.genderId === 2 ? 'Female' : ams.genderId === 3 ? 'Other' : '');
+                const profileUrl = getFileUrl(getProfilePath(ams));
+
+                return (
+                  <div className="ams-row-wrap" key={ams.id || ams.amsCode || displayName}>
+                    <div className="ams-row-left">
+                      {profileUrl ? (
+                        <img
+                          src={profileUrl}
+                          alt={displayName}
+                          className="ams-row-avatar-img"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const next = e.currentTarget.nextElementSibling;
+                            if (next) next.classList.remove('hidden');
+                          }}
+                        />
+                      ) : null}
+                      <div className={`rm-avatar ams-avatar ${profileUrl ? 'hidden' : ''}`}>
+                        {initials(displayName)}
+                      </div>
+                      <div className="ams-row-info">
+                        <strong>{displayName}</strong>
+                        <span>{genderLabel || 'Specialist'}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="details-button"
+                      onClick={() => handleOpenAmsDetails(ams)}
+                    >
+                      <Eye size={14} /> View
+                    </button>
+                    <button
+                      type="button"
+                      className="details-button edit-button"
+                      onClick={() => openEditAms(ams)}
+                    >
+                      <Pencil size={14} /> Edit
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           ) : (
-            <p className="loading-line">No recent activity is available.</p>
+            <p className="loading-line">No Area Management Specialists found.</p>
           )}
         </div>
       </section>
 
+      {/* RM / Agent Details Modal */}
       {selectedPerson && (
         <div
           className="person-dialog-backdrop"
@@ -576,6 +853,7 @@ export function Dashboard() {
         </div>
       )}
 
+      {/* Application Details Modal */}
       {selectedApplication && (
         <div
           className="person-dialog-backdrop"
@@ -657,6 +935,370 @@ export function Dashboard() {
               </button>
             </div>
           </section>
+        </div>
+      )}
+
+      {/* AMS Full Details Modal */}
+      {selectedAms && (
+        <div
+          className="person-dialog-backdrop"
+          role="presentation"
+          onMouseDown={() => setSelectedAms(null)}
+        >
+          <section
+            className="person-dialog ams-details-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Area Management Specialist details"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button
+              className="person-dialog-close"
+              onClick={() => setSelectedAms(null)}
+              aria-label="Close AMS details"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Modal Header */}
+            <div className="ams-modal-header">
+              {getFileUrl(getProfilePath(selectedAms) || selectedAms.profileImagePath) ? (
+                <img
+                  src={getFileUrl(getProfilePath(selectedAms) || selectedAms.profileImagePath)}
+                  alt={selectedAms.fullName}
+                  className="ams-modal-avatar-img"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const next = e.currentTarget.nextElementSibling;
+                    if (next) next.classList.remove('hidden');
+                  }}
+                />
+              ) : null}
+              <div className={`person-dialog-avatar ams-modal-avatar ${getFileUrl(getProfilePath(selectedAms) || selectedAms.profileImagePath) ? 'hidden' : ''}`}>
+                {initials(selectedAms.fullName)}
+              </div>
+              <div className="ams-modal-title-block">
+                <span className="eyebrow">AREA MANAGEMENT SPECIALIST</span>
+                <h2>{selectedAms.fullName}</h2>
+                <div className="ams-badge-row">
+                  {selectedAms.amsCode && (
+                    <span className="ams-code-badge">Code: {selectedAms.amsCode}</span>
+                  )}
+                  <span className={`status ${selectedAms.isActive !== false ? 'active' : 'inactive'}`}>
+                    {selectedAms.isActive !== false ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {loadingAmsModal ? (
+              <p className="loading-line">Loading details…</p>
+            ) : (
+              <div className="ams-modal-scrollable">
+                {/* Personal Information */}
+                <div className="ams-modal-section">
+                  <h3 className="ams-section-title">Personal Information</h3>
+                  <dl className="person-detail-grid">
+                    <div>
+                      <dt>Full Name</dt>
+                      <dd>{selectedAms.fullName || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt>AMS Code</dt>
+                      <dd>{selectedAms.amsCode || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt>Date of Birth</dt>
+                      <dd>{formatDob(selectedAms.dateOfBirth)}</dd>
+                    </div>
+                    <div>
+                      <dt>Gender</dt>
+                      <dd>
+                        {selectedAms.genderName ||
+                          (selectedAms.genderId === 1
+                            ? 'Male'
+                            : selectedAms.genderId === 2
+                            ? 'Female'
+                            : selectedAms.genderId === 3
+                            ? 'Other'
+                            : '—')}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Mobile Number</dt>
+                      <dd>{selectedAms.mobileNumber || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt>Email Address</dt>
+                      <dd>{selectedAms.emailAddress || '—'}</dd>
+                    </div>
+                  </dl>
+                </div>
+
+                {/* Location Information */}
+                <div className="ams-modal-section">
+                  <h3 className="ams-section-title">Location Information</h3>
+                  <dl className="person-detail-grid">
+                    <div className="full-width">
+                      <dt>Address</dt>
+                      <dd>{selectedAms.address || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt>State</dt>
+                      <dd>{selectedAms.stateName || (selectedAms.stateId ? `State ID: ${selectedAms.stateId}` : '—')}</dd>
+                    </div>
+                    <div>
+                      <dt>City</dt>
+                      <dd>{selectedAms.cityName || (selectedAms.cityId ? `City ID: ${selectedAms.cityId}` : '—')}</dd>
+                    </div>
+                    <div>
+                      <dt>Pincode</dt>
+                      <dd>{selectedAms.pincode || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt>Branch</dt>
+                      <dd>{selectedAms.branch || '—'}</dd>
+                    </div>
+                    <div className="full-width">
+                      <dt>Districts</dt>
+                      <dd>
+                        {formatDistrictList(selectedAms.districts || selectedAms.districtNames)}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+
+                {/* Employment & Banking */}
+                <div className="ams-modal-section">
+                  <h3 className="ams-section-title">Employment & Banking</h3>
+                  <dl className="person-detail-grid">
+                    <div>
+                      <dt>Date Joined</dt>
+                      <dd>{formatDateTimeFriendly(selectedAms.dateJoined) || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt>Status</dt>
+                      <dd>{selectedAms.isActive !== false ? 'Active' : 'Inactive'}</dd>
+                    </div>
+                    <div>
+                      <dt>Account Number</dt>
+                      <dd>{selectedAms.accountNumber || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt>IFSC Code</dt>
+                      <dd>{selectedAms.ifscCode || '—'}</dd>
+                    </div>
+                  </dl>
+                </div>
+
+                {/* Assigned Districts (if available) */}
+                {((selectedAms.districts && selectedAms.districts.length > 0) || (selectedAms.districtNames && selectedAms.districtNames.length > 0)) && (
+                  <div className="ams-modal-section">
+                    <h3 className="ams-section-title">Assigned Districts</h3>
+                    <div className="ams-district-pills">
+                      {(selectedAms.districts || selectedAms.districtNames).map((d, i) => (
+                        <span key={d.districtId || i} className="ams-summary-pill">
+                          {typeof d === 'string' ? d : d.districtName || d.name || `District #${d.districtId || i}`}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Documents Section */}
+                <div className="ams-modal-section">
+                  <h3 className="ams-section-title">Documents</h3>
+                  <div className="ams-doc-links-grid">
+                    {/* Aadhaar Card */}
+                    <div className="ams-doc-card">
+                      <div className="ams-doc-card-info">
+                        <FileText size={18} className="ams-doc-icon" />
+                        <div>
+                          <strong>Aadhaar Card</strong>
+                          <small>
+                            {getAadhaarPath(selectedAms) || selectedAms.aadhaarDocumentPath
+                              ? 'Document uploaded'
+                              : 'No document uploaded'}
+                          </small>
+                        </div>
+                      </div>
+                      {(getAadhaarPath(selectedAms) || selectedAms.aadhaarDocumentPath) ? (
+                        <button
+                          type="button"
+                          className="details-button"
+                          onClick={() =>
+                            handlePreviewDocument(
+                              'Aadhaar Card',
+                              getAadhaarPath(selectedAms) || selectedAms.aadhaarDocumentPath
+                            )
+                          }
+                        >
+                          <Eye size={14} /> View Document
+                        </button>
+                      ) : (
+                        <span className="ams-doc-missing">Unavailable</span>
+                      )}
+                    </div>
+
+                    {/* PAN Card */}
+                    <div className="ams-doc-card">
+                      <div className="ams-doc-card-info">
+                        <FileText size={18} className="ams-doc-icon" />
+                        <div>
+                          <strong>PAN Card</strong>
+                          <small>
+                            {getPanPath(selectedAms) || selectedAms.panCardPath
+                              ? 'Document uploaded'
+                              : 'No document uploaded'}
+                          </small>
+                        </div>
+                      </div>
+                      {(getPanPath(selectedAms) || selectedAms.panCardPath) ? (
+                        <button
+                          type="button"
+                          className="details-button"
+                          onClick={() =>
+                            handlePreviewDocument(
+                              'PAN Card',
+                              getPanPath(selectedAms) || selectedAms.panCardPath
+                            )
+                          }
+                        >
+                          <Eye size={14} /> View Document
+                        </button>
+                      ) : (
+                        <span className="ams-doc-missing">Unavailable</span>
+                      )}
+                    </div>
+
+                    {/* Profile Image */}
+                    {(getProfilePath(selectedAms) || selectedAms.profileImagePath) && (
+                      <div className="ams-doc-card">
+                        <div className="ams-doc-card-info">
+                          <Camera size={18} className="ams-doc-icon" />
+                          <div>
+                            <strong>Profile Image</strong>
+                            <small>Photograph uploaded</small>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="details-button"
+                          onClick={() =>
+                            handlePreviewDocument(
+                              'Profile Image',
+                              getProfilePath(selectedAms) || selectedAms.profileImagePath
+                            )
+                          }
+                        >
+                          <Eye size={14} /> View Image
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="person-dialog-actions">
+              <button className="masters-btn-secondary" onClick={() => setSelectedAms(null)}>
+                Close
+              </button>
+              <button className="primary-button" onClick={() => openEditAms(selectedAms)}>
+                <Pencil size={16} /> Edit AMS
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* Dedicated Document / Image Preview Lightbox */}
+      {previewDoc && (
+        <div
+          className="ams-doc-preview-backdrop"
+          role="presentation"
+          onMouseDown={() => setPreviewDoc(null)}
+        >
+          <div
+            className="ams-doc-preview-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={previewDoc.title || 'Document Preview'}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="ams-doc-preview-header">
+              <h3>
+                {previewDoc.isPdf ? <FileText size={18} /> : <Camera size={18} />}
+                {previewDoc.title || 'Document Preview'}
+              </h3>
+              <div className="ams-doc-preview-header-actions">
+                <a
+                  href={previewDoc.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ams-doc-newtab-btn"
+                  title="Open in new window or tab"
+                >
+                  <ArrowUpRight size={14} /> Open in New Tab
+                </a>
+                <button
+                  type="button"
+                  className="ams-doc-preview-close"
+                  onClick={() => setPreviewDoc(null)}
+                  aria-label="Close preview"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="ams-doc-preview-body">
+              {previewDoc.isPdf ? (
+                <div className="ams-doc-iframe-container">
+                  <iframe
+                    src={previewDoc.url}
+                    title={previewDoc.title || 'PDF Preview'}
+                    className="ams-doc-iframe"
+                  />
+                  <div className="ams-doc-fallback-bar">
+                    <span>Trouble viewing PDF?</span>
+                    <a
+                      href={previewDoc.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ams-doc-newtab-btn"
+                    >
+                      <ArrowUpRight size={13} /> Open in new tab
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <div className="ams-doc-image-container">
+                  <img
+                    src={previewDoc.url}
+                    alt={previewDoc.title || 'Preview'}
+                    className="ams-doc-image"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      const errBox = document.getElementById('ams-doc-img-error');
+                      if (errBox) errBox.style.display = 'flex';
+                    }}
+                  />
+                  <div id="ams-doc-img-error" className="ams-doc-error-box" style={{ display: 'none' }}>
+                    <p>Unable to load image preview directly.</p>
+                    <a
+                      href={previewDoc.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ams-doc-newtab-btn"
+                    >
+                      <ArrowUpRight size={14} /> Open Image in New Tab
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

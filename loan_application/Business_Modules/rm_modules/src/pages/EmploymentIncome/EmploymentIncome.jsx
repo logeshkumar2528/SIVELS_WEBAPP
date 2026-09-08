@@ -16,8 +16,6 @@ import {
   getSectionState,
 } from '../applicationWizard/flowUtils';
 
-
-
 function buildEmploymentState(appData) {
   const saved = getSectionState(appData, 'employmentIncome', {});
   const count = getApplicantCount(appData);
@@ -29,7 +27,7 @@ function buildEmploymentState(appData) {
     designationNatureOfBusiness: source.designationNatureOfBusiness || '',
     employmentNature: source.employmentNature || '',
     qualification: source.qualification || '',
-    industryType: source.industryType || '',
+    industryType: source.industryType ?? source.industryTypeId ?? '',
     totalExperienceYears: source.totalExperienceYears || '',
     grossMonthlyIncome: source.grossMonthlyIncome || '',
     otherIncomeMonthly: source.otherIncomeMonthly || '',
@@ -49,11 +47,25 @@ function EmploymentCard({
   title, 
   person, 
   onChange, 
-  errors,
+  errors = {},
   qualificationOptions = [],
   employmentNatureOptions = [],
+  industryTypeOptions = [],
   isLoadingMasters = false
 }) {
+  const matchedIndustryOption = industryTypeOptions.find(
+    (opt) =>
+      opt.value === person.industryType ||
+      (person.industryType !== '' &&
+        person.industryType !== null &&
+        person.industryType !== undefined &&
+        String(opt.value) === String(person.industryType)) ||
+      (typeof person.industryType === 'string' &&
+        person.industryType.trim() !== '' &&
+        String(opt.label).toLowerCase() === person.industryType.trim().toLowerCase())
+  );
+  const currentIndustryValue = matchedIndustryOption ? matchedIndustryOption.value : person.industryType;
+
   return (
     <div className="aw-mini-card">
       <div className="aw-mini-card__header">
@@ -124,13 +136,17 @@ function EmploymentCard({
           <div className="aw-field">
             <label className="form-label">Industry Type</label>
             <div className="aw-input-wrapper">
-              <Factory className="aw-input-icon" size={14} />
-              <input
-                className="form-input aw-input aw-input--with-icon"
-                value={person.industryType}
-                onChange={(e) => onChange('industryType', e.target.value)}
+              <Select
+                error={!!errors.industryType}
+                value={currentIndustryValue}
+                onChange={(val) => onChange('industryType', val)}
+                placeholder={isLoadingMasters ? "Loading..." : "Select Industry Type"}
+                options={industryTypeOptions}
+                disabled={isLoadingMasters}
+                icon={<Factory size={14} />}
               />
             </div>
+            {errors.industryType && <span className="aw-field-error">{errors.industryType}</span>}
           </div>
 
           <div className="aw-field">
@@ -229,15 +245,24 @@ export default function EmploymentIncome() {
   const [isLoadingMasters, setIsLoadingMasters] = useState(false);
   const [qualificationOptions, setQualificationOptions] = useState([]);
   const [employmentNatureOptions, setEmploymentNatureOptions] = useState([]);
+  const [industryTypeOptions, setIndustryTypeOptions] = useState([]);
 
   useEffect(() => {
     async function fetchMaster(endpoint, idField, nameField, setStateFunc) {
       try {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+        const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
         const res = await fetch(`${baseUrl}/${endpoint}`);
         if (res.ok) {
-          const data = await res.json();
-          setStateFunc(data.map(item => ({ value: item[idField], label: item[nameField], raw: item })));
+          const raw = await res.json();
+          const data = Array.isArray(raw) ? raw : (raw?.value ?? raw?.items ?? raw?.data ?? []);
+          const activeRecords = data.filter((item) => item.isActive !== false);
+          setStateFunc(
+            activeRecords.map((item) => ({
+              value: item[idField],
+              label: item[nameField] || item.industryTypeName || item.industryType || String(item[idField]),
+              raw: item,
+            }))
+          );
         }
       } catch (e) {
         console.error(`Failed to fetch ${endpoint}:`, e);
@@ -249,6 +274,7 @@ export default function EmploymentIncome() {
       await Promise.allSettled([
         fetchMaster('EducationMaster', 'educationId', 'educationName', setQualificationOptions),
         fetchMaster('EmploymentType', 'employmentTypeId', 'employmentTypeName', setEmploymentNatureOptions),
+        fetchMaster('masters/IndustryTypeMaster', 'industryTypeId', 'industryTypeName', setIndustryTypeOptions),
       ]);
       setIsLoadingMasters(false);
     }
@@ -306,7 +332,7 @@ export default function EmploymentIncome() {
       return;
     }
 
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+    const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
     const allPersons = [
       { ...form.applicant, isPrimary: true },
       ...form.coApplicants.map((co, i) => ({ ...co, index: i, isPrimary: false }))
@@ -334,7 +360,7 @@ export default function EmploymentIncome() {
           DesignationNatureOfBusiness: person.designationNatureOfBusiness || '',
           EmploymentTypeId: person.employmentNature ? Number(person.employmentNature) : 1,
           EducationId: person.qualification ? Number(person.qualification) : 1,
-          IndustryType: person.industryType || '',
+          IndustryType: person.industryType ? String(person.industryType) : '',
           TotalExperience: Number(person.totalExperienceYears) || 0,
           GrossMonthlyIncome: Number(person.grossMonthlyIncome) || 0,
           OtherMonthlyIncome: Number(person.otherIncomeMonthly) || 0,
@@ -405,30 +431,29 @@ export default function EmploymentIncome() {
         onClose={() => setErrorPopup(null)}
       />
       <WizardSectionLayout
-      appId={appId}
-      appData={appData}
-      steps={APPLICATION_WIZARD_STEPS}
-      activeStep={5}
-      title="Step 5: Employment & Income Details"
-      subtitle="Capture applicant and co-applicant employment profile and income details."
-      backLabel="Back to Address Details"
-      continueLabel="Save & Continue"
-      onBack={handleBack}
-      onContinue={handleContinue}
-      onStepClick={(step) => navigate(step.route.replace(':applicationId', appId))}
-      headerAction={
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={ArrowLeftIcon ? <ArrowLeftIcon size={14} /> : null}
-          onClick={handleBack}
-        >
-          Back to Address Details
-        </Button>
-      }
-      footerHint={`Employment and income data is stored for ${activeCount > 1 ? `${activeCount} applicant records` : 'the applicant record'} on the same application.`}
-    >
-
+        appId={appId}
+        appData={appData}
+        steps={APPLICATION_WIZARD_STEPS}
+        activeStep={5}
+        title="Step 5: Employment & Income Details"
+        subtitle="Capture applicant and co-applicant employment profile and income details."
+        backLabel="Back to Address Details"
+        continueLabel="Save & Continue"
+        onBack={handleBack}
+        onContinue={handleContinue}
+        onStepClick={(step) => navigate(step.route.replace(':applicationId', appId))}
+        headerAction={
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={ArrowLeftIcon ? <ArrowLeftIcon size={14} /> : null}
+            onClick={handleBack}
+          >
+            Back to Address Details
+          </Button>
+        }
+        footerHint={`Employment and income data is stored for ${activeCount > 1 ? `${activeCount} applicant records` : 'the applicant record'} on the same application.`}
+      >
         <EmploymentCard
           title="Applicant Employment & Income"
           person={form.applicant}
@@ -440,26 +465,28 @@ export default function EmploymentIncome() {
           )}
           qualificationOptions={qualificationOptions}
           employmentNatureOptions={employmentNatureOptions}
+          industryTypeOptions={industryTypeOptions}
           isLoadingMasters={isLoadingMasters}
         />
 
-      {activeCount > 0 && form.coApplicants.map((person, index) => (
-        <EmploymentCard
-          key={`co-employment-${index}`}
-          title={`Co-Applicant ${index + 1} Employment & Income`}
-          person={person}
-          onChange={(field, value) => updatePerson('coApplicants', field, value, index)}
-          errors={Object.fromEntries(
-            Object.entries(errors)
-              .filter(([key]) => key.startsWith(`coApplicants.${index}.`))
-              .map(([key, value]) => [key.split('.').slice(2).join('.'), value]),
-          )}
-          qualificationOptions={qualificationOptions}
-          employmentNatureOptions={employmentNatureOptions}
-          isLoadingMasters={isLoadingMasters}
-        />
-      ))}
-    </WizardSectionLayout>
+        {activeCount > 0 && form.coApplicants.map((person, index) => (
+          <EmploymentCard
+            key={`co-employment-${index}`}
+            title={`Co-Applicant ${index + 1} Employment & Income`}
+            person={person}
+            onChange={(field, value) => updatePerson('coApplicants', field, value, index)}
+            errors={Object.fromEntries(
+              Object.entries(errors)
+                .filter(([key]) => key.startsWith(`coApplicants.${index}.`))
+                .map(([key, value]) => [key.split('.').slice(2).join('.'), value]),
+            )}
+            qualificationOptions={qualificationOptions}
+            employmentNatureOptions={employmentNatureOptions}
+            industryTypeOptions={industryTypeOptions}
+            isLoadingMasters={isLoadingMasters}
+          />
+        ))}
+      </WizardSectionLayout>
     </>
   );
 }

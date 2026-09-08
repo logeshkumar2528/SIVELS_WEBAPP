@@ -5,7 +5,8 @@ import {
   Percent, Type, Users, Network, FileText,
   CreditCard, Package, Target, Repeat, User, Heart, Building, 
   Map, Building2, Briefcase, Landmark, Globe, MapPin, Link, 
-  Layers, ShieldCheck, Home, Key, GraduationCap, Star, Contact, Shield, TrendingUp, LogOut, ArrowLeft
+  Layers, ShieldCheck, Home, Key, GraduationCap, Star, Contact, Shield, TrendingUp, LogOut, ArrowLeft,
+  Factory, Clock
 } from 'lucide-react';
 import './Navbar.css';
 
@@ -37,7 +38,10 @@ const MASTERS_MENU = [
   { label: 'Religion', path: '/masters/religion', icon: Star },
   { label: 'Caste', path: '/masters/caste', icon: Contact },
   { label: 'Loan Product Collateral', path: '/masters/loan-product-collateral', icon: Shield },
-  { label: 'Rate Of Interest', path: '/masters/rate-of-interest', icon: TrendingUp }
+  { label: 'Rate Of Interest', path: '/masters/rate-of-interest', icon: TrendingUp },
+  { label: 'Industry Type', path: '/masters/industry-type', icon: Factory },
+  { label: 'Loan Product Tenure', path: '/masters/loan-product-tenure', icon: Clock },
+  { label: 'Company Configuration', path: '/company', icon: Building2 }
 ];
 
 export function Navbar() {
