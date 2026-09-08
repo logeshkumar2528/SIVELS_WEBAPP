@@ -104,86 +104,94 @@ export function Navbar() {
   );
   const goBack = () => window.history.length > 1 ? navigate(-1) : navigate('/dashboard');
 
+  const isAmsDashboard = location.pathname.includes('ams-dashboard') || isAmsUser;
+
   return (
     <nav className="top-navbar">
       <div className="navbar-container">
-        <div className="navbar-left">
-          <div className="navbar-brand">
-            Sivels Finance
+        {!isAmsDashboard && (
+          <div className="navbar-left">
+            <div className="navbar-brand">
+              Sivels Finance
+            </div>
           </div>
-        </div>
+        )}
 
-        <button 
-          className="mobile-menu-toggle"
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          aria-label="Toggle navigation menu"
-        >
-          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
-
-        <div className={`navbar-navigation ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
-          {location.pathname !== (isAmsUser ? '/ams-dashboard' : '/dashboard') && !isAmsUser && <button className="nav-back" onClick={goBack}><ArrowLeft size={16} /> Back</button>}
-          <NavLink
-            to={isAmsUser ? '/ams-dashboard' : '/dashboard'}
-            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-            onClick={closeMenus}
+        {!isAmsDashboard && (
+          <button 
+            className="mobile-menu-toggle"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            aria-label="Toggle navigation menu"
           >
-            {isAmsUser ? 'Monitoring dashboard' : 'Dashboard'}
-          </NavLink>
+            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        )}
 
-          {!isAmsUser && <div className="nav-dropdown-container" ref={dropdownRef}>
-            <button 
-              className={`nav-link dropdown-toggle master-dropdown-trigger ${isMastersActive || isMastersOpen ? 'active' : ''}`}
-              onClick={() => setIsMastersOpen(!isMastersOpen)}
-              aria-expanded={isMastersOpen}
+        {!isAmsDashboard && (
+          <div className={`navbar-navigation ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+            {location.pathname !== '/dashboard' && <button className="nav-back" onClick={goBack}><ArrowLeft size={16} /> Back</button>}
+            <NavLink
+              to="/dashboard"
+              className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+              onClick={closeMenus}
             >
-              <div className="master-trigger-content">
-                <Database size={18} className="master-trigger-icon" />
-                <span>Masters</span>
-              </div>
-              <ChevronDown size={16} />
-            </button>
-            
-            {isMastersOpen && (
-              <div className="nav-dropdown-menu master-mega-menu">
-                <div className="master-search-container">
-                  <Search size={16} className="master-search-icon" />
-                  <input 
-                    type="text" 
-                    className="master-search-input"
-                    placeholder="Search master data..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    autoFocus
-                  />
+              Dashboard
+            </NavLink>
+
+            <div className="nav-dropdown-container" ref={dropdownRef}>
+              <button 
+                className={`nav-link dropdown-toggle master-dropdown-trigger ${isMastersActive || isMastersOpen ? 'active' : ''}`}
+                onClick={() => setIsMastersOpen(!isMastersOpen)}
+                aria-expanded={isMastersOpen}
+              >
+                <div className="master-trigger-content">
+                  <Database size={18} className="master-trigger-icon" />
+                  <span>Masters</span>
                 </div>
-                <div className="master-list-grid">
-                  {filteredMasters.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location.pathname.includes(item.path);
-                    return (
-                      <NavLink
-                        key={item.path}
-                        to={item.path}
-                        className={`dropdown-item ${isActive ? 'active' : ''}`}
-                        onClick={closeMenus}
-                      >
-                        <div className="dropdown-item-left">
-                          {Icon && <Icon size={16} className="dropdown-item-icon" />}
-                          <span>{item.label}</span>
-                        </div>
-                        {isActive && <Check size={16} className="dropdown-item-check" />}
-                      </NavLink>
-                    );
-                  })}
-                  {filteredMasters.length === 0 && (
-                    <div className="master-no-results">No masters found matching your search.</div>
-                  )}
+                <ChevronDown size={16} />
+              </button>
+              
+              {isMastersOpen && (
+                <div className="nav-dropdown-menu master-mega-menu">
+                  <div className="master-search-container">
+                    <Search size={16} className="master-search-icon" />
+                    <input 
+                      type="text" 
+                      className="master-search-input"
+                      placeholder="Search master data..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="master-list-grid">
+                    {filteredMasters.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location.pathname.includes(item.path);
+                      return (
+                        <NavLink
+                          key={item.path}
+                          to={item.path}
+                          className={`dropdown-item ${isActive ? 'active' : ''}`}
+                          onClick={closeMenus}
+                        >
+                          <div className="dropdown-item-left">
+                            {Icon && <Icon size={16} className="dropdown-item-icon" />}
+                            <span>{item.label}</span>
+                          </div>
+                          {isActive && <Check size={16} className="dropdown-item-check" />}
+                        </NavLink>
+                      );
+                    })}
+                    {filteredMasters.length === 0 && (
+                      <div className="master-no-results">No masters found matching your search.</div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>}
-        </div>
+              )}
+            </div>
+          </div>
+        )}
         <button className="navbar-logout" onClick={handleLogout}><LogOut size={17} /> <span>Logout</span></button>
       </div>
     </nav>

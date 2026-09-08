@@ -230,6 +230,15 @@ export default function VerifyOTP() {
         }
       } else if (resolvedModule === 'Master') {
         localStorage.setItem('masterData', JSON.stringify(resolvedAccount));
+      } else if (resolvedModule === 'BackOffice' || resolvedModule === 'Back Office' || resolvedModule === 'Operations') {
+        localStorage.setItem('backOfficeData', JSON.stringify(resolvedAccount));
+        localStorage.setItem('backOfficeAuth', JSON.stringify({
+          isAuthenticated: true,
+          name: resolvedAccount?.fullName || resolvedAccount?.name || 'Back Office Executive',
+          role: resolvedAccount?.role || 'Operations Team',
+          mobile: cleanMobile,
+          loginTimestamp: new Date().toISOString(),
+        }));
       }
 
       // 6. Brief pause to allow success toast to display before page transition

@@ -1,278 +1,251 @@
-/**
- * Dashboard
- * --------------------
- * Purpose:
- *   Back Office Dashboard page — the primary view for Back Office Officers.
- *
- * Responsibilities:
- *   - Compose reusable components to build the full dashboard layout.
- *   - Own filter tab state and pagination state.
- *   - Derive filtered and paginated application data.
- *   - Define table column renderers (which reference StatusBadge and Button).
- *   - Pass all data to children as props — no business logic in JSX.
- *
- * Rules:
- *   - Must stay under 250 lines.
- *   - All business data imported from dashboardData.js.
- *   - No hardcoded strings, colors, or values.
- *   - Does not import or know about Sidebar or Header.
- */
-
-import { useState, useMemo, useCallback } from 'react';
-import MainLayout    from '../../layouts/MainLayout/MainLayout';
-import StatCard      from '../../components/StatCard/StatCard';
-import SectionHeader from '../../components/SectionHeader/SectionHeader';
-import StatusBadge   from '../../components/StatusBadge/StatusBadge';
-import Button        from '../../components/Button/Button';
-import DataTable     from '../../components/DataTable/DataTable';
-import Pagination    from '../../components/Pagination/Pagination';
-import DonutChart    from '../../components/DonutChart/DonutChart';
-import iconMap       from '../../config/iconMap';
-import {
-  CURRENT_USER, BADGE_COUNTS, STAT_CARDS, FILTER_TABS,
-  APPLICATIONS, CHART_DATA, CHART_TOTAL, TASKS, ALERTS,
-} from './dashboardData';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import StatCard from '../../components/StatCard/StatCard';
+import iconMap from '../../config/iconMap';
+import { ROUTES, buildRoute } from '../../config/routeConfig';
+import { getKPIs, getAllDistricts, formatCurrency } from '../../data/backOfficeDummyData';
 import './Dashboard.css';
 
-/* ==========================================
-   EYE ICON — resolved once at module level
-========================================== */
-const EyeIcon = iconMap['Eye'];
+export default function Dashboard() {
+  const navigate = useNavigate();
+  const kpis = getKPIs();
+  const districts = getAllDistricts();
 
-/* ==========================================
-   STACKED CELL — internal render helper
-========================================== */
-function StackedCell({ primary, secondary }) {
+  const MapPinIcon = iconMap['MapPin'] || iconMap['Building2'];
+  const UsersIcon = iconMap['Users'];
+  const UserCheckIcon = iconMap['UserCheck'] || iconMap['UserRound'];
+  const FileTextIcon = iconMap['FileText'];
+  const ArrowRightIcon = iconMap['ArrowRight'];
+  const WalletIcon = iconMap['Wallet'] || iconMap['BadgeIndianRupee'];
+
   return (
-    <div className="dashboard-cell-stack">
-      <span className="dashboard-cell-primary">{primary}</span>
-      <span className="dashboard-cell-secondary">{secondary}</span>
+    <div className="bo-dashboard">
+      {/* ==========================================
+          SECTION 1 — 4 KPI METRIC CARDS
+      ========================================== */}
+      <section className="bo-kpi-grid" aria-label="Operational KPI Overview">
+        <StatCard
+          icon={MapPinIcon && <MapPinIcon size={22} strokeWidth={1.8} />}
+          title="Total Districts"
+          value={kpis.totalDistricts}
+          description="Operational Territories"
+          trend="6 Active Districts"
+          trendDirection="neutral"
+          variant="default"
+          onClick={() => navigate(ROUTES.DISTRICTS)}
+        />
+
+        <StatCard
+          icon={UsersIcon && <UsersIcon size={22} strokeWidth={1.8} />}
+          title="Total RMs"
+          value={kpis.totalRMs}
+          description="Relationship Managers"
+          trend="24 Active Staff"
+          trendDirection="up"
+          variant="success"
+          onClick={() => navigate(ROUTES.RMS)}
+        />
+
+        <StatCard
+          icon={UserCheckIcon && <UserCheckIcon size={22} strokeWidth={1.8} />}
+          title="Total Agents"
+          value={kpis.totalAgents}
+          description="Field Agents in Network"
+          trend="88 Field Agents"
+          trendDirection="up"
+          variant="info"
+          onClick={() => navigate(ROUTES.AGENTS)}
+        />
+
+        <StatCard
+          icon={FileTextIcon && <FileTextIcon size={22} strokeWidth={1.8} />}
+          title="Total Customers"
+          value={kpis.totalCustomers}
+          description="Loan Applications"
+          trend="₹18.45 Cr Portfolio"
+          trendDirection="up"
+          variant="warning"
+          onClick={() => navigate(ROUTES.CUSTOMERS)}
+        />
+      </section>
+
+      {/* ==========================================
+          SECTION 2 — DISTRICT OVERVIEW PREVIEW & DRILL-DOWN
+      ========================================== */}
+      <section className="bo-section" aria-label="District Operations Preview">
+        <div className="bo-section-header">
+          <div>
+            <h2 className="bo-section-title">District Operations Preview</h2>
+            <p className="bo-section-subtitle">Click any district to view detailed Relationship Managers and Agent allocations</p>
+          </div>
+          <button
+            type="button"
+            className="bo-btn bo-btn--outline"
+            onClick={() => navigate(ROUTES.DISTRICTS)}
+          >
+            <span>View All Districts</span>
+            {ArrowRightIcon && <ArrowRightIcon size={16} />}
+          </button>
+        </div>
+
+        <div className="bo-district-grid">
+          {districts.map((district) => (
+            <div
+              key={district.id}
+              className="bo-district-card bo-district-card--interactive"
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(buildRoute.districtDetail(district.id))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  navigate(buildRoute.districtDetail(district.id));
+                }
+              }}
+              aria-label={`View operations for ${district.name} district`}
+            >
+              <div className="bo-district-card-header">
+                <div className="bo-district-badge">
+                  {MapPinIcon && <MapPinIcon size={14} />}
+                  <span>{district.code}</span>
+                </div>
+                <span className="bo-district-zone">{district.zone}</span>
+              </div>
+
+              <h3 className="bo-district-name">{district.name}</h3>
+              <p className="bo-district-hq">{district.headquarters}</p>
+
+              <div className="bo-district-stats-grid">
+                <div className="bo-stat-box">
+                  <span className="bo-stat-box-label">RMs</span>
+                  <strong className="bo-stat-box-value">{district.rmCount}</strong>
+                </div>
+                <div className="bo-stat-box">
+                  <span className="bo-stat-box-label">Agents</span>
+                  <strong className="bo-stat-box-value">{district.agentCount}</strong>
+                </div>
+                <div className="bo-stat-box">
+                  <span className="bo-stat-box-label">Customers</span>
+                  <strong className="bo-stat-box-value">{district.customerCount}</strong>
+                </div>
+              </div>
+
+              <div className="bo-district-portfolio">
+                <div className="bo-portfolio-row">
+                  <span>Portfolio Volume</span>
+                  <strong>{formatCurrency(district.totalPortfolio)}</strong>
+                </div>
+                <div className="bo-progress-track">
+                  <div
+                    className="bo-progress-fill"
+                    style={{ width: `${district.completionRate}%` }}
+                  />
+                </div>
+                <div className="bo-portfolio-footer">
+                  <span>{district.completionRate}% Disbursed</span>
+                  <span>{district.pendingCount} Pending</span>
+                </div>
+              </div>
+
+              <div className="bo-district-card-footer">
+                <button
+                  type="button"
+                  className="bo-district-action-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(buildRoute.districtDetail(district.id));
+                  }}
+                >
+                  <span>View District Details</span>
+                  {ArrowRightIcon && <ArrowRightIcon size={14} />}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ==========================================
+          SECTION 3 — OPERATIONAL SNAPSHOT & QUICK ACTIONS
+      ========================================== */}
+      <section className="bo-summary-panel">
+        <div className="bo-summary-card">
+          <div className="bo-summary-card-header">
+            <div className="bo-summary-icon bo-summary-icon--green">
+              {WalletIcon && <WalletIcon size={20} />}
+            </div>
+            <div>
+              <h3>Total Portfolio Allocation</h3>
+              <p>Active disbursements and pipeline volume</p>
+            </div>
+          </div>
+          <div className="bo-summary-amounts">
+            <div className="bo-amount-item">
+              <small>Total Pipeline</small>
+              <strong>{formatCurrency(kpis.totalPortfolio)}</strong>
+            </div>
+            <div className="bo-amount-item is-success">
+              <small>Disbursed Amount</small>
+              <strong>{formatCurrency(kpis.totalDisbursed)}</strong>
+            </div>
+            <div className="bo-amount-item is-warning">
+              <small>Pending Applications</small>
+              <strong>{formatCurrency(kpis.totalPending)}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div className="bo-quick-actions-card">
+          <h3>Operations Navigation</h3>
+          <p>Quick access to operational monitoring consoles</p>
+          <div className="bo-quick-actions-list">
+            <button
+              type="button"
+              className="bo-quick-action-item"
+              onClick={() => navigate(ROUTES.RMS)}
+            >
+              <div className="bo-qa-icon">
+                {UsersIcon && <UsersIcon size={18} />}
+              </div>
+              <div className="bo-qa-text">
+                <strong>RM Monitoring Console</strong>
+                <small>Track performance of 24 Relationship Managers</small>
+              </div>
+              {ArrowRightIcon && <ArrowRightIcon size={16} className="bo-qa-arrow" />}
+            </button>
+
+            <button
+              type="button"
+              className="bo-quick-action-item"
+              onClick={() => navigate(ROUTES.AGENTS)}
+            >
+              <div className="bo-qa-icon">
+                {UserCheckIcon && <UserCheckIcon size={18} />}
+              </div>
+              <div className="bo-qa-text">
+                <strong>Agent Network Operations</strong>
+                <small>Monitor 88 field agents across Tamil Nadu districts</small>
+              </div>
+              {ArrowRightIcon && <ArrowRightIcon size={16} className="bo-qa-arrow" />}
+            </button>
+
+            <button
+              type="button"
+              className="bo-quick-action-item"
+              onClick={() => navigate(ROUTES.CUSTOMERS)}
+            >
+              <div className="bo-qa-icon">
+                {FileTextIcon && <FileTextIcon size={18} />}
+              </div>
+              <div className="bo-qa-text">
+                <strong>Customer Applications Queue</strong>
+                <small>Manage 412 loan applications and verification flow</small>
+              </div>
+              {ArrowRightIcon && <ArrowRightIcon size={16} className="bo-qa-arrow" />}
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
-
-/* ==========================================
-   DASHBOARD PAGE
-========================================== */
-function Dashboard() {
-  /* ---- Layout state ---- */
-  const [activeTab,    setActiveTab]    = useState('all');
-  const [currentPage,  setCurrentPage]  = useState(1);
-  const [pageSize,     setPageSize]     = useState(10);
-
-  /* ---- Filtered data ---- */
-  const filteredData = useMemo(() => {
-    if (activeTab === 'all') return APPLICATIONS;
-    return APPLICATIONS.filter((app) => app.status === activeTab);
-  }, [activeTab]);
-
-  /* ---- Paginated slice ---- */
-  const paginatedData = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredData.slice(start, start + pageSize);
-  }, [filteredData, currentPage, pageSize]);
-
-  /* ---- Tab counts (derived from data, not hardcoded) ---- */
-  const tabCounts = useMemo(() => {
-    const counts = { all: APPLICATIONS.length };
-    APPLICATIONS.forEach((app) => {
-      counts[app.status] = (counts[app.status] ?? 0) + 1;
-    });
-    return counts;
-  }, []);
-
-  /* ---- Handlers ---- */
-  const handleTabChange = useCallback((tabId) => {
-    setActiveTab(tabId);
-    setCurrentPage(1);
-  }, []);
-
-  const handlePageSizeChange = useCallback((size) => {
-    setPageSize(size);
-    setCurrentPage(1);
-  }, []);
-
-  /* ---- Table column definitions ---- */
-  const columns = useMemo(() => [
-    {
-      key:   'id',
-      label: 'Application ID',
-    },
-    {
-      key:    'customer',
-      label:  'Customer Name',
-      render: (row) => (
-        <StackedCell primary={row.customerName} secondary={row.customerPhone} />
-      ),
-    },
-    {
-      key:    'agent',
-      label:  'Agent / RM',
-      render: (row) => (
-        <StackedCell primary={row.agentName} secondary={`RM: ${row.rmName}`} />
-      ),
-    },
-    {
-      key:    'loanAmount',
-      label:  'Loan Amount',
-    },
-    {
-      key:    'submittedOn',
-      label:  'Submitted On',
-      render: (row) => (
-        <StackedCell primary={row.submittedDate} secondary={row.submittedTime} />
-      ),
-    },
-    {
-      key:    'status',
-      label:  'Status',
-      render: (row) => <StatusBadge status={row.status} />,
-    },
-    {
-      key:    'actions',
-      label:  'Actions',
-      render: (row) => {
-        const isReview = ['new', 'inReview', 'returned'].includes(row.status);
-        return (
-          <Button
-            label={isReview ? 'Review' : 'View'}
-            variant="outline"
-            size="sm"
-            icon={<EyeIcon size={13} strokeWidth={2} />}
-            onClick={() => {}}
-          />
-        );
-      },
-    },
-  ], []);
-
-  return (
-    <MainLayout
-      title="Back Office Dashboard"
-      subtitle="Welcome back! Here's what's happening today."
-      user={CURRENT_USER}
-      badgeCounts={BADGE_COUNTS}
-      notificationCount={12}
-    >
-      {/* ==================== STAT CARDS ==================== */}
-      <div className="dashboard-stats">
-        {STAT_CARDS.map((card) => {
-          const Icon = iconMap[card.icon];
-          return (
-            <StatCard
-              key={card.id}
-              icon={<Icon size={22} strokeWidth={1.8} />}
-              title={card.title}
-              value={card.value}
-              trend={card.trend}
-              trendDirection={card.trendDirection}
-              variant={card.variant}
-            />
-          );
-        })}
-      </div>
-
-      {/* ==================== MAIN BODY ==================== */}
-      <div className="dashboard-body">
-
-        {/* ---------- LEFT PANEL ---------- */}
-        <div className="dashboard-left">
-          <div className="dashboard-card">
-
-            <div className="dashboard-card-header">
-              <SectionHeader
-                title="Recent Applications"
-              />
-
-              {/* Filter tabs */}
-              <div className="dashboard-tabs" role="tablist" aria-label="Application filter">
-                {FILTER_TABS.map((tab) => (
-                  <button
-                    key={tab.id}
-                    role="tab"
-                    type="button"
-                    className={['dashboard-tab', activeTab === tab.id ? 'dashboard-tab--active' : ''].join(' ').trim()}
-                    onClick={() => handleTabChange(tab.id)}
-                    aria-selected={activeTab === tab.id}
-                    aria-label={`${tab.label} (${tabCounts[tab.id] ?? 0})`}
-                  >
-                    {tab.label}
-                    <span className="dashboard-tab-count">({tabCounts[tab.id] ?? 0})</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <DataTable columns={columns} data={paginatedData} rowKeyField="id" />
-
-            <Pagination
-              currentPage={currentPage}
-              totalItems={filteredData.length}
-              pageSize={pageSize}
-              onPageChange={setCurrentPage}
-              onPageSizeChange={handlePageSizeChange}
-            />
-          </div>
-        </div>
-
-        {/* ---------- RIGHT PANEL ---------- */}
-        <div className="dashboard-right">
-
-          {/* Donut chart */}
-          <div className="dashboard-card dashboard-card--padded">
-            <SectionHeader title="Application Process Overview" />
-            <DonutChart
-              data={CHART_DATA}
-              centerValue={CHART_TOTAL}
-              centerLabel="Total"
-            />
-          </div>
-
-          {/* Tasks */}
-          <div className="dashboard-card dashboard-card--padded">
-            <SectionHeader title="Tasks" />
-            <ul className="dashboard-tasks" role="list">
-              {TASKS.map((task) => {
-                const TaskIcon = iconMap[task.icon];
-                return (
-                  <li key={task.id} className="dashboard-task-item">
-                    <span className="dashboard-task-icon" aria-hidden="true">
-                      {TaskIcon && <TaskIcon size={16} strokeWidth={1.8} />}
-                    </span>
-                    <span className="dashboard-task-label">{task.label}</span>
-                    <span className="dashboard-task-count">{task.count}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-
-          {/* Alerts */}
-          <div className="dashboard-card dashboard-card--padded">
-            <SectionHeader title="Important Alerts" />
-            <ul className="dashboard-alerts" role="list">
-              {ALERTS.map((alert) => {
-                const AlertIcon   = iconMap[alert.icon];
-                const ChevronIcon = iconMap['ChevronRight'];
-                return (
-                  <li key={alert.id} className={`dashboard-alert-item dashboard-alert-item--${alert.severity}`}>
-                    <span className="dashboard-alert-icon" aria-hidden="true">
-                      {AlertIcon && <AlertIcon size={16} strokeWidth={2} />}
-                    </span>
-                    <span className="dashboard-alert-message">{alert.message}</span>
-                    <span className="dashboard-alert-chevron" aria-hidden="true">
-                      {ChevronIcon && <ChevronIcon size={14} strokeWidth={2} />}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-
-        </div>
-      </div>
-    </MainLayout>
-  );
-}
-
-export default Dashboard;

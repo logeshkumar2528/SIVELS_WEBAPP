@@ -32,6 +32,7 @@
 import { memo } from 'react';
 import iconMap from '../../config/iconMap';
 import logoImg from '../../../../../../Core/Logo_img/Logo.png';
+import { removeBackOfficeAuth } from '../../auth/authStorage';
 import './Sidebar.css';
 
 /* ==========================================
@@ -66,12 +67,22 @@ const NavItem = memo(function NavItem({ item, isActive, badgeCount, onNavigate }
 
   function handleClick(e) {
     e.preventDefault();
+    if (item.id === 'logout') {
+      removeBackOfficeAuth();
+      window.location.href = '/login';
+      return;
+    }
     onNavigate(item.route);
   }
 
   function handleKeyDown(e) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
+      if (item.id === 'logout') {
+        removeBackOfficeAuth();
+        window.location.href = '/login';
+        return;
+      }
       onNavigate(item.route);
     }
   }
