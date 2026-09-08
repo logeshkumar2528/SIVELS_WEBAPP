@@ -40,6 +40,7 @@ import { CompanyConfiguration } from './features/company/CompanyConfiguration';
 import AgentCreate from './pages/Agent/AgentCreate';
 import RelationshipManagerCreate from './pages/RelationshipManager/RelationshipManagerCreate';
 import AMSCreate from './pages/AMS/AMSCreate';
+import BackOfficeCreate from './pages/BackOffice/BackOfficeCreate';
 import CreateUser from './pages/CreateUser/CreateUser';
 import AMSDashboard from './pages/AMSDashboard/AMSDashboard';
 
@@ -76,6 +77,7 @@ function App() {
           <Route path="create-relationship-manager" element={<RelationshipManagerCreate />} />
           <Route path="edit-relationship-manager/:rmId" element={<RelationshipManagerCreate />} />
           <Route path="edit-ams/:amsId" element={<AMSCreate />} />
+          <Route path="edit-back-office/:backOfficeId" element={<BackOfficeCreate />} />
           <Route path="company" element={<CompanyConfiguration />} />
           
           <Route path="masters">

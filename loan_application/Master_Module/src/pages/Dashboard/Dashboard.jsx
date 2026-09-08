@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { formatDateTime, formatDateTimeFriendly } from '../../utils/dateHelper';
 import { getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
+import { getAllBackOffice } from '../../api/backOfficeApi';
 import './Dashboard.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -168,6 +169,7 @@ export function Dashboard() {
   const [applications, setApplications] = useState([]);
   const [rms, setRms] = useState([]);
   const [amsList, setAmsList] = useState([]);
+  const [backOfficeList, setBackOfficeList] = useState([]);
   const [query, setQuery] = useState('');
   const [applicationQuery, setApplicationQuery] = useState('');
   const [applicationStatusFilter, setApplicationStatusFilter] = useState('All');
@@ -185,14 +187,15 @@ export function Dashboard() {
     setError('');
     try {
       const headers = authHeaders();
-      const [agentResult, applicationResult, rmResult, amsResult] = await Promise.allSettled([
+      const [agentResult, applicationResult, rmResult, amsResult, backOfficeResult] = await Promise.allSettled([
         fetch(`${API_BASE}/AgentMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Agents request failed'))),
         fetch(`${API_BASE}/AgentAddCustomer`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Applications request failed'))),
         fetch(`${API_BASE}/RMMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('RM request failed'))),
         fetch(`${API_BASE}/AMSMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('AMS request failed'))),
+        getAllBackOffice(),
       ]);
 
-      if ([agentResult, applicationResult, rmResult, amsResult].some((result) => result.status === 'rejected')) {
+      if ([agentResult, applicationResult, rmResult, amsResult, backOfficeResult].some((result) => result.status === 'rejected')) {
         setError('Some live records could not be loaded. Available data is shown below.');
       }
 
@@ -308,10 +311,26 @@ export function Dashboard() {
         };
       }).filter((a) => a.id || a.fullName);
 
+      const backOfficeRows = backOfficeResult.status === 'fulfilled' ? unwrap(backOfficeResult.value) : [];
+      const liveBackOffice = backOfficeRows.map((item) => {
+        const id = read(item, ['backOfficeId', 'BackOfficeId', 'id']);
+        return {
+          id,
+          backOfficeCode: read(item, ['backOfficeCode', 'BackOfficeCode', 'code']),
+          name: read(item, ['fullName', 'FullName', 'name'], 'Unnamed back office officer'),
+          email: read(item, ['emailAddress', 'EmailAddress', 'email']),
+          phone: read(item, ['mobileNumber', 'MobileNumber', 'phone']),
+          branch: read(item, ['branch', 'Branch', 'branchName', 'BranchName']),
+          status: status(read(item, ['status', 'isActive', 'IsActive'])),
+          profileImagePath: getProfilePath(item),
+        };
+      }).filter((item) => item.id || item.name);
+
       setAgents(liveAgents);
       setApplications(liveApplications);
       setRms(liveRms);
       setAmsList(liveAms);
+      setBackOfficeList(liveBackOffice);
       setUpdatedAt(new Date());
     } catch {
       setError('Live dashboard data is unavailable. Check your connection and try again.');
@@ -319,6 +338,7 @@ export function Dashboard() {
       setApplications([]);
       setRms([]);
       setAmsList([]);
+      setBackOfficeList([]);
     } finally {
       setLoading(false);
     }
@@ -375,6 +395,10 @@ export function Dashboard() {
       navigate(`/edit-agent/${person.id}`);
       return;
     }
+    if (person.type === 'Back Office') {
+      navigate(`/edit-back-office/${person.id}`);
+      return;
+    }
     navigate(`/edit-relationship-manager/${person.id}`);
   };
 
@@ -382,6 +406,12 @@ export function Dashboard() {
     const targetId = ams?.id || ams?.amsId || ams?.AmsId;
     if (!targetId) return;
     navigate(`/edit-ams/${targetId}`);
+  };
+
+  const openEditBackOffice = (backOffice) => {
+    const targetId = backOffice?.id || backOffice?.backOfficeId || backOffice?.BackOfficeId;
+    if (!targetId) return;
+    navigate(`/edit-back-office/${targetId}`);
   };
 
   const handleOpenAmsDetails = async (ams) => {
@@ -716,6 +746,63 @@ export function Dashboard() {
           )}
         </div>
 
+        {/* Middle: Back Office */}
+        <div className="content-card">
+          <div className="card-heading">
+            <div>
+              <h2>Back office</h2>
+              <p>Select a back office officer to view or update their details.</p>
+            </div>
+            <Building2 size={20} className="heading-icon" />
+          </div>
+          {loading ? (
+            <p className="loading-line">Loading back office officers…</p>
+          ) : backOfficeList.length ? (
+            <div className="coverage-list back-office-list">
+              {backOfficeList.map((backOffice) => {
+                const displayName = backOffice.name || 'Unnamed back office officer';
+                const profileUrl = getFileUrl(backOffice.profileImagePath);
+
+                return (
+                  <div className="coverage-row-wrap" key={backOffice.id || backOffice.backOfficeCode || displayName}>
+                    <button
+                      className="coverage-row"
+                      onClick={() => setSelectedPerson({ ...backOffice, type: 'Back Office' })}
+                    >
+                      {profileUrl ? (
+                        <img
+                          src={profileUrl}
+                          alt={displayName}
+                          className="back-office-row-avatar-img"
+                          onError={(event) => {
+                            event.currentTarget.style.display = 'none';
+                            const next = event.currentTarget.nextElementSibling;
+                            if (next) next.classList.remove('hidden');
+                          }}
+                        />
+                      ) : null}
+                      <div className={`rm-avatar ${profileUrl ? 'hidden' : ''}`}>{initials(displayName)}</div>
+                      <div className="coverage-info">
+                        <strong>{displayName}</strong>
+                        <span>{backOffice.branch || backOffice.backOfficeCode || 'Back office officer'}</span>
+                      </div>
+                      <Eye size={16} />
+                    </button>
+                    <button
+                      className="details-button edit-button coverage-edit"
+                      onClick={() => openEditBackOffice(backOffice)}
+                    >
+                      <Pencil size={14} /> Edit
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="loading-line">No back office officers are available.</p>
+          )}
+        </div>
+
         {/* Right: Area Management Specialists */}
         <div className="content-card">
           <div className="card-heading">
@@ -828,6 +915,17 @@ export function Dashboard() {
                     <dd>{selectedPerson.applications}</dd>
                   </div>
                 </>
+              ) : selectedPerson.type === 'Back Office' ? (
+                <>
+                  <div>
+                    <dt>Branch</dt>
+                    <dd>{selectedPerson.branch || 'Not available'}</dd>
+                  </div>
+                  <div>
+                    <dt>Back Office Code</dt>
+                    <dd>{selectedPerson.backOfficeCode || 'Not available'}</dd>
+                  </div>
+                </>
               ) : (
                 <>
                   <div>
@@ -846,7 +944,7 @@ export function Dashboard() {
                 Close
               </button>
               <button className="primary-button" onClick={() => openEdit(selectedPerson)}>
-                <Pencil size={16} /> Edit {selectedPerson.type === 'Agent' ? 'agent' : 'RM'}
+                <Pencil size={16} /> Edit {selectedPerson.type === 'Agent' ? 'agent' : selectedPerson.type === 'Back Office' ? 'back office' : 'RM'}
               </button>
             </div>
           </section>
