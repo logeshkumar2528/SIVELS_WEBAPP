@@ -40,4 +40,7 @@ export const BACK_OFFICE_ENDPOINTS = {
   BACK_OFFICE_MASTER: '/BackOfficeMaster',
   BACK_OFFICE_BY_ID: (id) =>
     `/BackOfficeMaster/${encodeURIComponent(id)}`,
+
+  // FOIR Eligibility Calculation
+  FOIR_CALCULATION: '/FOIREligibilityCalculation',
 };

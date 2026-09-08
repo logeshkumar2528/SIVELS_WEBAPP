@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Building2, MapPin, Hash, List, CreditCard, Files } from 'lucide-react';
+import { Building2, MapPin, Hash, List, CreditCard, Files, AlertCircle, RefreshCw } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
 import Select from '../../components/Select/Select';
@@ -24,7 +24,7 @@ function buildBankState(appData) {
   const savedCoApplicants = Array.isArray(saved.coApplicants) ? saved.coApplicants : [];
 
   const createBank = (source = {}) => ({
-    applicationBankExistingLoanDetailsId: source.applicationBankExistingLoanDetailsId || null,
+    applicationBankExistingLoanDetailsId: source.applicationBankExistingLoanDetailsId || source.ApplicationBankExistingLoanDetailsId || source.applicationBankDetailsId || source.ApplicationBankDetailsId || null,
     bankName: source.bankName || '',
     branch: source.branch || '',
     ifscCode: source.ifscCode || '',
@@ -133,11 +133,13 @@ export default function BankExistingLoans() {
   const navigate = useNavigate();
   const { applicationId } = useParams();
   const appId = applicationId;
-  const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
+  const { getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildBankState(getApplication(appId)));
   const [errorPopup, setErrorPopup] = useState(null);
   const [viewingLoansFor, setViewingLoansFor] = useState(null);
-  const [transientLoans, setTransientLoans] = useState({});
+  const [activeLoansList, setActiveLoansList] = useState([]);
+  const [isLoadingActiveLoans, setIsLoadingActiveLoans] = useState(false);
+  const [activeLoansError, setActiveLoansError] = useState(null);
   const [viewingCardsFor, setViewingCardsFor] = useState(null);
   const [transientCards, setTransientCards] = useState({});
   const [isLoadingMasters, setIsLoadingMasters] = useState(false);
@@ -170,15 +172,36 @@ export default function BankExistingLoans() {
     loadMasters();
   }, []);
 
-  const prevAppIdRef = useRef(appId);
+  const hydratedAppIdRef = useRef(null);
 
   useEffect(() => {
     ensureApplication(appId);
-    if (prevAppIdRef.current !== appId) {
-      prevAppIdRef.current = appId;
-      setForm(buildBankState(getApplication(appId)));
+  }, [appId, ensureApplication]);
+
+  useEffect(() => {
+    if (hydratedAppIdRef.current === appId) return;
+    let active = true;
+
+    async function hydrateBankData() {
+      if (!appId) return;
+      try {
+        const hydratedApp = await loadApplicationFromBackend(appId);
+        if (!active) return;
+        hydratedAppIdRef.current = appId;
+        if (hydratedApp) {
+          setForm(buildBankState(hydratedApp));
+        }
+      } catch (err) {
+        console.error('Error hydrating bank data:', err);
+      }
     }
-  }, [appId, ensureApplication, getApplication]);
+
+    hydrateBankData();
+
+    return () => {
+      active = false;
+    };
+  }, [appId, loadApplicationFromBackend]);
 
   const appData = useMemo(() => getApplication(appId), [getApplication, appId]);
   const activeCount = useMemo(() => getApplicantCount(appData), [appData]);
@@ -224,21 +247,66 @@ export default function BankExistingLoans() {
     persist(nextForm);
   };
 
-  const updateLoanDetail = (loanIndex, field, value) => {
-    if (!viewingLoansFor) return;
+  const fetchActiveLoansForBank = async (bankDetailsId) => {
+    setIsLoadingActiveLoans(true);
+    setActiveLoansError(null);
+    setActiveLoansList([]);
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
-    const key = viewingLoansFor.type === 'applicant' 
-      ? `applicant-${viewingLoansFor.scope}`
-      : `coApplicant-${viewingLoansFor.index}-${viewingLoansFor.scope}`;
-      
-    setTransientLoans(prev => {
-      const currentLoans = prev[key] ? [...prev[key]] : [];
-      if (!currentLoans[loanIndex]) {
-        currentLoans[loanIndex] = { purpose: '', totalAmount: '', pending: '', emis: '', status: '' };
+    try {
+      const res = await fetch(`${baseUrl}/ApplicationBankActiveLoanDetails`);
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (data?.value ?? data?.data ?? data?.result ?? []);
+        
+        let matched = [];
+        if (bankDetailsId) {
+          matched = list.filter((item) => {
+            const itemBankId =
+              item.applicationBankDetailsId ??
+              item.ApplicationBankDetailsId ??
+              item.applicationBankExistingLoanDetailsId ??
+              item.ApplicationBankExistingLoanDetailsId ??
+              item.bankDetailsId ??
+              item.BankDetailsId;
+            return String(itemBankId) === String(bankDetailsId);
+          });
+        }
+        setActiveLoansList(matched);
+      } else {
+        console.warn('Failed to fetch ApplicationBankActiveLoanDetails:', res.status);
+        setActiveLoansError('Unable to load active loan details from server.');
       }
-      currentLoans[loanIndex] = { ...currentLoans[loanIndex], [field]: value };
-      return { ...prev, [key]: currentLoans };
-    });
+    } catch (err) {
+      console.error('Error fetching active loans from server:', err);
+      setActiveLoansError('Network error while connecting to Active Loans API.');
+    } finally {
+      setIsLoadingActiveLoans(false);
+    }
+  };
+
+  const handleOpenLoansModal = (target) => {
+    setViewingLoansFor(target);
+    const currentApp = getApplication(appId);
+    const bankState = target.type === 'applicant'
+      ? form.applicant[target.scope]
+      : form.coApplicants[target.index]?.[target.scope];
+    
+    const appDataBankState = target.type === 'applicant'
+      ? currentApp?.bankExistingLoans?.applicant?.[target.scope] || currentApp?.sections?.bankExistingLoans?.applicant?.[target.scope]
+      : currentApp?.bankExistingLoans?.coApplicants?.[target.index]?.[target.scope] || currentApp?.sections?.bankExistingLoans?.coApplicants?.[target.index]?.[target.scope];
+    
+    const bankId =
+      bankState?.applicationBankDetailsId ||
+      bankState?.ApplicationBankDetailsId ||
+      bankState?.applicationBankExistingLoanDetailsId ||
+      bankState?.ApplicationBankExistingLoanDetailsId ||
+      appDataBankState?.applicationBankDetailsId ||
+      appDataBankState?.ApplicationBankDetailsId ||
+      appDataBankState?.applicationBankExistingLoanDetailsId ||
+      appDataBankState?.ApplicationBankExistingLoanDetailsId;
+
+    fetchActiveLoansForBank(bankId);
   };
 
   const updateCardDetail = (cardIndex, field, value) => {
@@ -389,7 +457,7 @@ export default function BankExistingLoans() {
           title="Primary Bank"
           bank={form.applicant.primaryBank}
           onChange={(field, value) => updateApplicantBank('primaryBank', field, value)}
-          onViewLoans={() => setViewingLoansFor({ type: 'applicant', scope: 'primaryBank' })}
+          onViewLoans={() => handleOpenLoansModal({ type: 'applicant', scope: 'primaryBank' })}
           onViewCreditCards={() => setViewingCardsFor({ type: 'applicant', scope: 'primaryBank' })}
           bankOptions={bankOptions}
           branchOptions={branchOptions}
@@ -399,7 +467,7 @@ export default function BankExistingLoans() {
           title="Other Bank"
           bank={form.applicant.otherBank}
           onChange={(field, value) => updateApplicantBank('otherBank', field, value)}
-          onViewLoans={() => setViewingLoansFor({ type: 'applicant', scope: 'otherBank' })}
+          onViewLoans={() => handleOpenLoansModal({ type: 'applicant', scope: 'otherBank' })}
           onViewCreditCards={() => setViewingCardsFor({ type: 'applicant', scope: 'otherBank' })}
           bankOptions={bankOptions}
           branchOptions={branchOptions}
@@ -417,7 +485,7 @@ export default function BankExistingLoans() {
               title="Primary Bank"
               bank={coApp.primaryBank}
               onChange={(field, value) => updateCoApplicantBank(index, 'primaryBank', field, value)}
-              onViewLoans={() => setViewingLoansFor({ type: 'coApplicant', index, scope: 'primaryBank' })}
+              onViewLoans={() => handleOpenLoansModal({ type: 'coApplicant', index, scope: 'primaryBank' })}
               onViewCreditCards={() => setViewingCardsFor({ type: 'coApplicant', index, scope: 'primaryBank' })}
               bankOptions={bankOptions}
               branchOptions={branchOptions}
@@ -427,7 +495,7 @@ export default function BankExistingLoans() {
               title="Other Bank"
               bank={coApp.otherBank}
               onChange={(field, value) => updateCoApplicantBank(index, 'otherBank', field, value)}
-              onViewLoans={() => setViewingLoansFor({ type: 'coApplicant', index, scope: 'otherBank' })}
+              onViewLoans={() => handleOpenLoansModal({ type: 'coApplicant', index, scope: 'otherBank' })}
               onViewCreditCards={() => setViewingCardsFor({ type: 'coApplicant', index, scope: 'otherBank' })}
               bankOptions={bankOptions}
               branchOptions={branchOptions}
@@ -457,91 +525,129 @@ export default function BankExistingLoans() {
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #edf2f7' }}><Button variant="primary" onClick={saveCardDetails}>Done</Button></div>
       </Modal>
 
-      <Modal show={viewingLoansFor !== null} onHide={() => setViewingLoansFor(null)} title={`${viewingLoansFor?.scope === 'primaryBank' ? 'Primary Bank' : 'Other Bank'} - Active Loans Details`} size="lg">
-        {viewingLoansFor && (() => {
-          const bank = viewingLoansFor.type === 'applicant' 
-            ? form.applicant[viewingLoansFor.scope] 
-            : form.coApplicants[viewingLoansFor.index][viewingLoansFor.scope];
-          const loansCount = parseInt(bank.noOfActiveLoans) || 0;
-          const key = viewingLoansFor.type === 'applicant' 
-            ? `applicant-${viewingLoansFor.scope}`
-            : `coApplicant-${viewingLoansFor.index}-${viewingLoansFor.scope}`;
-          const activeLoansDetails = transientLoans[key] || [];
+      <Modal 
+        show={viewingLoansFor !== null} 
+        onHide={() => {
+          setViewingLoansFor(null);
+          setActiveLoansList([]);
+          setActiveLoansError(null);
+        }} 
+        title={`${viewingLoansFor?.type === 'coApplicant' ? `Co-Applicant ${(viewingLoansFor?.index || 0) + 1}` : 'Applicant'} - ${viewingLoansFor?.scope === 'primaryBank' ? 'Primary Bank' : 'Other Bank'} Active Loans`} 
+        size="lg"
+      >
+        {isLoadingActiveLoans ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 0', gap: '12px', color: '#64748b' }}>
+            <RefreshCw className="master-spin" size={24} style={{ color: '#0284c7' }} />
+            <span style={{ fontSize: '13px', fontWeight: 500 }}>Fetching active loan details from server...</span>
+          </div>
+        ) : activeLoansError ? (
+          <div style={{ padding: '24px', textAlign: 'center', color: '#b91c1c', background: '#fef2f2', borderRadius: '8px', border: '1px solid #fecaca' }}>
+            <AlertCircle size={24} style={{ margin: '0 auto 8px' }} />
+            <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>Error Loading Active Loans</div>
+            <div style={{ fontSize: '12px' }}>{activeLoansError}</div>
+          </div>
+        ) : activeLoansList.length === 0 ? (
+          <div style={{ padding: '32px 16px', textAlign: 'center', color: '#64748b', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+            <Files size={32} style={{ margin: '0 auto 8px', color: '#94a3b8' }} />
+            <div style={{ fontWeight: 600, color: '#334155', fontSize: '14px', marginBottom: '4px' }}>No Active Loan Records Found</div>
+            <div style={{ fontSize: '12px', maxWidth: '400px', margin: '0 auto' }}>
+              There are no active loan records linked with this bank account in the system.
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+            {activeLoansList.map((loan, i) => {
+              const loanType = loan.loanType ?? loan.LoanType ?? loan.typeOfLoan ?? loan.TypeOfLoan ?? '-';
+              const totalAmount = loan.totalLoanAmount ?? loan.TotalLoanAmount ?? loan.loanAmount ?? loan.LoanAmount;
+              const outstanding = loan.totalOutstanding ?? loan.TotalOutstanding ?? loan.outstandingAmount ?? loan.OutstandingAmount;
+              const emi = loan.emiAmount ?? loan.EmiAmount ?? loan.emi ?? loan.Emi;
+              const status = loan.status ?? loan.Status ?? 'Active';
+              const isStatusActive = String(status).trim().toLowerCase() === 'active';
 
-          return (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-              {Array.from({ length: loansCount }).map((_, i) => {
-                const loan = activeLoansDetails[i] || {};
-                return (
-                <div key={i} style={{ padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>Loan {i + 1}</div>
-                  
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, textTransform: 'uppercase' }}>Type Loan</span>
-                    <input 
-                      type="text"
-                      className="form-input compact-input"
-                      style={{ background: '#fff' }}
-                      placeholder="e.g. Personal / Business Loan"
-                      value={loan.purpose || ''}
-                      onChange={(e) => updateLoanDetail(i, 'purpose', e.target.value)}
-                    />
+              return (
+                <div 
+                  key={loan.applicationBankActiveLoanDetailsId ?? loan.ApplicationBankActiveLoanDetailsId ?? i} 
+                  style={{ 
+                    padding: '16px', 
+                    borderRadius: '8px', 
+                    border: '1px solid #e2e8f0', 
+                    background: '#f8fafc', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    gap: '14px',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px' }}>
+                    <span style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>
+                      Loan #{i + 1}
+                    </span>
+                    <span 
+                      style={{ 
+                        fontSize: '11px', 
+                        fontWeight: 600, 
+                        padding: '2px 10px', 
+                        borderRadius: '9999px',
+                        background: isStatusActive ? '#dcfce7' : '#f1f5f9',
+                        color: isStatusActive ? '#15803d' : '#475569',
+                        border: `1px solid ${isStatusActive ? '#bbf7d0' : '#e2e8f0'}`
+                      }}
+                    >
+                      {status}
+                    </span>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, textTransform: 'uppercase' }}>Total Loan Amount</span>
-                      <input 
-                        type="text"
-                        className="form-input compact-input"
-                        style={{ background: '#fff' }}
-                        placeholder="₹"
-                        value={loan.totalAmount || ''}
-                        onChange={(e) => updateLoanDetail(i, 'totalAmount', e.target.value.replace(/\D/g, ''))}
-                      />
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Loan Type
+                      </span>
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>
+                        {loanType}
+                      </span>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, textTransform: 'uppercase' }}>Total Outstanding</span>
-                      <input 
-                        type="text"
-                        className="form-input compact-input"
-                        style={{ background: '#fff' }}
-                        placeholder="₹"
-                        value={loan.pending || ''}
-                        onChange={(e) => updateLoanDetail(i, 'pending', e.target.value.replace(/\D/g, ''))}
-                      />
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        EMI Amount
+                      </span>
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f766e' }}>
+                        {emi !== undefined && emi !== null && emi !== '' 
+                          ? `₹ ${Number(emi).toLocaleString('en-IN')}` 
+                          : '-'}
+                      </span>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, textTransform: 'uppercase' }}>EMIs</span>
-                      <input
-                        type="text"
-                        className="form-input compact-input"
-                        style={{ background: '#fff' }}
-                        placeholder="₹"
-                        value={loan.emis || ''}
-                        onChange={(e) => updateLoanDetail(i, 'emis', e.target.value.replace(/\D/g, ''))}
-                      />
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Total Loan Amount
+                      </span>
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>
+                        {totalAmount !== undefined && totalAmount !== null && totalAmount !== '' 
+                          ? `₹ ${Number(totalAmount).toLocaleString('en-IN')}` 
+                          : '-'}
+                      </span>
                     </div>
-                  </div>
-                  
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, textTransform: 'uppercase' }}>Status</span>
-                    <Select
-                      value={loan.status || ''}
-                      onChange={(val) => updateLoanDetail(i, 'status', val)}
-                      options={[{value: 'Active', label: 'Active'}, {value: 'Closed', label: 'Closed'}]}
-                      placeholder="Select Status"
-                    />
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Total Outstanding
+                      </span>
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: '#b91c1c' }}>
+                        {outstanding !== undefined && outstanding !== null && outstanding !== '' 
+                          ? `₹ ${Number(outstanding).toLocaleString('en-IN')}` 
+                          : '-'}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                );
-              })}
-            </div>
-          );
-        })()}
+              );
+            })}
+          </div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #edf2f7' }}>
-          <Button variant="primary" onClick={() => setViewingLoansFor(null)}>
-            Done
+          <Button variant="primary" onClick={() => { setViewingLoansFor(null); setActiveLoansList([]); }}>
+            Close
           </Button>
         </div>
       </Modal>

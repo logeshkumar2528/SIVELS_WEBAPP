@@ -171,6 +171,18 @@ export const backOfficeService = {
     const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.BACK_OFFICE_BY_ID(id));
     return unwrapResponse(response);
   },
+
+  /* ==========================================
+     8. FOIR ELIGIBILITY CALCULATION APIs
+  ========================================== */
+
+  /**
+   * Retrieve all FOIR eligibility calculation records.
+   */
+  getFoirEligibilityCalculations: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.FOIR_CALCULATION);
+    return unwrapResponse(response);
+  },
 };
 
 export default backOfficeService;

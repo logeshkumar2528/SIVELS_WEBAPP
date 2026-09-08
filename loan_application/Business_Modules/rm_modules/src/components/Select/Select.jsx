@@ -18,7 +18,10 @@ export default function Select({
   const triggerRef = useRef(null);
 
   const selectedOption = options.find(
-    (opt) => opt.value === value || (value !== '' && value !== null && value !== undefined && String(opt.value) === String(value))
+    (opt) =>
+      opt.value === value ||
+      (value !== '' && value !== null && value !== undefined && String(opt.value) === String(value)) ||
+      (typeof value === 'string' && value.trim() !== '' && typeof opt.label === 'string' && opt.label.trim().toLowerCase() === value.trim().toLowerCase())
   );
 
   useEffect(() => {
