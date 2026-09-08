@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { ArrowLeft, BriefcaseBusiness, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { ArrowLeft, BriefcaseBusiness, Building2, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AgentCreate from '../Agent/AgentCreate';
 import RelationshipManagerCreate from '../RelationshipManager/RelationshipManagerCreate';
 import AMSCreate from '../AMS/AMSCreate';
+import BackOfficeCreate from '../BackOffice/BackOfficeCreate';
 import './CreateUser.css';
 
 const USER_TYPES = {
@@ -21,6 +22,11 @@ const USER_TYPES = {
     title: 'Create AMS',
     description: 'Build an AMS account with multiple district access.',
     icon: ShieldCheck,
+  },
+  backOffice: {
+    title: 'Create back office',
+    description: 'Set up a back office officer with the RM-style workflow.',
+    icon: Building2,
   },
 };
 
@@ -57,6 +63,8 @@ export default function CreateUser() {
 
     if (userType === 'agent') return <AgentCreate onSuccessRedirect="/dashboard" />;
     if (userType === 'rm') return <RelationshipManagerCreate />;
+    if (userType === 'ams') return <AMSCreate />;
+    if (userType === 'backOffice') return <BackOfficeCreate />;
     return <AMSCreate />;
   };
 
@@ -84,6 +92,7 @@ export default function CreateUser() {
           <option value="agent">Create agent</option>
           <option value="rm">Create relationship manager</option>
           <option value="ams">Create AMS</option>
+          <option value="backOffice">Create back office</option>
         </select>
       </section>
 

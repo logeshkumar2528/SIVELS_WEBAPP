@@ -120,7 +120,12 @@ export default function Dashboard() {
     {
       key: 'status',
       label: 'STATUS',
-      render: (row) => <StatusBadge status={row.status} />,
+      render: (row) => (
+        <StatusBadge
+          status={row.status}
+          label={row.status === 'Approved' ? 'Logged to HO' : undefined}
+        />
+      ),
     },
     {
       key: 'action',
