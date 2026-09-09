@@ -244,12 +244,51 @@ export default function CustomerVerification() {
   const EyeIcon = iconMap['Eye'] || iconMap['FileText'];
   const BadgeIndianRupeeIcon = iconMap['BadgeIndianRupee'] || iconMap['Wallet'];
   const FileCheckIcon = iconMap['FileCheck'] || iconMap['FileText'];
+  const XIcon = iconMap['X'] || iconMap['XCircle'];
 
   // 5. FOIR Calculation State: 'idle' | 'loading' | 'success' | 'empty' | 'error'
   const [foirState, setFoirState] = useState('idle');
   const [foirData, setFoirData] = useState(null);
   const [foirError, setFoirError] = useState(null);
   const [foirLoadingStage, setFoirLoadingStage] = useState(0);
+
+  // 6. FOIR Decision Remarks Modal State (Approve / Not Approve)
+  const [decisionModalOpen, setDecisionModalOpen] = useState(false);
+  const [decisionType, setDecisionType] = useState(null); // 'approve' | 'notApprove'
+  const [decisionRemarks, setDecisionRemarks] = useState('');
+  const [decisionError, setDecisionError] = useState('');
+  const [, setConfirmedDecision] = useState(null);
+
+  const handleOpenDecisionModal = (type) => {
+    setDecisionType(type);
+    setDecisionRemarks('');
+    setDecisionError('');
+    setDecisionModalOpen(true);
+  };
+
+  const handleCloseDecisionModal = () => {
+    setDecisionModalOpen(false);
+    setDecisionType(null);
+    setDecisionRemarks('');
+    setDecisionError('');
+  };
+
+  const handleConfirmDecision = () => {
+    const trimmed = decisionRemarks.trim();
+    if (!trimmed) {
+      setDecisionError('Remarks are required.');
+      return;
+    }
+    setConfirmedDecision({
+      type: decisionType,
+      remarks: trimmed,
+      date: new Date().toISOString(),
+    });
+    setDecisionModalOpen(false);
+    setDecisionType(null);
+    setDecisionRemarks('');
+    setDecisionError('');
+  };
 
   // 5a. Initial Load: Fetch latest FOIR calculation snapshot via GET /by-customer/{agentCustomerId}
   useEffect(() => {
@@ -1219,13 +1258,21 @@ export default function CustomerVerification() {
                       <strong>{isEligible ? 'Applicant appears eligible' : 'Additional review recommended'}</strong>
                       <small>Based on the returned income and obligation values</small>
                     </div>
-                    <div className="bo-cv-foir-result-highlight">
-                      <span>Loan eligibility</span>
-                      <strong className={isEligible ? 'is-positive' : 'is-negative'}>{formatFoirCurrency(loanEligibilityAmount)}</strong>
-                    </div>
-                    <div className="bo-cv-foir-result-highlight">
-                      <span>Actual FOIR</span>
-                      <strong>{formatFoirCurrency(actualFOIR)}</strong>
+                    <div className="bo-cv-foir-result-actions">
+                      <button
+                        type="button"
+                        className="bo-cv-foir-btn-approve"
+                        onClick={() => handleOpenDecisionModal('approve')}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        className="bo-cv-foir-btn-not-approve"
+                        onClick={() => handleOpenDecisionModal('notApprove')}
+                      >
+                        Not Approve
+                      </button>
                     </div>
                   </div>
 
@@ -1262,19 +1309,13 @@ export default function CustomerVerification() {
                       </strong>
                     </div>
 
-                    {/* 6. Actual FOIR */}
-                    <div className="bo-cv-foir-cell">
-                      <span className="bo-cv-foir-cell-lbl">Actual FOIR</span>
-                      <strong className="bo-cv-foir-cell-val">{formatFoirCurrency(actualFOIR)}</strong>
-                    </div>
-
-                    {/* 7. Requested Loan Amount */}
+                    {/* 6. Requested Loan Amount */}
                     <div className="bo-cv-foir-cell">
                       <span className="bo-cv-foir-cell-lbl">Requested Loan Amount</span>
                       <strong className="bo-cv-foir-cell-val">{formatFoirCurrency(requestedLoanAmount)}</strong>
                     </div>
 
-                    {/* 8. Proposed Tenure (Months) */}
+                    {/* 7. Proposed Tenure (Months) */}
                     <div className="bo-cv-foir-cell">
                       <span className="bo-cv-foir-cell-lbl">Proposed Tenure (Months)</span>
                       <strong className="bo-cv-foir-cell-val">
@@ -1282,23 +1323,7 @@ export default function CustomerVerification() {
                       </strong>
                     </div>
 
-                    {/* 9. EMI Factor */}
-                    <div className="bo-cv-foir-cell">
-                      <span className="bo-cv-foir-cell-lbl">EMI Factor</span>
-                      <strong className="bo-cv-foir-cell-val">
-                        {emiFactor !== undefined && emiFactor !== null && emiFactor !== '' ? Number(emiFactor).toLocaleString('en-IN', { maximumFractionDigits: 4 }) : '—'}
-                      </strong>
-                    </div>
-
-                    {/* 10. Loan Eligibility Amount */}
-                    <div className="bo-cv-foir-cell">
-                      <span className="bo-cv-foir-cell-lbl">Loan Eligibility Amount</span>
-                      <strong className={`bo-cv-foir-cell-val ${isEligible ? 'text-success' : 'text-danger'}`}>
-                        {formatFoirCurrency(loanEligibilityAmount)}
-                      </strong>
-                    </div>
-
-                    {/* 11. Status */}
+                    {/* 8. Status */}
                     <div className="bo-cv-foir-cell">
                       <span className="bo-cv-foir-cell-lbl">Status</span>
                       <span className={`bo-cv-foir-status-pill ${isEligible ? 'is-eligible' : 'is-not-eligible'}`}>
@@ -1321,6 +1346,90 @@ export default function CustomerVerification() {
           customerData={verificationData}
           onClose={handleCloseModal}
         />
+      )}
+
+      {/* ── FOIR Decision Remarks Modal (Approve / Not Approve) ── */}
+      {decisionModalOpen && (
+        <div
+          className="bo-cv-decision-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bo-cv-decision-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              handleCloseDecisionModal();
+            }
+          }}
+        >
+          <div className="bo-cv-decision-modal-card">
+            <div className="bo-cv-decision-modal-header">
+              <div className="bo-cv-decision-modal-title-group">
+                <h3 id="bo-cv-decision-modal-title" className="bo-cv-decision-modal-title">
+                  {decisionType === 'approve' ? 'Approve FOIR' : 'Not Approve FOIR'}
+                </h3>
+                <p className="bo-cv-decision-modal-subtitle">
+                  Add remarks before confirming this decision.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="bo-cv-decision-modal-close"
+                onClick={handleCloseDecisionModal}
+                aria-label="Close modal"
+              >
+                {XIcon ? <XIcon size={16} /> : <span>×</span>}
+              </button>
+            </div>
+
+            <div className="bo-cv-decision-modal-body">
+              <label htmlFor="bo-cv-decision-remarks" className="bo-cv-decision-label">
+                REMARKS
+              </label>
+              <textarea
+                id="bo-cv-decision-remarks"
+                className={`bo-cv-decision-textarea ${decisionError ? 'has-error' : ''}`}
+                rows={4}
+                value={decisionRemarks}
+                onChange={(e) => {
+                  setDecisionRemarks(e.target.value);
+                  if (decisionError && e.target.value.trim()) {
+                    setDecisionError('');
+                  }
+                }}
+                placeholder={
+                  decisionType === 'approve'
+                    ? 'Enter approval remarks...'
+                    : 'Enter reason / remarks...'
+                }
+                autoFocus
+              />
+              {decisionError && (
+                <span className="bo-cv-decision-error-msg">{decisionError}</span>
+              )}
+            </div>
+
+            <div className="bo-cv-decision-modal-footer">
+              <button
+                type="button"
+                className="bo-cv-decision-btn-cancel"
+                onClick={handleCloseDecisionModal}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={
+                  decisionType === 'approve'
+                    ? 'bo-cv-decision-btn-confirm-approve'
+                    : 'bo-cv-decision-btn-confirm-reject'
+                }
+                onClick={handleConfirmDecision}
+              >
+                {decisionType === 'approve' ? 'Confirm Approve' : 'Confirm Not Approve'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
