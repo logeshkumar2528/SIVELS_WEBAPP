@@ -38,7 +38,8 @@ function isObsoleteMock(val) {
 }
 
 export default function PdfView() {
-  const { applicationId } = useParams();
+  const params = useParams();
+  const applicationId = params.applicationId || params.customerId;
   const navigate = useNavigate();
   const location = useLocation();
   const { applications, getApplication, loadApplicationFromBackend } = useApplicationDraftStore();
@@ -779,6 +780,29 @@ export default function PdfView() {
           d.fileName?.toLowerCase().includes('photo'))
     ) || {};
 
+  const handleBack = () => {
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo);
+      return;
+    }
+    if (location.state?.closeTo) {
+      navigate(location.state.closeTo);
+      return;
+    }
+    if (location.state?.backTo) {
+      navigate(location.state.backTo);
+      return;
+    }
+
+    if (location.pathname.startsWith('/backoffice')) {
+      const targetCustomerId = params.customerId || params.applicationId || applicationId || location.state?.customerId;
+      navigate(`/backoffice/customers/${targetCustomerId}/verify`);
+      return;
+    }
+
+    navigate(ROUTES.SUBMISSION_HISTORY);
+  };
+
   return (
     <div className="pdf-view-wrapper">
       <ErrorPopup
@@ -790,8 +814,11 @@ export default function PdfView() {
         onClose={() => setErrorPopup(null)}
       />
       <div className="pdf-controls">
-        <Button variant="secondary" onClick={() => navigate(location.state?.closeTo || ROUTES.SUBMISSION_HISTORY)}>
-          {location.state?.closeTo ? 'Close PDF' : 'Back'}
+        <Button
+          variant="secondary"
+          onClick={handleBack}
+        >
+          Back to Application
         </Button>
         <Button onClick={handleDownloadPdf} disabled={isGeneratingPdf}>
           {isGeneratingPdf ? 'Generating PDF...' : 'Download PDF'}

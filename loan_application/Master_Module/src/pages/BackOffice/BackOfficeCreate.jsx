@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Building2, LoaderCircle, MapPin, Save, UserRound, Landmark } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -10,12 +10,15 @@ import {
   uploadBackOfficeAadhaar,
   uploadBackOfficePan,
   uploadBackOfficeProfileImage,
+  getBackOfficeProfileImageBlob,
 } from '../../api/backOfficeApi';
 import { masterService } from '../../../../Core/src/services/masterService';
 import { getBankBranches } from '../../api/masters/bankBranchApi';
 import { getCurrentUserId } from '../../utils/authHelper';
 import { generateUserCode } from '../../utils/codeGenerator';
-import { DocumentPreviewModal, DocumentUploadCard } from '../../components/DocumentUpload/DocumentUploadSection';
+import { DocumentPreviewModal, DocumentUploadCard, fetchDocumentBlobUrl, isPdfUrl } from '../../components/DocumentUpload/DocumentUploadSection';
+import { getProfileImageUrl } from '../../utils/profileImageHelper';
+import { getFileUrl, isPdfFile, getAadhaarPath, getPanPath, getProfilePath, getDocumentUrl } from '../Dashboard/Dashboard';
 import '../RelationshipManager/RelationshipManagerCreate.css';
 
 const createInitialForm = () => ({
@@ -80,7 +83,33 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
   const [profileImage, setProfileImage] = useState(null);
   const [profilePreviewUrl, setProfilePreviewUrl] = useState(null);
 
+  // Existing document states (for Edit Mode)
+  const [existingAadhaarUrl, setExistingAadhaarUrl] = useState(null);
+  const [existingAadhaarFileName, setExistingAadhaarFileName] = useState(null);
+  const [isExistingAadhaarPdf, setIsExistingAadhaarPdf] = useState(false);
+
+  const [existingPanUrl, setExistingPanUrl] = useState(null);
+  const [existingPanFileName, setExistingPanFileName] = useState(null);
+  const [isExistingPanPdf, setIsExistingPanPdf] = useState(false);
+
+  const [existingProfileUrl, setExistingProfileUrl] = useState(null);
+
   const [previewDoc, setPreviewDoc] = useState(null);
+  const blobUrlsRef = useRef([]);
+
+  useEffect(() => {
+    return () => {
+      blobUrlsRef.current.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // ignore
+        }
+      });
+      blobUrlsRef.current = [];
+    };
+  }, []);
+
 
   useEffect(() => {
     let active = true;
@@ -149,6 +178,29 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
           ifscCode: record.ifscCode || record.IFSCCode || record.IfscCode || '',
         });
         setIsActive(record.isActive !== false && record.IsActive !== false);
+
+        const aadhaarPath = getAadhaarPath(record) || record.aadhaarDocumentPath || record.aadhaarPath || record.aadhaarCardPath || '';
+        const panPath = getPanPath(record) || record.panCardPath || record.panDocumentPath || record.panPath || '';
+        const profilePath = getProfilePath(record) || record.profileImagePath || record.profilePath || '';
+
+        if (aadhaarPath) {
+          const url = getDocumentUrl('BackOffice', editBackOfficeId, 'aadhar', aadhaarPath);
+          setExistingAadhaarUrl(url);
+          setExistingAadhaarFileName(aadhaarPath.split('/').pop().split('\\').pop() || 'Aadhaar Card');
+          setIsExistingAadhaarPdf(isPdfUrl(aadhaarPath));
+        }
+
+        if (panPath) {
+          const url = getDocumentUrl('BackOffice', editBackOfficeId, 'pan', panPath);
+          setExistingPanUrl(url);
+          setExistingPanFileName(panPath.split('/').pop().split('\\').pop() || 'PAN Card');
+          setIsExistingPanPdf(isPdfUrl(panPath));
+        }
+
+        if (editBackOfficeId) {
+          const directProfileUrl = getProfileImageUrl('BackOffice', editBackOfficeId);
+          setExistingProfileUrl(directProfileUrl);
+        }
       } catch (err) {
         if (active) {
           setError(err.response?.data?.message || err.message || 'Unable to load back office details.');
@@ -163,6 +215,66 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
       active = false;
     };
   }, [editBackOfficeId, isEditMode]);
+
+  const handlePreviewExisting = async (title, url, isPdfInitial = false) => {
+    const isProfile = String(title || '').toLowerCase().includes('profile') || String(title || '').toLowerCase().includes('photo') || String(title || '').toLowerCase().includes('image');
+
+    const effectiveUrl = isProfile && editBackOfficeId ? getProfileImageUrl('BackOffice', editBackOfficeId) : url;
+
+    if (!effectiveUrl) return;
+
+    if (isProfile) {
+      setPreviewDoc({
+        name: title,
+        title,
+        url: effectiveUrl,
+        isPdf: false,
+        loading: false,
+      });
+      return;
+    }
+
+    setPreviewDoc({
+      name: title,
+      title,
+      url: effectiveUrl,
+      isPdf: isPdfInitial,
+      loading: true,
+    });
+
+    try {
+      const blobResult = await fetchDocumentBlobUrl(effectiveUrl);
+      if (blobResult?.url) {
+        if (blobResult.isBlob) {
+          blobUrlsRef.current.push(blobResult.url);
+        }
+        setPreviewDoc({
+          name: title,
+          title,
+          url: blobResult.url,
+          isPdf: blobResult.isPdf,
+          loading: false,
+        });
+      } else {
+        setPreviewDoc({
+          name: title,
+          title,
+          url: effectiveUrl,
+          isPdf: isPdfInitial,
+          loading: false,
+        });
+      }
+    } catch {
+      setPreviewDoc({
+        name: title,
+        title,
+        url: effectiveUrl,
+        isPdf: isPdfInitial,
+        loading: false,
+      });
+    }
+  };
+
 
   const selectedStateId = String(form.stateId || '');
   const visibleCities = useMemo(
@@ -518,14 +630,18 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
             <div className="doc-upload-grid">
               <DocumentUploadCard
                 title="Aadhaar Card"
-                required
+                required={!isEditMode && !existingAadhaarUrl}
                 subtitle="Upload clear image of Aadhaar Card"
                 note="JPG, PNG or PDF (Max. 10MB)"
                 accept=".pdf,.jpg,.jpeg,.png"
                 icon="document"
                 file={aadhaarFile}
-                previewUrl={aadhaarPreviewUrl}
-                isPdf={isAadhaarPdf}
+                previewUrl={aadhaarPreviewUrl || existingAadhaarUrl}
+                isPdf={aadhaarFile ? isAadhaarPdf : isExistingAadhaarPdf}
+                isExisting={Boolean(!aadhaarFile && existingAadhaarUrl)}
+                existingUrl={existingAadhaarUrl}
+                existingFileName={existingAadhaarFileName}
+                onViewExisting={() => handlePreviewExisting('Aadhaar Card', existingAadhaarUrl, isExistingAadhaarPdf)}
                 onUpload={(e) => {
                   const file = e.target.files?.[0];
                   if (file) handleFileUpload(setAadhaarFile, setAadhaarPreviewUrl, setIsAadhaarPdf, file, 10);
@@ -541,14 +657,18 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
 
               <DocumentUploadCard
                 title="PAN Card"
-                required
+                required={!isEditMode && !existingPanUrl}
                 subtitle="Upload clear image of PAN Card"
                 note="JPG, PNG or PDF (Max. 10MB)"
                 accept=".pdf,.jpg,.jpeg,.png"
                 icon="document"
                 file={panFile}
-                previewUrl={panPreviewUrl}
-                isPdf={isPanPdf}
+                previewUrl={panPreviewUrl || existingPanUrl}
+                isPdf={panFile ? isPanPdf : isExistingPanPdf}
+                isExisting={Boolean(!panFile && existingPanUrl)}
+                existingUrl={existingPanUrl}
+                existingFileName={existingPanFileName}
+                onViewExisting={() => handlePreviewExisting('PAN Card', existingPanUrl, isExistingPanPdf)}
                 onUpload={(e) => {
                   const file = e.target.files?.[0];
                   if (file) handleFileUpload(setPanFile, setPanPreviewUrl, setIsPanPdf, file, 10);
@@ -564,14 +684,18 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
 
               <DocumentUploadCard
                 title="Profile Image"
-                required
+                required={!isEditMode && !existingProfileUrl}
                 subtitle="Upload clear image of Profile Image"
                 note="JPG, PNG (Max. 5MB)"
                 accept=".jpg,.jpeg,.png"
                 icon="camera"
                 file={profileImage}
-                previewUrl={profilePreviewUrl}
+                previewUrl={profilePreviewUrl || existingProfileUrl}
                 isProfile
+                isExisting={Boolean(!profileImage && existingProfileUrl)}
+                existingUrl={existingProfileUrl}
+                existingFileName="Profile Photograph"
+                onViewExisting={() => handlePreviewExisting('Profile Image', existingProfileUrl, false)}
                 onUpload={(e) => {
                   const file = e.target.files?.[0];
                   if (file) handleFileUpload(setProfileImage, setProfilePreviewUrl, () => {}, file, 5);

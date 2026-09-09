@@ -5,8 +5,9 @@
  * RM Application Wizard steps in the Back Office workspace.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import iconMap from '../../config/iconMap';
+import backOfficeService from '../../api/backOfficeService';
 import './VerificationStepModal.css';
 
 function formatCurrency(amount) {
@@ -25,9 +26,100 @@ export default function VerificationStepModal({
   const ShieldCheckIcon = iconMap['ShieldCheck'];
   const FileTextIcon = iconMap['FileText'];
   const EyeIcon = iconMap['Eye'];
+  const ExternalLinkIcon = iconMap['ExternalLink'];
+  const UserIcon = iconMap['User'] || iconMap['UserRound'];
+  const LandmarkIcon = iconMap['Landmark'] || iconMap['Building2'];
+  const CreditCardIcon = iconMap['CreditCard'];
+  const AlertCircleIcon = iconMap['AlertCircle'] || iconMap['AlertTriangle'];
+  const IdCardIcon = iconMap['UserCheck'] || iconMap['ShieldCheck'] || iconMap['FileText'];
 
   // Local simulated PAN verification state for Step 2
   const [panState, setPanState] = useState('verified'); // 'idle' | 'verifying' | 'verified'
+
+  // Document preview modal & download states for Step 4 (KYC Documents)
+  const [previewModalDoc, setPreviewModalDoc] = useState(null);
+  const [loadingDocId, setLoadingDocId] = useState(null);
+  const [docError, setDocError] = useState(null);
+  const blobUrlsRef = useRef([]);
+
+  useEffect(() => {
+    return () => {
+      blobUrlsRef.current.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // ignore
+        }
+      });
+      blobUrlsRef.current = [];
+    };
+  }, []);
+
+  const handleCloseDocPreview = () => {
+    if (previewModalDoc?.url) {
+      try {
+        URL.revokeObjectURL(previewModalDoc.url);
+      } catch {
+        // ignore
+      }
+    }
+    setPreviewModalDoc(null);
+  };
+
+  const isPdfFile = (fileName = '') => {
+    return /\.pdf$/i.test(String(fileName));
+  };
+
+  const getDocIcon = (doc) => {
+    const name = (doc?.name || doc?.documentTypeName || doc?.fileName || '').toLowerCase();
+    if (name.includes('photo') || name.includes('image') || name.includes('picture')) return UserIcon || FileTextIcon;
+    if (name.includes('pan') || name.includes('aadhaar') || name.includes('aadhar') || name.includes('id') || name.includes('card')) return IdCardIcon || ShieldCheckIcon || FileTextIcon;
+    if (name.includes('bank') || name.includes('statement') || name.includes('passbook')) return LandmarkIcon || CreditCardIcon || FileTextIcon;
+    return FileTextIcon;
+  };
+
+  const handleViewDocument = async (doc) => {
+    const docId = doc.agentCustomerDocumentId || doc.id;
+    if (!docId) {
+      setDocError('Document identifier not available.');
+      return;
+    }
+
+    setDocError(null);
+    setLoadingDocId(docId);
+
+    try {
+      const blobData = await backOfficeService.downloadCustomerDocument(docId);
+
+      const fileName = doc.fileName || doc.name || 'document';
+      let mimeType = blobData.type || 'application/octet-stream';
+      if (/\.(jpg|jpeg)$/i.test(fileName)) mimeType = 'image/jpeg';
+      else if (/\.png$/i.test(fileName)) mimeType = 'image/png';
+      else if (/\.webp$/i.test(fileName)) mimeType = 'image/webp';
+      else if (/\.pdf$/i.test(fileName)) mimeType = 'application/pdf';
+      else if (/\.gif$/i.test(fileName)) mimeType = 'image/gif';
+
+      const typedBlob = new Blob([blobData], { type: mimeType });
+      const objectUrl = window.URL.createObjectURL(typedBlob);
+      blobUrlsRef.current.push(objectUrl);
+
+      const isPdf = mimeType === 'application/pdf' || isPdfFile(fileName);
+
+      setPreviewModalDoc({
+        id: docId,
+        name: doc.name || doc.documentTypeName || 'Customer Document',
+        fileName: doc.fileName || '',
+        url: objectUrl,
+        isPdf,
+        isImage: !isPdf,
+      });
+    } catch (err) {
+      console.error('Failed to download/view customer document:', err);
+      setDocError('Unable to load document preview. Please try again.');
+    } finally {
+      setLoadingDocId(null);
+    }
+  };
 
   if (!stepDefinition || !customerData) return null;
 
@@ -265,32 +357,70 @@ export default function VerificationStepModal({
       // ----------------------------------------------------
       case 4: {
         const kyc = customerData.kycDocuments || {};
-        const docs = kyc.documents || [];
+        const docs = Array.isArray(kyc.documents) ? kyc.documents : [];
         return (
           <div className="bo-modal-step-body">
             <div className="bo-modal-info-banner">
               <span className="bo-banner-kicker">KYC PROOFS &amp; BIOMETRIC VERIFICATION</span>
-              <p>Mode: <strong>{kyc.verificationMode || 'e-KYC Inspection'}</strong>. Inspect uploaded government ID proofs.</p>
+              <p>Mode: <strong>{kyc.verificationMode || 'e-KYC Inspection'}</strong>. Inspect uploaded government ID proofs and applicant documents.</p>
             </div>
+
+            {docError && (
+              <div className="bo-doc-error-banner" role="alert">
+                {AlertCircleIcon && <AlertCircleIcon size={16} />}
+                <span>{docError}</span>
+              </div>
+            )}
 
             {docs.length > 0 ? (
               <div className="bo-kyc-docs-grid">
-                {docs.map((doc) => (
-                  <div key={doc.id} className="bo-kyc-doc-card">
-                    <div className="bo-kyc-thumb-preview">
-                      {FileTextIcon && <FileTextIcon size={24} className="bo-doc-icon" />}
-                      <span className="bo-doc-type-label">{doc.name}</span>
-                    </div>
-                    <div className="bo-kyc-doc-details">
-                      <h6>{doc.name}</h6>
-                      <small>{doc.type} &bull; {doc.documentNumber}</small>
-                      <div className="bo-doc-meta-row">
-                        <span className="bo-doc-status-badge is-verified">✓ {doc.verificationStatus}</span>
-                        <span className="bo-doc-size">{doc.fileSize}</span>
+                {docs.map((doc, idx) => {
+                  const docId = doc.agentCustomerDocumentId || doc.id || idx;
+                  const isDocLoading = loadingDocId === docId;
+                  const DocIcon = getDocIcon(doc);
+                  const isPdf = isPdfFile(doc.fileName || doc.name);
+
+                  return (
+                    <div key={docId} className="bo-kyc-doc-card">
+                      <div className="bo-kyc-thumb-preview">
+                        <DocIcon size={24} className="bo-doc-icon" />
+                        <span className="bo-doc-type-label">{isPdf ? 'PDF' : (doc.name || 'DOC')}</span>
+                      </div>
+                      <div className="bo-kyc-doc-details">
+                        <h6>{doc.name || 'Document'}</h6>
+                        <small title={doc.fileName || doc.documentNumber || ''}>
+                          {doc.fileName ? doc.fileName : (doc.documentNumber && doc.documentNumber !== '—' ? doc.documentNumber : (doc.type || 'Uploaded'))}
+                        </small>
+                        <div className="bo-doc-meta-row">
+                          <span className="bo-doc-status-badge is-verified">✓ {doc.verificationStatus || 'Uploaded'}</span>
+                          {doc.agentCustomerDocumentId || doc.id ? (
+                            <button
+                              type="button"
+                              className="bo-doc-view-btn"
+                              onClick={() => handleViewDocument(doc)}
+                              disabled={isDocLoading}
+                              title="View uploaded document"
+                            >
+                              {isDocLoading ? (
+                                <>
+                                  <span className="bo-doc-btn-spinner" />
+                                  <span>Loading...</span>
+                                </>
+                              ) : (
+                                <>
+                                  {EyeIcon && <EyeIcon size={13} />}
+                                  <span>View</span>
+                                </>
+                              )}
+                            </button>
+                          ) : (
+                            <span className="bo-doc-size">{doc.fileSize || 'Uploaded'}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="bo-empty-step-state">
@@ -805,6 +935,81 @@ export default function VerificationStepModal({
           </button>
         </div>
       </div>
+
+      {/* Lightbox / Full Document Preview Modal */}
+      {previewModalDoc && (
+        <div className="bo-doc-preview-backdrop" onClick={handleCloseDocPreview}>
+          <div
+            className="bo-doc-preview-dialog"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bo-doc-preview-header">
+              <div className="bo-doc-preview-header-info">
+                <span className="bo-doc-preview-title">{previewModalDoc.name}</span>
+                {previewModalDoc.fileName && (
+                  <span className="bo-doc-preview-filename">{previewModalDoc.fileName}</span>
+                )}
+              </div>
+              <div className="bo-doc-preview-header-actions">
+                {previewModalDoc.url && (
+                  <a
+                    href={previewModalDoc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bo-doc-preview-ext-link"
+                    title="Open in new tab"
+                  >
+                    {ExternalLinkIcon ? <ExternalLinkIcon size={14} /> : <span>↗</span>}
+                    <span>Open in New Tab</span>
+                  </a>
+                )}
+                <button
+                  type="button"
+                  className="bo-doc-preview-close-btn"
+                  onClick={handleCloseDocPreview}
+                  aria-label="Close preview"
+                >
+                  {XIcon ? <XIcon size={18} /> : <span>×</span>}
+                </button>
+              </div>
+            </div>
+
+            <div className="bo-doc-preview-body">
+              {previewModalDoc.isPdf ? (
+                <div className="bo-doc-pdf-container">
+                  <iframe
+                    src={previewModalDoc.url}
+                    title={previewModalDoc.name || 'PDF Document'}
+                    className="bo-doc-preview-iframe"
+                  />
+                  <div className="bo-doc-pdf-fallback">
+                    <span>Trouble viewing PDF?</span>
+                    <a
+                      href={previewModalDoc.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bo-doc-preview-ext-link"
+                    >
+                      {ExternalLinkIcon ? <ExternalLinkIcon size={13} /> : <span>↗</span>}
+                      <span>Open PDF in New Tab</span>
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <div className="bo-doc-img-container">
+                  <img
+                    src={previewModalDoc.url}
+                    alt={previewModalDoc.name || 'Document'}
+                    className="bo-doc-preview-img"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

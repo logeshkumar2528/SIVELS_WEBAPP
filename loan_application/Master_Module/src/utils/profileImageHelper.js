@@ -6,6 +6,11 @@
 
 export {
   getProfileImageUrl,
+  getProfileImageUpdateUrl,
+  updateProfileImage,
+  buildFileUrl,
+  getRmDocumentDownloadUrl,
+  getDocumentUrl,
   getInitials,
   isValidId,
   default,

@@ -218,53 +218,74 @@ export function mapApplicationFullDetails(response, extraDocs = []) {
     raw: addressList,
   };
 
-  // STEP 4: KYC Documents (Combined from ApplicationFullDetails + AgentCustomerDocument)
+  // STEP 4: KYC Documents (Authentic Customer Documents from AgentCustomerDocument / ApplicationFullDetails)
   const combinedDocs = [];
-  const seenDocKeys = new Set();
+  const seenDocIds = new Set();
 
-  // 1. Add from kycList
-  kycList.forEach((doc, idx) => {
-    const docId = String(getValue(doc, 'applicationKYCDocumentId', 'ApplicationKYCDocumentId') || `KYC_${idx + 1}`);
-    const name = getValue(doc, 'documentTypeName', 'DocumentTypeName') || (doc.panCardNo ? 'PAN Card' : doc.aadhaarLastFourDigits ? 'Aadhaar Card' : `KYC Document ${idx + 1}`);
-    const docNumber = getValue(doc, 'documentNumber', 'DocumentNumber') || doc.panCardNo || (doc.aadhaarLastFourDigits ? `XXXX-XXXX-${doc.aadhaarLastFourDigits}` : '—');
+  const sourceDocs = (Array.isArray(extraDocs) && extraDocs.length > 0)
+    ? extraDocs
+    : (Array.isArray(response?.documents) && response.documents.length > 0
+      ? response.documents
+      : []);
 
-    seenDocKeys.add(name.toLowerCase());
+  // 1. Process authentic uploaded documents from AgentCustomerDocument first
+  sourceDocs.forEach((doc, idx) => {
+    if (!doc || doc.isActive === false) return;
+    const docId = doc.agentCustomerDocumentId ?? doc.id;
+    const key = docId ? `id_${docId}` : `idx_${idx}_${doc.fileName || ''}`;
+    if (seenDocIds.has(key)) return;
+    seenDocIds.add(key);
+
+    const docName =
+      doc.documentTypeName ||
+      doc.documentType ||
+      (doc.documentTypeId === 1 ? 'Aadhaar Card' :
+       doc.documentTypeId === 2 ? 'PAN Card' :
+       doc.documentTypeId === 3 ? 'Bank Statement' :
+       doc.documentTypeId === 4 ? 'Salary Slip' :
+       doc.documentTypeId === 5 ? 'ITR / Form 16' :
+       doc.documentTypeId === 6 ? 'Photo' :
+       doc.fileName || `Document ${idx + 1}`);
+
     combinedDocs.push({
-      id: docId,
-      name,
-      type: 'Identity & Address Proof',
-      documentNumber: docNumber,
+      id: docId || `DOC_${idx + 1}`,
+      agentCustomerDocumentId: docId || null,
+      agentCustomerId: doc.agentCustomerId || agentCustomerId,
+      documentTypeId: doc.documentTypeId || null,
+      name: docName,
+      fileName: doc.fileName || '',
+      filePath: doc.filePath || '',
+      type: docName,
+      documentNumber: doc.documentNumber || (doc.panCardNo ? doc.panCardNo : (doc.aadhaarLastFourDigits ? `XXXX-XXXX-${doc.aadhaarLastFourDigits}` : '—')),
       uploadStatus: 'Uploaded',
-      verificationStatus: getValue(doc, 'verificationId', 'VerificationId') === 1 ? 'Verified' : 'Pending',
-      fileSize: '1.5 MB',
-      uploadedOn: appliedDate ? String(appliedDate).slice(0, 10) : 'Not Available',
+      verificationStatus: doc.verificationStatus || 'Uploaded',
+      fileSize: doc.fileSize || 'Uploaded',
+      uploadedOn: doc.createdAt ? String(doc.createdAt).slice(0, 10) : (appliedDate ? String(appliedDate).slice(0, 10) : 'Not Available'),
       raw: doc,
     });
   });
 
-  // 2. Add from extraDocs (if fetched from AgentCustomerDocument)
-  if (Array.isArray(extraDocs)) {
-    extraDocs.forEach((doc, idx) => {
-      const docId = String(doc.agentCustomerDocumentId || doc.id || `DOC_${idx + 1}`);
-      const name = doc.documentTypeName || doc.documentType || doc.fileName || `Document ${idx + 1}`;
-      if (!seenDocKeys.has(name.toLowerCase())) {
-        seenDocKeys.add(name.toLowerCase());
-        combinedDocs.push({
-          id: docId,
-          name,
-          type: 'Identity & Address Proof',
-          documentNumber: doc.documentNumber || '—',
-          uploadStatus: 'Uploaded',
-          verificationStatus: doc.verificationStatus || 'Uploaded',
-          fileSize: doc.fileSize || '1.2 MB',
-          uploadedOn: doc.createdAt ? String(doc.createdAt).slice(0, 10) : (appliedDate ? String(appliedDate).slice(0, 10) : 'Not Available'),
-          raw: doc,
-        });
-      }
+  // 2. If no uploaded documents found, fallback to kycList metadata from ApplicationFullDetails
+  if (combinedDocs.length === 0 && Array.isArray(kycList) && kycList.length > 0) {
+    kycList.forEach((doc, idx) => {
+      const docId = String(getValue(doc, 'applicationKYCDocumentId', 'ApplicationKYCDocumentId') || `KYC_${idx + 1}`);
+      const name = getValue(doc, 'documentTypeName', 'DocumentTypeName') || (doc.panCardNo ? 'PAN Card' : doc.aadhaarLastFourDigits ? 'Aadhaar Card' : `KYC Document ${idx + 1}`);
+      const docNumber = getValue(doc, 'documentNumber', 'DocumentNumber') || doc.panCardNo || (doc.aadhaarLastFourDigits ? `XXXX-XXXX-${doc.aadhaarLastFourDigits}` : '—');
+      combinedDocs.push({
+        id: docId,
+        name,
+        type: 'Identity & Address Proof',
+        documentNumber: docNumber,
+        uploadStatus: 'Uploaded',
+        verificationStatus: getValue(doc, 'verificationId', 'VerificationId') === 1 ? 'Verified' : 'Pending',
+        fileSize: 'Uploaded',
+        uploadedOn: appliedDate ? String(appliedDate).slice(0, 10) : 'Not Available',
+        raw: doc,
+      });
     });
   }
 
-  // Fallback: If no document objects exist, but PAN/Aadhaar strings are present
+  // Fallback: If still no documents exist, but PAN/Aadhaar strings are present
   if (combinedDocs.length === 0) {
     if (panNumber) {
       combinedDocs.push({
@@ -483,6 +504,7 @@ export function mapApplicationFullDetails(response, extraDocs = []) {
 
   return {
     customerId: String(agentCustomerId),
+    agentCustomerId: agentCustomerId ? Number(agentCustomerId) : null,
     applicationId: `APP-${agentCustomerId}`,
     customerName,
     mobile: mobile ? String(mobile).replace(/\D/g, '').slice(-10) : 'Not Available',

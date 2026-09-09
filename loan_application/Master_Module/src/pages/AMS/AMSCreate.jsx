@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CheckSquare2, Landmark, MapPin, MapPinned, Save, ShieldCheck, UserRound, Building2, LoaderCircle } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -17,7 +17,9 @@ import { getBankBranches } from '../../api/masters/bankBranchApi';
 import { masterService } from '../../../../Core/src/services/masterService';
 import { getCurrentUserId } from '../../utils/authHelper';
 import { generateUserCode } from '../../utils/codeGenerator';
-import { DocumentUploadCard, DocumentPreviewModal } from '../../components/DocumentUpload/DocumentUploadSection';
+import { DocumentUploadCard, DocumentPreviewModal, fetchDocumentBlobUrl, isPdfUrl } from '../../components/DocumentUpload/DocumentUploadSection';
+import { getProfileImageUrl } from '../../utils/profileImageHelper';
+import { getFileUrl, isPdfFile, getAadhaarPath, getPanPath, getDocumentUrl } from '../Dashboard/Dashboard';
 import '../RelationshipManager/RelationshipManagerCreate.css';
 import './AMSCreate.css';
 
@@ -110,7 +112,33 @@ export default function AMSCreate() {
   const [profileImage, setProfileImage] = useState(null);
   const [profilePreviewUrl, setProfilePreviewUrl] = useState(null);
 
+  // Existing document states (for Edit Mode)
+  const [existingAadhaarUrl, setExistingAadhaarUrl] = useState(null);
+  const [existingAadhaarFileName, setExistingAadhaarFileName] = useState(null);
+  const [isExistingAadhaarPdf, setIsExistingAadhaarPdf] = useState(false);
+
+  const [existingPanUrl, setExistingPanUrl] = useState(null);
+  const [existingPanFileName, setExistingPanFileName] = useState(null);
+  const [isExistingPanPdf, setIsExistingPanPdf] = useState(false);
+
+  const [existingProfileUrl, setExistingProfileUrl] = useState(null);
+  const [profileVersion, setProfileVersion] = useState(() => Date.now());
+
   const [previewDoc, setPreviewDoc] = useState(null);
+  const blobUrlsRef = useRef([]);
+
+  useEffect(() => {
+    return () => {
+      blobUrlsRef.current.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // ignore
+        }
+      });
+      blobUrlsRef.current = [];
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -236,6 +264,30 @@ export default function AMSCreate() {
               .filter(Boolean)
           );
         }
+        const aadhaarPath = getAadhaarPath(record) || record.aadhaarDocumentPath || record.aadhaarPath || record.aadhaarCardPath || '';
+        const panPath = getPanPath(record) || record.panCardPath || record.panDocumentPath || record.panPath || '';
+        const profilePath = record.profileImagePath || record.profilePath || record.profilePicturePath || '';
+
+        if (aadhaarPath) {
+          const url = getDocumentUrl('AMS', editAmsId, 'aadhar', aadhaarPath);
+          setExistingAadhaarUrl(url);
+          setExistingAadhaarFileName(aadhaarPath.split('/').pop().split('\\').pop() || 'Aadhaar Card');
+          setIsExistingAadhaarPdf(isPdfUrl(aadhaarPath));
+        }
+
+        if (panPath) {
+          const url = getDocumentUrl('AMS', editAmsId, 'pan', panPath);
+          setExistingPanUrl(url);
+          setExistingPanFileName(panPath.split('/').pop().split('\\').pop() || 'PAN Card');
+          setIsExistingPanPdf(isPdfUrl(panPath));
+        }
+
+        if (editAmsId) {
+          const freshVersion = Date.now();
+          setProfileVersion(freshVersion);
+          const directProfileUrl = getProfileImageUrl('AMS', editAmsId, freshVersion);
+          setExistingProfileUrl(directProfileUrl);
+        }
       } catch (error) {
         if (active) {
           console.error('Failed to load AMS details:', error);
@@ -251,6 +303,66 @@ export default function AMSCreate() {
       active = false;
     };
   }, [editAmsId, isEditMode]);
+
+  const handlePreviewExisting = async (title, url, isPdfInitial = false) => {
+    const isProfile = String(title || '').toLowerCase().includes('profile') || String(title || '').toLowerCase().includes('photo') || String(title || '').toLowerCase().includes('image');
+
+    const effectiveUrl = isProfile && editAmsId ? getProfileImageUrl('AMS', editAmsId, profileVersion) : url;
+
+    if (!effectiveUrl) return;
+
+    if (isProfile) {
+      setPreviewDoc({
+        name: title,
+        title,
+        url: effectiveUrl,
+        isPdf: false,
+        loading: false,
+      });
+      return;
+    }
+
+    setPreviewDoc({
+      name: title,
+      title,
+      url: effectiveUrl,
+      isPdf: isPdfInitial,
+      loading: true,
+    });
+
+    try {
+      const blobResult = await fetchDocumentBlobUrl(effectiveUrl);
+      if (blobResult?.url) {
+        if (blobResult.isBlob) {
+          blobUrlsRef.current.push(blobResult.url);
+        }
+        setPreviewDoc({
+          name: title,
+          title,
+          url: blobResult.url,
+          isPdf: blobResult.isPdf,
+          loading: false,
+        });
+      } else {
+        setPreviewDoc({
+          name: title,
+          title,
+          url: effectiveUrl,
+          isPdf: isPdfInitial,
+          loading: false,
+        });
+      }
+    } catch {
+      setPreviewDoc({
+        name: title,
+        title,
+        url: effectiveUrl,
+        isPdf: isPdfInitial,
+        loading: false,
+      });
+    }
+  };
+
 
   const selectedStateId = String(form.stateId || '');
 
@@ -567,6 +679,19 @@ export default function AMSCreate() {
         setSubmittingStep('Uploading Profile Image...');
         try {
           await uploadAMSProfile(targetAmsId, profileImage);
+          const updatedTs = Date.now();
+          setProfileVersion(updatedTs);
+          if (typeof window !== 'undefined') {
+            try {
+              window.dispatchEvent(
+                new CustomEvent('profile-image-updated', {
+                  detail: { role: 'AMS', id: targetAmsId, timestamp: updatedTs },
+                })
+              );
+            } catch {
+              // ignore
+            }
+          }
         } catch (err) {
           const msg = err.response?.data?.message || err.message || 'Profile Image upload failed';
           throw new Error(`AMS was ${isEditMode ? 'updated' : 'created'} successfully, but Profile Image upload failed: ${msg}`);
@@ -808,8 +933,12 @@ export default function AMSCreate() {
               accept=".pdf,.jpg,.jpeg,.png"
               icon="document"
               file={aadhaarFile}
-              previewUrl={aadhaarPreviewUrl}
-              isPdf={isAadhaarPdf}
+              previewUrl={aadhaarPreviewUrl || existingAadhaarUrl}
+              isPdf={aadhaarFile ? isAadhaarPdf : isExistingAadhaarPdf}
+              isExisting={Boolean(!aadhaarFile && existingAadhaarUrl)}
+              existingUrl={existingAadhaarUrl}
+              existingFileName={existingAadhaarFileName}
+              onViewExisting={() => handlePreviewExisting('Aadhaar Card', existingAadhaarUrl, isExistingAadhaarPdf)}
               onUpload={handleAadhaarUpload}
               onRemove={handleRemoveAadhaar}
               onView={() =>
@@ -827,8 +956,12 @@ export default function AMSCreate() {
               accept=".pdf,.jpg,.jpeg,.png"
               icon="document"
               file={panFile}
-              previewUrl={panPreviewUrl}
-              isPdf={isPanPdf}
+              previewUrl={panPreviewUrl || existingPanUrl}
+              isPdf={panFile ? isPanPdf : isExistingPanPdf}
+              isExisting={Boolean(!panFile && existingPanUrl)}
+              existingUrl={existingPanUrl}
+              existingFileName={existingPanFileName}
+              onViewExisting={() => handlePreviewExisting('PAN Card', existingPanUrl, isExistingPanPdf)}
               onUpload={handlePanUpload}
               onRemove={handleRemovePan}
               onView={() =>
@@ -846,8 +979,12 @@ export default function AMSCreate() {
               accept=".jpg,.jpeg,.png"
               icon="camera"
               file={profileImage}
-              previewUrl={profilePreviewUrl}
+              previewUrl={profilePreviewUrl || existingProfileUrl}
               isProfile
+              isExisting={Boolean(!profileImage && existingProfileUrl)}
+              existingUrl={existingProfileUrl}
+              existingFileName="Profile Photograph"
+              onViewExisting={() => handlePreviewExisting('Profile Image', existingProfileUrl, false)}
               onUpload={handleProfileImageUpload}
               onRemove={handleRemoveProfileImg}
               onView={() =>

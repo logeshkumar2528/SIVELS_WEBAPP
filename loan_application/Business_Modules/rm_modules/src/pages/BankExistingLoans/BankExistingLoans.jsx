@@ -129,6 +129,131 @@ function BankCard({
   );
 }
 
+async function syncCreditCardsForBank(bankId, cardsToSave, activeCount, baseUrl, currentUserId = 1) {
+  if (!bankId) return [];
+
+  // 1. Fetch existing credit cards from backend for this bank
+  let existingCards = [];
+  try {
+    const res = await fetch(`${baseUrl}/ApplicationBankCreditCardDetails/by-bank/${bankId}`);
+    if (res.ok) {
+      const data = await res.json();
+      existingCards = Array.isArray(data) ? data : (data?.value ?? data?.data ?? []);
+    }
+  } catch (err) {
+    console.warn(`Failed to fetch existing credit cards for bank ${bankId}:`, err);
+  }
+
+  const existingMap = new Map();
+  existingCards.forEach((c) => {
+    const cid = c.applicationBankCreditCardDetailsId ?? c.ApplicationBankCreditCardDetailsId ?? c.id;
+    if (cid) existingMap.set(String(cid), c);
+  });
+
+  const updatedCardsList = [];
+  const processedCardIds = new Set();
+
+  // 2. Save/Update cards within activeCount
+  for (let i = 0; i < activeCount; i++) {
+    const card = cardsToSave[i] || {};
+    const cardName = card.cardName || '';
+    const cardNumber = card.cardNumber || '';
+
+    if (cardName || cardNumber) {
+      const cardId = card.applicationBankCreditCardDetailsId || card.ApplicationBankCreditCardDetailsId;
+
+      if (cardId && existingMap.has(String(cardId))) {
+        // PUT update
+        processedCardIds.add(String(cardId));
+        const putPayload = {
+          applicationBankCreditCardDetailsId: Number(cardId),
+          applicationBankExistingLoanDetailsId: Number(bankId),
+          cardName: cardName,
+          cardNumber: cardNumber,
+          status: card.status || 'Active',
+          modifiedBy: Number(currentUserId) || 1,
+        };
+
+        try {
+          const putRes = await fetch(`${baseUrl}/ApplicationBankCreditCardDetails/${cardId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(putPayload),
+          });
+          if (putRes.ok) {
+            updatedCardsList.push({
+              ...card,
+              applicationBankCreditCardDetailsId: Number(cardId),
+              applicationBankExistingLoanDetailsId: Number(bankId),
+            });
+          } else {
+            updatedCardsList.push(card);
+          }
+        } catch (e) {
+          console.warn(`Failed to update credit card ${cardId}:`, e);
+          updatedCardsList.push(card);
+        }
+      } else {
+        // POST new card
+        const postPayload = {
+          applicationBankExistingLoanDetailsId: Number(bankId),
+          cardName: cardName,
+          cardNumber: cardNumber,
+          status: card.status || 'Active',
+          createdBy: Number(currentUserId) || 1,
+        };
+
+        try {
+          const postRes = await fetch(`${baseUrl}/ApplicationBankCreditCardDetails`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(postPayload),
+          });
+          if (postRes.ok) {
+            let newId = null;
+            if (postRes.status !== 204) {
+              const resText = await postRes.text();
+              if (resText) {
+                try {
+                  const resJson = JSON.parse(resText);
+                  newId = resJson?.applicationBankCreditCardDetailsId || resJson?.ApplicationBankCreditCardDetailsId || resJson?.id;
+                } catch (e) {}
+              }
+            }
+            if (newId) processedCardIds.add(String(newId));
+            updatedCardsList.push({
+              ...card,
+              applicationBankCreditCardDetailsId: newId || card.applicationBankCreditCardDetailsId || null,
+              applicationBankExistingLoanDetailsId: Number(bankId),
+            });
+          } else {
+            updatedCardsList.push(card);
+          }
+        } catch (e) {
+          console.warn('Failed to create credit card:', e);
+          updatedCardsList.push(card);
+        }
+      }
+    }
+  }
+
+  // 3. Delete any previously existing cards from backend that are no longer active/present
+  for (const existingCard of existingCards) {
+    const cid = existingCard.applicationBankCreditCardDetailsId ?? existingCard.ApplicationBankCreditCardDetailsId ?? existingCard.id;
+    if (cid && !processedCardIds.has(String(cid))) {
+      try {
+        await fetch(`${baseUrl}/ApplicationBankCreditCardDetails/${cid}`, {
+          method: 'DELETE',
+        });
+      } catch (delErr) {
+        console.warn(`Failed to delete removed credit card ${cid}:`, delErr);
+      }
+    }
+  }
+
+  return updatedCardsList;
+}
+
 export default function BankExistingLoans() {
   const navigate = useNavigate();
   const { applicationId } = useParams();
@@ -141,6 +266,7 @@ export default function BankExistingLoans() {
   const [activeLoansError, setActiveLoansError] = useState(null);
   const [transientLoans, setTransientLoans] = useState({});
   const [viewingCardsFor, setViewingCardsFor] = useState(null);
+  const [isLoadingCards, setIsLoadingCards] = useState(false);
   const [transientCards, setTransientCards] = useState({});
   const [isLoadingMasters, setIsLoadingMasters] = useState(false);
   const [bankOptions, setBankOptions] = useState([]);
@@ -189,7 +315,60 @@ export default function BankExistingLoans() {
         if (!active) return;
         hydratedAppIdRef.current = appId;
         if (hydratedApp) {
-          setForm(buildBankState(hydratedApp));
+          const initialBankState = buildBankState(hydratedApp);
+          const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+
+          const fetchBankCards = async (bank) => {
+            const bankId = bank?.applicationBankExistingLoanDetailsId;
+            if (!bankId) return bank;
+            try {
+              const res = await fetch(`${baseUrl}/ApplicationBankCreditCardDetails/by-bank/${bankId}`);
+              if (res.ok) {
+                const data = await res.json();
+                const list = Array.isArray(data) ? data : (data?.value ?? data?.data ?? []);
+                const mapped = list.map((item) => ({
+                  applicationBankCreditCardDetailsId: item.applicationBankCreditCardDetailsId ?? item.ApplicationBankCreditCardDetailsId ?? item.id ?? null,
+                  applicationBankExistingLoanDetailsId: bankId,
+                  cardName: item.cardName ?? item.CardName ?? '',
+                  cardNumber: item.cardNumber ?? item.CardNumber ?? '',
+                  status: item.status ?? item.Status ?? 'Active',
+                }));
+                return {
+                  ...bank,
+                  noOfActiveCreditCards: mapped.length > 0 ? String(mapped.length) : (bank.noOfActiveCreditCards || ''),
+                  activeCreditCardsDetails: mapped,
+                };
+              }
+            } catch (e) {
+              console.warn(`Failed to fetch credit cards for bank ${bankId}:`, e);
+            }
+            return bank;
+          };
+
+          const [applicantPrimary, applicantOther] = await Promise.all([
+            fetchBankCards(initialBankState.applicant.primaryBank),
+            fetchBankCards(initialBankState.applicant.otherBank),
+          ]);
+
+          const coApplicants = await Promise.all(
+            initialBankState.coApplicants.map(async (co) => {
+              const [coPrimary, coOther] = await Promise.all([
+                fetchBankCards(co.primaryBank),
+                fetchBankCards(co.otherBank),
+              ]);
+              return { primaryBank: coPrimary, otherBank: coOther };
+            })
+          );
+
+          if (!active) return;
+          const updatedForm = {
+            applicant: {
+              primaryBank: applicantPrimary,
+              otherBank: applicantOther,
+            },
+            coApplicants,
+          };
+          setForm(updatedForm);
         }
       } catch (err) {
         console.error('Error hydrating bank data:', err);
@@ -424,27 +603,143 @@ export default function BankExistingLoans() {
     setViewingLoansFor(null);
   };
 
+  const handleOpenCardsModal = async (target) => {
+    setViewingCardsFor(target);
+    const key = getTargetKey(target);
+    const bank = getBankByTarget(target);
+    const count = parseInt(bank?.noOfActiveCreditCards, 10) || 0;
+    const bankId =
+      bank?.applicationBankExistingLoanDetailsId ||
+      bank?.ApplicationBankExistingLoanDetailsId ||
+      bank?.applicationBankDetailsId ||
+      bank?.ApplicationBankDetailsId;
+
+    if (!bankId) {
+      const existing = transientCards[key] || bank?.activeCreditCardsDetails || [];
+      const cardsArray = Array.from({ length: count }, (_, i) => existing[i] || {
+        cardName: '',
+        cardNumber: '',
+        status: 'Active',
+        applicationBankExistingLoanDetailsId: null,
+      });
+      setTransientCards((prev) => ({ ...prev, [key]: cardsArray }));
+      return;
+    }
+
+    setIsLoadingCards(true);
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+
+    try {
+      const res = await fetch(`${baseUrl}/ApplicationBankCreditCardDetails/by-bank/${bankId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (data?.value ?? data?.data ?? []);
+        const mappedCards = list.map((item) => ({
+          applicationBankCreditCardDetailsId: item.applicationBankCreditCardDetailsId ?? item.ApplicationBankCreditCardDetailsId ?? item.id ?? item.Id ?? null,
+          applicationBankExistingLoanDetailsId: bankId,
+          cardName: item.cardName ?? item.CardName ?? '',
+          cardNumber: item.cardNumber ?? item.CardNumber ?? '',
+          status: item.status ?? item.Status ?? 'Active',
+        }));
+
+        const cardsArray = Array.from({ length: count }, (_, i) => mappedCards[i] || {
+          cardName: '',
+          cardNumber: '',
+          status: 'Active',
+          applicationBankExistingLoanDetailsId: bankId,
+        });
+
+        setTransientCards((prev) => ({ ...prev, [key]: cardsArray }));
+      } else {
+        const existing = transientCards[key] || bank?.activeCreditCardsDetails || [];
+        const cardsArray = Array.from({ length: count }, (_, i) => existing[i] || {
+          cardName: '',
+          cardNumber: '',
+          status: 'Active',
+          applicationBankExistingLoanDetailsId: bankId,
+        });
+        setTransientCards((prev) => ({ ...prev, [key]: cardsArray }));
+      }
+    } catch (err) {
+      console.error('Error fetching credit cards from server:', err);
+      const existing = transientCards[key] || bank?.activeCreditCardsDetails || [];
+      const cardsArray = Array.from({ length: count }, (_, i) => existing[i] || {
+        cardName: '',
+        cardNumber: '',
+        status: 'Active',
+        applicationBankExistingLoanDetailsId: bankId,
+      });
+      setTransientCards((prev) => ({ ...prev, [key]: cardsArray }));
+    } finally {
+      setIsLoadingCards(false);
+    }
+  };
+
   const updateCardDetail = (cardIndex, field, value) => {
     if (!viewingCardsFor) return;
-    const key = viewingCardsFor.type === 'applicant'
-      ? `applicant-${viewingCardsFor.scope}`
-      : `coApplicant-${viewingCardsFor.index}-${viewingCardsFor.scope}`;
+    const key = getTargetKey(viewingCardsFor);
     setTransientCards((prev) => {
-      const cards = prev[key] ? [...prev[key]] : [];
-      cards[cardIndex] = { ...(cards[cardIndex] || {}), [field]: value };
+      const bank = getBankByTarget(viewingCardsFor);
+      const count = parseInt(bank?.noOfActiveCreditCards, 10) || 0;
+      const currentList = prev[key] || bank?.activeCreditCardsDetails || [];
+      const cards = Array.from({ length: count }, (_, i) => ({
+        cardName: '',
+        cardNumber: '',
+        status: 'Active',
+        applicationBankExistingLoanDetailsId: bank?.applicationBankExistingLoanDetailsId || null,
+        ...(currentList[i] || {}),
+      }));
+      cards[cardIndex] = { ...cards[cardIndex], [field]: value };
       return { ...prev, [key]: cards };
     });
   };
 
-  const saveCardDetails = () => {
+  const saveCardDetails = async () => {
     if (!viewingCardsFor) return;
-    const key = viewingCardsFor.type === 'applicant'
-      ? `applicant-${viewingCardsFor.scope}`
-      : `coApplicant-${viewingCardsFor.index}-${viewingCardsFor.scope}`;
-    const cards = transientCards[key] || [];
-    if (viewingCardsFor.type === 'applicant') updateApplicantBank(viewingCardsFor.scope, 'activeCreditCardsDetails', cards);
-    else updateCoApplicantBank(viewingCardsFor.index, viewingCardsFor.scope, 'activeCreditCardsDetails', cards);
+    const target = viewingCardsFor;
+    const key = getTargetKey(target);
+    const bank = getBankByTarget(target);
+    const count = parseInt(bank?.noOfActiveCreditCards, 10) || 0;
+    const cards = transientCards[key] || bank?.activeCreditCardsDetails || [];
+    const finalCards = Array.from({ length: count }, (_, i) => ({
+      cardName: '',
+      cardNumber: '',
+      status: 'Active',
+      applicationBankExistingLoanDetailsId: bank?.applicationBankExistingLoanDetailsId || null,
+      ...(cards[i] || {}),
+    }));
+
+    if (target.type === 'applicant') {
+      updateApplicantBank(target.scope, 'activeCreditCardsDetails', finalCards);
+    } else {
+      updateCoApplicantBank(target.index, target.scope, 'activeCreditCardsDetails', finalCards);
+    }
     setViewingCardsFor(null);
+
+    const bankId =
+      bank?.applicationBankExistingLoanDetailsId ||
+      bank?.ApplicationBankExistingLoanDetailsId ||
+      bank?.applicationBankDetailsId ||
+      bank?.ApplicationBankDetailsId;
+
+    if (bankId) {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+      const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || '{}');
+      const currentUserId = currentUser?.rmId || currentUser?.userId || currentUser?.id || 1;
+      try {
+        const synced = await syncCreditCardsForBank(bankId, finalCards, count, baseUrl, currentUserId);
+        if (synced && synced.length > 0) {
+          if (target.type === 'applicant') {
+            updateApplicantBank(target.scope, 'activeCreditCardsDetails', synced);
+          } else {
+            updateCoApplicantBank(target.index, target.scope, 'activeCreditCardsDetails', synced);
+          }
+          setTransientCards((prev) => ({ ...prev, [key]: synced }));
+        }
+      } catch (e) {
+        console.warn('Background sync of credit cards failed:', e);
+      }
+    }
   };
 
   const handleContinue = async () => {
@@ -572,6 +867,26 @@ export default function BankExistingLoans() {
               }
             }
           }
+
+          // Save Credit Card Details if any
+          const cardsKey = person.isPrimary
+            ? `applicant-${bank.scope}`
+            : `coApplicant-${person.index}-${bank.scope}`;
+          const cardsToSave = transientCards[cardsKey] || bank.data.activeCreditCardsDetails || [];
+          const cardsCount = Number(bank.data.noOfActiveCreditCards) || 0;
+
+          if (savedId) {
+            try {
+              const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || '{}');
+              const currentUserId = currentUser?.rmId || currentUser?.userId || currentUser?.id || 1;
+              const syncedCards = await syncCreditCardsForBank(savedId, cardsToSave, cardsCount, baseUrl, currentUserId);
+              if (syncedCards && syncedCards.length > 0) {
+                bank.data.activeCreditCardsDetails = syncedCards;
+              }
+            } catch (cardErr) {
+              console.warn('Failed to save credit card items:', cardErr);
+            }
+          }
         }
       }
 
@@ -632,7 +947,7 @@ export default function BankExistingLoans() {
           bank={form.applicant.primaryBank}
           onChange={(field, value) => updateApplicantBank('primaryBank', field, value)}
           onViewLoans={() => handleOpenLoansModal({ type: 'applicant', scope: 'primaryBank' })}
-          onViewCreditCards={() => setViewingCardsFor({ type: 'applicant', scope: 'primaryBank' })}
+          onViewCreditCards={() => handleOpenCardsModal({ type: 'applicant', scope: 'primaryBank' })}
           bankOptions={bankOptions}
           branchOptions={branchOptions}
           isLoadingMasters={isLoadingMasters}
@@ -642,7 +957,7 @@ export default function BankExistingLoans() {
           bank={form.applicant.otherBank}
           onChange={(field, value) => updateApplicantBank('otherBank', field, value)}
           onViewLoans={() => handleOpenLoansModal({ type: 'applicant', scope: 'otherBank' })}
-          onViewCreditCards={() => setViewingCardsFor({ type: 'applicant', scope: 'otherBank' })}
+          onViewCreditCards={() => handleOpenCardsModal({ type: 'applicant', scope: 'otherBank' })}
           bankOptions={bankOptions}
           branchOptions={branchOptions}
           isLoadingMasters={isLoadingMasters}
@@ -660,7 +975,7 @@ export default function BankExistingLoans() {
               bank={coApp.primaryBank}
               onChange={(field, value) => updateCoApplicantBank(index, 'primaryBank', field, value)}
               onViewLoans={() => handleOpenLoansModal({ type: 'coApplicant', index, scope: 'primaryBank' })}
-              onViewCreditCards={() => setViewingCardsFor({ type: 'coApplicant', index, scope: 'primaryBank' })}
+              onViewCreditCards={() => handleOpenCardsModal({ type: 'coApplicant', index, scope: 'primaryBank' })}
               bankOptions={bankOptions}
               branchOptions={branchOptions}
               isLoadingMasters={isLoadingMasters}
@@ -670,7 +985,7 @@ export default function BankExistingLoans() {
               bank={coApp.otherBank}
               onChange={(field, value) => updateCoApplicantBank(index, 'otherBank', field, value)}
               onViewLoans={() => handleOpenLoansModal({ type: 'coApplicant', index, scope: 'otherBank' })}
-              onViewCreditCards={() => setViewingCardsFor({ type: 'coApplicant', index, scope: 'otherBank' })}
+              onViewCreditCards={() => handleOpenCardsModal({ type: 'coApplicant', index, scope: 'otherBank' })}
               bankOptions={bankOptions}
               branchOptions={branchOptions}
               isLoadingMasters={isLoadingMasters}
@@ -680,22 +995,29 @@ export default function BankExistingLoans() {
       ))}
 
       <Modal show={viewingCardsFor !== null} onHide={() => setViewingCardsFor(null)} title={`${viewingCardsFor?.scope === 'primaryBank' ? 'Primary Bank' : 'Other Bank'} - Active Credit Card Details`} size="lg">
-        {viewingCardsFor && (() => {
-          const bank = viewingCardsFor.type === 'applicant' ? form.applicant[viewingCardsFor.scope] : form.coApplicants[viewingCardsFor.index][viewingCardsFor.scope];
-          const count = parseInt(bank.noOfActiveCreditCards) || 0;
-          const key = viewingCardsFor.type === 'applicant' ? `applicant-${viewingCardsFor.scope}` : `coApplicant-${viewingCardsFor.index}-${viewingCardsFor.scope}`;
-          const cards = transientCards[key] || bank.activeCreditCardsDetails || [];
-          return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-            {Array.from({ length: count }).map((_, i) => {
-              const card = cards[i] || {};
-              return <div key={i} style={{ padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a' }}>Credit Card {i + 1}</div>
-                <input className="form-input compact-input" placeholder="Card Name" value={card.cardName || ''} onChange={(e) => updateCardDetail(i, 'cardName', e.target.value)} />
-                <input className="form-input compact-input" placeholder="Card Number" inputMode="numeric" value={card.cardNumber || ''} onChange={(e) => updateCardDetail(i, 'cardNumber', e.target.value.replace(/\D/g, '').slice(0, 19))} />
-              </div>;
-            })}
-          </div>;
-        })()}
+        {isLoadingCards ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 0', gap: '12px', color: '#64748b' }}>
+            <RefreshCw className="master-spin" size={24} style={{ color: '#0284c7' }} />
+            <span style={{ fontSize: '13px', fontWeight: 500 }}>Fetching credit card details from server...</span>
+          </div>
+        ) : (
+          viewingCardsFor && (() => {
+            const bank = viewingCardsFor.type === 'applicant' ? form.applicant[viewingCardsFor.scope] : form.coApplicants[viewingCardsFor.index][viewingCardsFor.scope];
+            const count = parseInt(bank.noOfActiveCreditCards) || 0;
+            const key = viewingCardsFor.type === 'applicant' ? `applicant-${viewingCardsFor.scope}` : `coApplicant-${viewingCardsFor.index}-${viewingCardsFor.scope}`;
+            const cards = transientCards[key] || bank.activeCreditCardsDetails || [];
+            return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+              {Array.from({ length: count }).map((_, i) => {
+                const card = cards[i] || {};
+                return <div key={i} style={{ padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a' }}>Credit Card {i + 1}</div>
+                  <input className="form-input compact-input" placeholder="Card Name" value={card.cardName || ''} onChange={(e) => updateCardDetail(i, 'cardName', e.target.value)} />
+                  <input className="form-input compact-input" placeholder="Card Number" value={card.cardNumber || ''} onChange={(e) => updateCardDetail(i, 'cardNumber', e.target.value)} />
+                </div>;
+              })}
+            </div>;
+          })()
+        )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #edf2f7' }}><Button variant="primary" onClick={saveCardDetails}>Done</Button></div>
       </Modal>
 

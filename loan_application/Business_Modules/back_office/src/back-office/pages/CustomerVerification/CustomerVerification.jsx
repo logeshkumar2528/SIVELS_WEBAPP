@@ -244,6 +244,7 @@ export default function CustomerVerification() {
   const EyeIcon = iconMap['Eye'] || iconMap['FileText'];
   const BadgeIndianRupeeIcon = iconMap['BadgeIndianRupee'] || iconMap['Wallet'];
   const FileCheckIcon = iconMap['FileCheck'] || iconMap['FileText'];
+  const FileTextIcon = iconMap['FileText'] || iconMap['FileCheck'] || iconMap['Eye'];
   const XIcon = iconMap['X'] || iconMap['XCircle'];
 
   // 5. FOIR Calculation State: 'idle' | 'loading' | 'success' | 'empty' | 'error'
@@ -258,6 +259,28 @@ export default function CustomerVerification() {
   const [decisionRemarks, setDecisionRemarks] = useState('');
   const [decisionError, setDecisionError] = useState('');
   const [, setConfirmedDecision] = useState(null);
+
+  const handleViewForm = () => {
+    const rawCustomer = verificationData?.raw?.customer || verificationData?.customer || {};
+    const rawCust = Array.isArray(rawCustomer) ? rawCustomer[0] : rawCustomer;
+    const targetCustomerId =
+      customerId ||
+      verificationData?.customerId ||
+      rawCust?.agentCustomerId ||
+      rawCust?.AgentCustomerId;
+
+    const id = Number(targetCustomerId);
+    if (!id || isNaN(id)) return;
+
+    navigate(`/backoffice/customers/${id}/view-form`, {
+      state: {
+        returnTo: `/backoffice/customers/${id}/verify`,
+        closeTo: `/backoffice/customers/${id}/verify`,
+        source: 'backoffice',
+        customerId: id,
+      },
+    });
+  };
 
   const handleOpenDecisionModal = (type) => {
     setDecisionType(type);
@@ -491,11 +514,7 @@ export default function CustomerVerification() {
   };
 
   const handleBack = () => {
-    if (window.history.length > 2) {
-      navigate(-1);
-    } else {
-      navigate(ROUTES.CUSTOMERS);
-    }
+    navigate(ROUTES.CUSTOMERS);
   };
 
   // ----------------------------------------------------
@@ -638,7 +657,7 @@ export default function CustomerVerification() {
           </div>
         </div>
 
-        {/* Right: Verification status summary badges */}
+        {/* Right: Verification status summary badges & View Form action */}
         <div className="bo-cv-header-right">
           <div className="bo-cv-status-badge-item">
             <span className="bo-cv-status-lbl">Application:</span>
@@ -660,6 +679,16 @@ export default function CustomerVerification() {
               <span className="bo-cv-pill-unverified">Not Verified</span>
             )}
           </div>
+
+          <button
+            type="button"
+            className="bo-cv-view-form-btn"
+            onClick={handleViewForm}
+            title="View completed loan application form"
+          >
+            {FileTextIcon && <FileTextIcon size={13} />}
+            <span>View Form</span>
+          </button>
         </div>
       </header>
 

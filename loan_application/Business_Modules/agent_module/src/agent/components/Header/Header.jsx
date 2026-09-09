@@ -25,12 +25,24 @@ function Header() {
     }
   }
 
+  const [imageVersion, setImageVersion] = useState(Date.now())
   const resolvedAgentId = agentId || agentData?.agentId || agentData?.AgentId || (typeof window !== 'undefined' ? localStorage.getItem('agentId') : null)
-  const profileImageUrl = getProfileImageUrl('Agent', resolvedAgentId)
+  const profileImageUrl = getProfileImageUrl('Agent', resolvedAgentId, imageVersion)
 
   useEffect(() => {
     setImageError(false)
   }, [profileImageUrl])
+
+  useEffect(() => {
+    const handleUpdate = (e) => {
+      if (!e.detail?.role || e.detail.role.toLowerCase().includes('agent')) {
+        setImageVersion(e.detail?.timestamp || Date.now())
+        setImageError(false)
+      }
+    }
+    window.addEventListener('profile-image-updated', handleUpdate)
+    return () => window.removeEventListener('profile-image-updated', handleUpdate)
+  }, [])
 
   const agentName = agentData?.fullName || 'Agent'
   const agentInitial = agentName ? agentName.charAt(0).toUpperCase() : 'A'

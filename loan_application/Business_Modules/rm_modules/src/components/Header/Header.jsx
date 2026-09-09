@@ -5,13 +5,25 @@ import './Header.css';
 
 function UserAvatar({ name = '', role = 'RM', id = null, avatarUrl = null }) {
   const [imageFailed, setImageFailed] = useState(false);
+  const [imageVersion, setImageVersion] = useState(Date.now());
 
   const resolvedId = id || (typeof localStorage !== 'undefined' ? localStorage.getItem('rmId') : null);
-  const imageUrl = avatarUrl || (resolvedId ? getProfileImageUrl('RM', resolvedId) : null);
+  const imageUrl = avatarUrl || (resolvedId ? getProfileImageUrl('RM', resolvedId, imageVersion) : null);
 
   useEffect(() => {
     setImageFailed(false);
   }, [imageUrl]);
+
+  useEffect(() => {
+    const handleUpdate = (e) => {
+      if (!e.detail?.role || e.detail.role.toLowerCase().includes('rm') || e.detail.role.toLowerCase().includes('relationship')) {
+        setImageVersion(e.detail?.timestamp || Date.now());
+        setImageFailed(false);
+      }
+    };
+    window.addEventListener('profile-image-updated', handleUpdate);
+    return () => window.removeEventListener('profile-image-updated', handleUpdate);
+  }, []);
 
   if (imageUrl && !imageFailed) {
     return (

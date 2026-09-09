@@ -53,6 +53,14 @@ export const uploadBackOfficeProfileImage = async (backOfficeId, file) => {
   return response.data;
 };
 
+export const getBackOfficeProfileImageBlob = async (backOfficeId) => {
+  if (!backOfficeId) return null;
+  const response = await axiosInstance.get(`/BackOfficeMaster/${encodeURIComponent(backOfficeId)}/profile-image`, {
+    responseType: 'blob',
+  });
+  return response.data;
+};
+
 export const extractBackOfficeId = (response) => {
   if (!response) return null;
   if (typeof response === 'number') return response;

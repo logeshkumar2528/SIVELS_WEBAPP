@@ -342,13 +342,66 @@
   right: -4px;
   bottom: -4px;
   display: grid;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   place-items: center;
   border: 3px solid #1d452d;
   border-radius: 50%;
   background: #62cf7b;
   color: #0e3b20;
+}
+
+.bo-profile-avatar-edit-btn {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: #0f7a4c;
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s ease;
+  z-index: 3;
+  padding: 0;
+}
+
+.bo-profile-avatar-edit-btn:hover:not(:disabled) {
+  background: #0a5233;
+  transform: scale(1.1);
+}
+
+.bo-profile-avatar-edit-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.bo-spin-icon {
+  animation: boSpinAnim 0.8s linear infinite;
+}
+
+@keyframes boSpinAnim {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.bo-profile-upload-msg {
+  font-size: 11px;
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+.bo-profile-upload-msg.is-error {
+  color: #fca5a5;
+}
+
+.bo-profile-upload-msg.is-success {
+  color: #86efac;
 }
 
 .bo-profile-eyebrow {

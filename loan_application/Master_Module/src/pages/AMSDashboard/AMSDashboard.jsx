@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import {
   Activity,
   AlertCircle,
@@ -24,6 +24,7 @@ import {
   Building2,
   Phone,
   Mail,
+  Camera,
 } from 'lucide-react';
 import logoImg from '../../../../Core/Logo_img/Logo.png';
 import { getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
@@ -31,7 +32,7 @@ import { getAllRelationshipManagers } from '../../api/rmApi';
 import { getAllAgents } from '../../api/agentApi';
 import { agentCustomerService } from '../../../../Core/src/services/agentCustomerService';
 import axiosInstance from '../../api/axiosInstance';
-import { getProfileImageUrl } from '../../utils/profileImageHelper';
+import { getProfileImageUrl, updateProfileImage } from '../../utils/profileImageHelper';
 import './AMSDashboard.css';
 
 const unwrap = (response) => {
@@ -57,9 +58,23 @@ const initials = (name = '') =>
     .map((part) => part[0].toUpperCase())
     .join('') || 'AM';
 
-function AmsAvatar({ role, id, name, className = 'ams-person-avatar' }) {
+function AmsAvatar({ role, id, name, className = 'ams-person-avatar', version = null }) {
   const [error, setError] = useState(false);
-  const imageUrl = getProfileImageUrl(role, id);
+  const [liveVersion, setLiveVersion] = useState(version || Date.now());
+
+  useEffect(() => {
+    const handleUpdate = (e) => {
+      if (!e.detail?.role || e.detail.role.toLowerCase() === String(role).toLowerCase()) {
+        setLiveVersion(e.detail?.timestamp || Date.now());
+        setError(false);
+      }
+    };
+    window.addEventListener('profile-image-updated', handleUpdate);
+    return () => window.removeEventListener('profile-image-updated', handleUpdate);
+  }, [role]);
+
+  const effectiveVersion = version || liveVersion;
+  const imageUrl = getProfileImageUrl(role, id, effectiveVersion);
 
   useEffect(() => {
     setError(false);
@@ -184,8 +199,53 @@ export default function AMSDashboard() {
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedAgent, setSelectedAgent] = useState(null);
 
+  // AMS Profile Image Upload State
+  const [amsImageVersion, setAmsImageVersion] = useState(Date.now());
+  const [isUploadingAmsImage, setIsUploadingAmsImage] = useState(false);
+  const [amsImageError, setAmsImageError] = useState('');
+  const [amsImageSuccess, setAmsImageSuccess] = useState('');
+  const amsFileInputRef = useRef(null);
+
   const sessionUser = useMemo(() => getLoggedInAmsInfo(), []);
   const currentAmsId = sessionUser.amsId;
+
+  const handleAmsImageChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAmsImageError('');
+    setAmsImageSuccess('');
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type?.toLowerCase())) {
+      setAmsImageError('Please select a valid image (JPEG, PNG, WebP).');
+      if (amsFileInputRef.current) amsFileInputRef.current.value = '';
+      return;
+    }
+
+    if (!currentAmsId) {
+      setAmsImageError('AMS identity not found. Cannot update photo.');
+      if (amsFileInputRef.current) amsFileInputRef.current.value = '';
+      return;
+    }
+
+    setIsUploadingAmsImage(true);
+
+    try {
+      await updateProfileImage('AMS', currentAmsId, file);
+      setAmsImageVersion(Date.now());
+      setAmsImageSuccess('Profile photo updated!');
+      setTimeout(() => setAmsImageSuccess(''), 4000);
+    } catch (err) {
+      console.error('Failed to update AMS profile image:', err);
+      setAmsImageError(err.message || 'Failed to update photo. Please try again.');
+    } finally {
+      setIsUploadingAmsImage(false);
+      if (amsFileInputRef.current) {
+        amsFileInputRef.current.value = '';
+      }
+    }
+  };
 
   const loadDashboardData = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) {
@@ -756,10 +816,31 @@ export default function AMSDashboard() {
             </div>
             <div className="ams-dashboard-hero-side">
               <div className="ams-account-badge">
-                <AmsAvatar role="AMS" id={currentAmsId} name={amsName} className="ams-account-avatar" />
+                <div className="ams-account-avatar-wrapper" style={{ position: 'relative' }}>
+                  <AmsAvatar role="AMS" id={currentAmsId} name={amsName} className="ams-account-avatar" version={amsImageVersion} />
+                  <button
+                    type="button"
+                    className="ams-avatar-edit-btn"
+                    onClick={() => amsFileInputRef.current?.click()}
+                    disabled={isUploadingAmsImage}
+                    title="Change profile photo"
+                    aria-label="Change profile photo"
+                  >
+                    {isUploadingAmsImage ? <Loader2 size={11} className="ams-spin" /> : <Camera size={11} />}
+                  </button>
+                  <input
+                    type="file"
+                    ref={amsFileInputRef}
+                    onChange={handleAmsImageChange}
+                    accept="image/jpeg,image/jpg,image/png,image/webp"
+                    style={{ display: 'none' }}
+                  />
+                </div>
                 <span>
                   <strong>{amsCode}</strong>
                   <small>Area Management Specialist</small>
+                  {amsImageError && <span style={{ color: '#dc2626', fontSize: '10px', display: 'block', fontWeight: 600 }}>{amsImageError}</span>}
+                  {amsImageSuccess && <span style={{ color: '#16a34a', fontSize: '10px', display: 'block', fontWeight: 600 }}>{amsImageSuccess}</span>}
                 </span>
               </div>
               <button

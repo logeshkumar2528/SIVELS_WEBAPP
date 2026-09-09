@@ -18,8 +18,18 @@ import {
 } from 'lucide-react';
 import {
   DocumentUploadCard,
-  DocumentPreviewModal
+  DocumentPreviewModal,
+  fetchDocumentBlobUrl,
+  isPdfUrl,
 } from '../../components/DocumentUpload/DocumentUploadSection';
+import {
+  uploadAgentAadhaar,
+  uploadAgentPan,
+  uploadAgentProfileImage,
+  getAgentProfileImageBlob,
+} from '../../api/agentApi';
+import { getProfileImageUrl } from '../../utils/profileImageHelper';
+import { getFileUrl, isPdfFile, getAadhaarPath, getPanPath, getProfilePath, getDocumentUrl } from '../Dashboard/Dashboard';
 import { generateUserCode } from '../../utils/codeGenerator';
 import '../RelationshipManager/RelationshipManagerCreate.css';
 import './AgentCreate.css';
@@ -89,8 +99,33 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
   const [profileImage, setProfileImage] = useState(null);
   const [profilePreviewUrl, setProfilePreviewUrl] = useState(null);
 
+  // Existing document states (for Edit Mode)
+  const [existingAadhaarUrl, setExistingAadhaarUrl] = useState(null);
+  const [existingAadhaarFileName, setExistingAadhaarFileName] = useState(null);
+  const [isExistingAadhaarPdf, setIsExistingAadhaarPdf] = useState(false);
+
+  const [existingPanUrl, setExistingPanUrl] = useState(null);
+  const [existingPanFileName, setExistingPanFileName] = useState(null);
+  const [isExistingPanPdf, setIsExistingPanPdf] = useState(false);
+
+  const [existingProfileUrl, setExistingProfileUrl] = useState(null);
+
   // Lightbox Modal for viewing
   const [previewDoc, setPreviewDoc] = useState(null);
+  const blobUrlsRef = useRef([]);
+
+  useEffect(() => {
+    return () => {
+      blobUrlsRef.current.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // ignore
+        }
+      });
+      blobUrlsRef.current = [];
+    };
+  }, []);
 
   // Confirmation & status
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
@@ -98,6 +133,7 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [createdAgentId, setCreatedAgentId] = useState(null);
+
 
   useEffect(() => {
     fetch(`${API_BASE}/RMMaster`)
@@ -163,6 +199,38 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
           bankAccountNumber: record.bankAccountNumber || '',
           ifscCode: record.ifscCode || '',
         });
+
+        const realAgentId = record.agentId || record.AgentId || record.id || record.Id || editAgentId;
+        const aadhaarPath = getAadhaarPath(record) || record.aadhaarDocumentPath || record.aadhaarPath || record.aadhaarCardPath || '';
+        const panPath = getPanPath(record) || record.panCardPath || record.panDocumentPath || record.panPath || '';
+        const profilePath = getProfilePath(record) || record.profileImagePath || record.profilePath || '';
+
+        const aadhaarUrl = getDocumentUrl('Agent', realAgentId, 'aadhaar', aadhaarPath);
+        const panUrl = getDocumentUrl('Agent', realAgentId, 'pan', panPath);
+
+        console.log("Agent record:", record);
+        console.log("Agent entityId:", realAgentId);
+        console.log("Agent document type:", "Aadhaar Card");
+        console.log("Final Agent document URL:", aadhaarUrl);
+        console.log("Agent document type:", "PAN Card");
+        console.log("Final Agent document URL:", panUrl);
+
+        if (aadhaarPath) {
+          setExistingAadhaarUrl(aadhaarUrl);
+          setExistingAadhaarFileName(aadhaarPath.split('/').pop().split('\\').pop() || 'Aadhaar Card');
+          setIsExistingAadhaarPdf(isPdfUrl(aadhaarPath));
+        }
+
+        if (panPath) {
+          setExistingPanUrl(panUrl);
+          setExistingPanFileName(panPath.split('/').pop().split('\\').pop() || 'PAN Card');
+          setIsExistingPanPdf(isPdfUrl(panPath));
+        }
+
+        if (realAgentId) {
+          const directProfileUrl = getProfileImageUrl('Agent', realAgentId);
+          setExistingProfileUrl(directProfileUrl);
+        }
       } catch (error) {
         if (active) {
           setErrorMessage(error.message || 'Failed to load agent details.');
@@ -177,6 +245,79 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
       active = false;
     };
   }, [editAgentId]);
+
+  const handlePreviewExisting = async (title, url, isPdfInitial = false) => {
+    const isProfile = String(title || '').toLowerCase().includes('profile') || String(title || '').toLowerCase().includes('photo') || String(title || '').toLowerCase().includes('image');
+
+    const effectiveUrl = isProfile && editAgentId ? getProfileImageUrl('Agent', editAgentId) : url;
+
+    if (!effectiveUrl) return;
+
+    if (isProfile) {
+      setPreviewDoc({
+        name: title,
+        title,
+        url: effectiveUrl,
+        isPdf: false,
+        loading: false,
+      });
+      return;
+    }
+
+    setPreviewDoc({
+      name: title,
+      title,
+      url: effectiveUrl,
+      isPdf: isPdfInitial,
+      loading: true,
+    });
+
+    try {
+      const blobResult = await fetchDocumentBlobUrl(effectiveUrl);
+      if (blobResult?.url) {
+        if (blobResult.isBlob) {
+          blobUrlsRef.current.push(blobResult.url);
+        }
+        setPreviewDoc({
+          name: title,
+          title,
+          url: blobResult.url,
+          isPdf: blobResult.isPdf,
+          loading: false,
+        });
+      } else {
+        setPreviewDoc({
+          name: title,
+          title,
+          url: effectiveUrl,
+          isPdf: isPdfInitial,
+          loading: false,
+        });
+      }
+    } catch {
+      setPreviewDoc({
+        name: title,
+        title,
+        url: effectiveUrl,
+        isPdf: isPdfInitial,
+        loading: false,
+      });
+    }
+  };
+
+  const handleClosePreview = () => {
+    blobUrlsRef.current.forEach((url) => {
+      try {
+        if (url && url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
+      } catch {
+        // ignore
+      }
+    });
+    blobUrlsRef.current = [];
+    setPreviewDoc(null);
+  };
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => {
@@ -410,30 +551,27 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
         throw new Error('Agent saved, but failed to retrieve Agent ID from server response.');
       }
 
-      // Upload PAN card
-      if (panFile) {
-        const formDataUpload = new FormData();
-        formDataUpload.append('file', panFile);
-
-        const token = localStorage.getItem('authToken');
-        const uploadHeaders = {};
-        if (token) {
-          uploadHeaders.Authorization = `Bearer ${token}`;
+      if (aadhaarFile && targetAgentId) {
+        try {
+          await uploadAgentAadhaar(targetAgentId, aadhaarFile);
+        } catch (err) {
+          console.warn('Agent Aadhaar upload failed:', err);
         }
+      }
 
-        const uploadEndpoint = `${API_BASE}/AgentMaster/${encodeURIComponent(targetAgentId)}/upload-pan`;
-        const uploadResponse = await fetch(uploadEndpoint, {
-          method: 'POST',
-          headers: uploadHeaders,
-          body: formDataUpload,
-        });
+      if (panFile && targetAgentId) {
+        try {
+          await uploadAgentPan(targetAgentId, panFile);
+        } catch (err) {
+          console.warn('Agent PAN upload failed:', err);
+        }
+      }
 
-        if (!uploadResponse.ok) {
-          const uploadErrorText = await uploadResponse.text().catch(() => '');
-          console.error('Agent PAN upload failed:', uploadResponse.status, uploadErrorText);
-          const panError = new Error('Agent was created successfully, but PAN card upload failed.');
-          panError.isPanUploadFailure = true;
-          throw panError;
+      if (profileImage && targetAgentId) {
+        try {
+          await uploadAgentProfileImage(targetAgentId, profileImage);
+        } catch (err) {
+          console.warn('Agent Profile Image upload failed:', err);
         }
       }
 
@@ -760,14 +898,28 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
               {/* 1. Aadhaar Card */}
               <DocumentUploadCard
                 title="Aadhaar Card"
-                required
-                subtitle="Upload clear image of Aadhaar Card"
+                required={!isEditMode && !existingAadhaarUrl}
+                subtitle={
+                  isEditMode && existingAadhaarUrl
+                    ? 'Existing document uploaded. Select new file to replace.'
+                    : 'Upload clear image of Aadhaar Card'
+                }
                 note="JPG, PNG or PDF (Max. 10MB)"
                 accept=".pdf,.jpg,.jpeg,.png"
                 icon="document"
                 file={aadhaarFile}
                 previewUrl={aadhaarPreviewUrl}
                 isPdf={isAadhaarPdf}
+                isExisting={!aadhaarFile && Boolean(existingAadhaarUrl)}
+                existingUrl={existingAadhaarUrl}
+                existingFileName={existingAadhaarFileName}
+                onViewExisting={() =>
+                  handlePreviewExisting(
+                    'Aadhaar Card',
+                    existingAadhaarUrl,
+                    isExistingAadhaarPdf
+                  )
+                }
                 onUpload={handleAadhaarUpload}
                 onRemove={handleRemoveAadhaar}
                 onView={() =>
@@ -782,10 +934,10 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
               {/* 2. PAN Card */}
               <DocumentUploadCard
                 title="PAN Card"
-                required={!isEditMode}
+                required={!isEditMode && !existingPanUrl}
                 subtitle={
-                  isEditMode
-                    ? 'Upload new PAN card to replace existing (optional on edit)'
+                  isEditMode && existingPanUrl
+                    ? 'Existing document uploaded. Select new file to replace.'
                     : 'Upload clear image of PAN Card (mandatory)'
                 }
                 note="JPG, PNG or PDF (Max. 10MB)"
@@ -794,6 +946,16 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
                 file={panFile}
                 previewUrl={panPreviewUrl}
                 isPdf={isPanPdf}
+                isExisting={!panFile && Boolean(existingPanUrl)}
+                existingUrl={existingPanUrl}
+                existingFileName={existingPanFileName}
+                onViewExisting={() =>
+                  handlePreviewExisting(
+                    'PAN Card',
+                    existingPanUrl,
+                    isExistingPanPdf
+                  )
+                }
                 onUpload={handlePanUpload}
                 onRemove={handleRemovePan}
                 onView={() =>
@@ -808,14 +970,28 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
               {/* 3. Profile Image */}
               <DocumentUploadCard
                 title="Profile Image"
-                required
-                subtitle="Upload clear image of Profile Image"
+                required={!isEditMode && !existingProfileUrl}
+                subtitle={
+                  isEditMode && existingProfileUrl
+                    ? 'Existing photo uploaded. Select new image to replace.'
+                    : 'Upload clear image of Profile Image'
+                }
                 note="JPG, PNG (Max. 5MB)"
                 accept=".jpg,.jpeg,.png"
                 icon="camera"
                 file={profileImage}
                 previewUrl={profilePreviewUrl}
                 isProfile
+                isExisting={!profileImage && Boolean(existingProfileUrl)}
+                existingUrl={existingProfileUrl}
+                existingFileName="Profile Photo"
+                onViewExisting={() =>
+                  handlePreviewExisting(
+                    'Profile Photo',
+                    existingProfileUrl,
+                    false
+                  )
+                }
                 onUpload={handleProfileImageUpload}
                 onRemove={handleRemoveProfileImg}
                 onView={() =>
@@ -861,7 +1037,7 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
       {/* DOCUMENT PREVIEW LIGHTBOX */}
       <DocumentPreviewModal
         isOpen={Boolean(previewDoc)}
-        onClose={() => setPreviewDoc(null)}
+        onClose={handleClosePreview}
         doc={previewDoc}
       />
 
