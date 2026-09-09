@@ -24,23 +24,34 @@ export const DUMMY_CREDENTIALS = {
  */
 export function getBackOfficeAuth() {
   try {
-    const raw = localStorage.getItem(BACK_OFFICE_AUTH_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && parsed.isAuthenticated) return parsed;
-    }
-
     const boDataRaw = localStorage.getItem('backOfficeData');
     if (boDataRaw) {
       const bo = JSON.parse(boDataRaw);
       if (bo && typeof bo === 'object') {
+        const boId = bo.backOfficeId || bo.id || bo.userId || localStorage.getItem('backOfficeId') || null;
         return {
           isAuthenticated: true,
           name: bo.fullName || bo.name || DUMMY_CREDENTIALS.name,
           role: bo.role || DUMMY_CREDENTIALS.role,
           mobile: bo.mobileNumber || bo.mobile || DUMMY_CREDENTIALS.mobile,
-          id: bo.backOfficeId || bo.id || null,
+          id: boId,
+          backOfficeId: boId,
+          employeeCode: bo.employeeCode || bo.backOfficeCode || '',
+          email: bo.email || bo.emailAddress || '',
           loginTimestamp: new Date().toISOString(),
+        };
+      }
+    }
+
+    const raw = localStorage.getItem(BACK_OFFICE_AUTH_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.isAuthenticated) {
+        const boId = parsed.id || parsed.backOfficeId || localStorage.getItem('backOfficeId') || null;
+        return {
+          ...parsed,
+          id: boId,
+          backOfficeId: boId,
         };
       }
     }
@@ -55,16 +66,18 @@ export function getBackOfficeAuth() {
         role.includes('back office') ||
         role.includes('operations')
       ) {
+        const boId = user.backOfficeId || user.userId || user.id || localStorage.getItem('backOfficeId') || null;
         return {
           isAuthenticated: true,
           name: user.fullName || user.name || DUMMY_CREDENTIALS.name,
           role: user.role || DUMMY_CREDENTIALS.role,
           mobile: user.mobileNumber || user.mobile || DUMMY_CREDENTIALS.mobile,
-          id: user.backOfficeId || user.userId || user.id || null,
+          id: boId,
+          backOfficeId: boId,
           loginTimestamp: new Date().toISOString(),
         };
       }
-      // Explicitly non-BackOffice user logged in
+      // Explicitly non-BackOffice user in sivels_currentUser - do not use
       return null;
     }
     return null;

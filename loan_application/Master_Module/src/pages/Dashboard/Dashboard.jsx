@@ -20,6 +20,7 @@ import {
 import { formatDateTime, formatDateTimeFriendly } from '../../utils/dateHelper';
 import { getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
 import { getAllBackOffice } from '../../api/backOfficeApi';
+import { getProfileImageUrl } from '../../utils/profileImageHelper';
 import './Dashboard.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -27,6 +28,31 @@ const unwrap = (response) => Array.isArray(response) ? response : (response?.dat
 const read = (record, keys, fallback = '') => keys.map((key) => record?.[key]).find((value) => value !== undefined && value !== null && value !== '') ?? fallback;
 const status = (value, fallback = 'Active') => typeof value === 'boolean' ? (value ? 'Active' : 'Inactive') : String(value || fallback).replace(/^./, (letter) => letter.toUpperCase());
 const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'A';
+
+function MasterAvatar({ role, id, name, className = 'role-avatar', style }) {
+  const [error, setError] = useState(false);
+  const imageUrl = getProfileImageUrl(role, id);
+
+  useEffect(() => {
+    setError(false);
+  }, [imageUrl]);
+
+  if (imageUrl && !error) {
+    return (
+      <span className={className} style={{ overflow: 'hidden', padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', ...style }}>
+        <img
+          src={imageUrl}
+          alt={`${name || role} avatar`}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+          onError={() => setError(true)}
+        />
+      </span>
+    );
+  }
+
+  return <span className={className} style={style}>{initials(name)}</span>;
+}
+
 const money = (value) => Number(String(value ?? '').replace(/[^0-9.-]/g, '')) || 0;
 const formatAmount = (amount) => amount > 0 ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount) : '—';
 
@@ -674,7 +700,7 @@ export function Dashboard() {
                   <tr key={agent.id || agent.name}>
                     <td>
                       <div className="agent-name">
-                        <span>{initials(agent.name)}</span>
+                        <MasterAvatar role="Agent" id={agent.id} name={agent.name} />
                         <strong>{agent.name}</strong>
                       </div>
                     </td>
@@ -742,7 +768,7 @@ export function Dashboard() {
                 {coverage.map((rm) => (
                   <div className="role-user-row" key={rm.id || rm.name}>
                     <button className="role-user-main" onClick={() => setSelectedPerson({ ...rm, type: 'Relationship manager' })}>
-                      <span className="role-avatar">{initials(rm.name)}</span>
+                      <MasterAvatar role="RM" id={rm.id} name={rm.name} className="role-avatar" />
                       <span className="role-user-copy">
                         <strong>{rm.name}</strong>
                         <small>{rm.agents} {rm.agents === 1 ? 'agent' : 'agents'} assigned</small>
@@ -769,12 +795,11 @@ export function Dashboard() {
               <div className="role-list">
                 {backOfficeList.map((backOffice) => {
                   const displayName = backOffice.name || 'Unnamed officer';
-                  const profileUrl = getFileUrl(backOffice.profileImagePath);
+                  const boId = backOffice.id || backOffice.backOfficeId;
                   return (
                     <div className="role-user-row" key={backOffice.id || backOffice.backOfficeCode || displayName}>
                       <button className="role-user-main" onClick={() => setSelectedPerson({ ...backOffice, type: 'Back Office' })}>
-                        {profileUrl ? <img src={profileUrl} alt="" className="role-avatar role-avatar-image" onError={(event) => { event.currentTarget.style.display = 'none'; event.currentTarget.nextElementSibling?.classList.remove('role-avatar-fallback'); }} /> : null}
-                        <span className={`role-avatar ${profileUrl ? 'role-avatar-fallback' : ''}`}>{initials(displayName)}</span>
+                        <MasterAvatar role="BackOffice" id={boId} name={displayName} className="role-avatar" />
                         <span className="role-user-copy"><strong>{displayName}</strong><small>{backOffice.branch || backOffice.backOfficeCode || 'Operations team'}</small></span>
                       </button>
                       <button className="icon-action" aria-label={`Edit ${displayName}`} onClick={() => openEditBackOffice(backOffice)}><Pencil size={15} /></button>
@@ -799,12 +824,11 @@ export function Dashboard() {
                 {amsList.map((ams) => {
                   const displayName = ams.fullName || 'Unnamed specialist';
                   const genderLabel = ams.genderName || (ams.genderId === 1 ? 'Male' : ams.genderId === 2 ? 'Female' : ams.genderId === 3 ? 'Other' : 'Specialist');
-                  const profileUrl = getFileUrl(getProfilePath(ams));
+                  const amsId = ams.id || ams.amsId;
                   return (
                     <div className="role-user-row" key={ams.id || ams.amsCode || displayName}>
                       <button className="role-user-main" onClick={() => handleOpenAmsDetails(ams)}>
-                        {profileUrl ? <img src={profileUrl} alt="" className="role-avatar role-avatar-image" onError={(event) => { event.currentTarget.style.display = 'none'; event.currentTarget.nextElementSibling?.classList.remove('role-avatar-fallback'); }} /> : null}
-                        <span className={`role-avatar ${profileUrl ? 'role-avatar-fallback' : ''}`}>{initials(displayName)}</span>
+                        <MasterAvatar role="AMS" id={amsId} name={displayName} className="role-avatar" />
                         <span className="role-user-copy"><strong>{displayName}</strong><small>{genderLabel}</small></span>
                       </button>
                       <div className="role-row-actions">
@@ -841,7 +865,20 @@ export function Dashboard() {
             >
               <X size={18} />
             </button>
-            <div className="person-dialog-avatar">{initials(selectedPerson.name)}</div>
+            <MasterAvatar
+              role={
+                selectedPerson.type === 'Relationship manager' || selectedPerson.type === 'RM'
+                  ? 'RM'
+                  : selectedPerson.type === 'Back Office'
+                  ? 'BackOffice'
+                  : selectedPerson.type === 'AMS'
+                  ? 'AMS'
+                  : 'Agent'
+              }
+              id={selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.amsId}
+              name={selectedPerson.name}
+              className="person-dialog-avatar"
+            />
             <span className="eyebrow">{selectedPerson.type}</span>
             <h2>{selectedPerson.name}</h2>
             <span className={`status ${String(selectedPerson.status || 'active').toLowerCase()}`}>
@@ -1012,21 +1049,12 @@ export function Dashboard() {
 
             {/* Modal Header */}
             <div className="ams-modal-header">
-              {getFileUrl(getProfilePath(selectedAms) || selectedAms.profileImagePath) ? (
-                <img
-                  src={getFileUrl(getProfilePath(selectedAms) || selectedAms.profileImagePath)}
-                  alt={selectedAms.fullName}
-                  className="ams-modal-avatar-img"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                    const next = e.currentTarget.nextElementSibling;
-                    if (next) next.classList.remove('hidden');
-                  }}
-                />
-              ) : null}
-              <div className={`person-dialog-avatar ams-modal-avatar ${getFileUrl(getProfilePath(selectedAms) || selectedAms.profileImagePath) ? 'hidden' : ''}`}>
-                {initials(selectedAms.fullName)}
-              </div>
+              <MasterAvatar
+                role="AMS"
+                id={selectedAms.amsId || selectedAms.id}
+                name={selectedAms.fullName}
+                className="person-dialog-avatar ams-modal-avatar"
+              />
               <div className="ams-modal-title-block">
                 <span className="eyebrow">AREA MANAGEMENT SPECIALIST</span>
                 <h2>{selectedAms.fullName}</h2>

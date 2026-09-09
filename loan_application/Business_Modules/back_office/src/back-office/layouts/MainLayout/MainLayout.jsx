@@ -110,17 +110,82 @@ function MainLayout({
 
   const getCurrentUser = useCallback(() => {
     try {
-      const raw = localStorage.getItem('sivels_currentUser') || localStorage.getItem('backOfficeData');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        return {
-          name: parsed.fullName || parsed.name || 'Back Office Executive',
-          role: parsed.role || 'Operations Team',
-        };
+      // 1. Priority 1: Back Office account data
+      const boDataRaw = localStorage.getItem('backOfficeData');
+      if (boDataRaw) {
+        const bo = JSON.parse(boDataRaw);
+        if (bo && typeof bo === 'object') {
+          const boId = bo.backOfficeId || bo.id || bo.userId || localStorage.getItem('backOfficeId') || null;
+          return {
+            id: boId,
+            backOfficeId: boId,
+            name: bo.fullName || bo.name || 'Back Office Executive',
+            role: bo.role || 'Operations Team',
+            employeeCode: bo.employeeCode || bo.backOfficeCode || '',
+            avatarUrl: bo.avatarUrl || bo.profileImageUrl || null,
+          };
+        }
       }
-      return { name: 'Back Office Executive', role: 'Operations Team' };
+
+      // 2. Priority 2: Back Office auth session
+      const authRaw = localStorage.getItem('backOfficeAuth');
+      if (authRaw) {
+        const auth = JSON.parse(authRaw);
+        if (auth && typeof auth === 'object') {
+          const boId = auth.id || auth.backOfficeId || localStorage.getItem('backOfficeId') || null;
+          return {
+            id: boId,
+            backOfficeId: boId,
+            name: auth.name || auth.fullName || 'Back Office Executive',
+            role: auth.role || 'Operations Team',
+            avatarUrl: auth.avatarUrl || null,
+          };
+        }
+      }
+
+      // 3. Priority 3: sivels_currentUser ONLY if role === "BackOffice" / "Operations"
+      const userRaw = localStorage.getItem('sivels_currentUser');
+      if (userRaw) {
+        const parsed = JSON.parse(userRaw);
+        if (parsed && typeof parsed === 'object') {
+          const roleStr = String(parsed.role || '').toLowerCase();
+          const isBackOffice =
+            roleStr.includes('backoffice') ||
+            roleStr.includes('back_office') ||
+            roleStr.includes('back office') ||
+            roleStr.includes('operations');
+
+          if (isBackOffice) {
+            const boId = parsed.backOfficeId || parsed.id || parsed.userId || localStorage.getItem('backOfficeId') || null;
+            return {
+              id: boId,
+              backOfficeId: boId,
+              name: parsed.fullName || parsed.name || 'Back Office Executive',
+              role: parsed.role || 'Operations Team',
+              avatarUrl: parsed.avatarUrl || parsed.profileImageUrl || null,
+            };
+          }
+        }
+      }
+
+      // 4. Default Fallback
+      const boId = localStorage.getItem('backOfficeId') || null;
+      return {
+        id: boId,
+        backOfficeId: boId,
+        name: 'Back Office Executive',
+        role: 'Operations Team',
+        avatarUrl: null,
+      };
     } catch {
-      return { name: 'Back Office Executive', role: 'Operations Team' };
+      const boId = localStorage.getItem('backOfficeId') || null;
+      return {
+        id: boId,
+        backOfficeId: boId,
+        name: 'Back Office Executive',
+        role: 'Operations Team',
+        avatarUrl: null,
+      };
     }
   }, []);
 
@@ -128,7 +193,15 @@ function MainLayout({
      Computed values
   ------------------------------------------ */
   const todayDate = formatHeaderDate(new Date());
-  const resolvedUser = user?.name ? user : getCurrentUser();
+  const fallbackUser = getCurrentUser();
+  const resolvedUser = {
+    ...fallbackUser,
+    ...(user?.name ? user : {}),
+    id: user?.id || user?.backOfficeId || fallbackUser.id,
+    name: user?.name || fallbackUser.name,
+    role: user?.role || fallbackUser.role,
+    avatarUrl: user?.avatarUrl || fallbackUser.avatarUrl,
+  };
 
   return (
     <div className={['layout', sidebarOpen ? 'layout--sidebar-open' : ''].join(' ').trim()}>

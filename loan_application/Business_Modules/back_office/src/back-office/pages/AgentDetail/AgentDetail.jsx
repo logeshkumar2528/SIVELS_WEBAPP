@@ -11,13 +11,44 @@
  *   - Direct Relational Verification: "Verify Now" routes using the authentic primary key (`agentCustomerId`).
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Breadcrumb from '../../components/Breadcrumb/Breadcrumb';
 import iconMap from '../../config/iconMap';
 import { ROUTES, buildRoute } from '../../config/routeConfig';
 import { useAgentDetailData } from '../../hooks/useAgentDetailData';
+import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './AgentDetail.css';
+
+function BoAvatar({ role, id, name, fallbackInitials, className }) {
+  const [error, setError] = useState(false);
+  const imageUrl = getProfileImageUrl(role, id);
+
+  useEffect(() => {
+    setError(false);
+  }, [imageUrl]);
+
+  const initials = fallbackInitials || getInitials(name, role === 'RM' ? 'RM' : role === 'Agent' ? 'AG' : 'BO');
+
+  if (imageUrl && !error) {
+    return (
+      <div className={className} style={{ overflow: 'hidden', padding: 0 }}>
+        <img
+          src={imageUrl}
+          alt={`${name || role} avatar`}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+          onError={() => setError(true)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className={className}>
+      {initials}
+    </div>
+  );
+}
 
 /**
  * Currency formatter for loan amounts.
@@ -261,9 +292,13 @@ export default function AgentDetail() {
       {/* Agent Header Profile Card */}
       <div className="bo-agent-header-card">
         <div className="bo-agent-profile-strip">
-          <div className="bo-agent-avatar-large">
-            {(agent.name || 'AG').slice(0, 2).toUpperCase()}
-          </div>
+          <BoAvatar
+            role="Agent"
+            id={agentId || agent.agentId || agent.id}
+            name={agent.name || agent.fullName}
+            fallbackInitials={(agent.name || 'AG').slice(0, 2).toUpperCase()}
+            className="bo-agent-avatar-large"
+          />
           <div className="bo-agent-profile-details">
             <div className="bo-agent-tag-row">
               <span className="bo-kicker-tag">FIELD AGENT</span>

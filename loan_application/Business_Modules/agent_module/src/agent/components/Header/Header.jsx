@@ -1,29 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Bell } from 'lucide-react'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
+import { getProfileImageUrl } from '../../utils/profileImageHelper'
 import './Header.css'
-
-const getBackendBaseUrl = () => {
-  const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api/'
-  return apiBase.replace(/\/api\/?$/, '')
-}
-
-const resolveImageUrl = (path) => {
-  if (!path || typeof path !== 'string' || !path.trim()) return null
-  const trimmed = path.trim()
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
-    return trimmed
-  }
-  const backendBase = getBackendBaseUrl()
-  const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
-  return `${backendBase}${cleanPath}`
-}
 
 function Header() {
   const [imageError, setImageError] = useState(false)
   const location = useLocation()
-  const { agentData, loadingAgent } = useAgentIdentity()
+  const { agentId, agentData, loadingAgent } = useAgentIdentity()
 
   const getPageTitle = () => {
     switch (location.pathname) {
@@ -40,11 +25,16 @@ function Header() {
     }
   }
 
+  const resolvedAgentId = agentId || agentData?.agentId || agentData?.AgentId || (typeof window !== 'undefined' ? localStorage.getItem('agentId') : null)
+  const profileImageUrl = getProfileImageUrl('Agent', resolvedAgentId)
+
+  useEffect(() => {
+    setImageError(false)
+  }, [profileImageUrl])
+
   const agentName = agentData?.fullName || 'Agent'
-  const agentInitial = agentName.charAt(0).toUpperCase()
+  const agentInitial = agentName ? agentName.charAt(0).toUpperCase() : 'A'
   const agentCode = agentData?.agentCode || 'N/A'
-  const rawImagePath = agentData?.profileImagePath || agentData?.ProfileImagePath || null
-  const profileImage = !imageError && rawImagePath ? resolveImageUrl(rawImagePath) : null
 
   return (
     <header className="header">
@@ -62,9 +52,9 @@ function Header() {
 
         <div className="header-profile">
           <div className="header-avatar" style={{ overflow: 'hidden' }}>
-            {loadingAgent ? '' : profileImage ? (
+            {loadingAgent ? '' : (!imageError && profileImageUrl) ? (
               <img 
-                src={profileImage} 
+                src={profileImageUrl} 
                 alt={agentName}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 onError={() => setImageError(true)}

@@ -3,19 +3,10 @@ import iconMap from '../../config/iconMap';
 import Breadcrumb from '../../components/Breadcrumb/Breadcrumb';
 import Button from '../../components/Button/Button';
 import { formatDateTime } from '../../utils/dateHelper';
+import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './RmProfile.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-
-function getInitials(name = '') {
-  return String(name)
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() || '')
-    .join('');
-}
 
 function normalizePhone(phone = '') {
   const digits = String(phone).replace(/\D/g, '');
@@ -56,6 +47,11 @@ function buildFallbackProfile(currentUser = {}) {
 export default function RmProfile() {
   const getCurrentUser = () => {
     try {
+      const rmDataRaw = localStorage.getItem('rmData');
+      if (rmDataRaw) {
+        const parsed = JSON.parse(rmDataRaw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
       const raw = localStorage.getItem('sivels_currentUser');
       return raw ? JSON.parse(raw) : {};
     } catch {
@@ -65,8 +61,18 @@ export default function RmProfile() {
 
   const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
   const [profile, setProfile] = useState(() => buildFallbackProfile(getCurrentUser()));
+  const [activeRmId, setActiveRmId] = useState(() => Number(currentUser?.rmId || currentUser?.RMId || localStorage.getItem('rmId')) || null);
+  const [imageFailed, setImageFailed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+
+  const imageUrl = useMemo(() => {
+    return activeRmId ? getProfileImageUrl('RM', activeRmId) : null;
+  }, [activeRmId]);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imageUrl]);
 
   const BriefcaseIcon = iconMap['Briefcase'];
   const MailIcon = iconMap['Mail'];
@@ -94,7 +100,7 @@ export default function RmProfile() {
         const data = await response.json();
         const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);
         const currentMobile = String(currentUser?.mobileNumber || currentUser?.phone || '').replace(/\D/g, '');
-        const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || 0);
+        const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || localStorage.getItem('rmId') || 0);
 
         const match =
           rows.find((row) => Number(row.rmId || row.RMId) === currentRmId) ||
@@ -102,6 +108,8 @@ export default function RmProfile() {
           rows[0];
 
         if (active && match) {
+          const resolvedId = Number(match.rmId || match.RMId || currentRmId) || null;
+          setActiveRmId(resolvedId);
           const name = match.fullName || currentUser?.fullName || currentUser?.name || 'Relationship Manager';
           const employeeId = match.rmCode || `RM${String(match.rmId || currentRmId || 1).padStart(4, '0')}`;
           const location = [match.branch, match.cityName, match.stateName].filter(Boolean).join(', ');
@@ -173,7 +181,31 @@ export default function RmProfile() {
       <div className="rm-banner">
         <div className="rm-banner-left">
           <div className="rm-avatar-wrapper">
-            <img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" alt={profile.name} className="rm-avatar-img" />
+            {imageUrl && !imageFailed ? (
+              <img
+                src={imageUrl}
+                alt={profile.name}
+                className="rm-avatar-img"
+                onError={() => setImageFailed(true)}
+              />
+            ) : (
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--color-primary, #0f766e)',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: '700',
+                  fontSize: '24px',
+                }}
+              >
+                {getInitials(profile.name, 'RM')}
+              </div>
+            )}
             <div className="rm-avatar-badge">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
             </div>

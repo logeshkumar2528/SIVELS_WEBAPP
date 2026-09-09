@@ -31,6 +31,7 @@ import { getAllRelationshipManagers } from '../../api/rmApi';
 import { getAllAgents } from '../../api/agentApi';
 import { agentCustomerService } from '../../../../Core/src/services/agentCustomerService';
 import axiosInstance from '../../api/axiosInstance';
+import { getProfileImageUrl } from '../../utils/profileImageHelper';
 import './AMSDashboard.css';
 
 const unwrap = (response) => {
@@ -39,6 +40,8 @@ const unwrap = (response) => {
   if (Array.isArray(response?.data)) return response.data;
   if (Array.isArray(response?.value)) return response.value;
   if (Array.isArray(response?.items)) return response.items;
+  if (Array.isArray(response?.result)) return response.result;
+  if (Array.isArray(response?.list)) return response.list;
   return [];
 };
 
@@ -53,6 +56,30 @@ const initials = (name = '') =>
     .slice(0, 2)
     .map((part) => part[0].toUpperCase())
     .join('') || 'AM';
+
+function AmsAvatar({ role, id, name, className = 'ams-person-avatar' }) {
+  const [error, setError] = useState(false);
+  const imageUrl = getProfileImageUrl(role, id);
+
+  useEffect(() => {
+    setError(false);
+  }, [imageUrl]);
+
+  if (imageUrl && !error) {
+    return (
+      <span className={className} style={{ overflow: 'hidden', padding: 0 }}>
+        <img
+          src={imageUrl}
+          alt={name || role}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          onError={() => setError(true)}
+        />
+      </span>
+    );
+  }
+
+  return <span className={className}>{initials(name)}</span>;
+}
 
 const formatMoney = (amount) => {
   const num = Number(amount) || 0;
@@ -94,14 +121,41 @@ const normalizeStatus = (value, statusName = '') => {
 
 const getLoggedInAmsInfo = () => {
   try {
-    const user = JSON.parse(localStorage.getItem('sivels_currentUser') || '{}');
     const amsData = JSON.parse(localStorage.getItem('amsData') || '{}');
-    const amsId = user?.amsId || user?.id || user?.AmsId || amsData?.amsId || amsData?.id || null;
-    const fullName = user?.fullName || user?.name || amsData?.fullName || 'AMS Officer';
-    const amsCode = user?.amsCode || amsData?.amsCode || (amsId ? `AMS${String(amsId).padStart(4, '0')}` : 'AMS0001');
-    const mobileNumber = user?.mobileNumber || user?.phone || amsData?.mobileNumber || '';
-    const emailAddress = user?.emailAddress || user?.email || amsData?.emailAddress || '';
-    const branch = user?.branch || amsData?.branch || '';
+    const directAmsId = localStorage.getItem('amsId');
+    const user = JSON.parse(localStorage.getItem('sivels_currentUser') || '{}');
+    const isUserAms = String(user?.role || '').toLowerCase() === 'ams';
+    const amsId =
+      amsData?.amsId ||
+      amsData?.AmsId ||
+      amsData?.id ||
+      directAmsId ||
+      (isUserAms ? (user?.amsId || user?.AmsId || user?.id || user?.userId) : null) ||
+      user?.amsId ||
+      user?.AmsId;
+    const fullName =
+      amsData?.fullName ||
+      amsData?.name ||
+      (isUserAms ? (user?.fullName || user?.name) : null) ||
+      user?.fullName ||
+      'AMS Officer';
+    const amsCode =
+      amsData?.amsCode ||
+      (isUserAms ? (user?.amsCode || user?.code) : null) ||
+      (amsId ? `AMS${String(amsId).padStart(4, '0')}` : 'AMS0001');
+    const mobileNumber =
+      amsData?.mobileNumber ||
+      amsData?.phone ||
+      (isUserAms ? (user?.mobileNumber || user?.phone) : null) ||
+      user?.mobileNumber ||
+      '';
+    const emailAddress =
+      amsData?.emailAddress ||
+      amsData?.email ||
+      (isUserAms ? (user?.emailAddress || user?.email) : null) ||
+      user?.emailAddress ||
+      '';
+    const branch = amsData?.branch || (isUserAms ? user?.branch : null) || user?.branch || '';
     return { amsId, fullName, amsCode, mobileNumber, emailAddress, branch };
   } catch {
     return { amsId: null, fullName: 'AMS Officer', amsCode: 'AMS0001', mobileNumber: '', emailAddress: '', branch: '' };
@@ -145,7 +199,10 @@ export default function AMSDashboard() {
       const requests = [
         // 1. AMS District Mapping
         currentAmsId
-          ? getAMSDistrictsByAmsId(currentAmsId).catch(() => [])
+          ? getAMSDistrictsByAmsId(currentAmsId).catch((err) => {
+              console.warn('District mapping API call failed:', err);
+              return [];
+            })
           : Promise.resolve([]),
         // 2. All Relationship Managers
         getAllRelationshipManagers().catch(() =>
@@ -167,11 +224,6 @@ export default function AMSDashboard() {
 
       const [districtRes, rmRes, agentRes, appRes, profileRes] = await Promise.allSettled(requests);
 
-      let hasRejection = false;
-      if (districtRes.status === 'rejected' || rmRes.status === 'rejected') {
-        hasRejection = true;
-      }
-
       // Process districts
       const districtData = districtRes.status === 'fulfilled' ? unwrap(districtRes.value) : [];
       setRawDistricts(districtData);
@@ -191,10 +243,6 @@ export default function AMSDashboard() {
       // Process Profile
       if (profileRes.status === 'fulfilled' && profileRes.value) {
         setAmsProfile(profileRes.value);
-      }
-
-      if (hasRejection) {
-        setErrorNotice('Some live monitoring records could not be synchronized. Available data is shown below.');
       }
 
       setLastUpdated(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }));
@@ -219,24 +267,26 @@ export default function AMSDashboard() {
   // Normalize Applications
   const liveApplications = useMemo(() => {
     return rawApplications.map((c) => {
-      const id = read(c, ['agentCustomerId', 'AgentCustomerId', 'applicationId', 'id']);
-      const agentId = Number(read(c, ['agentId', 'AgentId', 'createdBy']));
-      const customerName = read(c, ['fullName', 'customerName', 'FullName', 'name'], 'Unnamed Customer');
-      const mobile = read(c, ['mobileNumber', 'MobileNumber', 'mobile', 'phone'], '—');
-      const email = read(c, ['email', 'emailAddress', 'Email'], '—');
-      const employmentType = read(c, ['employmentTypeName', 'EmploymentTypeName', 'employmentType'], '—');
-      const loanPurpose = read(c, ['loanPurposeName', 'LoanPurposeName', 'loanType', 'purpose'], 'General');
-      const rawAmount = read(c, ['expectedLoanAmount', 'ExpectedLoanAmount', 'loanAmount', 'disbursedAmount', 'requestedAmount'], 0);
+      const id = read(c, ['agentCustomerId', 'AgentCustomerId', 'applicationId', 'ApplicationId', 'id', 'Id']);
+      const agentId = Number(read(c, ['agentId', 'AgentId', 'createdBy', 'CreatedBy']));
+      const rmId = Number(read(c, ['rmId', 'RMId', 'relationshipManagerId', 'RelationshipManagerId']));
+      const customerName = read(c, ['fullName', 'customerName', 'FullName', 'CustomerName', 'name', 'Name'], 'Unnamed Customer');
+      const mobile = read(c, ['mobileNumber', 'MobileNumber', 'mobile', 'phone', 'Phone'], '—');
+      const email = read(c, ['email', 'emailAddress', 'Email', 'EmailAddress'], '—');
+      const employmentType = read(c, ['employmentTypeName', 'EmploymentTypeName', 'employmentType', 'EmploymentType'], '—');
+      const loanPurpose = read(c, ['loanPurposeName', 'LoanPurposeName', 'loanType', 'LoanType', 'purpose', 'Purpose'], 'General');
+      const rawAmount = read(c, ['expectedLoanAmount', 'ExpectedLoanAmount', 'loanAmount', 'LoanAmount', 'disbursedAmount', 'requestedAmount'], 0);
       const amount = Number(String(rawAmount).replace(/[^0-9.-]/g, '')) || 0;
       const status = normalizeStatus(
-        read(c, ['status', 'applicationStatus', 'ApplicationStatus']),
+        read(c, ['status', 'Status', 'applicationStatus', 'ApplicationStatus']),
         read(c, ['statusName', 'StatusName'])
       );
-      const createdAt = read(c, ['createdAt', 'CreatedAt', 'createdDate', 'dateJoined']);
+      const createdAt = read(c, ['createdAt', 'CreatedAt', 'createdDate', 'CreatedDate', 'dateJoined']);
 
       return {
         id,
         agentId,
+        rmId,
         customerName,
         mobile,
         email,
@@ -252,20 +302,24 @@ export default function AMSDashboard() {
   // Normalize Agents
   const liveAgents = useMemo(() => {
     return rawAgents.map((ag) => {
-      const id = Number(read(ag, ['agentId', 'AgentId', 'id']));
-      const rmId = Number(read(ag, ['rmId', 'RMId', 'relationshipManagerId', 'RelationshipManagerId', 'createdBy']));
-      const name = read(ag, ['fullName', 'agentName', 'name'], 'Unnamed Agent');
-      const code = read(ag, ['agentCode', 'AgentCode', 'code'], `AG${id || '000'}`);
-      const rmName = read(ag, ['rmName', 'RMName', 'relationshipManager'], 'Unassigned RM');
-      const branch = read(ag, ['branch', 'Branch', 'branchName'], '—');
-      const mobile = read(ag, ['mobileNumber', 'MobileNumber', 'phone'], '—');
-      const email = read(ag, ['emailAddress', 'EmailAddress', 'email'], '—');
+      const id = Number(read(ag, ['agentId', 'AgentId', 'id', 'Id']));
+      const rmId = Number(read(ag, ['rmId', 'RMId', 'relationshipManagerId', 'RelationshipManagerId', 'createdBy', 'CreatedBy']));
+      const name = read(ag, ['fullName', 'agentName', 'AgentName', 'name', 'Name'], 'Unnamed Agent');
+      const code = read(ag, ['agentCode', 'AgentCode', 'code', 'Code'], `AG${id || '000'}`);
+      const rmName = read(ag, ['rmName', 'RMName', 'relationshipManager', 'RelationshipManager'], 'Unassigned RM');
+      const districtId = Number(read(ag, ['districtId', 'DistrictId', 'districtID', 'DistrictID']));
+      const districtName = read(ag, ['districtName', 'DistrictName', 'district', 'District'], '');
+      const branch = read(ag, ['branch', 'Branch', 'branchName', 'BranchName'], '—');
+      const mobile = read(ag, ['mobileNumber', 'MobileNumber', 'phone', 'Phone'], '—');
+      const email = read(ag, ['emailAddress', 'EmailAddress', 'email', 'Email'], '—');
       const isActive = ag.isActive ?? ag.IsActive ?? true;
 
       return {
         id,
         agentId: id,
         rmId,
+        districtId,
+        districtName,
         name,
         code,
         rmName,
@@ -281,15 +335,15 @@ export default function AMSDashboard() {
   // Normalize RMs
   const liveRms = useMemo(() => {
     return rawRms.map((rm) => {
-      const id = Number(read(rm, ['rmId', 'RMId', 'id']));
-      const code = read(rm, ['rmCode', 'RMCode', 'code'], `RM${id || '000'}`);
-      const name = read(rm, ['fullName', 'rmName', 'RMName', 'name']) || `${read(rm, ['firstName'])} ${read(rm, ['lastName'])}`.trim() || 'Unnamed RM';
-      const districtId = Number(read(rm, ['districtId', 'DistrictId', 'districtID']));
-      const districtName = read(rm, ['districtName', 'DistrictName', 'district'], '');
-      const amsId = read(rm, ['amsId', 'AmsId', 'amsID']);
-      const branch = read(rm, ['branch', 'Branch', 'branchName'], '—');
-      const mobile = read(rm, ['mobileNumber', 'MobileNumber', 'phone'], '—');
-      const email = read(rm, ['emailAddress', 'EmailAddress', 'email'], '—');
+      const id = Number(read(rm, ['rmId', 'RMId', 'id', 'Id']));
+      const code = read(rm, ['rmCode', 'RMCode', 'code', 'Code'], `RM${id || '000'}`);
+      const name = read(rm, ['fullName', 'rmName', 'RMName', 'name', 'Name']) || `${read(rm, ['firstName', 'FirstName'])} ${read(rm, ['lastName', 'LastName'])}`.trim() || 'Unnamed RM';
+      const districtId = Number(read(rm, ['districtId', 'DistrictId', 'districtID', 'DistrictID']));
+      const districtName = read(rm, ['districtName', 'DistrictName', 'district', 'District'], '');
+      const amsId = read(rm, ['amsId', 'AmsId', 'amsID', 'AmsID']);
+      const branch = read(rm, ['branch', 'Branch', 'branchName', 'BranchName'], '—');
+      const mobile = read(rm, ['mobileNumber', 'MobileNumber', 'phone', 'Phone'], '—');
+      const email = read(rm, ['emailAddress', 'EmailAddress', 'email', 'Email'], '—');
       const isActive = rm.isActive ?? rm.IsActive ?? true;
 
       return {
@@ -311,8 +365,8 @@ export default function AMSDashboard() {
   // Normalize Assigned Districts
   const liveDistricts = useMemo(() => {
     return rawDistricts.map((d) => {
-      const id = Number(read(d, ['districtId', 'DistrictId', 'id']));
-      const name = read(d, ['districtName', 'DistrictName', 'name'], `District #${id}`);
+      const id = Number(read(d, ['districtId', 'DistrictId', 'id', 'Id']));
+      const name = read(d, ['districtName', 'DistrictName', 'name', 'Name'], `District #${id}`);
       return {
         id: String(id),
         districtId: id,
@@ -329,33 +383,70 @@ export default function AMSDashboard() {
     totals,
     rmsNeedingReview,
   } = useMemo(() => {
-    const assignedDistrictIds = new Set(liveDistricts.map((d) => Number(d.districtId)));
+    const assignedDistrictIds = new Set(liveDistricts.map((d) => Number(d.districtId)).filter(Boolean));
+    const assignedDistrictIdStrings = new Set(liveDistricts.map((d) => String(d.districtId).trim()));
+    const assignedDistrictNames = new Set(
+      liveDistricts.map((d) => String(d.name || '').trim().toLowerCase()).filter(Boolean)
+    );
 
     // 1. Scoped RMs (Belonging to AMS districts OR directly mapped to amsId)
-    const scopedRms = liveRms.filter((rm) =>
-      (rm.districtId && assignedDistrictIds.has(Number(rm.districtId))) ||
-      (currentAmsId && Number(rm.amsId) === Number(currentAmsId))
+    const scopedRms = liveRms.filter((rm) => {
+      const rmDistId = Number(rm.districtId);
+      const rmDistName = String(rm.districtName || '').trim().toLowerCase();
+      const rmAmsId = Number(rm.amsId);
+      return (
+        (rmDistId && assignedDistrictIds.has(rmDistId)) ||
+        (rm.districtId && assignedDistrictIdStrings.has(String(rm.districtId).trim())) ||
+        (rmDistName && assignedDistrictNames.has(rmDistName)) ||
+        (currentAmsId && rmAmsId && rmAmsId === Number(currentAmsId))
+      );
+    });
+    const scopedRmIds = new Set(scopedRms.map((rm) => Number(rm.id)).filter(Boolean));
+    const scopedRmIdStrings = new Set(scopedRms.map((rm) => String(rm.id).trim()));
+    const scopedRmNames = new Set(
+      scopedRms.map((rm) => String(rm.name || '').trim().toLowerCase()).filter(Boolean)
     );
-    const scopedRmIds = new Set(scopedRms.map((rm) => Number(rm.id)));
 
-    // 2. Scoped Agents (Belonging to scoped RMs)
-    const scopedAgents = liveAgents.filter((ag) => scopedRmIds.has(Number(ag.rmId)));
-    const scopedAgentIds = new Set(scopedAgents.map((ag) => Number(ag.id)));
+    // 2. Scoped Agents (Belonging to scoped RMs or AMS districts)
+    const scopedAgents = liveAgents.filter((ag) => {
+      const agRmId = Number(ag.rmId);
+      const agRmName = String(ag.rmName || '').trim().toLowerCase();
+      const agDistId = Number(ag.districtId);
+      const agDistName = String(ag.districtName || '').trim().toLowerCase();
+      return (
+        (agRmId && scopedRmIds.has(agRmId)) ||
+        (ag.rmId && scopedRmIdStrings.has(String(ag.rmId).trim())) ||
+        (agRmName && scopedRmNames.has(agRmName)) ||
+        (agDistId && assignedDistrictIds.has(agDistId)) ||
+        (agDistName && assignedDistrictNames.has(agDistName))
+      );
+    });
+    const scopedAgentIds = new Set(scopedAgents.map((ag) => Number(ag.id)).filter(Boolean));
+    const scopedAgentIdStrings = new Set(scopedAgents.map((ag) => String(ag.id).trim()));
 
-    // 3. Scoped Customers (Belonging to scoped Agents)
-    const scopedCustomers = liveApplications.filter((c) => scopedAgentIds.has(Number(c.agentId)));
+    // 3. Scoped Customers (Belonging to scoped Agents or RMs)
+    const scopedCustomers = liveApplications.filter((c) => {
+      const cAgentId = Number(c.agentId);
+      const cRmId = Number(c.rmId);
+      return (
+        (cAgentId && scopedAgentIds.has(cAgentId)) ||
+        (c.agentId && scopedAgentIdStrings.has(String(c.agentId).trim())) ||
+        (cRmId && scopedRmIds.has(cRmId))
+      );
+    });
 
     // 4. Index customers by agentId
     const customersByAgent = new Map();
     scopedCustomers.forEach((c) => {
-      const list = customersByAgent.get(Number(c.agentId)) || [];
+      const key = String(c.agentId || '');
+      const list = customersByAgent.get(key) || [];
       list.push(c);
-      customersByAgent.set(Number(c.agentId), list);
+      customersByAgent.set(key, list);
     });
 
     // 5. Enrich Agents
     const enrichedAgents = scopedAgents.map((ag) => {
-      const custs = customersByAgent.get(Number(ag.id)) || [];
+      const custs = customersByAgent.get(String(ag.id || '')) || [];
       const totalCustomers = custs.length;
       const pendingCustomers = custs.filter((c) => c.status === 'Pending' || c.status === 'Under Review').length;
       const approvedCustomers = custs.filter((c) => c.status === 'Approved').length;
@@ -375,17 +466,34 @@ export default function AMSDashboard() {
       };
     });
 
-    // 6. Index enriched agents by rmId
-    const agentsByRm = new Map();
+    // 6. Index enriched agents by rmId and rmName
+    const agentsByRmId = new Map();
+    const agentsByRmName = new Map();
     enrichedAgents.forEach((ag) => {
-      const list = agentsByRm.get(Number(ag.rmId)) || [];
-      list.push(ag);
-      agentsByRm.set(Number(ag.rmId), list);
+      if (ag.rmId) {
+        const key = String(ag.rmId);
+        const list = agentsByRmId.get(key) || [];
+        list.push(ag);
+        agentsByRmId.set(key, list);
+      }
+      if (ag.rmName && ag.rmName !== 'Unassigned RM') {
+        const key = String(ag.rmName).trim().toLowerCase();
+        const list = agentsByRmName.get(key) || [];
+        list.push(ag);
+        agentsByRmName.set(key, list);
+      }
     });
 
     // 7. Enrich RMs
     const enrichedRms = scopedRms.map((rm) => {
-      const agList = agentsByRm.get(Number(rm.id)) || [];
+      const listById = agentsByRmId.get(String(rm.id || '')) || [];
+      const listByName = agentsByRmName.get(String(rm.name || '').trim().toLowerCase()) || [];
+      const agentMap = new Map();
+      [...listById, ...listByName].forEach((ag) => {
+        agentMap.set(String(ag.id), ag);
+      });
+      const agList = Array.from(agentMap.values());
+
       const totalAgents = agList.length;
       const totalCustomers = agList.reduce((sum, ag) => sum + ag.totalCustomers, 0);
       const pendingCustomers = agList.reduce((sum, ag) => sum + ag.pendingCustomers, 0);
@@ -408,18 +516,34 @@ export default function AMSDashboard() {
       };
     });
 
-    // 8. Index enriched RMs by districtId
-    const rmsByDistrict = new Map();
+    // 8. Index enriched RMs by districtId and districtName
+    const rmsByDistrictId = new Map();
+    const rmsByDistrictName = new Map();
     enrichedRms.forEach((rm) => {
-      const dId = Number(rm.districtId);
-      const list = rmsByDistrict.get(dId) || [];
-      list.push(rm);
-      rmsByDistrict.set(dId, list);
+      if (rm.districtId) {
+        const key = String(rm.districtId);
+        const list = rmsByDistrictId.get(key) || [];
+        list.push(rm);
+        rmsByDistrictId.set(key, list);
+      }
+      if (rm.districtName) {
+        const key = String(rm.districtName).trim().toLowerCase();
+        const list = rmsByDistrictName.get(key) || [];
+        list.push(rm);
+        rmsByDistrictName.set(key, list);
+      }
     });
 
     // 9. Enrich Districts
     const enrichedDistricts = liveDistricts.map((dist) => {
-      const mgrs = rmsByDistrict.get(Number(dist.districtId)) || [];
+      const listById = rmsByDistrictId.get(String(dist.districtId || '')) || [];
+      const listByName = rmsByDistrictName.get(String(dist.name || '').trim().toLowerCase()) || [];
+      const rmMap = new Map();
+      [...listById, ...listByName].forEach((rm) => {
+        rmMap.set(String(rm.id), rm);
+      });
+      const mgrs = Array.from(rmMap.values());
+
       const rmsCount = mgrs.length;
       const agentsCount = mgrs.reduce((sum, rm) => sum + rm.totalAgents, 0);
       const applicationsCount = mgrs.reduce((sum, rm) => sum + rm.totalCustomers, 0);
@@ -475,13 +599,13 @@ export default function AMSDashboard() {
   }, [assignedDistrictsWithData, selectedDistrictId]);
 
   const selectedDistrict =
-    assignedDistrictsWithData.find((d) => d.id === selectedDistrictId) ||
+    assignedDistrictsWithData.find((d) => String(d.id) === String(selectedDistrictId)) ||
     assignedDistrictsWithData[0] ||
     null;
 
   const selectedRm =
-    selectedDistrict?.managers.find((rm) => rm.id === selectedRmId) ||
-    assignedRmsWithData.find((rm) => rm.id === selectedRmId) ||
+    selectedDistrict?.managers.find((rm) => String(rm.id) === String(selectedRmId)) ||
+    assignedRmsWithData.find((rm) => String(rm.id) === String(selectedRmId)) ||
     null;
 
   const visibleManagers = useMemo(() => {
@@ -535,7 +659,7 @@ export default function AMSDashboard() {
           </span>
         </div>
         <div className="ams-sidebar-profile">
-          <span className="ams-sidebar-avatar">{initials(amsName)}</span>
+          <AmsAvatar role="AMS" id={currentAmsId} name={amsName} className="ams-sidebar-avatar" />
           <span>
             <strong>{amsName}</strong>
             <small>AMS · {totals.districts} district{totals.districts === 1 ? '' : 's'}</small>
@@ -632,7 +756,7 @@ export default function AMSDashboard() {
             </div>
             <div className="ams-dashboard-hero-side">
               <div className="ams-account-badge">
-                <span className="ams-account-avatar">{initials(amsName)}</span>
+                <AmsAvatar role="AMS" id={currentAmsId} name={amsName} className="ams-account-avatar" />
                 <span>
                   <strong>{amsCode}</strong>
                   <small>Area Management Specialist</small>
@@ -775,7 +899,7 @@ export default function AMSDashboard() {
                     }}
                   >
                     <div className="ams-collection-rm-top">
-                      <span className="ams-person-avatar small">{initials(rm.name)}</span>
+                      <AmsAvatar role="RM" id={rm.rmId || rm.id} name={rm.name} className="ams-person-avatar small" />
                       <span>
                         <strong>{rm.name}</strong>
                         <small>{rm.totalAgents} agents · {rm.pendingCustomers} pending</small>
@@ -844,7 +968,7 @@ export default function AMSDashboard() {
                   <tr key={rm.id} className={selectedRmId === rm.id ? 'is-open' : ''}>
                     <td>
                       <div className="ams-person-cell">
-                        <span className="ams-person-avatar">{initials(rm.name)}</span>
+                        <AmsAvatar role="RM" id={rm.rmId || rm.id} name={rm.name} className="ams-person-avatar" />
                         <span>
                           <strong>{rm.name}</strong>
                           <small>{rm.code} · {rm.status}</small>
@@ -949,7 +1073,7 @@ export default function AMSDashboard() {
                     }
                   >
                     <div className="ams-agent-card-top">
-                      <span className="ams-person-avatar small">{initials(agent.name)}</span>
+                      <AmsAvatar role="Agent" id={agent.agentId || agent.id} name={agent.name} className="ams-person-avatar small" />
                       <span>
                         <strong>{agent.name}</strong>
                         <small>{agent.code} · {agent.branch || 'Main Branch'}</small>
@@ -1096,7 +1220,7 @@ export default function AMSDashboard() {
               <span className="ams-modal-kicker">AGENT MONITORING DETAILS</span>
               
               <div className="ams-modal-person">
-                <span className="ams-person-avatar large">{initials(selectedAgent.name)}</span>
+                <AmsAvatar role="Agent" id={selectedAgent.agentId || selectedAgent.id} name={selectedAgent.name} className="ams-person-avatar large" />
                 <div>
                   <h2 id="ams-agent-title">{selectedAgent.name}</h2>
                   <p>

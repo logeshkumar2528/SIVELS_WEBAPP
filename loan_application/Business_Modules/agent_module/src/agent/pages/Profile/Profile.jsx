@@ -16,23 +16,8 @@ import {
   ChevronRight
 } from 'lucide-react'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
+import { getProfileImageUrl } from '../../utils/profileImageHelper'
 import './Profile.css'
-
-const getBackendBaseUrl = () => {
-  const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api/'
-  return apiBase.replace(/\/api\/?$/, '')
-}
-
-const resolveImageUrl = (path) => {
-  if (!path || typeof path !== 'string' || !path.trim()) return null
-  const trimmed = path.trim()
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
-    return trimmed
-  }
-  const backendBase = getBackendBaseUrl()
-  const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
-  return `${backendBase}${cleanPath}`
-}
 
 function Profile() {
   const [imageError, setImageError] = useState(false)
@@ -116,9 +101,12 @@ function Profile() {
   const agentGender = agentData?.genderName || (agentData?.genderId === 6 ? 'Male' : agentData?.genderId === 7 ? 'Female' : 'N/A')
   const agentAddress = agentData?.address || 'N/A'
   const agentState = agentData?.state || 'N/A'
-  const agentPincode = agentData?.pincode || 'N/A'
-  const rawImagePath = agentData?.profileImagePath || agentData?.ProfileImagePath || null
-  const profileImageUrl = !imageError && rawImagePath ? resolveImageUrl(rawImagePath) : null
+  const resolvedAgentId = agentId || agentData?.agentId || agentData?.AgentId || (typeof window !== 'undefined' ? localStorage.getItem('agentId') : null)
+  const profileImageUrl = getProfileImageUrl('Agent', resolvedAgentId)
+
+  useEffect(() => {
+    setImageError(false)
+  }, [profileImageUrl])
 
   return (
     <div className="profile-page">
@@ -128,8 +116,8 @@ function Profile() {
         <div className="profile-overview-left">
           {/* Identity: Avatar + Name & Role */}
           <div className="profile-identity-row">
-            <div className="profile-avatar-img">
-              {profileImageUrl ? (
+            <div className="profile-avatar-img" style={{ overflow: 'hidden' }}>
+              {!imageError && profileImageUrl ? (
                 <img 
                   src={profileImageUrl} 
                   alt={agentName} 
