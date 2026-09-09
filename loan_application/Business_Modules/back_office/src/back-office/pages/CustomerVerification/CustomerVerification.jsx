@@ -22,6 +22,7 @@ import { ROUTES } from '../../config/routeConfig';
 import { VERIFICATION_STEP_DEFINITIONS } from '../../config/verificationSteps';
 import { useVerificationWorkspace } from '../../hooks/useVerificationWorkspace';
 import backOfficeService from '../../api/backOfficeService';
+import { getBackOfficeAuth } from '../../auth/authStorage';
 import VerificationStepModal from '../../components/Verification/VerificationStepModal';
 import './CustomerVerification.css';
 
@@ -36,52 +37,6 @@ function formatFoirCurrency(amount) {
   return num % 1 === 0
     ? `₹${num.toLocaleString('en-IN')}`
     : `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-/**
- * Matches the current applicant to FOIR calculation records from backend.
- * Uses agentCustomerId, applicationEmploymentIncomeDetailsId, and applicationProductDetailsId.
- * Sorts matching records descending by calculationId/createdAt.
- */
-function findMatchingFoirCalculation(records = [], { agentCustomerId, employmentIncomeId, productDetailsId }) {
-  if (!Array.isArray(records) || records.length === 0) return null;
-
-  const validAgentId = agentCustomerId != null && agentCustomerId !== '' ? String(agentCustomerId) : null;
-  const validEmpId = employmentIncomeId != null && employmentIncomeId !== '' ? String(employmentIncomeId) : null;
-  const validProdId = productDetailsId != null && productDetailsId !== '' ? String(productDetailsId) : null;
-
-  const matches = records.filter((item) => {
-    const itemAgentId = item.agentCustomerId ?? item.AgentCustomerId;
-    const itemEmpId = item.applicationEmploymentIncomeDetailsId ?? item.ApplicationEmploymentIncomeDetailsId;
-    const itemProdId = item.applicationProductDetailsId ?? item.ApplicationProductDetailsId;
-
-    if (validAgentId && itemAgentId != null && String(itemAgentId) === validAgentId) {
-      return true;
-    }
-    if (validEmpId && itemEmpId != null && String(itemEmpId) === validEmpId) {
-      return true;
-    }
-    if (validProdId && itemProdId != null && String(itemProdId) === validProdId) {
-      return true;
-    }
-    return false;
-  });
-
-  if (matches.length === 0) return null;
-
-  // Sort descending by calculationId or createdAt (latest first)
-  matches.sort((a, b) => {
-    const calcIdA = Number(a.calculationId ?? a.CalculationId ?? a.id ?? a.Id ?? 0);
-    const calcIdB = Number(b.calculationId ?? b.CalculationId ?? b.id ?? b.Id ?? 0);
-    if (calcIdA !== calcIdB) {
-      return calcIdB - calcIdA;
-    }
-    const dateA = new Date(a.createdAt || a.CreatedAt || 0).getTime();
-    const dateB = new Date(b.createdAt || b.CreatedAt || 0).getTime();
-    return dateB - dateA;
-  });
-
-  return matches[0];
 }
 
 const STAGES = [
@@ -296,22 +251,67 @@ export default function CustomerVerification() {
   const [foirError, setFoirError] = useState(null);
   const [foirLoadingStage, setFoirLoadingStage] = useState(0);
 
+  // 5a. Initial Load: Fetch latest FOIR calculation snapshot via GET /by-customer/{agentCustomerId}
+  useEffect(() => {
+    const rawCustomer = verificationData?.raw?.customer || verificationData?.customer || {};
+    const rawCust = Array.isArray(rawCustomer) ? rawCustomer[0] : rawCustomer;
+    const targetCustomerId =
+      verificationData?.customerId ||
+      rawCust?.agentCustomerId ||
+      rawCust?.AgentCustomerId ||
+      customerId;
+
+    if (!targetCustomerId) return;
+
+    let isMounted = true;
+
+    const fetchLatestFoir = async () => {
+      try {
+        const res = await backOfficeService.getFoirCalculationsByCustomer(targetCustomerId);
+        if (!isMounted) return;
+
+        const records = Array.isArray(res) ? res : (res?.value ?? res?.data ?? res?.result ?? []);
+        // Backend returns records newest-first (latest calculation snapshot at index 0)
+        const latestResult = records.length > 0 ? records[0] : null;
+
+        if (latestResult) {
+          setFoirData(latestResult);
+          setFoirState('success');
+        } else {
+          setFoirData(null);
+          setFoirState('idle');
+        }
+      } catch (err) {
+        if (!isMounted) return;
+        // If 404 or no calculation records exist yet, keep idle state for user to trigger first calculation
+        console.warn('No existing FOIR records found for customer:', err?.message);
+        setFoirData(null);
+        setFoirState('idle');
+      }
+    };
+
+    fetchLatestFoir();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [verificationData?.customerId, customerId]);
+
   const handleCalculateFoir = async () => {
+    if (foirState === 'loading') return;
+
     const startedAt = Date.now();
     setFoirState('loading');
     setFoirLoadingStage(0);
     setFoirError(null);
 
     try {
-      const res = await backOfficeService.getFoirEligibilityCalculations();
-      const records = Array.isArray(res) ? res : (res?.value ?? res?.data ?? res?.result ?? []);
-
       // Resolve application IDs from current verification data
       const rawCustomer = verificationData?.raw?.customer || verificationData?.customer || {};
       const rawCust = Array.isArray(rawCustomer) ? rawCustomer[0] : rawCustomer;
-      const rawEmp = verificationData?.raw?.employmentIncome || verificationData?.employmentIncome?.raw || {};
+      const rawEmp = verificationData?.raw?.employmentIncome || verificationData?.employmentIncome?.raw || verificationData?.raw?.EmploymentIncome || {};
       const rawEmpItem = Array.isArray(rawEmp) ? rawEmp[0] : rawEmp;
-      const rawProd = verificationData?.raw?.productDetails || verificationData?.applicationDetails?.raw || {};
+      const rawProd = verificationData?.raw?.productDetails || verificationData?.applicationDetails?.raw || verificationData?.raw?.ProductDetails || verificationData?.raw?.applicationProductDetails || {};
       const rawProdItem = Array.isArray(rawProd) ? rawProd[0] : rawProd;
 
       const agentCustId =
@@ -319,37 +319,79 @@ export default function CustomerVerification() {
         rawCust?.agentCustomerId ||
         rawCust?.AgentCustomerId ||
         verificationData?.raw?.agentCustomerId ||
-        verificationData?.raw?.AgentCustomerId;
+        verificationData?.raw?.AgentCustomerId ||
+        customerId;
 
       const empIncomeId =
         rawEmpItem?.applicationEmploymentIncomeDetailsId ||
         rawEmpItem?.ApplicationEmploymentIncomeDetailsId ||
-        verificationData?.employmentIncome?.employmentIncomeDetailsId;
+        rawEmpItem?.employmentIncomeDetailsId ||
+        rawEmpItem?.EmploymentIncomeDetailsId ||
+        rawEmpItem?.id ||
+        rawEmpItem?.Id ||
+        verificationData?.employmentIncome?.raw?.applicationEmploymentIncomeDetailsId ||
+        verificationData?.employmentIncome?.raw?.ApplicationEmploymentIncomeDetailsId;
 
       const prodDetailsId =
         rawProdItem?.applicationProductDetailsId ||
         rawProdItem?.ApplicationProductDetailsId ||
-        verificationData?.applicationDetails?.productDetailsId;
+        rawProdItem?.productDetailsId ||
+        rawProdItem?.ProductDetailsId ||
+        rawProdItem?.id ||
+        rawProdItem?.Id ||
+        verificationData?.applicationDetails?.raw?.applicationProductDetailsId ||
+        verificationData?.applicationDetails?.raw?.ApplicationProductDetailsId;
 
-      const matched = findMatchingFoirCalculation(records, {
-        agentCustomerId: agentCustId,
-        employmentIncomeId: empIncomeId,
-        productDetailsId: prodDetailsId,
-      });
+      const auth = getBackOfficeAuth();
+      const loggedInUserId =
+        auth?.id ||
+        localStorage.getItem('backOfficeId') ||
+        (() => {
+          try {
+            const bo = JSON.parse(localStorage.getItem('backOfficeData') || 'null');
+            if (bo?.backOfficeId || bo?.id || bo?.userId) return bo.backOfficeId || bo.id || bo.userId;
+            const cu = JSON.parse(localStorage.getItem('sivels_currentUser') || 'null');
+            if (cu?.backOfficeId || cu?.userId || cu?.id) return cu.backOfficeId || cu.userId || cu.id;
+          } catch {}
+          return null;
+        })() ||
+        1;
 
-      // Keep the processing state visible long enough to communicate the work being done.
-      const remainingTime = Math.max(0, 1500 - (Date.now() - startedAt));
-      await new Promise((resolve) => setTimeout(resolve, remainingTime));
+      if (!agentCustId || !empIncomeId || !prodDetailsId) {
+        const missing = [];
+        if (!agentCustId) missing.push('Customer ID');
+        if (!empIncomeId) missing.push('Employment Income ID');
+        if (!prodDetailsId) missing.push('Product Details ID');
+        throw new Error(`Unable to calculate FOIR: Required identifier(s) [${missing.join(', ')}] not found in application data.`);
+      }
 
-      if (matched) {
-        setFoirData(matched);
+      const payload = {
+        agentCustomerId: Number(agentCustId),
+        applicationEmploymentIncomeDetailsId: Number(empIncomeId),
+        applicationProductDetailsId: Number(prodDetailsId),
+        createdBy: Number(loggedInUserId) || 1,
+      };
+
+      const res = await backOfficeService.calculateFoir(payload);
+
+      // Smooth visual transition for progress stages
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < 800) {
+        await new Promise((resolve) => setTimeout(resolve, 800 - elapsed));
+      }
+
+      const freshResult = (res && typeof res === 'object' && !Array.isArray(res))
+        ? res
+        : (Array.isArray(res) ? res[0] : (res?.data ?? res?.value ?? res?.result ?? res));
+
+      if (freshResult) {
+        setFoirData(freshResult);
         setFoirState('success');
       } else {
-        setFoirData(null);
-        setFoirState('empty');
+        throw new Error('Calculation service did not return a result record.');
       }
     } catch (err) {
-      console.error('Error fetching FOIR calculation:', err);
+      console.error('Error calculating FOIR:', err);
       setFoirError(err?.response?.data?.message || err?.message || 'Unable to connect to FOIR calculation service.');
       setFoirState('error');
     }
@@ -1055,9 +1097,10 @@ export default function CustomerVerification() {
                   type="button"
                   className="bo-btn bo-btn--primary bo-cv-calc-foir-btn"
                   onClick={handleCalculateFoir}
+                  disabled={foirState === 'loading'}
                 >
-                  {RefreshCwIcon && <RefreshCwIcon size={14} />}
-                  <span>Calculate FOIR</span>
+                  {RefreshCwIcon && <RefreshCwIcon size={14} className={foirState === 'loading' ? 'bo-cv-spin' : ''} />}
+                  <span>{foirState === 'loading' ? 'Calculating FOIR...' : 'Calculate FOIR'}</span>
                 </button>
               </div>
             )}
@@ -1095,9 +1138,10 @@ export default function CustomerVerification() {
                     type="button"
                     className="bo-btn bo-btn--outline bo-cv-foir-recalc-btn"
                     onClick={handleCalculateFoir}
+                    disabled={foirState === 'loading'}
                   >
-                    {RefreshCwIcon && <RefreshCwIcon size={13} />}
-                    <span>Retry Calculation</span>
+                    {RefreshCwIcon && <RefreshCwIcon size={13} className={foirState === 'loading' ? 'bo-cv-spin' : ''} />}
+                    <span>{foirState === 'loading' ? 'Calculating FOIR...' : 'Retry Calculation'}</span>
                   </button>
                 </div>
               </div>
@@ -1116,9 +1160,10 @@ export default function CustomerVerification() {
                     type="button"
                     className="bo-btn bo-btn--primary bo-cv-calc-foir-btn"
                     onClick={handleCalculateFoir}
+                    disabled={foirState === 'loading'}
                   >
-                    {RefreshCwIcon && <RefreshCwIcon size={13} />}
-                    <span>Calculate Again</span>
+                    {RefreshCwIcon && <RefreshCwIcon size={13} className={foirState === 'loading' ? 'bo-cv-spin' : ''} />}
+                    <span>{foirState === 'loading' ? 'Calculating FOIR...' : 'Calculate Again'}</span>
                   </button>
                 </div>
               </div>
@@ -1160,10 +1205,11 @@ export default function CustomerVerification() {
                       type="button"
                       className="bo-btn bo-btn--outline bo-cv-foir-recalc-btn"
                       onClick={handleCalculateFoir}
+                      disabled={foirState === 'loading'}
                       title="Re-run FOIR calculation"
                     >
-                      {RefreshCwIcon && <RefreshCwIcon size={13} />}
-                      <span>Re-calculate FOIR</span>
+                      {RefreshCwIcon && <RefreshCwIcon size={13} className={foirState === 'loading' ? 'bo-cv-spin' : ''} />}
+                      <span>{foirState === 'loading' ? 'Calculating FOIR...' : 'Re-calculate FOIR'}</span>
                     </button>
                   </div>
 

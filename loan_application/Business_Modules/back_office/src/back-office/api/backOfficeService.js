@@ -183,6 +183,25 @@ export const backOfficeService = {
     const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.FOIR_CALCULATION);
     return unwrapResponse(response);
   },
+
+  /**
+   * Retrieve FOIR eligibility calculations for a specific customer.
+   * Backend returns records sorted newest-first by CalculationId DESC.
+   * @param {string|number} agentCustomerId - Customer ID
+   */
+  getFoirCalculationsByCustomer: async (agentCustomerId) => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.FOIR_BY_CUSTOMER(agentCustomerId));
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Calculate fresh FOIR eligibility snapshot.
+   * @param {object} payload - { agentCustomerId, applicationEmploymentIncomeDetailsId, applicationProductDetailsId, createdBy }
+   */
+  calculateFoir: async (payload) => {
+    const response = await axiosInstance.post(BACK_OFFICE_ENDPOINTS.FOIR_CALCULATE, payload);
+    return unwrapResponse(response);
+  },
 };
 
 export default backOfficeService;

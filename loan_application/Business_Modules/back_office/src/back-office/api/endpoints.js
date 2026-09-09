@@ -43,4 +43,7 @@ export const BACK_OFFICE_ENDPOINTS = {
 
   // FOIR Eligibility Calculation
   FOIR_CALCULATION: '/FOIREligibilityCalculation',
+  FOIR_BY_CUSTOMER: (agentCustomerId) =>
+    `/FOIREligibilityCalculation/by-customer/${encodeURIComponent(agentCustomerId)}`,
+  FOIR_CALCULATE: '/FOIREligibilityCalculation/calculate',
 };
