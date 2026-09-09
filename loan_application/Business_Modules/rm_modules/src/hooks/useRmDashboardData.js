@@ -93,6 +93,8 @@ const buildAgentPerformance = (applications, agents) => {
     const agentId = Number(agent.agentId || agent.AgentId || index + 1);
     const agentName = agent.agentName || agent.fullName || agent.name || `Agent ${index + 1}`;
     performanceByAgent.set(agentId, {
+      id: agentId,
+      agentId,
       name: agentName,
       totalCustomers: 0,
       pendingVerification: 0,

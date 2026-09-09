@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import iconMap from '../../config/iconMap';
 import StatCard from '../../components/StatCard/StatCard';
@@ -10,7 +10,46 @@ import Modal from '../../components/Modal/Modal';
 import Button from '../../components/Button/Button';
 import { ROUTES } from '../../config/routeConfig';
 import { useRmDashboardData } from '../../hooks/useRmDashboardData';
+import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './Dashboard.css';
+
+function AgentAvatar({ name = '', agentId = null, className = 'agent-avatar-lg', style = {} }) {
+  const [failed, setFailed] = useState(false);
+  const imageUrl = useMemo(() => {
+    return agentId ? getProfileImageUrl('Agent', agentId) : null;
+  }, [agentId]);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [imageUrl]);
+
+  if (imageUrl && !failed) {
+    return (
+      <img
+        src={imageUrl}
+        alt={name || 'Agent'}
+        className={className}
+        style={{ objectFit: 'cover', ...style }}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={className}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        ...style,
+      }}
+      aria-hidden="true"
+    >
+      {getInitials(name, 'AG')}
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -257,9 +296,11 @@ export default function Dashboard() {
         {selectedAgent && (
           <div className="agent-modal-body">
             <div className="agent-modal-header">
-              <div className="agent-avatar-lg">
-                {selectedAgent.name[0]}
-              </div>
+              <AgentAvatar
+                name={selectedAgent.name}
+                agentId={selectedAgent.agentId || selectedAgent.id}
+                className="agent-avatar-lg"
+              />
               <h3 className="agent-modal-name">{selectedAgent.name}</h3>
               <p className="text-muted">Field Relationship Executive</p>
             </div>

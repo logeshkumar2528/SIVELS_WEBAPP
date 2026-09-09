@@ -1,26 +1,34 @@
-import { memo } from 'react';
+import { memo, useState, useEffect } from 'react';
 import iconMap from '../../config/iconMap';
+import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './Header.css';
 
-function UserAvatar({ name, avatarUrl }) {
-  if (avatarUrl) {
+function UserAvatar({ name = '', role = 'RM', id = null, avatarUrl = null }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  const resolvedId = id || (typeof localStorage !== 'undefined' ? localStorage.getItem('rmId') : null);
+  const imageUrl = avatarUrl || (resolvedId ? getProfileImageUrl('RM', resolvedId) : null);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imageUrl]);
+
+  if (imageUrl && !imageFailed) {
     return (
       <img
-        src={avatarUrl}
-        alt={`${name} avatar`}
+        src={imageUrl}
+        alt={`${name || 'RM'} avatar`}
         className="header-avatar-img"
+        onError={() => setImageFailed(true)}
       />
     );
   }
 
-  const parts = name.trim().split(' ');
-  const initials = parts.length >= 2
-    ? `${parts[0][0]}${parts[parts.length - 1][0]}`
-    : parts[0] ? parts[0][0] : 'RM';
+  const initials = getInitials(name, 'RM');
 
   return (
     <div className="header-avatar-initials" aria-hidden="true">
-      {initials.toUpperCase()}
+      {initials}
     </div>
   );
 }
@@ -30,7 +38,7 @@ const Header = memo(function Header({
   subtitle = '',
   date = '',
   notificationCount = 0,
-  user = { name: 'Rajesh Kumar', role: 'Senior RM' },
+  user = { name: 'Relationship Manager', role: 'Relationship Manager' },
   onMenuToggle,
   onNotificationsClick,
   onUserMenuClick,
@@ -95,7 +103,12 @@ const Header = memo(function Header({
           aria-label={`User menu for ${user.name}`}
         >
           <div className="header-avatar">
-            <UserAvatar name={user.name} avatarUrl={user.avatarUrl} />
+            <UserAvatar
+              name={user.name}
+              role="RM"
+              id={user.id || user.rmId}
+              avatarUrl={user.avatarUrl}
+            />
           </div>
 
           <div className="header-user-info">

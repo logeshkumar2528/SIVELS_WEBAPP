@@ -11,13 +11,44 @@
  *   - Authentic Navigation: "View Team" routes using authentic `rmId`.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Breadcrumb from '../../components/Breadcrumb/Breadcrumb';
 import iconMap from '../../config/iconMap';
 import { ROUTES, buildRoute } from '../../config/routeConfig';
 import { useDistrictDetailData } from '../../hooks/useDistrictDetailData';
+import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './DistrictDetail.css';
+
+function BoAvatar({ role, id, name, fallbackInitials, className }) {
+  const [error, setError] = useState(false);
+  const imageUrl = getProfileImageUrl(role, id);
+
+  useEffect(() => {
+    setError(false);
+  }, [imageUrl]);
+
+  const initials = fallbackInitials || getInitials(name, role === 'RM' ? 'RM' : role === 'Agent' ? 'AG' : 'BO');
+
+  if (imageUrl && !error) {
+    return (
+      <div className={className} style={{ overflow: 'hidden', padding: 0 }}>
+        <img
+          src={imageUrl}
+          alt={`${name || role} avatar`}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+          onError={() => setError(true)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className={className}>
+      {initials}
+    </div>
+  );
+}
 
 /**
  * Currency formatter for loan amounts.
@@ -266,9 +297,13 @@ export default function DistrictDetail() {
                   <tr key={rm.rmId || rm.id}>
                     <td>
                       <div className="bo-user-cell">
-                        <div className="bo-avatar-badge">
-                          {rmName.slice(0, 2).toUpperCase()}
-                        </div>
+                        <BoAvatar
+                          role="RM"
+                          id={targetRmId}
+                          name={rmName}
+                          fallbackInitials={rmName.slice(0, 2).toUpperCase()}
+                          className="bo-avatar-badge"
+                        />
                         <div className="bo-user-text">
                           <strong>{rmName}</strong>
                           <small>{rmCode}</small>

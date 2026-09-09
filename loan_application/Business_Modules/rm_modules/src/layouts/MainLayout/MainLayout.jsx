@@ -32,10 +32,59 @@ function MainLayout({
 
   const getCurrentUser = useCallback(() => {
     try {
+      // 1. Priority 1: rmData
+      const rmDataRaw = localStorage.getItem('rmData');
+      if (rmDataRaw) {
+        const rm = JSON.parse(rmDataRaw);
+        if (rm && typeof rm === 'object') {
+          const rmId = rm.rmId || rm.id || localStorage.getItem('rmId') || null;
+          return {
+            id: rmId,
+            rmId: rmId,
+            name: rm.fullName || rm.name || 'Relationship Manager',
+            role: rm.role || 'Relationship Manager',
+            avatarUrl: rm.avatarUrl || rm.profileImageUrl || null,
+          };
+        }
+      }
+
+      // 2. Priority 2: sivels_currentUser ONLY if role === 'RM' / Relationship Manager
       const raw = localStorage.getItem('sivels_currentUser');
-      return raw ? JSON.parse(raw) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          const roleStr = String(parsed.role || '').toLowerCase();
+          if (roleStr.includes('rm') || roleStr.includes('relationship')) {
+            const rmId = parsed.rmId || parsed.id || parsed.userId || localStorage.getItem('rmId') || null;
+            return {
+              id: rmId,
+              rmId: rmId,
+              name: parsed.fullName || parsed.name || 'Relationship Manager',
+              role: parsed.role || 'Relationship Manager',
+              avatarUrl: parsed.avatarUrl || parsed.profileImageUrl || null,
+            };
+          }
+        }
+      }
+
+      // 3. Fallback
+      const rmId = localStorage.getItem('rmId') || null;
+      return {
+        id: rmId,
+        rmId: rmId,
+        name: 'Relationship Manager',
+        role: 'Relationship Manager',
+        avatarUrl: null,
+      };
     } catch {
-      return null;
+      const rmId = localStorage.getItem('rmId') || null;
+      return {
+        id: rmId,
+        rmId: rmId,
+        name: 'Relationship Manager',
+        role: 'Relationship Manager',
+        avatarUrl: null,
+      };
     }
   }, []);
   const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
@@ -69,12 +118,16 @@ function MainLayout({
   }, [navigate]);
 
   const todayDate = formatHeaderDate(new Date());
-  const resolvedUser = currentUser
-    ? {
-        name: currentUser.fullName || currentUser.name || 'Relationship Manager',
-        role: currentUser.role || 'Relationship Manager',
-      }
-    : user;
+  const fallbackUser = getCurrentUser();
+  const resolvedUser = {
+    ...fallbackUser,
+    ...(currentUser || {}),
+    ...(user?.name && user.name !== 'Rajesh Kumar' ? user : {}),
+    id: user?.id || user?.rmId || currentUser?.id || currentUser?.rmId || fallbackUser?.id,
+    name: (user?.name && user.name !== 'Rajesh Kumar' ? user.name : null) || currentUser?.name || fallbackUser?.name,
+    role: (user?.role && user.role !== 'Relationship Manager' ? user.role : null) || currentUser?.role || fallbackUser?.role,
+    avatarUrl: user?.avatarUrl || currentUser?.avatarUrl || fallbackUser?.avatarUrl,
+  };
 
   return (
     <div className={['layout', sidebarOpen ? 'layout--sidebar-open' : ''].join(' ').trim()}>

@@ -30,33 +30,41 @@
  *   - No inline styles — all values via CSS variables in Header.css.
  */
 
-import { memo } from 'react';
+import { memo, useState, useEffect } from 'react';
 import iconMap from '../../config/iconMap';
+import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './Header.css';
 
 /* ==========================================
-   AVATAR — Renders initials when no image URL
+   AVATAR — Renders backend image with initials fallback
 ========================================== */
-function UserAvatar({ name, avatarUrl }) {
-  if (avatarUrl) {
+function UserAvatar({ name = '', role = 'BackOffice', id = null, avatarUrl = null }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  // Direct avatar URL or dynamically resolved from BackOffice role + ID
+  const resolvedId = id || (typeof localStorage !== 'undefined' ? localStorage.getItem('backOfficeId') : null);
+  const imageUrl = avatarUrl || (resolvedId ? getProfileImageUrl('BackOffice', resolvedId) : null);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imageUrl]);
+
+  if (imageUrl && !imageFailed) {
     return (
       <img
-        src={avatarUrl}
-        alt={`${name} avatar`}
+        src={imageUrl}
+        alt={`${name || 'Back Office User'} avatar`}
         className="header-avatar-img"
+        onError={() => setImageFailed(true)}
       />
     );
   }
 
-  /* Generate initials from name (first + last word) */
-  const parts    = name.trim().split(' ');
-  const initials = parts.length >= 2
-    ? `${parts[0][0]}${parts[parts.length - 1][0]}`
-    : parts[0][0];
+  const initials = getInitials(name, 'BO');
 
   return (
     <div className="header-avatar-initials" aria-hidden="true">
-      {initials.toUpperCase()}
+      {initials}
     </div>
   );
 }
@@ -139,7 +147,12 @@ const Header = memo(function Header({
           aria-haspopup="true"
         >
           <div className="header-avatar">
-            <UserAvatar name={user.name} avatarUrl={user.avatarUrl} />
+            <UserAvatar
+              name={user.name}
+              role={user.role || 'BackOffice'}
+              id={user.id || user.backOfficeId}
+              avatarUrl={user.avatarUrl}
+            />
           </div>
 
           <div className="header-user-info">

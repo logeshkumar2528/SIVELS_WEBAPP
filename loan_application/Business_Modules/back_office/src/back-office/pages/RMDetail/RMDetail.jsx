@@ -11,13 +11,44 @@
  *   - Authentic Navigation: "View Customers" routes using real `agentId`.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Breadcrumb from '../../components/Breadcrumb/Breadcrumb';
 import iconMap from '../../config/iconMap';
 import { ROUTES, buildRoute } from '../../config/routeConfig';
 import { useRMDetailData } from '../../hooks/useRMDetailData';
+import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './RMDetail.css';
+
+function BoAvatar({ role, id, name, fallbackInitials, className }) {
+  const [error, setError] = useState(false);
+  const imageUrl = getProfileImageUrl(role, id);
+
+  useEffect(() => {
+    setError(false);
+  }, [imageUrl]);
+
+  const initials = fallbackInitials || getInitials(name, role === 'RM' ? 'RM' : role === 'Agent' ? 'AG' : 'BO');
+
+  if (imageUrl && !error) {
+    return (
+      <div className={className} style={{ overflow: 'hidden', padding: 0 }}>
+        <img
+          src={imageUrl}
+          alt={`${name || role} avatar`}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+          onError={() => setError(true)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className={className}>
+      {initials}
+    </div>
+  );
+}
 
 /**
  * Currency formatter for loan amounts.
@@ -187,9 +218,13 @@ export default function RMDetail() {
       {/* RM Header Overview Card */}
       <div className="bo-rm-header-card">
         <div className="bo-rm-profile-strip">
-          <div className="bo-rm-avatar-large">
-            {(rm.name || 'RM').slice(0, 2).toUpperCase()}
-          </div>
+          <BoAvatar
+            role="RM"
+            id={rm.rmId || rm.id || rmId}
+            name={rm.name || rm.fullName}
+            fallbackInitials={(rm.name || 'RM').slice(0, 2).toUpperCase()}
+            className="bo-rm-avatar-large"
+          />
           <div className="bo-rm-profile-details">
             <div className="bo-rm-tag-row">
               <span className="bo-kicker-tag">RELATIONSHIP MANAGER</span>
@@ -301,9 +336,13 @@ export default function RMDetail() {
                   <tr key={ag.agentId || ag.id}>
                     <td>
                       <div className="bo-user-cell">
-                        <div className="bo-agent-avatar">
-                          {agentName.slice(0, 2).toUpperCase()}
-                        </div>
+                        <BoAvatar
+                          role="Agent"
+                          id={targetAgentId}
+                          name={agentName}
+                          fallbackInitials={agentName.slice(0, 2).toUpperCase()}
+                          className="bo-agent-avatar"
+                        />
                         <div className="bo-user-text">
                           <strong>{agentName}</strong>
                           <small>{agentCode}</small>

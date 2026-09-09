@@ -12,12 +12,43 @@
  *   - Authentic Navigation: "View Customers" routes using authentic `agentId`.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import iconMap from '../../config/iconMap';
 import { buildRoute } from '../../config/routeConfig';
 import { useAgentMonitoringData } from '../../hooks/useAgentMonitoringData';
+import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './AgentMonitoring.css';
+
+function BoAvatar({ role, id, name, fallbackInitials, className }) {
+  const [error, setError] = useState(false);
+  const imageUrl = getProfileImageUrl(role, id);
+
+  useEffect(() => {
+    setError(false);
+  }, [imageUrl]);
+
+  const initials = fallbackInitials || getInitials(name, role === 'RM' ? 'RM' : role === 'Agent' ? 'AG' : 'BO');
+
+  if (imageUrl && !error) {
+    return (
+      <div className={className} style={{ overflow: 'hidden', padding: 0 }}>
+        <img
+          src={imageUrl}
+          alt={`${name || role} avatar`}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+          onError={() => setError(true)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className={className}>
+      {initials}
+    </div>
+  );
+}
 
 /**
  * Currency formatter for loan amounts.
@@ -257,9 +288,13 @@ export default function AgentMonitoring() {
                     <tr key={ag.agentId || ag.id}>
                       <td>
                         <div className="bo-user-cell">
-                          <div className="bo-agent-avatar">
-                            {agentName.slice(0, 2).toUpperCase()}
-                          </div>
+                          <BoAvatar
+                            role="Agent"
+                            id={targetAgentId}
+                            name={agentName}
+                            fallbackInitials={agentName.slice(0, 2).toUpperCase()}
+                            className="bo-agent-avatar"
+                          />
                           <div className="bo-user-text">
                             <strong>{agentName}</strong>
                             <small>{agentCode}</small>

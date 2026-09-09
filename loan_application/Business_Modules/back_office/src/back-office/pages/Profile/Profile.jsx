@@ -1,25 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import iconMap from '../../config/iconMap';
 import { useBackOfficeProfile } from '../../hooks/useBackOfficeProfile';
+import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './Profile.css';
-
-const getInitials = (name = '') => name
-  .split(/\s+/)
-  .filter(Boolean)
-  .slice(0, 2)
-  .map((part) => part[0])
-  .join('')
-  .toUpperCase() || 'BO';
-
-const getProfileImageUrl = (path) => {
-  if (!path) return '';
-  const value = String(path).trim();
-  if (/^(https?:|blob:|data:)/i.test(value)) return value;
-
-  const apiBase = (import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api')
-    .replace(/\/+$/, '');
-  return `${apiBase.replace(/\/api$/i, '')}/${value.replace(/^\/+/, '').replace(/\\/g, '/')}`;
-};
 
 function ProfileField({ icon: Icon, label, value }) {
   return (
@@ -44,6 +27,8 @@ function ProfileSkeleton() {
 
 export default function Profile() {
   const { profile, loading, error, refetch } = useBackOfficeProfile();
+  const [imageFailed, setImageFailed] = useState(false);
+
   const UserIcon = iconMap.UserCircle || iconMap.User;
   const MailIcon = iconMap.Mail;
   const PhoneIcon = iconMap.Phone;
@@ -53,7 +38,20 @@ export default function Profile() {
   const RefreshIcon = iconMap.RefreshCw;
   const CheckIcon = iconMap.CheckCircle2 || iconMap.Check;
 
-  const imageUrl = useMemo(() => getProfileImageUrl(profile?.profileImagePath), [profile?.profileImagePath]);
+  const targetId =
+    profile?.backOfficeId ||
+    profile?.id ||
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('backOfficeId') : null);
+
+  const imageUrl = useMemo(() => {
+    return targetId ? getProfileImageUrl('BackOffice', targetId) : null;
+  }, [targetId]);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imageUrl]);
+
+  const showImage = Boolean(imageUrl && !imageFailed);
   const statusClass = profile?.isActive ? 'is-active' : 'is-inactive';
 
   if (loading) return <ProfileSkeleton />;
@@ -80,15 +78,17 @@ export default function Profile() {
         <div className="bo-profile-hero-glow" aria-hidden="true" />
         <div className="bo-profile-hero-content">
           <div className="bo-profile-avatar-wrap">
-            {imageUrl ? (
+            {showImage ? (
               <img
                 src={imageUrl}
-                alt={profile.fullName}
+                alt={profile.fullName || 'Back Office User'}
                 className="bo-profile-avatar-image"
-                onError={(event) => { event.currentTarget.style.display = 'none'; event.currentTarget.nextElementSibling?.classList.remove('is-hidden'); }}
+                onError={() => setImageFailed(true)}
               />
             ) : null}
-            <div className={`bo-profile-avatar ${imageUrl ? 'is-hidden' : ''}`}>{getInitials(profile.fullName)}</div>
+            <div className={`bo-profile-avatar ${showImage ? 'is-hidden' : ''}`}>
+              {getInitials(profile.fullName, 'BO')}
+            </div>
             <span className="bo-profile-avatar-check"><CheckIcon size={13} /></span>
           </div>
           <div className="bo-profile-identity">

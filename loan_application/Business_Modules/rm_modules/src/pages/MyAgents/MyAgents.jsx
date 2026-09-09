@@ -7,9 +7,54 @@ import Modal from '../../components/Modal/Modal';
 import Select from '../../components/Select/Select';
 import Pagination from '../../components/Pagination/Pagination';
 import { formatDate } from '../../utils/dateHelper';
+import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './MyAgents.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+
+function AgentAvatar({ name = '', agentId = null, className = 'ag-cell-avatar', style = {} }) {
+  const [failed, setFailed] = useState(false);
+  const imageUrl = useMemo(() => {
+    return agentId ? getProfileImageUrl('Agent', agentId) : null;
+  }, [agentId]);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [imageUrl]);
+
+  if (imageUrl && !failed) {
+    return (
+      <img
+        src={imageUrl}
+        alt={name || 'Agent'}
+        className={className}
+        style={{ objectFit: 'cover', ...style }}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={className}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#0f7a4b',
+        color: '#ffffff',
+        fontWeight: '700',
+        fontSize: style.fontSize || '13px',
+        borderRadius: '50%',
+        flexShrink: 0,
+        ...style,
+      }}
+      aria-hidden="true"
+    >
+      {getInitials(name, 'AG')}
+    </div>
+  );
+}
 
 function getStoredUser() {
   try {
@@ -31,10 +76,6 @@ function normalizePhone(value = '') {
 function formatCurrency(value) {
   const amount = Number(value || 0);
   return amount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
-}
-
-function buildAvatar(name = '') {
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Agent')}&background=0f7a4b&color=fff&bold=true`;
 }
 
 function makeAgentId(agent = {}, index = 0) {
@@ -295,9 +336,9 @@ export default function MyAgents() {
       label: 'AGENT',
       render: (row) => (
         <div className="ag-cell-name">
-          <img
-            src={row.avatarUrl}
-            alt={row.name}
+          <AgentAvatar
+            name={row.name}
+            agentId={row.agentId}
             className="ag-cell-avatar"
           />
           <div className="ag-cell-name-info">
@@ -527,10 +568,11 @@ export default function MyAgents() {
           <div className="agent-detail-modal">
             <div className="agent-detail-hero">
               <div className="agent-detail-avatar-wrap">
-                <img
-                  src={safeSelectedAgent.avatarUrl || buildAvatar(safeAgentDetails.fullName || safeAgentDetails.name || 'Agent')}
-                  alt={safeSelectedAgent.name || safeAgentDetails.fullName || 'Agent'}
+                <AgentAvatar
+                  name={safeSelectedAgent.name || safeAgentDetails.fullName || 'Agent'}
+                  agentId={safeSelectedAgent.agentId || safeAgentDetails.agentId || safeAgentDetails.id}
                   className="agent-detail-avatar"
+                  style={{ width: '64px', height: '64px', fontSize: '20px' }}
                 />
               </div>
               <div className="agent-detail-hero-copy">
