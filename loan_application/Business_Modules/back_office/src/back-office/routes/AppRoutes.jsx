@@ -29,6 +29,8 @@ import AgentMonitoring from '../pages/AgentMonitoring/AgentMonitoring';
 import CustomerMonitoring from '../pages/CustomerMonitoring/CustomerMonitoring';
 import CustomerVerification from '../pages/CustomerVerification/CustomerVerification';
 import Profile from '../pages/Profile/Profile';
+import PdfView from '../../../../rm_modules/src/pages/PdfView/PdfView';
+import { ApplicationDraftProvider } from '../../../../rm_modules/src/state/ApplicationDraftContext';
 
 // Hierarchical Drill-Down Detail Pages
 import DistrictDetail from '../pages/DistrictDetail/DistrictDetail';
@@ -200,6 +202,18 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <CustomerVerification />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ---- Completed Application View Form (Read-Only - Protected) ---- */}
+        <Route
+          path={ROUTES.CUSTOMER_VIEW_FORM}
+          element={
+            <ProtectedRoute>
+              <ApplicationDraftProvider>
+                <PdfView />
+              </ApplicationDraftProvider>
             </ProtectedRoute>
           }
         />

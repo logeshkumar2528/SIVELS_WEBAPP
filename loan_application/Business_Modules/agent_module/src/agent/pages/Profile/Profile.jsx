@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
 import {
   Phone,
@@ -13,20 +13,88 @@ import {
   Coins,
   MapPin,
   X,
-  ChevronRight
+  ChevronRight,
+  Camera,
+  Loader2
 } from 'lucide-react'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
-import { getProfileImageUrl } from '../../utils/profileImageHelper'
+import { getProfileImageUrl, updateProfileImage } from '../../utils/profileImageHelper'
 import './Profile.css'
 
 function Profile() {
   const [imageError, setImageError] = useState(false)
+  const [imageVersion, setImageVersion] = useState(Date.now())
+  const [previewUrl, setPreviewUrl] = useState(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const [uploadSuccess, setUploadSuccess] = useState('')
+  const fileInputRef = useRef(null)
+
   const [showCommissionModal, setShowCommissionModal] = useState(false)
   const [selectedEmiCustomer, setSelectedEmiCustomer] = useState(null)
-
   const [customersCount, setCustomersCount] = useState('...')
 
   const { agentData, loadingAgent, agentId } = useAgentIdentity()
+
+  const resolvedAgentId = agentId || agentData?.agentId || agentData?.AgentId || (typeof window !== 'undefined' ? localStorage.getItem('agentId') : null)
+  const profileImageUrl = getProfileImageUrl('Agent', resolvedAgentId, imageVersion)
+
+  useEffect(() => {
+    setImageError(false)
+  }, [profileImageUrl])
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+      }
+    }
+  }, [previewUrl])
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploadError('')
+    setUploadSuccess('')
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(file.type?.toLowerCase())) {
+      setUploadError('Please select a valid image (JPEG, PNG, WebP).')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
+    if (!resolvedAgentId) {
+      setUploadError('Agent identity not found. Cannot update photo.')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
+    const localUrl = URL.createObjectURL(file)
+    setPreviewUrl(localUrl)
+    setIsUploading(true)
+
+    try {
+      await updateProfileImage('Agent', resolvedAgentId, file)
+      setImageVersion(Date.now())
+      setImageError(false)
+      setUploadSuccess('Profile image updated successfully!')
+      setTimeout(() => setUploadSuccess(''), 4000)
+    } catch (err) {
+      console.error('Failed to update agent profile image:', err)
+      setUploadError(err.message || 'Failed to update profile image. Please try again.')
+    } finally {
+      setIsUploading(false)
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+      }
+      setPreviewUrl(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
 
   useEffect(() => {
     if (loadingAgent || !agentId) return
@@ -101,12 +169,7 @@ function Profile() {
   const agentGender = agentData?.genderName || (agentData?.genderId === 6 ? 'Male' : agentData?.genderId === 7 ? 'Female' : 'N/A')
   const agentAddress = agentData?.address || 'N/A'
   const agentState = agentData?.state || 'N/A'
-  const resolvedAgentId = agentId || agentData?.agentId || agentData?.AgentId || (typeof window !== 'undefined' ? localStorage.getItem('agentId') : null)
-  const profileImageUrl = getProfileImageUrl('Agent', resolvedAgentId)
-
-  useEffect(() => {
-    setImageError(false)
-  }, [profileImageUrl])
+  const agentPincode = agentData?.pincode || agentData?.Pincode || 'N/A'
 
   return (
     <div className="profile-page">
@@ -116,17 +179,44 @@ function Profile() {
         <div className="profile-overview-left">
           {/* Identity: Avatar + Name & Role */}
           <div className="profile-identity-row">
-            <div className="profile-avatar-img" style={{ overflow: 'hidden' }}>
-              {!imageError && profileImageUrl ? (
-                <img 
-                  src={profileImageUrl} 
-                  alt={agentName} 
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  onError={() => setImageError(true)}
-                />
-              ) : (
-                <User size={38} strokeWidth={2} style={{ color: '#1A7A3C' }} />
-              )}
+            <div className="profile-avatar-container" style={{ position: 'relative' }}>
+              <div className="profile-avatar-img" style={{ overflow: 'hidden' }}>
+                {previewUrl ? (
+                  <img
+                    src={previewUrl}
+                    alt={agentName}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : !imageError && profileImageUrl ? (
+                  <img 
+                    src={profileImageUrl} 
+                    alt={agentName} 
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={() => setImageError(true)}
+                  />
+                ) : (
+                  <User size={38} strokeWidth={2} style={{ color: '#1A7A3C' }} />
+                )}
+              </div>
+
+              <button
+                type="button"
+                className="profile-avatar-edit-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                title="Change profile photo"
+                aria-label="Change profile photo"
+              >
+                {isUploading ? <Loader2 size={12} className="profile-spin" /> : <Camera size={12} />}
+              </button>
+
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="image/jpeg,image/jpg,image/png,image/webp"
+                style={{ display: 'none' }}
+              />
             </div>
 
             <div className="profile-name-block">
@@ -135,6 +225,8 @@ function Profile() {
                 <span className="profile-role-text">{agentRole}</span>
                 <CheckCircle2 size={15} className="profile-verified-badge" />
               </div>
+              {uploadError && <div className="profile-upload-status is-error">{uploadError}</div>}
+              {uploadSuccess && <div className="profile-upload-status is-success">{uploadSuccess}</div>}
             </div>
           </div>
 

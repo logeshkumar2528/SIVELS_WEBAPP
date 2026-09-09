@@ -26,6 +26,7 @@ export const ROUTES = {
   CUSTOMERS:            `${BASE}/customers`,
   CUSTOMER_DETAIL:      `${BASE}/customers/:customerId`,
   CUSTOMER_VERIFICATION: `${BASE}/customers/:customerId/verify`,
+  CUSTOMER_VIEW_FORM:   `${BASE}/customers/:customerId/view-form`,
 
   /* ==========================================
      ACCOUNT & SYSTEM
@@ -48,6 +49,7 @@ export const buildRoute = {
   customers: () => ROUTES.CUSTOMERS,
   customerDetail: (customerId) => `${BASE}/customers/${customerId}`,
   customerVerification: (customerId) => `${BASE}/customers/${customerId}/verify`,
+  customerViewForm: (customerId) => `${BASE}/customers/${customerId}/view-form`,
   profile: () => ROUTES.PROFILE,
   logout: () => ROUTES.LOGOUT,
 };

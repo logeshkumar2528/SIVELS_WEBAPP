@@ -1,13 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Save, UserRound, MapPin, Landmark, LoaderCircle, Building2 } from 'lucide-react';
-import { createRelationshipManager, getRelationshipManager, updateRelationshipManager } from '../../api/rmApi';
+import {
+  createRelationshipManager,
+  getRelationshipManager,
+  updateRelationshipManager,
+  uploadRMAadhaar,
+  uploadRMPan,
+  uploadRMProfileImage,
+  getRMProfileImageBlob,
+  extractRmId,
+} from '../../api/rmApi';
 import { getBankBranches } from '../../api/masters/bankBranchApi';
 import { masterService } from '../../../../Core/src/services/masterService';
 import { getCurrentUserId } from '../../utils/authHelper';
 import { generateUserCode } from '../../utils/codeGenerator';
-import { DocumentUploadCard, DocumentPreviewModal } from '../../components/DocumentUpload/DocumentUploadSection';
+import { DocumentUploadCard, DocumentPreviewModal, fetchDocumentBlobUrl, isPdfUrl } from '../../components/DocumentUpload/DocumentUploadSection';
+import { getProfileImageUrl } from '../../utils/profileImageHelper';
+import { getFileUrl, isPdfFile, getAadhaarPath, getPanPath, getProfilePath, getDocumentUrl } from '../Dashboard/Dashboard';
 import './RelationshipManagerCreate.css';
 
 const fields = [
@@ -56,7 +67,33 @@ export default function RelationshipManagerCreate() {
   const [profileImage, setProfileImage] = useState(null);
   const [profilePreviewUrl, setProfilePreviewUrl] = useState(null);
 
+  // Existing document states (for Edit Mode)
+  const [existingAadhaarUrl, setExistingAadhaarUrl] = useState(null);
+  const [existingAadhaarFileName, setExistingAadhaarFileName] = useState(null);
+  const [isExistingAadhaarPdf, setIsExistingAadhaarPdf] = useState(false);
+
+  const [existingPanUrl, setExistingPanUrl] = useState(null);
+  const [existingPanFileName, setExistingPanFileName] = useState(null);
+  const [isExistingPanPdf, setIsExistingPanPdf] = useState(false);
+
+  const [existingProfileUrl, setExistingProfileUrl] = useState(null);
+
   const [previewDoc, setPreviewDoc] = useState(null);
+  const blobUrlsRef = useRef([]);
+
+  useEffect(() => {
+    return () => {
+      blobUrlsRef.current.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // ignore
+        }
+      });
+      blobUrlsRef.current = [];
+    };
+  }, []);
+
 
   const handleAadhaarUpload = (e) => {
     const file = e.target.files?.[0];
@@ -153,6 +190,29 @@ export default function RelationshipManagerCreate() {
           accountNumber: record.accountNumber || '',
           ifscCode: record.ifscCode || '',
         });
+
+        const aadhaarPath = getAadhaarPath(record) || record.aadhaarDocumentPath || record.aadhaarPath || record.aadhaarCardPath || '';
+        const panPath = getPanPath(record) || record.panCardPath || record.panDocumentPath || record.panPath || '';
+        const profilePath = getProfilePath(record) || record.profileImagePath || record.profilePath || '';
+
+        if (aadhaarPath) {
+          const url = getDocumentUrl('RM', rmId, 'aadhar', aadhaarPath);
+          setExistingAadhaarUrl(url);
+          setExistingAadhaarFileName(aadhaarPath.split('/').pop().split('\\').pop() || 'Aadhaar Card');
+          setIsExistingAadhaarPdf(isPdfUrl(aadhaarPath));
+        }
+
+        if (panPath) {
+          const url = getDocumentUrl('RM', rmId, 'pan', panPath);
+          setExistingPanUrl(url);
+          setExistingPanFileName(panPath.split('/').pop().split('\\').pop() || 'PAN Card');
+          setIsExistingPanPdf(isPdfUrl(panPath));
+        }
+
+        if (rmId) {
+          const directProfileUrl = getProfileImageUrl('RM', rmId);
+          setExistingProfileUrl(directProfileUrl);
+        }
       } catch (err) {
         if (active) {
           setError(err.response?.data?.message || err.message || 'Unable to load relationship manager.');
@@ -167,6 +227,65 @@ export default function RelationshipManagerCreate() {
       active = false;
     };
   }, [isEditMode, rmId]);
+
+  const handlePreviewExisting = async (title, url, isPdfInitial = false) => {
+    const isProfile = String(title || '').toLowerCase().includes('profile') || String(title || '').toLowerCase().includes('photo') || String(title || '').toLowerCase().includes('image');
+
+    const effectiveUrl = isProfile && rmId ? getProfileImageUrl('RM', rmId) : url;
+
+    if (!effectiveUrl) return;
+
+    if (isProfile) {
+      setPreviewDoc({
+        name: title,
+        title,
+        url: effectiveUrl,
+        isPdf: false,
+        loading: false,
+      });
+      return;
+    }
+
+    setPreviewDoc({
+      name: title,
+      title,
+      url: effectiveUrl,
+      isPdf: isPdfInitial,
+      loading: true,
+    });
+
+    try {
+      const blobResult = await fetchDocumentBlobUrl(effectiveUrl);
+      if (blobResult?.url) {
+        if (blobResult.isBlob) {
+          blobUrlsRef.current.push(blobResult.url);
+        }
+        setPreviewDoc({
+          name: title,
+          title,
+          url: blobResult.url,
+          isPdf: blobResult.isPdf,
+          loading: false,
+        });
+      } else {
+        setPreviewDoc({
+          name: title,
+          title,
+          url: effectiveUrl,
+          isPdf: isPdfInitial,
+          loading: false,
+        });
+      }
+    } catch {
+      setPreviewDoc({
+        name: title,
+        title,
+        url: effectiveUrl,
+        isPdf: isPdfInitial,
+        loading: false,
+      });
+    }
+  };
 
   const update = (key, value) => {
     setForm((current) => {
@@ -215,13 +334,40 @@ export default function RelationshipManagerCreate() {
         modifiedBy: getCurrentUserId() || 1,
       };
 
+      let targetRmId = rmId || null;
+
       if (isEditMode) {
         await updateRelationshipManager(rmId, { ...payload, rmId: Number(rmId) });
-        toast.success('Relationship manager updated successfully');
       } else {
-        await createRelationshipManager(payload);
-        toast.success('Relationship manager created successfully');
+        const response = await createRelationshipManager(payload);
+        targetRmId = extractRmId(response);
       }
+
+      if (aadhaarFile && targetRmId) {
+        try {
+          await uploadRMAadhaar(targetRmId, aadhaarFile);
+        } catch (err) {
+          console.warn('RM Aadhaar upload failed:', err);
+        }
+      }
+
+      if (panFile && targetRmId) {
+        try {
+          await uploadRMPan(targetRmId, panFile);
+        } catch (err) {
+          console.warn('RM PAN upload failed:', err);
+        }
+      }
+
+      if (profileImage && targetRmId) {
+        try {
+          await uploadRMProfileImage(targetRmId, profileImage);
+        } catch (err) {
+          console.warn('RM Profile Image upload failed:', err);
+        }
+      }
+
+      toast.success(isEditMode ? 'Relationship manager updated successfully' : 'Relationship manager created successfully');
       navigate('/dashboard');
     } catch (err) {
       const message = err.response?.status === 409
@@ -231,6 +377,7 @@ export default function RelationshipManagerCreate() {
       toast.error(message);
     } finally {
       setSaving(false);
+
     }
   };
 
@@ -367,13 +514,18 @@ export default function RelationshipManagerCreate() {
           <div className="doc-upload-grid">
             <DocumentUploadCard
               title="Aadhaar Card"
+              required={!isEditMode && !existingAadhaarUrl}
               subtitle="Upload clear image of Aadhaar Card"
               note="JPG, PNG or PDF (Max. 10MB)"
               accept=".pdf,.jpg,.jpeg,.png"
               icon="document"
               file={aadhaarFile}
-              previewUrl={aadhaarPreviewUrl}
-              isPdf={isAadhaarPdf}
+              previewUrl={aadhaarPreviewUrl || existingAadhaarUrl}
+              isPdf={aadhaarFile ? isAadhaarPdf : isExistingAadhaarPdf}
+              isExisting={Boolean(!aadhaarFile && existingAadhaarUrl)}
+              existingUrl={existingAadhaarUrl}
+              existingFileName={existingAadhaarFileName}
+              onViewExisting={() => handlePreviewExisting('Aadhaar Card', existingAadhaarUrl, isExistingAadhaarPdf)}
               onUpload={handleAadhaarUpload}
               onRemove={handleRemoveAadhaar}
               onView={() =>
@@ -386,13 +538,18 @@ export default function RelationshipManagerCreate() {
             />
             <DocumentUploadCard
               title="PAN Card"
+              required={!isEditMode && !existingPanUrl}
               subtitle="Upload clear image of PAN Card"
               note="JPG, PNG or PDF (Max. 10MB)"
               accept=".pdf,.jpg,.jpeg,.png"
               icon="document"
               file={panFile}
-              previewUrl={panPreviewUrl}
-              isPdf={isPanPdf}
+              previewUrl={panPreviewUrl || existingPanUrl}
+              isPdf={panFile ? isPanPdf : isExistingPanPdf}
+              isExisting={Boolean(!panFile && existingPanUrl)}
+              existingUrl={existingPanUrl}
+              existingFileName={existingPanFileName}
+              onViewExisting={() => handlePreviewExisting('PAN Card', existingPanUrl, isExistingPanPdf)}
               onUpload={handlePanUpload}
               onRemove={handleRemovePan}
               onView={() =>
@@ -405,13 +562,18 @@ export default function RelationshipManagerCreate() {
             />
             <DocumentUploadCard
               title="Profile Image"
+              required={!isEditMode && !existingProfileUrl}
               subtitle="Upload clear image of Profile Image"
               note="JPG, PNG (Max. 5MB)"
               accept=".jpg,.jpeg,.png"
               icon="camera"
               file={profileImage}
-              previewUrl={profilePreviewUrl}
+              previewUrl={profilePreviewUrl || existingProfileUrl}
               isProfile
+              isExisting={Boolean(!profileImage && existingProfileUrl)}
+              existingUrl={existingProfileUrl}
+              existingFileName="Profile Photograph"
+              onViewExisting={() => handlePreviewExisting('Profile Image', existingProfileUrl, false)}
               onUpload={handleProfileImageUpload}
               onRemove={handleRemoveProfileImg}
               onView={() =>

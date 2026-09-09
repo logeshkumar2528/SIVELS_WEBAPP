@@ -1,7 +1,7 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import iconMap from '../../config/iconMap';
 import { useBackOfficeProfile } from '../../hooks/useBackOfficeProfile';
-import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
+import { getProfileImageUrl, getInitials, updateProfileImage } from '../../utils/profileImageHelper';
 import './Profile.css';
 
 function ProfileField({ icon: Icon, label, value }) {
@@ -28,6 +28,12 @@ function ProfileSkeleton() {
 export default function Profile() {
   const { profile, loading, error, refetch } = useBackOfficeProfile();
   const [imageFailed, setImageFailed] = useState(false);
+  const [imageVersion, setImageVersion] = useState(Date.now());
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [uploadSuccess, setUploadSuccess] = useState('');
+  const fileInputRef = useRef(null);
 
   const UserIcon = iconMap.UserCircle || iconMap.User;
   const MailIcon = iconMap.Mail;
@@ -37,6 +43,7 @@ export default function Profile() {
   const ShieldIcon = iconMap.ShieldCheck;
   const RefreshIcon = iconMap.RefreshCw;
   const CheckIcon = iconMap.CheckCircle2 || iconMap.Check;
+  const CameraIcon = iconMap.Camera || iconMap.UserRound;
 
   const targetId =
     profile?.backOfficeId ||
@@ -44,14 +51,67 @@ export default function Profile() {
     (typeof localStorage !== 'undefined' ? localStorage.getItem('backOfficeId') : null);
 
   const imageUrl = useMemo(() => {
-    return targetId ? getProfileImageUrl('BackOffice', targetId) : null;
-  }, [targetId]);
+    return targetId ? getProfileImageUrl('BackOffice', targetId, imageVersion) : null;
+  }, [targetId, imageVersion]);
 
   useEffect(() => {
     setImageFailed(false);
   }, [imageUrl]);
 
-  const showImage = Boolean(imageUrl && !imageFailed);
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadError('');
+    setUploadSuccess('');
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type?.toLowerCase())) {
+      setUploadError('Please select a valid image (JPEG, PNG, WebP).');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    if (!targetId) {
+      setUploadError('Back Office identity not found. Cannot update photo.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    const localUrl = URL.createObjectURL(file);
+    setPreviewUrl(localUrl);
+    setIsUploading(true);
+
+    try {
+      await updateProfileImage('BackOffice', targetId, file);
+      setImageVersion(Date.now());
+      setImageFailed(false);
+      setUploadSuccess('Profile image updated successfully!');
+      setTimeout(() => setUploadSuccess(''), 4000);
+    } catch (err) {
+      console.error('Failed to update back office profile image:', err);
+      setUploadError(err.message || 'Failed to update profile image. Please try again.');
+    } finally {
+      setIsUploading(false);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      setPreviewUrl(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const showImage = Boolean((previewUrl || imageUrl) && !imageFailed);
   const statusClass = profile?.isActive ? 'is-active' : 'is-inactive';
 
   if (loading) return <ProfileSkeleton />;
@@ -80,7 +140,7 @@ export default function Profile() {
           <div className="bo-profile-avatar-wrap">
             {showImage ? (
               <img
-                src={imageUrl}
+                src={previewUrl || imageUrl}
                 alt={profile.fullName || 'Back Office User'}
                 className="bo-profile-avatar-image"
                 onError={() => setImageFailed(true)}
@@ -90,6 +150,25 @@ export default function Profile() {
               {getInitials(profile.fullName, 'BO')}
             </div>
             <span className="bo-profile-avatar-check"><CheckIcon size={13} /></span>
+
+            <button
+              type="button"
+              className="bo-profile-avatar-edit-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              title="Change profile photo"
+              aria-label="Change profile photo"
+            >
+              {isUploading ? <RefreshIcon size={12} className="bo-spin-icon" /> : (CameraIcon ? <CameraIcon size={12} /> : <span>📷</span>)}
+            </button>
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/jpeg,image/jpg,image/png,image/webp"
+              style={{ display: 'none' }}
+            />
           </div>
           <div className="bo-profile-identity">
             <span className="bo-profile-eyebrow">Back office account</span>
@@ -99,6 +178,8 @@ export default function Profile() {
               <span>{profile.backOfficeCode || profile.employeeCode}</span>
               <span className={`bo-profile-status ${statusClass}`}><i /> {profile.status}</span>
             </div>
+            {uploadError && <div className="bo-profile-upload-msg is-error">{uploadError}</div>}
+            {uploadSuccess && <div className="bo-profile-upload-msg is-success">{uploadSuccess}</div>}
           </div>
         </div>
         <div className="bo-profile-hero-note">

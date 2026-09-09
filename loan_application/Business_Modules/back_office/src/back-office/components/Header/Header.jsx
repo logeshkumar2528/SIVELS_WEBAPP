@@ -40,14 +40,26 @@ import './Header.css';
 ========================================== */
 function UserAvatar({ name = '', role = 'BackOffice', id = null, avatarUrl = null }) {
   const [imageFailed, setImageFailed] = useState(false);
+  const [imageVersion, setImageVersion] = useState(Date.now());
 
   // Direct avatar URL or dynamically resolved from BackOffice role + ID
   const resolvedId = id || (typeof localStorage !== 'undefined' ? localStorage.getItem('backOfficeId') : null);
-  const imageUrl = avatarUrl || (resolvedId ? getProfileImageUrl('BackOffice', resolvedId) : null);
+  const imageUrl = avatarUrl || (resolvedId ? getProfileImageUrl('BackOffice', resolvedId, imageVersion) : null);
 
   useEffect(() => {
     setImageFailed(false);
   }, [imageUrl]);
+
+  useEffect(() => {
+    const handleUpdate = (e) => {
+      if (!e.detail?.role || e.detail.role.toLowerCase().includes('backoffice') || e.detail.role.toLowerCase().includes('back_office')) {
+        setImageVersion(e.detail?.timestamp || Date.now());
+        setImageFailed(false);
+      }
+    };
+    window.addEventListener('profile-image-updated', handleUpdate);
+    return () => window.removeEventListener('profile-image-updated', handleUpdate);
+  }, []);
 
   if (imageUrl && !imageFailed) {
     return (

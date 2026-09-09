@@ -80,6 +80,14 @@ export const uploadAMSProfile = async (amsId, file) => {
   return response.data;
 };
 
+export const getAMSProfileImageBlob = async (amsId) => {
+  if (!amsId) return null;
+  const response = await axiosInstance.get(`/AMSMaster/${encodeURIComponent(amsId)}/profile-image`, {
+    responseType: 'blob',
+  });
+  return response.data;
+};
+
 export const extractAmsId = (response) => {
   if (!response) return null;
   if (typeof response === 'number') return response;

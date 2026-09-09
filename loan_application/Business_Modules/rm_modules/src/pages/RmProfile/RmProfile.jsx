@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import iconMap from '../../config/iconMap';
 import Breadcrumb from '../../components/Breadcrumb/Breadcrumb';
 import Button from '../../components/Button/Button';
 import { formatDateTime } from '../../utils/dateHelper';
-import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
+import { getProfileImageUrl, getInitials, updateProfileImage } from '../../utils/profileImageHelper';
 import './RmProfile.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -63,16 +63,76 @@ export default function RmProfile() {
   const [profile, setProfile] = useState(() => buildFallbackProfile(getCurrentUser()));
   const [activeRmId, setActiveRmId] = useState(() => Number(currentUser?.rmId || currentUser?.RMId || localStorage.getItem('rmId')) || null);
   const [imageFailed, setImageFailed] = useState(false);
+  const [imageVersion, setImageVersion] = useState(Date.now());
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [uploadSuccess, setUploadSuccess] = useState('');
+  const fileInputRef = useRef(null);
+
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
   const imageUrl = useMemo(() => {
-    return activeRmId ? getProfileImageUrl('RM', activeRmId) : null;
-  }, [activeRmId]);
+    return activeRmId ? getProfileImageUrl('RM', activeRmId, imageVersion) : null;
+  }, [activeRmId, imageVersion]);
 
   useEffect(() => {
     setImageFailed(false);
   }, [imageUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadError('');
+    setUploadSuccess('');
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type?.toLowerCase())) {
+      setUploadError('Please select a valid image (JPEG, PNG, WebP).');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    if (!activeRmId) {
+      setUploadError('RM identity not found. Cannot update photo.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    const localUrl = URL.createObjectURL(file);
+    setPreviewUrl(localUrl);
+    setIsUploading(true);
+
+    try {
+      await updateProfileImage('RM', activeRmId, file);
+      setImageVersion(Date.now());
+      setImageFailed(false);
+      setUploadSuccess('Profile image updated successfully!');
+      setTimeout(() => setUploadSuccess(''), 4000);
+    } catch (err) {
+      console.error('Failed to update RM profile image:', err);
+      setUploadError(err.message || 'Failed to update profile image. Please try again.');
+    } finally {
+      setIsUploading(false);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      setPreviewUrl(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   const BriefcaseIcon = iconMap['Briefcase'];
   const MailIcon = iconMap['Mail'];
@@ -181,7 +241,13 @@ export default function RmProfile() {
       <div className="rm-banner">
         <div className="rm-banner-left">
           <div className="rm-avatar-wrapper">
-            {imageUrl && !imageFailed ? (
+            {previewUrl ? (
+              <img
+                src={previewUrl}
+                alt={profile.name}
+                className="rm-avatar-img"
+              />
+            ) : imageUrl && !imageFailed ? (
               <img
                 src={imageUrl}
                 alt={profile.name}
@@ -206,15 +272,35 @@ export default function RmProfile() {
                 {getInitials(profile.name, 'RM')}
               </div>
             )}
-            <div className="rm-avatar-badge">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-            </div>
+            <button
+              type="button"
+              className="rm-avatar-badge"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              title="Change profile photo"
+              aria-label="Change profile photo"
+            >
+              {isUploading ? (
+                <ClockIcon size={12} className="rm-spin" />
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+              )}
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/jpeg,image/jpg,image/png,image/webp"
+              style={{ display: 'none' }}
+            />
           </div>
           <div className="rm-banner-details">
             <div className="rm-name-row">
               <h2 className="rm-name">{isLoading ? 'Loading...' : profile.name}</h2>
               <span className="rm-role-badge">{profile.role}</span>
             </div>
+            {uploadError && <div className="rm-upload-msg is-error">{uploadError}</div>}
+            {uploadSuccess && <div className="rm-upload-msg is-success">{uploadSuccess}</div>}
             <div className="rm-contact-grid">
               <div className="rm-contact-item">
                 {BriefcaseIcon && <BriefcaseIcon size={14} className="text-muted" />}

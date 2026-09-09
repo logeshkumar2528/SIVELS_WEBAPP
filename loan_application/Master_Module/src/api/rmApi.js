@@ -10,3 +10,67 @@ export const getAllRelationshipManagers = async () => {
 };
 
 export const updateRelationshipManager = (rmId, data) => axiosInstance.put(`/RMMaster/${rmId}`, data);
+
+export const uploadRMAadhaar = async (rmId, file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await axiosInstance.post(
+    `/RMMaster/${encodeURIComponent(rmId)}/aadhar`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return response.data;
+};
+
+export const uploadRMPan = async (rmId, file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await axiosInstance.post(
+    `/RMMaster/${encodeURIComponent(rmId)}/pan`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return response.data;
+};
+
+export const uploadRMProfileImage = async (rmId, file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await axiosInstance.post(
+    `/RMMaster/${encodeURIComponent(rmId)}/profile-image`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return response.data;
+};
+
+export const getRMProfileImageBlob = async (rmId) => {
+  if (!rmId) return null;
+  const response = await axiosInstance.get(`/RMMaster/${encodeURIComponent(rmId)}/profile-image`, {
+    responseType: 'blob',
+  });
+  return response.data;
+};
+
+export const extractRmId = (response) => {
+  if (!response) return null;
+  if (typeof response === 'number') return response;
+  if (typeof response === 'string' && response.trim() !== '' && !Number.isNaN(Number(response))) {
+    return Number(response);
+  }
+  return (
+    response.rmId ||
+    response.RMId ||
+    response.id ||
+    response.Id ||
+    response.data?.rmId ||
+    response.data?.RMId ||
+    response.data?.id ||
+    response.value?.[0]?.rmId ||
+    response.value?.[0]?.RMId ||
+    response.value?.[0]?.id ||
+    (typeof response.data === 'number' ? response.data : null) ||
+    null
+  );
+};
+

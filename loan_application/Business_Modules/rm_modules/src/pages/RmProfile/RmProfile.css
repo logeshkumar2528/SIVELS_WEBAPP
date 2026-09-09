@@ -49,8 +49,48 @@
   align-items: center;
   justify-content: center;
   color: #475569;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
   border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  z-index: 2;
+}
+
+.rm-avatar-badge:hover:not(:disabled) {
+  background: #f0fdf4;
+  color: #15803d;
+  border-color: #86efac;
+  transform: scale(1.1);
+}
+
+.rm-avatar-badge:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.rm-spin {
+  animation: rmSpinAnim 0.8s linear infinite;
+}
+
+@keyframes rmSpinAnim {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.rm-upload-msg {
+  font-size: 11px;
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+.rm-upload-msg.is-error {
+  color: #dc2626;
+}
+
+.rm-upload-msg.is-success {
+  color: #16a34a;
 }
 
 .rm-banner-details {

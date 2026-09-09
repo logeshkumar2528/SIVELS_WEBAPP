@@ -104,6 +104,7 @@ import {
   Edit3,
   LogIn,
   KeyRound,
+  ExternalLink,
 } from 'lucide-react';
 
 /* ==========================================
@@ -200,6 +201,7 @@ const iconMap = {
   Edit3,
   LogIn,
   KeyRound,
+  ExternalLink,
 };
 
 export default iconMap;

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
+  AlertCircle,
   ArrowUpRight,
   BriefcaseBusiness,
   Building2,
@@ -9,6 +10,7 @@ import {
   CheckCircle2,
   Eye,
   FileText,
+  LoaderCircle,
   Pencil,
   Plus,
   RefreshCw,
@@ -19,19 +21,48 @@ import {
 } from 'lucide-react';
 import { formatDateTime, formatDateTimeFriendly } from '../../utils/dateHelper';
 import { getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
-import { getAllBackOffice } from '../../api/backOfficeApi';
-import { getProfileImageUrl } from '../../utils/profileImageHelper';
+import { getAllBackOffice, getBackOfficeById } from '../../api/backOfficeApi';
+import { getRelationshipManager } from '../../api/rmApi';
+import { getAgentById } from '../../api/agentApi';
+import { getProfileImageUrl, getDocumentUrl } from '../../utils/profileImageHelper';
 import './Dashboard.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-const unwrap = (response) => Array.isArray(response) ? response : (response?.data || response?.value || []);
+const unwrap = (response) => {
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.data)) return response.data;
+  if (Array.isArray(response?.value)) return response.value;
+  if (Array.isArray(response?.data?.value)) return response.data.value;
+  return [];
+};
 const read = (record, keys, fallback = '') => keys.map((key) => record?.[key]).find((value) => value !== undefined && value !== null && value !== '') ?? fallback;
 const status = (value, fallback = 'Active') => typeof value === 'boolean' ? (value ? 'Active' : 'Inactive') : String(value || fallback).replace(/^./, (letter) => letter.toUpperCase());
 const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'A';
 
-function MasterAvatar({ role, id, name, className = 'role-avatar', style }) {
+function MasterAvatar({ role, id, name, className = 'role-avatar', style, version = null }) {
   const [error, setError] = useState(false);
-  const imageUrl = getProfileImageUrl(role, id);
+  const [liveVersion, setLiveVersion] = useState(version || Date.now());
+
+  useEffect(() => {
+    if (version) {
+      setLiveVersion(version);
+      setError(false);
+    }
+  }, [version]);
+
+  useEffect(() => {
+    const handleUpdate = (e) => {
+      if (!e.detail?.role || e.detail.role.toLowerCase() === String(role).toLowerCase()) {
+        setLiveVersion(e.detail?.timestamp || Date.now());
+        setError(false);
+      }
+    };
+    window.addEventListener('profile-image-updated', handleUpdate);
+    return () => window.removeEventListener('profile-image-updated', handleUpdate);
+  }, [role]);
+
+  const effectiveVersion = version || liveVersion;
+  const imageUrl = getProfileImageUrl(role, id, effectiveVersion);
 
   useEffect(() => {
     setError(false);
@@ -87,6 +118,8 @@ export const getFileUrl = (path) => {
   return `${staticBase}/${normalizedPath}`;
 };
 
+export { getDocumentUrl };
+
 export const getAadhaarPath = (record) =>
   read(record, [
     'aadhaarDocumentPath',
@@ -99,16 +132,21 @@ export const getAadhaarPath = (record) =>
     'AadharPath',
     'aadhaarCardPath',
     'AadhaarCardPath',
+    'aadharCardPath',
+    'AadharCardPath',
   ]);
 
 export const getPanPath = (record) =>
   read(record, [
     'panCardPath',
     'PanCardPath',
+    'PANCardPath',
     'panDocumentPath',
     'PanDocumentPath',
+    'PANDocumentPath',
     'panPath',
     'PanPath',
+    'PANPath',
   ]);
 
 export const getProfilePath = (record) =>
@@ -191,6 +229,7 @@ const authHeaders = () => {
 
 export function Dashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [agents, setAgents] = useState([]);
   const [applications, setApplications] = useState([]);
   const [rms, setRms] = useState([]);
@@ -207,8 +246,10 @@ export function Dashboard() {
   const [selectedAms, setSelectedAms] = useState(null);
   const [loadingAmsModal, setLoadingAmsModal] = useState(false);
   const [previewDoc, setPreviewDoc] = useState(null);
+  const [imageVersion, setImageVersion] = useState(() => Date.now());
 
   const loadDashboard = useCallback(async () => {
+    setImageVersion(Date.now());
     setLoading(true);
     setError('');
     try {
@@ -226,30 +267,41 @@ export function Dashboard() {
       }
 
       const rmRows = rmResult.status === 'fulfilled' ? unwrap(rmResult.value) : [];
-      const liveRms = rmRows.map((rm) => ({
-        id: read(rm, ['rmId', 'RMId', 'id']),
-        name: read(rm, ['fullName', 'name', 'rmName', 'RMName']) || `${read(rm, ['firstName'])} ${read(rm, ['lastName'])}`.trim(),
-        email: read(rm, ['emailAddress', 'email']),
-        phone: read(rm, ['mobileNumber', 'phone']),
-        branch: read(rm, ['branch', 'Branch', 'branchName', 'BranchName']),
-        status: status(read(rm, ['status', 'isActive', 'IsActive'])),
-      })).filter((rm) => rm.id && rm.name);
+      const liveRms = rmRows.map((rm) => {
+        const id = read(rm, ['rmId', 'RMId', 'id', 'Id']);
+        const rmName = read(rm, ['fullName', 'FullName', 'rmName', 'RMName', 'name', 'Name']) || `${read(rm, ['firstName', 'FirstName'], '')} ${read(rm, ['lastName', 'LastName'], '')}`.trim() || 'Unnamed RM';
+        return {
+          id,
+          rmId: id,
+          name: rmName,
+          fullName: rmName,
+          email: read(rm, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+          phone: read(rm, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+          branch: read(rm, ['branch', 'Branch', 'branchName', 'BranchName']),
+          status: status(read(rm, ['status', 'Status', 'isActive', 'IsActive'])),
+          aadhaarDocumentPath: getAadhaarPath(rm),
+          panCardPath: getPanPath(rm),
+          profileImagePath: getProfilePath(rm),
+          rawRecord: rm,
+        };
+      }).filter((rm) => rm.id && rm.name);
       const rmNames = new Map(liveRms.map((rm) => [String(rm.id), rm.name]));
 
       const agentRows = agentResult.status === 'fulfilled' ? unwrap(agentResult.value) : [];
       const agentLookup = new Map();
       agentRows.forEach((agent) => {
-        const id = read(agent, ['agentId', 'AgentId', 'id']);
+        const id = read(agent, ['agentId', 'AgentId', 'id', 'Id']);
         if (!id) return;
         const rmId = read(agent, ['rmId', 'RMId', 'relationshipManagerId', 'RelationshipManagerId', 'createdBy']);
         agentLookup.set(String(id), {
           id,
-          name: read(agent, ['fullName', 'agentName', 'name'], 'Unnamed agent'),
-          email: read(agent, ['emailAddress', 'email']),
-          phone: read(agent, ['mobileNumber', 'phone']),
-          branch: read(agent, ['branch', 'Branch']),
+          agentId: id,
+          name: read(agent, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name'], 'Unnamed agent'),
+          email: read(agent, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+          phone: read(agent, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+          branch: read(agent, ['branch', 'Branch', 'branchName', 'BranchName']),
           rmId,
-          rmName: read(agent, ['rmName', 'RMName', 'relationshipManager']) || rmNames.get(String(rmId)) || 'Unassigned',
+          rmName: read(agent, ['rmName', 'RMName', 'relationshipManager', 'RelationshipManager']) || rmNames.get(String(rmId)) || 'Unassigned',
         });
       });
 
@@ -290,40 +342,50 @@ export function Dashboard() {
 
       const liveAgents = agentRows.map((agent) => {
         const rmId = read(agent, ['rmId', 'RMId', 'relationshipManagerId', 'RelationshipManagerId', 'createdBy']);
-        const id = read(agent, ['agentId', 'AgentId', 'id']);
+        const id = read(agent, ['agentId', 'AgentId', 'id', 'Id']);
+        const agentName = read(agent, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name'], 'Unnamed agent');
         return {
           id,
-          name: read(agent, ['fullName', 'agentName', 'name'], 'Unnamed agent'),
-          email: read(agent, ['emailAddress', 'email']),
-          phone: read(agent, ['mobileNumber', 'phone']),
-          rm: read(agent, ['relationshipManager', 'rmName', 'RMName']) || rmNames.get(String(rmId)) || 'Unassigned',
+          agentId: id,
+          name: agentName,
+          fullName: agentName,
+          email: read(agent, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+          phone: read(agent, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+          rm: read(agent, ['relationshipManager', 'RelationshipManager', 'rmName', 'RMName']) || rmNames.get(String(rmId)) || 'Unassigned',
           rmId,
-          status: status(read(agent, ['status', 'isActive', 'IsActive'])),
+          branch: read(agent, ['branch', 'Branch', 'branchName', 'BranchName']),
+          status: status(read(agent, ['status', 'Status', 'isActive', 'IsActive'])),
           applications: applicationsByAgent.get(String(id)) || 0,
-          updatedAt: read(agent, ['modifiedAt', 'updatedAt', 'createdAt', 'createdDate', 'dateJoined']),
+          updatedAt: read(agent, ['modifiedAt', 'ModifiedAt', 'updatedAt', 'UpdatedAt', 'createdAt', 'CreatedAt', 'createdDate', 'dateJoined', 'DateJoined']),
+          aadhaarDocumentPath: getAadhaarPath(agent),
+          panCardPath: getPanPath(agent),
+          profileImagePath: getProfilePath(agent),
+          rawRecord: agent,
         };
       }).filter((agent) => agent.id || agent.name);
 
       const amsRows = amsResult.status === 'fulfilled' ? unwrap(amsResult.value) : [];
       const liveAms = amsRows.map((item) => {
-        const id = read(item, ['amsId', 'AmsId', 'id']);
+        const id = read(item, ['amsId', 'AmsId', 'id', 'Id']);
+        const fullName = read(item, ['fullName', 'FullName', 'name', 'Name'], 'Unnamed AMS');
         return {
           id,
           amsId: id,
-          amsCode: read(item, ['amsCode', 'AmsCode', 'code']),
-          fullName: read(item, ['fullName', 'FullName', 'name'], 'Unnamed AMS'),
+          amsCode: read(item, ['amsCode', 'AmsCode', 'code', 'Code']),
+          fullName,
+          name: fullName,
           genderId: item.genderId ?? item.GenderId,
           genderName: read(item, ['genderName', 'GenderName', 'gender', 'Gender']),
-          dateOfBirth: read(item, ['dateOfBirth', 'DateOfBirth', 'dob']),
+          dateOfBirth: read(item, ['dateOfBirth', 'DateOfBirth', 'dob', 'DOB']),
           address: read(item, ['address', 'Address']),
           stateId: item.stateId ?? item.StateId,
-          stateName: read(item, ['stateName', 'StateName', 'state']),
+          stateName: read(item, ['stateName', 'StateName', 'state', 'State']),
           cityId: item.cityId ?? item.CityId,
-          cityName: read(item, ['cityName', 'CityName', 'city']),
+          cityName: read(item, ['cityName', 'CityName', 'city', 'City']),
           pincode: read(item, ['pincode', 'Pincode']),
-          mobileNumber: read(item, ['mobileNumber', 'MobileNumber', 'phone']),
-          emailAddress: read(item, ['emailAddress', 'EmailAddress', 'email']),
-          branch: read(item, ['branch', 'Branch', 'branchName']),
+          mobileNumber: read(item, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+          emailAddress: read(item, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+          branch: read(item, ['branch', 'Branch', 'branchName', 'BranchName']),
           dateJoined: read(item, ['dateJoined', 'DateJoined']),
           isActive: item.isActive ?? item.IsActive ?? true,
           accountNumber: read(item, ['accountNumber', 'AccountNumber']),
@@ -334,21 +396,28 @@ export function Dashboard() {
           districtNames: Array.isArray(item.districtNames || item.districts || item.amsDistricts)
             ? item.districtNames || item.districts || item.amsDistricts
             : [],
+          rawRecord: item,
         };
       }).filter((a) => a.id || a.fullName);
 
       const backOfficeRows = backOfficeResult.status === 'fulfilled' ? unwrap(backOfficeResult.value) : [];
       const liveBackOffice = backOfficeRows.map((item) => {
-        const id = read(item, ['backOfficeId', 'BackOfficeId', 'id']);
+        const id = read(item, ['backOfficeId', 'BackOfficeId', 'id', 'Id']);
+        const boName = read(item, ['fullName', 'FullName', 'name', 'Name'], 'Unnamed back office officer');
         return {
           id,
-          backOfficeCode: read(item, ['backOfficeCode', 'BackOfficeCode', 'code']),
-          name: read(item, ['fullName', 'FullName', 'name'], 'Unnamed back office officer'),
-          email: read(item, ['emailAddress', 'EmailAddress', 'email']),
-          phone: read(item, ['mobileNumber', 'MobileNumber', 'phone']),
+          backOfficeId: id,
+          backOfficeCode: read(item, ['backOfficeCode', 'BackOfficeCode', 'code', 'Code']),
+          name: boName,
+          fullName: boName,
+          email: read(item, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+          phone: read(item, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
           branch: read(item, ['branch', 'Branch', 'branchName', 'BranchName']),
-          status: status(read(item, ['status', 'isActive', 'IsActive'])),
+          status: status(read(item, ['status', 'Status', 'isActive', 'IsActive'])),
+          aadhaarDocumentPath: getAadhaarPath(item),
+          panCardPath: getPanPath(item),
           profileImagePath: getProfilePath(item),
+          rawRecord: item,
         };
       }).filter((item) => item.id || item.name);
 
@@ -372,7 +441,7 @@ export function Dashboard() {
 
   useEffect(() => {
     loadDashboard();
-  }, [loadDashboard]);
+  }, [loadDashboard, location.key, location.pathname]);
 
   const filteredAgents = useMemo(
     () => agents.filter((agent) => `${agent.name} ${agent.email} ${agent.rm}`.toLowerCase().includes(query.toLowerCase())),
@@ -423,6 +492,7 @@ export function Dashboard() {
 
   const openEdit = (person) => {
     if (!person?.id) return;
+    setSelectedPerson(null);
     if (person.type === 'Agent') {
       navigate(`/edit-agent/${person.id}`);
       return;
@@ -437,65 +507,305 @@ export function Dashboard() {
   const openEditAms = (ams) => {
     const targetId = ams?.id || ams?.amsId || ams?.AmsId;
     if (!targetId) return;
+    setSelectedAms(null);
     navigate(`/edit-ams/${targetId}`);
   };
 
   const openEditBackOffice = (backOffice) => {
     const targetId = backOffice?.id || backOffice?.backOfficeId || backOffice?.BackOfficeId;
     if (!targetId) return;
+    setSelectedPerson(null);
     navigate(`/edit-back-office/${targetId}`);
   };
 
+  const handleOpenPersonDetails = async (person, type) => {
+    const roleType = type || person?.type || 'Agent';
+    const targetId = person?.id || person?.agentId || person?.rmId || person?.backOfficeId;
+    if (!targetId && !person) return;
+
+    const initialPerson = {
+      ...person,
+      type: roleType,
+      id: targetId || person?.id,
+      name: person?.name || person?.fullName || 'Unnamed',
+      fullName: person?.fullName || person?.name || 'Unnamed',
+      email: person?.email || person?.emailAddress || 'Not available',
+      phone: person?.phone || person?.mobileNumber || 'Not available',
+      status: person?.status || 'Active',
+      branch: person?.branch || '',
+      aadhaarDocumentPath: getAadhaarPath(person),
+      panCardPath: getPanPath(person),
+      profileImagePath: getProfilePath(person),
+    };
+    setSelectedPerson(initialPerson);
+
+    if (!targetId) return;
+
+    try {
+      if (roleType === 'Relationship manager' || roleType === 'RM') {
+        const response = await getRelationshipManager(targetId);
+        const recordValue = response?.data !== undefined ? response.data : response;
+        const record = Array.isArray(recordValue)
+          ? recordValue[0]
+          : (recordValue?.value?.[0] || recordValue?.data || recordValue?.value || recordValue);
+
+        if (record && typeof record === 'object') {
+          const freshName = read(record, ['fullName', 'FullName', 'rmName', 'RMName', 'name', 'Name']) || `${read(record, ['firstName', 'FirstName'], '')} ${read(record, ['lastName', 'LastName'], '')}`.trim() || initialPerson.name;
+          const freshEmail = read(record, ['emailAddress', 'EmailAddress', 'email', 'Email']) || initialPerson.email;
+          const freshPhone = read(record, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']) || initialPerson.phone;
+          const freshBranch = read(record, ['branch', 'Branch', 'branchName', 'BranchName']) || initialPerson.branch;
+          const freshStatus = status(read(record, ['status', 'Status', 'isActive', 'IsActive']), initialPerson.status);
+          const freshAadhaar = getAadhaarPath(record) || initialPerson.aadhaarDocumentPath;
+          const freshPan = getPanPath(record) || initialPerson.panCardPath;
+          const freshProfile = getProfilePath(record) || initialPerson.profileImagePath;
+
+          const updatedPerson = {
+            ...initialPerson,
+            ...record,
+            id: targetId,
+            rmId: targetId,
+            type: 'Relationship manager',
+            name: freshName,
+            fullName: freshName,
+            email: freshEmail,
+            phone: freshPhone,
+            branch: freshBranch,
+            status: freshStatus,
+            aadhaarDocumentPath: freshAadhaar,
+            panCardPath: freshPan,
+            profileImagePath: freshProfile,
+            rawRecord: record,
+          };
+
+          setSelectedPerson(updatedPerson);
+
+          setRms((prevList) =>
+            prevList.map((item) =>
+              (item.id === targetId || item.rmId === targetId)
+                ? {
+                    ...item,
+                    ...record,
+                    id: targetId,
+                    rmId: targetId,
+                    name: freshName,
+                    fullName: freshName,
+                    email: freshEmail,
+                    phone: freshPhone,
+                    branch: freshBranch,
+                    status: freshStatus,
+                    aadhaarDocumentPath: freshAadhaar,
+                    panCardPath: freshPan,
+                    profileImagePath: freshProfile,
+                    rawRecord: record,
+                  }
+                : item
+            )
+          );
+        }
+      } else if (roleType === 'Back Office') {
+        const response = await getBackOfficeById(targetId);
+        const recordValue = response?.data !== undefined ? response.data : response;
+        const record = Array.isArray(recordValue)
+          ? recordValue[0]
+          : (recordValue?.value?.[0] || recordValue?.data || recordValue?.value || recordValue);
+
+        if (record && typeof record === 'object') {
+          const freshName = read(record, ['fullName', 'FullName', 'name', 'Name']) || initialPerson.name;
+          const freshCode = read(record, ['backOfficeCode', 'BackOfficeCode', 'code', 'Code']) || initialPerson.backOfficeCode;
+          const freshEmail = read(record, ['emailAddress', 'EmailAddress', 'email', 'Email']) || initialPerson.email;
+          const freshPhone = read(record, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']) || initialPerson.phone;
+          const freshBranch = read(record, ['branch', 'Branch', 'branchName', 'BranchName']) || initialPerson.branch;
+          const freshStatus = status(read(record, ['status', 'Status', 'isActive', 'IsActive']), initialPerson.status);
+          const freshAadhaar = getAadhaarPath(record) || initialPerson.aadhaarDocumentPath;
+          const freshPan = getPanPath(record) || initialPerson.panCardPath;
+          const freshProfile = getProfilePath(record) || initialPerson.profileImagePath;
+
+          const updatedPerson = {
+            ...initialPerson,
+            ...record,
+            id: targetId,
+            backOfficeId: targetId,
+            type: 'Back Office',
+            name: freshName,
+            fullName: freshName,
+            backOfficeCode: freshCode,
+            email: freshEmail,
+            phone: freshPhone,
+            branch: freshBranch,
+            status: freshStatus,
+            aadhaarDocumentPath: freshAadhaar,
+            panCardPath: freshPan,
+            profileImagePath: freshProfile,
+            rawRecord: record,
+          };
+
+          setSelectedPerson(updatedPerson);
+
+          setBackOfficeList((prevList) =>
+            prevList.map((item) =>
+              (item.id === targetId || item.backOfficeId === targetId)
+                ? {
+                    ...item,
+                    ...record,
+                    id: targetId,
+                    backOfficeId: targetId,
+                    name: freshName,
+                    fullName: freshName,
+                    backOfficeCode: freshCode,
+                    email: freshEmail,
+                    phone: freshPhone,
+                    branch: freshBranch,
+                    status: freshStatus,
+                    aadhaarDocumentPath: freshAadhaar,
+                    panCardPath: freshPan,
+                    profileImagePath: freshProfile,
+                    rawRecord: record,
+                  }
+                : item
+            )
+          );
+        }
+      } else if (roleType === 'Agent') {
+        const response = await getAgentById(targetId);
+        const recordValue = response?.data !== undefined ? response.data : response;
+        const record = Array.isArray(recordValue)
+          ? recordValue[0]
+          : (recordValue?.value?.[0] || recordValue?.data || recordValue?.value || recordValue);
+
+        if (record && typeof record === 'object') {
+          const freshName = read(record, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name']) || initialPerson.name;
+          const freshEmail = read(record, ['emailAddress', 'EmailAddress', 'email', 'Email']) || initialPerson.email;
+          const freshPhone = read(record, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']) || initialPerson.phone;
+          const freshRm = read(record, ['relationshipManager', 'RelationshipManager', 'rmName', 'RMName']) || initialPerson.rm;
+          const freshBranch = read(record, ['branch', 'Branch', 'branchName', 'BranchName']) || initialPerson.branch;
+          const freshStatus = status(read(record, ['status', 'Status', 'isActive', 'IsActive']), initialPerson.status);
+          const freshAadhaar = getAadhaarPath(record) || initialPerson.aadhaarDocumentPath;
+          const freshPan = getPanPath(record) || initialPerson.panCardPath;
+          const freshProfile = getProfilePath(record) || initialPerson.profileImagePath;
+
+          const updatedPerson = {
+            ...initialPerson,
+            ...record,
+            id: targetId,
+            agentId: targetId,
+            type: 'Agent',
+            name: freshName,
+            fullName: freshName,
+            email: freshEmail,
+            phone: freshPhone,
+            rm: freshRm,
+            branch: freshBranch,
+            status: freshStatus,
+            aadhaarDocumentPath: freshAadhaar,
+            panCardPath: freshPan,
+            profileImagePath: freshProfile,
+            rawRecord: record,
+          };
+
+          setSelectedPerson(updatedPerson);
+
+          setAgents((prevList) =>
+            prevList.map((item) =>
+              (item.id === targetId || item.agentId === targetId)
+                ? {
+                    ...item,
+                    ...record,
+                    id: targetId,
+                    agentId: targetId,
+                    name: freshName,
+                    fullName: freshName,
+                    email: freshEmail,
+                    phone: freshPhone,
+                    rm: freshRm,
+                    branch: freshBranch,
+                    status: freshStatus,
+                    aadhaarDocumentPath: freshAadhaar,
+                    panCardPath: freshPan,
+                    profileImagePath: freshProfile,
+                    rawRecord: record,
+                  }
+                : item
+            )
+          );
+        }
+      }
+    } catch (err) {
+      console.error(`Failed to load full ${roleType} details:`, err);
+    }
+  };
+
   const handleOpenAmsDetails = async (ams) => {
-    setSelectedAms(ams);
+    const targetId = ams?.id || ams?.amsId || ams?.AmsId;
+    if (!targetId) return;
+
+    const freshVersion = Date.now();
+    setSelectedAms({ ...ams, imageVersion: freshVersion });
     setLoadingAmsModal(true);
     try {
-      const targetId = ams.id || ams.amsId || ams.AmsId;
-      if (targetId) {
-        const [fullDataResult, districtDataResult] = await Promise.allSettled([
-          getAMSById(targetId),
-          getAMSDistrictsByAmsId(targetId),
-        ]);
+      const [fullDataResult, districtDataResult] = await Promise.allSettled([
+        getAMSById(targetId),
+        getAMSDistrictsByAmsId(targetId),
+      ]);
 
-        const fullData = fullDataResult.status === 'fulfilled' ? fullDataResult.value : null;
-        const record = Array.isArray(fullData) ? fullData[0] : (fullData?.data || fullData?.value?.[0] || fullData);
+      const fullData = fullDataResult.status === 'fulfilled' ? fullDataResult.value : null;
+      const record = Array.isArray(fullData)
+        ? fullData[0]
+        : (fullData?.data?.value?.[0] || fullData?.data || fullData?.value?.[0] || fullData);
 
-        let mappedDistricts = [];
-        if (districtDataResult.status === 'fulfilled' && districtDataResult.value) {
-          const rawDistricts = districtDataResult.value;
-          mappedDistricts = Array.isArray(rawDistricts)
-            ? rawDistricts
-            : (rawDistricts?.data || rawDistricts?.value || []);
-        }
-
-        setSelectedAms((prev) => {
-          const currentRecord = record || {};
-          const fallbackDistricts = Array.isArray(currentRecord.districtNames || currentRecord.districts || currentRecord.amsDistricts)
-            ? currentRecord.districtNames || currentRecord.districts || currentRecord.amsDistricts
-            : (prev?.districts || prev?.districtNames || []);
-
-          const finalDistricts = mappedDistricts.length > 0 ? mappedDistricts : fallbackDistricts;
-
-          return {
-            ...prev,
-            ...currentRecord,
-            id: currentRecord.amsId || currentRecord.id || prev.id,
-            fullName: currentRecord.fullName || prev.fullName,
-            amsCode: currentRecord.amsCode || prev.amsCode,
-            genderName: currentRecord.genderName || prev.genderName,
-            stateName: currentRecord.stateName || prev.stateName,
-            cityName: currentRecord.cityName || prev.cityName,
-            branch: currentRecord.branch || prev.branch,
-            accountNumber: currentRecord.accountNumber || prev.accountNumber,
-            ifscCode: currentRecord.ifscCode || prev.ifscCode,
-            aadhaarDocumentPath: getAadhaarPath(currentRecord) || prev.aadhaarDocumentPath,
-            panCardPath: getPanPath(currentRecord) || prev.panCardPath,
-            profileImagePath: getProfilePath(currentRecord) || prev.profileImagePath,
-            districts: finalDistricts,
-            districtNames: finalDistricts,
-          };
-        });
+      let mappedDistricts = [];
+      if (districtDataResult.status === 'fulfilled' && districtDataResult.value) {
+        const rawDistricts = districtDataResult.value;
+        mappedDistricts = Array.isArray(rawDistricts)
+          ? rawDistricts
+          : (rawDistricts?.data || rawDistricts?.value || []);
       }
+
+      const currentRecord = (record && typeof record === 'object') ? record : {};
+      const fallbackDistricts = Array.isArray(currentRecord.districtNames || currentRecord.districts || currentRecord.amsDistricts)
+        ? currentRecord.districtNames || currentRecord.districts || currentRecord.amsDistricts
+        : (ams?.districts || ams?.districtNames || []);
+
+      const finalDistricts = mappedDistricts.length > 0 ? mappedDistricts : fallbackDistricts;
+
+      const mappedAms = {
+        ...ams,
+        ...currentRecord,
+        id: targetId,
+        amsId: targetId,
+        imageVersion: freshVersion,
+        amsCode: read(currentRecord, ['amsCode', 'AmsCode', 'code'], ams.amsCode || ''),
+        fullName: read(currentRecord, ['fullName', 'FullName', 'name'], ams.fullName || 'Unnamed AMS'),
+        genderId: currentRecord.genderId ?? currentRecord.GenderId ?? ams.genderId,
+        genderName: read(currentRecord, ['genderName', 'GenderName', 'gender', 'Gender'], ams.genderName || ''),
+        dateOfBirth: read(currentRecord, ['dateOfBirth', 'DateOfBirth', 'dob'], ams.dateOfBirth || ''),
+        address: read(currentRecord, ['address', 'Address'], ams.address || ''),
+        stateId: currentRecord.stateId ?? currentRecord.StateId ?? ams.stateId,
+        stateName: read(currentRecord, ['stateName', 'StateName', 'state', 'State'], ams.stateName || ''),
+        cityId: currentRecord.cityId ?? currentRecord.CityId ?? ams.cityId,
+        cityName: read(currentRecord, ['cityName', 'CityName', 'city', 'City'], ams.cityName || ''),
+        pincode: read(currentRecord, ['pincode', 'Pincode'], ams.pincode || ''),
+        mobileNumber: read(currentRecord, ['mobileNumber', 'MobileNumber', 'phone', 'Phone'], ams.mobileNumber || ''),
+        emailAddress: read(currentRecord, ['emailAddress', 'EmailAddress', 'email', 'Email'], ams.emailAddress || ''),
+        branch: read(currentRecord, ['branch', 'Branch', 'branchName', 'BranchName'], ams.branch || ''),
+        dateJoined: read(currentRecord, ['dateJoined', 'DateJoined'], ams.dateJoined || ''),
+        isActive: currentRecord.isActive ?? currentRecord.IsActive ?? ams.isActive ?? true,
+        accountNumber: read(currentRecord, ['accountNumber', 'AccountNumber'], ams.accountNumber || ''),
+        ifscCode: read(currentRecord, ['ifscCode', 'IfscCode'], ams.ifscCode || ''),
+        aadhaarDocumentPath: getAadhaarPath(currentRecord) || ams.aadhaarDocumentPath || '',
+        panCardPath: getPanPath(currentRecord) || ams.panCardPath || '',
+        profileImagePath: getProfilePath(currentRecord) || ams.profileImagePath || '',
+        districts: finalDistricts,
+        districtNames: finalDistricts,
+        rawRecord: currentRecord,
+      };
+
+      setSelectedAms(mappedAms);
+
+      setAmsList((prevList) =>
+        prevList.map((item) =>
+          (item.id === targetId || item.amsId === targetId) ? { ...item, ...mappedAms } : item
+        )
+      );
     } catch (err) {
       console.error('Failed to load full AMS details:', err);
     } finally {
@@ -503,19 +813,98 @@ export function Dashboard() {
     }
   };
 
-  const handlePreviewDocument = (title, rawPath) => {
-    if (!rawPath) return;
-    const fullUrl = getFileUrl(rawPath);
-    if (!fullUrl) return;
-    const isPdf = isPdfFile(fullUrl) || isPdfFile(rawPath);
+  const blobUrlsRef = useRef([]);
+
+  const cleanupBlobUrls = useCallback(() => {
+    blobUrlsRef.current.forEach((url) => {
+      try {
+        if (url && url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
+      } catch (e) {
+        // ignore
+      }
+    });
+    blobUrlsRef.current = [];
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      cleanupBlobUrls();
+    };
+  }, [cleanupBlobUrls]);
+
+  const handleClosePreview = () => {
+    cleanupBlobUrls();
+    setPreviewDoc(null);
+  };
+
+  const handlePreviewDocument = async (title, rawPath, role = null, entityId = null, version = null) => {
+    let targetUrl = '';
+    const isProfile = String(title || '').toLowerCase().includes('profile') || String(title || '').toLowerCase().includes('photo') || String(title || '').toLowerCase().includes('image');
+    const effectiveVersion = version || imageVersion;
+
+    if (isProfile && role && entityId) {
+      targetUrl = getProfileImageUrl(role, entityId, effectiveVersion);
+    } else if (role && entityId) {
+      targetUrl = getDocumentUrl(role, entityId, title, rawPath);
+    } else if (rawPath) {
+      targetUrl = getFileUrl(rawPath) || rawPath;
+    } else if (role && entityId && isProfile) {
+      targetUrl = getProfileImageUrl(role, entityId, effectiveVersion);
+    }
+
+    if (!targetUrl) return;
+
+    // Direct image display without XHR/fetch for AMS Profile Image to prevent CORS block
+    if (isProfile && String(role || '').toUpperCase() === 'AMS') {
+      setPreviewDoc({
+        title,
+        name: title,
+        url: targetUrl,
+        rawPath,
+        isPdf: false,
+        loading: false,
+      });
+      return;
+    }
+
+    const isPdfInitial = isPdfFile(targetUrl) || (rawPath ? isPdfFile(rawPath) : false);
+
     setPreviewDoc({
       title,
       name: title,
-      url: fullUrl,
+      url: targetUrl,
       rawPath,
-      isPdf,
+      isPdf: isPdfInitial,
+      loading: true,
     });
+
+    try {
+      const headers = authHeaders();
+      const response = await fetch(targetUrl, { headers });
+      if (response.ok) {
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        blobUrlsRef.current.push(objectUrl);
+        const isPdf = blob.type === 'application/pdf' || isPdfInitial;
+        setPreviewDoc({
+          title,
+          name: title,
+          url: objectUrl,
+          rawPath,
+          isPdf,
+          loading: false,
+        });
+      } else {
+        setPreviewDoc((prev) => (prev ? { ...prev, loading: false } : null));
+      }
+    } catch (err) {
+      console.warn('Blob preview fetch failed, using fallback URL:', err);
+      setPreviewDoc((prev) => (prev ? { ...prev, loading: false } : null));
+    }
   };
+
 
   return (
     <div className="dashboard-page">
@@ -700,7 +1089,7 @@ export function Dashboard() {
                   <tr key={agent.id || agent.name}>
                     <td>
                       <div className="agent-name">
-                        <MasterAvatar role="Agent" id={agent.id} name={agent.name} />
+                        <MasterAvatar role="Agent" id={agent.id} name={agent.name} version={imageVersion} />
                         <strong>{agent.name}</strong>
                       </div>
                     </td>
@@ -719,7 +1108,7 @@ export function Dashboard() {
                       <div className="action-buttons">
                         <button
                           className="details-button"
-                          onClick={() => setSelectedPerson({ ...agent, type: 'Agent' })}
+                          onClick={() => handleOpenPersonDetails(agent, 'Agent')}
                         >
                           <Eye size={15} /> View
                         </button>
@@ -767,15 +1156,18 @@ export function Dashboard() {
               <div className="role-list">
                 {coverage.map((rm) => (
                   <div className="role-user-row" key={rm.id || rm.name}>
-                    <button className="role-user-main" onClick={() => setSelectedPerson({ ...rm, type: 'Relationship manager' })}>
-                      <MasterAvatar role="RM" id={rm.id} name={rm.name} className="role-avatar" />
+                    <button className="role-user-main" onClick={() => handleOpenPersonDetails(rm, 'Relationship manager')}>
+                      <MasterAvatar role="RM" id={rm.id} name={rm.name} className="role-avatar" version={imageVersion} />
                       <span className="role-user-copy">
                         <strong>{rm.name}</strong>
                         <small>{rm.agents} {rm.agents === 1 ? 'agent' : 'agents'} assigned</small>
                       </span>
                     </button>
                     <span className="role-progress"><i style={{ width: `${(rm.agents / maxCoverage) * 100}%` }} /></span>
-                    <button className="icon-action" aria-label={`Edit ${rm.name}`} onClick={() => navigate(`/edit-relationship-manager/${rm.id}`)}><Pencil size={15} /></button>
+                    <div className="role-row-actions">
+                      <button className="icon-action view-action" aria-label={`View ${rm.name}`} onClick={() => handleOpenPersonDetails(rm, 'Relationship manager')}><Eye size={15} /></button>
+                      <button className="icon-action" aria-label={`Edit ${rm.name}`} onClick={() => navigate(`/edit-relationship-manager/${rm.id}`)}><Pencil size={15} /></button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -798,11 +1190,14 @@ export function Dashboard() {
                   const boId = backOffice.id || backOffice.backOfficeId;
                   return (
                     <div className="role-user-row" key={backOffice.id || backOffice.backOfficeCode || displayName}>
-                      <button className="role-user-main" onClick={() => setSelectedPerson({ ...backOffice, type: 'Back Office' })}>
-                        <MasterAvatar role="BackOffice" id={boId} name={displayName} className="role-avatar" />
+                      <button className="role-user-main" onClick={() => handleOpenPersonDetails(backOffice, 'Back Office')}>
+                        <MasterAvatar role="BackOffice" id={boId} name={displayName} className="role-avatar" version={imageVersion} />
                         <span className="role-user-copy"><strong>{displayName}</strong><small>{backOffice.branch || backOffice.backOfficeCode || 'Operations team'}</small></span>
                       </button>
-                      <button className="icon-action" aria-label={`Edit ${displayName}`} onClick={() => openEditBackOffice(backOffice)}><Pencil size={15} /></button>
+                      <div className="role-row-actions">
+                        <button className="icon-action view-action" aria-label={`View ${displayName}`} onClick={() => handleOpenPersonDetails(backOffice, 'Back Office')}><Eye size={15} /></button>
+                        <button className="icon-action" aria-label={`Edit ${displayName}`} onClick={() => openEditBackOffice(backOffice)}><Pencil size={15} /></button>
+                      </div>
                     </div>
                   );
                 })}
@@ -828,7 +1223,7 @@ export function Dashboard() {
                   return (
                     <div className="role-user-row" key={ams.id || ams.amsCode || displayName}>
                       <button className="role-user-main" onClick={() => handleOpenAmsDetails(ams)}>
-                        <MasterAvatar role="AMS" id={amsId} name={displayName} className="role-avatar" />
+                        <MasterAvatar role="AMS" id={amsId} name={displayName} className="role-avatar" version={imageVersion} />
                         <span className="role-user-copy"><strong>{displayName}</strong><small>{genderLabel}</small></span>
                       </button>
                       <div className="role-row-actions">
@@ -878,6 +1273,7 @@ export function Dashboard() {
               id={selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.amsId}
               name={selectedPerson.name}
               className="person-dialog-avatar"
+              version={selectedPerson.imageVersion || imageVersion}
             />
             <span className="eyebrow">{selectedPerson.type}</span>
             <h2>{selectedPerson.name}</h2>
@@ -928,6 +1324,132 @@ export function Dashboard() {
                 </>
               )}
             </dl>
+
+            {/* Documents Section */}
+            <div className="ams-modal-section" style={{ width: '100%', marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+              <h3 className="ams-section-title">Documents</h3>
+              <div className="ams-doc-links-grid">
+                {/* Aadhaar Card */}
+                <div className="ams-doc-card">
+                  <div className="ams-doc-card-info">
+                    <FileText size={18} className="ams-doc-icon" />
+                    <div>
+                      <strong>Aadhaar Card</strong>
+                      <small>
+                        {getAadhaarPath(selectedPerson) || selectedPerson.aadhaarDocumentPath
+                          ? 'Document uploaded'
+                          : 'No document uploaded'}
+                      </small>
+                    </div>
+                  </div>
+                  {(getAadhaarPath(selectedPerson) || selectedPerson.aadhaarDocumentPath) ? (
+                    <button
+                      type="button"
+                      className="details-button"
+                      onClick={() => {
+                        const personRole =
+                          selectedPerson.type === 'Relationship manager' || selectedPerson.type === 'RM'
+                            ? 'RM'
+                            : selectedPerson.type === 'Back Office'
+                            ? 'BackOffice'
+                            : selectedPerson.type === 'AMS'
+                            ? 'AMS'
+                            : 'Agent';
+                        const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.amsId;
+                        handlePreviewDocument(
+                          'Aadhaar Card',
+                          getAadhaarPath(selectedPerson) || selectedPerson.aadhaarDocumentPath,
+                          personRole,
+                          personId
+                        );
+                      }}
+                    >
+                      <Eye size={14} /> View Document
+                    </button>
+                  ) : (
+                    <span className="ams-doc-missing">Unavailable</span>
+                  )}
+                </div>
+
+                {/* PAN Card */}
+                <div className="ams-doc-card">
+                  <div className="ams-doc-card-info">
+                    <FileText size={18} className="ams-doc-icon" />
+                    <div>
+                      <strong>PAN Card</strong>
+                      <small>
+                        {getPanPath(selectedPerson) || selectedPerson.panCardPath
+                          ? 'Document uploaded'
+                          : 'No document uploaded'}
+                      </small>
+                    </div>
+                  </div>
+                  {(getPanPath(selectedPerson) || selectedPerson.panCardPath) ? (
+                    <button
+                      type="button"
+                      className="details-button"
+                      onClick={() => {
+                        const personRole =
+                          selectedPerson.type === 'Relationship manager' || selectedPerson.type === 'RM'
+                            ? 'RM'
+                            : selectedPerson.type === 'Back Office'
+                            ? 'BackOffice'
+                            : selectedPerson.type === 'AMS'
+                            ? 'AMS'
+                            : 'Agent';
+                        const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.amsId;
+                        handlePreviewDocument(
+                          'PAN Card',
+                          getPanPath(selectedPerson) || selectedPerson.panCardPath,
+                          personRole,
+                          personId
+                        );
+                      }}
+                    >
+                      <Eye size={14} /> View Document
+                    </button>
+                  ) : (
+                    <span className="ams-doc-missing">Unavailable</span>
+                  )}
+                </div>
+
+                {/* Profile Image */}
+                <div className="ams-doc-card">
+                  <div className="ams-doc-card-info">
+                    <Camera size={18} className="ams-doc-icon" />
+                    <div>
+                      <strong>Profile Image</strong>
+                      <small>Photograph uploaded</small>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="details-button"
+                    onClick={() => {
+                      const personRole =
+                        selectedPerson.type === 'Relationship manager' || selectedPerson.type === 'RM'
+                          ? 'RM'
+                          : selectedPerson.type === 'Back Office'
+                          ? 'BackOffice'
+                          : selectedPerson.type === 'AMS'
+                          ? 'AMS'
+                          : 'Agent';
+                      const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.amsId;
+                      handlePreviewDocument(
+                        'Profile Image',
+                        getProfilePath(selectedPerson) || selectedPerson.profileImagePath,
+                        personRole,
+                        personId,
+                        selectedPerson.imageVersion || imageVersion
+                      );
+                    }}
+                  >
+                    <Eye size={14} /> View Image
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div className="person-dialog-actions">
               <button className="masters-btn-secondary" onClick={() => setSelectedPerson(null)}>
                 Close
@@ -1054,6 +1576,7 @@ export function Dashboard() {
                 id={selectedAms.amsId || selectedAms.id}
                 name={selectedAms.fullName}
                 className="person-dialog-avatar ams-modal-avatar"
+                version={selectedAms.imageVersion || imageVersion}
               />
               <div className="ams-modal-title-block">
                 <span className="eyebrow">AREA MANAGEMENT SPECIALIST</span>
@@ -1207,7 +1730,9 @@ export function Dashboard() {
                           onClick={() =>
                             handlePreviewDocument(
                               'Aadhaar Card',
-                              getAadhaarPath(selectedAms) || selectedAms.aadhaarDocumentPath
+                              getAadhaarPath(selectedAms) || selectedAms.aadhaarDocumentPath,
+                              'AMS',
+                              selectedAms.amsId || selectedAms.id || selectedAms.AmsId
                             )
                           }
                         >
@@ -1238,7 +1763,9 @@ export function Dashboard() {
                           onClick={() =>
                             handlePreviewDocument(
                               'PAN Card',
-                              getPanPath(selectedAms) || selectedAms.panCardPath
+                              getPanPath(selectedAms) || selectedAms.panCardPath,
+                              'AMS',
+                              selectedAms.amsId || selectedAms.id || selectedAms.AmsId
                             )
                           }
                         >
@@ -1265,7 +1792,10 @@ export function Dashboard() {
                           onClick={() =>
                             handlePreviewDocument(
                               'Profile Image',
-                              getProfilePath(selectedAms) || selectedAms.profileImagePath
+                              getProfilePath(selectedAms) || selectedAms.profileImagePath,
+                              'AMS',
+                              selectedAms.amsId || selectedAms.id || selectedAms.AmsId,
+                              selectedAms.imageVersion || imageVersion
                             )
                           }
                         >
@@ -1295,7 +1825,7 @@ export function Dashboard() {
         <div
           className="ams-doc-preview-backdrop"
           role="presentation"
-          onMouseDown={() => setPreviewDoc(null)}
+          onMouseDown={handleClosePreview}
         >
           <div
             className="ams-doc-preview-dialog"
@@ -1310,19 +1840,21 @@ export function Dashboard() {
                 {previewDoc.title || 'Document Preview'}
               </h3>
               <div className="ams-doc-preview-header-actions">
-                <a
-                  href={previewDoc.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ams-doc-newtab-btn"
-                  title="Open in new window or tab"
-                >
-                  <ArrowUpRight size={14} /> Open in New Tab
-                </a>
+                {previewDoc.url && (
+                  <a
+                    href={previewDoc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ams-doc-newtab-btn"
+                    title="Open in new window or tab"
+                  >
+                    <ArrowUpRight size={14} /> Open in New Tab
+                  </a>
+                )}
                 <button
                   type="button"
                   className="ams-doc-preview-close"
-                  onClick={() => setPreviewDoc(null)}
+                  onClick={handleClosePreview}
                   aria-label="Close preview"
                 >
                   <X size={18} />
@@ -1331,7 +1863,12 @@ export function Dashboard() {
             </div>
 
             <div className="ams-doc-preview-body">
-              {previewDoc.isPdf ? (
+              {previewDoc.loading ? (
+                <div className="doc-loading-container">
+                  <LoaderCircle size={28} className="doc-spin-icon" />
+                  <span>Loading document preview...</span>
+                </div>
+              ) : previewDoc.isPdf ? (
                 <div className="ams-doc-iframe-container">
                   <iframe
                     src={previewDoc.url}
@@ -1364,14 +1901,16 @@ export function Dashboard() {
                   />
                   <div id="ams-doc-img-error" className="ams-doc-error-box" style={{ display: 'none' }}>
                     <p>Unable to load image preview directly.</p>
-                    <a
-                      href={previewDoc.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ams-doc-newtab-btn"
-                    >
-                      <ArrowUpRight size={14} /> Open Image in New Tab
-                    </a>
+                    {previewDoc.url && (
+                      <a
+                        href={previewDoc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ams-doc-newtab-btn"
+                      >
+                        <ArrowUpRight size={14} /> Open Image in New Tab
+                      </a>
+                    )}
                   </div>
                 </div>
               )}

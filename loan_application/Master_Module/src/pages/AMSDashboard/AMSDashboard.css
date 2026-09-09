@@ -37,3 +37,31 @@
 
 .ams-notice-banner{display:flex;align-items:center;gap:10px;padding:12px 16px;background:#fff8e6;border:1px solid #fedb88;border-radius:12px;color:#8c5a00;font-size:12px;font-weight:600;margin-bottom:20px}
 .ams-empty-card-state{padding:30px 20px;text-align:center;color:#94a3b8;font-size:13px;background:#fbfdfb;border:1px dashed #dbe5de;border-radius:14px}
+
+.ams-avatar-edit-btn {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #198038;
+  color: #fff;
+  border: 2px solid #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+  padding: 0;
+  z-index: 2;
+}
+.ams-avatar-edit-btn:hover:not(:disabled) {
+  background: #13602a;
+  transform: scale(1.1);
+}
+.ams-avatar-edit-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
