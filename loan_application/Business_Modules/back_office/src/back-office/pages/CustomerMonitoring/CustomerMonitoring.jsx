@@ -351,7 +351,6 @@ export default function CustomerMonitoring() {
                     <th>Loan Product</th>
                     <th>Amount</th>
                     <th>Assigned Agent &amp; RM</th>
-                    <th>District</th>
                     <th>KYC Status</th>
                     <th>Status</th>
                     <th>Action</th>
@@ -368,7 +367,6 @@ export default function CustomerMonitoring() {
                     const amountVal = c.amount || c.expectedLoanAmount || c.loanAmount;
                     const agentName = c.agentName || '—';
                     const rmName = c.rmName || '—';
-                    const districtName = c.districtName || '—';
                     const kycStatus = c.kycStatus || 'Verified';
 
                     return (
@@ -398,9 +396,6 @@ export default function CustomerMonitoring() {
                             <span><strong>Agent:</strong> {agentName}</span>
                             <small><strong>RM:</strong> {rmName}</small>
                           </div>
-                        </td>
-                        <td>
-                          <span className="bo-district-tag">{districtName}</span>
                         </td>
                         <td>
                           <span

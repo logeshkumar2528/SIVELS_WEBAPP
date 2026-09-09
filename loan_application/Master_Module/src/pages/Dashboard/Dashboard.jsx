@@ -379,6 +379,12 @@ export function Dashboard() {
     agents: agents.filter((agent) => String(agent.rmId) === String(rm.id) || agent.rm === rm.name).length,
   }));
   const maxCoverage = Math.max(...coverage.map((rm) => rm.agents), 1);
+  const topAgents = [...agents].sort((a, b) => (b.applications || 0) - (a.applications || 0)).slice(0, 4);
+  const topCoverage = [...coverage].sort((a, b) => (b.agents || 0) - (a.agents || 0)).slice(0, 5);
+  const recentApplications = [...applications]
+    .filter((application) => application.createdAt)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 5);
 
   // 5 Stats Cards: RM, Agents, AMS, Applications, Approved Amount
   const stats = [
@@ -487,26 +493,34 @@ export function Dashboard() {
 
   return (
     <div className="dashboard-page">
-      <header className="dashboard-header">
-        <div>
+      <section className="dashboard-hero">
+        <div className="dashboard-hero-copy">
           <span className="eyebrow">MASTER WORKSPACE</span>
           <h1 className="dashboard-title">Admin dashboard</h1>
-          <p className="dashboard-description">A live view of your lending network, applications, and RM coverage.</p>
-          {updatedAt && (
-            <p className="dashboard-meta">
-              Last synced {formatDateTimeFriendly(updatedAt)}
-            </p>
-          )}
+          <p className="dashboard-description">
+            A cleaner operating view for the lending network, built for quick scanning and easy action.
+          </p>
+          <div className="dashboard-meta-row">
+            <span><Activity size={14} /> Live data</span>
+            <span><Users size={14} /> {agents.length} agents</span>
+            <span><ShieldCheck size={14} /> {rms.length} RMs</span>
+            {updatedAt && <span><ArrowUpRight size={14} /> Synced {formatDateTimeFriendly(updatedAt)}</span>}
+          </div>
         </div>
-        <div className="dashboard-actions">
-          <button className="masters-btn-secondary" onClick={loadDashboard} disabled={loading}>
-            <RefreshCw size={17} className={loading ? 'master-spin' : ''} /> Refresh
+        <div className="dashboard-hero-actions">
+          <button className="masters-btn-secondary dashboard-refresh-button" onClick={loadDashboard} disabled={loading}>
+            <RefreshCw size={17} className={loading ? 'master-spin' : ''} /> Refresh data
           </button>
-          <button className="primary-button" onClick={() => navigate('/create-user')}>
+          <button className="primary-button dashboard-create-button" onClick={() => navigate('/create-user')}>
             <Plus size={18} /> Create user
           </button>
+          <div className="dashboard-hero-card">
+            <span>Pending</span>
+            <strong>{pending.length}</strong>
+            <small>Applications waiting for action</small>
+          </div>
         </div>
-      </header>
+      </section>
 
       {error && <div className="dashboard-error" role="status">{error}</div>}
 
@@ -701,170 +715,108 @@ export function Dashboard() {
         </div>
       </section>
 
-      {/* Bottom Grid: Relationship Managers & Area Management Specialists */}
-      <section className="bottom-grid">
-        {/* Left: Relationship Managers */}
-        <div className="content-card">
-          <div className="card-heading">
-            <div>
-              <h2>Relationship managers</h2>
-              <p>Select an RM to view or update their details.</p>
-            </div>
-            <Activity size={20} className="heading-icon" />
+      <section className="people-workspace">
+        <div className="workspace-heading">
+          <div>
+            <span className="section-kicker">People & access</span>
+            <h2>Manage your lending team</h2>
+            <p>Keep every role visible, easy to scan, and one click away from its next action.</p>
           </div>
-          {loading ? (
-            <p className="loading-line">Loading relationship managers…</p>
-          ) : coverage.length ? (
-            <div className="coverage-list">
-              {coverage.map((rm) => (
-                <div className="coverage-row-wrap" key={rm.id || rm.name}>
-                  <button
-                    className="coverage-row"
-                    onClick={() => setSelectedPerson({ ...rm, type: 'Relationship manager' })}
-                  >
-                    <div className="rm-avatar">{initials(rm.name)}</div>
-                    <div className="coverage-info">
-                      <strong>{rm.name}</strong>
-                      <span>{rm.agents} agents assigned</span>
-                    </div>
-                    <div className="coverage-bar">
-                      <i style={{ width: `${(rm.agents / maxCoverage) * 100}%` }} />
-                    </div>
-                    <Eye size={16} />
-                  </button>
-                  <button
-                    className="details-button edit-button coverage-edit"
-                    onClick={() => navigate(`/edit-relationship-manager/${rm.id}`)}
-                  >
-                    <Pencil size={14} /> Edit
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="loading-line">No relationship managers are available.</p>
-          )}
+          <button className="primary-button workspace-add-button" onClick={() => navigate('/create-user')}>
+            <Plus size={17} /> Add user
+          </button>
         </div>
 
-        {/* Middle: Back Office */}
-        <div className="content-card">
-          <div className="card-heading">
-            <div>
-              <h2>Back office</h2>
-              <p>Select a back office officer to view or update their details.</p>
+        <div className="role-card-grid">
+          <section className="role-card role-card-rm">
+            <div className="role-card-heading">
+              <div className="role-card-icon"><Activity size={18} /></div>
+              <div>
+                <h3>Relationship managers</h3>
+                <p>Own agent coverage and performance.</p>
+              </div>
+              <span className="role-count">{rms.length}</span>
             </div>
-            <Building2 size={20} className="heading-icon" />
-          </div>
-          {loading ? (
-            <p className="loading-line">Loading back office officers…</p>
-          ) : backOfficeList.length ? (
-            <div className="coverage-list back-office-list">
-              {backOfficeList.map((backOffice) => {
-                const displayName = backOffice.name || 'Unnamed back office officer';
-                const profileUrl = getFileUrl(backOffice.profileImagePath);
-
-                return (
-                  <div className="coverage-row-wrap" key={backOffice.id || backOffice.backOfficeCode || displayName}>
-                    <button
-                      className="coverage-row"
-                      onClick={() => setSelectedPerson({ ...backOffice, type: 'Back Office' })}
-                    >
-                      {profileUrl ? (
-                        <img
-                          src={profileUrl}
-                          alt={displayName}
-                          className="back-office-row-avatar-img"
-                          onError={(event) => {
-                            event.currentTarget.style.display = 'none';
-                            const next = event.currentTarget.nextElementSibling;
-                            if (next) next.classList.remove('hidden');
-                          }}
-                        />
-                      ) : null}
-                      <div className={`rm-avatar ${profileUrl ? 'hidden' : ''}`}>{initials(displayName)}</div>
-                      <div className="coverage-info">
-                        <strong>{displayName}</strong>
-                        <span>{backOffice.branch || backOffice.backOfficeCode || 'Back office officer'}</span>
-                      </div>
-                      <Eye size={16} />
+            {loading ? <p className="role-empty">Loading managers…</p> : coverage.length ? (
+              <div className="role-list">
+                {coverage.map((rm) => (
+                  <div className="role-user-row" key={rm.id || rm.name}>
+                    <button className="role-user-main" onClick={() => setSelectedPerson({ ...rm, type: 'Relationship manager' })}>
+                      <span className="role-avatar">{initials(rm.name)}</span>
+                      <span className="role-user-copy">
+                        <strong>{rm.name}</strong>
+                        <small>{rm.agents} {rm.agents === 1 ? 'agent' : 'agents'} assigned</small>
+                      </span>
                     </button>
-                    <button
-                      className="details-button edit-button coverage-edit"
-                      onClick={() => openEditBackOffice(backOffice)}
-                    >
-                      <Pencil size={14} /> Edit
-                    </button>
+                    <span className="role-progress"><i style={{ width: `${(rm.agents / maxCoverage) * 100}%` }} /></span>
+                    <button className="icon-action" aria-label={`Edit ${rm.name}`} onClick={() => navigate(`/edit-relationship-manager/${rm.id}`)}><Pencil size={15} /></button>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="loading-line">No back office officers are available.</p>
-          )}
-        </div>
+                ))}
+              </div>
+            ) : <div className="role-empty-state"><strong>No managers yet</strong><span>Add a relationship manager to assign agents.</span><button onClick={() => navigate('/create-user')}><Plus size={15} /> Add manager</button></div>}
+          </section>
 
-        {/* Right: Area Management Specialists */}
-        <div className="content-card">
-          <div className="card-heading">
-            <div>
-              <h2>Area Management Specialists</h2>
-              <p>Select an AMS to view their complete details.</p>
+          <section className="role-card role-card-back-office">
+            <div className="role-card-heading">
+              <div className="role-card-icon"><Building2 size={18} /></div>
+              <div>
+                <h3>Back office</h3>
+                <p>Support operations from every branch.</p>
+              </div>
+              <span className="role-count">{backOfficeList.length}</span>
             </div>
-            <ShieldCheck size={20} className="heading-icon" />
-          </div>
-          {loading ? (
-            <p className="loading-line">Loading Area Management Specialists…</p>
-          ) : amsList.length ? (
-            <div className="coverage-list ams-list">
-              {amsList.map((ams) => {
-                const displayName = ams.fullName || 'Unnamed AMS';
-                const genderLabel = ams.genderName || (ams.genderId === 1 ? 'Male' : ams.genderId === 2 ? 'Female' : ams.genderId === 3 ? 'Other' : '');
-                const profileUrl = getFileUrl(getProfilePath(ams));
+            {loading ? <p className="role-empty">Loading officers…</p> : backOfficeList.length ? (
+              <div className="role-list">
+                {backOfficeList.map((backOffice) => {
+                  const displayName = backOffice.name || 'Unnamed officer';
+                  const profileUrl = getFileUrl(backOffice.profileImagePath);
+                  return (
+                    <div className="role-user-row" key={backOffice.id || backOffice.backOfficeCode || displayName}>
+                      <button className="role-user-main" onClick={() => setSelectedPerson({ ...backOffice, type: 'Back Office' })}>
+                        {profileUrl ? <img src={profileUrl} alt="" className="role-avatar role-avatar-image" onError={(event) => { event.currentTarget.style.display = 'none'; event.currentTarget.nextElementSibling?.classList.remove('role-avatar-fallback'); }} /> : null}
+                        <span className={`role-avatar ${profileUrl ? 'role-avatar-fallback' : ''}`}>{initials(displayName)}</span>
+                        <span className="role-user-copy"><strong>{displayName}</strong><small>{backOffice.branch || backOffice.backOfficeCode || 'Operations team'}</small></span>
+                      </button>
+                      <button className="icon-action" aria-label={`Edit ${displayName}`} onClick={() => openEditBackOffice(backOffice)}><Pencil size={15} /></button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : <div className="role-empty-state"><strong>No officers yet</strong><span>Add a back office user to support operations.</span><button onClick={() => navigate('/create-user')}><Plus size={15} /> Add officer</button></div>}
+          </section>
 
-                return (
-                  <div className="ams-row-wrap" key={ams.id || ams.amsCode || displayName}>
-                    <div className="ams-row-left">
-                      {profileUrl ? (
-                        <img
-                          src={profileUrl}
-                          alt={displayName}
-                          className="ams-row-avatar-img"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            const next = e.currentTarget.nextElementSibling;
-                            if (next) next.classList.remove('hidden');
-                          }}
-                        />
-                      ) : null}
-                      <div className={`rm-avatar ams-avatar ${profileUrl ? 'hidden' : ''}`}>
-                        {initials(displayName)}
-                      </div>
-                      <div className="ams-row-info">
-                        <strong>{displayName}</strong>
-                        <span>{genderLabel || 'Specialist'}</span>
+          <section className="role-card role-card-ams">
+            <div className="role-card-heading">
+              <div className="role-card-icon"><ShieldCheck size={18} /></div>
+              <div>
+                <h3>Area specialists</h3>
+                <p>Cover districts and local operations.</p>
+              </div>
+              <span className="role-count">{amsList.length}</span>
+            </div>
+            {loading ? <p className="role-empty">Loading specialists…</p> : amsList.length ? (
+              <div className="role-list">
+                {amsList.map((ams) => {
+                  const displayName = ams.fullName || 'Unnamed specialist';
+                  const genderLabel = ams.genderName || (ams.genderId === 1 ? 'Male' : ams.genderId === 2 ? 'Female' : ams.genderId === 3 ? 'Other' : 'Specialist');
+                  const profileUrl = getFileUrl(getProfilePath(ams));
+                  return (
+                    <div className="role-user-row" key={ams.id || ams.amsCode || displayName}>
+                      <button className="role-user-main" onClick={() => handleOpenAmsDetails(ams)}>
+                        {profileUrl ? <img src={profileUrl} alt="" className="role-avatar role-avatar-image" onError={(event) => { event.currentTarget.style.display = 'none'; event.currentTarget.nextElementSibling?.classList.remove('role-avatar-fallback'); }} /> : null}
+                        <span className={`role-avatar ${profileUrl ? 'role-avatar-fallback' : ''}`}>{initials(displayName)}</span>
+                        <span className="role-user-copy"><strong>{displayName}</strong><small>{genderLabel}</small></span>
+                      </button>
+                      <div className="role-row-actions">
+                        <button className="icon-action view-action" aria-label={`View ${displayName}`} onClick={() => handleOpenAmsDetails(ams)}><Eye size={15} /></button>
+                        <button className="icon-action" aria-label={`Edit ${displayName}`} onClick={() => openEditAms(ams)}><Pencil size={15} /></button>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      className="details-button"
-                      onClick={() => handleOpenAmsDetails(ams)}
-                    >
-                      <Eye size={14} /> View
-                    </button>
-                    <button
-                      type="button"
-                      className="details-button edit-button"
-                      onClick={() => openEditAms(ams)}
-                    >
-                      <Pencil size={14} /> Edit
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="loading-line">No Area Management Specialists found.</p>
-          )}
+                  );
+                })}
+              </div>
+            ) : <div className="role-empty-state"><strong>No specialists yet</strong><span>Add an AMS to manage local districts.</span><button onClick={() => navigate('/create-user')}><Plus size={15} /> Add specialist</button></div>}
+          </section>
         </div>
       </section>
 

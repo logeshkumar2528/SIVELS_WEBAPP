@@ -4,12 +4,8 @@
  * Purpose:
  *   Custom hook for fetching, normalizing, and managing authenticated Back Office user profile data.
  *
- * Priority Strategy:
- *   - Priority 1: Use authenticated login session data from localStorage (`backOfficeData`, `sivels_currentUser`, `backOfficeAuth`)
- *                 if full profile is already present.
- *   - Priority 2: If only user ID / backOfficeId is present (or on page refresh), fetch fresh profile details
- *                 via `GET /BackOfficeMaster/:id` using `backOfficeService.getBackOfficeProfile(id)`.
- *   - Priority 3: Fall back safely to "Not Available" for missing fields. Zero dummy data used.
+ * The session is used only to resolve the authenticated profile ID. Displayed
+ * profile values always come from `GET /BackOfficeMaster/:id`.
  *
  * Returns:
  *   { profile, loading, error, refetch }
@@ -80,15 +76,6 @@ export function useBackOfficeProfile() {
     try {
       // 1. Check local session storage first (Priority 1)
       const sessionUser = getStoredSessionUser();
-      let initialMapped = null;
-
-      if (sessionUser) {
-        initialMapped = mapBackOfficeProfile(sessionUser);
-        if (initialMapped && isMounted) {
-          setProfile(initialMapped);
-        }
-      }
-
       // 2. Extract authentic Back Office ID / User ID
       const targetId =
         sessionUser?.backOfficeId ??
@@ -101,38 +88,19 @@ export function useBackOfficeProfile() {
 
       // 3. If authentic ID is available, fetch live profile from API (Priority 2)
       if (targetId) {
-        try {
-          const apiResponse = await backOfficeService.getBackOfficeProfile(targetId);
-          if (!isMounted) return;
+        const apiResponse = await backOfficeService.getBackOfficeProfile(targetId);
+        if (!isMounted) return;
 
-          if (apiResponse) {
-            const liveProfile = mapBackOfficeProfile(apiResponse);
-            if (liveProfile) {
-              setProfile(liveProfile);
-
-              // Update cached backOfficeData for offline / instant reload
-              try {
-                localStorage.setItem('backOfficeData', JSON.stringify(apiResponse));
-              } catch {
-                // Ignore storage quota errors
-              }
-              setLoading(false);
-              return;
-            }
-          }
-        } catch (apiErr) {
-          // If API fails but we have sessionUser, log warning and use sessionUser
-          if (initialMapped) {
-            console.warn('[useBackOfficeProfile] Live profile lookup failed, using session data:', apiErr?.message);
-            if (isMounted) setLoading(false);
-            return;
-          }
-          throw apiErr;
+        const liveProfile = mapBackOfficeProfile(apiResponse);
+        if (!liveProfile) {
+          throw new Error('The profile API returned an empty response.');
         }
+
+        setProfile(liveProfile);
+        return;
       }
 
-      // If no ID and no sessionUser found
-      if (!initialMapped && isMounted) {
+      if (isMounted) {
         setError('No active Back Office session found. Please log in again.');
       }
     } catch (err) {
