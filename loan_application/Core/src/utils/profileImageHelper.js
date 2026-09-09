@@ -240,87 +240,140 @@ export function getInitials(name, fallback = 'U') {
 }
 
 /**
- * Generates the full document URL for a given role, ID, and document type (Aadhaar or PAN).
+ * Resolves any backend file path, relative URL, or absolute URL into a valid public URL.
  *
- * @param {string} role - Entity role ('BackOffice', 'RM', 'Agent', 'AMS', etc.)
- * @param {string|number} id - Entity master ID
- * @param {string} docType - 'aadhar' / 'aadhaar' or 'pan'
- * @param {string} rawPath - Optional raw path from database
- * @returns {string|null} - Resolved document URL
+ * @param {string} value - Document path, relative URL, or full URL
+ * @returns {string} - Resolved URL
  */
-export function getDocumentUrl(role, id, docType, rawPath = '') {
-  if (rawPath) {
-    const clean = String(rawPath).trim();
-    if (
-      clean.startsWith('http://') ||
-      clean.startsWith('https://') ||
-      clean.startsWith('blob:') ||
-      clean.startsWith('data:')
-    ) {
-      return clean;
-    }
+export function buildFileUrl(value) {
+  if (!value) return '';
+
+  const clean = String(value).trim();
+  if (
+    clean.startsWith('http://') ||
+    clean.startsWith('https://') ||
+    clean.startsWith('blob:') ||
+    clean.startsWith('data:')
+  ) {
+    return clean;
   }
 
+  const staticBase = API_BASE_URL.replace(/\/api$/i, '');
+
+  if (clean.startsWith('/api') || clean.startsWith('api/')) {
+    const norm = clean.replace(/^\/?api\//i, '');
+    return `${API_BASE_URL}/${norm}`;
+  }
+
+  const normalizedPath = clean.replace(/\\/g, '/').replace(/^\/+/, '');
+  return `${staticBase}/${normalizedPath}`;
+}
+
+/**
+ * Builds the RM document download/view endpoint URL using the stored database path.
+ *
+ * @param {string} storedPath - e.g. "RMAadhar/ab22415c-6323-4ee5-8680-666c472cf2ca.png"
+ * @returns {string|null} - URL e.g. "https://fusiontecsoftware.com/sivels/api/RMMaster/download?path=RMAadhar%2Fab22415c-6323-4ee5-8680-666c472cf2ca.png"
+ */
+export function getRmDocumentDownloadUrl(storedPath) {
+  if (!storedPath) return null;
+  const clean = String(storedPath).trim();
+  if (
+    clean.startsWith('http://') ||
+    clean.startsWith('https://') ||
+    clean.startsWith('blob:') ||
+    clean.startsWith('data:')
+  ) {
+    return clean;
+  }
+  return `${API_BASE_URL}/RMMaster/download?path=${encodeURIComponent(clean)}`;
+}
+
+/**
+ * Generates the full document URL for a given role, entityId, documentType (Aadhaar or PAN), and storedPath.
+ *
+ * Rules:
+ * 1. RM: Uses /api/RMMaster/download?path={encodedStoredPath} from storedPath
+ * 2. AMS: /api/AMSMaster/{amsId}/aadhar or /api/AMSMaster/{amsId}/pan
+ * 3. BackOffice: /api/BackOfficeMaster/{backOfficeId}/aadhar or /api/BackOfficeMaster/{backOfficeId}/pan
+ * 4. Agent: /api/AgentMaster/{agentId}/aadhaar or /api/AgentMaster/{agentId}/pan
+ *
+ * @param {string} role - Entity role ('RM', 'AMS', 'BackOffice', 'Agent')
+ * @param {string|number} entityId - Entity master ID
+ * @param {string} documentType - 'Aadhaar Card' / 'aadhar' / 'pan' / 'PAN Card'
+ * @param {string} storedPath - Stored file path from DB (e.g. "RMAadhar/abc.png")
+ * @returns {string|null} - Resolved URL
+ */
+export function getDocumentUrl(role, entityId, documentType = '', storedPath = '') {
   const normalizedRole = String(role || '').trim().toLowerCase();
-  const normalizedDocType = String(docType || '').trim().toLowerCase();
-  const cleanId = isValidId(id) ? encodeURIComponent(String(id).trim()) : '';
+  const normalizedDocType = String(documentType || '').trim().toLowerCase();
+  const cleanId = isValidId(entityId) ? encodeURIComponent(String(entityId).trim()) : '';
 
   const isAadhaar =
     normalizedDocType.includes('aadhaar') ||
     normalizedDocType.includes('aadhar');
   const isPan = normalizedDocType.includes('pan');
 
-  if (cleanId) {
-    if (
-      normalizedRole === 'ams' ||
-      normalizedRole === 'amsmaster' ||
-      normalizedRole === 'areamanager' ||
-      normalizedRole === 'area manager' ||
-      normalizedRole === 'area_manager' ||
-      normalizedRole === 'areaspecialist' ||
-      normalizedRole === 'area specialist'
-    ) {
-      if (isAadhaar) return `${API_BASE_URL}/AMSMaster/${cleanId}/aadhar`;
-      if (isPan) return `${API_BASE_URL}/AMSMaster/${cleanId}/pan`;
+  // 1. RM: Use storedPath via /api/RMMaster/download?path={storedPath}
+  const isRm =
+    normalizedRole === 'rm' ||
+    normalizedRole === 'rmmaster' ||
+    normalizedRole === 'relationshipmanager' ||
+    normalizedRole === 'relationship manager' ||
+    normalizedRole === 'relationship_manager';
+
+  if (isRm) {
+    const raw = storedPath || (typeof role === 'string' && (role.includes('/') || role.includes('\\')) ? role : '');
+    if (raw) {
+      return getRmDocumentDownloadUrl(raw);
     }
-    if (
-      normalizedRole === 'backoffice' ||
-      normalizedRole === 'back_office' ||
-      normalizedRole === 'back office' ||
-      normalizedRole === 'backofficemaster' ||
-      normalizedRole === 'operations' ||
-      normalizedRole === 'operations team'
-    ) {
-      if (isAadhaar) return `${API_BASE_URL}/BackOfficeMaster/${cleanId}/aadhar`;
-      if (isPan) return `${API_BASE_URL}/BackOfficeMaster/${cleanId}/pan`;
-    }
-    if (
-      normalizedRole === 'rm' ||
-      normalizedRole === 'rmmaster' ||
-      normalizedRole === 'relationshipmanager' ||
-      normalizedRole === 'relationship manager' ||
-      normalizedRole === 'relationship_manager'
-    ) {
-      if (isAadhaar) return `${API_BASE_URL}/RMMaster/${cleanId}/aadhar`;
-      if (isPan) return `${API_BASE_URL}/RMMaster/${cleanId}/pan`;
-    }
-    if (
-      normalizedRole === 'agent' ||
-      normalizedRole === 'agentmaster' ||
-      normalizedRole === 'fieldagent' ||
-      normalizedRole === 'field agent' ||
-      normalizedRole === 'field_agent'
-    ) {
-      if (isAadhaar) return `${API_BASE_URL}/AgentMaster/${cleanId}/aadhar`;
-      if (isPan) return `${API_BASE_URL}/AgentMaster/${cleanId}/pan`;
-    }
+    return null;
   }
 
-  if (rawPath) {
-    const cleanPath = String(rawPath).trim();
-    const normalizedPath = cleanPath.replace(/\\/g, '/').replace(/^\/+/, '');
-    const staticBase = API_BASE_URL.replace(/\/api$/i, '');
-    return `${staticBase}/${normalizedPath}`;
+  // 2. AMS: /api/AMSMaster/{amsId}/aadhar and /api/AMSMaster/{amsId}/pan
+  const isAms =
+    normalizedRole === 'ams' ||
+    normalizedRole === 'amsmaster' ||
+    normalizedRole === 'areamanager' ||
+    normalizedRole === 'area manager' ||
+    normalizedRole === 'area_manager' ||
+    normalizedRole === 'areaspecialist' ||
+    normalizedRole === 'area specialist';
+
+  if (isAms && cleanId) {
+    if (isAadhaar) return `${API_BASE_URL}/AMSMaster/${cleanId}/aadhar`;
+    if (isPan) return `${API_BASE_URL}/AMSMaster/${cleanId}/pan`;
+  }
+
+  // 3. BackOffice: /api/BackOfficeMaster/{backOfficeId}/aadhar and /api/BackOfficeMaster/{backOfficeId}/pan
+  const isBackOffice =
+    normalizedRole === 'backoffice' ||
+    normalizedRole === 'back_office' ||
+    normalizedRole === 'back office' ||
+    normalizedRole === 'backofficemaster' ||
+    normalizedRole === 'operations' ||
+    normalizedRole === 'operations team';
+
+  if (isBackOffice && cleanId) {
+    if (isAadhaar) return `${API_BASE_URL}/BackOfficeMaster/${cleanId}/aadhar`;
+    if (isPan) return `${API_BASE_URL}/BackOfficeMaster/${cleanId}/pan`;
+  }
+
+  // 4. Agent: /api/AgentMaster/{agentId}/aadhaar and /api/AgentMaster/{agentId}/pan
+  const isAgent =
+    normalizedRole === 'agent' ||
+    normalizedRole === 'agentmaster' ||
+    normalizedRole === 'fieldagent' ||
+    normalizedRole === 'field agent' ||
+    normalizedRole === 'field_agent';
+
+  if (isAgent && cleanId) {
+    if (isAadhaar) return `${API_BASE_URL}/AgentMaster/${cleanId}/aadhaar`;
+    if (isPan) return `${API_BASE_URL}/AgentMaster/${cleanId}/pan`;
+  }
+
+  if (storedPath) {
+    return buildFileUrl(storedPath);
   }
 
   return null;
@@ -330,6 +383,8 @@ export default {
   getProfileImageUrl,
   getProfileImageUpdateUrl,
   updateProfileImage,
+  buildFileUrl,
+  getRmDocumentDownloadUrl,
   getDocumentUrl,
   getInitials,
   isValidId,

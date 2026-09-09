@@ -24,7 +24,7 @@ import { getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
 import { getAllBackOffice, getBackOfficeById } from '../../api/backOfficeApi';
 import { getRelationshipManager } from '../../api/rmApi';
 import { getAgentById } from '../../api/agentApi';
-import { getProfileImageUrl, getDocumentUrl } from '../../utils/profileImageHelper';
+import { getProfileImageUrl, getDocumentUrl, buildFileUrl } from '../../utils/profileImageHelper';
 import './Dashboard.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -87,38 +87,9 @@ function MasterAvatar({ role, id, name, className = 'role-avatar', style, versio
 const money = (value) => Number(String(value ?? '').replace(/[^0-9.-]/g, '')) || 0;
 const formatAmount = (amount) => amount > 0 ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount) : '—';
 
-export const getFileUrl = (path) => {
-  if (!path) return null;
+export const getFileUrl = (path) => buildFileUrl(path);
 
-  const cleanPath = String(path).trim();
-
-  if (!cleanPath) return null;
-
-  if (
-    cleanPath.startsWith('http://') ||
-    cleanPath.startsWith('https://') ||
-    cleanPath.startsWith('blob:') ||
-    cleanPath.startsWith('data:')
-  ) {
-    return cleanPath;
-  }
-
-  const normalizedPath = cleanPath
-    .replace(/\\/g, '/')
-    .replace(/^\/+/, '');
-
-  const rawBase = (
-    import.meta.env.VITE_API_BASE_URL ||
-    'https://fusiontecsoftware.com/sivels/api'
-  ).replace(/\/+$/, '');
-
-  // Remove API route prefix for static uploaded files
-  const staticBase = rawBase.replace(/\/api$/i, '');
-
-  return `${staticBase}/${normalizedPath}`;
-};
-
-export { getDocumentUrl };
+export { getDocumentUrl, buildFileUrl };
 
 export const getAadhaarPath = (record) =>
   read(record, [
@@ -846,18 +817,27 @@ export function Dashboard() {
 
     if (isProfile && role && entityId) {
       targetUrl = getProfileImageUrl(role, entityId, effectiveVersion);
-    } else if (role && entityId) {
+    } else {
       targetUrl = getDocumentUrl(role, entityId, title, rawPath);
-    } else if (rawPath) {
-      targetUrl = getFileUrl(rawPath) || rawPath;
-    } else if (role && entityId && isProfile) {
-      targetUrl = getProfileImageUrl(role, entityId, effectiveVersion);
+    }
+
+    const isAgent =
+      String(role || '').toLowerCase() === 'agent' ||
+      String(role || '').toLowerCase() === 'agentmaster' ||
+      String(role || '').toLowerCase() === 'fieldagent' ||
+      selectedPerson?.type === 'Agent';
+
+    if (isAgent) {
+      console.log("Agent record:", selectedPerson || rawPath);
+      console.log("Agent entityId:", entityId);
+      console.log("Agent document type:", title);
+      console.log("Final Agent document URL:", targetUrl);
     }
 
     if (!targetUrl) return;
 
-    // Direct image display without XHR/fetch for AMS Profile Image to prevent CORS block
-    if (isProfile && String(role || '').toUpperCase() === 'AMS') {
+    // Direct image display without XHR/fetch for Profile Images to prevent CORS block
+    if (isProfile) {
       setPreviewDoc({
         title,
         name: title,

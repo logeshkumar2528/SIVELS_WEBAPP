@@ -17,8 +17,8 @@ import { masterService } from '../../../../Core/src/services/masterService';
 import { getCurrentUserId } from '../../utils/authHelper';
 import { generateUserCode } from '../../utils/codeGenerator';
 import { DocumentUploadCard, DocumentPreviewModal, fetchDocumentBlobUrl, isPdfUrl } from '../../components/DocumentUpload/DocumentUploadSection';
-import { getProfileImageUrl } from '../../utils/profileImageHelper';
-import { getFileUrl, isPdfFile, getAadhaarPath, getPanPath, getProfilePath, getDocumentUrl } from '../Dashboard/Dashboard';
+import { getProfileImageUrl, getRmDocumentDownloadUrl, buildFileUrl, getDocumentUrl } from '../../utils/profileImageHelper';
+import { isPdfFile, getAadhaarPath, getPanPath, getProfilePath } from '../Dashboard/Dashboard';
 import './RelationshipManagerCreate.css';
 
 const fields = [
@@ -191,27 +191,35 @@ export default function RelationshipManagerCreate() {
           ifscCode: record.ifscCode || '',
         });
 
-        const aadhaarPath = getAadhaarPath(record) || record.aadhaarDocumentPath || record.aadhaarPath || record.aadhaarCardPath || '';
-        const panPath = getPanPath(record) || record.panCardPath || record.panDocumentPath || record.panPath || '';
-        const profilePath = getProfilePath(record) || record.profileImagePath || record.profilePath || '';
+        const aadhaarValue = getAadhaarPath(record) || record.aadhaarDocumentPath || record.aadharDocumentPath || record.aadhaarPath || record.aadharPath || '';
+        const panValue = getPanPath(record) || record.panCardPath || record.panDocumentPath || record.panPath || '';
+        const profileValue = getProfilePath(record) || record.profileImagePath || record.profilePath || '';
 
-        if (aadhaarPath) {
-          const url = getDocumentUrl('RM', rmId, 'aadhar', aadhaarPath);
-          setExistingAadhaarUrl(url);
-          setExistingAadhaarFileName(aadhaarPath.split('/').pop().split('\\').pop() || 'Aadhaar Card');
-          setIsExistingAadhaarPdf(isPdfUrl(aadhaarPath));
+        const aadhaarUrl = getRmDocumentDownloadUrl(aadhaarValue);
+        const panUrl = getRmDocumentDownloadUrl(panValue);
+        const profileUrl = getProfileImageUrl('RM', rmId);
+
+        console.log("RM API document response:", response.data);
+        console.log("Aadhaar saved value:", aadhaarValue);
+        console.log("PAN saved value:", panValue);
+        console.log("Profile saved value:", profileValue);
+        console.log("Final Aadhaar URL:", aadhaarUrl);
+        console.log("Final PAN URL:", panUrl);
+
+        if (aadhaarValue) {
+          setExistingAadhaarUrl(aadhaarUrl);
+          setExistingAadhaarFileName(aadhaarValue.split('/').pop().split('\\').pop() || 'Aadhaar Card');
+          setIsExistingAadhaarPdf(isPdfUrl(aadhaarValue));
         }
 
-        if (panPath) {
-          const url = getDocumentUrl('RM', rmId, 'pan', panPath);
-          setExistingPanUrl(url);
-          setExistingPanFileName(panPath.split('/').pop().split('\\').pop() || 'PAN Card');
-          setIsExistingPanPdf(isPdfUrl(panPath));
+        if (panValue) {
+          setExistingPanUrl(panUrl);
+          setExistingPanFileName(panValue.split('/').pop().split('\\').pop() || 'PAN Card');
+          setIsExistingPanPdf(isPdfUrl(panValue));
         }
 
         if (rmId) {
-          const directProfileUrl = getProfileImageUrl('RM', rmId);
-          setExistingProfileUrl(directProfileUrl);
+          setExistingProfileUrl(profileUrl);
         }
       } catch (err) {
         if (active) {
@@ -441,6 +449,20 @@ export default function RelationshipManagerCreate() {
     </label>
   );
 
+  const handleClosePreview = () => {
+    blobUrlsRef.current.forEach((url) => {
+      try {
+        if (url && url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
+      } catch {
+        // ignore
+      }
+    });
+    blobUrlsRef.current = [];
+    setPreviewDoc(null);
+  };
+
   return (
     <div className="masters-page rm-create-page">
       <header className="rm-hero">
@@ -607,7 +629,7 @@ export default function RelationshipManagerCreate() {
       </form>
       <DocumentPreviewModal
         isOpen={Boolean(previewDoc)}
-        onClose={() => setPreviewDoc(null)}
+        onClose={handleClosePreview}
         doc={previewDoc}
       />
     </div>

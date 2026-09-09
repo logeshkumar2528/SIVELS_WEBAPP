@@ -200,26 +200,35 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
           ifscCode: record.ifscCode || '',
         });
 
+        const realAgentId = record.agentId || record.AgentId || record.id || record.Id || editAgentId;
         const aadhaarPath = getAadhaarPath(record) || record.aadhaarDocumentPath || record.aadhaarPath || record.aadhaarCardPath || '';
         const panPath = getPanPath(record) || record.panCardPath || record.panDocumentPath || record.panPath || '';
         const profilePath = getProfilePath(record) || record.profileImagePath || record.profilePath || '';
 
+        const aadhaarUrl = getDocumentUrl('Agent', realAgentId, 'aadhaar', aadhaarPath);
+        const panUrl = getDocumentUrl('Agent', realAgentId, 'pan', panPath);
+
+        console.log("Agent record:", record);
+        console.log("Agent entityId:", realAgentId);
+        console.log("Agent document type:", "Aadhaar Card");
+        console.log("Final Agent document URL:", aadhaarUrl);
+        console.log("Agent document type:", "PAN Card");
+        console.log("Final Agent document URL:", panUrl);
+
         if (aadhaarPath) {
-          const url = getDocumentUrl('Agent', editAgentId, 'aadhar', aadhaarPath);
-          setExistingAadhaarUrl(url);
+          setExistingAadhaarUrl(aadhaarUrl);
           setExistingAadhaarFileName(aadhaarPath.split('/').pop().split('\\').pop() || 'Aadhaar Card');
           setIsExistingAadhaarPdf(isPdfUrl(aadhaarPath));
         }
 
         if (panPath) {
-          const url = getDocumentUrl('Agent', editAgentId, 'pan', panPath);
-          setExistingPanUrl(url);
+          setExistingPanUrl(panUrl);
           setExistingPanFileName(panPath.split('/').pop().split('\\').pop() || 'PAN Card');
           setIsExistingPanPdf(isPdfUrl(panPath));
         }
 
-        if (editAgentId) {
-          const directProfileUrl = getProfileImageUrl('Agent', editAgentId);
+        if (realAgentId) {
+          const directProfileUrl = getProfileImageUrl('Agent', realAgentId);
           setExistingProfileUrl(directProfileUrl);
         }
       } catch (error) {
@@ -294,6 +303,20 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
         loading: false,
       });
     }
+  };
+
+  const handleClosePreview = () => {
+    blobUrlsRef.current.forEach((url) => {
+      try {
+        if (url && url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
+      } catch {
+        // ignore
+      }
+    });
+    blobUrlsRef.current = [];
+    setPreviewDoc(null);
   };
 
   const handleInputChange = (field, value) => {
@@ -1014,7 +1037,7 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
       {/* DOCUMENT PREVIEW LIGHTBOX */}
       <DocumentPreviewModal
         isOpen={Boolean(previewDoc)}
-        onClose={() => setPreviewDoc(null)}
+        onClose={handleClosePreview}
         doc={previewDoc}
       />
 

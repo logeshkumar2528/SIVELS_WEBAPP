@@ -24,7 +24,7 @@ export const uploadAgentAadhaar = async (agentId, file) => {
   const formData = new FormData();
   formData.append('file', file);
   const response = await axiosInstance.post(
-    `/AgentMaster/${encodeURIComponent(agentId)}/aadhar`,
+    `/AgentMaster/${encodeURIComponent(agentId)}/upload-aadhaar`,
     formData,
     { headers: { 'Content-Type': 'multipart/form-data' } }
   );
@@ -34,27 +34,18 @@ export const uploadAgentAadhaar = async (agentId, file) => {
 export const uploadAgentPan = async (agentId, file) => {
   const formData = new FormData();
   formData.append('file', file);
-  try {
-    const response = await axiosInstance.post(
-      `/AgentMaster/${encodeURIComponent(agentId)}/upload-pan`,
-      formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
-    );
-    return response.data;
-  } catch {
-    const response = await axiosInstance.post(
-      `/AgentMaster/${encodeURIComponent(agentId)}/pan`,
-      formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
-    );
-    return response.data;
-  }
+  const response = await axiosInstance.post(
+    `/AgentMaster/${encodeURIComponent(agentId)}/upload-pan`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return response.data;
 };
 
 export const uploadAgentProfileImage = async (agentId, file) => {
   const formData = new FormData();
   formData.append('file', file);
-  const response = await axiosInstance.post(
+  const response = await axiosInstance.put(
     `/AgentMaster/${encodeURIComponent(agentId)}/profile-image`,
     formData,
     { headers: { 'Content-Type': 'multipart/form-data' } }

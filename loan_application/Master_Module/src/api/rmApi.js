@@ -15,7 +15,7 @@ export const uploadRMAadhaar = async (rmId, file) => {
   const formData = new FormData();
   formData.append('file', file);
   const response = await axiosInstance.post(
-    `/RMMaster/${encodeURIComponent(rmId)}/aadhar`,
+    `/RMMaster/upload-aadhar/${encodeURIComponent(rmId)}`,
     formData,
     { headers: { 'Content-Type': 'multipart/form-data' } }
   );
@@ -26,7 +26,7 @@ export const uploadRMPan = async (rmId, file) => {
   const formData = new FormData();
   formData.append('file', file);
   const response = await axiosInstance.post(
-    `/RMMaster/${encodeURIComponent(rmId)}/pan`,
+    `/RMMaster/upload-pan/${encodeURIComponent(rmId)}`,
     formData,
     { headers: { 'Content-Type': 'multipart/form-data' } }
   );
@@ -36,11 +36,22 @@ export const uploadRMPan = async (rmId, file) => {
 export const uploadRMProfileImage = async (rmId, file) => {
   const formData = new FormData();
   formData.append('file', file);
-  const response = await axiosInstance.post(
-    `/RMMaster/${encodeURIComponent(rmId)}/profile-image`,
+  const response = await axiosInstance.put(
+    `/RMMaster/replace-profile-image/${encodeURIComponent(rmId)}`,
     formData,
     { headers: { 'Content-Type': 'multipart/form-data' } }
   );
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(
+        new CustomEvent('profile-image-updated', {
+          detail: { role: 'RM', id: rmId, timestamp: Date.now() },
+        })
+      );
+    } catch {
+      // ignore
+    }
+  }
   return response.data;
 };
 
