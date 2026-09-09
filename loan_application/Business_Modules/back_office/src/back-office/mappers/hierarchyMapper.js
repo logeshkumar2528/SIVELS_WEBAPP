@@ -239,7 +239,16 @@ export function mapCustomer(customer) {
   const agentName = getValue(customer, 'agentName', 'AgentName') || '';
   const agentCode = getValue(customer, 'agentCode', 'AgentCode') || '';
   const rmId = getValue(customer, 'rmId', 'RmId', 'RMId');
-  const rmName = getValue(customer, 'rmName', 'RmName', 'RMName') || '';
+  const rmName = getValue(
+    customer,
+    'rmName',
+    'RmName',
+    'RMName',
+    'relationshipManagerName',
+    'RelationshipManagerName',
+    'relationshipManager',
+    'RelationshipManager'
+  ) || '';
   const districtId = getValue(customer, 'districtId', 'DistrictId');
   const districtName = getValue(customer, 'districtName', 'DistrictName', 'district', 'District') || '';
   const kycStatus = getValue(customer, 'kycStatus', 'KycStatus') || 'Verified';
@@ -363,6 +372,23 @@ export function mapBackOfficeProfile(raw) {
   ) ?? true;
 
   const role = getValue(source, 'role', 'Role') || 'Operations Team';
+  const profileImagePath = getValue(
+    source,
+    'profileImagePath',
+    'ProfileImagePath',
+    'profileImage',
+    'ProfileImage',
+    'profilePicturePath',
+    'ProfilePicturePath'
+  ) || '';
+  const rawPermissions = getValue(source, 'permissions', 'Permissions', 'accessPermissions', 'AccessPermissions');
+  const permissions = Array.isArray(rawPermissions)
+    ? rawPermissions.map((permission) => (
+      typeof permission === 'string'
+        ? permission
+        : permission?.name || permission?.label || permission?.permissionName || permission?.PermissionName || ''
+    )).filter(Boolean)
+    : [];
 
   return {
     id: idStr,
@@ -378,7 +404,8 @@ export function mapBackOfficeProfile(raw) {
     role,
     status: isActive ? 'Active' : 'Inactive',
     isActive: Boolean(isActive),
+    profileImagePath,
+    permissions,
     raw: source,
   };
 }
-

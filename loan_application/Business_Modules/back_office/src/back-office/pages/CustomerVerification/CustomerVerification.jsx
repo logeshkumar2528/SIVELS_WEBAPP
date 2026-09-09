@@ -92,6 +92,13 @@ const STAGES = [
   { id: 4, label: 'Credit Bureau Report Successfully Retrieved' },
 ];
 
+const FOIR_LOADING_STAGES = [
+  'Reading applicant income details',
+  'Checking existing monthly obligations',
+  'Applying the FOIR policy threshold',
+  'Preparing the eligibility summary',
+];
+
 /**
  * Builds simulated Credit Bureau report dynamically from customer verification data.
  */
@@ -287,9 +294,12 @@ export default function CustomerVerification() {
   const [foirState, setFoirState] = useState('idle');
   const [foirData, setFoirData] = useState(null);
   const [foirError, setFoirError] = useState(null);
+  const [foirLoadingStage, setFoirLoadingStage] = useState(0);
 
   const handleCalculateFoir = async () => {
+    const startedAt = Date.now();
     setFoirState('loading');
+    setFoirLoadingStage(0);
     setFoirError(null);
 
     try {
@@ -327,6 +337,10 @@ export default function CustomerVerification() {
         productDetailsId: prodDetailsId,
       });
 
+      // Keep the processing state visible long enough to communicate the work being done.
+      const remainingTime = Math.max(0, 1500 - (Date.now() - startedAt));
+      await new Promise((resolve) => setTimeout(resolve, remainingTime));
+
       if (matched) {
         setFoirData(matched);
         setFoirState('success');
@@ -340,6 +354,16 @@ export default function CustomerVerification() {
       setFoirState('error');
     }
   };
+
+  useEffect(() => {
+    if (foirState !== 'loading') return undefined;
+
+    const timers = FOIR_LOADING_STAGES.slice(1).map((_, index) => (
+      setTimeout(() => setFoirLoadingStage(index + 1), (index + 1) * 360)
+    ));
+
+    return () => timers.forEach(clearTimeout);
+  }, [foirState]);
 
   // Staged loading effect for CIBIL simulation (approx 2.3s)
   useEffect(() => {
@@ -1040,25 +1064,23 @@ export default function CustomerVerification() {
 
             {foirState === 'loading' && (
               <div className="bo-cv-foir-card bo-cv-foir-loading-card">
-                <div className="bo-cv-foir-loading-inner">
-                  <div className="bo-cv-spinner-box">
-                    {RefreshCwIcon && <RefreshCwIcon size={22} className="bo-cv-spin" />}
-                  </div>
+                <div className="bo-cv-foir-processing-head">
+                  <div className="bo-cv-foir-processing-orb"><span /></div>
                   <div>
-                    <h4 className="bo-cv-foir-title">Calculating FOIR Eligibility...</h4>
-                    <p className="bo-cv-foir-subtitle">
-                      Querying FOIREligibilityCalculation for applicant #{verificationData?.customerId}...
-                    </p>
+                    <span className="bo-cv-foir-processing-kicker">LIVE ELIGIBILITY CHECK</span>
+                    <h4 className="bo-cv-foir-title">Calculating FOIR<span className="bo-cv-running-dots" aria-hidden="true">...</span></h4>
+                    <p className="bo-cv-foir-subtitle">Applicant #{verificationData?.customerId} · secure calculation in progress</p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="bo-btn bo-btn--primary bo-cv-calc-foir-btn"
-                  disabled
-                >
-                  {RefreshCwIcon && <RefreshCwIcon size={14} className="bo-cv-spin" />}
-                  <span>Calculating...</span>
-                </button>
+                <div className="bo-cv-foir-processing-body">
+                  <div className="bo-cv-foir-progress-track"><i style={{ width: `${((foirLoadingStage + 1) / FOIR_LOADING_STAGES.length) * 100}%` }} /></div>
+                  <div className="bo-cv-foir-processing-meta"><strong>{FOIR_LOADING_STAGES[foirLoadingStage]}</strong><span>{Math.round(((foirLoadingStage + 1) / FOIR_LOADING_STAGES.length) * 100)}%</span></div>
+                  <div className="bo-cv-foir-process-steps">
+                    {FOIR_LOADING_STAGES.map((stage, index) => (
+                      <span key={stage} className={index <= foirLoadingStage ? 'is-complete' : ''}><i>{index < foirLoadingStage ? '✓' : index === foirLoadingStage ? '•' : ''}</i>{stage}</span>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1143,6 +1165,22 @@ export default function CustomerVerification() {
                       {RefreshCwIcon && <RefreshCwIcon size={13} />}
                       <span>Re-calculate FOIR</span>
                     </button>
+                  </div>
+
+                  <div className="bo-cv-foir-result-strip">
+                    <div className="bo-cv-foir-result-status">
+                      <span className="bo-cv-foir-result-label">Decision snapshot</span>
+                      <strong>{isEligible ? 'Applicant appears eligible' : 'Additional review recommended'}</strong>
+                      <small>Based on the returned income and obligation values</small>
+                    </div>
+                    <div className="bo-cv-foir-result-highlight">
+                      <span>Loan eligibility</span>
+                      <strong className={isEligible ? 'is-positive' : 'is-negative'}>{formatFoirCurrency(loanEligibilityAmount)}</strong>
+                    </div>
+                    <div className="bo-cv-foir-result-highlight">
+                      <span>Actual FOIR</span>
+                      <strong>{formatFoirCurrency(actualFOIR)}</strong>
+                    </div>
                   </div>
 
                   <div className="bo-cv-foir-grid">
