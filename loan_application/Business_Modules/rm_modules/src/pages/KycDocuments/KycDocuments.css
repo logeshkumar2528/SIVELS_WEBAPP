@@ -589,4 +589,159 @@
   color: #dc2626;
 }
 
+/* ==========================================
+   CO-APPLICANT DOCUMENTS SECTION
+========================================== */
+.co-applicant-docs-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+  width: 100%;
+}
+
+.co-applicant-docs-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.co-applicant-docs-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.co-applicant-docs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .co-applicant-docs-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+.co-doc-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Co-Applicant Selected Document Card */
+.co-doc-selected-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-left: 3px solid var(--color-primary, #0F7A4C);
+  border-radius: 6px;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 38px;
+}
+
+.co-doc-selected-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.co-doc-selected-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.co-doc-selected-name {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.co-doc-selected-size {
+  font-size: 10.5px;
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.co-doc-selected-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.co-doc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background-color: transparent;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.co-doc-btn--view {
+  background-color: #eaf5ee;
+  color: #0F7A4C;
+  border-color: #bbf7d0;
+}
+
+.co-doc-btn--view:hover {
+  background-color: #0F7A4C;
+  color: #ffffff;
+  border-color: #0F7A4C;
+}
+
+.co-doc-btn--replace {
+  background-color: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+.co-doc-btn--replace:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+.co-doc-btn--remove {
+  padding: 3px;
+  color: #64748b;
+  border-radius: 4px;
+}
+
+.co-doc-btn--remove:hover {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+
+
 

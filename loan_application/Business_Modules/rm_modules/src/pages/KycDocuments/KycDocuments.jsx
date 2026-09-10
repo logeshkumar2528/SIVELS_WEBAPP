@@ -114,11 +114,31 @@ function KycCard({
   documentTypeOptions = [],
   verificationOptions = [],
   isLoadingMasters = false,
+  coApplicantDocs,
+  onCoApplicantDocChange,
+  onCoApplicantDocRemove,
+  onViewLocalFile,
 }) {
   const [otpStep, setOtpStep] = useState(person.verificationStatus === 'Verified' ? 'verified' : 'idle');
   const [otpValue, setOtpValue] = useState('');
   const [fileSizeError, setFileSizeError] = useState('');
   const fileInputRefs = useRef([]);
+  const coDocInputRefs = useRef({ aadhaar: null, pan: null, profile: null });
+
+  const handleCoDocChange = (docType, event) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      onCoApplicantDocChange?.(docType, file);
+    }
+    event.target.value = '';
+  };
+
+  const handleCoDocRemove = (docType) => {
+    if (coDocInputRefs.current[docType]) {
+      coDocInputRefs.current[docType].value = '';
+    }
+    onCoApplicantDocRemove?.(docType);
+  };
 
   useEffect(() => {
     if (person.verificationStatus !== 'Verified' && otpStep === 'verified') {
@@ -649,6 +669,204 @@ function KycCard({
             )}
           </div>
         </div>
+
+        {isCoApplicant && (
+          <div className="co-applicant-docs-section">
+            <div className="co-applicant-docs-header">
+              <span className="co-applicant-docs-title">CO-APPLICANT DOCUMENTS</span>
+            </div>
+            <div className="co-applicant-docs-grid">
+              {/* 1. Aadhaar */}
+              <div className="co-doc-col">
+                <label className="form-label">Aadhaar</label>
+                <input
+                  ref={(el) => {
+                    coDocInputRefs.current.aadhaar = el;
+                  }}
+                  type="file"
+                  style={coApplicantDocs?.aadhaar ? { display: 'none' } : undefined}
+                  className={!coApplicantDocs?.aadhaar ? "form-input aw-input kyc-compact-file-input" : undefined}
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  aria-label="Upload Co-Applicant Aadhaar"
+                  onChange={(e) => handleCoDocChange('aadhaar', e)}
+                />
+
+                {coApplicantDocs?.aadhaar && (
+                  <div className="co-doc-selected-card">
+                    <div className="co-doc-selected-info">
+                      <div className="co-doc-selected-icon">
+                        {getFileIcon(coApplicantDocs.aadhaar.name)}
+                      </div>
+                      <span className="co-doc-selected-name" title={coApplicantDocs.aadhaar.name}>
+                        {coApplicantDocs.aadhaar.name}
+                      </span>
+                      {coApplicantDocs.aadhaar.size && (
+                        <span className="co-doc-selected-size">
+                          • {formatFileSize(coApplicantDocs.aadhaar.size)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="co-doc-selected-actions">
+                      <button
+                        type="button"
+                        className="co-doc-btn co-doc-btn--view"
+                        onClick={() => onViewLocalFile?.(coApplicantDocs.aadhaar, `${title} - Aadhaar`)}
+                        title="View Aadhaar document"
+                      >
+                        <Eye size={12} />
+                        <span>View</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="co-doc-btn co-doc-btn--replace"
+                        onClick={() => coDocInputRefs.current.aadhaar?.click()}
+                        title="Replace Aadhaar document"
+                      >
+                        <RefreshCw size={12} />
+                        <span>Replace</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCoDocRemove('aadhaar')}
+                        className="co-doc-btn co-doc-btn--remove"
+                        title="Clear selection"
+                        aria-label="Clear Aadhaar selection"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. PAN Card */}
+              <div className="co-doc-col">
+                <label className="form-label">PAN Card</label>
+                <input
+                  ref={(el) => {
+                    coDocInputRefs.current.pan = el;
+                  }}
+                  type="file"
+                  style={coApplicantDocs?.pan ? { display: 'none' } : undefined}
+                  className={!coApplicantDocs?.pan ? "form-input aw-input kyc-compact-file-input" : undefined}
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  aria-label="Upload Co-Applicant PAN Card"
+                  onChange={(e) => handleCoDocChange('pan', e)}
+                />
+
+                {coApplicantDocs?.pan && (
+                  <div className="co-doc-selected-card">
+                    <div className="co-doc-selected-info">
+                      <div className="co-doc-selected-icon">
+                        {getFileIcon(coApplicantDocs.pan.name)}
+                      </div>
+                      <span className="co-doc-selected-name" title={coApplicantDocs.pan.name}>
+                        {coApplicantDocs.pan.name}
+                      </span>
+                      {coApplicantDocs.pan.size && (
+                        <span className="co-doc-selected-size">
+                          • {formatFileSize(coApplicantDocs.pan.size)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="co-doc-selected-actions">
+                      <button
+                        type="button"
+                        className="co-doc-btn co-doc-btn--view"
+                        onClick={() => onViewLocalFile?.(coApplicantDocs.pan, `${title} - PAN Card`)}
+                        title="View PAN Card document"
+                      >
+                        <Eye size={12} />
+                        <span>View</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="co-doc-btn co-doc-btn--replace"
+                        onClick={() => coDocInputRefs.current.pan?.click()}
+                        title="Replace PAN Card document"
+                      >
+                        <RefreshCw size={12} />
+                        <span>Replace</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCoDocRemove('pan')}
+                        className="co-doc-btn co-doc-btn--remove"
+                        title="Clear selection"
+                        aria-label="Clear PAN Card selection"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Profile Image */}
+              <div className="co-doc-col">
+                <label className="form-label">Profile Image</label>
+                <input
+                  ref={(el) => {
+                    coDocInputRefs.current.profile = el;
+                  }}
+                  type="file"
+                  style={coApplicantDocs?.profile ? { display: 'none' } : undefined}
+                  className={!coApplicantDocs?.profile ? "form-input aw-input kyc-compact-file-input" : undefined}
+                  accept=".jpg,.jpeg,.png"
+                  aria-label="Upload Co-Applicant Profile Image"
+                  onChange={(e) => handleCoDocChange('profile', e)}
+                />
+
+                {coApplicantDocs?.profile && (
+                  <div className="co-doc-selected-card">
+                    <div className="co-doc-selected-info">
+                      <div className="co-doc-selected-icon">
+                        {getFileIcon(coApplicantDocs.profile.name)}
+                      </div>
+                      <span className="co-doc-selected-name" title={coApplicantDocs.profile.name}>
+                        {coApplicantDocs.profile.name}
+                      </span>
+                      {coApplicantDocs.profile.size && (
+                        <span className="co-doc-selected-size">
+                          • {formatFileSize(coApplicantDocs.profile.size)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="co-doc-selected-actions">
+                      <button
+                        type="button"
+                        className="co-doc-btn co-doc-btn--view"
+                        onClick={() => onViewLocalFile?.(coApplicantDocs.profile, `${title} - Profile Image`)}
+                        title="View Profile Image"
+                      >
+                        <Eye size={12} />
+                        <span>View</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="co-doc-btn co-doc-btn--replace"
+                        onClick={() => coDocInputRefs.current.profile?.click()}
+                        title="Replace Profile Image"
+                      >
+                        <RefreshCw size={12} />
+                        <span>Replace</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCoDocRemove('profile')}
+                        className="co-doc-btn co-doc-btn--remove"
+                        title="Clear selection"
+                        aria-label="Clear Profile Image selection"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -662,6 +880,42 @@ export default function KycDocuments() {
   const [form, setForm] = useState(() => buildKycState(getApplication(appId)));
   const [errors, setErrors] = useState({});
   const [errorPopup, setErrorPopup] = useState(null);
+
+  // Co-Applicant 3-document local state (keyed by coApplicant index: { [index]: { aadhaar: File|null, pan: File|null, profile: File|null } })
+  const [coApplicantDocs, setCoApplicantDocs] = useState({});
+
+  const handleCoApplicantDocChange = (index, docType, file) => {
+    setCoApplicantDocs((prev) => ({
+      ...prev,
+      [index]: {
+        ...(prev[index] || {}),
+        [docType]: file,
+      },
+    }));
+  };
+
+  const handleCoApplicantDocRemove = (index, docType) => {
+    setCoApplicantDocs((prev) => ({
+      ...prev,
+      [index]: {
+        ...(prev[index] || {}),
+        [docType]: null,
+      },
+    }));
+  };
+
+  const handleViewLocalFile = (file, docLabel) => {
+    if (!file) return;
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const url = URL.createObjectURL(file);
+    activeBlobUrlsRef.current.push(url);
+    setSelectedPreviewDoc({
+      documentTypeName: docLabel,
+      fileName: file.name,
+      fileType: isPdf ? 'pdf' : 'image',
+      previewUrl: url,
+    });
+  };
 
   // Document viewing state
   const [viewingDocsFor, setViewingDocsFor] = useState(null); // 'applicant' | number (coApplicant index)
@@ -1423,6 +1677,10 @@ export default function KycDocuments() {
               title={`Co-Applicant ${index + 1} KYC`}
               person={person}
               isCoApplicant={true}
+              coApplicantDocs={coApplicantDocs[index]}
+              onCoApplicantDocChange={(docType, file) => handleCoApplicantDocChange(index, docType, file)}
+              onCoApplicantDocRemove={(docType) => handleCoApplicantDocRemove(index, docType)}
+              onViewLocalFile={handleViewLocalFile}
               onChange={(field, value) => updatePerson('coApplicants', field, value, index)}
               onViewDocuments={() => handleOpenDocsModal(index)}
               documentTypeOptions={documentTypeOptions}
