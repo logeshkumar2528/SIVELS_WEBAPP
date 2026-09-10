@@ -199,12 +199,41 @@ export default function NewApplications({ initialFilter = 'All' }) {
         if (row.status === 'Returned') btnText = 'Review Return';
         const applicationId = row.agentCustomerId || row.id;
 
+        const handleActionClick = async () => {
+          if (row.status === 'New' || btnText === 'Verify Now') {
+            try {
+              const getRes = await fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`);
+              if (getRes.ok) {
+                const data = await getRes.json();
+                const cust = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
+                if (cust && Number(cust.status ?? cust.Status ?? 0) === 0) {
+                  const payload = {
+                    ...cust,
+                    status: 1,
+                  };
+                  const putRes = await fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                  });
+                  if (!putRes.ok && putRes.status !== 204) {
+                    console.error(`Failed to update status to Pending (${putRes.status})`);
+                  }
+                }
+              }
+            } catch (err) {
+              console.error('Failed to update status to Pending:', err);
+            }
+          }
+          navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId));
+        };
+
         return (
           <div className="new-apps-actions-cell">
             <Button
               size="sm"
               variant="primary"
-              onClick={() => navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId))}
+              onClick={handleActionClick}
             >
               {btnText}
             </Button>

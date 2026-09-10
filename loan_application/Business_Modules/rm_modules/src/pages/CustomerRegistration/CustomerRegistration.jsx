@@ -77,6 +77,76 @@ function createEmptyPerson(overrides = {}) {
   };
 }
 
+const RELATIONSHIP_MAP = {
+  self: 1,
+  spouse: 2,
+  father: 3,
+  mother: 4,
+  son: 5,
+  daughter: 6,
+  brother: 7,
+  sister: 8,
+  other: 15,
+};
+
+function resolveRelationshipId(value, isPrimary = false, options = []) {
+  if (value !== undefined && value !== null && value !== '') {
+    const num = Number(value);
+    if (!isNaN(num) && num > 0) {
+      return num;
+    }
+    if (typeof value === 'string') {
+      const clean = value.trim().toLowerCase();
+      if (options && options.length > 0) {
+        const found = options.find(
+          (opt) =>
+            typeof opt.label === 'string' &&
+            opt.label.trim().toLowerCase() === clean
+        );
+        if (found && !isNaN(Number(found.value)) && Number(found.value) > 0) {
+          return Number(found.value);
+        }
+      }
+      if (RELATIONSHIP_MAP[clean]) {
+        return RELATIONSHIP_MAP[clean];
+      }
+    }
+  }
+
+  if (isPrimary) {
+    if (options && options.length > 0) {
+      const selfOpt = options.find(
+        (opt) => typeof opt.label === 'string' && opt.label.trim().toLowerCase() === 'self'
+      );
+      if (selfOpt && !isNaN(Number(selfOpt.value)) && Number(selfOpt.value) > 0) {
+        return Number(selfOpt.value);
+      }
+    }
+    return 1;
+  }
+
+  return 15;
+}
+
+function resolveMasterId(value, options = [], defaultVal = null) {
+  if (value !== undefined && value !== null && value !== '') {
+    const num = Number(value);
+    if (!isNaN(num) && num > 0) return num;
+    if (typeof value === 'string' && options && options.length > 0) {
+      const clean = value.trim().toLowerCase();
+      const found = options.find(
+        (opt) =>
+          typeof opt.label === 'string' &&
+          opt.label.trim().toLowerCase() === clean
+      );
+      if (found && !isNaN(Number(found.value)) && Number(found.value) > 0) {
+        return Number(found.value);
+      }
+    }
+  }
+  return defaultVal;
+}
+
 function buildPersonalInformationState(appData) {
   const saved = appData.registration?.personalInformation || appData.sections?.personalInformation || appData.registration || {};
   const savedApplicant = saved.applicant || saved.primaryApplicant || {};
@@ -527,7 +597,11 @@ export default function CustomerRegistration() {
              const uniqueNames = [...new Set(data.map(item => item[nameField]))];
              setState(uniqueNames.map(name => ({ value: name, label: name })));
           } else {
-             setState(data.map(item => ({ value: item[idField], label: item[nameField], raw: item })));
+             setState(data.map(item => {
+               const val = item[idField] !== undefined ? item[idField] : item[Object.keys(item).find(k => k.toLowerCase() === idField.toLowerCase())];
+               const lbl = item[nameField] !== undefined ? item[nameField] : item[Object.keys(item).find(k => k.toLowerCase() === nameField.toLowerCase())];
+               return { value: val, label: lbl, raw: item };
+             }));
           }
         }
       } catch (e) {
@@ -693,20 +767,27 @@ export default function CustomerRegistration() {
           ? `${baseUrl}/ApplicationPersonalInformation/${person.personalInformationId}`
           : `${baseUrl}/ApplicationPersonalInformation`;
 
+        const relId = resolveRelationshipId(person.relationshipWithApplicant, person.isPrimary, relationshipOptions);
+        const titleId = resolveMasterId(person.title, titleOptions, 1);
+        const casteId = resolveMasterId(person.category, categoryOptions, null);
+        const genderId = resolveMasterId(person.gender, genderOptions, null);
+        const maritalStatusId = resolveMasterId(person.maritalStatus, maritalStatusOptions, null);
+        const religionId = resolveMasterId(person.religion, religionOptions, null);
+
         const payload = {
           ApplicationKYCDocumentId: Number(kycDocId),
-          RelationshipId: person.relationshipWithApplicant ? Number(person.relationshipWithApplicant) : 1, // Defaulting if not selected
-          TitleId: person.title ? Number(person.title) : 1,
+          RelationshipId: relId,
+          TitleId: titleId,
           FirstName: person.firstName || '',
           MiddleName: person.middleName || null,
           LastName: person.lastName || '',
           FatherSpouseName: person.fatherOrSpouseName || null,
-          CasteId: person.category ? Number(person.category) : null,
-          GenderId: person.gender ? Number(person.gender) : null,
-          MaritalStatusId: person.maritalStatus ? Number(person.maritalStatus) : null,
+          CasteId: casteId,
+          GenderId: genderId,
+          MaritalStatusId: maritalStatusId,
           MobileNumber: person.mobileNo || null,
           EmailId: person.emailId || null,
-          ReligionId: person.religion ? Number(person.religion) : null,
+          ReligionId: religionId,
           DateOfBirth: person.dateOfBirth ? new Date(person.dateOfBirth).toISOString() : null,
           MothersMaidenName: person.mothersMaidenName || null,
           CreatedBy: 1
@@ -725,6 +806,8 @@ export default function CustomerRegistration() {
         });
 
         if (!response.ok) {
+          const errText = await response.text();
+          console.error(`API Error saving Personal Information (${response.status}):`, errText);
           throw new Error(`Failed to save: ${response.statusText}`);
         }
 

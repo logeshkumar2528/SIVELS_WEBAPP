@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -51,6 +51,8 @@ export default function PdfView() {
   const [liveRM, setLiveRM] = useState(null);
   const [liveEmployment, setLiveEmployment] = useState(null);
   const [liveCollateral, setLiveCollateral] = useState(null);
+  const [liveKycCoApplicants, setLiveKycCoApplicants] = useState([]);
+  const [coApplicantPhotos, setCoApplicantPhotos] = useState({});
   const [downloadedDocs, setDownloadedDocs] = useState([]);
   const [masterMaps, setMasterMaps] = useState({
     sourcingChannels: {},
@@ -101,9 +103,13 @@ export default function PdfView() {
           console.warn('Hydration in PdfView:', hErr);
         }
 
+        const token = localStorage.getItem('authToken');
+        const authHeaders = {};
+        if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+
         const fetchMaster = async (endpoint, idField, nameField) => {
           try {
-            const res = await fetch(`${API_BASE}/${endpoint}`);
+            const res = await fetch(`${API_BASE}/${endpoint}`, { headers: authHeaders });
             if (res.ok) {
               const data = await res.json();
               const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : (data?.data || []));
@@ -150,9 +156,11 @@ export default function PdfView() {
           persInfoRes,
           collateralDetailsRes,
           productDetailsRes,
+          kycDetailsRes,
+          fullDetailsRes,
         ] = await Promise.allSettled([
-          fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`).then((r) => (r.ok ? r.json() : null)),
-          fetch(`${API_BASE}/RMMaster`).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${API_BASE}/RMMaster`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
           fetchMaster('SourcingChannelMaster', 'sourcingChannelId', 'sourcingChannelName'),
           fetchMaster('LoanProductMaster', 'loanProductId', 'productName'),
           fetchMaster('LoanPurposeMaster', 'loanPurposeId', 'purposeName'),
@@ -171,11 +179,13 @@ export default function PdfView() {
           fetchMaster('EducationMaster', 'educationId', 'educationName'),
           fetchMaster('City', 'cityId', 'cityName'),
           fetchMaster('State', 'stateId', 'stateName'),
-          fetch(`${API_BASE}/ApplicationEmploymentIncomeDetails`).then((r) => (r.ok ? r.json() : null)),
-          fetch(`${API_BASE}/ApplicationAddressDetails`).then((r) => (r.ok ? r.json() : null)),
-          fetch(`${API_BASE}/ApplicationPersonalInformation`).then((r) => (r.ok ? r.json() : null)),
-          fetch(`${API_BASE}/ApplicationCollateralDetails`).then((r) => (r.ok ? r.json() : null)),
-          fetch(`${API_BASE}/ApplicationProductDetails`).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${API_BASE}/ApplicationEmploymentIncomeDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${API_BASE}/ApplicationAddressDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${API_BASE}/ApplicationPersonalInformation`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${API_BASE}/ApplicationCollateralDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${API_BASE}/ApplicationKYCDocuments`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${API_BASE}/ApplicationFullDetails/${applicationId}`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
         ]);
 
         let resolvedCustomerId = applicationId;
@@ -212,9 +222,11 @@ export default function PdfView() {
               if (matchedAddr) matchedAddrId = matchedAddr.applicationAddressDetailsId;
             }
 
-            const matchedEmp = (matchedAddrId && empList.find((e) => e.applicationAddressDetailsId === matchedAddrId)) ||
-              (appData.employmentIncome?.applicant?.employmentIncomeDetailsId && empList.find(e => e.applicationEmploymentIncomeDetailsId === appData.employmentIncome.applicant.employmentIncomeDetailsId)) ||
-              empList[empList.length - 1];
+            const matchedEmp =
+              (matchedAddrId && empList.find((e) => e.applicationAddressDetailsId === matchedAddrId)) ||
+              (appData.employmentIncome?.applicant?.employmentIncomeDetailsId &&
+                empList.find((e) => e.applicationEmploymentIncomeDetailsId === appData.employmentIncome.applicant.employmentIncomeDetailsId)) ||
+              null;
 
             if (matchedEmp) {
               const liveEmpObj = {
@@ -291,6 +303,70 @@ export default function PdfView() {
             }
           }
 
+          let allKycRecords = [];
+          if (fullDetailsRes?.status === 'fulfilled' && fullDetailsRes.value) {
+            const rawVal = fullDetailsRes.value?.value || fullDetailsRes.value?.data || fullDetailsRes.value;
+            const fullKyc =
+              rawVal.kycDocuments ||
+              rawVal.KycDocuments ||
+              rawVal.applicationKYCDocuments ||
+              rawVal.ApplicationKYCDocuments ||
+              (Array.isArray(rawVal) ? rawVal : []);
+            if (Array.isArray(fullKyc)) {
+              allKycRecords.push(...fullKyc);
+            }
+          }
+
+          if (kycDetailsRes?.status === 'fulfilled' && kycDetailsRes.value) {
+            const rawKycList = Array.isArray(kycDetailsRes.value)
+              ? kycDetailsRes.value
+              : (kycDetailsRes.value?.value || kycDetailsRes.value?.data || []);
+
+            const prodList = productDetailsRes?.status === 'fulfilled' && Array.isArray(productDetailsRes.value)
+              ? productDetailsRes.value
+              : (productDetailsRes?.value?.value || productDetailsRes?.value?.data || []);
+
+            const matchedProduct = prodList.find(
+              (p) =>
+                String(p.agentCustomerId ?? p.AgentCustomerId) === String(resolvedCustomerId) ||
+                String(p.agentCustomerId ?? p.AgentCustomerId) === String(applicationId)
+            );
+            const targetProdId =
+              matchedProduct?.applicationProductDetailsId ??
+              matchedProduct?.ApplicationProductDetailsId ??
+              fullDetailsRes?.value?.productDetails?.applicationProductDetailsId ??
+              fullDetailsRes?.value?.productDetails?.ApplicationProductDetailsId ??
+              appData.applicationProductDetailsId;
+
+            const filteredKycs = rawKycList.filter((k) =>
+              (targetProdId && String(k.applicationProductDetailsId ?? k.ApplicationProductDetailsId) === String(targetProdId)) ||
+              (resolvedCustomerId && String(k.agentCustomerId ?? k.AgentCustomerId) === String(resolvedCustomerId)) ||
+              (applicationId && String(k.agentCustomerId ?? k.AgentCustomerId) === String(applicationId))
+            );
+
+            allKycRecords.push(...filteredKycs);
+          }
+
+          if (allKycRecords.length > 0) {
+            const uniqueKycMap = new Map();
+            allKycRecords.forEach((k) => {
+              const id = k.applicationKYCDocumentId || k.ApplicationKYCDocumentId || k.kycDocumentId || k.id;
+              if (id && !uniqueKycMap.has(String(id))) {
+                uniqueKycMap.set(String(id), k);
+              }
+            });
+            const combinedKycList = Array.from(uniqueKycMap.values()).sort(
+              (a, b) =>
+                Number(a.applicationKYCDocumentId || a.kycDocumentId || 0) -
+                Number(b.applicationKYCDocumentId || b.kycDocumentId || 0)
+            );
+            if (combinedKycList.length > 1) {
+              setLiveKycCoApplicants(combinedKycList.slice(1));
+            } else if (combinedKycList.length === 1 && (appData.coApplicantsCount > 0 || getApplicantCount(appData) > 0)) {
+              setLiveKycCoApplicants(combinedKycList);
+            }
+          }
+
           if (rmRes.status === 'fulfilled' && rmRes.value) {
             const data = rmRes.value;
             const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);
@@ -308,22 +384,55 @@ export default function PdfView() {
               0
             );
 
-            let currentUser = {};
+            let currentRmObj = {};
             try {
-              currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || '{}');
+              const rmDataRaw = localStorage.getItem('rmData');
+              if (rmDataRaw) currentRmObj = JSON.parse(rmDataRaw);
+              if (!currentRmObj || Object.keys(currentRmObj).length === 0) {
+                const raw = localStorage.getItem('sivels_currentUser');
+                if (raw) currentRmObj = JSON.parse(raw);
+              }
             } catch {
               // Ignore malformed session data and rely on application data.
             }
-            const sessionRmId = Number(currentUser?.rmId || currentUser?.RMId || 0);
+            const sessionRmId = Number(
+              currentRmObj?.rmId ||
+              currentRmObj?.RMId ||
+              currentRmObj?.id ||
+              currentRmObj?.userId ||
+              localStorage.getItem('rmId') ||
+              0
+            );
+            const currentMobile = String(
+              currentRmObj?.mobileNumber ||
+              currentRmObj?.phone ||
+              ''
+            ).replace(/\D/g, '');
+            const currentEmail = String(
+              currentRmObj?.emailAddress ||
+              currentRmObj?.email ||
+              ''
+            ).trim().toLowerCase();
+            const currentName = String(
+              currentRmObj?.fullName ||
+              currentRmObj?.name ||
+              ''
+            ).trim().toLowerCase();
+
             const matched =
               rows.find((r) => Number(r.rmId || r.RMId || r.id) === rmIdFromRecord && rmIdFromRecord > 0) ||
-              rows.find((r) => Number(r.rmId || r.RMId || r.id) === sessionRmId && sessionRmId > 0) ||
+              (sessionRmId > 0 && rows.find((r) => Number(r.rmId || r.RMId || r.id) === sessionRmId)) ||
+              (currentMobile && rows.find((r) => String(r.mobileNumber || '').replace(/\D/g, '') === currentMobile)) ||
+              (currentEmail && rows.find((r) => String(r.emailAddress || '').trim().toLowerCase() === currentEmail)) ||
+              (currentName && rows.find((r) => String(r.fullName || r.name || '').trim().toLowerCase() === currentName)) ||
               null;
 
-            if (matched) {
+            const resolvedRM = matched || (currentRmObj && (currentRmObj.fullName || currentRmObj.name) ? currentRmObj : null);
+
+            if (resolvedRM) {
               setLiveRM({
-                name: matched.fullName || matched.name || '',
-                employeeId: matched.rmCode || (matched.rmId ? `RM${String(matched.rmId).padStart(3, '0')}` : ''),
+                name: resolvedRM.fullName || resolvedRM.name || '',
+                employeeId: resolvedRM.rmCode || resolvedRM.employeeId || (resolvedRM.rmId ? `RM${String(resolvedRM.rmId).padStart(4, '0')}` : ''),
               });
             }
           }
@@ -356,7 +465,7 @@ export default function PdfView() {
           const token = localStorage.getItem('authToken');
           if (token) headers['Authorization'] = `Bearer ${token}`;
 
-          const candidateIds = [resolvedCustomerId, applicationId, appData.agentCustomerId, 8].filter(Boolean);
+          const candidateIds = [resolvedCustomerId, applicationId, appData.agentCustomerId].filter(Boolean);
           const uniqueCandidateIds = [...new Set(candidateIds)];
 
           let activeDocs = [];
@@ -590,17 +699,94 @@ export default function PdfView() {
     return !isNaN(num) ? `${num} Years` : `${exp} Years`;
   };
 
-  // Dynamic Co-Applicants Resolution using standard helper
-  const applicantCount = getApplicantCount(appData);
   const personalData = appData.registration?.personalInformation || appData.sections?.personalInformation || {};
   const applicant = personalData.applicant || {};
-
   const rawCoApplicants = Array.isArray(personalData.coApplicants) ? personalData.coApplicants : [];
-  const coApplicants = Array.from({ length: applicantCount }, (_, i) => rawCoApplicants[i] || {});
-  const hasCoApplicants = applicantCount > 0;
 
   const kycData = appData.kycDocuments || appData.sections?.kycDocuments || {};
   const addressData = appData.addressDetails || appData.sections?.addressDetails || {};
+
+  // Dynamic Co-Applicants Resolution using standard helper
+  const applicantCount = Math.max(
+    getApplicantCount(appData),
+    liveKycCoApplicants.length,
+    Array.isArray(kycData.coApplicants) ? kycData.coApplicants.length : 0,
+    rawCoApplicants.length
+  );
+  const coApplicants = Array.from({ length: applicantCount }, (_, i) => rawCoApplicants[i] || {});
+  const hasCoApplicants = applicantCount > 0;
+
+  const coApplicantKycIds = useMemo(() => {
+    const rawCoKycs = Array.isArray(kycData.coApplicants) ? kycData.coApplicants : [];
+    return Array.from({ length: applicantCount }, (_, i) => {
+      const coKyc = rawCoKycs[i] || {};
+      const liveKyc = liveKycCoApplicants[i] || {};
+      return (
+        coKyc.applicationKYCDocumentId ||
+        coKyc.ApplicationKYCDocumentId ||
+        coKyc.applicationKycDocumentId ||
+        coKyc.kycDocumentId ||
+        coKyc.KycDocumentId ||
+        coKyc.id ||
+        coKyc.Id ||
+        liveKyc.applicationKYCDocumentId ||
+        liveKyc.ApplicationKYCDocumentId ||
+        liveKyc.applicationKycDocumentId ||
+        liveKyc.kycDocumentId ||
+        liveKyc.KycDocumentId ||
+        liveKyc.id ||
+        liveKyc.Id ||
+        null
+      );
+    });
+  }, [kycData.coApplicants, liveKycCoApplicants, applicantCount]);
+
+  const coApplicantKycIdsKey = useMemo(() => {
+    return coApplicantKycIds.map((id) => id || '').join(',');
+  }, [coApplicantKycIds]);
+
+  // Fetch Co-Applicant Profile Images using dynamic kycDocumentId
+  useEffect(() => {
+    if (!hasCoApplicants) return;
+
+    let isMounted = true;
+    const token = localStorage.getItem('authToken');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    coApplicantKycIds.forEach((kycId, idx) => {
+      if (!kycId) return;
+
+      fetch(`${API_BASE}/ApplicationKYCDocuments/${kycId}/profile-image`, { headers })
+        .then(async (res) => {
+          if (res.ok && isMounted) {
+            const blob = await res.blob();
+            if (blob && blob.size > 0) {
+              const mimeType = blob.type || 'image/jpeg';
+              const typedBlob = new Blob([blob], { type: mimeType });
+              const objectUrl = URL.createObjectURL(typedBlob);
+              blobUrlsRef.current.push(objectUrl);
+              if (isMounted) {
+                setCoApplicantPhotos((prev) => ({
+                  ...prev,
+                  [idx]: objectUrl,
+                  [String(idx)]: objectUrl,
+                  [kycId]: objectUrl,
+                  [String(kycId)]: objectUrl,
+                }));
+              }
+            }
+          }
+        })
+        .catch((err) => {
+          console.warn(`Could not load profile image for co-applicant KYC ${kycId}:`, err);
+        });
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [hasCoApplicants, coApplicantKycIdsKey]);
   
   const rawEmp = appData.employmentIncome || appData.sections?.employmentIncome || {};
   const rawApplicant = rawEmp.applicant || {};
@@ -708,9 +894,9 @@ export default function PdfView() {
 
   // Resolved Applicant Signature & Date
   const resolvedApplicantSignature =
-    !isObsoleteMock(declarationData.applicantSignature)
+    !isObsoleteMock(declarationData.applicantSignature) && declarationData.applicantSignature
       ? declarationData.applicantSignature
-      : customerDisplayName;
+      : '-';
 
   const resolvedApplicantDate =
     !isObsoleteMock(declarationData.applicantDate)
@@ -719,9 +905,9 @@ export default function PdfView() {
 
   // Resolved RM Signature & Date
   const resolvedRMSignature =
-    !isObsoleteMock(declarationData.ackReceivedBy)
+    !isObsoleteMock(declarationData.ackReceivedBy) && declarationData.ackReceivedBy
       ? declarationData.ackReceivedBy
-      : resolvedRMName;
+      : (resolvedRMName || '-');
 
   const resolvedRMDate =
     !isObsoleteMock(declarationData.ackDate)
@@ -732,8 +918,18 @@ export default function PdfView() {
 
   const getCollectedDocumentNames = (person = {}, documents = []) => {
     const names = [];
+
+    const normalizeBadgeName = (raw) => {
+      const s = String(raw || '').trim();
+      const lower = s.toLowerCase();
+      if (lower === 'aadhaar' || lower === 'aadhaar card' || lower === 'aadhaar proof') {
+        return 'Aadhaar';
+      }
+      return s;
+    };
+
     const addName = (name) => {
-      const normalized = String(name || '').trim();
+      const normalized = normalizeBadgeName(name);
       if (normalized && !names.some((existing) => existing.toLowerCase() === normalized.toLowerCase())) {
         names.push(normalized);
       }
@@ -896,21 +1092,37 @@ export default function PdfView() {
               </div>
 
               {hasCoApplicants &&
-                coApplicants.map((_, i) => (
-                  <div className="pdf-photo-column" key={i}>
-                    <div className="pdf-photo-box">
-                      <div style={{ color: '#64748b', fontSize: '10px', padding: '6px', textAlign: 'center' }}>
-                        No Photo
+                coApplicants.map((_, i) => {
+                  const kycId = coApplicantKycIds[i];
+                  const coPhotoUrl =
+                    (kycId ? (coApplicantPhotos[kycId] || coApplicantPhotos[String(kycId)]) : null) ||
+                    coApplicantPhotos[i] ||
+                    coApplicantPhotos[String(i)] ||
+                    null;
+                  return (
+                    <div className="pdf-photo-column" key={i}>
+                      <div className="pdf-photo-box">
+                        {coPhotoUrl ? (
+                          <img
+                            src={coPhotoUrl}
+                            alt={`Co-Applicant ${i + 1}`}
+                            style={{ objectFit: 'contain' }}
+                          />
+                        ) : (
+                          <div style={{ color: '#64748b', fontSize: '10px', padding: '6px', textAlign: 'center' }}>
+                            No Photo
+                          </div>
+                        )}
+                        <div className="pdf-photo-timestamp">Co-Applicant {i + 1}</div>
                       </div>
-                      <div className="pdf-photo-timestamp">Co-Applicant {i + 1}</div>
+                      <div className="pdf-geo-details">
+                        Lat: 13.0827, Long: 80.2707
+                        <br />
+                        {formatDateTime(new Date())}
+                      </div>
                     </div>
-                    <div className="pdf-geo-details">
-                      Lat: 13.0827, Long: 80.2707
-                      <br />
-                      {formatDateTime(new Date())}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
             </div>
           </div>
 
@@ -1573,11 +1785,13 @@ export default function PdfView() {
 
             {hasCoApplicants &&
               coApplicants.map((co, i) => {
-                const coSig =
+                const coSigRaw =
                   declarationData.coApplicants?.[i]?.signature ||
-                  (i === 0 ? declarationData.coApplicantSignature : '') ||
-                  composeFullName(co) ||
-                  `Co-Applicant ${i + 1}`;
+                  (i === 0 ? declarationData.coApplicantSignature : '');
+                const coSig =
+                  !isObsoleteMock(coSigRaw) && coSigRaw
+                    ? coSigRaw
+                    : '-';
                 const coDate =
                   declarationData.coApplicants?.[i]?.date ||
                   (i === 0 ? declarationData.coApplicantDate : '') ||

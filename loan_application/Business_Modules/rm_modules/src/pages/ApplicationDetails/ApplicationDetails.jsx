@@ -91,35 +91,40 @@ function normalizeApplicationStatus(status, statusName = '') {
   return 'New';
 }
 
-async function updateCustomerStatusToInProgress(baseUrl, customerId, record) {
-  const currentStatus = Number(record.status ?? record.Status ?? 0);
-  // Progression protection: only update if status is 0 (Draft / Newly Created)
-  if (currentStatus >= 1) {
-    return; // Already in progress (1) or approved (2)
-  }
+async function updateCustomerStatusToInProgress(baseUrl, customerId, record = {}) {
+  if (!customerId) return;
 
-  const payload = {
-    agentCustomerId: Number(record.agentCustomerId || record.AgentCustomerId || customerId),
-    agentId: Number(record.agentId ?? record.AgentId ?? 1),
-    fullName: record.fullName || record.FullName || record.customerName || '',
-    mobileNumber: record.mobileNumber || record.MobileNumber || record.mobile || '',
-    email: record.email || record.Email || record.emailAddress || '',
-    employmentTypeId: Number(record.employmentTypeId ?? record.EmploymentTypeId ?? 1),
-    loanPurposeId: Number(record.loanPurposeId ?? record.LoanPurposeId ?? 1),
-    expectedLoanAmount: Number(record.expectedLoanAmount ?? record.ExpectedLoanAmount ?? 0),
-    remarks: record.remarks || record.Remarks || '',
-    status: 1,
-    isActive: record.isActive !== undefined ? record.isActive : (record.IsActive !== undefined ? record.IsActive : true),
-  };
+  try {
+    let baseRecord = record;
+    const getRes = await fetch(`${baseUrl}/AgentAddCustomer/${customerId}`);
+    if (getRes.ok) {
+      const data = await getRes.json();
+      const cust = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
+      if (cust) baseRecord = cust;
+    }
 
-  const response = await fetch(`${baseUrl}/AgentAddCustomer/${customerId}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+    const currentStatus = Number(baseRecord.status ?? baseRecord.Status ?? 0);
+    // Progression protection: only update if status is 0 (Draft / Newly Created)
+    if (currentStatus >= 1) {
+      return; // Already in progress (1) or approved (2)
+    }
 
-  if (!response.ok) {
-    console.error(`Failed to update customer status to in-progress (${response.status})`);
+    const payload = {
+      ...baseRecord,
+      status: 1,
+    };
+
+    const response = await fetch(`${baseUrl}/AgentAddCustomer/${customerId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      console.error(`Failed to update customer status to in-progress (${response.status})`);
+    }
+  } catch (err) {
+    console.error('Failed to update customer status to in-progress:', err);
   }
 }
 
@@ -170,13 +175,14 @@ export default function ApplicationDetails() {
         if (active && record) {
           setDisplayRecord(record);
           setAgentBranch('');
-          const rawStatus = Number(record?.status ?? record?.Status ?? 0);
+          const rawStatus = Number(record?.rawStatus ?? record?.status ?? record?.Status ?? 0);
           const currentStatus = normalizeApplicationStatus(record.status, record.statusName || record.StatusName);
 
           // Update status to 1 (In Progress) if newly created (status 0)
-          if (rawStatus === 0 && appId) {
+          if ((rawStatus === 0 || currentStatus === 'New' || record.status === 'Draft') && appId) {
             try {
               await updateCustomerStatusToInProgress(baseUrl, appId, record);
+              saveApplication(appId, { status: 'Pending', rawStatus: 1 });
             } catch (statusError) {
               console.error('Failed to update status to 1 on Step 1 start:', statusError);
             }

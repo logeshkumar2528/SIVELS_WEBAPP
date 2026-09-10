@@ -119,7 +119,8 @@
 .bo-cv-header-right {
   display: flex;
   align-items: center;
-  gap: 14px;
+  justify-content: flex-end;
+  gap: 16px;
   flex-shrink: 0;
 }
 
@@ -184,37 +185,6 @@
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 12px;
-}
-
-.bo-cv-view-form-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 13px;
-  background: var(--color-primary, #0f7a4c);
-  color: #ffffff;
-  border: 1px solid var(--color-primary, #0f7a4c);
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  font-family: inherit;
-  box-shadow: 0 1px 3px rgba(15, 122, 76, 0.18);
-  white-space: nowrap;
-}
-
-.bo-cv-view-form-btn:hover {
-  background: var(--color-primary-hover, #0d6941);
-  border-color: var(--color-primary-hover, #0d6941);
-  box-shadow: 0 2px 6px rgba(15, 122, 76, 0.28);
-  transform: translateY(-1px);
-}
-
-.bo-cv-view-form-btn:active {
-  transform: translateY(0);
 }
 
 /* ── 2. Dedicated 2-Column Body ────────────────────────────────────── */
@@ -290,6 +260,25 @@
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.bo-cv-steps-nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.bo-cv-steps-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bo-cv-steps-nav::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.bo-cv-steps-nav::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .bo-cv-steps-list {
@@ -2309,3 +2298,884 @@
 .bo-cv-decision-btn-confirm-reject:active {
   transform: translateY(0);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   15-STEP UNDERWRITING VERIFICATION WORKFLOW STYLES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Generic Step Panel Container ───────────────────────────────────────── */
+.bo-cv-step-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: boCvPanelFadeIn 0.2s ease-out;
+}
+
+@keyframes boCvPanelFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bo-cv-step-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.bo-cv-step-header-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.bo-cv-step-badge-num {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border-radius: 10px;
+  background: var(--color-primary-light, #eaf5ee);
+  color: var(--color-primary, #0f7a4c);
+  font-weight: 800;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-primary-muted, #a8d5b5);
+}
+
+.bo-cv-step-panel-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 3px 0;
+  line-height: 1.25;
+}
+
+.bo-cv-step-panel-desc {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.bo-cv-step-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Step 01: Application Form (PdfView) ─────────────────────────────────── */
+.bo-cv-pdfview-wrapper {
+  background: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.bo-cv-doc-display-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.bo-cv-person-doc-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.bo-cv-person-doc-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.bo-cv-person-doc-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--color-primary-light, #eaf5ee);
+  color: var(--color-primary, #0f7a4c);
+  border: 1px solid var(--color-primary-muted, #a8d5b5);
+}
+
+.bo-cv-person-doc-badge.co-app {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.bo-cv-person-doc-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.bo-cv-image-preview-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #0f172a08;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.bo-cv-uncropped-img {
+  max-width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  background: #ffffff;
+  display: block;
+}
+
+.bo-cv-pdf-frame-wrapper {
+  width: 100%;
+}
+
+.bo-cv-doc-iframe {
+  width: 100%;
+  height: 520px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.bo-cv-doc-loading-box,
+.bo-cv-doc-empty-box,
+.bo-cv-empty-doc-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 240px;
+  padding: 32px;
+  text-align: center;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+}
+
+.bo-cv-empty-doc-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bo-cv-empty-doc-card h4 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #334155;
+  margin: 0;
+}
+
+.bo-cv-empty-doc-card p,
+.bo-cv-doc-empty-box p {
+  font-size: 13px;
+  margin: 0;
+  color: #64748b;
+  max-width: 440px;
+  line-height: 1.45;
+}
+
+.bo-cv-doc-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e2e8f0;
+  border-top-color: var(--color-primary, #0f7a4c);
+  border-radius: 50%;
+  animation: boCvSpin 0.8s linear infinite;
+}
+
+/* Document Information / Metadata Row */
+.bo-cv-doc-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  width: 100%;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-top: 14px;
+  box-sizing: border-box;
+  font-size: 13px;
+  color: #334155;
+}
+
+.bo-cv-doc-meta-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* ── 1. Consistent Verification Remarks & Reject Action Bar ──────────────── */
+.verification-action-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.verification-remarks-field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.verification-remarks-field label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.bo-cv-remarks-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  color: #0f172a;
+  background: #ffffff;
+  resize: vertical;
+  min-height: 68px;
+  line-height: 1.45;
+  transition: all 0.15s ease;
+}
+
+.bo-cv-remarks-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #0f7a4c);
+  box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.12);
+}
+
+.reject-rm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 18px;
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.reject-rm-btn:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+  color: #b91c1c;
+}
+
+.reject-rm-btn:active {
+  transform: translateY(1px);
+}
+
+@media (max-width: 768px) {
+  .verification-action-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .reject-rm-btn {
+    width: 100%;
+  }
+}
+
+.bo-cv-feedback-alert {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bo-cv-feedback-alert.is-success {
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+}
+
+.bo-cv-feedback-alert.is-error {
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+/* ── Steps 06-08, 15: Compact Placeholders ───────────────────────────────── */
+.bo-cv-placeholder-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 36px 24px;
+  background: #f8fafc;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 10px;
+  gap: 10px;
+}
+
+.bo-cv-placeholder-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.bo-cv-placeholder-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.bo-cv-placeholder-panel h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #334155;
+  margin: 0;
+}
+
+.bo-cv-placeholder-panel p {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+  max-width: 440px;
+  line-height: 1.45;
+}
+
+/* ── Steps 09-10: File Upload Dropzones (Legal Opinion & Technical Value) ─── */
+.bo-cv-upload-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bo-cv-dropzone-box {
+  position: relative;
+  background: #f8fafc;
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.bo-cv-dropzone-box:hover {
+  background: #f1f5f9;
+  border-color: var(--color-primary, #0f7a4c);
+}
+
+.bo-cv-file-input {
+  display: none;
+}
+
+.bo-cv-dropzone-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 44px 24px;
+  cursor: pointer;
+  text-align: center;
+  gap: 8px;
+}
+
+.bo-cv-dropzone-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: var(--color-primary, #0f7a4c);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.bo-cv-dropzone-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.bo-cv-dropzone-sub {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.bo-cv-dropzone-types {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.bo-cv-file-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.bo-cv-file-card-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.bo-cv-file-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: var(--color-primary-light, #eaf5ee);
+  color: var(--color-primary, #0f7a4c);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bo-cv-file-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bo-cv-file-size {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.bo-cv-file-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ── Step 11: Manual CIBIL PAN Card Upload Section ──────────────────────── */
+.bo-cv-manual-pan-section {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.bo-cv-manual-pan-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.bo-cv-manual-pan-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bo-cv-manual-pan-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.bo-cv-manual-pan-subtitle {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+
+.bo-cv-manual-pan-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bo-cv-manual-pan-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.bo-cv-manual-pan-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.bo-cv-manual-pan-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.bo-cv-manual-pan-selected-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.bo-cv-manual-pan-file-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.bo-cv-manual-pan-file-info span {
+  color: #64748b;
+}
+
+/* ── Step 12: Personal Discussion (PD) Verification ──────────────────────── */
+.bo-cv-pd-container {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.bo-cv-pd-select-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 20px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.bo-cv-pd-select-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.bo-cv-pd-dropdown {
+  width: 100%;
+  max-width: 320px;
+  padding: 9px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.bo-cv-pd-dropdown:focus {
+  outline: none;
+  border-color: var(--color-primary, #0f7a4c);
+  box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.12);
+}
+
+.bo-cv-pd-result-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.bo-cv-pd-result-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.bo-cv-pd-mode-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  background: var(--color-primary-light, #eaf5ee);
+  color: var(--color-primary, #0f7a4c);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bo-cv-pd-result-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 2px 0;
+}
+
+.bo-cv-pd-result-header p {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+
+.bo-cv-pd-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.bo-cv-pd-detail-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bo-cv-pd-detail-item small {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.bo-cv-pd-detail-item strong {
+  font-size: 14px;
+  color: #0f172a;
+}
+
+/* ── Step 14: Eligibility Fit ────────────────────────────────────────────── */
+.bo-cv-fit-container {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.bo-cv-fit-select-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 20px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.bo-cv-fit-select-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.bo-cv-fit-dropdown {
+  width: 100%;
+  max-width: 320px;
+  padding: 9px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.bo-cv-fit-dropdown:focus {
+  outline: none;
+  border-color: var(--color-primary, #0f7a4c);
+  box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.12);
+}
+
+.bo-cv-fit-result-card {
+  border-radius: 10px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.bo-cv-fit-result-card.is-fit {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.bo-cv-fit-result-card.is-conditional-fit {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.bo-cv-fit-result-card.is-not-fit {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.bo-cv-fit-result-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bo-cv-fit-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.is-fit .bo-cv-fit-badge {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+
+.is-conditional-fit .bo-cv-fit-badge {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.is-not-fit .bo-cv-fit-badge {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
+.bo-cv-fit-result-head h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.bo-cv-fit-desc {
+  font-size: 13px;
+  color: #334155;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.bo-cv-fit-meta-note {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
