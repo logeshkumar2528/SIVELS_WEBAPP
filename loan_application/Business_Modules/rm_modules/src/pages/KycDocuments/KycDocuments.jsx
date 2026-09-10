@@ -37,6 +37,28 @@ function last4FromValue(value = '') {
   return digits.slice(-4);
 }
 
+function formatFileSize(bytes) {
+  if (!bytes || isNaN(bytes) || bytes <= 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)} KB`;
+  const mb = kb / 1024;
+  if (mb < 1024) return `${mb.toFixed(1)} MB`;
+  const gb = mb / 1024;
+  return `${gb.toFixed(1)} GB`;
+}
+
+function getFileIcon(fileName = '') {
+  const ext = String(fileName).split('.').pop()?.toLowerCase();
+  if (ext === 'zip' || ext === 'rar' || ext === '7z' || ext === 'tar' || ext === 'gz') {
+    return <FolderOpen size={16} color="#d97706" />;
+  }
+  if (ext === 'jpg' || ext === 'jpeg' || ext === 'png' || ext === 'webp' || ext === 'gif') {
+    return <ImageIcon size={16} color="#2563eb" />;
+  }
+  return <FileText size={16} color="#0F7A4C" />;
+}
+
 function buildKycState(appData) {
   const saved = getSectionState(appData, 'kycDocuments', {});
   const count = getApplicantCount(appData);
@@ -48,24 +70,32 @@ function buildKycState(appData) {
       aadhaarLast4: saved.applicant?.aadhaarLast4 || last4FromValue(appData.aadhaarNo),
       panCardNo: saved.applicant?.panCardNo || appData.panCardNo || appData.panNumber || '',
       identityDocumentType: saved.applicant?.identityDocumentType || '',
-      identityDocumentCount: saved.applicant?.identityDocumentCount || '',
+      identityDocumentCount: saved.applicant?.identityDocumentCount || (saved.applicant?.identityDocumentFiles?.length ? String(saved.applicant.identityDocumentFiles.length) : ''),
       identityDocumentFiles: Array.isArray(saved.applicant?.identityDocumentFiles)
         ? saved.applicant.identityDocumentFiles
-        : [],
+        : (saved.applicant?.manualDocuments ? saved.applicant.manualDocuments.split(',').map((s) => s.trim()).filter(Boolean) : []),
+      identityDocumentRawFiles: [],
       identityDocumentNo: saved.applicant?.identityDocumentNo || '',
       verificationStatus: saved.applicant?.verificationStatus || 'Pending',
+      documentPath: saved.applicant?.documentPath || null,
+      manualDocuments: saved.applicant?.manualDocuments || '',
+      fileSize: saved.applicant?.fileSize || null,
     },
     coApplicants: createArray(count, (index) => ({
       kycDocumentId: savedCoApplicants[index]?.kycDocumentId || savedCoApplicants[index]?.applicationKYCDocumentId || null,
       aadhaarLast4: savedCoApplicants[index]?.aadhaarLast4 || '',
       panCardNo: savedCoApplicants[index]?.panCardNo || '',
       identityDocumentType: savedCoApplicants[index]?.identityDocumentType || '',
-      identityDocumentCount: savedCoApplicants[index]?.identityDocumentCount || '',
+      identityDocumentCount: savedCoApplicants[index]?.identityDocumentCount || (savedCoApplicants[index]?.identityDocumentFiles?.length ? String(savedCoApplicants[index].identityDocumentFiles.length) : ''),
       identityDocumentFiles: Array.isArray(savedCoApplicants[index]?.identityDocumentFiles)
         ? savedCoApplicants[index].identityDocumentFiles
-        : [],
+        : (savedCoApplicants[index]?.manualDocuments ? savedCoApplicants[index].manualDocuments.split(',').map((s) => s.trim()).filter(Boolean) : []),
+      identityDocumentRawFiles: [],
       identityDocumentNo: savedCoApplicants[index]?.identityDocumentNo || '',
       verificationStatus: savedCoApplicants[index]?.verificationStatus || 'Pending',
+      documentPath: savedCoApplicants[index]?.documentPath || null,
+      manualDocuments: savedCoApplicants[index]?.manualDocuments || '',
+      fileSize: savedCoApplicants[index]?.fileSize || null,
     })),
   };
 }
@@ -87,6 +117,7 @@ function KycCard({
 }) {
   const [otpStep, setOtpStep] = useState(person.verificationStatus === 'Verified' ? 'verified' : 'idle');
   const [otpValue, setOtpValue] = useState('');
+  const [fileSizeError, setFileSizeError] = useState('');
   const fileInputRefs = useRef([]);
 
   useEffect(() => {
@@ -117,12 +148,79 @@ function KycCard({
 
   const selectedDocumentCount = Number(person.identityDocumentCount) || 0;
   const selectedDocumentFiles = Array.isArray(person.identityDocumentFiles) ? person.identityDocumentFiles : [];
+  const selectedDocumentRawFiles = Array.isArray(person.identityDocumentRawFiles) ? person.identityDocumentRawFiles : [];
+
+  const persistedFiles = useMemo(() => {
+    const list = [];
+    if (person.documentPath) {
+      const rawPaths = String(person.documentPath).split(',').map((s) => s.trim()).filter(Boolean);
+      rawPaths.forEach((path, i) => {
+        const cleanName = path.split('/').pop() || path.split('\\').pop() || `Document ${i + 1}`;
+        list.push({
+          path,
+          fileName: cleanName,
+          size: person.fileSize || null,
+          isPersisted: true,
+        });
+      });
+    } else if (person.manualDocuments && typeof person.manualDocuments === 'string' && !selectedDocumentRawFiles.some(Boolean)) {
+      const rawNames = person.manualDocuments.split(',').map((s) => s.trim()).filter(Boolean);
+      rawNames.forEach((name) => {
+        list.push({
+          path: name,
+          fileName: name,
+          size: person.fileSize || null,
+          isPersisted: true,
+        });
+      });
+    }
+    return list;
+  }, [person.documentPath, person.manualDocuments, person.fileSize, selectedDocumentRawFiles]);
+
+  const handleDownloadPersisted = async (fileObj) => {
+    if (!fileObj || !fileObj.path) return;
+    const path = fileObj.path;
+    const fileName = fileObj.fileName || path.split('/').pop() || path.split('\\').pop() || 'document.zip';
+
+    let downloadUrl = path;
+    if (!downloadUrl.startsWith('http://') && !downloadUrl.startsWith('https://')) {
+      const cleanPath = path.replace(/\\/g, '/').replace(/^\/+/, '');
+      downloadUrl = `${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`;
+    }
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(downloadUrl, { headers });
+      if (res.ok) {
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+        return;
+      }
+    } catch (err) {
+      console.warn('Direct fetch download failed, fallback to direct window open:', err);
+    }
+
+    window.open(downloadUrl, '_blank');
+  };
 
   const handleDocumentTypeChange = (value) => {
     onChange('identityDocumentType', value);
     if (!value) {
       onChange('identityDocumentCount', '');
       onChange('identityDocumentFiles', []);
+      onChange('identityDocumentRawFiles', []);
+      onChange('manualDocuments', '');
+      setFileSizeError('');
     }
   };
 
@@ -130,19 +228,42 @@ function KycCard({
     const count = Number(value) || 0;
     onChange('identityDocumentCount', value);
     onChange('identityDocumentFiles', Array.from({ length: count }, (_, index) => selectedDocumentFiles[index] || ''));
+    onChange('identityDocumentRawFiles', Array.from({ length: count }, (_, index) => selectedDocumentRawFiles[index] || null));
   };
 
   const handleDocumentFileChange = (index, event) => {
-    const nextFiles = [...selectedDocumentFiles];
-    nextFiles[index] = event.target.files?.[0]?.name || '';
-    onChange('identityDocumentFiles', nextFiles);
-    onChange('manualDocuments', nextFiles.filter(Boolean).join(', '));
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.size > 150 * 1024 * 1024) {
+        setFileSizeError('Each file must be 150 MB or smaller');
+        event.target.value = '';
+        const nextFiles = [...selectedDocumentFiles];
+        nextFiles[index] = '';
+        const nextRawFiles = [...selectedDocumentRawFiles];
+        nextRawFiles[index] = null;
+        onChange('identityDocumentFiles', nextFiles);
+        onChange('identityDocumentRawFiles', nextRawFiles);
+        onChange('manualDocuments', nextFiles.filter(Boolean).join(', '));
+        return;
+      }
+      setFileSizeError('');
+      const nextFiles = [...selectedDocumentFiles];
+      nextFiles[index] = file.name;
+      const nextRawFiles = [...selectedDocumentRawFiles];
+      nextRawFiles[index] = file;
+      onChange('identityDocumentFiles', nextFiles);
+      onChange('identityDocumentRawFiles', nextRawFiles);
+      onChange('manualDocuments', nextFiles.filter(Boolean).join(', '));
+    }
   };
 
   const handleRemoveFile = (index) => {
     const nextFiles = [...selectedDocumentFiles];
     nextFiles[index] = '';
+    const nextRawFiles = [...selectedDocumentRawFiles];
+    nextRawFiles[index] = null;
     onChange('identityDocumentFiles', nextFiles);
+    onChange('identityDocumentRawFiles', nextRawFiles);
     onChange('manualDocuments', nextFiles.filter(Boolean).join(', '));
     if (fileInputRefs.current[index]) {
       fileInputRefs.current[index].value = '';
@@ -343,46 +464,188 @@ function KycCard({
           <div className="aw-field aw-upload-field">
             <label className="form-label">Upload Manual Documents (ZIP/Images)</label>
             {selectedDocumentCount > 0 ? (
-              <div className="aw-upload-list">
-                {Array.from({ length: selectedDocumentCount }, (_, index) => (
-                  <div className="aw-input-wrapper" key={`document-upload-${index}`}>
-                    <input
-                      ref={(element) => { fileInputRefs.current[index] = element; }}
-                      type="file"
-                      className="form-input aw-input"
-                      accept=".zip,image/*"
-                      aria-label={`Upload document ${index + 1}`}
-                      onChange={(event) => handleDocumentFileChange(index, event)}
-                      style={{ padding: '6px', paddingRight: selectedDocumentFiles[index] ? '30px' : '6px' }}
-                    />
-                    {selectedDocumentFiles[index] && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveFile(index)}
-                        className="aw-upload-remove"
-                        title={`Remove document ${index + 1}`}
-                      >
-                        <X size={16} />
-                      </button>
-                    )}
-                  </div>
-                ))}
+              <div className="kyc-upload-container">
+                {Array.from({ length: selectedDocumentCount }, (_, index) => {
+                  const persisted = persistedFiles[index];
+                  const rawFile = selectedDocumentRawFiles[index];
+                  const selectedName = selectedDocumentFiles[index];
+
+                  return (
+                    <div className="kyc-doc-slot" key={`document-upload-${index}`}>
+                      {selectedDocumentCount > 1 && (
+                        <div className="kyc-doc-slot-header">
+                          <span className="kyc-doc-slot-title">File {index + 1}</span>
+                        </div>
+                      )}
+
+                      {/* 1. Existing Uploaded File Row */}
+                      {persisted && (
+                        <div className="kyc-existing-file-row">
+                          <div className="kyc-existing-file-main">
+                            <div className="kyc-existing-file-icon">
+                              {getFileIcon(persisted.fileName)}
+                            </div>
+                            <div className="kyc-existing-file-details">
+                              <span className="kyc-existing-file-name" title={persisted.fileName}>
+                                {persisted.fileName}
+                              </span>
+                              <span className="kyc-existing-file-status">
+                                {persisted.size ? `${formatFileSize(persisted.size)} • ` : ''}Uploaded successfully
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="kyc-download-btn"
+                            onClick={() => handleDownloadPersisted(persisted)}
+                            title={`Download ${persisted.fileName}`}
+                          >
+                            <Download size={12} />
+                            <span>Download</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* 2. Choose / Replace File Input */}
+                      <div className="kyc-file-input-wrapper">
+                        {persisted && (
+                          <span className="kyc-replace-label">Replace file:</span>
+                        )}
+                        <input
+                          ref={(element) => {
+                            fileInputRefs.current[index] = element;
+                          }}
+                          type="file"
+                          className="form-input aw-input kyc-compact-file-input"
+                          accept=".zip,image/*"
+                          aria-label={`Upload document ${index + 1}`}
+                          onChange={(event) => handleDocumentFileChange(index, event)}
+                        />
+                      </div>
+
+                      {/* 3. Selected Fresh File Row */}
+                      {(rawFile || selectedName) && (
+                        <div className="kyc-selected-file-row">
+                          <div className="kyc-selected-file-main">
+                            <span className="kyc-selected-label">Selected:</span>
+                            <span className="kyc-selected-name" title={rawFile?.name || selectedName}>
+                              {rawFile?.name || selectedName}
+                            </span>
+                            {rawFile?.size && (
+                              <span className="kyc-selected-size">
+                                • {formatFileSize(rawFile.size)}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFile(index)}
+                            className="kyc-clear-file-btn"
+                            title="Clear selection"
+                            aria-label="Clear selection"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <div className="aw-input-wrapper">
-                <input
-                  type="file"
-                  className="form-input aw-input"
-                  accept=".zip,image/*"
-                  multiple
-                  onChange={(e) => {
-                    if (e.target.files.length > 0) {
-                      onChange('manualDocuments', e.target.files[0].name);
-                    }
-                  }}
-                  style={{ padding: '6px', paddingRight: person.manualDocuments ? '30px' : '6px' }}
-                />
+              <div className="kyc-upload-container">
+                <div className="kyc-doc-slot">
+                  {/* 1. Existing Uploaded File Row if any */}
+                  {persistedFiles[0] && (
+                    <div className="kyc-existing-file-row">
+                      <div className="kyc-existing-file-main">
+                        <div className="kyc-existing-file-icon">
+                          {getFileIcon(persistedFiles[0].fileName)}
+                        </div>
+                        <div className="kyc-existing-file-details">
+                          <span className="kyc-existing-file-name" title={persistedFiles[0].fileName}>
+                            {persistedFiles[0].fileName}
+                          </span>
+                          <span className="kyc-existing-file-status">
+                            {persistedFiles[0].size ? `${formatFileSize(persistedFiles[0].size)} • ` : ''}Uploaded successfully
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="kyc-download-btn"
+                        onClick={() => handleDownloadPersisted(persistedFiles[0])}
+                        title={`Download ${persistedFiles[0].fileName}`}
+                      >
+                        <Download size={12} />
+                        <span>Download</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* 2. Choose / Replace File Input */}
+                  <div className="kyc-file-input-wrapper">
+                    {persistedFiles[0] && (
+                      <span className="kyc-replace-label">Replace file:</span>
+                    )}
+                    <input
+                      type="file"
+                      className="form-input aw-input kyc-compact-file-input"
+                      accept=".zip,image/*"
+                      multiple
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (file.size > 150 * 1024 * 1024) {
+                            setFileSizeError('Each file must be 150 MB or smaller');
+                            e.target.value = '';
+                            return;
+                          }
+                          setFileSizeError('');
+                          onChange('manualDocuments', file.name);
+                          onChange('identityDocumentFiles', [file.name]);
+                          onChange('identityDocumentRawFiles', [file]);
+                        }
+                      }}
+                    />
+                  </div>
+
+                  {/* 3. Selected Fresh File Row */}
+                  {selectedDocumentRawFiles[0] && (
+                    <div className="kyc-selected-file-row">
+                      <div className="kyc-selected-file-main">
+                        <span className="kyc-selected-label">Selected:</span>
+                        <span className="kyc-selected-name" title={selectedDocumentRawFiles[0].name}>
+                          {selectedDocumentRawFiles[0].name}
+                        </span>
+                        {selectedDocumentRawFiles[0].size && (
+                          <span className="kyc-selected-size">
+                            • {formatFileSize(selectedDocumentRawFiles[0].size)}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onChange('manualDocuments', '');
+                          onChange('identityDocumentFiles', []);
+                          onChange('identityDocumentRawFiles', []);
+                        }}
+                        className="kyc-clear-file-btn"
+                        title="Clear selection"
+                        aria-label="Clear selection"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
+            )}
+            {(fileSizeError || errors.manualDocuments || errors.identityDocumentFiles) && (
+              <span className="aw-field-error">
+                {fileSizeError || errors.manualDocuments || errors.identityDocumentFiles}
+              </span>
             )}
           </div>
         </div>
@@ -413,6 +676,7 @@ export default function KycDocuments() {
 
   // Keep ref of active preview URLs for cleanup
   const activeBlobUrlsRef = useRef([]);
+  const hydratedKycIdsRef = useRef(new Set());
 
   useEffect(() => {
     ensureApplication(appId);
@@ -449,6 +713,171 @@ export default function KycDocuments() {
   useEffect(() => {
     setForm(buildKycState(getApplication(appId)));
   }, [appId, activeCount, getApplication]);
+
+  const applicantKycId =
+    form.applicant?.kycDocumentId ||
+    appData?.kycDocuments?.applicant?.kycDocumentId ||
+    appData?.kycDocuments?.applicant?.applicationKYCDocumentId ||
+    appData?.applicationKYCDocumentId ||
+    null;
+
+  const coApplicantKycIds = useMemo(() => {
+    return (form.coApplicants || []).map(
+      (co, i) =>
+        co?.kycDocumentId ||
+        appData?.kycDocuments?.coApplicants?.[i]?.kycDocumentId ||
+        appData?.kycDocuments?.coApplicants?.[i]?.applicationKYCDocumentId ||
+        null
+    );
+  }, [form.coApplicants, appData?.kycDocuments?.coApplicants]);
+
+  const coApplicantKycIdsKey = coApplicantKycIds.map((id) => id || '').join(',');
+
+  // Hydrate KYC record from API if kycDocumentId exists
+  useEffect(() => {
+    if (!applicantKycId && !coApplicantKycIds.some(Boolean)) return;
+
+    let isMounted = true;
+    async function hydrateAllKyc() {
+      const token = localStorage.getItem('authToken');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      // 1. Hydrate Applicant
+      if (applicantKycId && !hydratedKycIdsRef.current.has(applicantKycId)) {
+        try {
+          const res = await fetch(`${API_BASE}/ApplicationKYCDocuments/${applicantKycId}`, { headers });
+          if (res.ok && isMounted) {
+            const data = await res.json();
+            hydratedKycIdsRef.current.add(applicantKycId);
+            if (data) {
+              const docPath =
+                data.documentPath ||
+                data.DocumentPath ||
+                data.filePath ||
+                data.FilePath ||
+                data.url ||
+                data.Url ||
+                null;
+              const docFiles = docPath
+                ? String(docPath)
+                    .split(',')
+                    .map((s) => s.trim().split('/').pop() || s.trim())
+                    .filter(Boolean)
+                : [];
+              const docCount = docFiles.length ? String(Math.min(docFiles.length, 3)) : '';
+
+              setForm((prev) => {
+                const app = prev.applicant;
+                return {
+                  ...prev,
+                  applicant: {
+                    ...app,
+                    kycDocumentId: applicantKycId,
+                    aadhaarLast4:
+                      app.aadhaarLast4 ||
+                      (data.aadhaarLastFourDigits ? String(data.aadhaarLastFourDigits) : ''),
+                    panCardNo: app.panCardNo || data.panCardNo || data.PANCardNo || '',
+                    identityDocumentNo:
+                      app.identityDocumentNo || data.documentNumber || data.DocumentNumber || '',
+                    identityDocumentType:
+                      app.identityDocumentType || (data.documentTypeId ? String(data.documentTypeId) : ''),
+                    verificationStatus:
+                      app.verificationStatus && app.verificationStatus !== 'Pending'
+                        ? app.verificationStatus
+                        : data.verificationId
+                        ? String(data.verificationId)
+                        : 'Pending',
+                    documentPath: docPath || app.documentPath,
+                    identityDocumentFiles: app.identityDocumentFiles?.length
+                      ? app.identityDocumentFiles
+                      : docFiles,
+                    manualDocuments:
+                      app.manualDocuments || (docFiles.length ? docFiles.join(', ') : ''),
+                    identityDocumentCount: app.identityDocumentCount || docCount,
+                    fileSize: data.fileSize || data.FileSize || null,
+                  },
+                };
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('Could not hydrate Applicant KYC record from server:', err);
+        }
+      }
+
+      // 2. Hydrate Co-Applicants
+      for (let i = 0; i < coApplicantKycIds.length; i++) {
+        const coKycId = coApplicantKycIds[i];
+        if (coKycId && !hydratedKycIdsRef.current.has(coKycId)) {
+          try {
+            const res = await fetch(`${API_BASE}/ApplicationKYCDocuments/${coKycId}`, { headers });
+            if (res.ok && isMounted) {
+              const data = await res.json();
+              hydratedKycIdsRef.current.add(coKycId);
+              if (data) {
+                const docPath =
+                  data.documentPath ||
+                  data.DocumentPath ||
+                  data.filePath ||
+                  data.FilePath ||
+                  data.url ||
+                  data.Url ||
+                  null;
+                const docFiles = docPath
+                  ? String(docPath)
+                      .split(',')
+                      .map((s) => s.trim().split('/').pop() || s.trim())
+                      .filter(Boolean)
+                  : [];
+                const docCount = docFiles.length ? String(Math.min(docFiles.length, 3)) : '';
+
+                setForm((prev) => {
+                  const newCo = [...prev.coApplicants];
+                  if (newCo[i]) {
+                    newCo[i] = {
+                      ...newCo[i],
+                      kycDocumentId: coKycId,
+                      aadhaarLast4:
+                        newCo[i].aadhaarLast4 ||
+                        (data.aadhaarLastFourDigits ? String(data.aadhaarLastFourDigits) : ''),
+                      panCardNo: newCo[i].panCardNo || data.panCardNo || data.PANCardNo || '',
+                      identityDocumentNo:
+                        newCo[i].identityDocumentNo || data.documentNumber || data.DocumentNumber || '',
+                      identityDocumentType:
+                        newCo[i].identityDocumentType || (data.documentTypeId ? String(data.documentTypeId) : ''),
+                      verificationStatus:
+                        newCo[i].verificationStatus && newCo[i].verificationStatus !== 'Pending'
+                          ? newCo[i].verificationStatus
+                          : data.verificationId
+                          ? String(data.verificationId)
+                          : 'Pending',
+                      documentPath: docPath || newCo[i].documentPath,
+                      identityDocumentFiles: newCo[i].identityDocumentFiles?.length
+                        ? newCo[i].identityDocumentFiles
+                        : docFiles,
+                      manualDocuments:
+                        newCo[i].manualDocuments || (docFiles.length ? docFiles.join(', ') : ''),
+                      identityDocumentCount: newCo[i].identityDocumentCount || docCount,
+                      fileSize: data.fileSize || data.FileSize || null,
+                    };
+                  }
+                  return { ...prev, coApplicants: newCo };
+                });
+              }
+            }
+          } catch (err) {
+            console.warn(`Could not hydrate Co-Applicant ${i + 1} KYC record from server:`, err);
+          }
+        }
+      }
+    }
+
+    hydrateAllKyc();
+    return () => {
+      isMounted = false;
+    };
+  }, [applicantKycId, coApplicantKycIdsKey]);
 
   // ── Document Cleanup Helper ──────────────────────────────────────────────
   const revokeAllBlobUrls = useCallback(() => {
@@ -731,14 +1160,27 @@ export default function KycDocuments() {
 
     const savedSection = appData.kycDocuments || {};
     const allPersons = [
-      { ...form.applicant, kycDocumentId: savedSection?.applicant?.kycDocumentId || null },
+      {
+        ...form.applicant,
+        personType: 'applicant',
+        index: null,
+        kycDocumentId: form.applicant.kycDocumentId || savedSection?.applicant?.kycDocumentId || null,
+      },
       ...form.coApplicants.map((co, i) => ({
         ...co,
-        kycDocumentId: savedSection?.coApplicants?.[i]?.kycDocumentId || null,
+        personType: 'coApplicants',
+        index: i,
+        kycDocumentId: co.kycDocumentId || savedSection?.coApplicants?.[i]?.kycDocumentId || null,
       })),
     ];
 
     try {
+      const token = localStorage.getItem('authToken');
+      const authHeaders = {};
+      if (token) {
+        authHeaders['Authorization'] = `Bearer ${token}`;
+      }
+
       for (const person of allPersons) {
         const isUpdate = !!person.kycDocumentId;
         const url = isUpdate
@@ -750,9 +1192,12 @@ export default function KycDocuments() {
           AadhaarLastFourDigits: person.aadhaarLast4 || null,
           PANCardNo: person.panCardNo || null,
           DocumentNumber: person.identityDocumentNo || null,
-          VerificationId: person.verificationStatus ? Number(person.verificationStatus) : null,
+          VerificationId:
+            person.verificationStatus && !isNaN(Number(person.verificationStatus))
+              ? Number(person.verificationStatus)
+              : null,
           DocumentTypeId: person.identityDocumentType ? Number(person.identityDocumentType) : null,
-          DocumentPath: null,
+          DocumentPath: person.documentPath || null,
           CreatedBy: 1,
         };
         if (isUpdate) {
@@ -763,7 +1208,10 @@ export default function KycDocuments() {
 
         const response = await fetch(url, {
           method: isUpdate ? 'PUT' : 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders,
+          },
           body: JSON.stringify(payload),
         });
 
@@ -790,15 +1238,105 @@ export default function KycDocuments() {
             }
           }
         }
-        const savedId = savedData.applicationKYCDocumentId || savedData.ApplicationKYCDocumentId;
+        const savedId =
+          savedData.applicationKYCDocumentId ||
+          savedData.ApplicationKYCDocumentId ||
+          savedData.id ||
+          person.kycDocumentId;
         if (savedId) person.kycDocumentId = savedId;
+
+        // Step 2: Upload manual documents if raw File objects exist
+        const rawFiles = (person.identityDocumentRawFiles || []).filter((f) => f instanceof File);
+        if (rawFiles.length > 0 && person.kycDocumentId) {
+          for (const rawFile of rawFiles) {
+            const formDataUpload = new FormData();
+            formDataUpload.append('files', rawFile);
+            formDataUpload.append('file', rawFile);
+
+            const uploadHeaders = {};
+            if (token) {
+              uploadHeaders['Authorization'] = `Bearer ${token}`;
+            }
+
+            const uploadUrl = `${API_BASE}/ApplicationKYCDocuments/${person.kycDocumentId}/upload`;
+            console.log(`Uploading manual document to: ${uploadUrl}`, rawFile.name);
+
+            const uploadResponse = await fetch(uploadUrl, {
+              method: 'POST',
+              headers: uploadHeaders,
+              body: formDataUpload,
+            });
+
+            if (!uploadResponse.ok) {
+              const uploadErrText = await uploadResponse.text().catch(() => '');
+              console.error(
+                `Manual document upload failed for KYC ${person.kycDocumentId}:`,
+                uploadResponse.status,
+                uploadErrText
+              );
+            } else {
+              console.log(`Uploaded document ${rawFile.name} successfully`);
+            }
+          }
+
+          // Step 3: Refresh / hydrate with GET /ApplicationKYCDocuments/{id}
+          try {
+            const getRes = await fetch(`${API_BASE}/ApplicationKYCDocuments/${person.kycDocumentId}`, {
+              headers: authHeaders,
+            });
+            if (getRes.ok) {
+              const kycRecord = await getRes.json();
+              console.log('Refreshed KYC Document record after upload:', kycRecord);
+              const docPath =
+                kycRecord.documentPath ||
+                kycRecord.DocumentPath ||
+                kycRecord.filePath ||
+                kycRecord.FilePath ||
+                kycRecord.url ||
+                kycRecord.Url ||
+                null;
+              if (docPath) {
+                person.documentPath = docPath;
+                const docFiles = String(docPath)
+                  .split(',')
+                  .map((s) => s.trim().split('/').pop() || s.trim())
+                  .filter(Boolean);
+                person.identityDocumentFiles = docFiles;
+                person.manualDocuments = docFiles.join(', ');
+                if (!person.identityDocumentCount && docFiles.length > 0) {
+                  person.identityDocumentCount = String(Math.min(docFiles.length, 3));
+                }
+              }
+              if (kycRecord.fileSize || kycRecord.FileSize) {
+                person.fileSize = kycRecord.fileSize || kycRecord.FileSize;
+              }
+            }
+          } catch (getErr) {
+            console.warn('Failed to refresh KYC record after upload:', getErr);
+          }
+        }
       }
 
       const updatedForm = {
-        applicant: { ...form.applicant, kycDocumentId: allPersons[0].kycDocumentId },
+        applicant: {
+          ...form.applicant,
+          kycDocumentId: allPersons[0].kycDocumentId,
+          documentPath: allPersons[0].documentPath,
+          manualDocuments: allPersons[0].manualDocuments,
+          identityDocumentFiles: allPersons[0].identityDocumentFiles,
+          identityDocumentCount: allPersons[0].identityDocumentCount,
+          fileSize: allPersons[0].fileSize,
+          identityDocumentRawFiles: [],
+        },
         coApplicants: form.coApplicants.map((co, i) => ({
           ...co,
           kycDocumentId: allPersons[i + 1]?.kycDocumentId || co.kycDocumentId,
+          documentPath: allPersons[i + 1]?.documentPath || co.documentPath,
+          manualDocuments: allPersons[i + 1]?.manualDocuments || co.manualDocuments,
+          identityDocumentFiles: allPersons[i + 1]?.identityDocumentFiles || co.identityDocumentFiles,
+          identityDocumentCount: allPersons[i + 1]?.identityDocumentCount || co.identityDocumentCount,
+          fileSize: allPersons[i + 1]?.fileSize || co.fileSize,
+          identityDocumentRawFiles: [],
         })),
       };
 

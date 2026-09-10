@@ -597,6 +597,139 @@ export default function CustomerVerification() {
     document.body.removeChild(a);
   };
 
+  // Extract all real persisted manual documents / ZIP archives for this customer application
+  const manualDocuments = useMemo(() => {
+    if (!verificationData) return [];
+    const list = [];
+    const seenPaths = new Set();
+
+    // 1. Extract from ApplicationKYCDocuments in raw verificationData
+    const rawKyc =
+      verificationData?.raw?.kycDocuments ||
+      verificationData?.raw?.KycDocuments ||
+      verificationData?.raw?.applicationKYCDocuments ||
+      verificationData?.raw?.ApplicationKYCDocuments ||
+      verificationData?.kycDocuments?.raw ||
+      [];
+    const kycArr = Array.isArray(rawKyc) ? rawKyc : (rawKyc ? [rawKyc] : []);
+
+    kycArr.forEach((item) => {
+      if (!item) return;
+      const docPathStr =
+        item.documentPath ||
+        item.DocumentPath ||
+        item.filePath ||
+        item.FilePath ||
+        item.url ||
+        item.Url;
+      if (!docPathStr) return;
+
+      const paths = String(docPathStr).split(',').map((s) => s.trim()).filter(Boolean);
+      paths.forEach((path, idx) => {
+        const cleanPath = path.replace(/\\/g, '/');
+        if (seenPaths.has(cleanPath)) return;
+        seenPaths.add(cleanPath);
+
+        const fileName = cleanPath.split('/').pop() || `Document_${idx + 1}`;
+        const ext = fileName.split('.').pop()?.toLowerCase() || '';
+        const isZip = ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext);
+        const isPdf = ext === 'pdf';
+        const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].includes(ext);
+
+        let fileTypeLabel = 'ZIP File / Manual Document';
+        if (isZip) fileTypeLabel = 'Compressed ZIP Archive (.zip)';
+        else if (isPdf) fileTypeLabel = 'PDF Document (.pdf)';
+        else if (isImage) fileTypeLabel = `Image Document (.${ext})`;
+
+        const cleanPathRel = cleanPath.replace(/^\/+/, '');
+        const downloadUrl =
+          cleanPath.startsWith('http://') || cleanPath.startsWith('https://')
+            ? cleanPath
+            : `https://fusiontecsoftware.com/sivels/api/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPathRel)}`;
+
+        list.push({
+          id: item.applicationKYCDocumentId ? `${item.applicationKYCDocumentId}_${idx}` : `manual_${idx}`,
+          applicationKYCDocumentId: item.applicationKYCDocumentId,
+          fileName,
+          path: cleanPath,
+          fileTypeLabel,
+          isZip,
+          isPdf,
+          isImage,
+          downloadUrl,
+          uploadedOn: item.createdAt || item.CreatedAt || item.modifiedAt || null,
+          source: 'ApplicationKYCDocuments',
+          size: item.fileSize || item.FileSize || null,
+        });
+      });
+    });
+
+    // 2. Check AgentCustomerDocument extra docs for any zip archives
+    const extraDocs = verificationData?.kycDocuments?.documents || [];
+    extraDocs.forEach((doc) => {
+      if (!doc) return;
+      const fn = doc.fileName || doc.name || '';
+      const isZip = /\.zip$/i.test(fn) || /(zip|archive)/i.test(doc.documentTypeName || doc.name || '');
+      if (isZip && fn && !seenPaths.has(fn)) {
+        seenPaths.add(fn);
+        const docId = doc.agentCustomerDocumentId || doc.id;
+        list.push({
+          id: docId || `agent_doc_${fn}`,
+          agentCustomerDocumentId: docId,
+          fileName: fn || 'Customer_Documents_Bundle.zip',
+          path: doc.filePath || fn,
+          fileTypeLabel: 'Compressed ZIP Archive (.zip)',
+          isZip: true,
+          isPdf: false,
+          isImage: false,
+          downloadUrl: null,
+          uploadedOn: doc.uploadedOn || null,
+          source: 'AgentCustomerDocument',
+          size: doc.fileSize || null,
+        });
+      }
+    });
+
+    return list;
+  }, [verificationData]);
+
+  const handleDownloadManualDoc = async (doc) => {
+    if (!doc) return;
+    const fileName = doc.fileName || 'document';
+
+    if (doc.source === 'AgentCustomerDocument' && doc.agentCustomerDocumentId) {
+      try {
+        const blobData = await backOfficeService.downloadCustomerDocument(doc.agentCustomerDocumentId);
+        const blobUrl = URL.createObjectURL(new Blob([blobData]));
+        handleDownloadFile(blobUrl, fileName);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+        return;
+      } catch (e) {
+        console.error('Failed to download customer document:', e);
+      }
+    }
+
+    if (doc.downloadUrl) {
+      try {
+        const token = localStorage.getItem('authToken');
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(doc.downloadUrl, { headers });
+        if (res.ok) {
+          const blob = await res.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          handleDownloadFile(blobUrl, fileName);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+          return;
+        }
+      } catch (err) {
+        console.warn('Direct fetch download failed, fallback to direct window open:', err);
+      }
+      window.open(doc.downloadUrl, '_blank');
+    }
+  };
+
   // 5a. Initial Load: Fetch latest FOIR calculation snapshot via GET /by-customer/{agentCustomerId}
   useEffect(() => {
     const rawCustomer = verificationData?.raw?.customer || verificationData?.customer || {};
@@ -1416,7 +1549,7 @@ export default function CustomerVerification() {
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
-              STEP 05: ZIP FILE
+              STEP 05: ZIP FILE / MANUAL DOCUMENTS
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 5 && (
             <div className="bo-cv-step-panel">
@@ -1434,40 +1567,38 @@ export default function CustomerVerification() {
               </div>
 
               <div className="bo-cv-doc-display-container">
-                {docPreviews.zip?.doc ? (
-                  <div className="bo-cv-zip-card">
-                    <div className="bo-cv-zip-header">
-                      <div className="bo-cv-zip-icon-box">
-                        {FileCheckIcon && <FileCheckIcon size={28} />}
+                {manualDocuments.length > 0 ? (
+                  <div className="bo-cv-manual-docs-list" style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
+                    {manualDocuments.map((doc, idx) => (
+                      <div className="bo-cv-file-card" key={doc.id || `manual-doc-${idx}`}>
+                        <div className="bo-cv-file-card-info">
+                          <div className="bo-cv-file-card-icon">
+                            {FileCheckIcon && <FileCheckIcon size={22} />}
+                          </div>
+                          <div>
+                            <h4 className="bo-cv-file-name" title={doc.fileName}>{doc.fileName}</h4>
+                            <div className="bo-cv-file-size" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                              <span>{doc.fileTypeLabel}</span>
+                              <span>•</span>
+                              <span style={{ color: '#15803d', fontWeight: 600 }}>Uploaded successfully</span>
+                              {doc.size && <span>• {formatFileSize(doc.size)}</span>}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="bo-cv-file-card-actions">
+                          <button
+                            type="button"
+                            className="bo-btn bo-btn--primary bo-btn--sm"
+                            onClick={() => handleDownloadManualDoc(doc)}
+                            title={`Download ${doc.fileName}`}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                          >
+                            {DownloadIcon && <DownloadIcon size={13} />}
+                            <span>Download</span>
+                          </button>
+                        </div>
                       </div>
-                      <div className="bo-cv-zip-info">
-                        <h4>{docPreviews.zip.doc.fileName || 'Customer_Documents_Bundle.zip'}</h4>
-                        <span className="bo-cv-zip-type">Compressed ZIP Archive (.zip)</span>
-                      </div>
-                    </div>
-                    <div className="bo-cv-zip-actions">
-                      <button
-                        type="button"
-                        className="bo-btn bo-btn--primary"
-                        onClick={async () => {
-                          const docId = docPreviews.zip.doc.agentCustomerDocumentId || docPreviews.zip.doc.id;
-                          if (docId) {
-                            try {
-                              const blobData = await backOfficeService.downloadCustomerDocument(docId);
-                              const typedBlob = new Blob([blobData], { type: 'application/zip' });
-                              const url = URL.createObjectURL(typedBlob);
-                              handleDownloadFile(url, docPreviews.zip.doc.fileName || 'Customer_Documents.zip');
-                              URL.revokeObjectURL(url);
-                            } catch (e) {
-                              console.error('Failed to download ZIP file:', e);
-                            }
-                          }
-                        }}
-                      >
-                        {DownloadIcon && <DownloadIcon size={14} />}
-                        <span>Download ZIP File</span>
-                      </button>
-                    </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="bo-cv-empty-doc-card">

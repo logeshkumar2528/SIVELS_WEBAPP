@@ -388,3 +388,205 @@
   background-color: #ffffff;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
 }
+
+/* ==========================================
+   COMPACT MANUAL UPLOAD SECTION
+========================================== */
+.kyc-upload-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.kyc-doc-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.kyc-doc-slot-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.kyc-doc-slot-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* 1. Existing Uploaded File Row */
+.kyc-existing-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #0F7A4C;
+  border-radius: 6px;
+  min-width: 0;
+}
+
+.kyc-existing-file-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.kyc-existing-file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.kyc-existing-file-details {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.kyc-existing-file-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.kyc-existing-file-status {
+  font-size: 10.5px;
+  color: #16a34a;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.kyc-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.kyc-download-btn:hover {
+  background-color: #0F7A4C;
+  color: #ffffff;
+  border-color: #0F7A4C;
+}
+
+/* 2. File Input & Replace Label */
+.kyc-file-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.kyc-replace-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.kyc-compact-file-input {
+  padding: 5px 8px !important;
+  font-size: 12px !important;
+  height: 36px !important;
+}
+
+/* 3. Selected Fresh File Row */
+.kyc-selected-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  background-color: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  min-width: 0;
+}
+
+.kyc-selected-file-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.kyc-selected-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.kyc-selected-name {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.kyc-selected-size {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.kyc-clear-file-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.kyc-clear-file-btn:hover {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+
