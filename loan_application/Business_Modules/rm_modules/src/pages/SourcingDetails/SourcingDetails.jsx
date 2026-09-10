@@ -11,6 +11,24 @@ import { buildSectionUpdate, getSectionState } from '../applicationWizard/flowUt
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
+function getLoggedInRMFromStorage() {
+  try {
+    const rmDataRaw = localStorage.getItem('rmData');
+    if (rmDataRaw) {
+      const parsed = JSON.parse(rmDataRaw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+    const raw = localStorage.getItem('sivels_currentUser');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch {
+    // ignore
+  }
+  return {};
+}
+
 function isObsoleteMock(val) {
   if (!val) return true;
   const s = String(val).trim().toLowerCase();
@@ -19,7 +37,8 @@ function isObsoleteMock(val) {
     s === 'anil kumar' ||
     s === '# emp1001' ||
     s === 'emp1001' ||
-    s === 'rm0001'
+    s === 'rm0001' ||
+    s === 'sivashanmugam m'
   );
 }
 
@@ -28,9 +47,14 @@ function buildSourcingState(appData) {
   const rawSourcedBy = saved.sourcedBy;
   const rawEmployeeId = saved.employeeId;
 
+  const currentRmObj = getLoggedInRMFromStorage();
+  const fallbackRmId = currentRmObj.rmId || currentRmObj.RMId || currentRmObj.id || localStorage.getItem('rmId');
+  const fallbackName = currentRmObj.fullName || currentRmObj.name || '';
+  const fallbackCode = currentRmObj.rmCode || currentRmObj.employeeId || (fallbackRmId ? `RM${String(fallbackRmId).padStart(4, '0')}` : '');
+
   return {
-    sourcedBy: isObsoleteMock(rawSourcedBy) ? 'Sivashanmugam M' : rawSourcedBy,
-    employeeId: isObsoleteMock(rawEmployeeId) ? 'RM001' : rawEmployeeId,
+    sourcedBy: !isObsoleteMock(rawSourcedBy) && rawSourcedBy ? rawSourcedBy : fallbackName,
+    employeeId: !isObsoleteMock(rawEmployeeId) && rawEmployeeId ? rawEmployeeId : fallbackCode,
   };
 }
 
@@ -59,30 +83,56 @@ export default function SourcingDetails() {
           const data = await res.json();
           const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);
 
-          let currentUser = {};
-          try {
-            const raw = localStorage.getItem('sivels_currentUser');
-            if (raw) currentUser = JSON.parse(raw);
-          } catch {
-            // ignore
-          }
+          const currentRmObj = getLoggedInRMFromStorage();
+          const currentRmId = Number(
+            currentRmObj?.rmId ||
+            currentRmObj?.RMId ||
+            currentRmObj?.id ||
+            currentRmObj?.userId ||
+            localStorage.getItem('rmId') ||
+            0
+          );
+          const currentMobile = String(
+            currentRmObj?.mobileNumber ||
+            currentRmObj?.phone ||
+            ''
+          ).replace(/\D/g, '');
+          const currentEmail = String(
+            currentRmObj?.emailAddress ||
+            currentRmObj?.email ||
+            ''
+          ).trim().toLowerCase();
+          const currentName = String(
+            currentRmObj?.fullName ||
+            currentRmObj?.name ||
+            ''
+          ).trim().toLowerCase();
 
-          const currentMobile = String(currentUser?.mobileNumber || currentUser?.phone || '').replace(/\D/g, '');
-          const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || 0);
+          // Match strictly to the logged-in RM identity (same logic as RmProfile.jsx)
+          const match =
+            (currentRmId > 0 && rows.find((r) => Number(r.rmId || r.RMId || r.id) === currentRmId)) ||
+            (currentMobile && rows.find((r) => String(r.mobileNumber || '').replace(/\D/g, '') === currentMobile)) ||
+            (currentEmail && rows.find((r) => String(r.emailAddress || '').trim().toLowerCase() === currentEmail)) ||
+            (currentName && rows.find((r) => String(r.fullName || r.name || '').trim().toLowerCase() === currentName)) ||
+            null;
 
-          const rm =
-            rows.find((row) => Number(row.rmId || row.RMId) === currentRmId && currentRmId > 0) ||
-            rows.find((row) => currentMobile && String(row.mobileNumber || '').replace(/\D/g, '') === currentMobile) ||
-            rows.find((row) => row.isActive !== false) ||
-            rows[0];
+          const resolvedRM = match || (currentRmObj && (currentRmObj.fullName || currentRmObj.name) ? currentRmObj : null);
 
-          if (active && rm) {
-            const updates = {
-              sourcedBy: rm.fullName || 'Sivashanmugam M',
-              employeeId: rm.rmCode || `RM${String(rm.rmId || 1).padStart(3, '0')}`,
-            };
-            setForm(updates);
-            saveApplication(appId, { sourcing: updates });
+          if (active && resolvedRM) {
+            const resolvedName = resolvedRM.fullName || resolvedRM.name || '';
+            const resolvedCode =
+              resolvedRM.rmCode ||
+              resolvedRM.employeeId ||
+              (resolvedRM.rmId ? `RM${String(resolvedRM.rmId).padStart(4, '0')}` : '');
+
+            if (resolvedName) {
+              const updates = {
+                sourcedBy: resolvedName,
+                employeeId: resolvedCode,
+              };
+              setForm(updates);
+              saveApplication(appId, { sourcing: updates });
+            }
           }
         }
       } catch (err) {
@@ -157,7 +207,7 @@ export default function SourcingDetails() {
                 <User className="aw-input-icon" size={14} />
                 <input
                   className="form-input aw-input aw-input--with-icon"
-                  value={isLoading ? 'Loading...' : form.sourcedBy}
+                  value={form.sourcedBy || (isLoading ? 'Loading...' : '')}
                   readOnly
                   placeholder="Enter RM Name"
                 />
@@ -169,7 +219,7 @@ export default function SourcingDetails() {
                 <Hash className="aw-input-icon" size={14} />
                 <input
                   className="form-input aw-input aw-input--with-icon"
-                  value={isLoading ? 'Loading...' : form.employeeId}
+                  value={form.employeeId || (isLoading ? 'Loading...' : '')}
                   readOnly
                   placeholder="Enter Employee ID (e.g. RM001)"
                 />

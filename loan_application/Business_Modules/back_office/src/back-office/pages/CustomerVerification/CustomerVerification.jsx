@@ -38,6 +38,8 @@ import PdfView from '../../../../../rm_modules/src/pages/PdfView/PdfView';
 import { ApplicationDraftProvider } from '../../../../../rm_modules/src/state/ApplicationDraftContext';
 import './CustomerVerification.css';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+
 function formatCurrency(amount) {
   if (amount === null || amount === undefined || isNaN(amount) || amount === 0) return '₹0';
   return `₹${Number(amount).toLocaleString('en-IN')}`;
@@ -275,7 +277,185 @@ export default function CustomerVerification() {
 
   // 4. Document Previews Cache & Blob Management
   const [docPreviews, setDocPreviews] = useState({});
+  const [coDocPreviews, setCoDocPreviews] = useState({});
   const blobUrlsRef = useRef([]);
+
+  // Supplementary server tables if not fully populated in ApplicationFullDetails
+  const [kycRecordsList, setKycRecordsList] = useState([]);
+  const [personalInfoList, setPersonalInfoList] = useState([]);
+
+  // Supplementary fetch for KYC and Personal Info to ensure complete Co-Applicant records
+  useEffect(() => {
+    const rawCustomer = verificationData?.raw?.customer || verificationData?.customer || {};
+    const rawCust = Array.isArray(rawCustomer) ? rawCustomer[0] : rawCustomer;
+    const targetCustomerId =
+      verificationData?.customerId ||
+      rawCust?.agentCustomerId ||
+      rawCust?.AgentCustomerId ||
+      customerId;
+
+    if (!targetCustomerId) return;
+
+    let isMounted = true;
+    async function fetchSupplementaryData() {
+      const token = localStorage.getItem('authToken');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      try {
+        const kycRes = await fetch(`${API_BASE}/ApplicationKYCDocuments`, { headers });
+        if (kycRes.ok && isMounted) {
+          const allKyc = await kycRes.json();
+          const kycArr = Array.isArray(allKyc) ? allKyc : (allKyc?.value || allKyc?.data || []);
+          const filteredKyc = kycArr
+            .filter((k) => String(k.agentCustomerId ?? k.AgentCustomerId) === String(targetCustomerId))
+            .sort((a, b) => (a.applicationKYCDocumentId || 0) - (b.applicationKYCDocumentId || 0));
+          if (filteredKyc.length > 0) {
+            setKycRecordsList(filteredKyc);
+          }
+        }
+      } catch (e) {
+        console.warn('Could not fetch supplementary KYC records:', e);
+      }
+
+      try {
+        const persRes = await fetch(`${API_BASE}/ApplicationPersonalInformation`, { headers });
+        if (persRes.ok && isMounted) {
+          const allPers = await persRes.json();
+          const persArr = Array.isArray(allPers) ? allPers : (allPers?.value || allPers?.data || []);
+          const filteredPers = persArr
+            .filter((p) => String(p.agentCustomerId ?? p.AgentCustomerId) === String(targetCustomerId))
+            .sort((a, b) => (a.personalInformationId || 0) - (b.personalInformationId || 0));
+          if (filteredPers.length > 0) {
+            setPersonalInfoList(filteredPers);
+          }
+        }
+      } catch (e) {
+        console.warn('Could not fetch supplementary personal info:', e);
+      }
+    }
+
+    fetchSupplementaryData();
+    return () => {
+      isMounted = false;
+    };
+  }, [customerId, verificationData]);
+
+  // Merge full KYC & Personal lists
+  const resolvedKycList = useMemo(() => {
+    const rawKyc =
+      verificationData?.raw?.kycDocuments ||
+      verificationData?.raw?.KycDocuments ||
+      verificationData?.raw?.applicationKYCDocuments ||
+      verificationData?.raw?.ApplicationKYCDocuments ||
+      verificationData?.kycDocuments?.raw ||
+      [];
+    const list = Array.isArray(rawKyc) ? rawKyc : (rawKyc ? [rawKyc] : []);
+    if (list.length >= kycRecordsList.length && list.length > 0) return list;
+    return kycRecordsList.length > 0 ? kycRecordsList : list;
+  }, [verificationData, kycRecordsList]);
+
+  const resolvedPersonalList = useMemo(() => {
+    const rawPersonal =
+      verificationData?.raw?.personalInformation ||
+      verificationData?.raw?.PersonalInformation ||
+      [];
+    const list = Array.isArray(rawPersonal) ? rawPersonal : (rawPersonal ? [rawPersonal] : []);
+    if (list.length >= personalInfoList.length && list.length > 0) return list;
+    return personalInfoList.length > 0 ? personalInfoList : list;
+  }, [verificationData, personalInfoList]);
+
+  const applicantKycRecord = resolvedKycList[0] || null;
+  const applicantKycId = applicantKycRecord?.applicationKYCDocumentId || applicantKycRecord?.kycDocumentId || null;
+
+  // Dynamic Co-Applicants extraction (supports 0, 1, 2, 3+ co-applicants)
+  const coApplicants = useMemo(() => {
+    const coPersonalList = resolvedPersonalList.slice(1);
+    const coKycList = resolvedKycList.slice(1);
+
+    const count = Math.max(
+      Number(verificationData?.applicationDetails?.coApplicantCount) || 0,
+      Number(verificationData?.application?.noOfCoApplicants) || 0,
+      coPersonalList.length,
+      coKycList.length
+    );
+
+    const result = [];
+    for (let i = 0; i < count; i++) {
+      const pers = coPersonalList[i] || {};
+      const kyc = coKycList[i] || {};
+      const nameParts = [pers.firstName, pers.middleName, pers.lastName].filter(Boolean).join(' ');
+      const name = nameParts || pers.fullName || pers.customerName || `Co-Applicant ${i + 1}`;
+      const pan = kyc.panCardNo || pers.panCardNo || pers.pan || '';
+      const aadhaarLast4 = kyc.aadhaarLastFourDigits || pers.aadhaarLastFourDigits || '';
+      const aadhaarDisplay = aadhaarLast4
+        ? `XXXX-XXXX-${aadhaarLast4}`
+        : (pers.aadhaarNumber ? String(pers.aadhaarNumber) : (kyc.aadhaarNumber ? String(kyc.aadhaarNumber) : '—'));
+      const kycDocumentId = kyc.applicationKYCDocumentId || kyc.kycDocumentId || kyc.id || null;
+
+      result.push({
+        index: i,
+        number: i + 1,
+        name,
+        pan,
+        aadhaarLast4,
+        aadhaarDisplay,
+        kycDocumentId,
+        kycRecord: kyc,
+        personalRecord: pers,
+      });
+    }
+    return result;
+  }, [verificationData, resolvedPersonalList, resolvedKycList]);
+
+  // Generic KYC binary file loader helper
+  const fetchKycDocBlob = useCallback(async (kycId, route, defaultName) => {
+    if (!kycId) return { loading: false, url: null, error: null };
+    try {
+      const token = localStorage.getItem('authToken');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${API_BASE}/ApplicationKYCDocuments/${kycId}/${route}`, { headers });
+      if (!res.ok) {
+        return { loading: false, url: null, error: null };
+      }
+      const blob = await res.blob();
+      if (!blob || blob.size === 0) {
+        return { loading: false, url: null, error: null };
+      }
+
+      let fileName = '';
+      const disposition = res.headers.get('content-disposition');
+      if (disposition) {
+        const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+        if (match && match[1]) {
+          fileName = match[1].replace(/['"]/g, '').trim();
+        }
+      }
+      const isPdf = blob.type === 'application/pdf' || (fileName && fileName.toLowerCase().endsWith('.pdf'));
+      if (!fileName) {
+        const ext = isPdf ? 'pdf' : (blob.type === 'image/png' ? 'png' : 'jpg');
+        fileName = `${defaultName}.${ext}`;
+      }
+
+      const objectUrl = window.URL.createObjectURL(blob);
+      blobUrlsRef.current.push(objectUrl);
+
+      return {
+        loading: false,
+        error: null,
+        url: objectUrl,
+        isPdf,
+        isImage: !isPdf,
+        fileName,
+        size: blob.size,
+      };
+    } catch (err) {
+      console.warn(`Could not load KYC doc for kycId ${kycId} route ${route}:`, err);
+      return { loading: false, url: null, error: null };
+    }
+  }, []);
 
   // Cleanup object URLs on unmount
   useEffect(() => {
@@ -441,6 +621,8 @@ export default function CustomerVerification() {
           url: objectUrl,
           isPdf,
           isImage: !isPdf,
+          fileName,
+          size: typedBlob.size,
         },
       }));
     } catch (err) {
@@ -457,50 +639,144 @@ export default function CustomerVerification() {
     }
   }, []);
 
-  // Fetch document preview whenever an active document step is opened
+  // Fetch document preview whenever an active document step is opened (Applicant + Co-Applicants)
   useEffect(() => {
     if (!verificationData) return;
     const docs = verificationData?.kycDocuments?.documents || [];
 
-    if (activeStep === 2 && !docPreviews.profile) {
-      const profileDoc = docs.find(
-        (d) =>
-          d.documentTypeId === 6 ||
-          /(photo|picture|client|profile)/i.test(d.documentTypeName || d.name || d.fileName || '')
-      );
-      if (profileDoc) {
-        loadDocumentPreview('profile', profileDoc);
-      } else {
-        setDocPreviews((prev) => ({ ...prev, profile: { loading: false, error: null, doc: null, url: null } }));
+    // ── STEP 2: PROFILE IMAGE ──────────────────────────────────────
+    if (activeStep === 2) {
+      // 1. Applicant Profile Image
+      if (!docPreviews.profile) {
+        const profileDoc = docs.find(
+          (d) =>
+            d.documentTypeId === 6 ||
+            /(photo|picture|client|profile)/i.test(d.documentTypeName || d.name || d.fileName || '')
+        );
+        if (profileDoc) {
+          loadDocumentPreview('profile', profileDoc);
+        } else if (applicantKycId) {
+          setDocPreviews((prev) => ({ ...prev, profile: { loading: true, error: null, doc: null, url: null } }));
+          fetchKycDocBlob(applicantKycId, 'profile-image', 'Applicant_Profile').then((res) => {
+            setDocPreviews((prev) => ({ ...prev, profile: res }));
+          });
+        } else {
+          setDocPreviews((prev) => ({ ...prev, profile: { loading: false, error: null, doc: null, url: null } }));
+        }
       }
+
+      // 2. Co-Applicants Profile Images
+      coApplicants.forEach((co) => {
+        if (!coDocPreviews[co.index]?.profile && co.kycDocumentId) {
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              profile: { loading: true, error: null, url: null },
+            },
+          }));
+          fetchKycDocBlob(co.kycDocumentId, 'profile-image', `CoApplicant_${co.number}_Profile`).then((res) => {
+            setCoDocPreviews((prev) => ({
+              ...prev,
+              [co.index]: {
+                ...(prev[co.index] || {}),
+                profile: res,
+              },
+            }));
+          });
+        }
+      });
     }
 
-    if (activeStep === 3 && !docPreviews.aadhaar) {
-      const aadhaarDoc = docs.find(
-        (d) =>
-          d.documentTypeId === 1 ||
-          /(aadhaar|aadhar)/i.test(d.documentTypeName || d.name || d.fileName || '')
-      );
-      if (aadhaarDoc) {
-        loadDocumentPreview('aadhaar', aadhaarDoc);
-      } else {
-        setDocPreviews((prev) => ({ ...prev, aadhaar: { loading: false, error: null, doc: null, url: null } }));
+    // ── STEP 3: AADHAAR CARD ───────────────────────────────────────
+    if (activeStep === 3) {
+      // 1. Applicant Aadhaar
+      if (!docPreviews.aadhaar) {
+        const aadhaarDoc = docs.find(
+          (d) =>
+            d.documentTypeId === 1 ||
+            /(aadhaar|aadhar)/i.test(d.documentTypeName || d.name || d.fileName || '')
+        );
+        if (aadhaarDoc) {
+          loadDocumentPreview('aadhaar', aadhaarDoc);
+        } else if (applicantKycId) {
+          setDocPreviews((prev) => ({ ...prev, aadhaar: { loading: true, error: null, doc: null, url: null } }));
+          fetchKycDocBlob(applicantKycId, 'aadhar', 'Applicant_Aadhaar').then((res) => {
+            setDocPreviews((prev) => ({ ...prev, aadhaar: res }));
+          });
+        } else {
+          setDocPreviews((prev) => ({ ...prev, aadhaar: { loading: false, error: null, doc: null, url: null } }));
+        }
       }
+
+      // 2. Co-Applicants Aadhaar
+      coApplicants.forEach((co) => {
+        if (!coDocPreviews[co.index]?.aadhaar && co.kycDocumentId) {
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              aadhaar: { loading: true, error: null, url: null },
+            },
+          }));
+          fetchKycDocBlob(co.kycDocumentId, 'aadhar', `CoApplicant_${co.number}_Aadhaar`).then((res) => {
+            setCoDocPreviews((prev) => ({
+              ...prev,
+              [co.index]: {
+                ...(prev[co.index] || {}),
+                aadhaar: res,
+              },
+            }));
+          });
+        }
+      });
     }
 
-    if (activeStep === 4 && !docPreviews.pan) {
-      const panDoc = docs.find(
-        (d) =>
-          d.documentTypeId === 2 ||
-          /\bpan\b/i.test(d.documentTypeName || d.name || d.fileName || '')
-      );
-      if (panDoc) {
-        loadDocumentPreview('pan', panDoc);
-      } else {
-        setDocPreviews((prev) => ({ ...prev, pan: { loading: false, error: null, doc: null, url: null } }));
+    // ── STEP 4: PAN CARD ───────────────────────────────────────────
+    if (activeStep === 4) {
+      // 1. Applicant PAN
+      if (!docPreviews.pan) {
+        const panDoc = docs.find(
+          (d) =>
+            d.documentTypeId === 2 ||
+            /\bpan\b/i.test(d.documentTypeName || d.name || d.fileName || '')
+        );
+        if (panDoc) {
+          loadDocumentPreview('pan', panDoc);
+        } else if (applicantKycId) {
+          setDocPreviews((prev) => ({ ...prev, pan: { loading: true, error: null, doc: null, url: null } }));
+          fetchKycDocBlob(applicantKycId, 'pan', 'Applicant_PAN').then((res) => {
+            setDocPreviews((prev) => ({ ...prev, pan: res }));
+          });
+        } else {
+          setDocPreviews((prev) => ({ ...prev, pan: { loading: false, error: null, doc: null, url: null } }));
+        }
       }
+
+      // 2. Co-Applicants PAN
+      coApplicants.forEach((co) => {
+        if (!coDocPreviews[co.index]?.pan && co.kycDocumentId) {
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              pan: { loading: true, error: null, url: null },
+            },
+          }));
+          fetchKycDocBlob(co.kycDocumentId, 'pan', `CoApplicant_${co.number}_PAN`).then((res) => {
+            setCoDocPreviews((prev) => ({
+              ...prev,
+              [co.index]: {
+                ...(prev[co.index] || {}),
+                pan: res,
+              },
+            }));
+          });
+        }
+      });
     }
 
+    // ── STEP 5: ZIP ARCHIVE ────────────────────────────────────────
     if (activeStep === 5 && !docPreviews.zip) {
       const zipDoc = docs.find(
         (d) =>
@@ -516,7 +792,7 @@ export default function CustomerVerification() {
         setDocPreviews((prev) => ({ ...prev, zip: { loading: false, error: null, doc: null, url: null } }));
       }
     }
-  }, [activeStep, verificationData, docPreviews, loadDocumentPreview]);
+  }, [activeStep, verificationData, docPreviews, coDocPreviews, loadDocumentPreview, fetchKycDocBlob, applicantKycId, coApplicants]);
 
   // Remarks & Send to RM Handler for Steps 2, 3, 4
   const handleRejectOrSendToRm = (stepNum, stepLabel) => {
@@ -597,74 +873,65 @@ export default function CustomerVerification() {
     document.body.removeChild(a);
   };
 
-  // Extract all real persisted manual documents / ZIP archives for this customer application
-  const manualDocuments = useMemo(() => {
+  // Extract real persisted manual documents / ZIP archives for Applicant
+  const applicantManualDocs = useMemo(() => {
     if (!verificationData) return [];
     const list = [];
     const seenPaths = new Set();
 
-    // 1. Extract from ApplicationKYCDocuments in raw verificationData
-    const rawKyc =
-      verificationData?.raw?.kycDocuments ||
-      verificationData?.raw?.KycDocuments ||
-      verificationData?.raw?.applicationKYCDocuments ||
-      verificationData?.raw?.ApplicationKYCDocuments ||
-      verificationData?.kycDocuments?.raw ||
-      [];
-    const kycArr = Array.isArray(rawKyc) ? rawKyc : (rawKyc ? [rawKyc] : []);
-
-    kycArr.forEach((item) => {
-      if (!item) return;
+    if (applicantKycRecord) {
       const docPathStr =
-        item.documentPath ||
-        item.DocumentPath ||
-        item.filePath ||
-        item.FilePath ||
-        item.url ||
-        item.Url;
-      if (!docPathStr) return;
+        applicantKycRecord.documentPath ||
+        applicantKycRecord.DocumentPath ||
+        applicantKycRecord.filePath ||
+        applicantKycRecord.FilePath ||
+        applicantKycRecord.url ||
+        applicantKycRecord.Url;
+      if (docPathStr) {
+        const paths = String(docPathStr).split(',').map((s) => s.trim()).filter(Boolean);
+        paths.forEach((path, idx) => {
+          const cleanPath = path.replace(/\\/g, '/');
+          if (seenPaths.has(cleanPath)) return;
+          seenPaths.add(cleanPath);
 
-      const paths = String(docPathStr).split(',').map((s) => s.trim()).filter(Boolean);
-      paths.forEach((path, idx) => {
-        const cleanPath = path.replace(/\\/g, '/');
-        if (seenPaths.has(cleanPath)) return;
-        seenPaths.add(cleanPath);
+          const fileName = cleanPath.split('/').pop() || `Applicant_Doc_${idx + 1}`;
+          const ext = fileName.split('.').pop()?.toLowerCase() || '';
+          const isZip = ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext);
+          const isPdf = ext === 'pdf';
+          const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].includes(ext);
 
-        const fileName = cleanPath.split('/').pop() || `Document_${idx + 1}`;
-        const ext = fileName.split('.').pop()?.toLowerCase() || '';
-        const isZip = ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext);
-        const isPdf = ext === 'pdf';
-        const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].includes(ext);
+          let fileTypeLabel = 'ZIP File / Manual Document';
+          if (isZip) fileTypeLabel = 'Compressed ZIP Archive (.zip)';
+          else if (isPdf) fileTypeLabel = 'PDF Document (.pdf)';
+          else if (isImage) fileTypeLabel = `Image Document (.${ext})`;
 
-        let fileTypeLabel = 'ZIP File / Manual Document';
-        if (isZip) fileTypeLabel = 'Compressed ZIP Archive (.zip)';
-        else if (isPdf) fileTypeLabel = 'PDF Document (.pdf)';
-        else if (isImage) fileTypeLabel = `Image Document (.${ext})`;
+          const cleanPathRel = cleanPath.replace(/^\/+/, '');
+          const downloadUrl =
+            cleanPath.startsWith('http://') || cleanPath.startsWith('https://')
+              ? cleanPath
+              : `${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPathRel)}`;
 
-        const cleanPathRel = cleanPath.replace(/^\/+/, '');
-        const downloadUrl =
-          cleanPath.startsWith('http://') || cleanPath.startsWith('https://')
-            ? cleanPath
-            : `https://fusiontecsoftware.com/sivels/api/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPathRel)}`;
-
-        list.push({
-          id: item.applicationKYCDocumentId ? `${item.applicationKYCDocumentId}_${idx}` : `manual_${idx}`,
-          applicationKYCDocumentId: item.applicationKYCDocumentId,
-          fileName,
-          path: cleanPath,
-          fileTypeLabel,
-          isZip,
-          isPdf,
-          isImage,
-          downloadUrl,
-          uploadedOn: item.createdAt || item.CreatedAt || item.modifiedAt || null,
-          source: 'ApplicationKYCDocuments',
-          size: item.fileSize || item.FileSize || null,
+          list.push({
+            id: applicantKycRecord.applicationKYCDocumentId
+              ? `app_kyc_${applicantKycRecord.applicationKYCDocumentId}_${idx}`
+              : `app_manual_${idx}`,
+            applicationKYCDocumentId: applicantKycRecord.applicationKYCDocumentId,
+            fileName,
+            path: cleanPath,
+            fileTypeLabel,
+            isZip,
+            isPdf,
+            isImage,
+            downloadUrl,
+            uploadedOn: applicantKycRecord.createdAt || applicantKycRecord.modifiedAt || null,
+            source: 'ApplicationKYCDocuments',
+            size: applicantKycRecord.fileSize || null,
+          });
         });
-      });
-    });
+      }
+    }
 
-    // 2. Check AgentCustomerDocument extra docs for any zip archives
+    // Check AgentCustomerDocument extra docs for any zip archives
     const extraDocs = verificationData?.kycDocuments?.documents || [];
     extraDocs.forEach((doc) => {
       if (!doc) return;
@@ -691,7 +958,79 @@ export default function CustomerVerification() {
     });
 
     return list;
-  }, [verificationData]);
+  }, [applicantKycRecord, verificationData]);
+
+  // Extract real persisted manual documents / ZIP archives for Co-Applicants (dynamic)
+  const coApplicantsManualDocs = useMemo(() => {
+    const map = {};
+    coApplicants.forEach((co) => {
+      const list = [];
+      const seenPaths = new Set();
+      const kyc = co.kycRecord;
+      if (kyc) {
+        const docPathStr =
+          kyc.documentPath ||
+          kyc.DocumentPath ||
+          kyc.filePath ||
+          kyc.FilePath ||
+          kyc.url ||
+          kyc.Url;
+        if (docPathStr) {
+          const paths = String(docPathStr).split(',').map((s) => s.trim()).filter(Boolean);
+          paths.forEach((path, idx) => {
+            const cleanPath = path.replace(/\\/g, '/');
+            if (seenPaths.has(cleanPath)) return;
+            seenPaths.add(cleanPath);
+
+            const fileName = cleanPath.split('/').pop() || `CoApplicant_${co.number}_Doc_${idx + 1}`;
+            const ext = fileName.split('.').pop()?.toLowerCase() || '';
+            const isZip = ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext);
+            const isPdf = ext === 'pdf';
+            const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].includes(ext);
+
+            let fileTypeLabel = 'ZIP File / Manual Document';
+            if (isZip) fileTypeLabel = 'Compressed ZIP Archive (.zip)';
+            else if (isPdf) fileTypeLabel = 'PDF Document (.pdf)';
+            else if (isImage) fileTypeLabel = `Image Document (.${ext})`;
+
+            const cleanPathRel = cleanPath.replace(/^\/+/, '');
+            const downloadUrl =
+              cleanPath.startsWith('http://') || cleanPath.startsWith('https://')
+                ? cleanPath
+                : `${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPathRel)}`;
+
+            list.push({
+              id: kyc.applicationKYCDocumentId
+                ? `co_${co.number}_kyc_${kyc.applicationKYCDocumentId}_${idx}`
+                : `co_${co.number}_manual_${idx}`,
+              applicationKYCDocumentId: kyc.applicationKYCDocumentId,
+              fileName,
+              path: cleanPath,
+              fileTypeLabel,
+              isZip,
+              isPdf,
+              isImage,
+              downloadUrl,
+              uploadedOn: kyc.createdAt || kyc.modifiedAt || null,
+              source: 'ApplicationKYCDocuments',
+              size: kyc.fileSize || null,
+            });
+          });
+        }
+      }
+      map[co.index] = list;
+    });
+    return map;
+  }, [coApplicants]);
+
+  // Combined manual documents for backwards compatibility
+  const manualDocuments = useMemo(() => {
+    const all = [...applicantManualDocs];
+    Object.values(coApplicantsManualDocs).forEach((coList) => {
+      if (Array.isArray(coList)) all.push(...coList);
+    });
+    return all;
+  }, [applicantManualDocs, coApplicantsManualDocs]);
 
   const handleDownloadManualDoc = async (doc) => {
     if (!doc) return;
@@ -1243,9 +1582,9 @@ export default function CustomerVerification() {
                 <div className="bo-cv-step-header-left">
                   <div className="bo-cv-step-badge-num">02</div>
                   <div>
-                    <h2 className="bo-cv-step-panel-title">Applicant Profile Image</h2>
+                    <h2 className="bo-cv-step-panel-title">Customer Profile Images</h2>
                     <p className="bo-cv-step-panel-desc">
-                      Inspect the authentic applicant photograph uploaded during customer onboarding.
+                      Inspect authentic photographs uploaded during customer onboarding for Applicant and Co-Applicant(s).
                     </p>
                   </div>
                 </div>
@@ -1253,47 +1592,112 @@ export default function CustomerVerification() {
               </div>
 
               <div className="bo-cv-doc-display-container">
-                {docPreviews.profile?.loading ? (
-                  <div className="bo-cv-doc-loading-box">
-                    <div className="bo-cv-loading-spinner" />
-                    <span>Loading applicant profile photograph...</span>
+                {/* 1. Applicant Profile Image Card */}
+                <div className="bo-cv-person-doc-card">
+                  <div className="bo-cv-person-doc-header">
+                    <div className="bo-cv-person-doc-badge">Applicant</div>
+                    <div className="bo-cv-person-doc-title">{verificationData.customerName}</div>
                   </div>
-                ) : docPreviews.profile?.url ? (
-                  <div className="bo-cv-image-preview-frame">
-                    <img
-                      src={docPreviews.profile.url}
-                      alt={`Profile of ${verificationData.customerName}`}
-                      className="bo-cv-uncropped-img"
-                    />
-                    <div className="bo-cv-doc-meta-row">
-                      <div className="bo-cv-doc-meta-left">
-                        <span><strong>File:</strong> {docPreviews.profile.doc?.fileName || 'Profile Image'}</span>
-                        {docPreviews.profile.doc?.uploadedOn && (
-                          <span><strong>Uploaded:</strong> {docPreviews.profile.doc.uploadedOn}</span>
-                        )}
+
+                  {docPreviews.profile?.loading ? (
+                    <div className="bo-cv-doc-loading-box">
+                      <div className="bo-cv-loading-spinner" />
+                      <span>Loading applicant profile photograph...</span>
+                    </div>
+                  ) : docPreviews.profile?.url ? (
+                    <div className="bo-cv-image-preview-frame">
+                      <img
+                        src={docPreviews.profile.url}
+                        alt={`Profile of ${verificationData.customerName}`}
+                        className="bo-cv-uncropped-img"
+                      />
+                      <div className="bo-cv-doc-meta-row">
+                        <div className="bo-cv-doc-meta-left">
+                          <span><strong>File:</strong> {docPreviews.profile.fileName || docPreviews.profile.doc?.fileName || 'Profile Image'}</span>
+                          {docPreviews.profile.doc?.uploadedOn && (
+                            <span><strong>Uploaded:</strong> {docPreviews.profile.doc.uploadedOn}</span>
+                          )}
+                          {docPreviews.profile.size && (
+                            <span><strong>Size:</strong> {formatFileSize(docPreviews.profile.size)}</span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="bo-btn bo-btn--outline bo-btn--sm"
+                          onClick={() => handleDownloadFile(docPreviews.profile.url, docPreviews.profile.fileName || docPreviews.profile.doc?.fileName || 'profile_image.jpg')}
+                        >
+                          {DownloadIcon && <DownloadIcon size={13} />}
+                          <span>Download</span>
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        className="bo-btn bo-btn--outline bo-btn--sm"
-                        onClick={() => handleDownloadFile(docPreviews.profile.url, docPreviews.profile.doc?.fileName || 'profile_image.jpg')}
-                      >
-                        {DownloadIcon && <DownloadIcon size={13} />}
-                        <span>Download</span>
-                      </button>
                     </div>
-                  </div>
-                ) : (
-                  <div className="bo-cv-empty-doc-card">
-                    <div className="bo-cv-empty-doc-icon">
-                      {UserIcon && <UserIcon size={36} />}
+                  ) : (
+                    <div className="bo-cv-empty-doc-card">
+                      <div className="bo-cv-empty-doc-icon">
+                        {UserIcon && <UserIcon size={36} />}
+                      </div>
+                      <h4>No Profile Image Document Found</h4>
+                      <p>
+                        {docPreviews.profile?.error ||
+                          `No uploaded customer photograph is currently available for applicant ${verificationData.customerName}.`}
+                      </p>
                     </div>
-                    <h4>No Profile Image Document Found</h4>
-                    <p>
-                      {docPreviews.profile?.error ||
-                        'No uploaded customer photograph is currently available for this application.'}
-                    </p>
-                  </div>
-                )}
+                  )}
+                </div>
+
+                {/* 2. Co-Applicant Profile Images (Dynamic) */}
+                {coApplicants.map((co) => {
+                  const coProfile = coDocPreviews[co.index]?.profile;
+                  return (
+                    <div className="bo-cv-person-doc-card" key={`co-profile-${co.index}`}>
+                      <div className="bo-cv-person-doc-header">
+                        <div className="bo-cv-person-doc-badge co-app">Co-Applicant {co.number}</div>
+                        <div className="bo-cv-person-doc-title">{co.name}</div>
+                      </div>
+
+                      {coProfile?.loading ? (
+                        <div className="bo-cv-doc-loading-box">
+                          <div className="bo-cv-loading-spinner" />
+                          <span>Loading Co-Applicant {co.number} profile photograph...</span>
+                        </div>
+                      ) : coProfile?.url ? (
+                        <div className="bo-cv-image-preview-frame">
+                          <img
+                            src={coProfile.url}
+                            alt={`Profile of ${co.name}`}
+                            className="bo-cv-uncropped-img"
+                          />
+                          <div className="bo-cv-doc-meta-row">
+                            <div className="bo-cv-doc-meta-left">
+                              <span><strong>File:</strong> {coProfile.fileName || `CoApplicant_${co.number}_Profile.jpg`}</span>
+                              {coProfile.size && (
+                                <span><strong>Size:</strong> {formatFileSize(coProfile.size)}</span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              className="bo-btn bo-btn--outline bo-btn--sm"
+                              onClick={() => handleDownloadFile(coProfile.url, coProfile.fileName || `CoApplicant_${co.number}_Profile.jpg`)}
+                            >
+                              {DownloadIcon && <DownloadIcon size={13} />}
+                              <span>Download</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bo-cv-empty-doc-card">
+                          <div className="bo-cv-empty-doc-icon">
+                            {UserIcon && <UserIcon size={36} />}
+                          </div>
+                          <h4>No Profile Image Document Found</h4>
+                          <p>
+                            No uploaded photograph is currently available for Co-Applicant {co.number} ({co.name}).
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
 
                 {/* Remarks & Reject / Send to RM */}
                 <div className="verification-action-bar">
@@ -1303,7 +1707,7 @@ export default function CustomerVerification() {
                       id="bo-cv-remarks-profile"
                       className="bo-cv-remarks-input"
                       rows={3}
-                      placeholder="Enter remarks or discrepancy details for applicant profile image..."
+                      placeholder="Enter remarks or discrepancy details for profile image verification..."
                       value={stepRemarks[2] || ''}
                       onChange={(e) => {
                         setStepRemarks({ ...stepRemarks, 2: e.target.value });
@@ -1339,9 +1743,9 @@ export default function CustomerVerification() {
                 <div className="bo-cv-step-header-left">
                   <div className="bo-cv-step-badge-num">03</div>
                   <div>
-                    <h2 className="bo-cv-step-panel-title">Applicant Aadhaar Card</h2>
+                    <h2 className="bo-cv-step-panel-title">Customer Aadhaar Cards</h2>
                     <p className="bo-cv-step-panel-desc">
-                      Verify applicant Aadhaar identity card and address document.
+                      Verify Aadhaar identity cards and address documentation for Applicant and Co-Applicant(s).
                     </p>
                   </div>
                 </div>
@@ -1349,61 +1753,140 @@ export default function CustomerVerification() {
               </div>
 
               <div className="bo-cv-doc-display-container">
-                {docPreviews.aadhaar?.loading ? (
-                  <div className="bo-cv-doc-loading-box">
-                    <div className="bo-cv-doc-loading-spinner" />
-                    <span>Loading applicant Aadhaar document...</span>
+                {/* 1. Applicant Aadhaar Card */}
+                <div className="bo-cv-person-doc-card">
+                  <div className="bo-cv-person-doc-header">
+                    <div className="bo-cv-person-doc-badge">Applicant</div>
+                    <div className="bo-cv-person-doc-title">{verificationData.customerName}</div>
                   </div>
-                ) : docPreviews.aadhaar?.url ? (
-                  <div className="bo-cv-image-preview-frame">
-                    {docPreviews.aadhaar.isPdf ? (
-                      <div className="bo-cv-pdf-frame-wrapper">
-                        <iframe
-                          src={docPreviews.aadhaar.url}
-                          title="Aadhaar Document PDF"
-                          className="bo-cv-doc-iframe"
-                        />
-                      </div>
-                    ) : (
-                      <img
-                        src={docPreviews.aadhaar.url}
-                        alt="Aadhaar Card"
-                        className="bo-cv-uncropped-img"
-                      />
-                    )}
 
-                    <div className="bo-cv-doc-meta-row">
-                      <div className="bo-cv-doc-meta-left">
-                        <span><strong>Document:</strong> {docPreviews.aadhaar.doc?.fileName || 'Aadhaar Card'}</span>
-                        {verificationData.personalInformation?.aadhaarNumber && (
-                          <span><strong>Aadhaar No:</strong> {verificationData.personalInformation.aadhaarNumber}</span>
-                        )}
-                        {docPreviews.aadhaar.doc?.uploadedOn && (
-                          <span><strong>Uploaded:</strong> {docPreviews.aadhaar.doc.uploadedOn}</span>
-                        )}
+                  {docPreviews.aadhaar?.loading ? (
+                    <div className="bo-cv-doc-loading-box">
+                      <div className="bo-cv-doc-loading-spinner" />
+                      <span>Loading applicant Aadhaar document...</span>
+                    </div>
+                  ) : docPreviews.aadhaar?.url ? (
+                    <div className="bo-cv-image-preview-frame">
+                      {docPreviews.aadhaar.isPdf ? (
+                        <div className="bo-cv-pdf-frame-wrapper">
+                          <iframe
+                            src={docPreviews.aadhaar.url}
+                            title="Aadhaar Document PDF"
+                            className="bo-cv-doc-iframe"
+                          />
+                        </div>
+                      ) : (
+                        <img
+                          src={docPreviews.aadhaar.url}
+                          alt="Aadhaar Card"
+                          className="bo-cv-uncropped-img"
+                        />
+                      )}
+
+                      <div className="bo-cv-doc-meta-row">
+                        <div className="bo-cv-doc-meta-left">
+                          <span><strong>Document:</strong> {docPreviews.aadhaar.fileName || docPreviews.aadhaar.doc?.fileName || 'Aadhaar Card'}</span>
+                          {verificationData.personalInformation?.aadhaarNumber && (
+                            <span><strong>Aadhaar No:</strong> {verificationData.personalInformation.aadhaarNumber}</span>
+                          )}
+                          {docPreviews.aadhaar.doc?.uploadedOn && (
+                            <span><strong>Uploaded:</strong> {docPreviews.aadhaar.doc.uploadedOn}</span>
+                          )}
+                          {docPreviews.aadhaar.size && (
+                            <span><strong>Size:</strong> {formatFileSize(docPreviews.aadhaar.size)}</span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="bo-btn bo-btn--outline bo-btn--sm"
+                          onClick={() => handleDownloadFile(docPreviews.aadhaar.url, docPreviews.aadhaar.fileName || docPreviews.aadhaar.doc?.fileName || 'aadhaar_card.pdf')}
+                        >
+                          {DownloadIcon && <DownloadIcon size={13} />}
+                          <span>Download Document</span>
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        className="bo-btn bo-btn--outline bo-btn--sm"
-                        onClick={() => handleDownloadFile(docPreviews.aadhaar.url, docPreviews.aadhaar.doc?.fileName || 'aadhaar_card.pdf')}
-                      >
-                        {DownloadIcon && <DownloadIcon size={13} />}
-                        <span>Download Document</span>
-                      </button>
                     </div>
-                  </div>
-                ) : (
-                  <div className="bo-cv-empty-doc-card">
-                    <div className="bo-cv-empty-doc-icon">
-                      {ShieldCheckIcon && <ShieldCheckIcon size={36} />}
+                  ) : (
+                    <div className="bo-cv-empty-doc-card">
+                      <div className="bo-cv-empty-doc-icon">
+                        {ShieldCheckIcon && <ShieldCheckIcon size={36} />}
+                      </div>
+                      <h4>No Aadhaar Document Found</h4>
+                      <p>
+                        {docPreviews.aadhaar?.error ||
+                          `No uploaded Aadhaar proof is currently available for applicant ${verificationData.customerName}.`}
+                      </p>
                     </div>
-                    <h4>No Aadhaar Document Found</h4>
-                    <p>
-                      {docPreviews.aadhaar?.error ||
-                        'No uploaded Aadhaar proof is currently available for this applicant.'}
-                    </p>
-                  </div>
-                )}
+                  )}
+                </div>
+
+                {/* 2. Co-Applicant Aadhaar Cards (Dynamic) */}
+                {coApplicants.map((co) => {
+                  const coAadhaar = coDocPreviews[co.index]?.aadhaar;
+                  return (
+                    <div className="bo-cv-person-doc-card" key={`co-aadhaar-${co.index}`}>
+                      <div className="bo-cv-person-doc-header">
+                        <div className="bo-cv-person-doc-badge co-app">Co-Applicant {co.number}</div>
+                        <div className="bo-cv-person-doc-title">{co.name}</div>
+                      </div>
+
+                      {coAadhaar?.loading ? (
+                        <div className="bo-cv-doc-loading-box">
+                          <div className="bo-cv-doc-loading-spinner" />
+                          <span>Loading Co-Applicant {co.number} Aadhaar document...</span>
+                        </div>
+                      ) : coAadhaar?.url ? (
+                        <div className="bo-cv-image-preview-frame">
+                          {coAadhaar.isPdf ? (
+                            <div className="bo-cv-pdf-frame-wrapper">
+                              <iframe
+                                src={coAadhaar.url}
+                                title={`Co-Applicant ${co.number} Aadhaar PDF`}
+                                className="bo-cv-doc-iframe"
+                              />
+                            </div>
+                          ) : (
+                            <img
+                              src={coAadhaar.url}
+                              alt={`Co-Applicant ${co.number} Aadhaar Card`}
+                              className="bo-cv-uncropped-img"
+                            />
+                          )}
+
+                          <div className="bo-cv-doc-meta-row">
+                            <div className="bo-cv-doc-meta-left">
+                              <span><strong>Document:</strong> {coAadhaar.fileName || `CoApplicant_${co.number}_Aadhaar`}</span>
+                              {co.aadhaarDisplay && (
+                                <span><strong>Aadhaar No:</strong> {co.aadhaarDisplay}</span>
+                              )}
+                              {coAadhaar.size && (
+                                <span><strong>Size:</strong> {formatFileSize(coAadhaar.size)}</span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              className="bo-btn bo-btn--outline bo-btn--sm"
+                              onClick={() => handleDownloadFile(coAadhaar.url, coAadhaar.fileName || `CoApplicant_${co.number}_Aadhaar.pdf`)}
+                            >
+                              {DownloadIcon && <DownloadIcon size={13} />}
+                              <span>Download Document</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bo-cv-empty-doc-card">
+                          <div className="bo-cv-empty-doc-icon">
+                            {ShieldCheckIcon && <ShieldCheckIcon size={36} />}
+                          </div>
+                          <h4>No Aadhaar Document Found</h4>
+                          <p>
+                            No uploaded Aadhaar proof is currently available for Co-Applicant {co.number} ({co.name}).
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
 
                 {/* Remarks & Reject / Send to RM */}
                 <div className="verification-action-bar">
@@ -1449,9 +1932,9 @@ export default function CustomerVerification() {
                 <div className="bo-cv-step-header-left">
                   <div className="bo-cv-step-badge-num">04</div>
                   <div>
-                    <h2 className="bo-cv-step-panel-title">Applicant PAN Card</h2>
+                    <h2 className="bo-cv-step-panel-title">Customer PAN Cards</h2>
                     <p className="bo-cv-step-panel-desc">
-                      Inspect Permanent Account Number tax identification document.
+                      Inspect Permanent Account Number tax identification documents for Applicant and Co-Applicant(s).
                     </p>
                   </div>
                 </div>
@@ -1459,59 +1942,138 @@ export default function CustomerVerification() {
               </div>
 
               <div className="bo-cv-doc-display-container">
-                {docPreviews.pan?.loading ? (
-                  <div className="bo-cv-doc-loading-box">
-                    <div className="bo-cv-doc-loading-spinner" />
-                    <span>Loading applicant PAN Card document...</span>
+                {/* 1. Applicant PAN Card */}
+                <div className="bo-cv-person-doc-card">
+                  <div className="bo-cv-person-doc-header">
+                    <div className="bo-cv-person-doc-badge">Applicant</div>
+                    <div className="bo-cv-person-doc-title">{verificationData.customerName}</div>
                   </div>
-                ) : docPreviews.pan?.url ? (
-                  <div className="bo-cv-image-preview-frame">
-                    {docPreviews.pan.isPdf ? (
-                      <div className="bo-cv-pdf-frame-wrapper">
-                        <iframe
-                          src={docPreviews.pan.url}
-                          title="PAN Document PDF"
-                          className="bo-cv-doc-iframe"
-                        />
-                      </div>
-                    ) : (
-                      <img
-                        src={docPreviews.pan.url}
-                        alt="PAN Card"
-                        className="bo-cv-uncropped-img"
-                      />
-                    )}
 
-                    <div className="bo-cv-doc-meta-row">
-                      <div className="bo-cv-doc-meta-left">
-                        <span><strong>Document:</strong> {docPreviews.pan.doc?.fileName || 'PAN Card'}</span>
-                        <span><strong>PAN:</strong> {panNumber}</span>
-                        {docPreviews.pan.doc?.uploadedOn && (
-                          <span><strong>Uploaded:</strong> {docPreviews.pan.doc.uploadedOn}</span>
-                        )}
+                  {docPreviews.pan?.loading ? (
+                    <div className="bo-cv-doc-loading-box">
+                      <div className="bo-cv-doc-loading-spinner" />
+                      <span>Loading applicant PAN Card document...</span>
+                    </div>
+                  ) : docPreviews.pan?.url ? (
+                    <div className="bo-cv-image-preview-frame">
+                      {docPreviews.pan.isPdf ? (
+                        <div className="bo-cv-pdf-frame-wrapper">
+                          <iframe
+                            src={docPreviews.pan.url}
+                            title="PAN Document PDF"
+                            className="bo-cv-doc-iframe"
+                          />
+                        </div>
+                      ) : (
+                        <img
+                          src={docPreviews.pan.url}
+                          alt="PAN Card"
+                          className="bo-cv-uncropped-img"
+                        />
+                      )}
+
+                      <div className="bo-cv-doc-meta-row">
+                        <div className="bo-cv-doc-meta-left">
+                          <span><strong>Document:</strong> {docPreviews.pan.fileName || docPreviews.pan.doc?.fileName || 'PAN Card'}</span>
+                          <span><strong>PAN:</strong> {panNumber}</span>
+                          {docPreviews.pan.doc?.uploadedOn && (
+                            <span><strong>Uploaded:</strong> {docPreviews.pan.doc.uploadedOn}</span>
+                          )}
+                          {docPreviews.pan.size && (
+                            <span><strong>Size:</strong> {formatFileSize(docPreviews.pan.size)}</span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="bo-btn bo-btn--outline bo-btn--sm"
+                          onClick={() => handleDownloadFile(docPreviews.pan.url, docPreviews.pan.fileName || docPreviews.pan.doc?.fileName || 'pan_card.pdf')}
+                        >
+                          {DownloadIcon && <DownloadIcon size={13} />}
+                          <span>Download Document</span>
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        className="bo-btn bo-btn--outline bo-btn--sm"
-                        onClick={() => handleDownloadFile(docPreviews.pan.url, docPreviews.pan.doc?.fileName || 'pan_card.pdf')}
-                      >
-                        {DownloadIcon && <DownloadIcon size={13} />}
-                        <span>Download Document</span>
-                      </button>
                     </div>
-                  </div>
-                ) : (
-                  <div className="bo-cv-empty-doc-card">
-                    <div className="bo-cv-empty-doc-icon">
-                      {FileTextIcon && <FileTextIcon size={36} />}
+                  ) : (
+                    <div className="bo-cv-empty-doc-card">
+                      <div className="bo-cv-empty-doc-icon">
+                        {FileTextIcon && <FileTextIcon size={36} />}
+                      </div>
+                      <h4>No PAN Card Document Found</h4>
+                      <p>
+                        {docPreviews.pan?.error ||
+                          `No uploaded PAN document is currently available for applicant ${verificationData.customerName}.`}
+                      </p>
                     </div>
-                    <h4>No PAN Card Document Found</h4>
-                    <p>
-                      {docPreviews.pan?.error ||
-                        'No uploaded PAN document is currently available for this applicant.'}
-                    </p>
-                  </div>
-                )}
+                  )}
+                </div>
+
+                {/* 2. Co-Applicant PAN Cards (Dynamic) */}
+                {coApplicants.map((co) => {
+                  const coPan = coDocPreviews[co.index]?.pan;
+                  return (
+                    <div className="bo-cv-person-doc-card" key={`co-pan-${co.index}`}>
+                      <div className="bo-cv-person-doc-header">
+                        <div className="bo-cv-person-doc-badge co-app">Co-Applicant {co.number}</div>
+                        <div className="bo-cv-person-doc-title">{co.name}</div>
+                      </div>
+
+                      {coPan?.loading ? (
+                        <div className="bo-cv-doc-loading-box">
+                          <div className="bo-cv-doc-loading-spinner" />
+                          <span>Loading Co-Applicant {co.number} PAN Card document...</span>
+                        </div>
+                      ) : coPan?.url ? (
+                        <div className="bo-cv-image-preview-frame">
+                          {coPan.isPdf ? (
+                            <div className="bo-cv-pdf-frame-wrapper">
+                              <iframe
+                                src={coPan.url}
+                                title={`Co-Applicant ${co.number} PAN PDF`}
+                                className="bo-cv-doc-iframe"
+                              />
+                            </div>
+                          ) : (
+                            <img
+                              src={coPan.url}
+                              alt={`Co-Applicant ${co.number} PAN Card`}
+                              className="bo-cv-uncropped-img"
+                            />
+                          )}
+
+                          <div className="bo-cv-doc-meta-row">
+                            <div className="bo-cv-doc-meta-left">
+                              <span><strong>Document:</strong> {coPan.fileName || `CoApplicant_${co.number}_PAN`}</span>
+                              {co.pan && (
+                                <span><strong>PAN:</strong> {co.pan}</span>
+                              )}
+                              {coPan.size && (
+                                <span><strong>Size:</strong> {formatFileSize(coPan.size)}</span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              className="bo-btn bo-btn--outline bo-btn--sm"
+                              onClick={() => handleDownloadFile(coPan.url, coPan.fileName || `CoApplicant_${co.number}_PAN.pdf`)}
+                            >
+                              {DownloadIcon && <DownloadIcon size={13} />}
+                              <span>Download Document</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bo-cv-empty-doc-card">
+                          <div className="bo-cv-empty-doc-icon">
+                            {FileTextIcon && <FileTextIcon size={36} />}
+                          </div>
+                          <h4>No PAN Card Document Found</h4>
+                          <p>
+                            No uploaded PAN document is currently available for Co-Applicant {co.number} ({co.name}).
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
 
                 {/* Remarks & Reject / Send to RM */}
                 <div className="verification-action-bar">
@@ -1557,9 +2119,9 @@ export default function CustomerVerification() {
                 <div className="bo-cv-step-header-left">
                   <div className="bo-cv-step-badge-num">05</div>
                   <div>
-                    <h2 className="bo-cv-step-panel-title">Customer ZIP Archive</h2>
+                    <h2 className="bo-cv-step-panel-title">Customer ZIP & Manual Documents</h2>
                     <p className="bo-cv-step-panel-desc">
-                      Download or inspect bundled documentation archive for this customer application.
+                      Download or inspect bundled documentation archives and manual files for Applicant and Co-Applicant(s).
                     </p>
                   </div>
                 </div>
@@ -1567,48 +2129,112 @@ export default function CustomerVerification() {
               </div>
 
               <div className="bo-cv-doc-display-container">
-                {manualDocuments.length > 0 ? (
-                  <div className="bo-cv-manual-docs-list" style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
-                    {manualDocuments.map((doc, idx) => (
-                      <div className="bo-cv-file-card" key={doc.id || `manual-doc-${idx}`}>
-                        <div className="bo-cv-file-card-info">
-                          <div className="bo-cv-file-card-icon">
-                            {FileCheckIcon && <FileCheckIcon size={22} />}
-                          </div>
-                          <div>
-                            <h4 className="bo-cv-file-name" title={doc.fileName}>{doc.fileName}</h4>
-                            <div className="bo-cv-file-size" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
-                              <span>{doc.fileTypeLabel}</span>
-                              <span>•</span>
-                              <span style={{ color: '#15803d', fontWeight: 600 }}>Uploaded successfully</span>
-                              {doc.size && <span>• {formatFileSize(doc.size)}</span>}
+                {/* 1. Applicant Manual / ZIP Documents */}
+                <div className="bo-cv-person-doc-card">
+                  <div className="bo-cv-person-doc-header">
+                    <div className="bo-cv-person-doc-badge">Applicant</div>
+                    <div className="bo-cv-person-doc-title">{verificationData.customerName}</div>
+                  </div>
+
+                  {applicantManualDocs.length > 0 ? (
+                    <div className="bo-cv-manual-docs-list" style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
+                      {applicantManualDocs.map((doc, idx) => (
+                        <div className="bo-cv-file-card" key={doc.id || `app-manual-${idx}`}>
+                          <div className="bo-cv-file-card-info">
+                            <div className="bo-cv-file-card-icon">
+                              {FileCheckIcon && <FileCheckIcon size={22} />}
+                            </div>
+                            <div>
+                              <h4 className="bo-cv-file-name" title={doc.fileName}>{doc.fileName}</h4>
+                              <div className="bo-cv-file-size" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                                <span>{doc.fileTypeLabel}</span>
+                                <span>•</span>
+                                <span style={{ color: '#15803d', fontWeight: 600 }}>Uploaded successfully</span>
+                                {doc.size && <span>• {formatFileSize(doc.size)}</span>}
+                              </div>
                             </div>
                           </div>
+                          <div className="bo-cv-file-card-actions">
+                            <button
+                              type="button"
+                              className="bo-btn bo-btn--primary bo-btn--sm"
+                              onClick={() => handleDownloadManualDoc(doc)}
+                              title={`Download ${doc.fileName}`}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                            >
+                              {DownloadIcon && <DownloadIcon size={13} />}
+                              <span>Download</span>
+                            </button>
+                          </div>
                         </div>
-                        <div className="bo-cv-file-card-actions">
-                          <button
-                            type="button"
-                            className="bo-btn bo-btn--primary bo-btn--sm"
-                            onClick={() => handleDownloadManualDoc(doc)}
-                            title={`Download ${doc.fileName}`}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                          >
-                            {DownloadIcon && <DownloadIcon size={13} />}
-                            <span>Download</span>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="bo-cv-empty-doc-card">
-                    <div className="bo-cv-empty-doc-icon">
-                      {FileCheckIcon && <FileCheckIcon size={36} />}
+                      ))}
                     </div>
-                    <h4>No ZIP File Available</h4>
-                    <p>No compressed document bundle was uploaded for this customer application.</p>
-                  </div>
-                )}
+                  ) : (
+                    <div className="bo-cv-empty-doc-card">
+                      <div className="bo-cv-empty-doc-icon">
+                        {FileCheckIcon && <FileCheckIcon size={36} />}
+                      </div>
+                      <h4>No ZIP / Manual Documents Found</h4>
+                      <p>No compressed document bundle was uploaded for applicant {verificationData.customerName}.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Co-Applicant Manual / ZIP Documents (Dynamic) */}
+                {coApplicants.map((co) => {
+                  const coDocs = coApplicantsManualDocs[co.index] || [];
+                  return (
+                    <div className="bo-cv-person-doc-card" key={`co-manual-card-${co.index}`}>
+                      <div className="bo-cv-person-doc-header">
+                        <div className="bo-cv-person-doc-badge co-app">Co-Applicant {co.number}</div>
+                        <div className="bo-cv-person-doc-title">{co.name}</div>
+                      </div>
+
+                      {coDocs.length > 0 ? (
+                        <div className="bo-cv-manual-docs-list" style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
+                          {coDocs.map((doc, idx) => (
+                            <div className="bo-cv-file-card" key={doc.id || `co-${co.number}-doc-${idx}`}>
+                              <div className="bo-cv-file-card-info">
+                                <div className="bo-cv-file-card-icon">
+                                  {FileCheckIcon && <FileCheckIcon size={22} />}
+                                </div>
+                                <div>
+                                  <h4 className="bo-cv-file-name" title={doc.fileName}>{doc.fileName}</h4>
+                                  <div className="bo-cv-file-size" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                                    <span>{doc.fileTypeLabel}</span>
+                                    <span>•</span>
+                                    <span style={{ color: '#15803d', fontWeight: 600 }}>Uploaded successfully</span>
+                                    {doc.size && <span>• {formatFileSize(doc.size)}</span>}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="bo-cv-file-card-actions">
+                                <button
+                                  type="button"
+                                  className="bo-btn bo-btn--primary bo-btn--sm"
+                                  onClick={() => handleDownloadManualDoc(doc)}
+                                  title={`Download ${doc.fileName}`}
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                >
+                                  {DownloadIcon && <DownloadIcon size={13} />}
+                                  <span>Download</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="bo-cv-empty-doc-card">
+                          <div className="bo-cv-empty-doc-icon">
+                            {FileCheckIcon && <FileCheckIcon size={36} />}
+                          </div>
+                          <h4>No ZIP / Manual Documents Found</h4>
+                          <p>No compressed document bundle was uploaded for Co-Applicant {co.number} ({co.name}).</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
 
                 {/* Remarks & Reject / Send to RM */}
                 <div className="verification-action-bar">

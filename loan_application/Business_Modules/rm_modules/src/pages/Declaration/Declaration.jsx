@@ -17,6 +17,29 @@ function getTodayDate() {
   return new Date().toISOString().split('T')[0];
 }
 
+function getLoggedInRMFromStorage() {
+  try {
+    const rmDataRaw = localStorage.getItem('rmData');
+    if (rmDataRaw) {
+      const parsed = JSON.parse(rmDataRaw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+    const raw = localStorage.getItem('sivels_currentUser');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch {
+    // ignore
+  }
+  return {};
+}
+
+function isNumericId(val) {
+  if (val === undefined || val === null || val === '') return false;
+  return /^\d+$/.test(String(val).trim());
+}
+
 function isObsoleteMock(val) {
   if (!val) return true;
   const s = String(val).trim().toLowerCase();
@@ -24,6 +47,7 @@ function isObsoleteMock(val) {
     s === 'anil kumar' ||
     s === 'karthik raja' ||
     s === 'rajesh kumar' ||
+    s === 'muthu a' ||
     s === '2025-06-06' ||
     s === '06-06-2025'
   );
@@ -36,33 +60,51 @@ function isObsoleteRmName(val) {
     s === 'karthik raja' ||
     s === 'rajesh kumar' ||
     s === 'dineshkumar' ||
-    s === 'dinesh kumar'
+    s === 'dinesh kumar' ||
+    s === 'sivashanmugam m'
   );
 }
 
 async function fetchLiveRMNameFromApi() {
+  const currentRmObj = getLoggedInRMFromStorage();
+  const fallbackName = currentRmObj.fullName || currentRmObj.name || '';
+
   try {
     const res = await fetch(`${API_BASE}/RMMaster`);
     if (res.ok) {
       const data = await res.json();
       const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);
 
-      let currentUser = {};
-      try {
-        const raw = localStorage.getItem('sivels_currentUser');
-        if (raw) currentUser = JSON.parse(raw);
-      } catch {
-        // ignore
-      }
-
-      const currentMobile = String(currentUser?.mobileNumber || currentUser?.phone || '').replace(/\D/g, '');
-      const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || 0);
+      const currentRmId = Number(
+        currentRmObj?.rmId ||
+        currentRmObj?.RMId ||
+        currentRmObj?.id ||
+        currentRmObj?.userId ||
+        localStorage.getItem('rmId') ||
+        0
+      );
+      const currentMobile = String(
+        currentRmObj?.mobileNumber ||
+        currentRmObj?.phone ||
+        ''
+      ).replace(/\D/g, '');
+      const currentEmail = String(
+        currentRmObj?.emailAddress ||
+        currentRmObj?.email ||
+        ''
+      ).trim().toLowerCase();
+      const currentName = String(
+        currentRmObj?.fullName ||
+        currentRmObj?.name ||
+        ''
+      ).trim().toLowerCase();
 
       const match =
-        rows.find((row) => Number(row.rmId || row.RMId) === currentRmId && currentRmId > 0) ||
-        rows.find((row) => currentMobile && String(row.mobileNumber || '').replace(/\D/g, '') === currentMobile) ||
-        rows.find((row) => row.isActive !== false) ||
-        rows[0];
+        (currentRmId > 0 && rows.find((r) => Number(r.rmId || r.RMId || r.id) === currentRmId)) ||
+        (currentMobile && rows.find((r) => String(r.mobileNumber || '').replace(/\D/g, '') === currentMobile)) ||
+        (currentEmail && rows.find((r) => String(r.emailAddress || '').trim().toLowerCase() === currentEmail)) ||
+        (currentName && rows.find((r) => String(r.fullName || r.name || '').trim().toLowerCase() === currentName)) ||
+        null;
 
       if (match?.fullName || match?.name) {
         return match.fullName || match.name;
@@ -72,7 +114,7 @@ async function fetchLiveRMNameFromApi() {
     console.error('Error fetching RM name from RMMaster:', err);
   }
 
-  return 'Sivashanmugam M';
+  return fallbackName || '';
 }
 
 function buildDeclarationState(appData) {
@@ -82,7 +124,17 @@ function buildDeclarationState(appData) {
   const coApplicantCount = getApplicantCount(appData);
   const savedCoApplicants = Array.isArray(saved.coApplicants) ? saved.coApplicants : [];
   const today = getTodayDate();
-  const productName = appData.loanProductDisplay || appData.loanType || appData.purposeOfLoan || 'Personal Loan';
+
+  const rawProductCandidate =
+    (!isNumericId(appData.loanProductDisplay) ? appData.loanProductDisplay : '') ||
+    (!isNumericId(appData.loanPurposeName) ? appData.loanPurposeName : '') ||
+    (!isNumericId(appData.loanProductName) ? appData.loanProductName : '') ||
+    (!isNumericId(appData.loanType) ? appData.loanType : '') ||
+    (!isNumericId(appData.purposeOfLoan) ? appData.purposeOfLoan : '') ||
+    'Personal Loan';
+
+  const currentRmObj = getLoggedInRMFromStorage();
+  const fallbackRmName = currentRmObj.fullName || currentRmObj.name || '';
 
   const rawSig = saved.applicantSignature;
   const rawAppDate = saved.applicantDate;
@@ -91,8 +143,13 @@ function buildDeclarationState(appData) {
   const rawAckReceivedBy = saved.ackReceivedBy;
   const rawAckDate = saved.ackDate;
 
+  const isInvalidAckProduct =
+    !rawAckProduct ||
+    isNumericId(rawAckProduct) ||
+    isObsoleteMock(rawAckProduct);
+
   return {
-    applicantSignature: isObsoleteMock(rawSig) ? (applicantName || '') : rawSig,
+    applicantSignature: isObsoleteMock(rawSig) ? '' : (rawSig || ''),
     applicantDate: isObsoleteMock(rawAppDate) ? today : rawAppDate,
     coApplicants: createArray(coApplicantCount, (index) => ({
       signature: isObsoleteMock(savedCoApplicants[index]?.signature)
@@ -102,11 +159,11 @@ function buildDeclarationState(appData) {
         ? today
         : savedCoApplicants[index]?.date || today,
     })),
-    coApplicantSignature: saved.coApplicantSignature || '',
+    coApplicantSignature: isObsoleteMock(saved.coApplicantSignature) ? '' : (saved.coApplicantSignature || ''),
     coApplicantDate: saved.coApplicantDate || today,
     ackApplicantName: isObsoleteMock(rawAckName) ? (applicantName || '') : rawAckName,
-    ackProduct: isObsoleteMock(rawAckProduct) ? productName : rawAckProduct,
-    ackReceivedBy: isObsoleteRmName(rawAckReceivedBy) ? 'Sivashanmugam M' : rawAckReceivedBy,
+    ackProduct: isInvalidAckProduct ? rawProductCandidate : rawAckProduct,
+    ackReceivedBy: isObsoleteRmName(rawAckReceivedBy) || !rawAckReceivedBy ? fallbackRmName : rawAckReceivedBy,
     ackDate: isObsoleteMock(rawAckDate) ? today : rawAckDate,
   };
 }
@@ -150,7 +207,13 @@ export default function Declaration() {
         }
 
         const custName = customerRecord?.fullName || customerRecord?.customerName || appData?.customerName || '';
-        const prodName = customerRecord?.loanPurposeName || customerRecord?.loanType || appData?.loanProductDisplay || appData?.loanType || 'Personal Loan';
+        const prodName =
+          (!isNumericId(customerRecord?.loanPurposeName) ? customerRecord?.loanPurposeName : '') ||
+          (!isNumericId(customerRecord?.loanProductName) ? customerRecord?.loanProductName : '') ||
+          (!isNumericId(customerRecord?.loanType) ? customerRecord?.loanType : '') ||
+          (!isNumericId(appData?.loanProductDisplay) ? appData?.loanProductDisplay : '') ||
+          (!isNumericId(appData?.loanType) ? appData?.loanType : '') ||
+          'Personal Loan';
 
         // 2. Fetch RM name from RMMaster (as in RM Profile)
         const resolvedRmName = await fetchLiveRMNameFromApi();
@@ -169,17 +232,17 @@ export default function Declaration() {
 
           // Update form state with live API values
           setForm((prev) => {
-            const shouldOverwriteSig = isObsoleteMock(prev.applicantSignature) || !prev.applicantSignature || prev.applicantSignature === 'Muthu A';
             const shouldOverwriteAck = isObsoleteMock(prev.ackApplicantName) || !prev.ackApplicantName || prev.ackApplicantName === 'Muthu A';
-            const shouldOverwriteRm = isObsoleteRmName(prev.ackReceivedBy);
+            const shouldOverwriteRm = isObsoleteRmName(prev.ackReceivedBy) || !prev.ackReceivedBy;
+            const shouldOverwriteProduct = !prev.ackProduct || isNumericId(prev.ackProduct) || isObsoleteMock(prev.ackProduct);
 
             const next = {
               ...prev,
-              applicantSignature: shouldOverwriteSig ? (custName || prev.applicantSignature) : prev.applicantSignature,
+              applicantSignature: isObsoleteMock(prev.applicantSignature) ? '' : (prev.applicantSignature || ''),
               applicantDate: isObsoleteMock(prev.applicantDate) ? today : (prev.applicantDate || today),
               ackApplicantName: shouldOverwriteAck ? (custName || prev.ackApplicantName) : prev.ackApplicantName,
-              ackProduct: isObsoleteMock(prev.ackProduct) ? prodName : (prev.ackProduct || prodName),
-              ackReceivedBy: shouldOverwriteRm ? resolvedRmName : (prev.ackReceivedBy || resolvedRmName),
+              ackProduct: shouldOverwriteProduct ? prodName : (prev.ackProduct || prodName),
+              ackReceivedBy: shouldOverwriteRm ? (resolvedRmName || prev.ackReceivedBy) : (prev.ackReceivedBy || resolvedRmName),
               ackDate: isObsoleteMock(prev.ackDate) ? today : (prev.ackDate || today),
             };
 
@@ -347,7 +410,6 @@ export default function Declaration() {
                   <input
                     className="form-input aw-input aw-input--with-icon"
                     value={form.applicantSignature}
-                    readOnly
                     onChange={(e) => persist({ ...form, applicantSignature: e.target.value })}
                     placeholder="Enter applicant signature"
                   />
@@ -361,7 +423,6 @@ export default function Declaration() {
                     type="date"
                     className="form-input aw-input aw-input--with-icon"
                     value={form.applicantDate}
-                    readOnly
                     onChange={(e) => persist({ ...form, applicantDate: e.target.value })}
                   />
                 </div>
@@ -377,7 +438,6 @@ export default function Declaration() {
                     <input
                       className="form-input aw-input aw-input--with-icon"
                       value={form.applicantSignature}
-                      readOnly
                       onChange={(e) => persist({ ...form, applicantSignature: e.target.value })}
                       placeholder="Enter applicant signature"
                     />
@@ -391,7 +451,6 @@ export default function Declaration() {
                       type="date"
                       className="form-input aw-input aw-input--with-icon"
                       value={form.applicantDate}
-                      readOnly
                       onChange={(e) => persist({ ...form, applicantDate: e.target.value })}
                     />
                   </div>
@@ -409,7 +468,6 @@ export default function Declaration() {
                       <input
                         className="form-input aw-input aw-input--with-icon"
                         value={coApp.signature}
-                        readOnly
                         onChange={(e) => {
                           const updated = [...form.coApplicants];
                           updated[index] = { ...updated[index], signature: e.target.value };
@@ -431,7 +489,6 @@ export default function Declaration() {
                         type="date"
                         className="form-input aw-input aw-input--with-icon"
                         value={coApp.date}
-                        readOnly
                         onChange={(e) => {
                           const updated = [...form.coApplicants];
                           updated[index] = { ...updated[index], date: e.target.value };

@@ -2394,12 +2394,56 @@
   overflow: hidden;
 }
 
-/* ── Steps 02-05: Document Review Workspace (PAN, Aadhaar, Bank, Income, ZIP) ── */
 .bo-cv-doc-display-container {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
   width: 100%;
+}
+
+.bo-cv-person-doc-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.bo-cv-person-doc-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.bo-cv-person-doc-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--color-primary-light, #eaf5ee);
+  color: var(--color-primary, #0f7a4c);
+  border: 1px solid var(--color-primary-muted, #a8d5b5);
+}
+
+.bo-cv-person-doc-badge.co-app {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.bo-cv-person-doc-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .bo-cv-image-preview-frame {
