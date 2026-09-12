@@ -96,9 +96,9 @@ export default function PdfView() {
 
     async function loadAllData() {
       try {
-        // Hydrate full application data into draft context first
+        // Hydrate full application data into draft context first (forceRefresh: true)
         try {
-          await loadApplicationFromBackend(applicationId);
+          await loadApplicationFromBackend(applicationId, true);
         } catch (hErr) {
           console.warn('Hydration in PdfView:', hErr);
         }
@@ -488,8 +488,79 @@ export default function PdfView() {
           }
 
           if (activeDocs.length > 0) {
+            let rejections = [];
+            try {
+              const rejRes = await fetch(`${API_BASE}/BackOfficeDocumentRejection`, { headers });
+              if (rejRes.ok) {
+                const allRejs = await rejRes.json();
+                const list = Array.isArray(allRejs) ? allRejs : (allRejs?.value || allRejs?.data || []);
+                rejections = list
+                  .filter(
+                    (r) =>
+                      r &&
+                      r.isActive !== false &&
+                      (String(r.agentCustomerId) === String(resolvedCustomerId) ||
+                        String(r.agentCustomerId) === String(applicationId))
+                  )
+                  .sort((a, b) => {
+                    const timeA = new Date(a.createdAt || 0).getTime();
+                    const timeB = new Date(b.createdAt || 0).getTime();
+                    if (timeA !== timeB) return timeB - timeA;
+                    return (b.backOfficeDocumentRejectionId || 0) - (a.backOfficeDocumentRejectionId || 0);
+                  });
+              }
+            } catch {
+              // ignore
+            }
+
+            // Group documents by document type
+            const docsByType = {};
+            activeDocs.forEach((d) => {
+              const typeKey = String(d.documentTypeId || d.documentTypeName || 'other').toLowerCase();
+              if (!docsByType[typeKey]) docsByType[typeKey] = [];
+              docsByType[typeKey].push(d);
+            });
+
+            // For each document type, select the accepted version
+            const selectedDocs = [];
+            Object.keys(docsByType).forEach((typeKey) => {
+              const list = docsByType[typeKey];
+              list.sort((a, b) => {
+                const timeA = new Date(a.createdAt || 0).getTime();
+                const timeB = new Date(b.createdAt || 0).getTime();
+                if (timeA !== timeB) return timeA - timeB;
+                return (a.agentCustomerDocumentId || 0) - (b.agentCustomerDocumentId || 0);
+              });
+
+              // Check if any matching rejection for this document type is currently pending verification
+              const matchingRej = rejections.find((r) => {
+                const rType = String(r.rejectedDocumentType || '').toUpperCase();
+                const sampleName = String(list[0]?.documentTypeName || list[0]?.fileName || '').toUpperCase();
+                return (
+                  rType.includes('PROFILE') && (sampleName.includes('PHOTO') || sampleName.includes('PROFILE') || list[0]?.documentTypeId === 6) ||
+                  rType.includes('AADHAAR') && (sampleName.includes('AADHAAR') || sampleName.includes('AADHAR') || list[0]?.documentTypeId === 1) ||
+                  rType.includes('PAN') && (sampleName.includes('PAN') || list[0]?.documentTypeId === 2) ||
+                  rType.includes('ZIP') && (sampleName.includes('ZIP') || list[0]?.documentTypeId === 4)
+                );
+              });
+
+              if (matchingRej && (matchingRej.status === 'ReturnedToRM' || matchingRej.status === 'Resubmitted')) {
+                // Pending verification: select the document uploaded at or before rejection
+                const rejTime = new Date(matchingRej.rejectedAt || matchingRej.createdAt || 0).getTime();
+                const beforeRej = list.filter((d) => new Date(d.createdAt || 0).getTime() <= rejTime + 5000);
+                if (beforeRej.length > 0) {
+                  selectedDocs.push(beforeRej[beforeRej.length - 1]);
+                } else {
+                  selectedDocs.push(list[0]);
+                }
+              } else {
+                // Verified or normal: latest uploaded document is the accepted document
+                selectedDocs.push(list[list.length - 1]);
+              }
+            });
+
             const loaded = await Promise.all(
-              activeDocs.map(async (doc) => {
+              selectedDocs.map(async (doc) => {
                 const docId = doc.agentCustomerDocumentId || doc.id;
                 const fileName = doc.fileName || '';
                 const ext = fileName.split('.').pop()?.toLowerCase();

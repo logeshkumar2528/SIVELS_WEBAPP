@@ -46,4 +46,17 @@ export const BACK_OFFICE_ENDPOINTS = {
   FOIR_BY_CUSTOMER: (agentCustomerId) =>
     `/FOIREligibilityCalculation/by-customer/${encodeURIComponent(agentCustomerId)}`,
   FOIR_CALCULATE: '/FOIREligibilityCalculation/calculate',
+
+  // Document Rejection & Returned Application Workflow
+  DOCUMENT_REJECTIONS: '/BackOfficeDocumentRejection',
+  DOCUMENT_REJECTION_BY_ID: (id) =>
+    `/BackOfficeDocumentRejection/${encodeURIComponent(id)}`,
+  DOCUMENT_REJECTIONS_BY_APPLICATION: (applicationProductDetailsId) =>
+    `/BackOfficeDocumentRejection/application/${encodeURIComponent(applicationProductDetailsId)}`,
+  DOCUMENT_REJECTIONS_BY_RM_RETURNED: (rmId) =>
+    `/BackOfficeDocumentRejection/rm/${encodeURIComponent(rmId)}/returned`,
+  DOCUMENT_REJECTION_RESUBMIT: (id) =>
+    `/BackOfficeDocumentRejection/${encodeURIComponent(id)}/resubmit`,
+  DOCUMENT_REJECTION_VERIFY: (id) =>
+    `/BackOfficeDocumentRejection/${encodeURIComponent(id)}/verify`,
 };

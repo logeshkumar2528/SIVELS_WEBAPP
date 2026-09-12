@@ -202,6 +202,87 @@ export const backOfficeService = {
     const response = await axiosInstance.post(BACK_OFFICE_ENDPOINTS.FOIR_CALCULATE, payload);
     return unwrapResponse(response);
   },
+
+  /* ==========================================
+     9. DOCUMENT REJECTION & RETURNED WORKFLOW
+  ========================================== */
+
+  /**
+   * Retrieve all rejection records.
+   */
+  getAllDocumentRejections: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.DOCUMENT_REJECTIONS);
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve a specific rejection record by ID.
+   * @param {string|number} id - Rejection ID
+   */
+  getDocumentRejectionById: async (id) => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.DOCUMENT_REJECTION_BY_ID(id));
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve all document rejections associated with an application.
+   * @param {string|number} applicationProductDetailsId
+   */
+  getDocumentRejectionsByApplication: async (applicationProductDetailsId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.DOCUMENT_REJECTIONS_BY_APPLICATION(applicationProductDetailsId)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve all returned rejections assigned to a specific RM.
+   * @param {string|number} rmId - RM ID
+   */
+  getReturnedRejectionsByRM: async (rmId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.DOCUMENT_REJECTIONS_BY_RM_RETURNED(rmId)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Create a new document rejection record (Back Office -> RM).
+   * @param {object} payload - { backOfficeId, rmId, agentCustomerId, applicationProductDetailsId, kycDocumentId, fieldVerificationId, rejectedDocumentType, rejectionRemarks, createdBy }
+   */
+  createDocumentRejection: async (payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.DOCUMENT_REJECTIONS,
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * RM resubmits a corrected document rejection back to Back Office.
+   * @param {string|number} id - Rejection ID
+   * @param {number} rmId - Logged-in RM ID
+   */
+  resubmitDocumentRejection: async (id, rmId) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.DOCUMENT_REJECTION_RESUBMIT(id),
+      { rmId: Number(rmId) }
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Back Office verifies a resubmitted document rejection.
+   * @param {string|number} id - Rejection ID
+   * @param {number} backOfficeId - Logged-in Back Office Operator ID
+   */
+  verifyDocumentRejection: async (id, backOfficeId) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.DOCUMENT_REJECTION_VERIFY(id),
+      { backOfficeId: Number(backOfficeId) }
+    );
+    return unwrapResponse(response);
+  },
 };
 
 export default backOfficeService;

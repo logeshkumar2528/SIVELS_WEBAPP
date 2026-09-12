@@ -8,10 +8,12 @@ const NEW_APPLICATION_BASE = `${BASE}/applications/new/:applicationId`;
 export const ROUTES = {
   LOGIN:                 `${BASE}/login`,
   DASHBOARD:             `${BASE}/dashboard`,
+  ADD_CUSTOMER:          `${BASE}/add-customer`,
   NEW_APPLICATIONS:      `${BASE}/applications/new`,
   PENDING_APPLICATIONS:  `${BASE}/applications/pending`,
   APPROVED_APPLICATIONS: `${BASE}/applications/approved`,
   RETURNED_APPLICATIONS: `${BASE}/applications/returned`,
+  CUSTOMER_SUBMISSION_HISTORY: `${BASE}/applications/customer-submission-history`,
   SUBMISSION_HISTORY:    `${BASE}/applications/submission-history`,
   FIELD_VERIFICATION:    `${BASE}/applications/field-verification`,
   FIELD_VERIFICATION_FOR_APPLICATION: `${BASE}/applications/field-verification/:applicationId`,

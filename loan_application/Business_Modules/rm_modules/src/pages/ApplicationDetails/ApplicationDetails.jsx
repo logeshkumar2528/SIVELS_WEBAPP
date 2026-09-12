@@ -228,7 +228,7 @@ export default function ApplicationDetails() {
     return () => {
       active = false;
     };
-  }, [appId, loadApplicationFromBackend, saveApplication]);
+  }, [appId]);
 
   // Customers created by a field agent must always use the Field Agent
   // sourcing channel. Resolve the ID from the master table instead of

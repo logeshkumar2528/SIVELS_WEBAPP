@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   X,
   User,
@@ -7,6 +7,7 @@ import {
   Eye,
   IdCard,
   Landmark,
+  Clock,
 } from 'lucide-react'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
 import { masterService } from '../../../../../../Core/src/services/masterService'
@@ -15,6 +16,7 @@ import './ViewCustomerModal.css'
 function ViewCustomerModal({ customer, onClose }) {
   const [modalImage, setModalImage] = useState(null)
   const [documents, setDocuments] = useState([])
+  const [activeDocTab, setActiveDocTab] = useState('original')
   const [loadingDocs, setLoadingDocs] = useState(true)
   const [viewError, setViewError] = useState('')
   
@@ -22,6 +24,54 @@ function ViewCustomerModal({ customer, onClose }) {
   const [loanPurposes, setLoanPurposes] = useState([])
   const [employmentTypes, setEmploymentTypes] = useState([])
   const [documentTypes, setDocumentTypes] = useState([])
+
+  // Group and sort documents chronologically into Original (V1) and Updated (V2+)
+  const { originalDocs, updatedDocs } = useMemo(() => {
+    const active = documents.filter((d) => d && d.isActive !== false)
+
+    const grouped = {}
+    active.forEach((doc) => {
+      const key = doc.documentTypeId
+        ? String(doc.documentTypeId)
+        : String(doc.documentTypeName || doc.documentName || 'other').trim().toLowerCase()
+      if (!grouped[key]) grouped[key] = []
+      grouped[key].push(doc)
+    })
+
+    const original = []
+    const updated = []
+
+    Object.keys(grouped).forEach((key) => {
+      const list = grouped[key]
+      list.sort((a, b) => {
+        const timeA = new Date(a.createdAt || 0).getTime()
+        const timeB = new Date(b.createdAt || 0).getTime()
+        if (timeA !== timeB) return timeA - timeB
+        return (Number(a.agentCustomerDocumentId || a.id) || 0) - (Number(b.agentCustomerDocumentId || b.id) || 0)
+      })
+
+      list.forEach((doc, index) => {
+        const isOrig = index === 0
+        const isLat = index === list.length - 1
+        const versionLabel = `V${index + 1}`
+        const item = {
+          ...doc,
+          isOriginal: isOrig,
+          isLatest: isLat,
+          versionLabel,
+          versionDisplay: isOrig ? 'Original' : versionLabel,
+        }
+
+        if (isOrig) {
+          original.push(item)
+        } else {
+          updated.push(item)
+        }
+      })
+    })
+
+    return { originalDocs: original, updatedDocs: updated }
+  }, [documents])
 
   useEffect(() => {
     const loadData = async () => {
@@ -262,14 +312,37 @@ function ViewCustomerModal({ customer, onClose }) {
               <div className="drawer-section-title">
                 <FileText size={16} /> Uploaded Documents ({documents.length})
               </div>
+
+              {/* Tabs */}
+              {!loadingDocs && documents.length > 0 && (
+                <div className="drawer-doc-tabs">
+                  <button
+                    type="button"
+                    className={`drawer-doc-tab-btn ${activeDocTab === 'original' ? 'drawer-doc-tab-btn--active' : ''}`}
+                    onClick={() => setActiveDocTab('original')}
+                  >
+                    <span>Original Documents</span>
+                    <span className="drawer-doc-tab-badge">{originalDocs.length}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`drawer-doc-tab-btn ${activeDocTab === 'updated' ? 'drawer-doc-tab-btn--active' : ''}`}
+                    onClick={() => setActiveDocTab('updated')}
+                  >
+                    <span>Updated Documents</span>
+                    <span className="drawer-doc-tab-badge">{updatedDocs.length}</span>
+                  </button>
+                </div>
+              )}
+
               <div className="drawer-documents-list">
                 {loadingDocs ? (
                   <div style={{ color: '#64748b', fontSize: '13px' }}>Loading documents...</div>
                 ) : documents.length === 0 ? (
                   <div style={{ color: '#64748b', fontSize: '13px' }}>No documents uploaded.</div>
-                ) : (
-                  documents.map((doc, idx) => {
-                    const docName = getDocumentName(doc.documentTypeId, doc.documentName)
+                ) : activeDocTab === 'original' ? (
+                  originalDocs.map((doc, idx) => {
+                    const docName = getDocumentName(doc.documentTypeId, doc.documentName || doc.documentTypeName)
                     const IconComp = getDocumentIcon(docName)
                     return (
                       <div className="drawer-doc-card" key={doc.agentCustomerDocumentId || doc.id || idx}>
@@ -278,8 +351,16 @@ function ViewCustomerModal({ customer, onClose }) {
                             <IconComp size={18} />
                           </div>
                           <div>
-                            <div className="drawer-doc-title">{docName}</div>
+                            <div className="drawer-doc-title-row">
+                              <span className="drawer-doc-title">{docName}</span>
+                              <span className="drawer-doc-badge drawer-doc-badge--original">Original</span>
+                            </div>
                             <div className="drawer-doc-status">{doc.fileName || 'Uploaded'}</div>
+                            {doc.createdAt && (
+                              <div className="drawer-doc-date">
+                                <Clock size={10} /> {formatDate(doc.createdAt)}
+                              </div>
+                            )}
                           </div>
                         </div>
                         <button
@@ -292,6 +373,50 @@ function ViewCustomerModal({ customer, onClose }) {
                       </div>
                     )
                   })
+                ) : (
+                  updatedDocs.length === 0 ? (
+                    <div style={{ color: '#64748b', fontSize: '13px', padding: '12px 0', textAlign: 'center' }}>
+                      No updated or replacement documents uploaded for this applicant.
+                    </div>
+                  ) : (
+                    updatedDocs.map((doc, idx) => {
+                      const docName = getDocumentName(doc.documentTypeId, doc.documentName || doc.documentTypeName)
+                      const IconComp = getDocumentIcon(docName)
+                      return (
+                        <div className="drawer-doc-card" key={doc.agentCustomerDocumentId || doc.id || idx}>
+                          <div className="drawer-doc-info">
+                            <div className="drawer-doc-icon">
+                              <IconComp size={18} />
+                            </div>
+                            <div>
+                              <div className="drawer-doc-title-row">
+                                <span className="drawer-doc-title">{docName}</span>
+                                <div className="drawer-doc-badges-group">
+                                  <span className="drawer-doc-badge drawer-doc-badge--updated">{doc.versionLabel}</span>
+                                  {doc.isLatest && (
+                                    <span className="drawer-doc-badge drawer-doc-badge--latest">Latest</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="drawer-doc-status">{doc.fileName || 'Uploaded'}</div>
+                              {doc.createdAt && (
+                                <div className="drawer-doc-date">
+                                  <Clock size={10} /> {formatDate(doc.createdAt)}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn-doc-view"
+                            onClick={() => handleViewDocument(doc)}
+                          >
+                            <Eye size={14} /> View
+                          </button>
+                        </div>
+                      )
+                    })
+                  )
                 )}
               </div>
             </div>
