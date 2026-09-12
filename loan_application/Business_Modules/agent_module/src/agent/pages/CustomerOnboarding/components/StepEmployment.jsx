@@ -67,7 +67,7 @@ const StepEmployment = ({ formData, handleChange, masters, onNext, onBack }) => 
           
           <div className="form-group" style={{ marginBottom: '0' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Salary</label>
-            <input type="number" name="salary" value={formData.salary} onChange={handleChange} min="0" style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' }} placeholder="Annual Salary" />
+            <input type="text" inputMode="numeric" name="salary" value={formData.salary} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' }} placeholder="Annual Salary" />
           </div>
         </div>
       )}

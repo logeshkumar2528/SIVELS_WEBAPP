@@ -237,11 +237,11 @@ function normalizeApplicationRecord(record = {}) {
     record.coApplicantsCount !== undefined &&
     record.coApplicantsCount !== null
       ? Number(record.coApplicantsCount)
-      : (record.noOfCoApplicants !== undefined && record.noOfCoApplicants !== null ? Number(record.noOfCoApplicants) : null);
+      : (record.noOfCoApplicants !== undefined && record.noOfCoApplicants !== null && record.noOfCoApplicants !== '' ? Number(record.noOfCoApplicants) : null);
 
   const coApplicantsCount =
     rawCoAppCount !== null && Number.isFinite(rawCoAppCount)
-      ? Math.max(rawCoAppCount, countFromSections)
+      ? Math.max(0, rawCoAppCount)
       : countFromSections;
 
   const distanceFromBranchKm =
@@ -312,15 +312,29 @@ function normalizeApplicationRecord(record = {}) {
     ? resolvedApplicant
     : (record.customerName || record.fullName || record.applicantName || '');
 
+  const isRmSourced = record.isRmSourced !== undefined
+    ? Boolean(record.isRmSourced)
+    : ((record.agentId === null || record.agentId === undefined || record.agentId === '') && Boolean(record.rmId || record.RMId || record.createdBy));
+  const rawAgentId = record.agentId !== undefined ? record.agentId : (record.AgentId !== undefined ? record.AgentId : null);
+  const resolvedAgentId = (rawAgentId !== null && rawAgentId !== undefined && rawAgentId !== '')
+    ? rawAgentId
+    : null;
+  const rmId = record.rmId ?? record.RMId ?? (isRmSourced ? (record.createdBy ?? null) : null);
+  const rmCustomerId = record.rmCustomerId ?? record.RmCustomerId ?? null;
+
   return {
     ...record,
     customerName,
     id: record.id || applicationNumber,
     applicationNumber,
     agentCustomerId: record.agentCustomerId || record.id || applicationNumber,
-    agentId: record.agentId || 1,
+    agentId: resolvedAgentId,
     agentName: record.agentName || '',
     agentCode: record.agentCode || '',
+    rmId,
+    rmCustomerId,
+    isRmSourced,
+    isAgentSourced: Boolean(resolvedAgentId),
     branch: record.branch || inferBranch(record.address),
     location: record.location || inferLocation(record.address),
     sourcingChannel: record.sourcingChannel || '',
@@ -353,7 +367,7 @@ function normalizeApplicationRecord(record = {}) {
       personalInformation: personalInfo,
       primaryApplicant: personalInfo.applicant || personalInfo.primaryApplicant || {},
       coApplicants: personalInfo.coApplicants || [],
-      coApplicantsCount: personalInfo.coApplicants?.length || coApplicantsCount || 0,
+      coApplicantsCount: coApplicantsCount !== undefined && coApplicantsCount !== null ? coApplicantsCount : (personalInfo.coApplicants?.length || 0),
     },
     kycDocuments: kycDocs,
     addressDetails: address,
@@ -525,8 +539,24 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   const rawStatus = customer.status !== undefined ? customer.status : customer.Status;
   const status = rawStatus === 2 ? 'Logged to HO' : (rawStatus === 1 ? 'Pending' : (rawStatus === 0 ? 'New' : (existingDraft.status || 'Draft')));
   const createdDate = customer.createdAt || customer.CreatedAt || customer.createdDate || customer.CreatedDate || existingDraft.createdDate || '';
-  const agentId = customer.agentId || customer.AgentId || productDetails.agentId || productDetails.AgentId || existingDraft.agentId || 1;
-  const agentName = customer.agentName || customer.AgentName || existingDraft.agentName || '';
+  const rmId = productDetails.rmId ?? productDetails.RmId ?? customer.rmId ?? customer.RmId ?? customer.createdBy ?? existingDraft.rmId ?? null;
+  const rmCustomerId = productDetails.rmCustomerId ?? productDetails.RmCustomerId ?? customer.rmCustomerId ?? existingDraft.rmCustomerId ?? null;
+
+  const hasCustomerAgentId = (customer && 'agentId' in customer) || (customer && 'AgentId' in customer);
+  const hasProductAgentId = (productDetails && 'agentId' in productDetails) || (productDetails && 'AgentId' in productDetails);
+
+  let rawAgentId;
+  if (hasCustomerAgentId) {
+    rawAgentId = customer.agentId !== undefined ? customer.agentId : customer.AgentId;
+  } else if (hasProductAgentId) {
+    rawAgentId = productDetails.agentId !== undefined ? productDetails.agentId : productDetails.AgentId;
+  } else {
+    rawAgentId = existingDraft.agentId ?? null;
+  }
+  const agentId = (rawAgentId !== null && rawAgentId !== undefined && rawAgentId !== '') ? rawAgentId : null;
+  const isRmSourced = (agentId === null || agentId === undefined) && Boolean(rmId);
+  const isAgentSourced = Boolean(agentId);
+  const agentName = isRmSourced ? (existingDraft.agentName || '') : (customer.agentName || customer.AgentName || existingDraft.agentName || '');
 
   const applicationProductDetailsId = productDetails.applicationProductDetailsId || productDetails.ApplicationProductDetailsId || existingDraft.applicationProductDetailsId || null;
   const sourcingChannel = productDetails.sourcingChannelId ?? productDetails.SourcingChannelId ?? existingDraft.sourcingChannel ?? '';
@@ -832,6 +862,10 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     agentCustomerId,
     agentId,
     agentName,
+    rmId,
+    rmCustomerId,
+    isRmSourced,
+    isAgentSourced,
     customerName,
     fullName: customerName,
     mobile,
@@ -874,7 +908,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
       personalInformation,
       primaryApplicant: personalInformation.applicant,
       coApplicants: personalInformation.coApplicants,
-      coApplicantsCount: personalInformation.coApplicants.length,
+      coApplicantsCount: coApplicantsCount !== undefined && coApplicantsCount !== null ? coApplicantsCount : (personalInformation.coApplicants?.length || 0),
     },
     kycDocuments,
     addressDetails,
@@ -987,13 +1021,7 @@ export function ApplicationDraftProvider({ children }) {
       return getApplication(applicationId);
     }
 
-    // If already hydrated and not forcing refresh, return immediately
-    const existingApp = applications[applicationId];
-    if (!forceRefresh && existingApp && existingApp._isHydrated) {
-      return existingApp;
-    }
-
-    // De-duplicate concurrent calls for the same ID
+    // De-duplicate concurrent calls for the same ID unless forcing refresh
     if (inFlightHydrations.has(appIdStr) && !forceRefresh) {
       return inFlightHydrations.get(appIdStr);
     }
@@ -1003,35 +1031,72 @@ export function ApplicationDraftProvider({ children }) {
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
       try {
+        let backendResult = null;
+
         // 1. Try full details endpoint
-        const fullRes = await fetch(`${baseUrl}/ApplicationFullDetails/${appIdStr}`);
-        if (fullRes.ok) {
-          const fullData = await fullRes.json();
-          if (fullData) {
-            const currentDraft = applications[appIdStr] || getApplication(appIdStr);
-            const mapped = mapBackendToApplication(fullData, currentDraft);
-            setApplications((prev) => ({
-              ...prev,
-              [appIdStr]: mapped,
-            }));
-            return mapped;
+        try {
+          const fullRes = await fetch(`${baseUrl}/ApplicationFullDetails/${appIdStr}`);
+          if (fullRes.ok) {
+            const fullData = await fullRes.json();
+            if (fullData) {
+              backendResult = fullData;
+            }
           }
+        } catch (fullErr) {
+          console.warn(`ApplicationFullDetails/${appIdStr} error:`, fullErr);
         }
 
         // 2. Fallback to AgentAddCustomer endpoint if full details is 404 or empty
-        const custRes = await fetch(`${baseUrl}/AgentAddCustomer/${appIdStr}`);
-        if (custRes.ok) {
-          const custData = await custRes.json();
-          const custRecord = Array.isArray(custData) ? custData[0] : (custData?.value ? custData.value[0] : custData);
-          if (custRecord) {
-            const currentDraft = applications[appIdStr] || getApplication(appIdStr);
-            const mapped = mapBackendToApplication({ customer: custRecord }, currentDraft);
-            setApplications((prev) => ({
-              ...prev,
-              [appIdStr]: mapped,
-            }));
-            return mapped;
+        if (!backendResult) {
+          const custRes = await fetch(`${baseUrl}/AgentAddCustomer/${appIdStr}`);
+          if (custRes.ok) {
+            const custData = await custRes.json();
+            const custRecord = Array.isArray(custData) ? custData[0] : (custData?.value ? custData.value[0] : custData);
+            if (custRecord) {
+              backendResult = { customer: custRecord };
+
+              // Supplement with ApplicationProductDetails if available
+              try {
+                let prodData = null;
+                const prodRes = await fetch(`${baseUrl}/ApplicationProductDetails/bycustomer/${encodeURIComponent(appIdStr)}`);
+                if (prodRes.ok) {
+                  prodData = await prodRes.json();
+                } else {
+                  const allProdRes = await fetch(`${baseUrl}/ApplicationProductDetails`);
+                  if (allProdRes.ok) {
+                    const allProds = await allProdRes.json();
+                    const list = Array.isArray(allProds) ? allProds : (allProds?.value || []);
+                    const matched = list.find((p) =>
+                      String(p.agentCustomerId) === String(appIdStr) ||
+                      (custRecord.agentId === null && Number(p.rmId || p.createdBy) === Number(custRecord.createdBy))
+                    );
+                    if (matched) {
+                      prodData = matched;
+                    }
+                  }
+                }
+
+                if (prodData) {
+                  const prod = Array.isArray(prodData) ? prodData[0] : (prodData?.value ? prodData.value[0] : prodData);
+                  if (prod) {
+                    backendResult.productDetails = prod;
+                  }
+                }
+              } catch (prodErr) {
+                console.warn('Could not fetch supplemental product details in hydration:', prodErr);
+              }
+            }
           }
+        }
+
+        if (backendResult) {
+          const currentDraft = applications[appIdStr] || getApplication(appIdStr);
+          const mapped = mapBackendToApplication(backendResult, currentDraft);
+          setApplications((prev) => ({
+            ...prev,
+            [appIdStr]: mapped,
+          }));
+          return mapped;
         }
       } catch (err) {
         console.warn(`Failed to hydrate application ${appIdStr} from backend:`, err);

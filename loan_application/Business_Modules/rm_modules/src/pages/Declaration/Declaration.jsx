@@ -292,9 +292,14 @@ export default function Declaration() {
       }
 
       // 2. Build full payload with status: 2 (Logged to HO / Completed)
+      const rawAgentId = customerRecord.agentId !== undefined ? customerRecord.agentId : customerRecord.AgentId;
+      const resolvedAgentId = (rawAgentId === null || rawAgentId === undefined || rawAgentId === '')
+        ? null
+        : Number(rawAgentId);
+
       const payload = {
         agentCustomerId: Number(customerRecord.agentCustomerId || customerRecord.AgentCustomerId || appId),
-        agentId: Number(customerRecord.agentId ?? customerRecord.AgentId ?? 1),
+        agentId: resolvedAgentId,
         fullName: customerRecord.fullName || customerRecord.FullName || customerRecord.customerName || appData.customerName || '',
         mobileNumber: customerRecord.mobileNumber || customerRecord.MobileNumber || customerRecord.mobile || appData.mobile || '',
         email: customerRecord.email || customerRecord.Email || customerRecord.emailAddress || appData.email || '',

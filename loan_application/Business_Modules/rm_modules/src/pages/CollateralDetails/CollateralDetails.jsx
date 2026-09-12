@@ -10,6 +10,7 @@ import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { buildSectionUpdate, getSectionState } from '../applicationWizard/flowUtils';
+import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 
 function buildCollateralState(appData) {
   if (!appData) {
@@ -136,12 +137,12 @@ function CollateralForm({
             <div className="aw-input-wrapper">
               <IndianRupee className="aw-input-icon" size={14} />
               <input 
-                type="number" 
+                type="text" 
+                inputMode="numeric"
                 className="form-input aw-input aw-input--with-icon" 
-                value={value?.estimatedValue ?? ''} 
-                onChange={(e) => onChange('estimatedValue', e.target.value)} 
+                value={formatIndianAmount(value?.estimatedValue ?? '')} 
+                onChange={(e) => onChange('estimatedValue', formatIndianAmount(e.target.value))} 
                 placeholder="0"
-                min="0"
               />
             </div>
           </div>
@@ -422,7 +423,7 @@ export default function CollateralDetails() {
             PropertyId: Number(prop.data.typeOfProperty),
             PropertyUsageId: Number(prop.data.usage) || 0,
             LocationAddress: prop.data.locationAddress || '',
-            EstimatedValue: Number(prop.data.estimatedValue) || 0,
+            EstimatedValue: parseAmountToNumber(prop.data.estimatedValue),
             CreatedBy: 1
           };
 

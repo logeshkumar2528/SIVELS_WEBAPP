@@ -96,6 +96,14 @@ export const backOfficeService = {
     return unwrapResponse(response);
   },
 
+  /**
+   * Retrieve all PD Verification Types from master data.
+   */
+  getPDVerificationTypes: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.PD_VERIFICATION_TYPES);
+    return unwrapResponse(response);
+  },
+
   /* ==========================================
      4. CUSTOMER / APPLICATION QUEUE APIs
   ========================================== */
@@ -280,6 +288,79 @@ export const backOfficeService = {
     const response = await axiosInstance.put(
       BACK_OFFICE_ENDPOINTS.DOCUMENT_REJECTION_VERIFY(id),
       { backOfficeId: Number(backOfficeId) }
+    );
+    return unwrapResponse(response);
+  },
+
+  /* ==========================================
+     10. BACK OFFICE APPLICATION DOCUMENTS (STEPS 09, 10, 11)
+  ========================================== */
+
+  /**
+   * Retrieve all uploaded Back Office documents for an application.
+   * @param {string|number} applicationProductDetailsId
+   */
+  getApplicationDocuments: async (applicationProductDetailsId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_DOCUMENTS_BY_APPLICATION(applicationProductDetailsId)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Upload a new Back Office application document (multipart/form-data).
+   * @param {FormData} formData - { File, DocumentType, DocumentTitle, ApplicationProductDetailsId, BackOfficeId, RmId, Remarks, UploadedBy }
+   */
+  uploadApplicationDocument: async (formData) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_DOCUMENT_UPLOAD,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Download a Back Office application document as blob.
+   * @param {string|number} documentId
+   */
+  downloadApplicationDocument: async (documentId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_DOCUMENT_DOWNLOAD(documentId),
+      {
+        responseType: 'blob',
+      }
+    );
+    return response;
+  },
+
+  /**
+   * Replace an existing Back Office application document (PUT multipart/form-data).
+   * @param {string|number} documentId
+   * @param {FormData} formData - { File, DocumentType, DocumentTitle, ModifiedBy, Remarks }
+   */
+  replaceApplicationDocument: async (documentId, formData) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_DOCUMENT_REPLACE(documentId),
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Update metadata (Remarks, DocumentStatus, ModifiedBy) of an application document.
+   * @param {string|number} documentId
+   * @param {object} payload - { remarks, documentStatus, modifiedBy }
+   */
+  updateApplicationDocumentMetadata: async (documentId, payload) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_DOCUMENT_METADATA(documentId),
+      payload
     );
     return unwrapResponse(response);
   },

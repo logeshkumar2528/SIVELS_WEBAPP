@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { User, Briefcase, Home, Building2, HelpCircle, CheckCircle2, RotateCcw, ArrowLeft, ArrowRight, AlertTriangle, Wallet, Info } from "lucide-react";
+import { formatIndianAmount, getRawAmount, parseAmountToNumber } from "../../../../../../Core/src/utils/amountHelper";
 
 const LOAN_TYPES = [
   { key: "personal", label: "Personal Loan", subtitle: "Short term personal needs", icon: User, tint: "#2563eb", bg: "#eff6ff", border: "#bfdbfe", rate: 16.0 },
@@ -47,7 +48,7 @@ export default function NewInvestmentPage({ onToast, onBackToDashboard, onGoToCu
   const handleAmountChange = (key, value) => {
     setAllocations((prev) => ({
       ...prev,
-      [key]: { ...prev[key], amount: value },
+      [key]: { ...prev[key], amount: formatIndianAmount(value) },
     }));
   };
 
@@ -68,14 +69,14 @@ export default function NewInvestmentPage({ onToast, onBackToDashboard, onGoToCu
 
   const totalAmount = useMemo(() => {
     return LOAN_TYPES.reduce((sum, loan) => {
-      const val = parseFloat(allocations[loan.key].amount) || 0;
+      const val = parseAmountToNumber(allocations[loan.key].amount);
       return sum + (allocations[loan.key].included ? val : 0);
     }, 0);
   }, [allocations]);
 
   const breakdown = useMemo(() => {
     return LOAN_TYPES.map((loan) => {
-      const amount = allocations[loan.key].included ? (parseFloat(allocations[loan.key].amount) || 0) : 0;
+      const amount = allocations[loan.key].included ? parseAmountToNumber(allocations[loan.key].amount) : 0;
       const percent = totalAmount > 0 ? (amount / totalAmount) * 100 : 0;
       return { key: loan.key, label: loan.label, amount, percent, rate: loan.rate, tint: loan.tint };
     });
@@ -223,8 +224,9 @@ export default function NewInvestmentPage({ onToast, onBackToDashboard, onGoToCu
                     <div style={{ marginBottom: "16px" }}>
                       <div style={{ fontSize: "12px", color: "#0f172a", fontWeight: 600, marginBottom: "6px" }}>Allocate Amount (₹)</div>
                       <input 
-                        type="number"
-                        value={amt}
+                        type="text"
+                        inputMode="numeric"
+                        value={formatIndianAmount(amt)}
                         onChange={(e) => handleAmountChange(loan.key, e.target.value)}
                         disabled={!isInc}
                         style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", outline: "none", fontSize: "14px", fontWeight: 600, color: "#0f172a" }}

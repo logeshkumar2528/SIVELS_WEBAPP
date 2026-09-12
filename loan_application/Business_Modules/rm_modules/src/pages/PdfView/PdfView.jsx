@@ -777,13 +777,27 @@ export default function PdfView() {
   const kycData = appData.kycDocuments || appData.sections?.kycDocuments || {};
   const addressData = appData.addressDetails || appData.sections?.addressDetails || {};
 
-  // Dynamic Co-Applicants Resolution using standard helper
-  const applicantCount = Math.max(
-    getApplicantCount(appData),
-    liveKycCoApplicants.length,
-    Array.isArray(kycData.coApplicants) ? kycData.coApplicants.length : 0,
-    rawCoApplicants.length
-  );
+  // Dynamic Co-Applicants Resolution using explicit count first
+  const explicitCoApplicantCount =
+    appData?.coApplicantsCount !== undefined &&
+    appData?.coApplicantsCount !== null &&
+    appData?.coApplicantsCount !== ''
+      ? Number(appData.coApplicantsCount)
+      : (appData?.noOfCoApplicants !== undefined &&
+         appData?.noOfCoApplicants !== null &&
+         appData?.noOfCoApplicants !== ''
+        ? Number(appData.noOfCoApplicants)
+        : null);
+
+  const applicantCount =
+    explicitCoApplicantCount !== null && Number.isFinite(explicitCoApplicantCount)
+      ? Math.max(0, explicitCoApplicantCount)
+      : Math.max(
+          getApplicantCount(appData),
+          liveKycCoApplicants.length,
+          Array.isArray(kycData.coApplicants) ? kycData.coApplicants.length : 0,
+          rawCoApplicants.length
+        );
   const coApplicants = Array.from({ length: applicantCount }, (_, i) => rawCoApplicants[i] || {});
   const hasCoApplicants = applicantCount > 0;
 

@@ -15,6 +15,7 @@ import {
   getApplicantCount,
   getSectionState,
 } from '../applicationWizard/flowUtils';
+import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 
 const ACCOUNT_TYPES = ['Savings', 'Current'];
 
@@ -167,9 +168,9 @@ async function syncActiveLoansForBank(bankId, loansToSave, activeCount, baseUrl,
   for (let i = 0; i < activeCount; i++) {
     const loan = loansToSave[i] || {};
     const loanType = loan.loanType || '';
-    const totalLoanAmount = loan.totalLoanAmount !== '' && loan.totalLoanAmount !== null && loan.totalLoanAmount !== undefined ? Number(loan.totalLoanAmount) : null;
-    const totalOutstanding = loan.totalOutstanding !== '' && loan.totalOutstanding !== null && loan.totalOutstanding !== undefined ? Number(loan.totalOutstanding) : null;
-    const emiAmount = loan.emiAmount !== '' && loan.emiAmount !== null && loan.emiAmount !== undefined ? Number(loan.emiAmount) : null;
+    const totalLoanAmount = loan.totalLoanAmount !== '' && loan.totalLoanAmount !== null && loan.totalLoanAmount !== undefined ? parseAmountToNumber(loan.totalLoanAmount) : null;
+    const totalOutstanding = loan.totalOutstanding !== '' && loan.totalOutstanding !== null && loan.totalOutstanding !== undefined ? parseAmountToNumber(loan.totalOutstanding) : null;
+    const emiAmount = loan.emiAmount !== '' && loan.emiAmount !== null && loan.emiAmount !== undefined ? parseAmountToNumber(loan.emiAmount) : null;
 
     if (loanType || totalLoanAmount !== null || totalOutstanding !== null || emiAmount !== null) {
       const loanId = loan.applicationBankActiveLoanDetailsId || loan.ApplicationBankActiveLoanDetailsId;
@@ -710,9 +711,9 @@ export default function BankExistingLoans() {
           applicationBankActiveLoanDetailsId: item.applicationBankActiveLoanDetailsId ?? item.ApplicationBankActiveLoanDetailsId ?? null,
           applicationBankExistingLoanDetailsId: Number(bankId),
           loanType: item.loanType ?? item.LoanType ?? '',
-          totalLoanAmount: item.totalLoanAmount !== undefined && item.totalLoanAmount !== null ? String(item.totalLoanAmount) : (item.TotalLoanAmount !== undefined && item.TotalLoanAmount !== null ? String(item.TotalLoanAmount) : ''),
-          totalOutstanding: item.totalOutstanding !== undefined && item.totalOutstanding !== null ? String(item.totalOutstanding) : (item.TotalOutstanding !== undefined && item.TotalOutstanding !== null ? String(item.TotalOutstanding) : ''),
-          emiAmount: item.emiAmount !== undefined && item.emiAmount !== null ? String(item.emiAmount) : (item.EmiAmount !== undefined && item.EmiAmount !== null ? String(item.EmiAmount) : ''),
+          totalLoanAmount: item.totalLoanAmount !== undefined && item.totalLoanAmount !== null ? formatIndianAmount(item.totalLoanAmount) : (item.TotalLoanAmount !== undefined && item.TotalLoanAmount !== null ? formatIndianAmount(item.TotalLoanAmount) : ''),
+          totalOutstanding: item.totalOutstanding !== undefined && item.totalOutstanding !== null ? formatIndianAmount(item.totalOutstanding) : (item.TotalOutstanding !== undefined && item.TotalOutstanding !== null ? formatIndianAmount(item.TotalOutstanding) : ''),
+          emiAmount: item.emiAmount !== undefined && item.emiAmount !== null ? formatIndianAmount(item.emiAmount) : (item.EmiAmount !== undefined && item.EmiAmount !== null ? formatIndianAmount(item.EmiAmount) : ''),
           status: item.status ?? item.Status ?? 'Active',
         }));
 
@@ -751,9 +752,12 @@ export default function BankExistingLoans() {
     }
   };
 
-  const updateLoanDetail = (loanIndex, field, value) => {
+  const updateLoanDetail = (loanIndex, field, rawValue) => {
     if (!viewingLoansFor) return;
     const key = getTargetKey(viewingLoansFor);
+    const value = ['totalLoanAmount', 'totalOutstanding', 'emiAmount'].includes(field)
+      ? formatIndianAmount(rawValue)
+      : rawValue;
     setTransientLoans((prev) => {
       const bank = getBankByTarget(viewingLoansFor);
       const count = parseInt(bank?.noOfActiveLoans, 10) || 0;
@@ -1297,8 +1301,8 @@ export default function BankExistingLoans() {
                             inputMode="numeric" 
                             className="form-input compact-input" 
                             placeholder="₹ Total Amount" 
-                            value={loan.totalLoanAmount || ''} 
-                            onChange={(e) => updateLoanDetail(i, 'totalLoanAmount', e.target.value.replace(/\D/g, ''))} 
+                            value={formatIndianAmount(loan.totalLoanAmount || '')} 
+                            onChange={(e) => updateLoanDetail(i, 'totalLoanAmount', e.target.value)} 
                           />
                         </div>
 
@@ -1311,8 +1315,8 @@ export default function BankExistingLoans() {
                             inputMode="numeric" 
                             className="form-input compact-input" 
                             placeholder="₹ Outstanding" 
-                            value={loan.totalOutstanding || ''} 
-                            onChange={(e) => updateLoanDetail(i, 'totalOutstanding', e.target.value.replace(/\D/g, ''))} 
+                            value={formatIndianAmount(loan.totalOutstanding || '')} 
+                            onChange={(e) => updateLoanDetail(i, 'totalOutstanding', e.target.value)} 
                           />
                         </div>
 
@@ -1325,8 +1329,8 @@ export default function BankExistingLoans() {
                             inputMode="numeric" 
                             className="form-input compact-input" 
                             placeholder="₹ EMI" 
-                            value={loan.emiAmount || ''} 
-                            onChange={(e) => updateLoanDetail(i, 'emiAmount', e.target.value.replace(/\D/g, ''))} 
+                            value={formatIndianAmount(loan.emiAmount || '')} 
+                            onChange={(e) => updateLoanDetail(i, 'emiAmount', e.target.value)} 
                           />
                         </div>
 

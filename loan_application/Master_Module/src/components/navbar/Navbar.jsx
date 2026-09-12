@@ -6,7 +6,7 @@ import {
   CreditCard, Package, Target, Repeat, User, Heart, Building, 
   Map, Building2, Briefcase, Landmark, Globe, MapPin, Link, 
   Layers, ShieldCheck, Home, Key, GraduationCap, Star, Contact, Shield, TrendingUp, LogOut, ArrowLeft,
-  Factory, Clock
+  Factory, Clock, Calculator, UserCheck
 } from 'lucide-react';
 import './Navbar.css';
 
@@ -42,6 +42,8 @@ const MASTERS_MENU = [
   { label: 'FOIR', path: '/masters/foir', icon: Percent },
   { label: 'Industry Type', path: '/masters/industry-type', icon: Factory },
   { label: 'Loan Product Tenure', path: '/masters/loan-product-tenure', icon: Clock },
+  { label: 'Assessment Method', path: '/masters/assessment-method', icon: Calculator },
+  { label: 'PD Verification Type', path: '/masters/pd-verification-type', icon: UserCheck },
   { label: 'Company Configuration', path: '/company', icon: Building2 }
 ];
 

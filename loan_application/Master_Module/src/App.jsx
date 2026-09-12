@@ -37,6 +37,8 @@ import { RateOfInterest } from './pages/masters/RateOfInterest/RateOfInterest';
 import { FOIR } from './pages/masters/FOIR/FOIR';
 import { IndustryType } from './pages/masters/IndustryType/IndustryType';
 import { LoanProductTenure } from './pages/masters/LoanProductTenure/LoanProductTenure';
+import { AssessmentMethod } from './pages/masters/AssessmentMethod/AssessmentMethod';
+import { PDVerificationType } from './pages/masters/PDVerificationType/PDVerificationType';
 import { CompanyConfiguration } from './features/company/CompanyConfiguration';
 import AgentCreate from './pages/Agent/AgentCreate';
 import RelationshipManagerCreate from './pages/RelationshipManager/RelationshipManagerCreate';
@@ -116,6 +118,8 @@ function App() {
             <Route path="foir" element={<FOIR />} />
             <Route path="industry-type" element={<IndustryType />} />
             <Route path="loan-product-tenure" element={<LoanProductTenure />} />
+            <Route path="assessment-method" element={<AssessmentMethod />} />
+            <Route path="pd-verification-type" element={<PDVerificationType />} />
           </Route>
         </Route>
       </Routes>

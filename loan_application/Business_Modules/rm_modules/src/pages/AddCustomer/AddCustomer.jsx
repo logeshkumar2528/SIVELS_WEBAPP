@@ -18,10 +18,13 @@ import {
   X,
   CreditCard,
   IdCard,
-  Landmark
+  Landmark,
+  RefreshCw,
 } from 'lucide-react';
 import Select from '../../components/Select/Select';
 import { masterService } from '../../../../../Core/src/services/masterService';
+import { rmCustomerService } from '../../services/rmCustomerService';
+import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 import { getCurrentRMContext } from '../../utils/rmContext';
 import { ROUTES } from '../../config/routeConfig';
 import './AddCustomer.css';
@@ -31,6 +34,7 @@ export default function AddCustomer() {
 
   // RM Identity Resolution
   const rmContext = getCurrentRMContext();
+  const rmId = rmContext.rmId ? Number(rmContext.rmId) : null;
 
   // Master Data State
   const [employmentTypes, setEmploymentTypes] = useState([]);
@@ -47,6 +51,10 @@ export default function AddCustomer() {
   const [previews, setPreviews] = useState({});
   const [modalImage, setModalImage] = useState(null);
 
+  // Partial submission recovery state (to prevent duplicate customer on upload retry)
+  const [createdRmCustomerId, setCreatedRmCustomerId] = useState(null);
+  const [uploadedDocTypeIds, setUploadedDocTypeIds] = useState(new Set());
+
   // Form State
   const [formData, setFormData] = useState({
     fullName: '',
@@ -60,7 +68,7 @@ export default function AddCustomer() {
 
   // Validation & UI Feedback State
   const [fieldErrors, setFieldErrors] = useState({});
-  const [globalBanner, setGlobalBanner] = useState(null); // { type: 'error' | 'info' | 'warning', message: string }
+  const [globalBanner, setGlobalBanner] = useState(null); // { type: 'error' | 'info' | 'warning' | 'success', message: string }
   const [submitting, setSubmitting] = useState(false);
 
   // Fetch Master Data on Mount
@@ -316,22 +324,7 @@ export default function AddCustomer() {
     } else if (name === 'fullName') {
       value = value.replace(/[^a-zA-Z\s]/g, '').replace(/^\s+/, '').replace(/\s{2,}/g, ' ');
     } else if (name === 'expectedAmount') {
-      let sanitized = value.replace(/[^0-9.]/g, '');
-      let parts = sanitized.split('.');
-      if (parts.length > 2) {
-        sanitized = parts[0] + '.' + parts.slice(1).join('');
-        parts = sanitized.split('.');
-      }
-      let beforeDecimal = parts[0] || '';
-      if (beforeDecimal.length > 18) {
-        beforeDecimal = beforeDecimal.substring(0, 18);
-      }
-      if (parts.length > 1) {
-        let afterDecimal = parts[1].substring(0, 2);
-        value = `${beforeDecimal}.${afterDecimal}`;
-      } else {
-        value = beforeDecimal;
-      }
+      value = formatIndianAmount(value, true, 2);
     }
 
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -404,11 +397,12 @@ export default function AddCustomer() {
     }
 
     // Expected Loan Amount
-    if (!formData.expectedAmount) {
+    const rawExpectedAmount = getRawAmount(formData.expectedAmount, true, 2);
+    if (!rawExpectedAmount) {
       errors.expectedAmount = 'Expected Loan Amount is required.';
       isValid = false;
     } else {
-      const amt = Number(formData.expectedAmount);
+      const amt = Number(rawExpectedAmount);
       if (isNaN(amt) || amt <= 0) {
         errors.expectedAmount = 'Expected Loan Amount must be greater than 0.';
         isValid = false;
@@ -440,9 +434,18 @@ export default function AddCustomer() {
     return isValid;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setGlobalBanner(null);
+
+    if (!rmId) {
+      setGlobalBanner({
+        type: 'error',
+        message: 'No active Relationship Manager session detected. Please sign in again.',
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
 
     const isValid = validateForm();
     if (!isValid) {
@@ -450,21 +453,126 @@ export default function AddCustomer() {
       return;
     }
 
-    // Form is completely valid!
-    // Since backend RM save endpoint is not active yet, do not call fake API or create dummy data.
     setSubmitting(true);
-    setTimeout(() => {
+
+    try {
+      // Step 1: Create or reuse existing RM customer record
+      let targetCustomerId = createdRmCustomerId;
+
+      if (!targetCustomerId) {
+        const customerPayload = {
+          rmId: Number(rmId),
+          fullName: formData.fullName.trim(),
+          mobileNumber: formData.mobileNumber.trim(),
+          email: formData.email && formData.email.trim() !== '' ? formData.email.trim() : null,
+          employmentTypeId: Number(formData.employmentTypeId),
+          loanPurposeId: Number(formData.loanPurposeId),
+          expectedLoanAmount: parseAmountToNumber(formData.expectedAmount),
+          remarks: formData.remarks.trim(),
+          status: 0,
+          isActive: true,
+          createdBy: Number(rmId),
+        };
+
+        const createRes = await rmCustomerService.createCustomer(customerPayload);
+        
+        targetCustomerId =
+          createRes?.rmCustomerId ||
+          createRes?.rMCustomerId ||
+          createRes?.id ||
+          createRes?.data?.rmCustomerId ||
+          createRes?.data?.rMCustomerId ||
+          createRes?.data?.id;
+
+        if (!targetCustomerId) {
+          throw new Error('Customer was created, but no Customer ID was returned by the server.');
+        }
+
+        setCreatedRmCustomerId(targetCustomerId);
+      }
+
+      // Step 2: Upload selected documents
+      const uploadTasks = [];
+      const updatedUploadedDocTypeIds = new Set(uploadedDocTypeIds);
+      const failedUploads = [];
+
+      for (const docTypeId of Object.keys(selectedFiles)) {
+        if (updatedUploadedDocTypeIds.has(docTypeId)) {
+          continue; // Already successfully uploaded
+        }
+
+        const fileData = selectedFiles[docTypeId];
+        if (!fileData) continue;
+
+        const filesList = Array.isArray(fileData) ? fileData : [fileData];
+
+        for (const file of filesList) {
+          if (!file) continue;
+
+          const uploadFormData = new FormData();
+          uploadFormData.append('file', file);
+          uploadFormData.append('rmCustomerId', String(targetCustomerId));
+          uploadFormData.append('documentTypeId', String(docTypeId));
+          uploadFormData.append('createdBy', String(rmId));
+          uploadFormData.append('remarks', '');
+          uploadFormData.append('isActive', 'true');
+
+          uploadTasks.push({
+            docTypeId,
+            fileName: file.name,
+            promise: rmCustomerService.uploadDocument(uploadFormData),
+          });
+        }
+      }
+
+      if (uploadTasks.length > 0) {
+        const uploadResults = await Promise.allSettled(uploadTasks.map((t) => t.promise));
+
+        uploadResults.forEach((result, idx) => {
+          const task = uploadTasks[idx];
+          if (result.status === 'fulfilled') {
+            updatedUploadedDocTypeIds.add(task.docTypeId);
+          } else {
+            console.error(`Failed to upload ${task.fileName}:`, result.reason);
+            const reasonMsg = result.reason?.response?.data?.message || result.reason?.message || 'Upload error';
+            failedUploads.push(`${task.fileName} (${reasonMsg})`);
+          }
+        });
+
+        setUploadedDocTypeIds(new Set(updatedUploadedDocTypeIds));
+      }
+
+      if (failedUploads.length > 0) {
+        setGlobalBanner({
+          type: 'warning',
+          message: `Customer saved (ID: ${targetCustomerId}), but some document(s) failed: ${failedUploads.join(', ')}. Please retry upload.`,
+        });
+        setSubmitting(false);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      // Step 3: Success! Navigate to Submission History
       setSubmitting(false);
+      navigate(ROUTES.CUSTOMER_SUBMISSION_HISTORY);
+    } catch (err) {
+      console.error('Error in RM Add Customer submission:', err);
+      const errMsg =
+        err?.response?.data?.message ||
+        err?.response?.data?.title ||
+        err?.message ||
+        'An error occurred while creating the customer application. Please try again.';
       setGlobalBanner({
-        type: 'info',
-        message: 'RM customer creation API is not available yet. Form and required documents have been validated successfully.',
+        type: 'error',
+        message: errMsg,
       });
+      setSubmitting(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 400);
+    }
   };
 
   const handleCancel = () => {
-    navigate(ROUTES.NEW_APPLICATIONS);
+    navigate(ROUTES.CUSTOMER_SUBMISSION_HISTORY);
   };
 
   // Dropdown Options
@@ -497,7 +605,7 @@ export default function AddCustomer() {
   return (
     <div className="add-customer">
       {/* Session Identity Notice if RM ID is missing */}
-      {!rmContext.rmId && (
+      {!rmId && (
         <div className="add-customer-warning-banner">
           <AlertCircle size={18} />
           <span>No active Relationship Manager identity detected in session. Please sign in again.</span>
@@ -518,6 +626,7 @@ export default function AddCustomer() {
           {globalBanner.type === 'info' && <Info size={18} />}
           {globalBanner.type === 'error' && <AlertCircle size={18} />}
           {globalBanner.type === 'warning' && <AlertCircle size={18} />}
+          {globalBanner.type === 'success' && <CheckCircle2 size={18} />}
           <span>{globalBanner.message}</span>
         </div>
       )}
@@ -550,6 +659,7 @@ export default function AddCustomer() {
                   placeholder="Enter full name"
                   value={formData.fullName}
                   onChange={handleInputChange}
+                  disabled={submitting || Boolean(createdRmCustomerId)}
                   required
                 />
               </div>
@@ -574,6 +684,7 @@ export default function AddCustomer() {
                   value={formData.mobileNumber}
                   onChange={handleInputChange}
                   maxLength={10}
+                  disabled={submitting || Boolean(createdRmCustomerId)}
                   required
                 />
               </div>
@@ -597,6 +708,7 @@ export default function AddCustomer() {
                   placeholder="Enter email address"
                   value={formData.email}
                   onChange={handleInputChange}
+                  disabled={submitting || Boolean(createdRmCustomerId)}
                 />
               </div>
               {fieldErrors.email && <div className="form-field-error">{fieldErrors.email}</div>}
@@ -628,7 +740,7 @@ export default function AddCustomer() {
                 onChange={(val) => handleSelectChange('employmentTypeId', val)}
                 options={employmentTypeOptions}
                 placeholder={employmentPlaceholder}
-                disabled={loadingMasters || !!mastersError}
+                disabled={loadingMasters || !!mastersError || submitting || Boolean(createdRmCustomerId)}
                 error={Boolean(fieldErrors.employmentTypeId)}
                 icon={<Briefcase size={16} strokeWidth={1.8} />}
               />
@@ -647,7 +759,7 @@ export default function AddCustomer() {
                 onChange={(val) => handleSelectChange('loanPurposeId', val)}
                 options={loanPurposeOptions}
                 placeholder={loanPurposePlaceholder}
-                disabled={loadingMasters || !!mastersError}
+                disabled={loadingMasters || !!mastersError || submitting || Boolean(createdRmCustomerId)}
                 error={Boolean(fieldErrors.loanPurposeId)}
                 icon={<Target size={16} strokeWidth={1.8} />}
               />
@@ -672,6 +784,7 @@ export default function AddCustomer() {
                   placeholder="Enter expected loan amount"
                   value={formData.expectedAmount}
                   onChange={handleInputChange}
+                  disabled={submitting || Boolean(createdRmCustomerId)}
                   required
                 />
               </div>
@@ -693,6 +806,7 @@ export default function AddCustomer() {
                 rows={3}
                 value={formData.remarks}
                 onChange={handleInputChange}
+                disabled={submitting || Boolean(createdRmCustomerId)}
                 required
               />
               {fieldErrors.remarks && <div className="form-field-error">{fieldErrors.remarks}</div>}
@@ -734,6 +848,7 @@ export default function AddCustomer() {
                   const files = selectedFiles[mapping.documentTypeId];
                   const hasFile = isMultiple ? files && files.length > 0 : Boolean(files);
                   const IconComponent = getDocumentIcon(docName);
+                  const isUploaded = uploadedDocTypeIds.has(String(mapping.documentTypeId));
 
                   return (
                     <div
@@ -767,15 +882,17 @@ export default function AddCustomer() {
                                     </span>
                                   </div>
                                 </div>
-                                <button
-                                  type="button"
-                                  className="file-remove-btn"
-                                  onClick={() => handleRemoveFile(mapping.documentTypeId, index)}
-                                  style={{ padding: '2px 4px', background: 'transparent', border: 'none' }}
-                                  disabled={submitting}
-                                >
-                                  <Trash2 size={13} color="#EF4444" />
-                                </button>
+                                {!isUploaded && (
+                                  <button
+                                    type="button"
+                                    className="file-remove-btn"
+                                    onClick={() => handleRemoveFile(mapping.documentTypeId, index)}
+                                    style={{ padding: '2px 4px', background: 'transparent', border: 'none' }}
+                                    disabled={submitting}
+                                  >
+                                    <Trash2 size={13} color="#EF4444" />
+                                  </button>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -825,36 +942,44 @@ export default function AddCustomer() {
                       )}
 
                       <div className="file-actions-row">
-                        <label className={`file-upload-btn ${submitting ? 'disabled' : ''}`}>
-                          <Upload size={13} strokeWidth={2} />
-                          <span>
-                            {hasFile
-                              ? isMultiple
-                                ? 'Add More'
-                                : 'Change'
-                              : isMultiple
-                              ? 'Choose Files'
-                              : 'Upload Document'}
-                          </span>
-                          <input
-                            type="file"
-                            multiple={isMultiple}
-                            className="file-input-hidden"
-                            accept=".pdf,.jpg,.jpeg,.png"
-                            onChange={(e) => handleFileChange(e, mapping.documentTypeId, isMultiple)}
-                            disabled={submitting}
-                          />
-                        </label>
-                        {hasFile && !isMultiple && (
-                          <button
-                            type="button"
-                            className="file-remove-btn"
-                            onClick={() => handleRemoveFile(mapping.documentTypeId)}
-                            disabled={submitting}
-                          >
-                            <Trash2 size={13} />
-                            <span>Remove</span>
-                          </button>
+                        {!isUploaded ? (
+                          <>
+                            <label className={`file-upload-btn ${submitting ? 'disabled' : ''}`}>
+                              <Upload size={13} strokeWidth={2} />
+                              <span>
+                                {hasFile
+                                  ? isMultiple
+                                    ? 'Add More'
+                                    : 'Change'
+                                  : isMultiple
+                                  ? 'Choose Files'
+                                  : 'Upload Document'}
+                              </span>
+                              <input
+                                type="file"
+                                multiple={isMultiple}
+                                className="file-input-hidden"
+                                accept=".pdf,.jpg,.jpeg,.png"
+                                onChange={(e) => handleFileChange(e, mapping.documentTypeId, isMultiple)}
+                                disabled={submitting}
+                              />
+                            </label>
+                            {hasFile && !isMultiple && (
+                              <button
+                                type="button"
+                                className="file-remove-btn"
+                                onClick={() => handleRemoveFile(mapping.documentTypeId)}
+                                disabled={submitting}
+                              >
+                                <Trash2 size={13} />
+                                <span>Remove</span>
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1A7A3C', fontSize: '12px', fontWeight: 600 }}>
+                            <CheckCircle2 size={14} /> Uploaded Successfully
+                          </div>
                         )}
                       </div>
                     </div>
@@ -878,10 +1003,20 @@ export default function AddCustomer() {
           <button
             type="submit"
             className="btn-submit"
-            disabled={submitting}
+            disabled={submitting || !rmId}
           >
-            {submitting ? 'Validating...' : (
-              <>Save & Continue to Documents <ArrowRight size={15} strokeWidth={2} /></>
+            {submitting ? (
+              <>
+                <RefreshCw size={15} className="animate-spin" /> Submitting...
+              </>
+            ) : createdRmCustomerId ? (
+              <>
+                Retry Document Uploads <ArrowRight size={15} strokeWidth={2} />
+              </>
+            ) : (
+              <>
+                Save & Continue to Documents <ArrowRight size={15} strokeWidth={2} />
+              </>
             )}
           </button>
         </div>
@@ -908,4 +1043,3 @@ export default function AddCustomer() {
     </div>
   );
 }
-

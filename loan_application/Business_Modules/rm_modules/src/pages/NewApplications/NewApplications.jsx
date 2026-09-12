@@ -79,7 +79,7 @@ const mapBackendApplication = (item, index, agentsById = {}, rejections = []) =>
     mobile: normalizeMobile(item.mobileNumber || item.mobile || ''),
     loanType: item.loanPurposeName || item.loanType || '',
     amount: formatCurrency(item.expectedLoanAmount ?? item.amount),
-    agentName: item.agentName || agent.fullName || agent.FullName || '',
+    agentName: item.agentName || agent.fullName || agent.FullName || (agentId ? '' : 'Direct (RM)'),
     createdDate: formatDate(item.createdAt || item.createdDate),
     status: normalizedStatus,
     rawStatus: normalizedStatus,
@@ -136,10 +136,11 @@ export default function NewApplications({ initialFilter = 'All' }) {
       const authHeaders = {};
       if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
-      const [agentRes, customerRes, rejectionsRes] = await Promise.all([
+      const [agentRes, customerRes, rejectionsRes, appProdRes] = await Promise.all([
         fetch(`${API_BASE}/AgentMaster`, { headers: authHeaders }),
         fetch(`${API_BASE}/AgentAddCustomer`, { headers: authHeaders }),
         fetch(`${API_BASE}/BackOfficeDocumentRejection/rm/${rmContext.rmId}/returned`, { headers: authHeaders }).catch(() => null),
+        fetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).catch(() => null),
       ]);
 
       if (!agentRes.ok) {
@@ -163,6 +164,24 @@ export default function NewApplications({ initialFilter = 'All' }) {
           returnedRejections = [];
         }
       }
+
+      let appProdList = [];
+      if (appProdRes && appProdRes.ok) {
+        try {
+          const pData = await appProdRes.json();
+          appProdList = resolveApiArray(pData);
+        } catch {
+          appProdList = [];
+        }
+      }
+
+      // Build Set of customer IDs that belong directly to this RM
+      const rmOwnedCustomerIds = new Set();
+      appProdList.forEach((p) => {
+        if (Number(p.rmId || p.RMId) === Number(rmContext.rmId) && p.agentCustomerId) {
+          rmOwnedCustomerIds.add(String(p.agentCustomerId));
+        }
+      });
 
       // Index active rejections by agentCustomerId & applicationProductDetailsId
       const activeRejectionsByCustId = {};
@@ -194,8 +213,21 @@ export default function NewApplications({ initialFilter = 'All' }) {
       const filtered = allCustomers.filter((item) => {
         const rowAgentId = Number(item.agentId || item.AgentId);
         const rowCustId = String(item.agentCustomerId || item.customerId || '');
-        // Include if agent is assigned OR if there's an active rejection for this customer
-        return agentIds.has(rowAgentId) || Boolean(activeRejectionsByCustId[rowCustId]);
+        
+        // 1. Normal agent-sourced customer: belongs to an agent assigned to this RM
+        const isAgentMapped = Boolean(rowAgentId && agentIds.has(rowAgentId));
+
+        // 2. Promoted RM-sourced customer (agentId is null): belongs directly to this RM
+        const isRmDirectOwned = (item.agentId === null || item.agentId === undefined) && (
+          rmOwnedCustomerIds.has(rowCustId) ||
+          Number(item.rmId || item.RMId) === Number(rmContext.rmId) ||
+          (Number(item.createdBy || item.CreatedBy) === Number(rmContext.rmId) && !item.agentId)
+        );
+
+        // 3. Active rejection for this RM
+        const hasActiveRejection = Boolean(activeRejectionsByCustId[rowCustId]);
+
+        return isAgentMapped || isRmDirectOwned || hasActiveRejection;
       });
 
       const mapped = filtered.map((item, index) => {

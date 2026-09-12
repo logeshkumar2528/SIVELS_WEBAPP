@@ -21,6 +21,8 @@ export const BACK_OFFICE_ENDPOINTS = {
   AGENTS: '/AgentMaster',
   AGENT_BY_ID: (id) => `/AgentMaster/${encodeURIComponent(id)}`,
 
+  PD_VERIFICATION_TYPES: '/PDVerificationTypeMaster',
+
   // Customer / Lead Ingestion
   CUSTOMERS: '/AgentAddCustomer',
   CUSTOMER_BY_ID: (id) => `/AgentAddCustomer/${encodeURIComponent(id)}`,
@@ -59,4 +61,15 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/BackOfficeDocumentRejection/${encodeURIComponent(id)}/resubmit`,
   DOCUMENT_REJECTION_VERIFY: (id) =>
     `/BackOfficeDocumentRejection/${encodeURIComponent(id)}/verify`,
+
+  // Back Office Application Documents (Steps 09, 10, 11)
+  APPLICATION_DOCUMENTS_BY_APPLICATION: (applicationProductDetailsId) =>
+    `/BackOfficeApplicationDocuments/application/${encodeURIComponent(applicationProductDetailsId)}`,
+  APPLICATION_DOCUMENT_UPLOAD: '/BackOfficeApplicationDocuments/upload',
+  APPLICATION_DOCUMENT_DOWNLOAD: (documentId) =>
+    `/BackOfficeApplicationDocuments/${encodeURIComponent(documentId)}/download`,
+  APPLICATION_DOCUMENT_REPLACE: (documentId) =>
+    `/BackOfficeApplicationDocuments/${encodeURIComponent(documentId)}/upload`,
+  APPLICATION_DOCUMENT_METADATA: (documentId) =>
+    `/BackOfficeApplicationDocuments/${encodeURIComponent(documentId)}`,
 };

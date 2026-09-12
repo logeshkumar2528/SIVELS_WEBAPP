@@ -27,6 +27,7 @@ import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import { formatDateTimeSeconds as formatDateTime } from '../../utils/dateHelper';
 import { buildValidationPopup, parseApiErrorBody } from '../../utils/formatUserFacingError';
 import { resolveApplicantName } from '../applicationWizard/flowUtils';
+import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 import './ApplicationDetails.css';
 
 function isEmptyValue(value) {
@@ -145,6 +146,15 @@ export default function ApplicationDetails() {
   const [displayRecord, setDisplayRecord] = useState(null);
   const [agentBranch, setAgentBranch] = useState('');
   const [agentInfo, setAgentInfo] = useState({ name: '', code: '' });
+  const [sourcingInfo, setSourcingInfo] = useState({
+    isRmSourced: false,
+    channel: '',
+    name: '',
+    code: '',
+    agentId: null,
+    rmId: null,
+    rmCustomerId: null,
+  });
 
   const [sourcingChannelOptions, setSourcingChannelOptions] = useState([]);
   const [loanProductOptions, setLoanProductOptions] = useState([]);
@@ -169,7 +179,7 @@ export default function ApplicationDetails() {
       setIsLoadingApplication(true);
 
       try {
-        const fullApp = await loadApplicationFromBackend(appId);
+        const fullApp = await loadApplicationFromBackend(appId, true);
         const record = fullApp || {};
 
         if (active && record) {
@@ -188,8 +198,74 @@ export default function ApplicationDetails() {
             }
           }
 
-          const agentId = record.agentId || record.AgentId;
-          if (agentId) {
+          const rawAgentId = record.agentId ?? record.AgentId ?? record.customer?.agentId ?? record.productDetails?.agentId ?? null;
+          const rawRmId = record.rmId ?? record.RMId ?? record.productDetails?.rmId ?? record.customer?.rmId ?? record.customer?.createdBy ?? null;
+          let rmCustomerId = record.rmCustomerId ?? record.productDetails?.rmCustomerId ?? null;
+
+          // If neither agentId nor rmId found on record, fetch ApplicationProductDetails to be certain
+          let agentId = (rawAgentId !== null && rawAgentId !== undefined && rawAgentId !== '') ? rawAgentId : null;
+          let rmId = rawRmId;
+          if (agentId === null && !rmId) {
+            try {
+              const prodRes = await fetch(`${baseUrl}/ApplicationProductDetails/bycustomer/${encodeURIComponent(appId)}`);
+              if (prodRes.ok) {
+                const prodData = await prodRes.json();
+                const prod = Array.isArray(prodData) ? prodData[0] : (prodData?.value ? prodData.value[0] : prodData);
+                if (prod) {
+                  if (prod.agentId) agentId = prod.agentId;
+                  if (prod.rmId) rmId = prod.rmId;
+                  if (prod.rmCustomerId) rmCustomerId = prod.rmCustomerId;
+                }
+              }
+            } catch (e) {
+              console.warn('Could not fetch ApplicationProductDetails for sourcing resolution:', e);
+            }
+          }
+
+          const isDirectRm = (agentId === null || agentId === undefined || agentId === '') && Boolean(rmId);
+
+          if (isDirectRm && rmId) {
+            // 1. Direct RM-sourced application
+            try {
+              const rmResponse = await fetch(`${baseUrl}/RMMaster/${rmId}`);
+              if (rmResponse.ok) {
+                const rmData = await rmResponse.json();
+                const rmRecord = Array.isArray(rmData)
+                  ? rmData[0]
+                  : (rmData?.value ? rmData.value[0] : rmData);
+                const branch = rmRecord?.branch || rmRecord?.Branch || '';
+                const name = rmRecord?.fullName || rmRecord?.FullName || rmRecord?.rmName || rmRecord?.RMName || '';
+                const code = rmRecord?.rmCode || rmRecord?.RMCode || rmRecord?.rmId || rmId;
+                if (active) {
+                  setAgentBranch(branch);
+                  setAgentInfo({ name, code: String(code || '') });
+                  setSourcingInfo({
+                    isRmSourced: true,
+                    channel: 'Direct RM',
+                    name,
+                    code: String(code || ''),
+                    agentId: null,
+                    rmId,
+                    rmCustomerId,
+                  });
+                  saveApplication(appId, {
+                    branch,
+                    agentName: name,
+                    agentCode: String(code || ''),
+                    sourcingChannelDisplay: 'Direct RM',
+                    isAgentSourced: false,
+                    isRmSourced: true,
+                    agentId: null,
+                    rmId,
+                    rmCustomerId,
+                  });
+                }
+              }
+            } catch (rmError) {
+              console.error('Failed to load RM details from RMMaster:', rmError);
+            }
+          } else if (agentId) {
+            // 2. Agent-sourced application
             try {
               const agentResponse = await fetch(`${baseUrl}/AgentMaster/${agentId}`);
               if (agentResponse.ok) {
@@ -203,7 +279,16 @@ export default function ApplicationDetails() {
                 if (active) {
                   setAgentBranch(branch);
                   setAgentInfo({ name, code: String(code || '') });
-                  saveApplication(appId, { branch, agentName: name, agentCode: String(code || '') });
+                  setSourcingInfo({
+                    isRmSourced: false,
+                    channel: 'Field Agent',
+                    name,
+                    code: String(code || ''),
+                    agentId,
+                    rmId: null,
+                    rmCustomerId: null,
+                  });
+                  saveApplication(appId, { branch, agentName: name, agentCode: String(code || ''), isAgentSourced: true });
                 }
               }
             } catch (agentError) {
@@ -236,6 +321,21 @@ export default function ApplicationDetails() {
   const appData = getApplication(appId);
 
   useEffect(() => {
+    if (isLoadingApplication || !displayRecord) {
+      return;
+    }
+
+    const isRmDirect = Boolean(
+      sourcingInfo.isRmSourced ||
+      displayRecord?.isRmSourced ||
+      ((displayRecord?.agentId === null || displayRecord?.agentId === undefined) && (displayRecord?.rmId || displayRecord?.createdBy)) ||
+      ((appData.agentId === null || appData.agentId === undefined) && (appData.rmId || appData.createdBy))
+    );
+
+    if (isRmDirect) {
+      return;
+    }
+
     const agentId = displayRecord?.agentId || displayRecord?.AgentId || appData.agentId;
     if (!agentId || sourcingChannelOptions.length === 0) {
       return;
@@ -254,7 +354,7 @@ export default function ApplicationDetails() {
         isAgentSourced: true,
       });
     }
-  }, [appId, appData.agentId, appData.sourcingChannel, displayRecord, saveApplication, sourcingChannelOptions]);
+  }, [appId, appData.agentId, appData.rmId, appData.createdBy, appData.sourcingChannel, displayRecord, isLoadingApplication, saveApplication, sourcingChannelOptions, sourcingInfo.isRmSourced]);
 
   useEffect(() => {
     async function fetchMasterData(endpoint, idField, nameField, setOptionsState) {
@@ -376,9 +476,12 @@ export default function ApplicationDetails() {
   const activeStep = useMemo(() => getWizardActiveStepByPath(location.pathname, APPLICATION_WIZARD_STEPS), [location.pathname]);
 
   const updateField = (field, rawValue) => {
-    const nextValue = ['loanAmount', 'loanTenureMonths', 'coApplicantsCount', 'distanceFromBranchKm', 'roi'].includes(field)
-      ? (rawValue === '' ? '' : Number(rawValue))
-      : rawValue;
+    let nextValue = rawValue;
+    if (field === 'loanAmount') {
+      nextValue = formatIndianAmount(rawValue);
+    } else if (['loanTenureMonths', 'coApplicantsCount', 'distanceFromBranchKm', 'roi'].includes(field)) {
+      nextValue = rawValue === '' ? '' : Number(rawValue);
+    }
 
     const updates = { [field]: nextValue };
 
@@ -424,41 +527,76 @@ export default function ApplicationDetails() {
         ? `${baseUrl}/ApplicationProductDetails/${appData.applicationProductDetailsId}` 
         : `${baseUrl}/ApplicationProductDetails`;
       
-      let agentId = appData.agentId;
-      if (!agentId) {
-        try {
-          const agentRes = await fetch(`${baseUrl}/AgentMaster`);
-          if (agentRes.ok) {
-            const agents = await agentRes.json();
-            if (agents && agents.length > 0) {
-              agentId = agents[0].agentId || agents[0].AgentId;
-            }
-          }
-        } catch (e) {
-          console.error("Failed to fetch default agent:", e);
+      const isRmDirect = Boolean(
+        sourcingInfo.isRmSourced ||
+        displayRecord?.isRmSourced ||
+        (displayRecord?.agentId === null && displayRecord?.rmId) ||
+        (appData.agentId === null && appData.rmId)
+      );
+
+      let payload;
+      if (isRmDirect) {
+        const rmId = Number(sourcingInfo.rmId || displayRecord?.rmId || appData.rmId || displayRecord?.createdBy || 0);
+        const rmCustomerId = Number(sourcingInfo.rmCustomerId || displayRecord?.rmCustomerId || appData.rmCustomerId || appId);
+
+        payload = {
+          RmId: rmId,
+          RmCustomerId: rmCustomerId,
+          AgentId: null,
+          SourcingChannelId: Number(appData.sourcingChannel) || 1,
+          LoanProductId: Number(appData.loanProduct) || 0,
+          LoanProductVariationId: appData.loanVariation ? Number(appData.loanVariation) : null,
+          LoanTransactionTypeId: Number(appData.loanTransactionType) || 0,
+          LoanPurposeId: Number(appData.purposeOfLoan) || 0,
+          LoanAmount: parseAmountToNumber(appData.loanAmount),
+          LoanTenure: Number(appData.loanTenureMonths) || 0,
+          InterestTypeId: Number(appData.interestType) || 0,
+          ROI: appData.roi !== null && appData.roi !== '' ? Number(appData.roi) : null,
+          DistanceFromBranch: appData.distanceFromBranchKm !== null && appData.distanceFromBranchKm !== '' ? Number(appData.distanceFromBranchKm) : null,
+          NoOfCoApplicants: appData.coApplicantsCount !== null && appData.coApplicantsCount !== '' ? Number(appData.coApplicantsCount) : null,
+          CreatedBy: rmId || 1
+        };
+
+        if (isUpdate) {
+          payload.ApplicationProductDetailsId = appData.applicationProductDetailsId;
         }
-      }
-      agentId = agentId || 1;
+      } else {
+        let agentId = appData.agentId;
+        if (!agentId) {
+          try {
+            const agentRes = await fetch(`${baseUrl}/AgentMaster`);
+            if (agentRes.ok) {
+              const agents = await agentRes.json();
+              if (agents && agents.length > 0) {
+                agentId = agents[0].agentId || agents[0].AgentId;
+              }
+            }
+          } catch (e) {
+            console.error("Failed to fetch default agent:", e);
+          }
+        }
+        agentId = agentId || 1;
 
-      const payload = {
-        AgentCustomerId: Number(appId),
-        AgentId: agentId,
-        SourcingChannelId: Number(appData.sourcingChannel) || 0,
-        LoanProductId: Number(appData.loanProduct) || 0,
-        LoanProductVariationId: appData.loanVariation ? Number(appData.loanVariation) : null,
-        LoanTransactionTypeId: Number(appData.loanTransactionType) || 0,
-        LoanPurposeId: Number(appData.purposeOfLoan) || 0,
-        LoanAmount: Number(appData.loanAmount) || 0,
-        LoanTenure: Number(appData.loanTenureMonths) || 0,
-        InterestTypeId: Number(appData.interestType) || 0,
-        ROI: appData.roi !== null && appData.roi !== '' ? Number(appData.roi) : null,
-        DistanceFromBranch: appData.distanceFromBranchKm !== null && appData.distanceFromBranchKm !== '' ? Number(appData.distanceFromBranchKm) : null,
-        NoOfCoApplicants: appData.coApplicantsCount !== null && appData.coApplicantsCount !== '' ? Number(appData.coApplicantsCount) : null,
-        CreatedBy: 1
-      };
+        payload = {
+          AgentCustomerId: Number(appId),
+          AgentId: agentId,
+          SourcingChannelId: Number(appData.sourcingChannel) || 0,
+          LoanProductId: Number(appData.loanProduct) || 0,
+          LoanProductVariationId: appData.loanVariation ? Number(appData.loanVariation) : null,
+          LoanTransactionTypeId: Number(appData.loanTransactionType) || 0,
+          LoanPurposeId: Number(appData.purposeOfLoan) || 0,
+          LoanAmount: parseAmountToNumber(appData.loanAmount),
+          LoanTenure: Number(appData.loanTenureMonths) || 0,
+          InterestTypeId: Number(appData.interestType) || 0,
+          ROI: appData.roi !== null && appData.roi !== '' ? Number(appData.roi) : null,
+          DistanceFromBranch: appData.distanceFromBranchKm !== null && appData.distanceFromBranchKm !== '' ? Number(appData.distanceFromBranchKm) : null,
+          NoOfCoApplicants: appData.coApplicantsCount !== null && appData.coApplicantsCount !== '' ? Number(appData.coApplicantsCount) : null,
+          CreatedBy: 1
+        };
 
-      if (isUpdate) {
-        payload.ApplicationProductDetailsId = appData.applicationProductDetailsId;
+        if (isUpdate) {
+          payload.ApplicationProductDetailsId = appData.applicationProductDetailsId;
+        }
       }
 
       console.log('Sending payload to backend:', payload);
@@ -528,8 +666,18 @@ export default function ApplicationDetails() {
   const submittedTime = formatDateTime(appData.createdDate || displayRecord?.createdAt || displayRecord?.createdDate || '');
   const applicationDisplayId = appData.applicationNumber || buildApplicationDisplayId(displayRecord || appData, appId) || appId;
   const statusText = appData.status || displayRecord?.status || 'New';
-  const sourcingAgentName = agentInfo.name || appData.agentName || displayRecord?.agentName || displayRecord?.AgentName || '';
-  const sourcingAgentCode = agentInfo.code || appData.agentCode || displayRecord?.agentCode || displayRecord?.AgentCode || displayRecord?.agentId || displayRecord?.AgentId || '';
+  const isRmSourced = Boolean(
+    sourcingInfo.isRmSourced ||
+    displayRecord?.isRmSourced ||
+    ((displayRecord?.agentId === null || displayRecord?.agentId === undefined) && (displayRecord?.rmId || displayRecord?.createdBy)) ||
+    ((appData.agentId === null || appData.agentId === undefined) && (appData.rmId || appData.createdBy))
+  );
+  const sourcingDisplayName = isRmSourced
+    ? (sourcingInfo.name || appData.agentName || displayRecord?.rmName || displayRecord?.RMName || '')
+    : (agentInfo.name || appData.agentName || displayRecord?.agentName || displayRecord?.AgentName || '');
+  const sourcingDisplayCode = isRmSourced
+    ? (sourcingInfo.code || appData.agentCode || displayRecord?.rmCode || displayRecord?.RMCode || (displayRecord?.rmId ? String(displayRecord.rmId) : '') || (appData.rmId ? String(appData.rmId) : ''))
+    : (agentInfo.code || appData.agentCode || displayRecord?.agentCode || displayRecord?.AgentCode || (displayRecord?.agentId ? String(displayRecord.agentId) : '') || (appData.agentId ? String(appData.agentId) : ''));
 
   return (
     <div className="page-container ad-page-root compact-mode">
@@ -613,15 +761,25 @@ export default function ApplicationDetails() {
                 <div className="compact-field sourcing-field">
                   <label className="compact-label">Sourcing Channel</label>
                   <div className="compact-input-wrapper">
-                    <Select
-                      error={!!errors.sourcingChannel}
-                      value={appData.sourcingChannel || ''}
-                      onChange={(val) => updateField('sourcingChannel', val)}
-                      placeholder={isLoadingMasters ? "Loading..." : "Select sourcing channel"}
-                      options={sourcingChannelOptions}
-                      icon={<UserCheck size={16} />}
-                      disabled={isLoadingMasters || Boolean(displayRecord?.agentId || displayRecord?.AgentId || appData.isAgentSourced)}
-                    />
+                    {isRmSourced ? (
+                      <input
+                        className="compact-input"
+                        value="Direct RM"
+                        readOnly
+                        aria-readonly="true"
+                        style={{ fontWeight: 600, color: '#1A7A3C' }}
+                      />
+                    ) : (
+                      <Select
+                        error={!!errors.sourcingChannel}
+                        value={appData.sourcingChannel || ''}
+                        onChange={(val) => updateField('sourcingChannel', val)}
+                        placeholder={isLoadingMasters ? "Loading..." : "Select sourcing channel"}
+                        options={sourcingChannelOptions}
+                        icon={<UserCheck size={16} />}
+                        disabled={isLoadingMasters || Boolean(displayRecord?.agentId || displayRecord?.AgentId || appData.isAgentSourced)}
+                      />
+                    )}
                   </div>
                   {errors.sourcingChannel && <span className="ad-field-error">{errors.sourcingChannel}</span>}
                 </div>
@@ -630,10 +788,10 @@ export default function ApplicationDetails() {
                   <div className="compact-input-wrapper">
                     <input
                       className="compact-input"
-                      value={sourcingAgentName}
+                      value={sourcingDisplayName}
                       readOnly
                       aria-readonly="true"
-                      placeholder="Agent name"
+                      placeholder={isRmSourced ? "RM name" : "Agent name"}
                     />
                   </div>
                 </div>
@@ -642,10 +800,10 @@ export default function ApplicationDetails() {
                   <div className="compact-input-wrapper">
                     <input
                       className="compact-input"
-                      value={sourcingAgentCode}
+                      value={sourcingDisplayCode}
                       readOnly
                       aria-readonly="true"
-                      placeholder="Agent code"
+                      placeholder={isRmSourced ? "RM code" : "Agent code"}
                     />
                   </div>
                 </div>
@@ -711,11 +869,9 @@ export default function ApplicationDetails() {
                     </span>
                     <input
                       className={`form-input compact-input compact-input--with-icon ${errors.loanAmount ? 'ad-input--invalid' : ''}`}
-                      type="number"
-                      min="1"
-                      step="1"
+                      type="text"
                       inputMode="numeric"
-                      value={appData.loanAmount ?? ''}
+                      value={formatIndianAmount(appData.loanAmount ?? '')}
                       onChange={(event) => updateField('loanAmount', event.target.value)}
                       placeholder="0"
                     />

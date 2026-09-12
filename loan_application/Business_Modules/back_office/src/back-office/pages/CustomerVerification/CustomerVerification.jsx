@@ -18,7 +18,7 @@
  * - Step 09: Legal Opinion (File upload dropzone with <= 150 MB validation, View, Download, Remove).
  * - Step 10: Technical Value (File upload dropzone with <= 150 MB validation, View, Download, Remove).
  * - Step 11: CIBIL Check (Preserved Credit Bureau verification simulation + Manual CIBIL PAN Upload).
- * - Step 12: PD Verification (Personal Discussion call type selector: Video Call / Tele Call / Audio Call).
+ * - Step 12: PD Verification (Personal Discussion mode selector from dynamic PDVerificationTypeMaster).
  * - Step 13: Eligibility Calculation (Preserved live FOIR calculation, recalculate, Approve/Not Approve modal).
  * - Step 14: Eligibility Fit (Underwriting Fit selector: Fit / Conditional Fit / Not Fit).
  * - Step 15: Recommendation Sheet (Credit underwriter recommendation placeholder).
@@ -653,34 +653,128 @@ export default function CustomerVerification() {
 
   // 6. Upload States for Steps 9 & 10 (Legal Opinion & Technical Value, Max 150MB)
   const [legalOpinion, setLegalOpinion] = useState({
+    backOfficeApplicationDocumentId: null,
+    documentType: 'LEGAL_OPINION',
+    documentTitle: 'Legal Opinion Report',
     file: null,
     fileName: '',
     fileSize: '',
     fileUrl: null,
     isPdf: false,
+    isImage: false,
+    uploadedAt: '',
+    modifiedAt: '',
+    modifiedBy: null,
+    documentStatus: '',
+    remarks: '',
+    loading: false,
+    savingRemarks: false,
     error: null,
+    successMsg: '',
   });
 
   const [technicalValue, setTechnicalValue] = useState({
+    backOfficeApplicationDocumentId: null,
+    documentType: 'TECHNICAL_VALUATION',
+    documentTitle: 'Technical Valuation Report',
     file: null,
     fileName: '',
     fileSize: '',
     fileUrl: null,
     isPdf: false,
+    isImage: false,
+    uploadedAt: '',
+    modifiedAt: '',
+    modifiedBy: null,
+    documentStatus: '',
+    remarks: '',
+    loading: false,
+    savingRemarks: false,
     error: null,
+    successMsg: '',
   });
 
   // 7. Manual CIBIL PAN Upload State for Step 11
   const [manualCibilPan, setManualCibilPan] = useState({
+    backOfficeApplicationDocumentId: null,
+    documentType: 'MANUAL_CIBIL_PAN',
+    documentTitle: 'Manual CIBIL PAN Card',
     file: null,
     fileName: '',
     fileSize: '',
     fileUrl: null,
+    isPdf: false,
+    isImage: false,
+    uploadedAt: '',
+    modifiedAt: '',
+    modifiedBy: null,
+    documentStatus: '',
+    remarks: '',
+    loading: false,
+    savingRemarks: false,
     error: null,
+    successMsg: '',
   });
 
-  // 8. PD Verification Call Type State for Step 12
-  const [pdCallType, setPdCallType] = useState('Video Call');
+  // 7b. Step Remarks Confirmation Modal State (Steps 09, 10, 11)
+  const [saveRemarksModal, setSaveRemarksModal] = useState({
+    open: false,
+    stepType: null,
+    stepLabel: '',
+    docId: null,
+    remarks: '',
+    setter: null,
+  });
+
+  // 8. PD Verification Master State for Step 12
+  const [pdVerificationTypes, setPdVerificationTypes] = useState([]);
+  const [pdVerificationTypesLoading, setPdVerificationTypesLoading] = useState(false);
+  const [pdVerificationTypesError, setPdVerificationTypesError] = useState(null);
+  const [selectedPdTypeId, setSelectedPdTypeId] = useState('');
+
+  const fetchPdVerificationTypes = useCallback(async () => {
+    setPdVerificationTypesLoading(true);
+    setPdVerificationTypesError(null);
+    try {
+      const res = await backOfficeService.getPDVerificationTypes();
+      const list = Array.isArray(res) ? res : (res?.data || res?.value || []);
+      setPdVerificationTypes(list);
+    } catch (err) {
+      console.error('Failed to load PD verification types:', err);
+      setPdVerificationTypesError('Failed to load PD verification modes. Please try again.');
+    } finally {
+      setPdVerificationTypesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeStep === 12) {
+      fetchPdVerificationTypes();
+    }
+  }, [activeStep, fetchPdVerificationTypes]);
+
+  const activePdVerificationTypes = useMemo(() => {
+    return (pdVerificationTypes || []).filter((item) => item.isActive === true);
+  }, [pdVerificationTypes]);
+
+  useEffect(() => {
+    if (activePdVerificationTypes.length > 0) {
+      const exists = activePdVerificationTypes.some(
+        (item) => String(item.pdVerificationTypeId) === String(selectedPdTypeId)
+      );
+      if (!exists) {
+        setSelectedPdTypeId(activePdVerificationTypes[0].pdVerificationTypeId);
+      }
+    }
+  }, [activePdVerificationTypes, selectedPdTypeId]);
+
+  const selectedPdType = useMemo(() => {
+    return (
+      activePdVerificationTypes.find(
+        (item) => String(item.pdVerificationTypeId) === String(selectedPdTypeId)
+      ) || null
+    );
+  }, [activePdVerificationTypes, selectedPdTypeId]);
 
   // 9. Eligibility Fit State for Step 14
   const [eligibilityFit, setEligibilityFit] = useState('Fit');
@@ -966,6 +1060,85 @@ export default function CustomerVerification() {
       fetchApplicationRejections();
     }
   }, [verificationData, fetchApplicationRejections]);
+
+  // Hydrate Back Office application documents (Steps 09, 10, 11)
+  const fetchBackOfficeDocuments = useCallback(async () => {
+    const appProdId =
+      verificationData?.application?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId;
+
+    if (!appProdId) return;
+
+    try {
+      const res = await backOfficeService.getApplicationDocuments(appProdId);
+      const list = Array.isArray(res) ? res : (res?.value || res?.data || []);
+      const activeDocs = list.filter((d) => d && d.isActive !== false);
+
+      const legalDoc = activeDocs.find((d) => d.documentType === 'LEGAL_OPINION');
+      if (legalDoc) {
+        setLegalOpinion((prev) => ({
+          ...prev,
+          backOfficeApplicationDocumentId: legalDoc.backOfficeApplicationDocumentId,
+          documentType: legalDoc.documentType,
+          documentTitle: legalDoc.documentTitle || 'Legal Opinion Report',
+          fileName: legalDoc.originalFileName || legalDoc.documentTitle || 'Legal Opinion Document',
+          fileSize: formatFileSize(legalDoc.fileSize),
+          uploadedAt: legalDoc.uploadedAt,
+          modifiedAt: legalDoc.modifiedAt || '',
+          modifiedBy: legalDoc.modifiedBy || null,
+          documentStatus: legalDoc.documentStatus || 'Uploaded',
+          remarks: legalDoc.remarks || '',
+          error: null,
+        }));
+      }
+
+      const techDoc = activeDocs.find((d) => d.documentType === 'TECHNICAL_VALUATION');
+      if (techDoc) {
+        setTechnicalValue((prev) => ({
+          ...prev,
+          backOfficeApplicationDocumentId: techDoc.backOfficeApplicationDocumentId,
+          documentType: techDoc.documentType,
+          documentTitle: techDoc.documentTitle || 'Technical Valuation Report',
+          fileName: techDoc.originalFileName || techDoc.documentTitle || 'Technical Valuation Document',
+          fileSize: formatFileSize(techDoc.fileSize),
+          uploadedAt: techDoc.uploadedAt,
+          modifiedAt: techDoc.modifiedAt || '',
+          modifiedBy: techDoc.modifiedBy || null,
+          documentStatus: techDoc.documentStatus || 'Uploaded',
+          remarks: techDoc.remarks || '',
+          error: null,
+        }));
+      }
+
+      const cibilDoc = activeDocs.find((d) => d.documentType === 'MANUAL_CIBIL_PAN' || d.documentType === 'CIBIL_REPORT');
+      if (cibilDoc) {
+        setManualCibilPan((prev) => ({
+          ...prev,
+          backOfficeApplicationDocumentId: cibilDoc.backOfficeApplicationDocumentId,
+          documentType: cibilDoc.documentType,
+          documentTitle: cibilDoc.documentTitle || 'Manual CIBIL PAN Card',
+          fileName: cibilDoc.originalFileName || cibilDoc.documentTitle || 'Manual CIBIL PAN Document',
+          fileSize: formatFileSize(cibilDoc.fileSize),
+          uploadedAt: cibilDoc.uploadedAt,
+          modifiedAt: cibilDoc.modifiedAt || '',
+          modifiedBy: cibilDoc.modifiedBy || null,
+          documentStatus: cibilDoc.documentStatus || 'Uploaded',
+          remarks: cibilDoc.remarks || '',
+          error: null,
+        }));
+      }
+    } catch (err) {
+      console.warn('[CustomerVerification] Failed to fetch Back Office documents:', err?.message);
+    }
+  }, [verificationData]);
+
+  useEffect(() => {
+    if (verificationData) {
+      fetchBackOfficeDocuments();
+    }
+  }, [verificationData, fetchBackOfficeDocuments]);
 
   const getActiveRejectionForApplicant = useCallback(
     (stepNum) => {
@@ -1742,34 +1915,350 @@ export default function CustomerVerification() {
     }
   };
 
-  // File Upload Handlers (Steps 9 & 10)
-  const handleFileUpload = (e, setter, label) => {
+  // ── Back Office Document Handlers (Steps 09, 10, 11) ───────────────────────
+  const handleUploadOrReplaceDocument = async (e, stepType, currentState, setter) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (file.size > 150 * 1024 * 1024) {
-      setter({
-        file: null,
-        fileName: '',
-        fileSize: '',
-        fileUrl: null,
-        isPdf: false,
-        error: `File size (${formatFileSize(file.size)}) exceeds the maximum 150 MB limit for ${label}.`,
-      });
+      setter((prev) => ({
+        ...prev,
+        error: `File size (${formatFileSize(file.size)}) exceeds the maximum 150 MB limit.`,
+      }));
+      e.target.value = '';
       return;
     }
 
-    const fileUrl = window.URL.createObjectURL(file);
-    blobUrlsRef.current.push(fileUrl);
+    const allowedExts = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.webp'];
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!allowedExts.includes(ext)) {
+      setter((prev) => ({
+        ...prev,
+        error: `Invalid file format (${ext}). Supported formats: PDF, DOC, DOCX, JPG, PNG, WEBP.`,
+      }));
+      e.target.value = '';
+      return;
+    }
 
-    setter({
-      file,
-      fileName: file.name,
-      fileSize: formatFileSize(file.size),
-      fileUrl,
-      isPdf: /\.pdf$/i.test(file.name),
-      error: null,
+    const appProdId =
+      verificationData?.application?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId;
+
+    if (!appProdId) {
+      setter((prev) => ({
+        ...prev,
+        error: 'Application Product Details ID is missing. Cannot upload document.',
+      }));
+      e.target.value = '';
+      return;
+    }
+
+    const boAuth = getBackOfficeAuth();
+    const backOfficeId = Number(
+      boAuth?.id ||
+      boAuth?.backOfficeId ||
+      localStorage.getItem('backOfficeId')
+    );
+
+    if (!backOfficeId || Number.isNaN(backOfficeId)) {
+      setter((prev) => ({
+        ...prev,
+        error: 'Unable to determine Back Office user. Please login again.',
+      }));
+      e.target.value = '';
+      return;
+    }
+
+    const rmId = Number(
+      verificationData?.customer?.rmId ||
+      verificationData?.application?.rmId ||
+      verificationData?.raw?.customer?.rmId ||
+      20
+    );
+
+    let docType = 'LEGAL_OPINION';
+    let docTitle = 'Legal Opinion Report';
+    if (stepType === 'TECHNICAL_VALUATION') {
+      docType = 'TECHNICAL_VALUATION';
+      docTitle = 'Technical Valuation Report';
+    } else if (stepType === 'MANUAL_CIBIL_PAN' || stepType === 'CIBIL_REPORT') {
+      docType = 'CIBIL_REPORT';
+      docTitle = 'Manual CIBIL PAN Card';
+    }
+
+    setter((prev) => ({ ...prev, loading: true, error: null }));
+
+    try {
+      const formData = new FormData();
+      formData.append('File', file);
+      formData.append('DocumentType', docType);
+      formData.append('DocumentTitle', docTitle);
+
+      const isReplace = Boolean(currentState?.backOfficeApplicationDocumentId);
+
+      if (isReplace) {
+        formData.append('ApplicationProductDetailsId', String(appProdId));
+        formData.append('BackOfficeId', String(backOfficeId));
+        formData.append('RmId', String(rmId));
+        formData.append('ModifiedBy', String(backOfficeId));
+        if (currentState?.remarks) {
+          formData.append('Remarks', currentState.remarks);
+        } else {
+          formData.append('Remarks', `Replaced ${docTitle}`);
+        }
+
+        const result = await backOfficeService.replaceApplicationDocument(
+          currentState.backOfficeApplicationDocumentId,
+          formData
+        );
+
+        if (currentState.fileUrl) {
+          try {
+            URL.revokeObjectURL(currentState.fileUrl);
+          } catch {}
+        }
+
+        setter((prev) => ({
+          ...prev,
+          backOfficeApplicationDocumentId: result?.backOfficeApplicationDocumentId || currentState.backOfficeApplicationDocumentId,
+          documentType: result?.documentType || docType,
+          documentTitle: result?.documentTitle || docTitle,
+          fileName: result?.originalFileName || file.name,
+          fileSize: formatFileSize(result?.fileSize || file.size),
+          uploadedAt: result?.uploadedAt || currentState.uploadedAt || new Date().toISOString(),
+          modifiedAt: result?.modifiedAt || new Date().toISOString(),
+          modifiedBy: result?.modifiedBy || backOfficeId,
+          documentStatus: result?.documentStatus || 'Uploaded',
+          remarks: result?.remarks !== undefined ? result.remarks : (currentState?.remarks || ''),
+          fileUrl: null,
+          loading: false,
+          error: null,
+          successMsg: 'Document replaced successfully',
+        }));
+
+        fetchBackOfficeDocuments();
+      } else {
+        formData.append('ApplicationProductDetailsId', String(appProdId));
+        formData.append('BackOfficeId', String(backOfficeId));
+        formData.append('RmId', String(rmId));
+        formData.append('Remarks', `Uploaded ${docTitle}`);
+        formData.append('UploadedBy', String(backOfficeId));
+
+        const result = await backOfficeService.uploadApplicationDocument(formData);
+
+        setter({
+          backOfficeApplicationDocumentId: result?.backOfficeApplicationDocumentId,
+          documentType: docType,
+          documentTitle: result?.documentTitle || docTitle,
+          fileName: result?.originalFileName || file.name,
+          fileSize: formatFileSize(result?.fileSize || file.size),
+          uploadedAt: result?.uploadedAt || new Date().toISOString(),
+          documentStatus: result?.documentStatus || 'Uploaded',
+          fileUrl: null,
+          loading: false,
+          error: null,
+        });
+      }
+    } catch (err) {
+      console.error(`Error uploading/replacing ${docTitle}:`, err);
+      setter((prev) => ({
+        ...prev,
+        loading: false,
+        error: err?.response?.data?.message || err?.message || `Failed to upload ${docTitle}. Please try again.`,
+      }));
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleViewBackOfficeDocument = async (docState, setter) => {
+    if (!docState?.backOfficeApplicationDocumentId) {
+      if (docState?.fileUrl) {
+        window.open(docState.fileUrl, '_blank');
+      }
+      return;
+    }
+
+    try {
+      setter((prev) => ({ ...prev, loading: true, error: null }));
+      const response = await backOfficeService.downloadApplicationDocument(
+        docState.backOfficeApplicationDocumentId
+      );
+      const blob = response?.data || response;
+
+      let mimeType = blob.type || 'application/octet-stream';
+      const isPdf = /\.pdf$/i.test(docState.fileName) || mimeType === 'application/pdf';
+      const isImage = /\.(jpg|jpeg|png|webp|gif|bmp)$/i.test(docState.fileName) || mimeType.startsWith('image/');
+
+      if (isPdf) mimeType = 'application/pdf';
+      else if (/\.(jpg|jpeg)$/i.test(docState.fileName)) mimeType = 'image/jpeg';
+      else if (/\.png$/i.test(docState.fileName)) mimeType = 'image/png';
+      else if (/\.webp$/i.test(docState.fileName)) mimeType = 'image/webp';
+
+      const typedBlob = new Blob([blob], { type: mimeType });
+      const objectUrl = window.URL.createObjectURL(typedBlob);
+      blobUrlsRef.current.push(objectUrl);
+
+      if (isPdf || isImage) {
+        window.open(objectUrl, '_blank');
+      } else {
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = docState.fileName || 'document';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+
+      setter((prev) => ({ ...prev, loading: false, fileUrl: objectUrl }));
+    } catch (err) {
+      console.error('Failed to view document:', err);
+      setter((prev) => ({
+        ...prev,
+        loading: false,
+        error: err?.message || 'Failed to fetch document for preview.',
+      }));
+    }
+  };
+
+  const handleDownloadBackOfficeDocument = async (docState, setter) => {
+    if (!docState?.backOfficeApplicationDocumentId) {
+      if (docState?.fileUrl) {
+        handleDownloadFile(docState.fileUrl, docState.fileName);
+      }
+      return;
+    }
+
+    try {
+      setter((prev) => ({ ...prev, loading: true, error: null }));
+      const response = await backOfficeService.downloadApplicationDocument(
+        docState.backOfficeApplicationDocumentId
+      );
+      const blob = response?.data || response;
+
+      const objectUrl = window.URL.createObjectURL(blob);
+      blobUrlsRef.current.push(objectUrl);
+
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = docState.fileName || 'document';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      setter((prev) => ({ ...prev, loading: false }));
+    } catch (err) {
+      console.error('Failed to download document:', err);
+      setter((prev) => ({
+        ...prev,
+        loading: false,
+        error: err?.message || 'Failed to download document.',
+      }));
+    }
+  };
+
+  const handleOpenSaveRemarksConfirm = (stepType, stepLabel, docState, setter) => {
+    if (!docState?.backOfficeApplicationDocumentId) {
+      setter((prev) => ({
+        ...prev,
+        error: 'Please upload a document first before saving remarks.',
+      }));
+      return;
+    }
+
+    const trimmed = (docState.remarks || '').trim();
+    if (!trimmed) {
+      setter((prev) => ({
+        ...prev,
+        error: 'Please enter remarks before saving.',
+      }));
+      return;
+    }
+
+    setter((prev) => ({ ...prev, error: null, successMsg: '' }));
+    setSaveRemarksModal({
+      open: true,
+      stepType,
+      stepLabel,
+      docId: docState.backOfficeApplicationDocumentId,
+      remarks: trimmed,
+      setter,
     });
+  };
+
+  const handleCancelSaveRemarks = () => {
+    setSaveRemarksModal({
+      open: false,
+      stepType: null,
+      stepLabel: '',
+      docId: null,
+      remarks: '',
+      setter: null,
+    });
+  };
+
+  const handleConfirmSaveRemarks = async () => {
+    const { docId, remarks, stepLabel, setter } = saveRemarksModal;
+    setSaveRemarksModal({
+      open: false,
+      stepType: null,
+      stepLabel: '',
+      docId: null,
+      remarks: '',
+      setter: null,
+    });
+
+    if (!docId || !setter) return;
+
+    const boAuth = getBackOfficeAuth();
+    const backOfficeId = Number(
+      boAuth?.id ||
+      boAuth?.backOfficeId ||
+      localStorage.getItem('backOfficeId')
+    );
+
+    if (!backOfficeId || Number.isNaN(backOfficeId)) {
+      setter((prev) => ({
+        ...prev,
+        error: 'Unable to determine Back Office user. Please login again.',
+      }));
+      return;
+    }
+
+    setter((prev) => ({ ...prev, savingRemarks: true, error: null, successMsg: '' }));
+
+    try {
+      const payload = {
+        remarks,
+        documentStatus: 'Saved',
+        modifiedBy: backOfficeId,
+      };
+
+      const result = await backOfficeService.updateApplicationDocumentMetadata(docId, payload);
+
+      setter((prev) => ({
+        ...prev,
+        documentStatus: result?.documentStatus || 'Saved',
+        remarks: result?.remarks || remarks,
+        modifiedBy: result?.modifiedBy || backOfficeId,
+        modifiedAt: result?.modifiedAt || new Date().toISOString(),
+        savingRemarks: false,
+        error: null,
+        successMsg: 'Saved successfully',
+      }));
+
+      // Background re-sync to ensure exact server state
+      fetchBackOfficeDocuments();
+    } catch (err) {
+      console.error(`Failed to save remarks for ${stepLabel}:`, err);
+      setter((prev) => ({
+        ...prev,
+        savingRemarks: false,
+        error: err?.response?.data?.message || err?.message || 'Failed to save remarks. Please try again.',
+      }));
+    }
   };
 
   const handleRemoveUploadedFile = (state, setter) => {
@@ -1779,12 +2268,24 @@ export default function CustomerVerification() {
       } catch {}
     }
     setter({
+      backOfficeApplicationDocumentId: null,
+      documentType: state.documentType || '',
+      documentTitle: state.documentTitle || '',
       file: null,
       fileName: '',
       fileSize: '',
       fileUrl: null,
       isPdf: false,
+      isImage: false,
+      uploadedAt: '',
+      modifiedAt: '',
+      modifiedBy: null,
+      documentStatus: '',
+      remarks: '',
+      loading: false,
+      savingRemarks: false,
       error: null,
+      successMsg: '',
     });
   };
 
@@ -4274,14 +4775,15 @@ export default function CustomerVerification() {
               </div>
 
               <div className="bo-cv-upload-container">
-                {!legalOpinion.file ? (
+                {!legalOpinion.backOfficeApplicationDocumentId && !legalOpinion.file ? (
                   <div className="bo-cv-dropzone-box">
                     <input
                       type="file"
                       id="bo-cv-legal-upload"
                       className="bo-cv-file-input"
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                      onChange={(e) => handleFileUpload(e, setLegalOpinion, 'Legal Opinion')}
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                      onChange={(e) => handleUploadOrReplaceDocument(e, 'LEGAL_OPINION', legalOpinion, setLegalOpinion)}
+                      disabled={legalOpinion.loading}
                     />
                     <label htmlFor="bo-cv-legal-upload" className="bo-cv-dropzone-label">
                       <div className="bo-cv-dropzone-icon">
@@ -4291,53 +4793,105 @@ export default function CustomerVerification() {
                       <span className="bo-cv-dropzone-sub">
                         Drag and drop or browse file from your device &bull; Maximum file size 150 MB
                       </span>
-                      <span className="bo-cv-dropzone-types">Supported formats: PDF, DOC, DOCX, JPG, PNG</span>
+                      <span className="bo-cv-dropzone-types">Supported formats: PDF, DOC, DOCX, JPG, PNG, WEBP</span>
                     </label>
                   </div>
                 ) : (
-                  <div className="bo-cv-file-card">
-                    <div className="bo-cv-file-card-info">
-                      <div className="bo-cv-file-card-icon">
-                        {FileCheckIcon && <FileCheckIcon size={26} />}
+                  <>
+                    <div className="bo-cv-file-card">
+                      <div className="bo-cv-file-card-info">
+                        <div className="bo-cv-file-card-icon">
+                          {FileCheckIcon && <FileCheckIcon size={26} />}
+                        </div>
+                        <div className="bo-cv-file-card-details">
+                          <h4 className="bo-cv-file-name">{legalOpinion.fileName || legalOpinion.documentTitle || 'Legal Opinion Document'}</h4>
+                          <div className="bo-cv-file-meta-badges">
+                            {legalOpinion.fileSize && (
+                              <span className="bo-cv-file-size">Size: {legalOpinion.fileSize}</span>
+                            )}
+                            {legalOpinion.uploadedAt && (
+                              <span className="bo-cv-file-size">Uploaded: {new Date(legalOpinion.uploadedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                            )}
+                            <span className="bo-cv-file-status-badge">{legalOpinion.documentStatus || 'Uploaded'}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="bo-cv-file-name">{legalOpinion.fileName}</h4>
-                        <span className="bo-cv-file-size">File Size: {legalOpinion.fileSize}</span>
+                      <div className="bo-cv-file-card-actions">
+                        <button
+                          type="button"
+                          className="bo-btn bo-btn--outline bo-btn--sm"
+                          onClick={() => handleViewBackOfficeDocument(legalOpinion, setLegalOpinion)}
+                          disabled={legalOpinion.loading}
+                        >
+                          {ExternalLinkIcon && <ExternalLinkIcon size={13} />}
+                          <span>{legalOpinion.loading ? 'Loading...' : 'View'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="bo-btn bo-btn--outline bo-btn--sm"
+                          onClick={() => handleDownloadBackOfficeDocument(legalOpinion, setLegalOpinion)}
+                          disabled={legalOpinion.loading}
+                        >
+                          {DownloadIcon && <DownloadIcon size={13} />}
+                          <span>Download</span>
+                        </button>
+                        <input
+                          type="file"
+                          id="bo-cv-legal-replace"
+                          className="bo-cv-file-input"
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                          onChange={(e) => handleUploadOrReplaceDocument(e, 'LEGAL_OPINION', legalOpinion, setLegalOpinion)}
+                          disabled={legalOpinion.loading}
+                        />
+                        <label htmlFor="bo-cv-legal-replace" className="bo-btn bo-btn--outline-warning bo-btn--sm bo-btn--replace">
+                          {RefreshCwIcon && <RefreshCwIcon size={13} />}
+                          <span>Replace Document</span>
+                        </label>
                       </div>
                     </div>
-                    <div className="bo-cv-file-card-actions">
-                      {legalOpinion.fileUrl && (
-                        <>
+
+                    {legalOpinion.backOfficeApplicationDocumentId && (
+                      <div className="bo-cv-step-remarks-box">
+                        <label htmlFor="bo-cv-legal-remarks-input" className="bo-cv-step-remarks-label">
+                          Legal Opinion Remarks
+                        </label>
+                        <textarea
+                          id="bo-cv-legal-remarks-input"
+                          className="bo-cv-step-remarks-textarea"
+                          rows={3}
+                          placeholder="Enter Legal Opinion remarks..."
+                          value={legalOpinion.remarks || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setLegalOpinion((prev) => ({ ...prev, remarks: val, error: null, successMsg: '' }));
+                          }}
+                          disabled={legalOpinion.savingRemarks}
+                        />
+                        <div className="bo-cv-step-remarks-footer">
+                          {legalOpinion.successMsg && (
+                            <span className="bo-cv-step-remarks-success">
+                              ✓ {legalOpinion.successMsg}
+                            </span>
+                          )}
                           <button
                             type="button"
-                            className="bo-btn bo-btn--outline bo-btn--sm"
-                            onClick={() => window.open(legalOpinion.fileUrl, '_blank')}
+                            className="bo-btn bo-btn--primary bo-btn--sm bo-cv-btn-save-remarks"
+                            onClick={() => handleOpenSaveRemarksConfirm('LEGAL_OPINION', 'Legal Opinion', legalOpinion, setLegalOpinion)}
+                            disabled={legalOpinion.savingRemarks || !(legalOpinion.remarks || '').trim()}
                           >
-                            {ExternalLinkIcon && <ExternalLinkIcon size={13} />}
-                            <span>View Preview</span>
+                            {legalOpinion.savingRemarks ? 'Saving...' : 'Save'}
                           </button>
-                          <button
-                            type="button"
-                            className="bo-btn bo-btn--outline bo-btn--sm"
-                            onClick={() => handleDownloadFile(legalOpinion.fileUrl, legalOpinion.fileName)}
-                          >
-                            {DownloadIcon && <DownloadIcon size={13} />}
-                            <span>Download</span>
-                          </button>
-                        </>
-                      )}
-                      <button
-                        type="button"
-                        className="bo-btn bo-btn--outline-danger bo-btn--sm"
-                        onClick={() => handleRemoveUploadedFile(legalOpinion, setLegalOpinion)}
-                      >
-                        {XIcon && <XIcon size={13} />}
-                        <span>Remove / Replace</span>
-                      </button>
-                    </div>
-                  </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
 
+                {legalOpinion.loading && (
+                  <div className="bo-cv-feedback-alert is-info">
+                    Processing Legal Opinion document...
+                  </div>
+                )}
                 {legalOpinion.error && (
                   <div className="bo-cv-feedback-alert is-error">
                     {legalOpinion.error}
@@ -4366,14 +4920,15 @@ export default function CustomerVerification() {
               </div>
 
               <div className="bo-cv-upload-container">
-                {!technicalValue.file ? (
+                {!technicalValue.backOfficeApplicationDocumentId && !technicalValue.file ? (
                   <div className="bo-cv-dropzone-box">
                     <input
                       type="file"
                       id="bo-cv-tech-upload"
                       className="bo-cv-file-input"
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                      onChange={(e) => handleFileUpload(e, setTechnicalValue, 'Technical Value')}
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                      onChange={(e) => handleUploadOrReplaceDocument(e, 'TECHNICAL_VALUATION', technicalValue, setTechnicalValue)}
+                      disabled={technicalValue.loading}
                     />
                     <label htmlFor="bo-cv-tech-upload" className="bo-cv-dropzone-label">
                       <div className="bo-cv-dropzone-icon">
@@ -4383,53 +4938,105 @@ export default function CustomerVerification() {
                       <span className="bo-cv-dropzone-sub">
                         Drag and drop or browse file from your device &bull; Maximum file size 150 MB
                       </span>
-                      <span className="bo-cv-dropzone-types">Supported formats: PDF, DOC, DOCX, JPG, PNG</span>
+                      <span className="bo-cv-dropzone-types">Supported formats: PDF, DOC, DOCX, JPG, PNG, WEBP</span>
                     </label>
                   </div>
                 ) : (
-                  <div className="bo-cv-file-card">
-                    <div className="bo-cv-file-card-info">
-                      <div className="bo-cv-file-card-icon">
-                        {FileCheckIcon && <FileCheckIcon size={26} />}
+                  <>
+                    <div className="bo-cv-file-card">
+                      <div className="bo-cv-file-card-info">
+                        <div className="bo-cv-file-card-icon">
+                          {FileCheckIcon && <FileCheckIcon size={26} />}
+                        </div>
+                        <div className="bo-cv-file-card-details">
+                          <h4 className="bo-cv-file-name">{technicalValue.fileName || technicalValue.documentTitle || 'Technical Valuation Document'}</h4>
+                          <div className="bo-cv-file-meta-badges">
+                            {technicalValue.fileSize && (
+                              <span className="bo-cv-file-size">Size: {technicalValue.fileSize}</span>
+                            )}
+                            {technicalValue.uploadedAt && (
+                              <span className="bo-cv-file-size">Uploaded: {new Date(technicalValue.uploadedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                            )}
+                            <span className="bo-cv-file-status-badge">{technicalValue.documentStatus || 'Uploaded'}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="bo-cv-file-name">{technicalValue.fileName}</h4>
-                        <span className="bo-cv-file-size">File Size: {technicalValue.fileSize}</span>
+                      <div className="bo-cv-file-card-actions">
+                        <button
+                          type="button"
+                          className="bo-btn bo-btn--outline bo-btn--sm"
+                          onClick={() => handleViewBackOfficeDocument(technicalValue, setTechnicalValue)}
+                          disabled={technicalValue.loading}
+                        >
+                          {ExternalLinkIcon && <ExternalLinkIcon size={13} />}
+                          <span>{technicalValue.loading ? 'Loading...' : 'View'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="bo-btn bo-btn--outline bo-btn--sm"
+                          onClick={() => handleDownloadBackOfficeDocument(technicalValue, setTechnicalValue)}
+                          disabled={technicalValue.loading}
+                        >
+                          {DownloadIcon && <DownloadIcon size={13} />}
+                          <span>Download</span>
+                        </button>
+                        <input
+                          type="file"
+                          id="bo-cv-tech-replace"
+                          className="bo-cv-file-input"
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                          onChange={(e) => handleUploadOrReplaceDocument(e, 'TECHNICAL_VALUATION', technicalValue, setTechnicalValue)}
+                          disabled={technicalValue.loading}
+                        />
+                        <label htmlFor="bo-cv-tech-replace" className="bo-btn bo-btn--outline-warning bo-btn--sm bo-btn--replace">
+                          {RefreshCwIcon && <RefreshCwIcon size={13} />}
+                          <span>Replace Document</span>
+                        </label>
                       </div>
                     </div>
-                    <div className="bo-cv-file-card-actions">
-                      {technicalValue.fileUrl && (
-                        <>
+
+                    {technicalValue.backOfficeApplicationDocumentId && (
+                      <div className="bo-cv-step-remarks-box">
+                        <label htmlFor="bo-cv-tech-remarks-input" className="bo-cv-step-remarks-label">
+                          Technical Valuation Remarks
+                        </label>
+                        <textarea
+                          id="bo-cv-tech-remarks-input"
+                          className="bo-cv-step-remarks-textarea"
+                          rows={3}
+                          placeholder="Enter Technical Valuation remarks..."
+                          value={technicalValue.remarks || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setTechnicalValue((prev) => ({ ...prev, remarks: val, error: null, successMsg: '' }));
+                          }}
+                          disabled={technicalValue.savingRemarks}
+                        />
+                        <div className="bo-cv-step-remarks-footer">
+                          {technicalValue.successMsg && (
+                            <span className="bo-cv-step-remarks-success">
+                              ✓ {technicalValue.successMsg}
+                            </span>
+                          )}
                           <button
                             type="button"
-                            className="bo-btn bo-btn--outline bo-btn--sm"
-                            onClick={() => window.open(technicalValue.fileUrl, '_blank')}
+                            className="bo-btn bo-btn--primary bo-btn--sm bo-cv-btn-save-remarks"
+                            onClick={() => handleOpenSaveRemarksConfirm('TECHNICAL_VALUATION', 'Technical Valuation', technicalValue, setTechnicalValue)}
+                            disabled={technicalValue.savingRemarks || !(technicalValue.remarks || '').trim()}
                           >
-                            {ExternalLinkIcon && <ExternalLinkIcon size={13} />}
-                            <span>View Preview</span>
+                            {technicalValue.savingRemarks ? 'Saving...' : 'Save'}
                           </button>
-                          <button
-                            type="button"
-                            className="bo-btn bo-btn--outline bo-btn--sm"
-                            onClick={() => handleDownloadFile(technicalValue.fileUrl, technicalValue.fileName)}
-                          >
-                            {DownloadIcon && <DownloadIcon size={13} />}
-                            <span>Download</span>
-                          </button>
-                        </>
-                      )}
-                      <button
-                        type="button"
-                        className="bo-btn bo-btn--outline-danger bo-btn--sm"
-                        onClick={() => handleRemoveUploadedFile(technicalValue, setTechnicalValue)}
-                      >
-                        {XIcon && <XIcon size={13} />}
-                        <span>Remove / Replace</span>
-                      </button>
-                    </div>
-                  </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
 
+                {technicalValue.loading && (
+                  <div className="bo-cv-feedback-alert is-info">
+                    Processing Technical Valuation document...
+                  </div>
+                )}
                 {technicalValue.error && (
                   <div className="bo-cv-feedback-alert is-error">
                     {technicalValue.error}
@@ -4468,36 +5075,121 @@ export default function CustomerVerification() {
                   </div>
                 </div>
 
-                {!manualCibilPan.file ? (
+                {!manualCibilPan.backOfficeApplicationDocumentId && !manualCibilPan.file ? (
                   <div className="bo-cv-manual-pan-upload-row">
                     <input
                       type="file"
                       id="bo-cv-cibil-pan-file"
                       className="bo-cv-file-input"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={(e) => handleFileUpload(e, setManualCibilPan, 'Manual CIBIL PAN')}
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                      onChange={(e) => handleUploadOrReplaceDocument(e, 'MANUAL_CIBIL_PAN', manualCibilPan, setManualCibilPan)}
+                      disabled={manualCibilPan.loading}
                     />
                     <label htmlFor="bo-cv-cibil-pan-file" className="bo-cv-manual-pan-btn">
                       {FileTextIcon && <FileTextIcon size={14} />}
-                      <span>Select Manual PAN File</span>
+                      <span>{manualCibilPan.loading ? 'Uploading...' : 'Select Manual PAN File'}</span>
                     </label>
-                    <span className="bo-cv-manual-pan-hint">No file selected (Optional reference upload)</span>
+                    <span className="bo-cv-manual-pan-hint">No file uploaded (Optional reference upload &bull; Max 150 MB)</span>
                   </div>
                 ) : (
-                  <div className="bo-cv-manual-pan-selected-card">
-                    <div className="bo-cv-manual-pan-file-info">
-                      {FileCheckIcon && <FileCheckIcon size={18} />}
-                      <strong>{manualCibilPan.fileName}</strong>
-                      <span>({manualCibilPan.fileSize})</span>
+                  <>
+                    <div className="bo-cv-file-card bo-cv-manual-pan-card-wrapper">
+                      <div className="bo-cv-file-card-info">
+                        <div className="bo-cv-file-card-icon">
+                          {FileCheckIcon && <FileCheckIcon size={24} />}
+                        </div>
+                        <div className="bo-cv-file-card-details">
+                          <h4 className="bo-cv-file-name">{manualCibilPan.fileName || manualCibilPan.documentTitle || 'Manual CIBIL PAN Document'}</h4>
+                          <div className="bo-cv-file-meta-badges">
+                            {manualCibilPan.fileSize && (
+                              <span className="bo-cv-file-size">Size: {manualCibilPan.fileSize}</span>
+                            )}
+                            {manualCibilPan.uploadedAt && (
+                              <span className="bo-cv-file-size">Uploaded: {new Date(manualCibilPan.uploadedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                            )}
+                            <span className="bo-cv-file-status-badge">{manualCibilPan.documentStatus || 'Uploaded'}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bo-cv-file-card-actions">
+                        <button
+                          type="button"
+                          className="bo-btn bo-btn--outline bo-btn--sm"
+                          onClick={() => handleViewBackOfficeDocument(manualCibilPan, setManualCibilPan)}
+                          disabled={manualCibilPan.loading}
+                        >
+                          {ExternalLinkIcon && <ExternalLinkIcon size={13} />}
+                          <span>{manualCibilPan.loading ? 'Loading...' : 'View'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="bo-btn bo-btn--outline bo-btn--sm"
+                          onClick={() => handleDownloadBackOfficeDocument(manualCibilPan, setManualCibilPan)}
+                          disabled={manualCibilPan.loading}
+                        >
+                          {DownloadIcon && <DownloadIcon size={13} />}
+                          <span>Download</span>
+                        </button>
+                        <input
+                          type="file"
+                          id="bo-cv-cibil-pan-replace"
+                          className="bo-cv-file-input"
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                          onChange={(e) => handleUploadOrReplaceDocument(e, 'MANUAL_CIBIL_PAN', manualCibilPan, setManualCibilPan)}
+                          disabled={manualCibilPan.loading}
+                        />
+                        <label htmlFor="bo-cv-cibil-pan-replace" className="bo-btn bo-btn--outline-warning bo-btn--sm bo-btn--replace">
+                          {RefreshCwIcon && <RefreshCwIcon size={13} />}
+                          <span>Replace Document</span>
+                        </label>
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      className="bo-btn bo-btn--outline-danger bo-btn--sm"
-                      onClick={() => handleRemoveUploadedFile(manualCibilPan, setManualCibilPan)}
-                    >
-                      {XIcon && <XIcon size={12} />}
-                      <span>Remove</span>
-                    </button>
+
+                    {manualCibilPan.backOfficeApplicationDocumentId && (
+                      <div className="bo-cv-step-remarks-box" style={{ marginTop: '12px' }}>
+                        <label htmlFor="bo-cv-cibil-pan-remarks-input" className="bo-cv-step-remarks-label">
+                          Manual CIBIL PAN Remarks
+                        </label>
+                        <textarea
+                          id="bo-cv-cibil-pan-remarks-input"
+                          className="bo-cv-step-remarks-textarea"
+                          rows={3}
+                          placeholder="Enter Manual CIBIL PAN remarks..."
+                          value={manualCibilPan.remarks || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setManualCibilPan((prev) => ({ ...prev, remarks: val, error: null, successMsg: '' }));
+                          }}
+                          disabled={manualCibilPan.savingRemarks}
+                        />
+                        <div className="bo-cv-step-remarks-footer">
+                          {manualCibilPan.successMsg && (
+                            <span className="bo-cv-step-remarks-success">
+                              ✓ {manualCibilPan.successMsg}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            className="bo-btn bo-btn--primary bo-btn--sm bo-cv-btn-save-remarks"
+                            onClick={() => handleOpenSaveRemarksConfirm('MANUAL_CIBIL_PAN', 'Manual CIBIL PAN', manualCibilPan, setManualCibilPan)}
+                            disabled={manualCibilPan.savingRemarks || !(manualCibilPan.remarks || '').trim()}
+                          >
+                            {manualCibilPan.savingRemarks ? 'Saving...' : 'Save'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {manualCibilPan.loading && (
+                  <div className="bo-cv-feedback-alert is-info" style={{ marginTop: '0.75rem' }}>
+                    Processing Manual CIBIL PAN document...
+                  </div>
+                )}
+                {manualCibilPan.error && (
+                  <div className="bo-cv-feedback-alert is-error" style={{ marginTop: '0.75rem' }}>
+                    {manualCibilPan.error}
                   </div>
                 )}
               </div>
@@ -4931,25 +5623,41 @@ export default function CustomerVerification() {
                   <select
                     id="bo-cv-pd-type-select"
                     className="bo-cv-pd-dropdown"
-                    value={pdCallType}
-                    onChange={(e) => setPdCallType(e.target.value)}
+                    value={selectedPdTypeId || ''}
+                    onChange={(e) => setSelectedPdTypeId(Number(e.target.value) || e.target.value)}
+                    disabled={pdVerificationTypesLoading || activePdVerificationTypes.length === 0}
                   >
-                    <option value="Video Call">Video Call</option>
-                    <option value="Tele Call">Tele Call</option>
-                    <option value="Audio Call">Audio Call</option>
+                    {pdVerificationTypesLoading ? (
+                      <option value="">Loading verification modes...</option>
+                    ) : activePdVerificationTypes.length === 0 ? (
+                      <option value="">No active PD verification modes available</option>
+                    ) : (
+                      activePdVerificationTypes.map((item) => (
+                        <option key={item.pdVerificationTypeId} value={item.pdVerificationTypeId}>
+                          {item.pdVerificationTypeName}
+                        </option>
+                      ))
+                    )}
                   </select>
+                  {pdVerificationTypesError && (
+                    <div style={{ fontSize: '12px', color: '#dc2626', marginTop: '6px' }}>
+                      {pdVerificationTypesError}
+                    </div>
+                  )}
                 </div>
 
-                {/* PD Call Type Panels */}
-                {pdCallType === 'Video Call' && (
+                {/* Dynamic PD Verification Mode Panel */}
+                {selectedPdType && (
                   <div className="bo-cv-pd-result-panel">
                     <div className="bo-cv-pd-result-header">
                       <div className="bo-cv-pd-mode-icon">
                         {PhoneIcon && <PhoneIcon size={24} />}
                       </div>
                       <div>
-                        <h3>Video Call selected</h3>
-                        <p>Face-to-face biometric and identity verification session for applicant #{verificationData.customerId}.</p>
+                        <h3>{selectedPdType.pdVerificationTypeName} selected</h3>
+                        <p>
+                          Personal discussion verification session for applicant #{verificationData.customerId}.
+                        </p>
                       </div>
                     </div>
                     <div className="bo-cv-pd-details-grid">
@@ -4963,75 +5671,11 @@ export default function CustomerVerification() {
                       </div>
                       <div className="bo-cv-pd-detail-item">
                         <small>Session Type</small>
-                        <span className="bo-cv-pill-verified">Live Video Interaction</span>
+                        <span className="bo-cv-pill-verified">{selectedPdType.pdVerificationTypeName}</span>
                       </div>
                       <div className="bo-cv-pd-detail-item">
                         <small>Verification Status</small>
                         <span className="bo-cv-pill-fetching">Ready for Underwriter Connection</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {pdCallType === 'Tele Call' && (
-                  <div className="bo-cv-pd-result-panel">
-                    <div className="bo-cv-pd-result-header">
-                      <div className="bo-cv-pd-mode-icon">
-                        {PhoneIcon && <PhoneIcon size={24} />}
-                      </div>
-                      <div>
-                        <h3>Tele Call selected</h3>
-                        <p>Telephonic underwriting discussion and business profile inquiry.</p>
-                      </div>
-                    </div>
-                    <div className="bo-cv-pd-details-grid">
-                      <div className="bo-cv-pd-detail-item">
-                        <small>Applicant</small>
-                        <strong>{verificationData.customerName}</strong>
-                      </div>
-                      <div className="bo-cv-pd-detail-item">
-                        <small>Contact Mobile</small>
-                        <strong>{verificationData.personalInformation?.mobile ? `+91 ${verificationData.personalInformation.mobile}` : 'Available'}</strong>
-                      </div>
-                      <div className="bo-cv-pd-detail-item">
-                        <small>Session Type</small>
-                        <span className="bo-cv-pill-verified">Telephonic Inquiry</span>
-                      </div>
-                      <div className="bo-cv-pd-detail-item">
-                        <small>Verification Status</small>
-                        <span className="bo-cv-pill-fetching">Ready for Underwriter Call</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {pdCallType === 'Audio Call' && (
-                  <div className="bo-cv-pd-result-panel">
-                    <div className="bo-cv-pd-result-header">
-                      <div className="bo-cv-pd-mode-icon">
-                        {PhoneIcon && <PhoneIcon size={24} />}
-                      </div>
-                      <div>
-                        <h3>Audio Call selected</h3>
-                        <p>VoIP audio conference verification and recorded declaration discussion.</p>
-                      </div>
-                    </div>
-                    <div className="bo-cv-pd-details-grid">
-                      <div className="bo-cv-pd-detail-item">
-                        <small>Applicant</small>
-                        <strong>{verificationData.customerName}</strong>
-                      </div>
-                      <div className="bo-cv-pd-detail-item">
-                        <small>Contact Mobile</small>
-                        <strong>{verificationData.personalInformation?.mobile ? `+91 ${verificationData.personalInformation.mobile}` : 'Available'}</strong>
-                      </div>
-                      <div className="bo-cv-pd-detail-item">
-                        <small>Session Type</small>
-                        <span className="bo-cv-pill-verified">Recorded Audio Bridge</span>
-                      </div>
-                      <div className="bo-cv-pd-detail-item">
-                        <small>Verification Status</small>
-                        <span className="bo-cv-pill-fetching">Ready for Underwriter Audio Bridge</span>
                       </div>
                     </div>
                   </div>
@@ -5581,6 +6225,75 @@ export default function CustomerVerification() {
                 disabled={isSubmittingRejection}
               >
                 {isSubmittingRejection ? 'Rejecting...' : 'Yes, Reject'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Save Remarks Confirmation Modal ── */}
+      {saveRemarksModal.open && (
+        <div
+          className="bo-cv-confirm-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bo-cv-save-remarks-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              handleCancelSaveRemarks();
+            }
+          }}
+        >
+          <div className="bo-cv-confirm-modal-card">
+            <div className="bo-cv-confirm-modal-header">
+              <div className="bo-cv-confirm-modal-icon-badge" style={{ background: '#eaf5ee', color: '#0f7a4c' }}>
+                {CheckCircleIcon ? <CheckCircleIcon size={20} /> : <span>✓</span>}
+              </div>
+              <div className="bo-cv-confirm-modal-title-group">
+                <h3 id="bo-cv-save-remarks-modal-title" className="bo-cv-confirm-modal-title">
+                  Confirm Save Remarks
+                </h3>
+                <p className="bo-cv-confirm-modal-subtitle">
+                  {saveRemarksModal.stepLabel ? `${saveRemarksModal.stepLabel} Step Remarks` : 'Step Remarks'}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="bo-cv-confirm-modal-close"
+                onClick={handleCancelSaveRemarks}
+                aria-label="Close modal"
+              >
+                {XIcon ? <XIcon size={16} /> : <span>×</span>}
+              </button>
+            </div>
+
+            <div className="bo-cv-confirm-modal-body">
+              <p className="bo-cv-confirm-modal-question">
+                Are you sure you want to save these remarks?
+              </p>
+
+              <div className="bo-cv-confirm-remarks-block">
+                <span className="bo-cv-confirm-remarks-label">ENTERED REMARKS</span>
+                <div className="bo-cv-confirm-remarks-preview">
+                  {saveRemarksModal.remarks}
+                </div>
+              </div>
+            </div>
+
+            <div className="bo-cv-confirm-modal-footer">
+              <button
+                type="button"
+                className="bo-cv-confirm-btn-cancel"
+                onClick={handleCancelSaveRemarks}
+              >
+                No
+              </button>
+              <button
+                type="button"
+                className="bo-cv-btn-save-remarks"
+                onClick={handleConfirmSaveRemarks}
+              >
+                Yes, Save
               </button>
             </div>
           </div>
