@@ -50,6 +50,12 @@ const ROLE_ENDPOINT_MAP = {
   areaspecialist: 'AMSMaster',
   'area specialist': 'AMSMaster',
   amsmaster: 'AMSMaster',
+
+  // Credit Manager mappings
+  creditmanager: 'CreditManagerMaster',
+  credit_manager: 'CreditManagerMaster',
+  'credit manager': 'CreditManagerMaster',
+  creditmanagermaster: 'CreditManagerMaster',
 };
 
 /**

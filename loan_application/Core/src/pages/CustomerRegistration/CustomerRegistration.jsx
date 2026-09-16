@@ -25,6 +25,7 @@ import {
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../../services/authService';
+import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../utils/amountHelper';
 
 // KYC step (moved in from the standalone CustomerVerification page)
 import '../CustomerVerification/CustomerVerification.css';
@@ -43,6 +44,8 @@ const CustomerRegistration = () => {
   const [activeStep, setActiveStep] = useState(1);
   const [currentAddress, setCurrentAddress] = useState('');
   const [permanentAddress, setPermanentAddress] = useState('');
+  const [salary, setSalary] = useState('');
+  const [annualTurnover, setAnnualTurnover] = useState('');
   const [sameAsCurrent, setSameAsCurrent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -174,8 +177,8 @@ const CustomerRegistration = () => {
           const payload = {
             ...data,
             permanentAddress: permanentAddress,
-            salary: Number(data.salary) || 0,
-            annualTurnover: String(data.annualTurnover || ''),
+            salary: parseAmountToNumber(salary || data.salary),
+            annualTurnover: getRawAmount(annualTurnover || data.annualTurnover),
             // KYC results captured during Step 6 — adjust field names to match backend contract
             aadhaar: kyc.aadhaarData,
             pan: kyc.panData,
@@ -280,7 +283,20 @@ const CustomerRegistration = () => {
                   <Input name="designation" label="Designation" required maxLength={50} placeholder="Enter designation" icon={Briefcase} />
                 </div>
                 <div className="form-grid-2">
-                  <Input name="salary" label="Salary" required type="number" min="0" max="999999999" placeholder="Enter salary" icon={() => <span style={{marginLeft: '4px'}}>₹</span>} />
+                  <Input 
+                    name="salary" 
+                    label="Salary" 
+                    required 
+                    type="text" 
+                    inputMode="numeric"
+                    value={salary} 
+                    onChange={(e) => {
+                      setSalary(formatIndianAmount(e.target.value));
+                      recomputeCompletedSteps();
+                    }} 
+                    placeholder="Enter salary" 
+                    icon={() => <span style={{marginLeft: '4px'}}>₹</span>} 
+                  />
                 </div>
                 </fieldset>
               </FormCard>
@@ -289,7 +305,20 @@ const CustomerRegistration = () => {
                 <fieldset disabled={isStepLocked(5)} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0, opacity: isStepLocked(5) ? 0.55 : 1 }}>
                 <div className="form-grid-2">
                   <Input name="gstNumber" label="GST Number" required maxLength={15} minLength={15} pattern="[A-Za-z0-9]{15}" title="GST number must be exactly 15 alphanumeric characters" placeholder="Enter GST number" icon={Receipt} />
-                  <Input name="annualTurnover" label="Annual Turnover" required type="number" min="0" max="9999999999" placeholder="Enter annual turnover" icon={() => <span style={{marginLeft: '4px'}}>₹</span>} />
+                  <Input 
+                    name="annualTurnover" 
+                    label="Annual Turnover" 
+                    required 
+                    type="text" 
+                    inputMode="numeric"
+                    value={annualTurnover} 
+                    onChange={(e) => {
+                      setAnnualTurnover(formatIndianAmount(e.target.value));
+                      recomputeCompletedSteps();
+                    }} 
+                    placeholder="Enter annual turnover" 
+                    icon={() => <span style={{marginLeft: '4px'}}>₹</span>} 
+                  />
                 </div>
                 <div className="form-grid-2">
                   <Input name="natureOfBusiness" label="Nature of Business" required maxLength={100} placeholder="Enter nature of business" icon={Building2} />

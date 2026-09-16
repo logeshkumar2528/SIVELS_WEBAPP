@@ -8,6 +8,7 @@ import StepAddress from './components/StepAddress';
 import StepReview from './components/StepReview';
 import { masterService } from '../../../../../../Core/src/services/masterService';
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService';
+import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../../Core/src/utils/amountHelper';
 import './CustomerOnboarding.css';
 
 const steps = [
@@ -119,9 +120,13 @@ const CustomerOnboarding = () => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    let finalValue = type === 'checkbox' ? checked : value;
+    if (name === 'salary' || name === 'annualTurnover') {
+      finalValue = formatIndianAmount(value, true, 2);
+    }
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: finalValue
     }));
   };
 
@@ -142,9 +147,9 @@ const CustomerOnboarding = () => {
         permanentAddress: formData.sameAsCurrent ? formData.currentAddress : formData.permanentAddress,
         employerName: formData.employerName,
         designation: formData.designation,
-        salary: formData.salary ? Number(formData.salary) : 0,
+        salary: formData.salary ? parseAmountToNumber(formData.salary) : 0,
         gstNumber: formData.gstNumber,
-        annualTurnover: formData.annualTurnover,
+        annualTurnover: formData.annualTurnover ? getRawAmount(formData.annualTurnover, true, 2) : '',
         natureOfBusiness: formData.natureOfBusiness
       };
 

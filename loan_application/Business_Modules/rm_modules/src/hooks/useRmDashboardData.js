@@ -40,6 +40,8 @@ const mapApplication = (item, index) => {
     item.applicationNumber ||
     item.agentCustomerId ||
     item.customerId ||
+    item.rmCustomerId ||
+    item.rMCustomerId ||
     `${index + 1}`;
   const normalizedStatus = normalizeApplicationStatus(item.status, item.statusName || item.StatusName);
 
@@ -50,13 +52,15 @@ const mapApplication = (item, index) => {
     mobile: String(item.mobileNumber || item.mobile || ''),
     loanType: item.loanPurposeName || item.loanType || '',
     amount: formatCurrency(item.expectedLoanAmount ?? item.amount),
-    agentName: item.agentName || '',
+    agentName: item.agentName || (item.createdByRole === 'RM' || item.rmId ? 'Direct RM' : ''),
     createdDate: formatDate(item.createdAt || item.createdDate),
     rawCreatedAt: item.createdAt || item.createdDate || '',
     status: normalizedStatus,
     rawStatus: normalizedStatus,
-    agentCustomerId: item.agentCustomerId || item.customerId || null,
+    agentCustomerId: item.agentCustomerId || item.customerId || item.rmCustomerId || item.rMCustomerId || null,
     agentId: item.agentId || item.AgentId || null,
+    rmId: item.rmId || item.RMId || item.createdBy || item.CreatedBy || null,
+    createdByRole: item.createdByRole || item.CreatedByRole || null,
   };
 };
 
@@ -178,7 +182,14 @@ export function useRmDashboardData() {
         const allowedAgentIds = buildAllowedAgentIdSet(agents);
         const applications = resolveApiArray(customersData)
           .map(mapApplication)
-          .filter((application) => application.agentId && allowedAgentIds.has(Number(application.agentId)));
+          .filter((application) => {
+            const rowAgentId = Number(application.agentId || 0);
+            const isAgentOwned = Boolean(rowAgentId > 0 && allowedAgentIds.has(rowAgentId));
+            const isDirectRmOwned =
+              (!application.agentId || application.agentId === '' || application.agentId === 0) &&
+              Number(application.rmId) === Number(rmContext.rmId);
+            return isAgentOwned || isDirectRmOwned;
+          });
 
         // Filter active agents (not marked inactive or disabled)
         const activeAgents = agents.filter((agent) => {
@@ -222,6 +233,9 @@ export function useRmDashboardData() {
                 draft.rawStatus === '2';
               if (isApproved) return false;
               if (draft.agentId && allowedAgentIds.size > 0 && !allowedAgentIds.has(Number(draft.agentId))) {
+                return false;
+              }
+              if ((!draft.agentId || draft.agentId === '' || draft.agentId === 0) && draft.rmId && Number(draft.rmId) !== Number(rmContext.rmId)) {
                 return false;
               }
               const hasProgress = Boolean(

@@ -1,9 +1,13 @@
 import { useFormContext } from 'react-hook-form';
 import Input from '../../../components/common/Input/Input';
+import { formatIndianAmount } from '../../../utils/amountHelper';
 
 const EmploymentInformation = () => {
-  const { register, watch, formState: { errors } } = useFormContext();
+  const { register, watch, setValue, formState: { errors } } = useFormContext();
   const employmentType = watch('employmentType');
+  const monthlySalary = watch('monthlySalary');
+  const annualIncome = watch('annualIncome');
+  const annualTurnover = watch('annualTurnover');
 
   return (
     <div>
@@ -33,20 +37,26 @@ const EmploymentInformation = () => {
 
 
         <Input 
-          type="number" 
+          type="text" 
+          inputMode="numeric"
           label="Monthly Salary (INR)" 
           required={employmentType === 'salaried'} 
           placeholder="0" 
           {...register('monthlySalary')} 
+          value={formatIndianAmount(monthlySalary ?? '')}
+          onChange={(e) => setValue('monthlySalary', formatIndianAmount(e.target.value), { shouldValidate: true })}
           error={errors.monthlySalary?.message} 
         />
 
         <Input 
-          type="number" 
+          type="text" 
+          inputMode="numeric"
           label="Annual Income (INR)" 
           required 
           placeholder="0" 
           {...register('annualIncome')} 
+          value={formatIndianAmount(annualIncome ?? '')}
+          onChange={(e) => setValue('annualIncome', formatIndianAmount(e.target.value), { shouldValidate: true })}
           error={errors.annualIncome?.message} 
         />
 
@@ -69,11 +79,14 @@ const EmploymentInformation = () => {
 
         {employmentType === 'business' && (
           <Input 
-            type="number" 
+            type="text" 
+            inputMode="numeric"
             label="Annual Turnover (INR)" 
             required 
             placeholder="0" 
             {...register('annualTurnover')} 
+            value={formatIndianAmount(annualTurnover ?? '')}
+            onChange={(e) => setValue('annualTurnover', formatIndianAmount(e.target.value), { shouldValidate: true })}
             error={errors.annualTurnover?.message} 
           />
         )}

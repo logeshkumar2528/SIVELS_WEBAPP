@@ -1,0 +1,1 @@
+import{C as e,a as t,b as n,o as r,v as i}from"./Logo-Ck-n51Vo.js";import{t as a}from"./App-DjyHW0AG.js";var o=e(n(),1),s=i(),c=t();(0,s.createRoot)(document.getElementById(`root`)).render((0,c.jsx)(o.StrictMode,{children:(0,c.jsx)(r,{children:(0,c.jsx)(a,{})})}));

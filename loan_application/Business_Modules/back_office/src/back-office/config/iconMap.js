@@ -105,6 +105,7 @@ import {
   LogIn,
   KeyRound,
   ExternalLink,
+  Trash2,
 } from 'lucide-react';
 
 /* ==========================================
@@ -202,6 +203,7 @@ const iconMap = {
   LogIn,
   KeyRound,
   ExternalLink,
+  Trash2,
 };
 
 export default iconMap;

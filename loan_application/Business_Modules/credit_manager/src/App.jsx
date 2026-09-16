@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { isCreditManagerAuthenticated } from './auth/authStorage';
 import Dashboard from './pages/Dashboard';
 import ReceivedApplications from './pages/ReceivedApplications';
 import PendingReview from './pages/PendingReview';
@@ -13,6 +14,17 @@ import './App.css';
 
 const AppContent = () => {
   const location = useLocation();
+  const isAuthenticated = isCreditManagerAuthenticated();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      window.location.replace('/login');
+    }
+  }, [isAuthenticated]);
+
+  if (!isAuthenticated) {
+    return null;
+  }
   
   let title = "Credit Manager Dashboard";
   let subtitle = "Overview of applications received from Credit Back Office";

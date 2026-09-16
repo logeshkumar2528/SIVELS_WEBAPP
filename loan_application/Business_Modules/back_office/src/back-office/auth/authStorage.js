@@ -91,15 +91,21 @@ export function getBackOfficeAuth() {
  */
 export function setBackOfficeAuth(authData) {
   try {
+    const boId = authData?.backOfficeId ?? authData?.id ?? (authData?.userId ? Number(authData.userId) : null);
+    const numId = boId != null && !isNaN(Number(boId)) && Number(boId) > 0 ? Number(boId) : null;
     const payload = {
       isAuthenticated: true,
       name: authData?.name || authData?.fullName || DUMMY_CREDENTIALS.name,
       role: authData?.role || DUMMY_CREDENTIALS.role,
       mobile: authData?.mobile || authData?.mobileNumber || DUMMY_CREDENTIALS.mobile,
-      id: authData?.id || authData?.backOfficeId || null,
+      id: numId,
+      backOfficeId: numId,
       loginTimestamp: new Date().toISOString(),
     };
     localStorage.setItem(BACK_OFFICE_AUTH_KEY, JSON.stringify(payload));
+    if (numId) {
+      localStorage.setItem('backOfficeId', String(numId));
+    }
     return payload;
   } catch {
     return null;

@@ -11,6 +11,7 @@ import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSect
 import Modal from '../../components/Modal/Modal';
 import { buildSectionUpdate, getSectionState } from '../applicationWizard/flowUtils';
 import { findFirstApplication, loadApplicationHeader } from '../../services/applicationApi';
+import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 
 const PROPERTY_TYPES = ['Residential', 'Commercial', 'Industrial'];
 const USAGE_TYPES = ['Self-Occupied', 'Vacant', 'Rented'];
@@ -79,7 +80,13 @@ function CollateralForm({ title, value, onChange, onViewGeo, isFetchingGeo, onFe
             <label className="form-label">Estimated Value (Rs.)</label>
             <div className="aw-input-wrapper">
               <IndianRupee className="aw-input-icon" size={14} />
-              <input className="form-input aw-input aw-input--with-icon" type="number" min="0" step="1" value={value.estimatedValue} onChange={(e) => onChange('estimatedValue', e.target.value)} />
+              <input 
+                className="form-input aw-input aw-input--with-icon" 
+                type="text" 
+                inputMode="numeric" 
+                value={formatIndianAmount(value.estimatedValue)} 
+                onChange={(e) => onChange('estimatedValue', formatIndianAmount(e.target.value))} 
+              />
             </div>
           </div>
 
@@ -238,7 +245,8 @@ export default function FieldVerificationStep2() {
     persist({ ...form, propertyCount: value === '' ? '' : count, properties: currentProperties });
   };
 
-  const updateField = (index, field, value) => {
+  const updateField = (index, field, rawValue) => {
+    const value = field === 'estimatedValue' ? formatIndianAmount(rawValue) : rawValue;
     const newProperties = [...form.properties];
     newProperties[index] = { ...newProperties[index], [field]: value };
     persist({ ...form, properties: newProperties });

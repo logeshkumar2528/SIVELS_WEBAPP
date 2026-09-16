@@ -15,6 +15,7 @@ import {
   getApplicantCount,
   getSectionState,
 } from '../applicationWizard/flowUtils';
+import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 
 function buildEmploymentState(appData) {
   const saved = getSectionState(appData, 'employmentIncome', {});
@@ -171,10 +172,9 @@ function EmploymentCard({
               <IndianRupee className="aw-input-icon" size={14} />
               <input
                 className={`form-input aw-input aw-input--with-icon ${errors.grossMonthlyIncome ? 'aw-input--invalid' : ''}`}
-                type="number"
-                min="0"
-                step="1"
-                value={person.grossMonthlyIncome}
+                type="text"
+                inputMode="numeric"
+                value={formatIndianAmount(person.grossMonthlyIncome)}
                 onChange={(e) => onChange('grossMonthlyIncome', e.target.value)}
               />
             </div>
@@ -187,10 +187,9 @@ function EmploymentCard({
               <IndianRupee className="aw-input-icon" size={14} />
               <input
                 className="form-input aw-input aw-input--with-icon"
-                type="number"
-                min="0"
-                step="1"
-                value={person.otherIncomeMonthly}
+                type="text"
+                inputMode="numeric"
+                value={formatIndianAmount(person.otherIncomeMonthly)}
                 onChange={(e) => onChange('otherIncomeMonthly', e.target.value)}
               />
             </div>
@@ -202,10 +201,9 @@ function EmploymentCard({
               <IndianRupee className="aw-input-icon" size={14} />
               <input
                 className={`form-input aw-input aw-input--with-icon ${errors.netMonthlyIncome ? 'aw-input--invalid' : ''}`}
-                type="number"
-                min="0"
-                step="1"
-                value={person.netMonthlyIncome}
+                type="text"
+                inputMode="numeric"
+                value={formatIndianAmount(person.netMonthlyIncome)}
                 onChange={(e) => onChange('netMonthlyIncome', e.target.value)}
               />
             </div>
@@ -218,10 +216,9 @@ function EmploymentCard({
               <IndianRupee className="aw-input-icon" size={14} />
               <input
                 className={`form-input aw-input aw-input--with-icon ${errors.grossAnnualIncome ? 'aw-input--invalid' : ''}`}
-                type="number"
-                min="0"
-                step="1"
-                value={person.grossAnnualIncome}
+                type="text"
+                inputMode="numeric"
+                value={formatIndianAmount(person.grossAnnualIncome)}
                 onChange={(e) => onChange('grossAnnualIncome', e.target.value)}
               />
             </div>
@@ -301,7 +298,11 @@ export default function EmploymentIncome() {
     saveApplication(appId, buildSectionUpdate(appData, 'employmentIncome', nextForm));
   };
 
-  const updatePerson = (scope, field, value, index = null) => {
+  const updatePerson = (scope, field, rawValue, index = null) => {
+    const value = ['grossMonthlyIncome', 'otherIncomeMonthly', 'netMonthlyIncome', 'grossAnnualIncome'].includes(field)
+      ? formatIndianAmount(rawValue)
+      : rawValue;
+
     if (scope === 'applicant') {
       persist({ ...form, applicant: { ...form.applicant, [field]: value } });
       return;
@@ -362,10 +363,10 @@ export default function EmploymentIncome() {
           EducationId: person.qualification ? Number(person.qualification) : 1,
           IndustryType: person.industryType ? String(person.industryType) : '',
           TotalExperience: Number(person.totalExperienceYears) || 0,
-          GrossMonthlyIncome: Number(person.grossMonthlyIncome) || 0,
-          OtherMonthlyIncome: Number(person.otherIncomeMonthly) || 0,
-          NetMonthlyIncome: Number(person.netMonthlyIncome) || 0,
-          GrossAnnualIncome: Number(person.grossAnnualIncome) || 0,
+          GrossMonthlyIncome: parseAmountToNumber(person.grossMonthlyIncome),
+          OtherMonthlyIncome: parseAmountToNumber(person.otherIncomeMonthly),
+          NetMonthlyIncome: parseAmountToNumber(person.netMonthlyIncome),
+          GrossAnnualIncome: parseAmountToNumber(person.grossAnnualIncome),
           CreatedBy: 1
         };
 

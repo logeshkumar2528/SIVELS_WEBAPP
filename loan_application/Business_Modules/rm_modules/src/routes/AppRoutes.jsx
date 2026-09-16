@@ -21,6 +21,8 @@ import DocumentChecklist from '../pages/DocumentChecklist/DocumentChecklist';
 import Declaration from '../pages/Declaration/Declaration';
 import MyAgents from '../pages/MyAgents/MyAgents';
 import RmProfile from '../pages/RmProfile/RmProfile';
+import AddCustomer from '../pages/AddCustomer/AddCustomer';
+import CustomerSubmissionHistory from '../pages/CustomerSubmissionHistory/CustomerSubmissionHistory';
 import SubmissionHistory from '../pages/SubmissionHistory/SubmissionHistory';
 import PdfView from '../pages/PdfView/PdfView';
 import FieldVerification from '../pages/FieldVerification/FieldVerification';
@@ -101,6 +103,24 @@ export default function AppRoutes() {
           element={
             <LayoutWrapper title="Returned Applications" subtitle="Applications returned for correction">
               <NewApplications initialFilter="Returned" />
+            </LayoutWrapper>
+          }
+        />
+
+        <Route
+          path={ROUTES.ADD_CUSTOMER}
+          element={
+            <LayoutWrapper title="Add Customer" subtitle="Direct RM Customer Intake">
+              <AddCustomer />
+            </LayoutWrapper>
+          }
+        />
+
+        <Route
+          path={ROUTES.CUSTOMER_SUBMISSION_HISTORY}
+          element={
+            <LayoutWrapper title="Customer Submission History" subtitle="Customers Created & Submitted by RM">
+              <CustomerSubmissionHistory />
             </LayoutWrapper>
           }
         />

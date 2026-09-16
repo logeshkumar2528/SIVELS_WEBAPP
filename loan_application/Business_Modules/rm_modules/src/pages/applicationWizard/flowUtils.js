@@ -18,6 +18,10 @@ export const KNOWN_DB_ID_FIELDS = [
   'ApplicationReferenceDetailsId',
   'agentCustomerId',
   'AgentCustomerId',
+  'rmCustomerId',
+  'RmCustomerId',
+  'rmId',
+  'RmId',
   'applicationProductDetailsId',
   'ApplicationProductDetailsId',
 ];
@@ -200,7 +204,15 @@ export function getApplicantCount(appData) {
     appData.coApplicantsCount !== null &&
     appData.coApplicantsCount !== ''
       ? Number(appData.coApplicantsCount)
-      : null;
+      : (appData.noOfCoApplicants !== undefined &&
+         appData.noOfCoApplicants !== null &&
+         appData.noOfCoApplicants !== ''
+        ? Number(appData.noOfCoApplicants)
+        : null);
+
+  if (direct !== null && Number.isFinite(direct)) {
+    return Math.max(0, direct);
+  }
 
   const personalSection = Number(appData?.sections?.personalInformation?.coApplicants?.length || 0);
   const personalReg = Number(appData?.registration?.personalInformation?.coApplicants?.length || 0);
@@ -231,10 +243,6 @@ export function getApplicantCount(appData) {
     declSection,
     declRoot
   );
-
-  if (direct !== null && Number.isFinite(direct)) {
-    return Math.max(direct, maxArrayCount);
-  }
 
   return maxArrayCount;
 }

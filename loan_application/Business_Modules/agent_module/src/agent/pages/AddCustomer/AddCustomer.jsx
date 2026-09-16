@@ -25,6 +25,7 @@ import { masterService } from '../../../../../../Core/src/services/masterService
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { getApiErrorMessage } from '../../../../../../Core/src/utils/apiErrorHandler'
+import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../../Core/src/utils/amountHelper'
 
 function AddCustomer() {
   const navigate = useNavigate()
@@ -228,25 +229,7 @@ function AddCustomer() {
     } else if (name === 'fullName') {
       value = value.replace(/[^a-zA-Z\s]/g, '').replace(/^\s+/, '').replace(/\s{2,}/g, ' ')
     } else if (name === 'expectedAmount') {
-      let sanitized = value.replace(/[^0-9.]/g, '')
-      let parts = sanitized.split('.')
-      if (parts.length > 2) {
-        sanitized = parts[0] + '.' + parts.slice(1).join('')
-        parts = sanitized.split('.')
-      }
-      let beforeDecimal = parts[0]
-      if (beforeDecimal.length > 18) {
-        beforeDecimal = beforeDecimal.substring(0, 18)
-      }
-      if (parts.length > 1) {
-        let afterDecimal = parts[1]
-        if (afterDecimal.length > 2) {
-          afterDecimal = afterDecimal.substring(0, 2)
-        }
-        value = `${beforeDecimal}.${afterDecimal}`
-      } else {
-        value = beforeDecimal
-      }
+      value = formatIndianAmount(value, true, 2)
     }
 
     setFormData((prev) => ({ ...prev, [name]: value }))
@@ -380,31 +363,15 @@ function AddCustomer() {
     }
 
     // Expected Loan Amount Validation
-    if (!formData.expectedAmount) {
+    const rawExpectedAmount = getRawAmount(formData.expectedAmount, true, 2)
+    if (!rawExpectedAmount) {
       newFieldErrors.expectedAmount = 'Expected Loan Amount is required.'
       isValid = false
     } else {
-      const amountStr = formData.expectedAmount.toString();
-      if (!/^\d{1,18}(\.\d{1,2})?$/.test(amountStr)) {
-        if (/[^\d.]/.test(amountStr) || (amountStr.match(/\./g) || []).length > 1) {
-          newFieldErrors.expectedAmount = 'Expected Loan Amount must contain numbers only, with up to 2 decimal places.'
-        } else {
-          const parts = amountStr.split('.')
-          if (parts[0] && parts[0].length > 18) {
-            newFieldErrors.expectedAmount = 'Expected Loan Amount cannot have more than 18 digits before the decimal point.'
-          } else if (parts[1] && parts[1].length > 2) {
-            newFieldErrors.expectedAmount = 'Expected Loan Amount cannot have more than 2 decimal places.'
-          } else {
-            newFieldErrors.expectedAmount = 'Expected Loan Amount must contain numbers only, with up to 2 decimal places.'
-          }
-        }
+      const expectedAmt = Number(rawExpectedAmount)
+      if (isNaN(expectedAmt) || expectedAmt <= 0) {
+        newFieldErrors.expectedAmount = 'Expected Loan Amount must be greater than 0.'
         isValid = false
-      } else {
-        const expectedAmt = Number(amountStr)
-        if (expectedAmt <= 0) {
-          newFieldErrors.expectedAmount = 'Expected Loan Amount must be greater than 0.'
-          isValid = false
-        }
       }
     }
 
@@ -446,7 +413,7 @@ function AddCustomer() {
           email: processedEmail,
           employmentTypeId: Number(formData.employmentTypeId),
           loanPurposeId: Number(formData.loanPurposeId),
-          expectedLoanAmount: Number(formData.expectedAmount),
+          expectedLoanAmount: parseAmountToNumber(formData.expectedAmount),
           remarks: formData.remarks,
           status: 0,
           isActive: true,

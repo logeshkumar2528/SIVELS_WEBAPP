@@ -8,6 +8,7 @@ import Select from '../../components/Select/Select';
 import Pagination from '../../components/Pagination/Pagination';
 import { formatDate } from '../../utils/dateHelper';
 import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
+import { getCurrentRMContext, resolveApiArray } from '../../utils/rmContext';
 import './MyAgents.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -56,15 +57,6 @@ function AgentAvatar({ name = '', agentId = null, className = 'ag-cell-avatar', 
   );
 }
 
-function getStoredUser() {
-  try {
-    const raw = localStorage.getItem('sivels_currentUser');
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
 function normalizeText(value = '') {
   return String(value || '').trim().toLowerCase();
 }
@@ -93,15 +85,15 @@ function normalizeStatus(value, fallback = 'Inactive') {
 function buildRow(agent, customerRows = []) {
   const agentId = Number(agent.agentId || agent.AgentId || 0);
   const rowsForAgent = customerRows.filter((row) => Number(row.agentId || row.AgentId || 0) === agentId);
-  const activeCustomers = rowsForAgent.filter((row) => row.isActive === true || normalizeText(row.status) === 'approved').length;
-  const pendingVerification = rowsForAgent.filter((row) => normalizeText(row.status) === 'draft' || normalizeText(row.status) === 'pending').length;
+  const activeCustomers = rowsForAgent.filter((row) => row.isActive === true || normalizeText(row.status) === 'approved' || Number(row.status) === 2).length;
+  const pendingVerification = rowsForAgent.filter((row) => normalizeText(row.status) === 'draft' || normalizeText(row.status) === 'pending' || Number(row.status) === 0 || Number(row.status) === 1).length;
   const pendingCollections = rowsForAgent.filter((row) => normalizeText(row.status) === 'collection pending' || normalizeText(row.status) === 'overdue').length;
   const recordStatus = normalizeStatus(agent.status ?? agent.isActive ?? agent.IsActive, agent.isActive === false ? 'Inactive' : 'Active');
 
   return {
     id: makeAgentId(agent, agentId),
     agentId,
-    name: agent.fullName || agent.agentName || agent.name || '-',
+    name: agent.fullName || agent.agentName || agent.name || 'Agent',
     phone: agent.mobileNumber || agent.phone || '-',
     email: agent.emailAddress || agent.email || '',
     assignedArea: agent.branch || agent.branchName || agent.area || '-',
@@ -112,14 +104,13 @@ function buildRow(agent, customerRows = []) {
     totalLoanAmount: rowsForAgent.reduce((sum, row) => sum + Number(row.expectedLoanAmount || row.loanAmount || 0), 0),
     status: recordStatus,
     joinDate: formatDate(agent.createdAt || agent.dateJoined || agent.createdDate, '-'),
-    avatarUrl: buildAvatar(agent.fullName || agent.agentName || agent.name || 'Agent'),
     raw: agent,
     records: rowsForAgent,
   };
 }
 
 export default function MyAgents() {
-  const currentUser = useMemo(() => getStoredUser(), []);
+  const rmContext = useMemo(() => getCurrentRMContext(), []);
   const [searchTerm, setSearchTerm] = useState('');
   const [areaFilter, setAreaFilter] = useState('All Areas');
   const [statusFilter, setStatusFilter] = useState('All Status');
@@ -206,10 +197,11 @@ export default function MyAgents() {
       setLoadError('');
 
       try {
+        const authHeaders = getAuthHeaders();
         const [rmResponse, agentsResponse, customerResponse] = await Promise.all([
-          fetch(`${API_BASE}/RMMaster`),
-          fetch(`${API_BASE}/AgentMaster`),
-          fetch(`${API_BASE}/AgentAddCustomer`),
+          fetch(`${API_BASE}/RMMaster`, { headers: authHeaders }),
+          fetch(`${API_BASE}/AgentMaster`, { headers: authHeaders }),
+          fetch(`${API_BASE}/AgentAddCustomer`, { headers: authHeaders }),
         ]);
 
         if (!rmResponse.ok) throw new Error(`Failed to load RM data (${rmResponse.status})`);
@@ -220,19 +212,19 @@ export default function MyAgents() {
         const agentsData = await agentsResponse.json();
         const customersData = await customerResponse.json();
 
-        const rmRows = Array.isArray(rmData) ? rmData : (Array.isArray(rmData?.value) ? rmData.value : []);
-        const agentRowsRaw = Array.isArray(agentsData) ? agentsData : (Array.isArray(agentsData?.value) ? agentsData.value : []);
-        const customerRowsRaw = Array.isArray(customersData) ? customersData : (Array.isArray(customersData?.value) ? customersData.value : []);
+        const rmRows = resolveApiArray(rmData);
+        const agentRowsRaw = resolveApiArray(agentsData);
+        const customerRowsRaw = resolveApiArray(customersData);
 
-        const currentMobile = normalizePhone(currentUser?.mobileNumber || currentUser?.phone).slice(-10);
-        const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || currentUser?.rmid || 0);
+        const currentRmId = Number(rmContext?.rmId || 0);
+        const currentMobile = normalizePhone(rmContext?.mobileNumber || rmContext?.phone || '').slice(-10);
         const matchedRm =
           rmRows.find((row) => currentRmId && Number(row.rmId || row.RMId || row.id) === currentRmId) ||
           rmRows.find((row) => currentMobile && normalizePhone(row.mobileNumber || row.MobileNumber || row.phone).slice(-10) === currentMobile) ||
           null;
 
         const resolvedRmId = currentRmId || Number(matchedRm?.rmId || matchedRm?.RMId || matchedRm?.id || 0);
-        const matchedRmName = normalizeText(matchedRm?.fullName || currentUser?.fullName || currentUser?.name || '');
+        const matchedRmName = normalizeText(matchedRm?.fullName || rmContext?.fullName || '');
         const matchedRmNameFromApi = normalizeText(matchedRm?.fullName || '');
 
         const filteredAgentsList = agentRowsRaw.filter((agent) => {
@@ -283,7 +275,7 @@ export default function MyAgents() {
     return () => {
       active = false;
     };
-  }, [currentUser]);
+  }, [rmContext]);
 
   const filteredAgents = useMemo(() => {
     const term = normalizeText(searchTerm);
@@ -427,7 +419,7 @@ export default function MyAgents() {
           <div className="ag-kpi-info">
             <span className="ag-kpi-title">Total Agents</span>
             <span className="ag-kpi-value">{agentRows.length}</span>
-            <span className="ag-kpi-trend text-muted">{currentUser?.branch || 'Live RM branch'}</span>
+            <span className="ag-kpi-trend text-muted">{rmContext?.branch || 'Live RM branch'}</span>
           </div>
         </div>
 
