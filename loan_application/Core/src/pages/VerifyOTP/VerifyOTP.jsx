@@ -244,11 +244,57 @@ export default function VerifyOTP() {
         }
         localStorage.setItem('backOfficeAuth', JSON.stringify({
           isAuthenticated: true,
+          backOfficeId: boId ? Number(boId) : null,
+          id: boId ? Number(boId) : null,
           name: boAccount?.fullName || boAccount?.name || 'Back Office Executive',
           role: boAccount?.role || 'Operations Team',
           mobile: cleanMobile,
           loginTimestamp: new Date().toISOString(),
         }));
+      } else if (
+        resolvedModule === 'CreditManager' ||
+        resolvedModule === 'Credit Manager' ||
+        String(result?.role || '').toLowerCase() === 'creditmanager' ||
+        String(result?.role || '').toLowerCase() === 'credit_manager'
+      ) {
+        const cmAccount = result?.creditManager || resolvedAccount || {};
+        const cmId = cmAccount?.creditManagerId ?? cmAccount?.CreditManagerId ?? cmAccount?.id;
+        const uId = result?.userId ?? cmAccount?.userId ?? null;
+
+        const creditManagerData = {
+          ...cmAccount,
+          ...(uId ? { userId: Number(uId) } : {}),
+        };
+
+        localStorage.setItem('creditManagerData', JSON.stringify(creditManagerData));
+
+        if (cmId) {
+          localStorage.setItem('creditManagerId', String(cmId));
+        }
+
+        const creditManagerAuth = {
+          isAuthenticated: true,
+          creditManagerId: cmId ? Number(cmId) : null,
+          userId: uId ? Number(uId) : null,
+          creditManagerCode: cmAccount?.creditManagerCode || cmAccount?.code || '',
+          fullName: cmAccount?.fullName || cmAccount?.name || 'Credit Manager',
+          mobileNumber: cleanMobile,
+          emailAddress: cmAccount?.emailAddress || cmAccount?.email || '',
+          branch: cmAccount?.branch || '',
+          role: 'CreditManager',
+          loginTimestamp: new Date().toISOString(),
+        };
+
+        localStorage.setItem('creditManagerAuth', JSON.stringify(creditManagerAuth));
+
+        const cmUserData = {
+          ...creditManagerData,
+          userId: uId ? Number(uId) : null,
+          role: 'CreditManager',
+          mobileNumber: cleanMobile,
+        };
+        localStorage.setItem('sivels_currentUser', JSON.stringify(cmUserData));
+        resolvedDestination = '/credit';
       }
 
       // 6. Brief pause to allow success toast to display before page transition

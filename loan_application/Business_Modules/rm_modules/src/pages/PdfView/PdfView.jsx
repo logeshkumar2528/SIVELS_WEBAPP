@@ -488,31 +488,6 @@ export default function PdfView() {
           }
 
           if (activeDocs.length > 0) {
-            let rejections = [];
-            try {
-              const rejRes = await fetch(`${API_BASE}/BackOfficeDocumentRejection`, { headers });
-              if (rejRes.ok) {
-                const allRejs = await rejRes.json();
-                const list = Array.isArray(allRejs) ? allRejs : (allRejs?.value || allRejs?.data || []);
-                rejections = list
-                  .filter(
-                    (r) =>
-                      r &&
-                      r.isActive !== false &&
-                      (String(r.agentCustomerId) === String(resolvedCustomerId) ||
-                        String(r.agentCustomerId) === String(applicationId))
-                  )
-                  .sort((a, b) => {
-                    const timeA = new Date(a.createdAt || 0).getTime();
-                    const timeB = new Date(b.createdAt || 0).getTime();
-                    if (timeA !== timeB) return timeB - timeA;
-                    return (b.backOfficeDocumentRejectionId || 0) - (a.backOfficeDocumentRejectionId || 0);
-                  });
-              }
-            } catch {
-              // ignore
-            }
-
             // Group documents by document type
             const docsByType = {};
             activeDocs.forEach((d) => {
@@ -521,7 +496,7 @@ export default function PdfView() {
               docsByType[typeKey].push(d);
             });
 
-            // For each document type, select the accepted version
+            // For each document type, select the latest uploaded active version
             const selectedDocs = [];
             Object.keys(docsByType).forEach((typeKey) => {
               const list = docsByType[typeKey];
@@ -532,31 +507,8 @@ export default function PdfView() {
                 return (a.agentCustomerDocumentId || 0) - (b.agentCustomerDocumentId || 0);
               });
 
-              // Check if any matching rejection for this document type is currently pending verification
-              const matchingRej = rejections.find((r) => {
-                const rType = String(r.rejectedDocumentType || '').toUpperCase();
-                const sampleName = String(list[0]?.documentTypeName || list[0]?.fileName || '').toUpperCase();
-                return (
-                  rType.includes('PROFILE') && (sampleName.includes('PHOTO') || sampleName.includes('PROFILE') || list[0]?.documentTypeId === 6) ||
-                  rType.includes('AADHAAR') && (sampleName.includes('AADHAAR') || sampleName.includes('AADHAR') || list[0]?.documentTypeId === 1) ||
-                  rType.includes('PAN') && (sampleName.includes('PAN') || list[0]?.documentTypeId === 2) ||
-                  rType.includes('ZIP') && (sampleName.includes('ZIP') || list[0]?.documentTypeId === 4)
-                );
-              });
-
-              if (matchingRej && (matchingRej.status === 'ReturnedToRM' || matchingRej.status === 'Resubmitted')) {
-                // Pending verification: select the document uploaded at or before rejection
-                const rejTime = new Date(matchingRej.rejectedAt || matchingRej.createdAt || 0).getTime();
-                const beforeRej = list.filter((d) => new Date(d.createdAt || 0).getTime() <= rejTime + 5000);
-                if (beforeRej.length > 0) {
-                  selectedDocs.push(beforeRej[beforeRej.length - 1]);
-                } else {
-                  selectedDocs.push(list[0]);
-                }
-              } else {
-                // Verified or normal: latest uploaded document is the accepted document
-                selectedDocs.push(list[list.length - 1]);
-              }
+              // Latest uploaded document is the active accepted document
+              selectedDocs.push(list[list.length - 1]);
             });
 
             const loaded = await Promise.all(
@@ -583,10 +535,13 @@ export default function PdfView() {
 
                     return {
                       agentCustomerDocumentId: docId,
+                      documentTypeId: doc.documentTypeId,
                       documentTypeName: doc.documentTypeName || doc.documentType || '',
                       fileName,
                       fileType: isPdf ? 'pdf' : 'image',
                       previewUrl,
+                      createdAt: doc.createdAt,
+                      isActive: doc.isActive !== false,
                     };
                   }
                 } catch (dlErr) {
@@ -595,10 +550,13 @@ export default function PdfView() {
 
                 return {
                   agentCustomerDocumentId: docId,
+                  documentTypeId: doc.documentTypeId,
                   documentTypeName: doc.documentTypeName || doc.documentType || '',
                   fileName,
                   fileType: isPdf ? 'pdf' : 'image',
                   previewUrl: null,
+                  createdAt: doc.createdAt,
+                  isActive: doc.isActive !== false,
                 };
               })
             );
@@ -1050,16 +1008,71 @@ export default function PdfView() {
       : []),
   ];
 
-  // Find client/profile photo if present in uploaded docs
-  const clientPhotoDoc =
-    downloadedDocs.find(
-      (d) =>
-        d.previewUrl &&
-        (d.documentTypeName?.toLowerCase().includes('client') ||
-          d.documentTypeName?.toLowerCase().includes('photo') ||
-          d.fileName?.toLowerCase().includes('client') ||
-          d.fileName?.toLowerCase().includes('photo'))
-    ) || {};
+  // Resolve Applicant Profile Photo: Type-First & Latest Active Version
+  const clientPhotoDoc = useMemo(() => {
+    if (!Array.isArray(downloadedDocs) || downloadedDocs.length === 0) return {};
+
+    // 1. Primary: Official Photo records (documentTypeId === 6 or normalized documentTypeName === "photo")
+    const officialPhotoDocs = downloadedDocs.filter((d) => {
+      if (!d || !d.previewUrl || d.isActive === false) return false;
+      const typeId = Number(d.documentTypeId);
+      const typeName = String(d.documentTypeName || '').trim().toLowerCase();
+      return typeId === 6 || typeName === 'photo';
+    });
+
+    if (officialPhotoDocs.length > 0) {
+      // Sort by createdAt DESC, tie-break with agentCustomerDocumentId DESC
+      officialPhotoDocs.sort((a, b) => {
+        const timeA = new Date(a.createdAt || 0).getTime();
+        const timeB = new Date(b.createdAt || 0).getTime();
+        if (timeB !== timeA) return timeB - timeA;
+        return (Number(b.agentCustomerDocumentId) || 0) - (Number(a.agentCustomerDocumentId) || 0);
+      });
+      return officialPhotoDocs[0];
+    }
+
+    // 2. Conservative Fallback: ONLY if type metadata is genuinely missing/unmapped
+    // NEVER match against documents with another valid documentTypeId (Aadhaar=1, PAN=2, Bank=3, Salary=4, etc.)
+    const KNOWN_NON_PHOTO_TYPE_IDS = [1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+    const fallbackPhotoDocs = downloadedDocs.filter((d) => {
+      if (!d || !d.previewUrl || d.isActive === false) return false;
+      const typeId = Number(d.documentTypeId);
+      if (KNOWN_NON_PHOTO_TYPE_IDS.includes(typeId)) return false;
+
+      const typeName = String(d.documentTypeName || '').trim().toLowerCase();
+      if (
+        typeName.includes('aadhaar') ||
+        typeName.includes('aadhar') ||
+        typeName.includes('pan') ||
+        typeName.includes('bank') ||
+        typeName.includes('statement') ||
+        typeName.includes('salary') ||
+        typeName.includes('slip')
+      ) {
+        return false;
+      }
+
+      const fileName = String(d.fileName || '').trim().toLowerCase();
+      return (
+        typeName.includes('photo') ||
+        typeName.includes('profile') ||
+        fileName.includes('photo') ||
+        fileName.includes('profile')
+      );
+    });
+
+    if (fallbackPhotoDocs.length > 0) {
+      fallbackPhotoDocs.sort((a, b) => {
+        const timeA = new Date(a.createdAt || 0).getTime();
+        const timeB = new Date(b.createdAt || 0).getTime();
+        if (timeB !== timeA) return timeB - timeA;
+        return (Number(b.agentCustomerDocumentId) || 0) - (Number(a.agentCustomerDocumentId) || 0);
+      });
+      return fallbackPhotoDocs[0];
+    }
+
+    return {};
+  }, [downloadedDocs]);
 
   const handleBack = () => {
     if (location.state?.returnTo) {

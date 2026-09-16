@@ -6,6 +6,7 @@ export const AMS_DASHBOARD        = '/master/ams-dashboard';
 export const CUSTOMER_DASHBOARD   = '/dashboard';
 export const MASTER_DASHBOARD     = '/master/dashboard';
 export const BACKOFFICE_DASHBOARD = '/backoffice/dashboard';
+export const CREDIT_MANAGER_DASHBOARD = '/credit';
 
 /**
  * Normalizes any mobile number string to 10 digits for consistent comparison:
@@ -90,6 +91,15 @@ export const ACCOUNT_SOURCES = [
     idStorageKey: 'backOfficeId',
   },
   {
+    role: 'CreditManager',
+    module: 'CreditManager',
+    endpoint: '/CreditManagerMaster',
+    destination: CREDIT_MANAGER_DASHBOARD,
+    idKey: 'creditManagerId',
+    storageKey: 'creditManagerData',
+    idStorageKey: 'creditManagerId',
+  },
+  {
     role: 'AMS',
     module: 'AMS',
     endpoint: '/AMSMaster',
@@ -165,14 +175,15 @@ export async function detectAccountModule(mobileNumber) {
   }
 
   // Fetch all master APIs concurrently
-  let agentRes, rmRes, amsRes, customerRes, backOfficeRes;
+  let agentRes, rmRes, amsRes, customerRes, backOfficeRes, creditManagerRes;
   try {
-    [agentRes, rmRes, amsRes, customerRes, backOfficeRes] = await Promise.allSettled([
+    [agentRes, rmRes, amsRes, customerRes, backOfficeRes, creditManagerRes] = await Promise.allSettled([
       axiosInstance.get('/AgentMaster'),
       axiosInstance.get('/RMMaster'),
       axiosInstance.get('/AMSMaster'),
       axiosInstance.get('/AgentAddCustomer'),
       axiosInstance.get('/BackOfficeMaster'),
+      axiosInstance.get('/CreditManagerMaster'),
     ]);
   } catch (err) {
     console.error('[ModuleDetection] Network error fetching masters:', err);
@@ -191,14 +202,16 @@ export async function detectAccountModule(mobileNumber) {
   const amsData = unwrapResponse(amsRes);
   const customerData = unwrapResponse(customerRes);
   const backOfficeData = unwrapResponse(backOfficeRes);
+  const creditManagerData = unwrapResponse(creditManagerRes);
 
   console.log("BackOffice API response:", backOfficeData);
+  console.log("CreditManager API response:", creditManagerData);
   console.log("Agent API response:", agentData);
   console.log("RM API response:", rmData);
   console.log("AMS API response:", amsData);
 
   // Check if all master lookups failed to connect
-  const anyFulfilled = [agentRes, rmRes, amsRes, customerRes, backOfficeRes].some((r) => r.status === 'fulfilled');
+  const anyFulfilled = [agentRes, rmRes, amsRes, customerRes, backOfficeRes, creditManagerRes].some((r) => r.status === 'fulfilled');
   if (!anyFulfilled) {
     if (normalizedMobile === '1234567890') {
       return {
@@ -243,6 +256,7 @@ export async function detectAccountModule(mobileNumber) {
 
   const sourcesMap = {
     BackOffice: backOfficeData,
+    CreditManager: creditManagerData,
     AMS: amsData,
     RM: rmData,
     Agent: agentData,

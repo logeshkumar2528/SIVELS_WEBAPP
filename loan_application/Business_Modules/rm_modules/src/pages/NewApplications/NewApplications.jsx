@@ -19,6 +19,7 @@ import {
 } from '../../utils/rmContext';
 import './NewApplications.css';
 import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
+import { resolveDocumentTypeId, validateApplicantDocumentFile } from '../../../../../Core/src/utils/documentTypeHelper';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
@@ -37,26 +38,33 @@ export const getRejectedDocumentLabel = (rejection) => {
     rawType.includes('CO_APPLICANT') ||
     rawType.includes('COAPPLICANT') ||
     rawType.startsWith('CO_') ||
-    rawType.startsWith('CO-');
+    rawType.startsWith('CO-') ||
+    (rejection.applicantSequence !== undefined && rejection.applicantSequence !== null && Number(rejection.applicantSequence) > 0);
 
+  let prefix = isCoApp ? 'Co-Applicant' : 'Applicant';
+  if (rejection.applicantSequence !== undefined && rejection.applicantSequence !== null) {
+    const seq = Number(rejection.applicantSequence);
+    if (seq === 0) prefix = 'Applicant';
+    else if (seq === 1) prefix = 'Co-Applicant 1';
+    else if (seq === 2) prefix = 'Co-Applicant 2';
+    else if (seq === 3) prefix = 'Co-Applicant 3';
+    else if (seq > 3) prefix = `Co-Applicant ${seq}`;
+  }
+
+  const isSalary = rawType.includes('SALARY') || rawType.includes('INCOME_SHEET') || rawType.includes('INCOME SHEET');
+  const isBank = rawType.includes('BANK') || rawType.includes('STATEMENT');
   const isProfile = rawType.includes('PROFILE') || rawType.includes('PHOTO') || rawType.includes('IMAGE');
   const isAadhaar = rawType.includes('AADHAAR') || rawType.includes('ADHAAR') || rawType.includes('UID');
   const isPan = rawType.includes('PAN');
   const isZip = rawType.includes('ZIP') || rawType.includes('MANUAL');
 
-  if (isCoApp) {
-    if (isProfile) return 'Co-Applicant Profile Image';
-    if (isAadhaar) return 'Co-Applicant Aadhaar Card';
-    if (isPan) return 'Co-Applicant PAN Card';
-    if (isZip) return 'Co-Applicant ZIP File';
-    return `Co-Applicant ${rejection.rejectedDocumentType || 'Document'}`;
-  } else {
-    if (isProfile) return 'Applicant Profile Image';
-    if (isAadhaar) return 'Applicant Aadhaar Card';
-    if (isPan) return 'Applicant PAN Card';
-    if (isZip) return 'Applicant ZIP File';
-    return `Applicant ${rejection.rejectedDocumentType || 'Document'}`;
-  }
+  if (isSalary) return `${prefix} Salary Slip / Income Sheet`;
+  if (isBank) return `${prefix} Bank Statement`;
+  if (isProfile) return `${prefix} Profile Image`;
+  if (isAadhaar) return `${prefix} Aadhaar Card`;
+  if (isPan) return `${prefix} PAN Card`;
+  if (isZip) return `${prefix} ZIP File`;
+  return `${prefix} ${rejection.rejectedDocumentType || 'Document'}`;
 };
 
 const mapBackendApplication = (item, index, agentsById = {}, rejections = []) => {
@@ -261,6 +269,15 @@ export default function NewApplications({ initialFilter = 'All' }) {
       return;
     }
 
+    const valRes = validateApplicantDocumentFile(file);
+    if (!valRes.valid) {
+      setRejectionFeedback((prev) => ({
+        ...prev,
+        [rejId]: { type: 'error', message: valRes.error }
+      }));
+      return;
+    }
+
     const rmContext = getCurrentRMContext();
     const rmId = Number(rmContext.rmId || 20);
     const token = localStorage.getItem('authToken') || localStorage.getItem('token');
@@ -276,15 +293,110 @@ export default function NewApplications({ initialFilter = 'All' }) {
         rawType.includes('CO_APPLICANT') ||
         rawType.includes('COAPPLICANT') ||
         rawType.startsWith('CO_') ||
-        rawType.startsWith('CO-');
+        rawType.startsWith('CO-') ||
+        (rejection.applicantSequence !== undefined && rejection.applicantSequence !== null && Number(rejection.applicantSequence) > 0);
 
+      const isSalary = rawType.includes('SALARY') || rawType.includes('INCOME_SHEET') || rawType.includes('INCOME SHEET');
+      const isBank = rawType.includes('BANK') || rawType.includes('STATEMENT');
       const isProfile = rawType.includes('PROFILE') || rawType.includes('PHOTO') || rawType.includes('IMAGE');
       const isAadhaar = rawType.includes('AADHAAR') || rawType.includes('ADHAAR') || rawType.includes('UID');
       const isPan = rawType.includes('PAN');
       const isZip = rawType.includes('ZIP') || rawType.includes('MANUAL');
 
       // Step 1: Upload replacement document
-      if (isCoApp) {
+      if (isCoApp && (isSalary || isBank)) {
+        // Co-Applicant Salary Slip or Bank Statement -> ApplicationKYCDocuments composite tuple
+        let docTypeId = rejection.documentTypeId;
+        if (!docTypeId) {
+          try {
+            const masterRes = await fetch(`${API_BASE}/DocumentTypeMaster`, { headers });
+            if (masterRes.ok) {
+              const masterData = await masterRes.json();
+              docTypeId = resolveDocumentTypeId(masterData, isSalary ? 'Salary Slip' : 'Bank Statement');
+            }
+          } catch {}
+        }
+        if (!docTypeId) {
+          docTypeId = isSalary ? 4 : 5;
+        }
+
+        const appProdId = rejection.applicationProductDetailsId || selectedReturnApp?.applicationProductDetailsId || selectedReturnApp?.id;
+        const seq = rejection.applicantSequence !== undefined && rejection.applicantSequence !== null
+          ? Number(rejection.applicantSequence)
+          : 1;
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('applicationProductDetailsId', String(appProdId));
+        formData.append('applicantSequence', String(seq));
+        formData.append('documentTypeId', String(docTypeId));
+        formData.append('uploadedBy', String(rmId));
+
+        const uploadUrl = `${API_BASE}/ApplicationKYCDocuments/applicant-document/upload`;
+        let uploadRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers,
+          body: formData,
+        });
+
+        if (!uploadRes.ok && (uploadRes.status === 400 || uploadRes.status === 404 || uploadRes.status === 405)) {
+          uploadRes = await fetch(uploadUrl, {
+            method: 'POST',
+            headers,
+            body: formData,
+          });
+        }
+
+        if (!uploadRes.ok) {
+          const errTxt = await uploadRes.text().catch(() => '');
+          throw new Error(`Failed to upload co-applicant replacement ${isSalary ? 'Salary Slip' : 'Bank Statement'} (${uploadRes.status}): ${errTxt}`);
+        }
+      } else if (!isCoApp && isBank) {
+        // Primary Applicant Bank Statement -> exists in ApplicationKYCDocuments
+        let docTypeId = rejection.documentTypeId;
+        if (!docTypeId) {
+          try {
+            const masterRes = await fetch(`${API_BASE}/DocumentTypeMaster`, { headers });
+            if (masterRes.ok) {
+              const masterData = await masterRes.json();
+              docTypeId = resolveDocumentTypeId(masterData, 'Bank Statement');
+            }
+          } catch {}
+        }
+        if (!docTypeId) {
+          docTypeId = 3;
+        }
+
+        const appProdId = rejection.applicationProductDetailsId || selectedReturnApp?.applicationProductDetailsId || selectedReturnApp?.id;
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('applicationProductDetailsId', String(appProdId));
+        formData.append('applicantSequence', '0');
+        formData.append('documentTypeId', String(docTypeId));
+        formData.append('uploadedBy', String(rmId));
+
+        const uploadUrl = `${API_BASE}/ApplicationKYCDocuments/applicant-document/upload`;
+        let uploadRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers,
+          body: formData,
+        });
+
+        if (!uploadRes.ok && (uploadRes.status === 400 || uploadRes.status === 404 || uploadRes.status === 405)) {
+          uploadRes = await fetch(uploadUrl, {
+            method: 'POST',
+            headers,
+            body: formData,
+          });
+        }
+
+        if (!uploadRes.ok) {
+          const errTxt = await uploadRes.text().catch(() => '');
+          throw new Error(`Failed to upload applicant replacement Bank Statement (${uploadRes.status}): ${errTxt}`);
+        }
+      } else if (isCoApp) {
+        // Co-Applicant Profile / Aadhaar / PAN / ZIP -> ApplicationKYCDocuments route endpoints
         let route = 'upload';
         if (isAadhaar) route = 'aadhar';
         else if (isPan) route = 'pan';
@@ -315,17 +427,31 @@ export default function NewApplications({ initialFilter = 'All' }) {
           throw new Error(`Failed to upload co-applicant document (${uploadRes.status}): ${errTxt}`);
         }
       } else {
-        let docTypeId = 4;
-        if (isProfile) docTypeId = 6;
-        else if (isAadhaar) docTypeId = 1;
-        else if (isPan) docTypeId = 2;
-        else if (isZip) docTypeId = 4;
+        // Primary Applicant: Salary Slip, Profile, Aadhaar, PAN, ZIP -> AgentCustomerDocument/upload
+        let docTypeId = rejection.documentTypeId;
+        if (!docTypeId) {
+          if (isSalary) {
+            docTypeId = 4;
+            try {
+              const masterRes = await fetch(`${API_BASE}/DocumentTypeMaster`, { headers });
+              if (masterRes.ok) {
+                const masterData = await masterRes.json();
+                docTypeId = resolveDocumentTypeId(masterData, 'Salary Slip') || 4;
+              }
+            } catch {}
+          } else if (isProfile) docTypeId = 6;
+          else if (isAadhaar) docTypeId = 1;
+          else if (isPan) docTypeId = 2;
+          else if (isZip) docTypeId = 4;
+          else docTypeId = 4;
+        }
 
+        const custId = rejection.agentCustomerId || selectedReturnApp?.agentCustomerId;
         const formData = new FormData();
         formData.append('file', file);
         formData.append('File', file);
-        formData.append('agentCustomerId', String(rejection.agentCustomerId || selectedReturnApp?.agentCustomerId));
-        formData.append('AgentCustomerId', String(rejection.agentCustomerId || selectedReturnApp?.agentCustomerId));
+        formData.append('agentCustomerId', String(custId));
+        formData.append('AgentCustomerId', String(custId));
         formData.append('documentTypeId', String(docTypeId));
         formData.append('DocumentTypeId', String(docTypeId));
         formData.append('createdBy', String(rmId));

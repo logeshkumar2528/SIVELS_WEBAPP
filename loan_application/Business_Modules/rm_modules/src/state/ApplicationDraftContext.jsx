@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { allNewApplications } from '../pages/NewApplications/newApplicationsData';
 import {
   LOAN_PRODUCTS,
@@ -963,14 +963,19 @@ export function ApplicationDraftProvider({ children }) {
 
   const [hydratingMap, setHydratingMap] = useState({});
 
+  const applicationsRef = useRef(applications);
+  useEffect(() => {
+    applicationsRef.current = applications;
+  }, [applications]);
+
   useEffect(() => {
     saveStoredApplications(applications);
   }, [applications]);
 
   const getApplication = useCallback((applicationId) => {
-    const source = applications[applicationId] || APP_SEED_MAP[applicationId] || buildBlankApplication(applicationId);
+    const source = applicationsRef.current[applicationId] || APP_SEED_MAP[applicationId] || buildBlankApplication(applicationId);
     return normalizeApplicationRecord(source);
-  }, [applications]);
+  }, []);
 
   const ensureApplication = useCallback((applicationId, overrides = {}) => {
     setApplications((current) => {
@@ -1090,7 +1095,7 @@ export function ApplicationDraftProvider({ children }) {
         }
 
         if (backendResult) {
-          const currentDraft = applications[appIdStr] || getApplication(appIdStr);
+          const currentDraft = applicationsRef.current[appIdStr] || getApplication(appIdStr);
           const mapped = mapBackendToApplication(backendResult, currentDraft);
           setApplications((prev) => ({
             ...prev,
@@ -1114,10 +1119,10 @@ export function ApplicationDraftProvider({ children }) {
 
     inFlightHydrations.set(appIdStr, hydrationPromise);
     return hydrationPromise;
-  }, [applications, getApplication]);
+  }, [getApplication]);
 
   const createApplicationDraft = useCallback(() => {
-    const nextId = generateApplicationNumber(applications);
+    const nextId = generateApplicationNumber(applicationsRef.current);
 
     setApplications((current) => ({
       ...current,
@@ -1129,7 +1134,7 @@ export function ApplicationDraftProvider({ children }) {
     }));
 
     return nextId;
-  }, [applications]);
+  }, []);
 
   const value = useMemo(() => ({
     applications,

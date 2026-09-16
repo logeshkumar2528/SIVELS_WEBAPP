@@ -2854,6 +2854,23 @@
   gap: 6px;
 }
 
+.bo-btn--outline-danger {
+  background-color: transparent;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bo-btn--outline-danger:hover:not(:disabled) {
+  background-color: #fef2f2;
+  border-color: #ef4444;
+  color: #b91c1c;
+}
+
 .bo-cv-file-card-details {
   display: flex;
   flex-direction: column;
@@ -3940,8 +3957,2903 @@
   transform: none;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   STEP 14: ELIGIBILITY ASSESSMENT (PHASE 2A)
+══════════════════════════════════════════════════════════════════════════ */
+.bo-cv-assess-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+}
+
+.bo-cv-assess-section {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 22px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bo-cv-assess-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.bo-cv-assess-section-title-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.bo-cv-assess-section-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-primary-light, #eaf5ee);
+  color: var(--color-primary, #0f7a4c);
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--color-primary-muted, #a8d5b5);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.bo-cv-assess-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 2px 0;
+  line-height: 1.3;
+}
+
+.bo-cv-assess-section-sub {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.bo-cv-assess-loading-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  color: #64748b;
+  font-size: 13px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px dashed #cbd5e1;
+}
+
+.bo-cv-assess-error-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #991b1b;
+  font-size: 13px;
+}
+
+.bo-cv-assess-error-msg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+/* ── Section 1: Method Cards ────────────────────────────────────────────── */
+.bo-cv-method-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.bo-cv-method-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 18px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  font-family: inherit;
+}
+
+.bo-cv-method-card:hover {
+  border-color: #94a3b8;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.bo-cv-method-card.is-selected {
+  border-color: #0f7a4c;
+  background: #fcfdfd;
+  box-shadow: 0 4px 14px rgba(15, 122, 76, 0.1);
+}
+
+.bo-cv-method-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.bo-cv-method-card-icon-wrap {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.bo-cv-method-card.is-selected .bo-cv-method-card-icon-wrap {
+  background: #eaf5ee;
+  color: #0f7a4c;
+}
+
+.bo-cv-method-radio {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 12px;
+  color: transparent;
+}
+
+.bo-cv-method-card.is-selected .bo-cv-method-radio {
+  border-color: #0f7a4c;
+  background: #0f7a4c;
+  color: #ffffff;
+}
+
+.bo-cv-method-card-content {
+  flex: 1;
+  margin-bottom: 14px;
+}
+
+.bo-cv-method-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 6px 0;
+}
+
+.bo-cv-method-desc {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.bo-cv-method-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.bo-cv-method-code-tag {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.bo-cv-method-active-pill {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f7a4c;
+  background: #eaf5ee;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid #a8d5b5;
+}
+
+/* ── Section 2: Applicant Selector ──────────────────────────────────────── */
+.bo-cv-applicant-tabs-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.bo-cv-applicant-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  text-align: left;
+  position: relative;
+}
+
+.bo-cv-applicant-tab-btn:hover {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+}
+
+.bo-cv-applicant-tab-btn.is-active {
+  background: #ffffff;
+  border-color: #0f7a4c;
+  box-shadow: 0 2px 8px rgba(15, 122, 76, 0.12);
+}
+
+.bo-cv-applicant-tab-icon {
+  color: #64748b;
+}
+
+.bo-cv-applicant-tab-btn.is-active .bo-cv-applicant-tab-icon {
+  color: #0f7a4c;
+}
+
+.bo-cv-applicant-tab-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.bo-cv-applicant-tab-role {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.bo-cv-applicant-tab-btn.is-active .bo-cv-applicant-tab-role {
+  color: #0f7a4c;
+}
+
+.bo-cv-applicant-tab-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.bo-cv-applicant-tab-active-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #0f7a4c;
+  margin-left: 4px;
+}
+
+/* ── Section 3: Information Grid ────────────────────────────────────────── */
+.bo-cv-assess-warning-strip {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.bo-cv-assess-warning-icon {
+  color: #d97706;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.bo-cv-assess-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.bo-cv-assess-info-cell {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bo-cv-assess-info-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+}
+
+.bo-cv-assess-info-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.bo-cv-role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.bo-cv-role-badge.is-main {
+  background: #eaf5ee;
+  color: #0f7a4c;
+  border: 1px solid #a8d5b5;
+}
+
+.bo-cv-role-badge.is-co {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.bo-cv-pan-val {
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  letter-spacing: 0.05em;
+  color: #1e293b;
+}
+
+.bo-cv-amount-val {
+  color: #0f7a4c;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.bo-cv-method-val {
+  color: #0369a1;
+}
+
+.bo-cv-foir-val {
+  color: #6d28d9;
+}
+
+/* ── Section 4: Placeholder Workspace ──────────────────────────────────── */
+.bo-cv-phase-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  letter-spacing: 0.03em;
+}
+
+.bo-cv-workspace-placeholder-card {
+  background: #f8fafc;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.bo-cv-workspace-placeholder-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.bo-cv-workspace-placeholder-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #0f7a4c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.bo-cv-workspace-placeholder-header h4 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 4px 0;
+}
+
+.bo-cv-workspace-placeholder-header p {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.bo-cv-workspace-feature-pills {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.bo-cv-feature-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.bo-cv-feature-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #0f7a4c;
+  flex-shrink: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PHASE 2B: SALARY INCOME ASSESSMENT STYLES
+══════════════════════════════════════════════════════════════════════════ */
+.bo-cv-salary-assessment-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+/* ── Section 4 Top Bar & Add Month Button ──────────────────────────────── */
+.bo-cv-salary-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 6px;
+}
+
+.bo-cv-salary-top-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bo-cv-salary-top-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.bo-cv-salary-count-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f7a4c;
+  background: #eaf5ee;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid #a8d5b5;
+}
+
+.bo-cv-salary-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1.5px dashed #0f7a4c;
+  color: #0f7a4c;
+  background: #f4fbf7;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.bo-cv-salary-add-btn:hover {
+  background: #e6f6ee;
+  border-color: #0d6941;
+  color: #0d6941;
+}
+
+.bo-cv-salary-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  color: #c2410c;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bo-cv-salary-remove-btn:hover {
+  background: #ffedd5;
+  border-color: #f97316;
+  color: #9a3412;
+}
+
+.bo-cv-salary-locked-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: #059669;
+  background: #ecfdf5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #a7f3d0;
+}
+
+/* ── Feedback Banners ───────────────────────────────────────────────────── */
+.bo-cv-salary-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.bo-cv-salary-banner.is-success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+.bo-cv-salary-banner.is-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.bo-cv-salary-banner.is-warning {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.bo-cv-salary-banner.is-info {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+}
+
+.bo-cv-salary-banner-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.bo-cv-salary-banner-msg {
+  flex: 1;
+  font-weight: 500;
+}
+
+/* ── Table & Inputs ─────────────────────────────────────────────────────── */
+.bo-cv-salary-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.bo-cv-salary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  text-align: left;
+  min-width: 780px;
+}
+
+.bo-cv-salary-table thead th {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 10px 10px;
+  border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.bo-cv-salary-table thead th.th-num {
+  text-align: right;
+}
+
+.bo-cv-salary-table thead th.th-readonly {
+  background: #f1f5f9;
+  color: #0f7a4c;
+}
+
+.bo-cv-salary-table thead th.th-status {
+  text-align: center;
+}
+
+.bo-cv-salary-table tbody tr {
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.15s ease;
+}
+
+.bo-cv-salary-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.bo-cv-salary-table tbody tr.is-persisted-row {
+  background: #fcfdfd;
+}
+
+.bo-cv-salary-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.bo-cv-salary-table tbody td {
+  padding: 8px 10px;
+  vertical-align: middle;
+}
+
+.bo-cv-salary-table tbody td.td-num {
+  text-align: right;
+}
+
+.bo-cv-salary-table tbody td.td-status {
+  text-align: center;
+}
+
+.bo-cv-salary-input {
+  width: 100%;
+  max-width: 96px;
+  padding: 5px 8px;
+  font-size: 12.5px;
+  font-family: inherit;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #0f172a;
+  text-align: right;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.bo-cv-salary-input.is-month {
+  max-width: 125px;
+  text-align: left;
+}
+
+.bo-cv-salary-input.is-percent {
+  max-width: 65px;
+}
+
+.bo-cv-salary-input:focus {
+  outline: none;
+  border-color: #0f7a4c;
+  box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.12);
+}
+
+.bo-cv-salary-input:disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.bo-cv-salary-month-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  font-weight: 700;
+  font-size: 12px;
+  color: #1e293b;
+  white-space: nowrap;
+}
+
+.bo-cv-salary-readonly-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.bo-cv-salary-calc-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f7a4c;
+}
+
+.bo-cv-salary-calc-val.is-total {
+  color: #0f7a4c;
+  background: #eaf5ee;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+/* ── Status Badges ──────────────────────────────────────────────────────── */
+.bo-cv-salary-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.bo-cv-salary-status-badge.is-saved {
+  background: #eaf5ee;
+  color: #0f7a4c;
+  border: 1px solid #a8d5b5;
+}
+
+.bo-cv-salary-status-badge.is-saving {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.bo-cv-salary-status-badge.is-error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.bo-cv-salary-status-badge.is-pending {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+/* ── Action Bar ─────────────────────────────────────────────────────────── */
+.bo-cv-salary-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+
+.bo-cv-salary-action-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.bo-cv-salary-hint-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #0f7a4c;
+  flex-shrink: 0;
+}
+
+.bo-cv-salary-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 22px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(15, 122, 76, 0.2);
+}
+
+/* ── 3-Month Income Summary Card ────────────────────────────────────────── */
+.bo-cv-salary-summary-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.bo-cv-salary-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.bo-cv-salary-summary-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.bo-cv-salary-summary-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f7a4c;
+  background: #eaf5ee;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid #a8d5b5;
+}
+
+.bo-cv-salary-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.bo-cv-salary-summary-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bo-cv-salary-summary-item.is-average {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.bo-cv-salary-summary-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+}
+
+.bo-cv-salary-summary-val {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f7a4c;
+}
+
+.bo-cv-salary-summary-val.is-engine {
+  font-size: 12px;
+  font-weight: 700;
+  color: #166534;
+  font-style: italic;
+}
+
+.bo-cv-salary-summary-sub {
+  font-size: 11px;
+  color: #64748b;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PHASE 2C: ABB METHOD WORKSPACE STYLES
+══════════════════════════════════════════════════════════════════════════ */
+.bo-cv-abb-assessment-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+/* ── Top Bar ─────────────────────────────────────────────────────────────── */
+.bo-cv-abb-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 4px;
+}
+
+.bo-cv-abb-top-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bo-cv-abb-top-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.bo-cv-abb-count-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f7a4c;
+  background: #eaf5ee;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid #a8d5b5;
+}
+
+.bo-cv-abb-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(15, 122, 76, 0.2);
+}
+
+/* ── Inline Add Account Form Card ───────────────────────────────────────── */
+.bo-cv-abb-add-form-card {
+  background: #ffffff;
+  border: 1.5px solid #0f7a4c;
+  border-radius: 10px;
+  padding: 18px 20px;
+  box-shadow: 0 4px 16px rgba(15, 122, 76, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: boCvSlideDown 0.2s ease;
+}
+
+@keyframes boCvSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bo-cv-abb-form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.bo-cv-abb-form-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #0f7a4c;
+}
+
+.bo-cv-abb-form-header-title h5 {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.bo-cv-abb-form-close-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.bo-cv-abb-form-close-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.bo-cv-abb-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px 18px;
+}
+
+.bo-cv-abb-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bo-cv-abb-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.bo-cv-abb-label .req {
+  color: #dc2626;
+  margin-left: 2px;
+}
+
+.bo-cv-abb-select,
+.bo-cv-abb-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #0f172a;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.bo-cv-abb-select:focus,
+.bo-cv-abb-input:focus {
+  outline: none;
+  border-color: #0f7a4c;
+  box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.12);
+}
+
+.bo-cv-abb-checkbox-group {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+
+.bo-cv-abb-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+}
+
+.bo-cv-abb-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #0f7a4c;
+  cursor: pointer;
+}
+
+.bo-cv-abb-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+/* ── Empty Card ─────────────────────────────────────────────────────────── */
+.bo-cv-abb-empty-card {
+  background: #f8fafc;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+}
+
+.bo-cv-abb-empty-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #eaf5ee;
+  color: #0f7a4c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.bo-cv-abb-empty-card h4 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.bo-cv-abb-empty-card p {
+  font-size: 13px;
+  color: #64748b;
+  max-width: 500px;
+  margin: 0 0 8px 0;
+  line-height: 1.45;
+}
+
+/* ── Registered Accounts List & Card ────────────────────────────────────── */
+.bo-cv-abb-accounts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.bo-cv-abb-account-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.bo-cv-abb-acc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.bo-cv-abb-acc-header-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bo-cv-abb-acc-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: #eaf5ee;
+  color: #0f7a4c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bo-cv-abb-acc-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bo-cv-abb-acc-bank-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.bo-cv-abb-acc-branch-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  background: #e2e8f0;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.bo-cv-abb-acc-num-pill {
+  font-size: 12px;
+  font-weight: 700;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  color: #0369a1;
+  background: #e0f2fe;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #bae6fd;
+}
+
+.bo-cv-abb-acc-period {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.bo-cv-abb-acc-period strong {
+  color: #334155;
+}
+
+.bo-cv-abb-inc-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.bo-cv-abb-inc-badge.is-included {
+  background: #eaf5ee;
+  color: #0f7a4c;
+  border: 1px solid #a8d5b5;
+}
+
+.bo-cv-abb-inc-badge.is-excluded {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PHASE 2D: CALCULATION SETTINGS, OBLIGATION & RESULT STYLES
+══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Section 5: Calculation Settings ────────────────────────────────────── */
+.bo-cv-calc-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.bo-cv-calc-setting-card {
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all 0.2s ease;
+}
+
+.bo-cv-calc-setting-card:hover {
+  border-color: #cbd5e1;
+  background: #ffffff;
+}
+
+.bo-cv-calc-setting-card.is-required-setting {
+  background: #ffffff;
+  border-color: #0f7a4c;
+  box-shadow: 0 2px 8px rgba(15, 122, 76, 0.06);
+}
+
+.bo-cv-calc-setting-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bo-cv-calc-setting-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #475569;
+}
+
+.bo-cv-calc-setting-label .req {
+  color: #dc2626;
+  margin-left: 2px;
+}
+
+.bo-cv-readonly-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  background: #e2e8f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+}
+
+.bo-cv-required-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: #0f7a4c;
+  background: #eaf5ee;
+  border: 1px solid #a8d5b5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+}
+
+.bo-cv-setting-action-btn {
+  background: transparent;
+  border: none;
+  color: #0f7a4c;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.bo-cv-setting-action-btn:hover {
+  background: #eaf5ee;
+  text-decoration: underline;
+}
+
+.bo-cv-calc-setting-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+}
+
+.bo-cv-setting-override-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+}
+
+.bo-cv-setting-currency-symbol {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f7a4c;
+}
+
+.bo-cv-setting-input {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #0f172a;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.bo-cv-setting-input.is-amount {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f7a4c;
+}
+
+.bo-cv-setting-input:focus {
+  outline: none;
+  border-color: #0f7a4c;
+  box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.12);
+}
+
+.bo-cv-setting-unit {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.bo-cv-calc-setting-hint {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* ── Section 6: Obligation & Policy FOIR ────────────────────────────────── */
+.bo-cv-obligation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.bo-cv-obligation-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bo-cv-obligation-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.bo-cv-obligation-val-row {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+}
+
+.bo-cv-obligation-val {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.bo-cv-obligation-desc {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.45;
+}
+
+/* ── Section 7: Calculate Trigger & Validation Bar ──────────────────────── */
+.bo-cv-calc-action-section {
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 12px;
+}
+
+.bo-cv-calc-trigger-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.bo-cv-calc-trigger-info {
+  flex: 1;
+  min-width: 260px;
+}
+
+.bo-cv-calc-trigger-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 4px 0;
+}
+
+.bo-cv-calc-trigger-sub {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.bo-cv-calculate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 28px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(15, 122, 76, 0.25);
+  transition: all 0.2s ease;
+}
+
+.bo-cv-calculate-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 122, 76, 0.35);
+}
+
+/* ── Section 8: Result Section ──────────────────────────────────────────── */
+.bo-cv-result-section {
+  background: #ffffff;
+  border: 2px solid #0f7a4c;
+  box-shadow: 0 6px 20px rgba(15, 122, 76, 0.08);
+}
+
+.bo-cv-assess-section-num.is-result {
+  background: #0f7a4c;
+  color: #ffffff;
+  border-color: #0f7a4c;
+}
+
+.bo-cv-result-header-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bo-cv-result-method-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0369a1;
+  background: #e0f2fe;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #bae6fd;
+}
+
+.bo-cv-result-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.bo-cv-result-status-badge.is-eligible {
+  background: #eaf5ee;
+  color: #0f7a4c;
+  border: 1.5px solid #a8d5b5;
+}
+
+.bo-cv-result-status-badge.is-shortfall {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1.5px solid #fde68a;
+}
+
+/* Hero Result Card */
+.bo-cv-result-hero-card {
+  background: linear-gradient(135deg, #f0fdf4 0%, #eaf5ee 100%);
+  border: 1.5px solid #a8d5b5;
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.bo-cv-result-hero-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bo-cv-result-hero-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #166534;
+}
+
+.bo-cv-result-hero-amount {
+  font-size: 32px;
+  font-weight: 800;
+  color: #0f7a4c;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.bo-cv-result-hero-sub-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #334155;
+  margin-top: 4px;
+}
+
+.bo-cv-result-hero-sub-divider {
+  color: #94a3b8;
+}
+
+.bo-cv-result-hero-status-box {
+  background: #ffffff;
+  border: 1px solid #a8d5b5;
+  border-radius: 10px;
+  padding: 14px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.bo-cv-result-hero-status-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.bo-cv-result-hero-status-val {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.bo-cv-result-hero-status-val.is-eligible {
+  color: #0f7a4c;
+}
+
+.bo-cv-result-hero-status-val.is-shortfall {
+  color: #b45309;
+}
+
+/* Result Metrics Grid */
+.bo-cv-result-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+}
+
+.bo-cv-result-metric-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bo-cv-result-metric-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+}
+
+.bo-cv-result-metric-val {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.bo-cv-result-metric-val.is-over-foir {
+  color: #dc2626;
+}
+
+.bo-cv-result-metric-sub {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+/* Result Metadata Footer */
+.bo-cv-result-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #f1f5f9;
+  font-size: 12px;
+  color: #64748b;
+  flex-wrap: wrap;
+}
+
+.bo-cv-result-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bo-cv-result-version-pill {
+  font-size: 11px;
+  font-weight: 700;
+  color: #334155;
+  background: #f1f5f9;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.bo-cv-result-time,
+.bo-cv-result-user {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.bo-cv-current-active-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f7a4c;
+  background: #eaf5ee;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid #a8d5b5;
+}
+
+/* ── Section 6: Add Loan Button & Inline Form Card ──────────────────────── */
+.bo-cv-loan-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(15, 122, 76, 0.2);
+}
+
+.bo-cv-loan-add-card {
+  background: #ffffff;
+  border: 1.5px solid #0f7a4c;
+  border-radius: 10px;
+  padding: 18px 20px;
+  box-shadow: 0 4px 16px rgba(15, 122, 76, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: boCvSlideDown 0.2s ease;
+  margin-bottom: 16px;
+}
+
+.bo-cv-loan-add-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.bo-cv-loan-add-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #0f7a4c;
+}
+
+.bo-cv-loan-add-title-row h5 {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.bo-cv-loan-close-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.bo-cv-loan-close-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.bo-cv-loan-add-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.bo-cv-loan-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.bo-cv-loan-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #475569;
+}
+
+.bo-cv-loan-label .req {
+  color: #dc2626;
+}
+
+.bo-cv-loan-select,
+.bo-cv-loan-input {
+  height: 38px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.bo-cv-loan-select:focus,
+.bo-cv-loan-input:focus {
+  border-color: #0f7a4c;
+  box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.12);
+}
+
+.bo-cv-loan-add-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #f1f5f9;
+}
+
+/* ── Section 6: Obligations Card & Mini-Table ───────────────────────────── */
+.bo-cv-obligations-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.bo-cv-obligations-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  gap: 12px;
+}
+
+.bo-cv-obligations-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.bo-cv-obligations-count-pill {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f7a4c;
+  background: #eaf5ee;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #a8d5b5;
+}
+
+.bo-cv-obligations-table-wrap {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.bo-cv-obligations-table {
+  min-width: 600px;
+}
+
+.bo-cv-obligations-empty {
+  padding: 20px;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.bo-cv-obligation-summary-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.bo-cv-obligation-summary-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+  flex: 1;
+  min-width: 260px;
+}
+
+.bo-cv-obligation-summary-total {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.bo-cv-obligation-summary-total strong {
+  font-size: 15px;
+  color: #0f7a4c;
+  font-weight: 800;
+}
+
+/* ── Section 9: Company Recommendation ──────────────────────────────────── */
+.bo-cv-recommendation-section {
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.bo-cv-assess-section-num.is-rec {
+  background: #1e293b;
+  color: #ffffff;
+  border-color: #1e293b;
+}
+
+.bo-cv-rec-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1e293b;
+  background: #f1f5f9;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+}
+
+.bo-cv-recommendation-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bo-cv-rec-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 480px;
+}
+
+.bo-cv-rec-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #334155;
+}
+
+.bo-cv-rec-label .req {
+  color: #dc2626;
+  margin-left: 2px;
+}
+
+.bo-cv-rec-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bo-cv-rec-currency-symbol {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f7a4c;
+}
+
+.bo-cv-rec-input {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
+  border: 1.5px solid #0f7a4c;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f7a4c;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.bo-cv-rec-input:focus {
+  outline: none;
+  border-color: #0f7a4c;
+  box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.15);
+}
+
+.bo-cv-rec-hint {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.bo-cv-rec-info-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.45;
+}
+
+.bo-cv-rec-info-icon {
+  color: #0369a1;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.bo-cv-rec-info-text strong {
+  color: #0f172a;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LIVE DYNAMIC SALARY WORKSPACE & ENHANCED STEP 14 POLISH
+══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Underwriting Guidance Strip ────────────────────────────────────────── */
+.bo-cv-salary-info-strip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #166534;
+  line-height: 1.45;
+}
+
+.bo-cv-salary-info-icon {
+  color: #0f7a4c;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.bo-cv-salary-info-text strong {
+  color: #0f7a4c;
+}
+
+/* ── 3-Month Compact Salary Summary Strip ────────────────────────────────── */
+.bo-cv-salary-summary-strip {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+
+.bo-cv-salary-summary-strip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-wrap: wrap;
+}
+
+.bo-cv-salary-summary-strip-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bo-cv-salary-summary-strip-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.bo-cv-salary-summary-strip-sub {
+  font-size: 11.5px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.bo-cv-salary-summary-strip-meta {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f7a4c;
+  background: #eaf5ee;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #a8d5b5;
+}
+
+.bo-cv-salary-summary-strip-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .bo-cv-salary-summary-strip-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.bo-cv-summary-strip-cell {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.bo-cv-summary-strip-cell.is-persisted {
+  background: #fcfdfd;
+  border-color: #e2e8f0;
+}
+
+.bo-cv-summary-strip-cell.is-draft {
+  background: #fafafa;
+  border-style: dashed;
+}
+
+.bo-cv-summary-strip-cell.is-average {
+  background: linear-gradient(135deg, #f0fdf4 0%, #eaf5ee 100%);
+  border: 1.5px solid #a8d5b5;
+}
+
+.bo-cv-summary-strip-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.bo-cv-summary-strip-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #475569;
+}
+
+.bo-cv-summary-strip-pill {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+
+.bo-cv-summary-strip-pill.is-persisted {
+  background: #eaf5ee;
+  color: #0f7a4c;
+  border: 1px solid #a8d5b5;
+}
+
+.bo-cv-summary-strip-pill.is-preview {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.bo-cv-summary-strip-pill.is-backend {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+
+.bo-cv-summary-strip-val {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.bo-cv-summary-strip-val.is-avg {
+  color: #0f7a4c;
+  font-size: 17px;
+}
+
+.bo-cv-summary-strip-sub {
+  font-size: 10.5px;
+  color: #64748b;
+}
+
+/* ── Pre-Calculation Parameters Summary Strip ───────────────────────────── */
+.bo-cv-calc-pre-summary {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.bo-cv-calc-pre-badge {
+  flex-shrink: 0;
+}
+
+.bo-cv-calc-pre-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #475569;
+}
+
+.bo-cv-calc-pre-items {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: #334155;
+}
+
+.bo-cv-calc-pre-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bo-cv-calc-pre-item-label {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.bo-cv-calc-pre-item strong {
+  color: #0f172a;
+}
+
+.bo-cv-calc-pre-dot {
+  color: #cbd5e1;
+  font-size: 10px;
+}
+
+/* ── RM Income Reference Card (Section 03) ────────────────────────────────── */
+.bo-cv-rm-income-ref-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-top: 14px;
+}
+
+.bo-cv-rm-income-ref-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.bo-cv-rm-income-ref-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bo-cv-rm-income-ref-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.bo-cv-rm-income-ref-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #475569;
+  background: #e2e8f0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bo-cv-rm-income-ref-sub {
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.bo-cv-rm-income-ref-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .bo-cv-rm-income-ref-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.bo-cv-rm-income-ref-cell {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bo-cv-rm-income-ref-cell.is-net {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.bo-cv-rm-income-ref-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.bo-cv-rm-income-ref-val {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.bo-cv-rm-income-ref-val.is-net-val {
+  color: #15803d;
+  font-weight: 800;
+}
+
+/* ── Company Recommendation Save Button (Section 09) ─────────────────────── */
+.bo-cv-save-rec-btn {
+  white-space: nowrap;
+  padding: 0 16px;
+  height: 40px;
+  font-weight: 600;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bo-cv-save-rec-btn:hover:not(:disabled) {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.bo-cv-save-rec-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bo-cv-rec-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Step 05 Financial Documents (Salary Slip, Bank Statement) ── */
+.bo-cv-financial-docs-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.bo-cv-subdoc-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.bo-cv-subdoc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.bo-cv-subdoc-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bo-cv-subdoc-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.bo-cv-subdoc-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Phase 2D: 17-Step Document Verification & Sidebar Grouping ── */
+
+.bo-cv-sidebar-group-header {
+  list-style: none;
+  padding: 14px 14px 6px 14px;
+  margin-top: 6px;
+}
+
+.bo-cv-sidebar-group-title {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  display: block;
+}
+
+.bo-cv-sidebar-group-header--docs {
+  padding: 10px 12px 8px 12px;
+  background: #f0fdf4;
+  border-top: 1px solid #dcfce7;
+  border-bottom: 1px solid #dcfce7;
+  margin: 10px 8px 6px 8px;
+  border-radius: 6px;
+}
+
+.bo-cv-sidebar-group-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bo-cv-sidebar-group-header--docs .bo-cv-sidebar-group-title {
+  color: #065f46;
+  font-size: 11px;
+}
+
+.bo-cv-group-progress-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  white-space: nowrap;
+}
+
+.bo-cv-group-progress-badge.is-progressing {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+.bo-cv-group-progress-badge.is-completed {
+  background: #059669;
+  color: #ffffff;
+  border-color: #047857;
+}
+
+.bo-cv-step-item--child {
+  padding-left: 8px;
+  border-left: 2px solid #e2e8f0;
+  margin-left: 12px;
+  margin-right: 8px;
+  margin-bottom: 2px;
+  transition: border-color 0.15s ease;
+}
+
+.bo-cv-step-item--child.is-active-child {
+  border-left-color: var(--color-primary, #0f7a4c);
+}
+
+.bo-cv-step-card--child {
+  padding: 8px 10px;
+}
+
+.bo-cv-step-num-box.is-verified-num {
+  background: #dcfce7;
+  color: #15803d;
+  font-weight: 800;
+}
+
+.bo-cv-step-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.bo-cv-sidebar-verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.bo-cv-verify-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.bo-cv-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #1e293b;
+  cursor: pointer;
+  user-select: none;
+}
+
+.bo-cv-verify-checkbox {
+  width: 17px;
+  height: 17px;
+  accent-color: #059669;
+  cursor: pointer;
+}
+
+.bo-cv-verify-text {
+  font-weight: 500;
+}
+
+.bo-cv-verify-text strong {
+  font-weight: 700;
+  color: #047857;
+}
+
+.bo-cv-verified-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
 
 
 
 
 
+
+
+
+
+
+
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   DOCUMENT VERIFICATION WORKSPACE ARCHITECTURE & ALIGNMENT (STEPS 02–07)
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Sidebar Range & Progress Badges ────────────────────────────── */
+.bo-cv-step-num-box--range {
+  width: auto !important;
+  min-width: 46px !important;
+  height: 28px !important;
+  padding: 0 6px !important;
+  border-radius: 14px !important;
+  white-space: nowrap !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+  flex-shrink: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.bo-cv-step-card.is-active .bo-cv-step-num-box--range {
+  background: var(--color-primary, #0f7a4c) !important;
+  color: #ffffff !important;
+  border-color: var(--color-primary, #0f7a4c) !important;
+  box-shadow: 0 0 0 1px var(--color-primary, #0f7a4c) !important;
+}
+
+.bo-cv-sidebar-progress-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.bo-cv-sidebar-progress-pill.is-progressing {
+  background: #fef9c3;
+  color: #854d0e;
+  border-color: #fde047;
+}
+
+.bo-cv-sidebar-progress-pill.is-completed {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #86efac;
+}
+
+/* ── 2. Unified Workspace Shell ────────────────────────────────────── */
+.bo-cv-doc-verification-workspace {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px 24px 24px 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── 3. Main Workspace Header Alignment ───────────────────────────── */
+.bo-cv-doc-workspace-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  padding-bottom: 14px !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  margin-bottom: 0 !important;
+}
+
+.bo-cv-doc-header-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+
+.bo-cv-step-badge-num--range {
+  width: auto !important;
+  min-width: 58px !important;
+  height: 38px !important;
+  padding: 0 10px !important;
+  white-space: nowrap !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  font-size: 13.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.01em !important;
+  border-radius: 10px !important;
+  background: var(--color-primary-light, #eaf5ee) !important;
+  color: var(--color-primary, #0f7a4c) !important;
+  border: 1px solid var(--color-primary-muted, #a8d5b5) !important;
+}
+
+.bo-cv-doc-header-text {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+  min-width: 0 !important;
+}
+
+.bo-cv-doc-workspace-title-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  flex-wrap: wrap !important;
+}
+
+.bo-cv-doc-workspace-title-row .bo-cv-step-panel-title {
+  margin: 0 !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  line-height: 1.25 !important;
+}
+
+.bo-cv-doc-header-text .bo-cv-step-panel-desc {
+  font-size: 13px !important;
+  color: #64748b !important;
+  margin: 0 !important;
+  line-height: 1.4 !important;
+}
+
+.bo-cv-doc-header-right {
+  display: flex !important;
+  align-items: center !important;
+  flex-shrink: 0 !important;
+}
+
+.bo-cv-doc-header-right .bo-cv-step-tag-pill {
+  margin: 0 !important;
+  white-space: nowrap !important;
+  font-size: 12px !important;
+}
+
+/* ── 4. Document Tab Bar Alignment (Equal Height, Full Width) ──────── */
+.bo-cv-doc-subtabs-nav {
+  display: flex !important;
+  align-items: stretch !important;
+  gap: 6px !important;
+  padding: 4px !important;
+  background: #f8fafc !important;
+  border-radius: 9px !important;
+  border: 1px solid #e2e8f0 !important;
+  overflow-x: auto !important;
+  scrollbar-width: thin !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.bo-cv-doc-subtab-btn {
+  flex: 1 1 0 !important;
+  min-width: 105px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  padding: 7px 8px !important;
+  height: 36px !important;
+  border: 1px solid transparent !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: #475569 !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.12s ease !important;
+  white-space: nowrap !important;
+  box-sizing: border-box !important;
+}
+
+.bo-cv-doc-subtab-btn:hover {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+.bo-cv-doc-subtab-btn.is-active {
+  background: #ffffff !important;
+  color: #0f7a4c !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+  font-weight: 700 !important;
+}
+
+.bo-cv-doc-subtab-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  color: #64748b !important;
+  background: #e2e8f0 !important;
+  padding: 1px 5px !important;
+  border-radius: 4px !important;
+  line-height: 1.2 !important;
+  flex-shrink: 0 !important;
+}
+
+.bo-cv-doc-subtab-btn.is-active .bo-cv-doc-subtab-badge {
+  background: #0f7a4c !important;
+  color: #ffffff !important;
+}
+
+.bo-cv-doc-subtab-btn.is-verified .bo-cv-doc-subtab-badge {
+  background: #dcfce7 !important;
+  color: #15803d !important;
+}
+
+.bo-cv-doc-subtab-label {
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+
+.bo-cv-doc-subtab-check {
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  color: #16a34a !important;
+  margin-left: 2px !important;
+  line-height: 1 !important;
+}
+
+.bo-cv-doc-subtab-alert {
+  font-size: 11px !important;
+  margin-left: 2px !important;
+  line-height: 1 !important;
+}
+
+/* ── 5. Inner Document Workspace & Header ──────────────────────────── */
+.bo-cv-doc-workspace-content {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+  width: 100% !important;
+}
+
+.bo-cv-doc-step-inner {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+  width: 100% !important;
+}
+
+.bo-cv-doc-step-header {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  padding-bottom: 12px !important;
+  margin-bottom: 4px !important;
+}
+
+.bo-cv-doc-step-header .bo-cv-step-badge-num {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  border-radius: 9px !important;
+  flex-shrink: 0 !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.bo-cv-doc-step-header .bo-cv-step-panel-title {
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  margin: 0 0 3px 0 !important;
+}
+
+.bo-cv-doc-step-header .bo-cv-step-panel-desc {
+  font-size: 12.5px !important;
+  color: #64748b !important;
+  margin: 0 !important;
+}

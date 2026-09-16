@@ -203,11 +203,219 @@ export const backOfficeService = {
   },
 
   /**
-   * Calculate fresh FOIR eligibility snapshot.
+   * Calculate fresh FOIR eligibility snapshot (Legacy).
    * @param {object} payload - { agentCustomerId, applicationEmploymentIncomeDetailsId, applicationProductDetailsId, createdBy }
    */
   calculateFoir: async (payload) => {
     const response = await axiosInstance.post(BACK_OFFICE_ENDPOINTS.FOIR_CALCULATE, payload);
+    return unwrapResponse(response);
+  },
+
+  /* ==========================================
+     8b. NEW ELIGIBILITY CALCULATION ENGINE APIs
+  ========================================== */
+
+  /**
+   * Retrieve all configured calculation methods (Income Method, ABB Method).
+   */
+  getCalculationMethods: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.CALCULATION_METHODS);
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve FOIR Master policies for initial policy FOIR resolution.
+   */
+  getFoirMaster: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.FOIR_MASTER);
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve all configured Employment Types from Master.
+   */
+  getEmploymentTypes: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.EMPLOYMENT_TYPES);
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve existing salary income records for a specific application product and applicant sequence.
+   * @param {string|number} applicationProductDetailsId
+   * @param {string|number} applicantSequence
+   */
+  getSalaryIncomeBySeq: async (applicationProductDetailsId, applicantSequence) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_SALARY_INCOME_BY_SEQ(applicationProductDetailsId, applicantSequence)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Create a single monthly salary income record.
+   * @param {object} payload - { applicationProductDetailsId, agentCustomerId, applicationEmploymentIncomeDetailsId, applicantSequence, salaryMonth, basicAmount, hraAmount, ccaAmount, taAmount, incentiveAmount, incentivePercentApplied, salarySlipPath, createdBy }
+   */
+  createSalaryIncome: async (payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_SALARY_INCOME,
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Update an existing monthly salary income record.
+   * @param {string|number} salaryIncomeDetailsId
+   * @param {object} payload - { salaryIncomeDetailsId, applicationProductDetailsId, agentCustomerId, applicationEmploymentIncomeDetailsId, applicantSequence, salaryMonth, basicAmount, hraAmount, ccaAmount, taAmount, incentiveAmount, incentivePercentApplied, salarySlipPath, modifiedBy }
+   */
+  updateSalaryIncome: async (salaryIncomeDetailsId, payload) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_SALARY_INCOME_BY_ID(salaryIncomeDetailsId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Update recommended loan amount on an eligibility assessment (Company Recommendation).
+   * @param {string|number} loanEligibilityAssessmentId
+   * @param {object} payload - { recommendedLoanAmount, modifiedBy }
+   */
+  updateAssessmentRecommendation: async (loanEligibilityAssessmentId, payload) => {
+    const response = await axiosInstance.patch(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_ASSESSMENT_RECOMMENDATION(loanEligibilityAssessmentId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve active banks from Bank Master.
+   */
+  getActiveBanks: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.BANKS_ACTIVE);
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve bank branches from Bank Branch Master.
+   */
+  getBankBranches: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.BANK_BRANCHES);
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve all bank active loans.
+   */
+  getActiveLoans: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.BANK_ACTIVE_LOANS);
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Create a new active loan facility under an existing bank details ID.
+   * @param {object} payload - { applicationBankExistingLoanDetailsId, loanType, totalLoanAmount, totalOutstanding, emiAmount, status, createdBy }
+   */
+  createActiveLoan: async (payload) => {
+    const response = await axiosInstance.post(BACK_OFFICE_ENDPOINTS.BANK_ACTIVE_LOANS, payload);
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Update an existing active loan facility.
+   * @param {string|number} id
+   * @param {object} payload - { applicationBankActiveLoanDetailsId, applicationBankExistingLoanDetailsId, loanType, totalLoanAmount, totalOutstanding, emiAmount, status, modifiedBy }
+   */
+  updateActiveLoan: async (id, payload) => {
+    const response = await axiosInstance.put(BACK_OFFICE_ENDPOINTS.BANK_ACTIVE_LOAN_BY_ID(id), payload);
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve all bank existing loan records.
+   */
+  getBankExistingLoans: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.BANK_EXISTING_LOANS);
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Create an application bank existing loan record.
+   * @param {object} payload - { applicationEmploymentIncomeDetailsId, bankId, bankBranchId, accountNumber, noOfActiveLoans, noOfActiveCreditCards, isPrimaryBank, createdBy }
+   */
+  createBankExistingLoan: async (payload) => {
+    const response = await axiosInstance.post(BACK_OFFICE_ENDPOINTS.BANK_EXISTING_LOANS, payload);
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve ABB accounts for a specific application product and applicant sequence.
+   * @param {string|number} applicationProductDetailsId
+   * @param {string|number} applicantSequence
+   */
+  getAbbAccountsBySeq: async (applicationProductDetailsId, applicantSequence) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_ABB_ACCOUNTS_BY_SEQ(applicationProductDetailsId, applicantSequence)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Create a new ABB account registration record.
+   * @param {object} payload - { applicationProductDetailsId, agentCustomerId, applicantSequence, bankId, bankBranchId, accountNumber, statementFromDate, statementToDate, statementDocumentPath, isIncluded, createdBy }
+   */
+  createAbbAccount: async (payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_ABB_ACCOUNTS,
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve monthly ABB balances for a specific ABB account ID.
+   * @param {string|number} abbAccountDetailsId
+   */
+  getAbbBalances: async (abbAccountDetailsId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_ABB_BALANCES_BY_ACCOUNT(abbAccountDetailsId)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Create a single monthly balance record for an ABB account.
+   * @param {object} payload - { abbAccountDetailsId, balanceMonth, balanceOn5th, balanceOn15th, balanceOn25th, createdBy }
+   */
+  createAbbBalance: async (payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_ABB_BALANCES,
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Run authoritative Eligibility Calculation engine (Income or ABB method).
+   * @param {object} payload - { applicationProductDetailsId, agentCustomerId, applicationEmploymentIncomeDetailsId, applicantSequence, assessmentMethodId, manualROI, manualTenureMonths, recommendedLoanAmount, pdDocumentPath, calculatedByUserId, calculatedByBackOfficeId, calculatedByRole }
+   */
+  calculateEligibility: async (payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_CALCULATE,
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve all saved calculation assessment results for an application.
+   * @param {string|number} applicationProductDetailsId
+   */
+  getAssessmentsByApplication: async (applicationProductDetailsId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_ASSESSMENTS_BY_APPLICATION(applicationProductDetailsId)
+    );
     return unwrapResponse(response);
   },
 
@@ -360,6 +568,105 @@ export const backOfficeService = {
   updateApplicationDocumentMetadata: async (documentId, payload) => {
     const response = await axiosInstance.put(
       BACK_OFFICE_ENDPOINTS.APPLICATION_DOCUMENT_METADATA(documentId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Delete an existing Back Office application document by ID.
+   * @param {string|number} documentId
+   */
+  deleteApplicationDocument: async (documentId) => {
+    const response = await axiosInstance.delete(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_DOCUMENT_DELETE(documentId)
+    );
+    return unwrapResponse(response);
+  },
+
+  /* ==========================================
+     11. APPLICANT-LEVEL DOCUMENTS (SALARY SLIP, BANK STATEMENT)
+  ========================================== */
+
+  /**
+   * Fetch an applicant-level document record by composite key.
+   * @param {string|number} applicationProductDetailsId
+   * @param {number} applicantSequence
+   * @param {number} documentTypeId
+   */
+  getApplicantDocument: async (applicationProductDetailsId, applicantSequence, documentTypeId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.APPLICANT_DOCUMENT(applicationProductDetailsId, applicantSequence, documentTypeId)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Upload a new applicant-level document (POST multipart/form-data).
+   * @param {FormData} formData - { file, applicationProductDetailsId, applicantSequence, documentTypeId, uploadedBy }
+   */
+  uploadApplicantDocument: async (formData) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.APPLICANT_DOCUMENT_UPLOAD,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Replace an existing applicant-level document (PUT multipart/form-data).
+   * @param {FormData} formData - { file, applicationProductDetailsId, applicantSequence, documentTypeId, uploadedBy }
+   */
+  replaceApplicantDocument: async (formData) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.APPLICANT_DOCUMENT_UPLOAD,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Download a KYC/applicant document as blob by relative server path.
+   * @param {string} path - Server relative path
+   */
+  downloadKycDocumentByPath: async (path) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.KYC_DOCUMENT_DOWNLOAD(path),
+      {
+        responseType: 'blob',
+      }
+    );
+    return response.data;
+  },
+
+  /* ==========================================
+     12. STEP-LEVEL VERIFICATION (BACK OFFICE)
+  ========================================== */
+
+  /**
+   * Retrieve all step verification records for an application.
+   * @param {string|number} appProdId - Application Product Details ID
+   */
+  getStepVerificationsByApplication: async (appProdId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.STEP_VERIFICATION_BY_APPLICATION(appProdId)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Create or update a step verification record (PUT /api/BackOfficeStepVerification).
+   * @param {object} payload - { applicationProductDetailsId, stepCode, isVerified, remarks, verifiedByBackOfficeId }
+   */
+  saveStepVerification: async (payload) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.STEP_VERIFICATION,
       payload
     );
     return unwrapResponse(response);

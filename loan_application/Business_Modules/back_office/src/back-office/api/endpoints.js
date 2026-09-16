@@ -23,6 +23,15 @@ export const BACK_OFFICE_ENDPOINTS = {
 
   PD_VERIFICATION_TYPES: '/PDVerificationTypeMaster',
 
+  BANKS_ACTIVE: '/masters/bank/active',
+  BANK_BRANCHES: '/BankBranch',
+  BANK_ACTIVE_LOANS: '/ApplicationBankActiveLoanDetails',
+  BANK_ACTIVE_LOAN_BY_ID: (id) =>
+    `/ApplicationBankActiveLoanDetails/${encodeURIComponent(id)}`,
+  BANK_EXISTING_LOANS: '/ApplicationBankExistingLoanDetails',
+  BANK_EXISTING_LOAN_BY_ID: (id) =>
+    `/ApplicationBankExistingLoanDetails/${encodeURIComponent(id)}`,
+
   // Customer / Lead Ingestion
   CUSTOMERS: '/AgentAddCustomer',
   CUSTOMER_BY_ID: (id) => `/AgentAddCustomer/${encodeURIComponent(id)}`,
@@ -43,11 +52,34 @@ export const BACK_OFFICE_ENDPOINTS = {
   BACK_OFFICE_BY_ID: (id) =>
     `/BackOfficeMaster/${encodeURIComponent(id)}`,
 
-  // FOIR Eligibility Calculation
+  // FOIR Eligibility Calculation (Legacy)
   FOIR_CALCULATION: '/FOIREligibilityCalculation',
   FOIR_BY_CUSTOMER: (agentCustomerId) =>
     `/FOIREligibilityCalculation/by-customer/${encodeURIComponent(agentCustomerId)}`,
   FOIR_CALCULATE: '/FOIREligibilityCalculation/calculate',
+
+  // Master Data - FOIR & Assessment
+  FOIR_MASTER: '/FOIRMaster',
+  EMPLOYMENT_TYPES: '/EmploymentType',
+
+  // New Eligibility Calculation Engine APIs
+  CALCULATION_METHODS: '/calculation/methods',
+  CALCULATION_CALCULATE: '/calculation/calculate',
+  CALCULATION_SALARY_INCOME: '/calculation/salary-income',
+  CALCULATION_SALARY_INCOME_BY_ID: (salaryIncomeDetailsId) =>
+    `/calculation/salary-income/${encodeURIComponent(salaryIncomeDetailsId)}`,
+  CALCULATION_SALARY_INCOME_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
+    `/calculation/salary-income/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
+  CALCULATION_ABB_ACCOUNTS: '/calculation/abb-accounts',
+  CALCULATION_ABB_ACCOUNTS_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
+    `/calculation/abb-accounts/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
+  CALCULATION_ABB_BALANCES: '/calculation/abb-balances',
+  CALCULATION_ABB_BALANCES_BY_ACCOUNT: (abbAccountDetailsId) =>
+    `/calculation/abb-balances/${encodeURIComponent(abbAccountDetailsId)}`,
+  CALCULATION_ASSESSMENTS_BY_APPLICATION: (applicationProductDetailsId) =>
+    `/calculation/assessments/by-application/${encodeURIComponent(applicationProductDetailsId)}`,
+  CALCULATION_ASSESSMENT_RECOMMENDATION: (loanEligibilityAssessmentId) =>
+    `/calculation/assessments/${encodeURIComponent(loanEligibilityAssessmentId)}/recommendation`,
 
   // Document Rejection & Returned Application Workflow
   DOCUMENT_REJECTIONS: '/BackOfficeDocumentRejection',
@@ -72,4 +104,18 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/BackOfficeApplicationDocuments/${encodeURIComponent(documentId)}/upload`,
   APPLICATION_DOCUMENT_METADATA: (documentId) =>
     `/BackOfficeApplicationDocuments/${encodeURIComponent(documentId)}`,
+  APPLICATION_DOCUMENT_DELETE: (documentId) =>
+    `/BackOfficeApplicationDocuments/${encodeURIComponent(documentId)}`,
+
+  // Applicant-Level Documents (Salary Slip, Bank Statement)
+  APPLICANT_DOCUMENT: (applicationProductDetailsId, applicantSequence, documentTypeId) =>
+    `/ApplicationKYCDocuments/applicant-document?applicationProductDetailsId=${encodeURIComponent(applicationProductDetailsId)}&applicantSequence=${encodeURIComponent(applicantSequence)}&documentTypeId=${encodeURIComponent(documentTypeId)}`,
+  APPLICANT_DOCUMENT_UPLOAD: '/ApplicationKYCDocuments/applicant-document/upload',
+  KYC_DOCUMENT_DOWNLOAD: (path) =>
+    `/ApplicationKYCDocuments/download?path=${encodeURIComponent(path)}`,
+
+  // Step-Level Verification Persistence
+  STEP_VERIFICATION: '/BackOfficeStepVerification',
+  STEP_VERIFICATION_BY_APPLICATION: (appProdId) =>
+    `/BackOfficeStepVerification/application/${encodeURIComponent(appProdId)}`,
 };

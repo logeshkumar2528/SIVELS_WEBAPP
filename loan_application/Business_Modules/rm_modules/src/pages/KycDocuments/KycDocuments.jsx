@@ -30,6 +30,9 @@ import {
 } from '../applicationWizard/flowUtils';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { parseApiErrorBody } from '../../utils/formatUserFacingError';
+import { resolveDocumentTypeId, validateApplicantDocumentFile } from '../../../../../Core/src/utils/documentTypeHelper';
+import { getCurrentRMContext } from '../../utils/rmContext';
+import rmCustomerService from '../../services/rmCustomerService';
 import './KycDocuments.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -151,21 +154,38 @@ function KycCard({
   const [otpValue, setOtpValue] = useState('');
   const [fileSizeError, setFileSizeError] = useState('');
   const fileInputRefs = useRef([]);
-  const coDocInputRefs = useRef({ aadhaar: null, pan: null, profile: null });
+  const docInputRefs = useRef({ aadhaar: null, pan: null, profile: null, salarySlip: null, bankStatement: null });
 
-  const handleCoDocChange = (docType, event) => {
+  const handleDocChange = (docType, event) => {
     const file = event.target.files?.[0];
     if (file) {
-      onCoApplicantDocChange?.(docType, file);
+      if (docType === 'salarySlip' || docType === 'bankStatement') {
+        const valRes = validateApplicantDocumentFile(file);
+        if (!valRes.valid) {
+          setFileSizeError(valRes.error);
+          event.target.value = '';
+          return;
+        }
+      } else if (file.size > 150 * 1024 * 1024) {
+        setFileSizeError('Each file must be 150 MB or smaller');
+        event.target.value = '';
+        return;
+      }
+      setFileSizeError('');
+      if (isCoApplicant) {
+        onCoApplicantDocChange?.(docType, file);
+      }
     }
     event.target.value = '';
   };
 
-  const handleCoDocRemove = (docType) => {
-    if (coDocInputRefs.current[docType]) {
-      coDocInputRefs.current[docType].value = '';
+  const handleDocRemove = (docType) => {
+    if (docInputRefs.current[docType]) {
+      docInputRefs.current[docType].value = '';
     }
-    onCoApplicantDocRemove?.(docType);
+    if (isCoApplicant) {
+      onCoApplicantDocRemove?.(docType);
+    }
   };
 
   useEffect(() => {
@@ -707,14 +727,14 @@ function KycCard({
                 <label className="form-label">Aadhaar</label>
                 <input
                   ref={(el) => {
-                    coDocInputRefs.current.aadhaar = el;
+                    docInputRefs.current.aadhaar = el;
                   }}
                   type="file"
                   style={coApplicantDocs?.aadhaar || coApplicantPersistedDocs?.aadhaar?.exists ? { display: 'none' } : undefined}
                   className={!coApplicantDocs?.aadhaar && !coApplicantPersistedDocs?.aadhaar?.exists ? "form-input aw-input kyc-compact-file-input" : undefined}
                   accept=".pdf,.jpg,.jpeg,.png"
                   aria-label="Upload Co-Applicant Aadhaar"
-                  onChange={(e) => handleCoDocChange('aadhaar', e)}
+                  onChange={(e) => handleDocChange('aadhaar', e)}
                 />
 
                 {/* Local fresh file selected */}
@@ -746,7 +766,7 @@ function KycCard({
                       <button
                         type="button"
                         className="co-doc-btn co-doc-btn--replace"
-                        onClick={() => coDocInputRefs.current.aadhaar?.click()}
+                        onClick={() => docInputRefs.current.aadhaar?.click()}
                         title="Replace Aadhaar document"
                       >
                         <RefreshCw size={12} />
@@ -754,7 +774,7 @@ function KycCard({
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleCoDocRemove('aadhaar')}
+                        onClick={() => handleDocRemove('aadhaar')}
                         className="co-doc-btn co-doc-btn--remove"
                         title="Clear selection"
                         aria-label="Clear Aadhaar selection"
@@ -794,7 +814,7 @@ function KycCard({
                       <button
                         type="button"
                         className="co-doc-btn co-doc-btn--replace"
-                        onClick={() => coDocInputRefs.current.aadhaar?.click()}
+                        onClick={() => docInputRefs.current.aadhaar?.click()}
                         title="Replace Aadhaar document"
                       >
                         <RefreshCw size={12} />
@@ -810,14 +830,14 @@ function KycCard({
                 <label className="form-label">PAN Card</label>
                 <input
                   ref={(el) => {
-                    coDocInputRefs.current.pan = el;
+                    docInputRefs.current.pan = el;
                   }}
                   type="file"
                   style={coApplicantDocs?.pan || coApplicantPersistedDocs?.pan?.exists ? { display: 'none' } : undefined}
                   className={!coApplicantDocs?.pan && !coApplicantPersistedDocs?.pan?.exists ? "form-input aw-input kyc-compact-file-input" : undefined}
                   accept=".pdf,.jpg,.jpeg,.png"
                   aria-label="Upload Co-Applicant PAN Card"
-                  onChange={(e) => handleCoDocChange('pan', e)}
+                  onChange={(e) => handleDocChange('pan', e)}
                 />
 
                 {/* Local fresh file selected */}
@@ -849,7 +869,7 @@ function KycCard({
                       <button
                         type="button"
                         className="co-doc-btn co-doc-btn--replace"
-                        onClick={() => coDocInputRefs.current.pan?.click()}
+                        onClick={() => docInputRefs.current.pan?.click()}
                         title="Replace PAN Card document"
                       >
                         <RefreshCw size={12} />
@@ -857,7 +877,7 @@ function KycCard({
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleCoDocRemove('pan')}
+                        onClick={() => handleDocRemove('pan')}
                         className="co-doc-btn co-doc-btn--remove"
                         title="Clear selection"
                         aria-label="Clear PAN Card selection"
@@ -897,7 +917,7 @@ function KycCard({
                       <button
                         type="button"
                         className="co-doc-btn co-doc-btn--replace"
-                        onClick={() => coDocInputRefs.current.pan?.click()}
+                        onClick={() => docInputRefs.current.pan?.click()}
                         title="Replace PAN Card document"
                       >
                         <RefreshCw size={12} />
@@ -913,14 +933,14 @@ function KycCard({
                 <label className="form-label">Profile Image</label>
                 <input
                   ref={(el) => {
-                    coDocInputRefs.current.profile = el;
+                    docInputRefs.current.profile = el;
                   }}
                   type="file"
                   style={coApplicantDocs?.profile || coApplicantPersistedDocs?.profile?.exists ? { display: 'none' } : undefined}
                   className={!coApplicantDocs?.profile && !coApplicantPersistedDocs?.profile?.exists ? "form-input aw-input kyc-compact-file-input" : undefined}
                   accept=".jpg,.jpeg,.png"
                   aria-label="Upload Co-Applicant Profile Image"
-                  onChange={(e) => handleCoDocChange('profile', e)}
+                  onChange={(e) => handleDocChange('profile', e)}
                 />
 
                 {/* Local fresh file selected */}
@@ -952,7 +972,7 @@ function KycCard({
                       <button
                         type="button"
                         className="co-doc-btn co-doc-btn--replace"
-                        onClick={() => coDocInputRefs.current.profile?.click()}
+                        onClick={() => docInputRefs.current.profile?.click()}
                         title="Replace Profile Image"
                       >
                         <RefreshCw size={12} />
@@ -960,7 +980,7 @@ function KycCard({
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleCoDocRemove('profile')}
+                        onClick={() => handleDocRemove('profile')}
                         className="co-doc-btn co-doc-btn--remove"
                         title="Clear selection"
                         aria-label="Clear Profile Image selection"
@@ -1000,8 +1020,214 @@ function KycCard({
                       <button
                         type="button"
                         className="co-doc-btn co-doc-btn--replace"
-                        onClick={() => coDocInputRefs.current.profile?.click()}
+                        onClick={() => docInputRefs.current.profile?.click()}
                         title="Replace Profile Image"
+                      >
+                        <RefreshCw size={12} />
+                        <span>Replace</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 4. Salary Slip / Income Sheet */}
+              <div className="co-doc-col">
+                <label className="form-label">Salary Slip / Income Sheet</label>
+                <input
+                  ref={(el) => {
+                    docInputRefs.current.salarySlip = el;
+                  }}
+                  type="file"
+                  style={coApplicantDocs?.salarySlip || coApplicantPersistedDocs?.salarySlip?.exists ? { display: 'none' } : undefined}
+                  className={!coApplicantDocs?.salarySlip && !coApplicantPersistedDocs?.salarySlip?.exists ? "form-input aw-input kyc-compact-file-input" : undefined}
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  aria-label="Upload Co-Applicant Salary Slip"
+                  onChange={(e) => handleDocChange('salarySlip', e)}
+                />
+
+                {/* Local fresh file selected */}
+                {coApplicantDocs?.salarySlip && (
+                  <div className="co-doc-selected-card">
+                    <div className="co-doc-selected-info">
+                      <div className="co-doc-selected-icon">
+                        {getFileIcon(coApplicantDocs.salarySlip.name)}
+                      </div>
+                      <span className="co-doc-selected-name" title={coApplicantDocs.salarySlip.name}>
+                        {coApplicantDocs.salarySlip.name}
+                      </span>
+                      {coApplicantDocs.salarySlip.size && (
+                        <span className="co-doc-selected-size">
+                          • {formatFileSize(coApplicantDocs.salarySlip.size)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="co-doc-selected-actions">
+                      <button
+                        type="button"
+                        className="co-doc-btn co-doc-btn--view"
+                        onClick={() => onViewLocalFile?.(coApplicantDocs.salarySlip, `${title} - Salary Slip`)}
+                        title="View Salary Slip"
+                      >
+                        <Eye size={12} />
+                        <span>View</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="co-doc-btn co-doc-btn--replace"
+                        onClick={() => docInputRefs.current.salarySlip?.click()}
+                        title="Replace Salary Slip"
+                      >
+                        <RefreshCw size={12} />
+                        <span>Replace</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDocRemove('salarySlip')}
+                        className="co-doc-btn co-doc-btn--remove"
+                        title="Clear selection"
+                        aria-label="Clear Salary Slip selection"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Persisted server file */}
+                {!coApplicantDocs?.salarySlip && coApplicantPersistedDocs?.salarySlip?.exists && (
+                  <div className="co-doc-selected-card">
+                    <div className="co-doc-selected-info">
+                      <div className="co-doc-selected-icon">
+                        {getFileIcon(coApplicantPersistedDocs.salarySlip.fileName)}
+                      </div>
+                      <span className="co-doc-selected-name" title={coApplicantPersistedDocs.salarySlip.fileName}>
+                        {coApplicantPersistedDocs.salarySlip.fileName}
+                      </span>
+                      {coApplicantPersistedDocs.salarySlip.size && (
+                        <span className="co-doc-selected-size">
+                          • {formatFileSize(coApplicantPersistedDocs.salarySlip.size)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="co-doc-selected-actions">
+                      <button
+                        type="button"
+                        className="co-doc-btn co-doc-btn--view"
+                        onClick={() => onViewPersistedDoc?.(coApplicantPersistedDocs.salarySlip, `${title} - Salary Slip`)}
+                        title="View Salary Slip"
+                      >
+                        <Eye size={12} />
+                        <span>View</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="co-doc-btn co-doc-btn--replace"
+                        onClick={() => docInputRefs.current.salarySlip?.click()}
+                        title="Replace Salary Slip"
+                      >
+                        <RefreshCw size={12} />
+                        <span>Replace</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 5. Bank Statement */}
+              <div className="co-doc-col">
+                <label className="form-label">Bank Statement</label>
+                <input
+                  ref={(el) => {
+                    docInputRefs.current.bankStatement = el;
+                  }}
+                  type="file"
+                  style={coApplicantDocs?.bankStatement || coApplicantPersistedDocs?.bankStatement?.exists ? { display: 'none' } : undefined}
+                  className={!coApplicantDocs?.bankStatement && !coApplicantPersistedDocs?.bankStatement?.exists ? "form-input aw-input kyc-compact-file-input" : undefined}
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  aria-label="Upload Co-Applicant Bank Statement"
+                  onChange={(e) => handleDocChange('bankStatement', e)}
+                />
+
+                {/* Local fresh file selected */}
+                {coApplicantDocs?.bankStatement && (
+                  <div className="co-doc-selected-card">
+                    <div className="co-doc-selected-info">
+                      <div className="co-doc-selected-icon">
+                        {getFileIcon(coApplicantDocs.bankStatement.name)}
+                      </div>
+                      <span className="co-doc-selected-name" title={coApplicantDocs.bankStatement.name}>
+                        {coApplicantDocs.bankStatement.name}
+                      </span>
+                      {coApplicantDocs.bankStatement.size && (
+                        <span className="co-doc-selected-size">
+                          • {formatFileSize(coApplicantDocs.bankStatement.size)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="co-doc-selected-actions">
+                      <button
+                        type="button"
+                        className="co-doc-btn co-doc-btn--view"
+                        onClick={() => onViewLocalFile?.(coApplicantDocs.bankStatement, `${title} - Bank Statement`)}
+                        title="View Bank Statement"
+                      >
+                        <Eye size={12} />
+                        <span>View</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="co-doc-btn co-doc-btn--replace"
+                        onClick={() => docInputRefs.current.bankStatement?.click()}
+                        title="Replace Bank Statement"
+                      >
+                        <RefreshCw size={12} />
+                        <span>Replace</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDocRemove('bankStatement')}
+                        className="co-doc-btn co-doc-btn--remove"
+                        title="Clear selection"
+                        aria-label="Clear Bank Statement selection"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Persisted server file */}
+                {!coApplicantDocs?.bankStatement && coApplicantPersistedDocs?.bankStatement?.exists && (
+                  <div className="co-doc-selected-card">
+                    <div className="co-doc-selected-info">
+                      <div className="co-doc-selected-icon">
+                        {getFileIcon(coApplicantPersistedDocs.bankStatement.fileName)}
+                      </div>
+                      <span className="co-doc-selected-name" title={coApplicantPersistedDocs.bankStatement.fileName}>
+                        {coApplicantPersistedDocs.bankStatement.fileName}
+                      </span>
+                      {coApplicantPersistedDocs.bankStatement.size && (
+                        <span className="co-doc-selected-size">
+                          • {formatFileSize(coApplicantPersistedDocs.bankStatement.size)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="co-doc-selected-actions">
+                      <button
+                        type="button"
+                        className="co-doc-btn co-doc-btn--view"
+                        onClick={() => onViewPersistedDoc?.(coApplicantPersistedDocs.bankStatement, `${title} - Bank Statement`)}
+                        title="View Bank Statement"
+                      >
+                        <Eye size={12} />
+                        <span>View</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="co-doc-btn co-doc-btn--replace"
+                        onClick={() => docInputRefs.current.bankStatement?.click()}
+                        title="Replace Bank Statement"
                       >
                         <RefreshCw size={12} />
                         <span>Replace</span>
@@ -1027,10 +1253,10 @@ export default function KycDocuments() {
   const [errors, setErrors] = useState({});
   const [errorPopup, setErrorPopup] = useState(null);
 
-  // Co-Applicant 3-document local state (keyed by coApplicant index: { [index]: { aadhaar: File|null, pan: File|null, profile: File|null } })
+  // Co-Applicant document local state (keyed by coApplicant index: { [index]: { aadhaar: File|null, pan: File|null, profile: File|null, salarySlip: File|null, bankStatement: File|null } })
   const [coApplicantDocs, setCoApplicantDocs] = useState({});
 
-  // Co-Applicant persisted 3-document state hydrated from GET APIs: { [index]: { aadhaar: { exists, fileName, blobUrl, mimeType, size }|null, ... } }
+  // Co-Applicant persisted document state hydrated from GET APIs: { [index]: { aadhaar: { exists, fileName, blobUrl, mimeType, size }|null, salarySlip: ..., bankStatement: ... } }
   const [coApplicantPersistedDocs, setCoApplicantPersistedDocs] = useState({});
 
   // Supplementary KYC records discovered from server for dynamic resolution
@@ -1103,7 +1329,9 @@ export default function KycDocuments() {
         CO_APPLICANT_PROFILE: 1,
         CO_APPLICANT_AADHAAR: 2,
         CO_APPLICANT_PAN: 3,
-        CO_APPLICANT_MANUAL: 4,
+        CO_APPLICANT_SALARY_SLIP: 4,
+        CO_APPLICANT_BANK_STATEMENT: 5,
+        CO_APPLICANT_MANUAL: 6,
       };
 
       updated.sort((a, b) => {
@@ -1179,13 +1407,13 @@ export default function KycDocuments() {
   const modalBlobUrlsRef = useRef([]);
   const hydratedKycIdsRef = useRef(new Set());
   const hydratedCoDocKeysRef = useRef(new Set());
+  const hydratedFinancialDocKeysRef = useRef(new Set());
 
   useEffect(() => {
-    ensureApplication(appId);
-    if (loadApplicationFromBackend) {
+    if (appId && loadApplicationFromBackend) {
       loadApplicationFromBackend(appId);
     }
-  }, [appId, ensureApplication, loadApplicationFromBackend]);
+  }, [appId, loadApplicationFromBackend]);
 
   // Master Data loading
   useEffect(() => {
@@ -1621,6 +1849,95 @@ export default function KycDocuments() {
     };
   }, [coApplicantKycIdsKey]);
 
+  // ── Dedicated Hydration for Applicant (Seq 0) & Co-Applicants (Seq 1..N) Financial Docs ──
+  useEffect(() => {
+    const appProdId =
+      appData?.applicationProductDetailsId ||
+      appData?.ApplicationProductDetailsId ||
+      appData?.id ||
+      null;
+
+    if (!appProdId || documentTypeOptions.length === 0) return;
+
+    let isMounted = true;
+
+    async function hydrateFinancialDocs() {
+      const salarySlipTypeId = resolveDocumentTypeId(documentTypeOptions, 'Salary Slip');
+      const bankStatementTypeId = resolveDocumentTypeId(documentTypeOptions, 'Bank Statement');
+
+      const docConfigs = [
+        { key: 'salarySlip', targetName: 'Salary Slip', typeId: salarySlipTypeId, defaultBase: 'SalarySlip' },
+        { key: 'bankStatement', targetName: 'Bank Statement', typeId: bankStatementTypeId, defaultBase: 'BankStatement' },
+      ];
+
+      // Hydrate Existing Co-Applicants (applicantSequence = 1..N)
+      // Only hydrate sequences for co-applicants that actually exist
+      const numCoApplicants = Math.max(activeCount - 1, (form.coApplicants || []).length, 0);
+      for (let i = 0; i < numCoApplicants; i++) {
+        const seq = i + 1;
+        for (const { key, targetName, typeId, defaultBase } of docConfigs) {
+          if (!typeId) continue;
+          const cacheKey = `applicant_doc_${appProdId}_${seq}_${typeId}`;
+          if (hydratedFinancialDocKeysRef.current.has(cacheKey)) continue;
+
+          try {
+            const docRes = await rmCustomerService.getApplicantDocument(appProdId, seq, typeId);
+            const docData = docRes?.data || docRes?.value || docRes;
+            const path = docData?.documentPath || docData?.DocumentPath || docData?.filePath || null;
+            if (path && isMounted) {
+              hydratedFinancialDocKeysRef.current.add(cacheKey);
+              const dlRes = await rmCustomerService.downloadKycDocumentByPath(path);
+              const blob = dlRes?.data || dlRes;
+              if (blob && blob.size > 0) {
+                const cleanName = path.split('/').pop() || path.split('\\').pop() || `CoApplicant_${seq}_${defaultBase}.pdf`;
+                const isPdf = blob.type === 'application/pdf' || cleanName.toLowerCase().endsWith('.pdf');
+                let mimeType = blob.type || (isPdf ? 'application/pdf' : 'image/jpeg');
+                if (/\.(jpg|jpeg)$/i.test(cleanName)) mimeType = 'image/jpeg';
+                else if (/\.png$/i.test(cleanName)) mimeType = 'image/png';
+                const typedBlob = new Blob([blob], { type: mimeType });
+                const blobUrl = URL.createObjectURL(typedBlob);
+                activeBlobUrlsRef.current.push(blobUrl);
+
+                setCoApplicantPersistedDocs((prev) => ({
+                  ...prev,
+                  [i]: {
+                    ...(prev[i] || {}),
+                    [key]: {
+                      exists: true,
+                      fileName: cleanName,
+                      blobUrl,
+                      mimeType: typedBlob.type,
+                      size: typedBlob.size,
+                      documentPath: path,
+                      documentTypeId: typeId,
+                      applicantDocumentId: docData?.applicationKYCDocumentId || docData?.id || null,
+                      applicantSequence: seq,
+                    },
+                  },
+                }));
+              }
+            }
+          } catch (e) {
+            // Document not found or not uploaded yet
+          }
+        }
+      }
+    }
+
+    hydrateFinancialDocs();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    appData?.applicationProductDetailsId,
+    appData?.ApplicationProductDetailsId,
+    appData?.id,
+    documentTypeOptions,
+    activeCount,
+    form.coApplicants?.length,
+  ]);
+
   // ── Document Cleanup Helpers ─────────────────────────────────────────────
   const revokeAllBlobUrls = useCallback(() => {
     if (activeBlobUrlsRef.current.length > 0) {
@@ -1695,170 +2012,6 @@ export default function KycDocuments() {
     return resolvedId || null;
   }, [appData, appId, saveApplication]);
 
-  // ── Load and Download Documents for Customer ─────────────────────────────
-  const loadCustomerDocuments = useCallback(async () => {
-    setIsLoadingDocs(true);
-    setDocsLoadError('');
-    revokeModalBlobUrls();
-    setCustomerDocs([]);
-
-    try {
-      const agentCustomerId = await resolveAgentCustomerId();
-      console.log('Agent Customer ID:', agentCustomerId);
-
-      if (!agentCustomerId) {
-        console.error('Agent Customer ID is missing');
-        setDocsLoadError('Agent Customer ID is missing for this application. Please ensure customer details are loaded.');
-        setIsLoadingDocs(false);
-        return;
-      }
-
-      const headers = {};
-      const token = localStorage.getItem('authToken');
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      // 1. Fetch document metadata for customer
-      const targetUrl = `${API_BASE}/AgentCustomerDocument/bycustomer/${agentCustomerId}`;
-      const res = await fetch(targetUrl, { headers });
-
-      if (!res.ok) {
-        let errorData = null;
-        try {
-          errorData = await res.json();
-        } catch {
-          try {
-            errorData = await res.text();
-          } catch {
-            // ignore
-          }
-        }
-
-        console.error('Document API Error:', {
-          status: res.status,
-          data: errorData,
-          url: targetUrl,
-          agentCustomerId,
-        });
-
-        if (res.status === 500) {
-          throw new Error('Unable to load documents. The document service returned a server error.');
-        } else if (res.status === 404) {
-          throw new Error('No document records found for this customer on the server.');
-        } else if (res.status === 401 || res.status === 403) {
-          throw new Error('You are not authorized to view documents. Please log in again.');
-        } else {
-          throw new Error(errorData?.message || errorData?.title || `Failed to fetch documents list (HTTP ${res.status})`);
-        }
-      }
-
-      const data = await res.json();
-      const documentList = Array.isArray(data) ? data : (data?.data || data?.value || data?.items || []);
-      console.log('Documents API Response:', documentList);
-
-      const activeDocs = documentList.filter((doc) => doc.isActive !== false);
-
-      if (activeDocs.length === 0) {
-        setCustomerDocs([]);
-        setIsLoadingDocs(false);
-        return;
-      }
-
-      // 2. Download and create preview blobs for each document in parallel
-      const loadedDocuments = await Promise.all(
-        activeDocs.map(async (doc) => {
-          const docId = doc.agentCustomerDocumentId || doc.agentCustomerId || doc.id;
-          console.log('Loading document:', doc.agentCustomerDocumentId || doc.id, doc.fileName);
-
-          const fileName = doc.fileName || 'document';
-          const ext = fileName.split('.').pop()?.toLowerCase();
-          const isPdf = ext === 'pdf';
-          const dlUrl = `${API_BASE}/AgentCustomerDocument/download/${docId}`;
-
-          try {
-            const dlRes = await fetch(dlUrl, { headers });
-            if (!dlRes.ok) {
-              let dlErrData = null;
-              try {
-                dlErrData = await dlRes.json();
-              } catch {
-                try {
-                  dlErrData = await dlRes.text();
-                } catch {
-                  // ignore
-                }
-              }
-              console.error('Document Download API Error:', {
-                status: dlRes.status,
-                data: dlErrData,
-                documentId: docId,
-                fileName,
-                url: dlUrl,
-                agentCustomerId,
-              });
-              throw new Error(`Download failed with status ${dlRes.status}`);
-            }
-
-            const rawBlob = await dlRes.blob();
-
-            // Map MIME type
-            let mimeType = 'application/octet-stream';
-            if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
-            else if (ext === 'png') mimeType = 'image/png';
-            else if (ext === 'pdf') mimeType = 'application/pdf';
-            else if (ext === 'webp') mimeType = 'image/webp';
-            else if (rawBlob.type && rawBlob.type !== 'application/octet-stream') {
-              mimeType = rawBlob.type;
-            }
-
-            const typedBlob = new Blob([rawBlob], { type: mimeType });
-            const previewUrl = URL.createObjectURL(typedBlob);
-            modalBlobUrlsRef.current.push(previewUrl);
-
-            return {
-              ...doc,
-              agentCustomerDocumentId: docId,
-              documentTypeId: doc.documentTypeId,
-              documentTypeName: doc.documentTypeName || doc.documentType || 'Uploaded Document',
-              fileName,
-              filePath: doc.filePath,
-              fileType: isPdf ? 'pdf' : 'image',
-              previewUrl,
-              createdAt: doc.createdAt,
-              createdBy: doc.createdBy,
-              isActive: doc.isActive !== false,
-              error: null,
-            };
-          } catch (dlErr) {
-            console.error(`Failed to download document ${docId} (${fileName}):`, dlErr);
-            return {
-              ...doc,
-              agentCustomerDocumentId: docId,
-              documentTypeId: doc.documentTypeId,
-              documentTypeName: doc.documentTypeName || doc.documentType || 'Uploaded Document',
-              fileName,
-              filePath: doc.filePath,
-              fileType: isPdf ? 'pdf' : 'image',
-              previewUrl: null,
-              createdAt: doc.createdAt,
-              createdBy: doc.createdBy,
-              isActive: doc.isActive !== false,
-              error: 'Failed to load preview',
-            };
-          }
-        })
-      );
-
-      setCustomerDocs(loadedDocuments);
-    } catch (err) {
-      console.error('Error in loadCustomerDocuments:', err);
-      setDocsLoadError(err.message || 'Unable to load documents. The document service returned a server error.');
-    } finally {
-      setIsLoadingDocs(false);
-    }
-  }, [resolveAgentCustomerId, revokeModalBlobUrls]);
-
   // ── Helper: Normalize server path ─────────────────────────────────────────
   const normalizeDocPath = useCallback((rawPath) => {
     if (!rawPath || typeof rawPath !== 'string' || !rawPath.trim()) return '';
@@ -1869,7 +2022,7 @@ export default function KycDocuments() {
     return clean;
   }, []);
 
-  // ── Helper: Fetch a single Co-App document blob by server path ────────────
+  // ── Helper: Fetch a single document blob by server path ────────────
   const fetchCoAppDocBlobByPath = useCallback(async (rawPath, defaultName) => {
     const cleanPath = normalizeDocPath(rawPath);
     if (!cleanPath) return { url: null, fileName: defaultName || '', error: 'No path provided' };
@@ -1939,7 +2092,7 @@ export default function KycDocuments() {
         error: null,
       };
     } catch (err) {
-      console.error(`Failed to download Co-App doc by path ${cleanPath}:`, err);
+      console.error(`Failed to download doc by path ${cleanPath}:`, err);
       return {
         url: null,
         fileName: cleanPath.split('/').pop() || defaultName || 'document',
@@ -1947,6 +2100,120 @@ export default function KycDocuments() {
       };
     }
   }, [normalizeDocPath]);
+
+  // ── Load and Download Documents for Customer ─────────────────────────────
+  const loadCustomerDocuments = useCallback(async () => {
+    setIsLoadingDocs(true);
+    setDocsLoadError('');
+    revokeModalBlobUrls();
+    setCustomerDocs([]);
+
+    try {
+      const agentCustomerId = await resolveAgentCustomerId();
+      console.log('Agent Customer ID:', agentCustomerId);
+
+      if (!agentCustomerId) {
+        console.error('Agent Customer ID is missing');
+        setDocsLoadError('Agent Customer ID is missing for this application. Please ensure customer details are loaded.');
+        setIsLoadingDocs(false);
+        return;
+      }
+
+      const headers = {};
+      const token = localStorage.getItem('authToken');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      // 1. Fetch document metadata for customer
+      let documentList = [];
+      try {
+        const targetUrl = `${API_BASE}/AgentCustomerDocument/bycustomer/${agentCustomerId}`;
+        const res = await fetch(targetUrl, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          documentList = Array.isArray(data) ? data : (data?.data || data?.value || data?.items || []);
+        }
+      } catch (err) {
+        console.warn('Could not fetch AgentCustomerDocument list:', err);
+      }
+
+      const activeDocs = documentList.filter((doc) => doc.isActive !== false);
+
+      // 2. Download and create preview blobs for each document in parallel
+      const loadedDocuments = await Promise.all(
+        activeDocs.map(async (doc) => {
+          const docId = doc.agentCustomerDocumentId || doc.agentCustomerId || doc.id;
+          const fileName = doc.fileName || 'document';
+          const ext = fileName.split('.').pop()?.toLowerCase();
+          const isPdf = ext === 'pdf';
+          const dlUrl = `${API_BASE}/AgentCustomerDocument/download/${docId}`;
+
+          try {
+            const dlRes = await fetch(dlUrl, { headers });
+            if (!dlRes.ok) {
+              throw new Error(`Download failed with status ${dlRes.status}`);
+            }
+
+            const rawBlob = await dlRes.blob();
+            let mimeType = 'application/octet-stream';
+            if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+            else if (ext === 'png') mimeType = 'image/png';
+            else if (ext === 'pdf') mimeType = 'application/pdf';
+            else if (ext === 'webp') mimeType = 'image/webp';
+            else if (rawBlob.type && rawBlob.type !== 'application/octet-stream') {
+              mimeType = rawBlob.type;
+            }
+
+            const typedBlob = new Blob([rawBlob], { type: mimeType });
+            const previewUrl = URL.createObjectURL(typedBlob);
+            modalBlobUrlsRef.current.push(previewUrl);
+
+            return {
+              ...doc,
+              agentCustomerDocumentId: docId,
+              documentTypeId: doc.documentTypeId,
+              documentTypeName: doc.documentTypeName || doc.documentType || 'Uploaded Document',
+              fileName,
+              filePath: doc.filePath,
+              fileType: isPdf ? 'pdf' : 'image',
+              previewUrl,
+              createdAt: doc.createdAt,
+              createdBy: doc.createdBy,
+              isActive: doc.isActive !== false,
+              error: null,
+            };
+          } catch (dlErr) {
+            console.error(`Failed to download document ${docId} (${fileName}):`, dlErr);
+            return {
+              ...doc,
+              agentCustomerDocumentId: docId,
+              documentTypeId: doc.documentTypeId,
+              documentTypeName: doc.documentTypeName || doc.documentType || 'Uploaded Document',
+              fileName,
+              filePath: doc.filePath,
+              fileType: isPdf ? 'pdf' : 'image',
+              previewUrl: null,
+              createdAt: doc.createdAt,
+              createdBy: doc.createdBy,
+              isActive: doc.isActive !== false,
+              error: 'Failed to load preview',
+            };
+          }
+        })
+      );
+
+      setCustomerDocs(loadedDocuments);
+    } catch (err) {
+      console.error('Error in loadCustomerDocuments:', err);
+      setDocsLoadError(err.message || 'Unable to load documents. The document service returned a server error.');
+    } finally {
+      setIsLoadingDocs(false);
+    }
+  }, [
+    resolveAgentCustomerId,
+    revokeModalBlobUrls,
+  ]);
 
   // ── Helper: Map rejection document types to standard categories ──────────
   const isDocTypeMatch = useCallback((rejType, slotCode) => {
@@ -1978,6 +2245,27 @@ export default function KycDocuments() {
         normRej === 'PROFILE' ||
         normRej === 'PROFILE_IMAGE' ||
         normRej === '4'
+      );
+    }
+    if (normSlot === 'CO_APPLICANT_SALARY_SLIP') {
+      return (
+        normRej === 'CO_APPLICANT_SALARY_SLIP' ||
+        normRej === 'SALARY_SLIP' ||
+        normRej === 'SALARY' ||
+        normRej === 'INCOME_SHEET' ||
+        normRej === 'SALARY SLIP' ||
+        normRej.includes('SALARY') ||
+        normRej.includes('INCOME_SHEET')
+      );
+    }
+    if (normSlot === 'CO_APPLICANT_BANK_STATEMENT') {
+      return (
+        normRej === 'CO_APPLICANT_BANK_STATEMENT' ||
+        normRej === 'BANK_STATEMENT' ||
+        normRej === 'BANK' ||
+        normRej === 'STATEMENT' ||
+        normRej === 'BANK STATEMENT' ||
+        normRej.includes('BANK')
       );
     }
     if (normSlot === 'CO_APPLICANT_MANUAL') {
@@ -2075,6 +2363,36 @@ export default function KycDocuments() {
 
       const persistedDocs = coApplicantPersistedDocs[coAppIndex] || {};
 
+      // Fetch latest applicant-level documents for Salary Slip & Bank Statement if not in local persisted state
+      let salarySlipPath = persistedDocs.salarySlip?.documentPath || null;
+      let bankStatementPath = persistedDocs.bankStatement?.documentPath || null;
+
+      if (productDetailsId && documentTypeOptions.length > 0) {
+        const salarySlipTypeId = resolveDocumentTypeId(documentTypeOptions, 'Salary Slip');
+        const bankStatementTypeId = resolveDocumentTypeId(documentTypeOptions, 'Bank Statement');
+        const seq = coAppIndex + 1;
+
+        if (!salarySlipPath && salarySlipTypeId) {
+          try {
+            const res = await rmCustomerService.getApplicantDocument(productDetailsId, seq, salarySlipTypeId);
+            const d = res?.data || res?.value || res;
+            if (d?.documentPath || d?.DocumentPath) {
+              salarySlipPath = d.documentPath || d.DocumentPath;
+            }
+          } catch {}
+        }
+
+        if (!bankStatementPath && bankStatementTypeId) {
+          try {
+            const res = await rmCustomerService.getApplicantDocument(productDetailsId, seq, bankStatementTypeId);
+            const d = res?.data || res?.value || res;
+            if (d?.documentPath || d?.DocumentPath) {
+              bankStatementPath = d.documentPath || d.DocumentPath;
+            }
+          } catch {}
+        }
+      }
+
       // 3. Define Standard Categories
       const categories = [
         {
@@ -2097,6 +2415,22 @@ export default function KycDocuments() {
           activePath: latestKyc.panCardPath,
           persistedKey: 'pan',
           defaultName: `CoApplicant_${coAppIndex + 1}_PAN`,
+        },
+        {
+          code: 'CO_APPLICANT_SALARY_SLIP',
+          name: 'Salary Slip / Income Sheet',
+          activePath: salarySlipPath,
+          persistedKey: 'salarySlip',
+          defaultName: `CoApplicant_${coAppIndex + 1}_SalarySlip.pdf`,
+          docTypeTarget: 'Salary Slip',
+        },
+        {
+          code: 'CO_APPLICANT_BANK_STATEMENT',
+          name: 'Bank Statement',
+          activePath: bankStatementPath,
+          persistedKey: 'bankStatement',
+          defaultName: `CoApplicant_${coAppIndex + 1}_BankStatement.pdf`,
+          docTypeTarget: 'Bank Statement',
         },
       ];
 
@@ -2454,9 +2788,12 @@ export default function KycDocuments() {
       return;
     }
 
-    const applicationProductDetailsId = appData.applicationProductDetailsId;
+    const applicationProductDetailsId =
+      appData?.applicationProductDetailsId ??
+      appData?.ApplicationProductDetailsId ??
+      appData?.id;
 
-    if (!applicationProductDetailsId) {
+    if (!applicationProductDetailsId || isNaN(Number(applicationProductDetailsId))) {
       setErrorPopup({
         title: 'Missing application details',
         message: 'Application product details are not saved yet. Please go back and save Application Details first.',
@@ -2771,6 +3108,226 @@ export default function KycDocuments() {
                 } catch (getErr) {
                   console.warn(`Failed to refresh co-applicant ${coIdx + 1} doc ${route} after upload:`, getErr);
                 }
+              }
+            }
+          }
+
+          // Step 2c: Upload Salary Slip & Bank Statement for Co-Applicant
+          const applicantDocTypes = [
+            { key: 'salarySlip', targetName: 'Salary Slip' },
+            { key: 'bankStatement', targetName: 'Bank Statement' },
+          ];
+
+          // Resolve authenticated user ID for uploadedBy
+          const currentRm = getCurrentRMContext();
+          const currentUser = (() => {
+            try {
+              return JSON.parse(localStorage.getItem('sivels_currentUser') || '{}');
+            } catch {
+              return {};
+            }
+          })();
+          const uploadedBy =
+            currentRm?.rmId ||
+            currentUser?.userId ||
+            currentUser?.id ||
+            currentUser?.rmId ||
+            Number(localStorage.getItem('userId')) ||
+            Number(localStorage.getItem('rmId')) ||
+            null;
+
+          for (const { key, targetName } of applicantDocTypes) {
+            const file = localDocs[key];
+            if (file instanceof File) {
+              const docTypeId = resolveDocumentTypeId(documentTypeOptions, targetName);
+              if (!docTypeId) {
+                setErrorPopup({
+                  title: 'Document Type Error',
+                  message: `Could not resolve dynamic document type ID for "${targetName}". Please verify master configuration.`,
+                  variant: 'error',
+                });
+                return;
+              }
+
+              if (!applicationProductDetailsId || isNaN(Number(applicationProductDetailsId))) {
+                setErrorPopup({
+                  title: 'Missing Application Details',
+                  message: 'Application Product Details ID is invalid or missing. Please save Application Details first.',
+                  variant: 'validation',
+                });
+                return;
+              }
+
+              if (!uploadedBy || isNaN(Number(uploadedBy))) {
+                setErrorPopup({
+                  title: 'Authentication Required',
+                  message: 'Unable to identify the authenticated RM user. Please re-login and try again.',
+                  variant: 'error',
+                });
+                return;
+              }
+
+              // Resolve verificationId for this co-applicant
+              let resolvedVerificationId = null;
+              const rawVerificationValue =
+                person.verificationId ||
+                person.VerificationId ||
+                person.verificationStatus ||
+                form.coApplicants?.[coIdx]?.verificationId ||
+                form.coApplicants?.[coIdx]?.verificationStatus ||
+                savedSection?.coApplicants?.[coIdx]?.verificationId ||
+                savedSection?.coApplicants?.[coIdx]?.verificationStatus ||
+                kycRecordsList?.[coIdx + 1]?.verificationId ||
+                kycRecordsList?.[coIdx + 1]?.VerificationId ||
+                null;
+
+              if (
+                rawVerificationValue !== null &&
+                rawVerificationValue !== undefined &&
+                !isNaN(Number(rawVerificationValue)) &&
+                Number(rawVerificationValue) > 0
+              ) {
+                resolvedVerificationId = Number(rawVerificationValue);
+              } else if (rawVerificationValue && verificationOptions.length > 0) {
+                const matchedOpt = verificationOptions.find(
+                  (opt) =>
+                    String(opt.value) === String(rawVerificationValue) ||
+                    String(opt.label).trim().toLowerCase() === String(rawVerificationValue).trim().toLowerCase()
+                );
+                if (matchedOpt && matchedOpt.value && !isNaN(Number(matchedOpt.value))) {
+                  resolvedVerificationId = Number(matchedOpt.value);
+                }
+              }
+
+              if (!resolvedVerificationId) {
+                setErrorPopup({
+                  title: 'Verification Status Required',
+                  message: `Verification Status must be selected for Co-Applicant ${coIdx + 1} before uploading financial documents.`,
+                  variant: 'validation',
+                });
+                return;
+              }
+
+              const isUpdate = Boolean(persistedDocs[key]?.exists);
+              const uploadMethod = isUpdate ? 'PUT' : 'POST';
+              const uploadUrl = `${API_BASE}/ApplicationKYCDocuments/applicant-document/upload`;
+
+              console.log(
+                `Uploading Co-Applicant ${coIdx + 1} ${key} (${targetName}, docTypeId: ${docTypeId}, verificationId: ${resolvedVerificationId}, uploadedBy: ${uploadedBy}) [${uploadMethod}] to: ${uploadUrl}`,
+                file.name
+              );
+
+              const formData = new FormData();
+              formData.append('file', file);
+              formData.append('applicationProductDetailsId', String(applicationProductDetailsId));
+              formData.append('applicantSequence', String(coIdx + 1));
+              formData.append('documentTypeId', String(docTypeId));
+              formData.append('verificationId', String(resolvedVerificationId));
+              formData.append('uploadedBy', String(uploadedBy));
+
+              const uploadHeaders = {};
+              if (token) {
+                uploadHeaders['Authorization'] = `Bearer ${token}`;
+              }
+
+              let uploadResponse = await fetch(uploadUrl, {
+                method: uploadMethod,
+                headers: uploadHeaders,
+                body: formData,
+              });
+
+              if (
+                !uploadResponse.ok &&
+                (uploadResponse.status === 400 ||
+                  uploadResponse.status === 404 ||
+                  uploadResponse.status === 405 ||
+                  uploadResponse.status === 409)
+              ) {
+                const fallbackMethod = uploadMethod === 'POST' ? 'PUT' : 'POST';
+                console.log(`Retrying Co-Applicant ${coIdx + 1} ${key} with fallback method [${fallbackMethod}]`);
+                const retryResponse = await fetch(uploadUrl, {
+                  method: fallbackMethod,
+                  headers: uploadHeaders,
+                  body: formData,
+                });
+                if (retryResponse.ok) {
+                  uploadResponse = retryResponse;
+                }
+              }
+
+              if (!uploadResponse.ok) {
+                const uploadErrText = await uploadResponse.text().catch(() => '');
+                let errorDetailMsg = uploadErrText;
+                try {
+                  const parsedErr = JSON.parse(uploadErrText);
+                  errorDetailMsg =
+                    parsedErr?.message || parsedErr?.title || parsedErr?.error || uploadErrText;
+                } catch {
+                  // raw text
+                }
+                console.error(
+                  `Co-Applicant ${coIdx + 1} ${targetName} upload failed (${uploadResponse.status}):`,
+                  uploadErrText
+                );
+                setErrorPopup({
+                  title: 'Document Upload Failed',
+                  message: `Co-Applicant ${coIdx + 1} ${targetName} upload failed: ${
+                    errorDetailMsg || `Server returned HTTP ${uploadResponse.status}`
+                  }`,
+                  variant: 'error',
+                });
+                return; // CRITICAL: Stop Save & Continue! Do NOT navigate!
+              }
+
+              console.log(`Co-Applicant ${coIdx + 1} ${key} uploaded successfully`);
+              // Refresh persisted doc
+              try {
+                const getDocRes = await fetch(
+                  `${API_BASE}/ApplicationKYCDocuments/applicant-document?applicationProductDetailsId=${applicationProductDetailsId}&applicantSequence=${coIdx + 1}&documentTypeId=${docTypeId}`,
+                  { headers: uploadHeaders }
+                );
+                if (getDocRes.ok) {
+                  const docRecord = await getDocRes.json();
+                  const path = docRecord?.documentPath || docRecord?.DocumentPath || null;
+                  if (path) {
+                    const cleanPath = path.replace(/\\/g, '/').replace(/^\/+/, '');
+                    const dlRes = await fetch(
+                      `${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`,
+                      { headers: uploadHeaders }
+                    );
+                    if (dlRes.ok) {
+                      const blob = await dlRes.blob();
+                      if (blob && blob.size > 0) {
+                        const blobUrl = URL.createObjectURL(blob);
+                        activeBlobUrlsRef.current.push(blobUrl);
+                        setCoApplicantPersistedDocs((prev) => ({
+                          ...prev,
+                          [coIdx]: {
+                            ...(prev[coIdx] || {}),
+                            [key]: {
+                              exists: true,
+                              fileName: file.name,
+                              blobUrl,
+                              mimeType: blob.type || file.type,
+                              size: blob.size || file.size,
+                              documentPath: path,
+                              documentTypeId: docTypeId,
+                            },
+                          },
+                        }));
+                        setCoApplicantDocs((prev) => ({
+                          ...prev,
+                          [coIdx]: {
+                            ...(prev[coIdx] || {}),
+                            [key]: null,
+                          },
+                        }));
+                      }
+                    }
+                  }
+                }
+              } catch (getErr) {
+                console.warn(`Failed to refresh co-applicant ${coIdx + 1} ${key} after upload:`, getErr);
               }
             }
           }

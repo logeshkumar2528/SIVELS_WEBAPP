@@ -14,6 +14,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { rmCustomerService } from '../../services/rmCustomerService';
+import { getCurrentRMContext } from '../../utils/rmContext';
 import './CustomerSubmissionHistory.css';
 
 export default function ViewCustomerDrawer({
@@ -51,6 +52,13 @@ export default function ViewCustomerDrawer({
 
   const { loanPurposes = [], employmentTypes = [], documentTypes = [] } = masterData;
 
+  const rmContext = getCurrentRMContext();
+  const currentRmId = rmContext.rmId ? Number(rmContext.rmId) : null;
+  const isDirectRmOwned =
+    (!customer?.agentId || customer?.agentId === '') &&
+    Number(customer?.rmId || customer?.RMId || customer?.createdBy || customer?.CreatedBy) === Number(currentRmId);
+  const isConverted = Boolean(customer?.isConverted || customer?.IsConverted || isDirectRmOwned);
+
   const rmCustomerId = customer?.rmCustomerId || customer?.rMCustomerId || customer?.id;
 
   // Group and sort documents chronologically into Original (V1) and Updated (V2+)
@@ -76,7 +84,9 @@ export default function ViewCustomerDrawer({
         const timeA = new Date(a.createdAt || 0).getTime();
         const timeB = new Date(b.createdAt || 0).getTime();
         if (timeA !== timeB) return timeA - timeB;
-        return (Number(a.rmCustomerDocumentId || a.id) || 0) - (Number(b.rmCustomerDocumentId || b.id) || 0);
+        const docIdA = Number(a.agentCustomerDocumentId ?? a.rmCustomerDocumentId ?? a.id) || 0;
+        const docIdB = Number(b.agentCustomerDocumentId ?? b.rmCustomerDocumentId ?? b.id) || 0;
+        return docIdA - docIdB;
       });
 
       list.forEach((doc, index) => {
@@ -104,7 +114,9 @@ export default function ViewCustomerDrawer({
       const timeA = new Date(a.createdAt || 0).getTime();
       const timeB = new Date(b.createdAt || 0).getTime();
       if (timeA !== timeB) return timeB - timeA;
-      return (Number(b.rmCustomerDocumentId || b.id) || 0) - (Number(a.rmCustomerDocumentId || a.id) || 0);
+      const docIdA = Number(a.agentCustomerDocumentId ?? a.rmCustomerDocumentId ?? a.id) || 0;
+      const docIdB = Number(b.agentCustomerDocumentId ?? b.rmCustomerDocumentId ?? b.id) || 0;
+      return docIdB - docIdA;
     });
 
     return { originalDocs: original, updatedDocs: updated };
@@ -112,6 +124,20 @@ export default function ViewCustomerDrawer({
 
   useEffect(() => {
     let isMounted = true;
+
+    const extractArray = (data) => {
+      if (Array.isArray(data)) return data;
+      if (data && typeof data === 'object') {
+        if (Array.isArray(data.data)) return data.data;
+        if (Array.isArray(data.items)) return data.items;
+        if (Array.isArray(data.result)) return data.result;
+        if (Array.isArray(data.list)) return data.list;
+        for (const key of Object.keys(data)) {
+          if (Array.isArray(data[key])) return data[key];
+        }
+      }
+      return [];
+    };
 
     const loadDocuments = async () => {
       if (!rmCustomerId) {
@@ -121,23 +147,42 @@ export default function ViewCustomerDrawer({
       setLoadingDocs(true);
       setViewError('');
       try {
-        const res = await rmCustomerService.getDocumentsByCustomerId(rmCustomerId);
-        const extractArray = (data) => {
-          if (Array.isArray(data)) return data;
-          if (data && typeof data === 'object') {
-            if (Array.isArray(data.data)) return data.data;
-            if (Array.isArray(data.items)) return data.items;
-            if (Array.isArray(data.result)) return data.result;
-            if (Array.isArray(data.list)) return data.list;
-            for (const key of Object.keys(data)) {
-              if (Array.isArray(data[key])) return data[key];
-            }
+        let loadedList = [];
+        let isCommon = false;
+
+        // Step 1: Try Primary Common AgentCustomerDocument endpoint
+        try {
+          const commonRes = await rmCustomerService.getAgentCustomerDocumentsByCustomerId(rmCustomerId);
+          const commonList = extractArray(commonRes);
+          if (commonList.length > 0) {
+            loadedList = commonList.map((doc) => ({
+              ...doc,
+              documentSource: 'common',
+            }));
+            isCommon = true;
           }
-          return [];
-        };
+        } catch (commonErr) {
+          console.warn('Common AgentCustomerDocument lookup failed or not found, attempting legacy fallback:', commonErr);
+        }
+
+        // Step 2: Fallback to Legacy RMCustomerDocument endpoint if common is empty or failed
+        if (!isCommon || loadedList.length === 0) {
+          try {
+            const legacyRes = await rmCustomerService.getDocumentsByCustomerId(rmCustomerId);
+            const legacyList = extractArray(legacyRes);
+            if (legacyList.length > 0) {
+              loadedList = legacyList.map((doc) => ({
+                ...doc,
+                documentSource: 'legacy',
+              }));
+            }
+          } catch (legacyErr) {
+            console.warn('Legacy RMCustomerDocument lookup failed:', legacyErr);
+          }
+        }
 
         if (isMounted) {
-          setDocuments(extractArray(res));
+          setDocuments(loadedList);
         }
       } catch (err) {
         if (isMounted) {
@@ -220,8 +265,21 @@ export default function ViewCustomerDrawer({
   const handleViewDocument = async (doc) => {
     setViewError('');
     try {
-      const docId = doc.rmCustomerDocumentId || doc.id;
-      const blob = await rmCustomerService.downloadDocument(docId);
+      const documentId =
+        doc.agentCustomerDocumentId ??
+        doc.rmCustomerDocumentId ??
+        doc.id;
+
+      if (!documentId) {
+        throw new Error('Document ID is missing.');
+      }
+
+      let blob;
+      if (doc.documentSource === 'common' || Boolean(doc.agentCustomerDocumentId)) {
+        blob = await rmCustomerService.downloadAgentCustomerDocument(documentId);
+      } else {
+        blob = await rmCustomerService.downloadDocument(documentId);
+      }
 
       const fileName = doc.fileName || doc.documentName || '';
       let mimeType = 'application/octet-stream';
@@ -416,7 +474,7 @@ export default function ViewCustomerDrawer({
                       const docName = getDocumentName(doc.documentTypeId, doc.documentName || doc.documentTypeName);
                       const IconComp = getDocumentIcon(docName);
                       return (
-                        <div className="drawer-doc-card" key={doc.rmCustomerDocumentId || doc.id || idx}>
+                        <div className="drawer-doc-card" key={doc.agentCustomerDocumentId || doc.rmCustomerDocumentId || doc.id || idx}>
                           <div className="drawer-doc-info">
                             <div className="drawer-doc-icon">
                               <IconComp size={18} />
@@ -454,7 +512,7 @@ export default function ViewCustomerDrawer({
                     const docName = getDocumentName(doc.documentTypeId, doc.documentName || doc.documentTypeName);
                     const IconComp = getDocumentIcon(docName);
                     return (
-                      <div className="drawer-doc-card" key={doc.rmCustomerDocumentId || doc.id || idx}>
+                      <div className="drawer-doc-card" key={doc.agentCustomerDocumentId || doc.rmCustomerDocumentId || doc.id || idx}>
                         <div className="drawer-doc-info">
                           <div className="drawer-doc-icon">
                             <IconComp size={18} />
@@ -499,7 +557,7 @@ export default function ViewCustomerDrawer({
             <button type="button" className="btn-close-drawer" onClick={handleClose}>
               Close Details
             </button>
-            {customer.isConverted || customer.IsConverted ? (
+            {isConverted ? (
               <button
                 type="button"
                 className="btn-drawer-continue-app"

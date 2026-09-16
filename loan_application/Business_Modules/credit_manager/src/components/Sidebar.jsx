@@ -1,6 +1,7 @@
 import React from 'react';
 import { LayoutDashboard, FileText, Clock, CheckCircle, XCircle, UserCircle, LogOut } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import { clearCreditManagerAuth } from '../auth/authStorage';
 import logoImg from '../../../../Core/Logo_img/Logo.png';
 import './Sidebar.css';
 
@@ -95,10 +96,18 @@ const Sidebar = () => {
             </Link>
           </li>
           <li>
-            <Link to="/logout" className={`sidebar-nav-item ${isActive('/logout')}`}>
+            <button
+              type="button"
+              className="sidebar-nav-item"
+              style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', font: 'inherit' }}
+              onClick={(e) => {
+                e.preventDefault();
+                clearCreditManagerAuth();
+              }}
+            >
               <span className="sidebar-nav-icon" aria-hidden="true"><LogOut size={17} strokeWidth={1.8} /></span>
               <span className="sidebar-nav-label">Logout</span>
-            </Link>
+            </button>
           </li>
         </ul>
       </div>

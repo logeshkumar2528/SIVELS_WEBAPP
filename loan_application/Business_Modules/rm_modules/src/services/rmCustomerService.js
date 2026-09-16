@@ -1,19 +1,62 @@
 import axiosInstance from '../../../../Core/src/api/axiosInstance';
 
+/**
+ * Normalizes RM customer responses at the service boundary.
+ * The backend returns `rmCustomerId`, which represents the common customer ID / AgentCustomerId.
+ * This normalization ensures downstream components have access to `commonCustomerId`, `agentCustomerId`,
+ * `rmCustomerId`, and `id` uniformly without modifying other backend fields.
+ */
+export function normalizeCustomerResponse(data) {
+  if (!data) return data;
+  if (Array.isArray(data)) {
+    return data.map(normalizeCustomerResponse);
+  }
+  if (typeof data !== 'object') {
+    return data;
+  }
+
+  if (Array.isArray(data.data)) {
+    return { ...data, data: data.data.map(normalizeCustomerResponse) };
+  }
+  if (Array.isArray(data.value)) {
+    return { ...data, value: data.value.map(normalizeCustomerResponse) };
+  }
+  if (Array.isArray(data.items)) {
+    return { ...data, items: data.items.map(normalizeCustomerResponse) };
+  }
+
+  const commonCustomerId =
+    data.rmCustomerId ??
+    data.rMCustomerId ??
+    data.agentCustomerId ??
+    data.AgentCustomerId ??
+    data.customerId ??
+    data.id ??
+    null;
+
+  return {
+    ...data,
+    commonCustomerId,
+    agentCustomerId: commonCustomerId ?? data.agentCustomerId,
+    rmCustomerId: commonCustomerId ?? data.rmCustomerId,
+    id: data.id ?? commonCustomerId,
+  };
+}
+
 export const rmCustomerService = {
   createCustomer: async (customerData) => {
     const response = await axiosInstance.post('/RMAddCustomer', customerData);
-    return response.data;
+    return normalizeCustomerResponse(response.data);
   },
 
   getAllCustomers: async () => {
     const response = await axiosInstance.get('/RMAddCustomer');
-    return response.data;
+    return normalizeCustomerResponse(response.data);
   },
 
   getCustomerById: async (id) => {
     const response = await axiosInstance.get(`/RMAddCustomer/${id}`);
-    return response.data;
+    return normalizeCustomerResponse(response.data);
   },
 
   uploadDocument: async (formData) => {
@@ -21,8 +64,18 @@ export const rmCustomerService = {
     return response.data;
   },
 
+  uploadAgentCustomerDocument: async (formData) => {
+    const response = await axiosInstance.post('/AgentCustomerDocument/upload', formData);
+    return response.data;
+  },
+
   getDocumentsByCustomerId: async (rmCustomerId) => {
     const response = await axiosInstance.get(`/RMCustomerDocument/bycustomer/${rmCustomerId}`);
+    return response.data;
+  },
+
+  getAgentCustomerDocumentsByCustomerId: async (customerId) => {
+    const response = await axiosInstance.get(`/AgentCustomerDocument/bycustomer/${customerId}`);
     return response.data;
   },
 
@@ -33,8 +86,79 @@ export const rmCustomerService = {
     return response.data;
   },
 
+  downloadAgentCustomerDocument: async (documentId) => {
+    const response = await axiosInstance.get(`/AgentCustomerDocument/download/${documentId}`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
   promoteRmCustomer: async (rmCustomerId, payload) => {
     const response = await axiosInstance.post(`/RMAddCustomer/${encodeURIComponent(rmCustomerId)}/promote`, payload);
+    return normalizeCustomerResponse(response.data);
+  },
+
+  /* ==========================================
+     APPLICANT-LEVEL DOCUMENTS (SALARY SLIP, BANK STATEMENT)
+  ========================================== */
+
+  /**
+   * Retrieve applicant-level document metadata.
+   * @param {string|number} applicationProductDetailsId
+   * @param {number} applicantSequence
+   * @param {number} documentTypeId
+   */
+  getApplicantDocument: async (applicationProductDetailsId, applicantSequence, documentTypeId) => {
+    const response = await axiosInstance.get(
+      `/ApplicationKYCDocuments/applicant-document?applicationProductDetailsId=${encodeURIComponent(applicationProductDetailsId)}&applicantSequence=${encodeURIComponent(applicantSequence)}&documentTypeId=${encodeURIComponent(documentTypeId)}`
+    );
+    return response.data;
+  },
+
+  /**
+   * Upload a new applicant-level document (POST multipart/form-data).
+   * @param {FormData} formData - { file, applicationProductDetailsId, applicantSequence, documentTypeId, uploadedBy }
+   */
+  uploadApplicantDocument: async (formData) => {
+    const response = await axiosInstance.post(
+      '/ApplicationKYCDocuments/applicant-document/upload',
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Replace an existing applicant-level document (PUT multipart/form-data).
+   * @param {FormData} formData - { file, applicationProductDetailsId, applicantSequence, documentTypeId, uploadedBy }
+   */
+  replaceApplicantDocument: async (formData) => {
+    const response = await axiosInstance.put(
+      '/ApplicationKYCDocuments/applicant-document/upload',
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Download a KYC/applicant document as blob by server path.
+   * @param {string} path - Relative server path
+   */
+  downloadKycDocumentByPath: async (path) => {
+    const response = await axiosInstance.get(
+      `/ApplicationKYCDocuments/download?path=${encodeURIComponent(path)}`,
+      {
+        responseType: 'blob',
+      }
+    );
     return response.data;
   },
 };
+
+export default rmCustomerService;
+

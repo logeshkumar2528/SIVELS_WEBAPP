@@ -477,11 +477,16 @@ export default function AddCustomer() {
         const createRes = await rmCustomerService.createCustomer(customerPayload);
         
         targetCustomerId =
+          createRes?.commonCustomerId ||
           createRes?.rmCustomerId ||
           createRes?.rMCustomerId ||
+          createRes?.agentCustomerId ||
+          createRes?.AgentCustomerId ||
           createRes?.id ||
+          createRes?.data?.commonCustomerId ||
           createRes?.data?.rmCustomerId ||
           createRes?.data?.rMCustomerId ||
+          createRes?.data?.agentCustomerId ||
           createRes?.data?.id;
 
         if (!targetCustomerId) {
@@ -511,16 +516,14 @@ export default function AddCustomer() {
 
           const uploadFormData = new FormData();
           uploadFormData.append('file', file);
-          uploadFormData.append('rmCustomerId', String(targetCustomerId));
+          uploadFormData.append('agentCustomerId', String(targetCustomerId));
           uploadFormData.append('documentTypeId', String(docTypeId));
           uploadFormData.append('createdBy', String(rmId));
-          uploadFormData.append('remarks', '');
-          uploadFormData.append('isActive', 'true');
 
           uploadTasks.push({
             docTypeId,
             fileName: file.name,
-            promise: rmCustomerService.uploadDocument(uploadFormData),
+            promise: rmCustomerService.uploadAgentCustomerDocument(uploadFormData),
           });
         }
       }

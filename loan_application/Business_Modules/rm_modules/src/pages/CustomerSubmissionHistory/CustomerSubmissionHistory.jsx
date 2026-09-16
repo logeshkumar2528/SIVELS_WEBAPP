@@ -545,7 +545,10 @@ export default function CustomerSubmissionHistory() {
                   const initial = (item.fullName || 'U').charAt(0).toUpperCase();
                   const avatarClass = initial.match(/[A-M]/i) ? 'avatar--A' : 'avatar--R';
                   const isItemPromoting = Boolean(isPromoting[item.rmCustomerId]);
-                  const isItemConverted = Boolean(item.isConverted || item.IsConverted);
+                  const isDirectRmOwned =
+                    (!item.agentId || item.agentId === '') &&
+                    Number(item.rmId || item.RMId || item.createdBy || item.CreatedBy) === Number(currentRmId);
+                  const isItemConverted = Boolean(item.isConverted || item.IsConverted || isDirectRmOwned);
 
                   return (
                     <tr key={item.rmCustomerId || idx} className="rm-csh-tr">
@@ -578,7 +581,7 @@ export default function CustomerSubmissionHistory() {
                               type="button"
                               className="btn-continue-app"
                               onClick={() => handleContinueToApp(item)}
-                              title="Customer promoted. Open in New Applications"
+                              title="Open in New Applications"
                             >
                               <ArrowRight size={14} />
                               <span>Continue to Application</span>
