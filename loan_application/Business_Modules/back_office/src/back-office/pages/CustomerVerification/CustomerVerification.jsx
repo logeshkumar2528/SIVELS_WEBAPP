@@ -62,6 +62,23 @@ function formatFileSize(bytes) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }
 
+function formatUploadDate(dateVal) {
+  if (!dateVal) return null;
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return null;
+    return d.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return null;
+  }
+}
+
 function isDocImage(doc) {
   if (!doc || !doc.url) return false;
   if (doc.isImage === true) return true;
@@ -162,23 +179,18 @@ const INITIAL_STEP_VERIFICATIONS = {
  * 17-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
  */
 const VERIFICATION_WORKFLOW_STEPS = [
-  { id: 1, number: 1, title: 'View Form', subtitle: 'Application form', group: 'FORM REVIEW' },
-  { id: 2, number: 2, title: 'Profile Image', subtitle: 'Applicant photo', group: 'DOCUMENT VERIFICATION', stepCode: 'PROFILE_IMAGE' },
-  { id: 3, number: 3, title: 'Aadhaar Card', subtitle: 'Identity & Address', group: 'DOCUMENT VERIFICATION', stepCode: 'AADHAAR' },
-  { id: 4, number: 4, title: 'PAN Card', subtitle: 'Tax identification', group: 'DOCUMENT VERIFICATION', stepCode: 'PAN' },
-  { id: 5, number: 5, title: 'Salary Slip', subtitle: 'Income proof & payslips', group: 'DOCUMENT VERIFICATION', stepCode: 'SALARY_SLIP' },
-  { id: 6, number: 6, title: 'Bank Statement', subtitle: 'Banking records & statements', group: 'DOCUMENT VERIFICATION', stepCode: 'BANK_STATEMENT' },
-  { id: 7, number: 7, title: 'ZIP / Archive', subtitle: 'Customer archives & additional docs', group: 'DOCUMENT VERIFICATION', stepCode: 'ZIP_ARCHIVE' },
-  { id: 8, number: 8, title: 'Property FI', subtitle: 'Property investigation', group: 'FIELD INVESTIGATION' },
-  { id: 9, number: 9, title: 'Office FI', subtitle: 'Office verification', group: 'FIELD INVESTIGATION' },
-  { id: 10, number: 10, title: 'Residence FI', subtitle: 'Residence verification', group: 'FIELD INVESTIGATION' },
-  { id: 11, number: 11, title: 'Legal Opinion', subtitle: 'Legal report upload', group: 'CREDIT & ASSESSMENT' },
-  { id: 12, number: 12, title: 'Technical Value', subtitle: 'Valuation report upload', group: 'CREDIT & ASSESSMENT' },
-  { id: 13, number: 13, title: 'CIBIL Check', subtitle: 'Credit Bureau & PAN', group: 'CREDIT & ASSESSMENT' },
-  { id: 14, number: 14, title: 'PD Verification', subtitle: 'Personal discussion', group: 'CREDIT & ASSESSMENT' },
-  { id: 15, number: 15, title: 'Eligibility Calculation', subtitle: 'FOIR ratio calculation', group: 'CREDIT & ASSESSMENT' },
-  { id: 16, number: 16, title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
-  { id: 17, number: 17, title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
+  { id: 1, number: 1, visibleNum: '01', title: 'View Form', subtitle: 'Application form', group: 'FORM REVIEW' },
+  { id: 2, number: 2, visibleNum: '02', title: 'Document Verification', subtitle: 'Applicant & Co-Applicant docs', group: 'DOCUMENT VERIFICATION', stepCodes: ['PROFILE_IMAGE', 'AADHAAR', 'PAN', 'SALARY_SLIP', 'BANK_STATEMENT', 'ZIP_ARCHIVE'] },
+  { id: 8, number: 8, visibleNum: '03', title: 'Property FI', subtitle: 'Property investigation', group: 'FIELD INVESTIGATION' },
+  { id: 9, number: 9, visibleNum: '04', title: 'Office FI', subtitle: 'Office verification', group: 'FIELD INVESTIGATION' },
+  { id: 10, number: 10, visibleNum: '05', title: 'Residence FI', subtitle: 'Residence verification', group: 'FIELD INVESTIGATION' },
+  { id: 11, number: 11, visibleNum: '06', title: 'Legal Opinion', subtitle: 'Legal report upload', group: 'CREDIT & ASSESSMENT' },
+  { id: 12, number: 12, visibleNum: '07', title: 'Technical Value', subtitle: 'Valuation report upload', group: 'CREDIT & ASSESSMENT' },
+  { id: 13, number: 13, visibleNum: '08', title: 'CIBIL Check', subtitle: 'Credit Bureau & PAN', group: 'CREDIT & ASSESSMENT' },
+  { id: 14, number: 14, visibleNum: '09', title: 'PD Verification', subtitle: 'Personal discussion', group: 'CREDIT & ASSESSMENT' },
+  { id: 15, number: 15, visibleNum: '10', title: 'Eligibility Calculation', subtitle: 'FOIR ratio calculation', group: 'CREDIT & ASSESSMENT' },
+  { id: 16, number: 16, visibleNum: '11', title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
+  { id: 17, number: 17, visibleNum: '12', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
 ];
 
 /**
@@ -317,6 +329,35 @@ function createBureauReport(customerData) {
 /**
  * Resolves standard status badge text and class.
  */
+/**
+ * Resolves document row status following strict underwriting priority:
+ * 1. Returned to RM (rejection status === 'ReturnedToRM')
+ * 2. Resubmitted (rejection status === 'Resubmitted')
+ * 3. Not Uploaded (!hasFile)
+ * 4. Verified (isVerified is true)
+ * 5. Not Verified (otherwise for uploaded document)
+ */
+function resolveRowStatus({ rejection, hasFile, isVerified }) {
+  const rejStatus = String(rejection?.status || '').trim();
+  if (
+    rejStatus === 'ReturnedToRM' ||
+    rejStatus.toLowerCase() === 'returnedtorm' ||
+    rejStatus.toLowerCase() === 'returned'
+  ) {
+    return 'Returned to RM';
+  }
+  if (rejStatus === 'Resubmitted' || rejStatus.toLowerCase() === 'resubmitted') {
+    return 'Resubmitted';
+  }
+  if (!hasFile) {
+    return 'Not Uploaded';
+  }
+  if (isVerified) {
+    return 'Verified';
+  }
+  return 'Not Verified';
+}
+
 function getStatusInfo(status) {
   if (status === null || status === undefined) {
     return { label: 'Pending', className: 'bo-cv-pill-pending' };
@@ -372,7 +413,10 @@ export default function CustomerVerification() {
   const [docTypeMasterMap, setDocTypeMasterMap] = useState({});
   const [allCustomerDocs, setAllCustomerDocs] = useState([]);
 
-  // Dynamically resolved DocumentTypeMaster IDs for Salary Slip / Income Sheet and Bank Statement
+  // Dynamically resolved DocumentTypeMaster IDs for KYC and Financial documents
+  const profileDocTypeId = useMemo(() => resolveDocumentTypeId(docTypesList, 'Profile') || resolveDocumentTypeId(docTypesList, 'Photo') || resolveDocumentTypeId(docTypesList, 'Profile Photo'), [docTypesList]);
+  const aadhaarDocTypeId = useMemo(() => resolveDocumentTypeId(docTypesList, 'Aadhaar') || resolveDocumentTypeId(docTypesList, 'Aadhar') || resolveDocumentTypeId(docTypesList, 'Aadhaar Card'), [docTypesList]);
+  const panDocTypeId = useMemo(() => resolveDocumentTypeId(docTypesList, 'PAN') || resolveDocumentTypeId(docTypesList, 'PAN Card'), [docTypesList]);
   const salarySlipDocTypeId = useMemo(() => resolveDocumentTypeId(docTypesList, 'Salary Slip'), [docTypesList]);
   const bankStatementDocTypeId = useMemo(() => resolveDocumentTypeId(docTypesList, 'Bank Statement'), [docTypesList]);
 
@@ -2966,6 +3010,80 @@ export default function CustomerVerification() {
   const PlusIcon = iconMap['Plus'] || iconMap['FilePlus'];
   const SaveIcon = iconMap['Save'];
   const Trash2Icon = iconMap['Trash2'] || iconMap['X'];
+  const RotateCcwIcon = iconMap['RotateCcw'] || iconMap['RefreshCw'];
+  const ChevronLeftIcon = iconMap['ChevronLeft'] || iconMap['ArrowLeft'];
+  const ChevronRightIcon = iconMap['ChevronRight'] || iconMap['ArrowRight'];
+  const UsersIcon = iconMap['Users'] || iconMap['User'];
+  const CameraIcon = iconMap['Camera'] || iconMap['User'];
+
+  // 13b. Compact Document Verification States
+  const [selectedCoApplicantIndex, setSelectedCoApplicantIndex] = useState(0);
+  const [previewModal, setPreviewModal] = useState({
+    open: false,
+    title: '',
+    docType: '',
+    personLabel: '',
+    personName: '',
+    url: null,
+    isPdf: false,
+    isImage: false,
+    isZip: false,
+    fileName: '',
+    fileSize: null,
+    uploadDate: null,
+    comparison: null,
+    rejectionId: null,
+    stepLabel: '',
+    stepNum: null,
+    kycId: null,
+    isCoApplicant: false,
+    applicantSequence: 0,
+    documentTypeId: null,
+    rejectedDocumentType: null,
+    manualDocs: null,
+  });
+
+  const handleOpenPreviewModal = useCallback((opts) => {
+    setPreviewModal({
+      open: true,
+      title: opts.title || `${opts.docType} Preview`,
+      docType: opts.docType || 'Document',
+      personLabel: opts.personLabel || '',
+      personName: opts.personName || '',
+      url: opts.url || null,
+      isPdf: Boolean(opts.isPdf),
+      isImage: Boolean(opts.isImage),
+      isZip: Boolean(opts.isZip),
+      fileName: opts.fileName || opts.docType || 'Document',
+      fileSize: opts.fileSize || null,
+      uploadDate: opts.uploadDate || null,
+      comparison: opts.comparison || null,
+      rejectionId: opts.rejectionId || null,
+      stepLabel: opts.stepLabel || opts.docType || 'Document',
+      stepNum: opts.stepNum || null,
+      kycId: opts.kycId || null,
+      isCoApplicant: Boolean(opts.isCoApplicant),
+      applicantSequence: opts.applicantSequence !== undefined ? opts.applicantSequence : 0,
+      documentTypeId: opts.documentTypeId || null,
+      rejectedDocumentType: opts.rejectedDocumentType || null,
+      manualDocs: opts.manualDocs || null,
+    });
+  }, []);
+
+  const handleClosePreviewModal = useCallback(() => {
+    setPreviewModal((prev) => ({ ...prev, open: false }));
+  }, []);
+
+  const applicantName = useMemo(() => {
+    return (
+      verificationData?.personalDetails?.applicantName ||
+      verificationData?.applicationDetails?.customerName ||
+      verificationData?.customerName ||
+      verificationData?.raw?.customerDetails?.customerName ||
+      'Primary Applicant'
+    );
+  }, [verificationData]);
+
 
   // Send to Credit Officer action handler
   const handleSendToCreditOfficer = () => {
@@ -3719,41 +3837,84 @@ export default function CustomerVerification() {
   }, [verificationData, fetchBackOfficeDocuments]);
 
   const getActiveRejectionForApplicant = useCallback(
-    (stepNum) => {
-      const baseType = STEP_DOC_TYPE_MAP[stepNum];
-      if (!baseType) return null;
+    (stepNum, docTypeId) => {
+      const baseType = STEP_DOC_TYPE_MAP[stepNum] || '';
+      if (!baseType && !docTypeId) return null;
       return (
         applicationRejections
           .filter((r) => {
-            const rType = String(r.rejectedDocumentType || '').toUpperCase();
-            const isCoApp =
-              rType.startsWith('CO_APPLICANT') ||
-              (r.kycDocumentId && applicantKycId && Number(r.kycDocumentId) !== Number(applicantKycId) && !rType.startsWith('APPLICANT'));
-            if (isCoApp) return false;
-            return rType === baseType || rType === `APPLICANT_${baseType}` || rType.endsWith(`_${baseType}`);
+            if (r.isActive === false) return false;
+            const seq = r.applicantSequence !== undefined && r.applicantSequence !== null && !isNaN(Number(r.applicantSequence))
+              ? Number(r.applicantSequence)
+              : null;
+            if (seq !== null && seq > 0) return false;
+
+            const rType = String(r.rejectedDocumentType || '').toUpperCase().trim();
+            if (rType.startsWith('CO_APPLICANT') || rType.startsWith('CO-APPLICANT') || rType.startsWith('COAPPLICANT')) return false;
+
+            // If kycDocumentId is present and applicantKycId is known, check if it's explicitly a Co-applicant KYC
+            if (seq === null && r.kycDocumentId && applicantKycId && Number(r.kycDocumentId) !== Number(applicantKycId) && !rType.startsWith('APPLICANT')) {
+              return false;
+            }
+
+            // Match by docTypeId if passed or matched from known document type
+            if (docTypeId && r.documentTypeId && Number(r.documentTypeId) === Number(docTypeId)) return true;
+
+            // Document type specific matches
+            if (stepNum === 2 && (Number(r.documentTypeId) === Number(profileDocTypeId) || Number(r.documentTypeId) === 6 || /(profile|photo)/i.test(rType))) return true;
+            if (stepNum === 3 && (Number(r.documentTypeId) === Number(aadhaarDocTypeId) || Number(r.documentTypeId) === 1 || /(aadhaar|aadhar)/i.test(rType))) return true;
+            if (stepNum === 4 && (Number(r.documentTypeId) === Number(panDocTypeId) || Number(r.documentTypeId) === 2 || /\bpan\b/i.test(rType))) return true;
+            if (stepNum === 5 && (Number(r.documentTypeId) === Number(salarySlipDocTypeId) || /(salary|payslip)/i.test(rType))) return true;
+            if (stepNum === 6 && (Number(r.documentTypeId) === Number(bankStatementDocTypeId) || /(bank|statement)/i.test(rType))) return true;
+            if (stepNum === 7 && /(zip|archive)/i.test(rType)) return true;
+
+            return Boolean(baseType && (rType === baseType || rType === `APPLICANT_${baseType}` || rType.endsWith(`_${baseType}`) || rType.includes(baseType)));
           })
           .sort((a, b) => (b.backOfficeDocumentRejectionId || 0) - (a.backOfficeDocumentRejectionId || 0))[0] || null
       );
     },
-    [applicationRejections, applicantKycId]
+    [applicationRejections, applicantKycId, profileDocTypeId, aadhaarDocTypeId, panDocTypeId, salarySlipDocTypeId, bankStatementDocTypeId]
   );
 
   const getActiveRejectionForCoApplicant = useCallback(
-    (coKycId, stepNum) => {
-      const baseType = STEP_DOC_TYPE_MAP[stepNum];
-      if (!baseType || !coKycId) return null;
+    (coKycId, stepNum, coSequence) => {
+      const baseType = STEP_DOC_TYPE_MAP[stepNum] || '';
+      if (!baseType && !stepNum) return null;
       return (
         applicationRejections
           .filter((r) => {
-            const rType = String(r.rejectedDocumentType || '').toUpperCase();
-            const matchesKyc = Number(r.kycDocumentId) === Number(coKycId);
-            const matchesType = rType === baseType || rType === `CO_APPLICANT_${baseType}` || rType.includes(baseType);
-            return matchesKyc && matchesType;
+            if (r.isActive === false) return false;
+            const rType = String(r.rejectedDocumentType || '').toUpperCase().trim();
+
+            // Check sequence: if sequence is explicitly 0, it's primary applicant
+            const seq = r.applicantSequence !== undefined && r.applicantSequence !== null && !isNaN(Number(r.applicantSequence))
+              ? Number(r.applicantSequence)
+              : null;
+            if (seq === 0) return false;
+
+            // Match sequence if both have it
+            if (seq !== null && coSequence !== undefined && coSequence !== null) {
+              if (seq !== Number(coSequence)) return false;
+            } else if (coKycId && r.kycDocumentId) {
+              if (Number(r.kycDocumentId) !== Number(coKycId)) return false;
+            } else if (!rType.startsWith('CO_APPLICANT') && !rType.startsWith('CO-APPLICANT') && !rType.startsWith('COAPPLICANT')) {
+              return false;
+            }
+
+            // Document type specific matches
+            if (stepNum === 2 && (Number(r.documentTypeId) === Number(profileDocTypeId) || Number(r.documentTypeId) === 6 || /(profile|photo)/i.test(rType))) return true;
+            if (stepNum === 3 && (Number(r.documentTypeId) === Number(aadhaarDocTypeId) || Number(r.documentTypeId) === 1 || /(aadhaar|aadhar)/i.test(rType))) return true;
+            if (stepNum === 4 && (Number(r.documentTypeId) === Number(panDocTypeId) || Number(r.documentTypeId) === 2 || /\bpan\b/i.test(rType))) return true;
+            if (stepNum === 5 && (Number(r.documentTypeId) === Number(salarySlipDocTypeId) || /(salary|payslip)/i.test(rType))) return true;
+            if (stepNum === 6 && (Number(r.documentTypeId) === Number(bankStatementDocTypeId) || /(bank|statement)/i.test(rType))) return true;
+            if (stepNum === 7 && /(zip|archive)/i.test(rType)) return true;
+
+            return Boolean(baseType && (rType === baseType || rType === `CO_APPLICANT_${baseType}` || rType.includes(baseType)));
           })
           .sort((a, b) => (b.backOfficeDocumentRejectionId || 0) - (a.backOfficeDocumentRejectionId || 0))[0] || null
       );
     },
-    [applicationRejections]
+    [applicationRejections, profileDocTypeId, aadhaarDocTypeId, panDocTypeId, salarySlipDocTypeId, bankStatementDocTypeId]
   );
 
   const getActiveRejectionForStep = useCallback(
@@ -4081,7 +4242,7 @@ export default function CustomerVerification() {
   ]);
 
   useEffect(() => {
-    if ((activeStep === 5 || activeStep === 6 || activeStep === 7) && verificationData) {
+    if (activeStep >= 2 && activeStep <= 7 && verificationData) {
       fetchFinancialDocuments();
     }
   }, [activeStep, verificationData, fetchFinancialDocuments]);
@@ -4190,9 +4351,11 @@ export default function CustomerVerification() {
     }
   }, [fetchFinancialDocuments]);
 
-  // Fetch document preview whenever an active document step is opened (Applicant + Co-Applicants)
+  // Fetch document previews whenever active document verification workspace is open (Applicant + Co-Applicants)
   useEffect(() => {
     if (!verificationData) return;
+    if (activeStep < 2 || activeStep > 7) return;
+
     const combinedDocs = [...(allCustomerDocs || [])];
     const initialDocs = verificationData?.kycDocuments?.documents || [];
     initialDocs.forEach((d) => {
@@ -4202,403 +4365,513 @@ export default function CustomerVerification() {
     });
 
     // ── STEP 2: PROFILE IMAGE ──────────────────────────────────────
-    if (activeStep === 2) {
-      const appRej = getActiveRejectionForApplicant(2);
-      if (!docPreviews.profile) {
-        setDocPreviews((prev) => ({ ...prev, profile: { loading: true, error: null, url: null } }));
+    const appProfileRej = getActiveRejectionForApplicant(2, profileDocTypeId);
+    const prevProfileRejId = docPreviews.profile?.comparison?.rejection?.backOfficeDocumentRejectionId || docPreviews.profile?.rejection?.backOfficeDocumentRejectionId;
+    const currentProfileRejId = appProfileRej?.backOfficeDocumentRejectionId;
+    const profileNeedsRefresh =
+      !docPreviews.profile ||
+      (currentProfileRejId && prevProfileRejId !== currentProfileRejId) ||
+      (appProfileRej?.status === 'Resubmitted' && !docPreviews.profile?.isComparison);
 
-        if (appRej && appRej.status === 'Resubmitted') {
-          // Resolve Old vs New documents
-          const { oldDoc, newDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 2, docTypeMasterMap);
-          Promise.all([
-            oldDoc ? downloadAndPrepareDoc(oldDoc) : Promise.resolve(null),
-            newDoc ? downloadAndPrepareDoc(newDoc) : (applicantKycId ? fetchKycDocBlob(applicantKycId, 'profile-image', 'Applicant_Profile') : Promise.resolve(null)),
-          ]).then(([oldRes, newRes]) => {
+    if (profileNeedsRefresh) {
+      const appRej = appProfileRej;
+      setDocPreviews((prev) => ({ ...prev, profile: { loading: true, error: null, url: null } }));
+
+      if (appRej && appRej.status === 'Resubmitted') {
+        // Resolve Old vs New documents
+        const { oldDoc, newDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 2, docTypeMasterMap);
+        const oldPromise = appRej.originalDocumentPath
+          ? fetchKycDocByPath(appRej.originalDocumentPath, 'Applicant_Profile_Old.jpg')
+          : (oldDoc ? downloadAndPrepareDoc(oldDoc) : Promise.resolve(null));
+        const newPromise = appRej.currentDocumentPath
+          ? fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Profile.jpg')
+          : (newDoc ? downloadAndPrepareDoc(newDoc) : (applicantKycId ? fetchKycDocBlob(applicantKycId, 'profile-image', 'Applicant_Profile') : Promise.resolve(null)));
+
+        Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
+          setDocPreviews((prev) => ({
+            ...prev,
+            profile: {
+              loading: false,
+              error: null,
+              isComparison: true,
+              comparison: {
+                oldDoc: oldRes,
+                newDoc: newRes,
+                hasOldVersion: Boolean(oldRes?.url),
+                hasNewVersion: Boolean(newRes?.url),
+                note: !oldRes?.url
+                  ? (!appRej.originalDocumentPath
+                      ? 'Prior version path was not recorded for this rejection.'
+                      : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                  : null,
+                rejection: appRej,
+              },
+              url: newRes?.url || oldRes?.url || null,
+              doc: newRes?.doc || oldRes?.doc || null,
+              fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_Profile.jpg',
+              size: newRes?.size || oldRes?.size || null,
+              isImage: true,
+              isPdf: false,
+              rejection: appRej,
+            },
+          }));
+        });
+      } else {
+        // Standard / Verified / ReturnedToRM single preview
+        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 2, docTypeMasterMap);
+        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc);
+
+        if (targetDoc) {
+          downloadAndPrepareDoc(targetDoc).then((res) => {
             setDocPreviews((prev) => ({
               ...prev,
               profile: {
                 loading: false,
-                error: null,
-                isComparison: true,
-                comparison: {
-                  oldDoc: oldRes,
-                  newDoc: newRes,
-                  hasOldVersion: Boolean(oldRes?.url),
-                  hasNewVersion: Boolean(newRes?.url),
-                  note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
-                  rejection: appRej,
+                error: res ? null : 'Failed to download document.',
+                isComparison: false,
+                comparison: null,
+                url: res?.url || null,
+                doc: targetDoc,
+                fileName: res?.fileName || targetDoc.fileName || 'Applicant_Profile.jpg',
+                size: res?.size || null,
+                isImage: true,
+                isPdf: false,
+                rejection: appRej,
+              },
+            }));
+          });
+        } else if (appRej?.currentDocumentPath) {
+          fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Profile.jpg').then((res) => {
+            setDocPreviews((prev) => ({
+              ...prev,
+              profile: {
+                ...res,
+                isComparison: false,
+                comparison: null,
+                rejection: appRej,
+              },
+            }));
+          });
+        } else if (applicantKycId) {
+          fetchKycDocBlob(applicantKycId, 'profile-image', 'Applicant_Profile').then((res) => {
+            setDocPreviews((prev) => ({ ...prev, profile: { ...res, isComparison: false, comparison: null, rejection: appRej } }));
+          });
+        } else {
+          setDocPreviews((prev) => ({ ...prev, profile: { loading: false, error: null, doc: null, url: null, rejection: appRej } }));
+        }
+      }
+    }
+
+    // Co-Applicants Profile Images
+    coApplicants.forEach((co) => {
+      const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 2, co.sequence || co.number || (co.index + 1));
+      const prevCoRejId = coDocPreviews[co.index]?.profile?.comparison?.rejection?.backOfficeDocumentRejectionId || coDocPreviews[co.index]?.profile?.rejection?.backOfficeDocumentRejectionId;
+      const currentCoRejId = coRej?.backOfficeDocumentRejectionId;
+      const coNeedsRefresh =
+        !coDocPreviews[co.index]?.profile ||
+        (currentCoRejId && prevCoRejId !== currentCoRejId) ||
+        (coRej?.status === 'Resubmitted' && !coDocPreviews[co.index]?.profile?.isComparison);
+
+      if (coNeedsRefresh && co.kycDocumentId) {
+        setCoDocPreviews((prev) => ({
+          ...prev,
+          [co.index]: {
+            ...(prev[co.index] || {}),
+            profile: { loading: true, error: null, url: null },
+          },
+        }));
+
+        if (coRej && coRej.status === 'Resubmitted') {
+          const oldPromise = coRej.originalDocumentPath
+            ? fetchKycDocByPath(coRej.originalDocumentPath, `CoApplicant_${co.number}_Profile_Old.jpg`)
+            : Promise.resolve(null);
+          const newPromise = coRej.currentDocumentPath
+            ? fetchKycDocByPath(coRej.currentDocumentPath, `CoApplicant_${co.number}_Profile.jpg`)
+            : fetchKycDocBlob(co.kycDocumentId, 'profile-image', `CoApplicant_${co.number}_Profile`);
+
+          Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
+            setCoDocPreviews((prev) => ({
+              ...prev,
+              [co.index]: {
+                ...(prev[co.index] || {}),
+                profile: {
+                  loading: false,
+                  error: null,
+                  isComparison: true,
+                  comparison: {
+                    oldDoc: oldRes,
+                    newDoc: newRes,
+                    hasOldVersion: Boolean(oldRes?.url),
+                    hasNewVersion: Boolean(newRes?.url),
+                    note: !oldRes?.url
+                      ? (!coRej.originalDocumentPath
+                          ? 'Prior version path was not recorded for this rejection.'
+                          : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                      : null,
+                    rejection: coRej,
+                  },
+                  url: newRes?.url || oldRes?.url || null,
+                  fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_Profile.jpg`,
+                  size: newRes?.size || oldRes?.size || null,
+                  isImage: true,
+                  isPdf: false,
+                  rejection: coRej,
                 },
-                url: newRes?.url || oldRes?.url || null,
-                doc: newRes?.doc || oldRes?.doc || null,
-                fileName: newRes?.fileName || oldRes?.fileName || 'Profile Image',
-                size: newRes?.size || oldRes?.size || null,
               },
             }));
           });
         } else {
-          // Standard / Verified / ReturnedToRM single preview
-          const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 2, docTypeMasterMap);
-          const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc);
-
-          if (targetDoc) {
-            downloadAndPrepareDoc(targetDoc).then((res) => {
-              setDocPreviews((prev) => ({
-                ...prev,
-                profile: {
-                  loading: false,
-                  error: res ? null : 'Failed to download document.',
-                  isComparison: false,
-                  comparison: null,
-                  url: res?.url || null,
-                  doc: targetDoc,
-                  fileName: res?.fileName || targetDoc.fileName || 'Profile Image',
-                  size: res?.size || null,
-                  isImage: true,
-                  isPdf: false,
-                },
-              }));
-            });
-          } else if (applicantKycId) {
-            fetchKycDocBlob(applicantKycId, 'profile-image', 'Applicant_Profile').then((res) => {
-              setDocPreviews((prev) => ({ ...prev, profile: { ...res, isComparison: false, comparison: null } }));
-            });
-          } else {
-            setDocPreviews((prev) => ({ ...prev, profile: { loading: false, error: null, doc: null, url: null } }));
-          }
+          fetchKycDocBlob(co.kycDocumentId, 'profile-image', `CoApplicant_${co.number}_Profile`).then((res) => {
+            setCoDocPreviews((prev) => ({
+              ...prev,
+              [co.index]: {
+                ...(prev[co.index] || {}),
+                profile: { ...res, isComparison: false, comparison: null, rejection: coRej },
+              },
+            }));
+          });
         }
       }
-
-      // Co-Applicants Profile Images
-      coApplicants.forEach((co) => {
-        if (!coDocPreviews[co.index]?.profile && co.kycDocumentId) {
-          setCoDocPreviews((prev) => ({
-            ...prev,
-            [co.index]: {
-              ...(prev[co.index] || {}),
-              profile: { loading: true, error: null, url: null },
-            },
-          }));
-          const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 2);
-
-          if (coRej && coRej.status === 'Resubmitted') {
-            const oldPromise = coRej.originalDocumentPath
-              ? fetchKycDocByPath(coRej.originalDocumentPath, `CoApplicant_${co.number}_Profile_Old.jpg`)
-              : Promise.resolve(null);
-            const newPromise = coRej.currentDocumentPath
-              ? fetchKycDocByPath(coRej.currentDocumentPath, `CoApplicant_${co.number}_Profile.jpg`)
-              : fetchKycDocBlob(co.kycDocumentId, 'profile-image', `CoApplicant_${co.number}_Profile`);
-
-            Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
-              setCoDocPreviews((prev) => ({
-                ...prev,
-                [co.index]: {
-                  ...(prev[co.index] || {}),
-                  profile: {
-                    loading: false,
-                    error: null,
-                    isComparison: true,
-                    comparison: {
-                      oldDoc: oldRes,
-                      newDoc: newRes,
-                      hasOldVersion: Boolean(oldRes?.url),
-                      hasNewVersion: Boolean(newRes?.url),
-                      note: !oldRes?.url
-                        ? (!coRej.originalDocumentPath
-                            ? 'Prior version path was not recorded for this rejection.'
-                            : (oldRes?.error || 'Previous version could not be retrieved from server.'))
-                        : null,
-                      rejection: coRej,
-                    },
-                    url: newRes?.url || oldRes?.url || null,
-                    fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_Profile.jpg`,
-                    size: newRes?.size || oldRes?.size || null,
-                    isImage: true,
-                    isPdf: false,
-                  },
-                },
-              }));
-            });
-          } else {
-            fetchKycDocBlob(co.kycDocumentId, 'profile-image', `CoApplicant_${co.number}_Profile`).then((res) => {
-              setCoDocPreviews((prev) => ({
-                ...prev,
-                [co.index]: {
-                  ...(prev[co.index] || {}),
-                  profile: { ...res, isComparison: false, comparison: null },
-                },
-              }));
-            });
-          }
-        }
-      });
-    }
+    });
 
     // ── STEP 3: AADHAAR CARD ───────────────────────────────────────
-    if (activeStep === 3) {
-      const appRej = getActiveRejectionForApplicant(3);
-      if (!docPreviews.aadhaar) {
-        setDocPreviews((prev) => ({ ...prev, aadhaar: { loading: true, error: null, url: null } }));
+    const appAadhaarRej = getActiveRejectionForApplicant(3, aadhaarDocTypeId);
+    const prevAadhaarRejId = docPreviews.aadhaar?.comparison?.rejection?.backOfficeDocumentRejectionId || docPreviews.aadhaar?.rejection?.backOfficeDocumentRejectionId;
+    const currentAadhaarRejId = appAadhaarRej?.backOfficeDocumentRejectionId;
+    const aadhaarNeedsRefresh =
+      !docPreviews.aadhaar ||
+      (currentAadhaarRejId && prevAadhaarRejId !== currentAadhaarRejId) ||
+      (appAadhaarRej?.status === 'Resubmitted' && !docPreviews.aadhaar?.isComparison);
 
-        if (appRej && appRej.status === 'Resubmitted') {
-          const { oldDoc, newDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 3, docTypeMasterMap);
-          Promise.all([
-            oldDoc ? downloadAndPrepareDoc(oldDoc) : Promise.resolve(null),
-            newDoc ? downloadAndPrepareDoc(newDoc) : (applicantKycId ? fetchKycDocBlob(applicantKycId, 'aadhar', 'Applicant_Aadhaar') : Promise.resolve(null)),
-          ]).then(([oldRes, newRes]) => {
+    if (aadhaarNeedsRefresh) {
+      const appRej = appAadhaarRej;
+      setDocPreviews((prev) => ({ ...prev, aadhaar: { loading: true, error: null, url: null } }));
+
+      if (appRej && appRej.status === 'Resubmitted') {
+        const { oldDoc, newDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 3, docTypeMasterMap);
+        const oldPromise = appRej.originalDocumentPath
+          ? fetchKycDocByPath(appRej.originalDocumentPath, 'Applicant_Aadhaar_Old')
+          : (oldDoc ? downloadAndPrepareDoc(oldDoc) : Promise.resolve(null));
+        const newPromise = appRej.currentDocumentPath
+          ? fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Aadhaar')
+          : (newDoc ? downloadAndPrepareDoc(newDoc) : (applicantKycId ? fetchKycDocBlob(applicantKycId, 'aadhar', 'Applicant_Aadhaar') : Promise.resolve(null)));
+
+        Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
+          setDocPreviews((prev) => ({
+            ...prev,
+            aadhaar: {
+              loading: false,
+              error: null,
+              isComparison: true,
+              comparison: {
+                oldDoc: oldRes,
+                newDoc: newRes,
+                hasOldVersion: Boolean(oldRes?.url),
+                hasNewVersion: Boolean(newRes?.url),
+                note: !oldRes?.url
+                  ? (!appRej.originalDocumentPath
+                      ? 'Prior version path was not recorded for this rejection.'
+                      : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                  : null,
+                rejection: appRej,
+              },
+              url: newRes?.url || oldRes?.url || null,
+              doc: newRes?.doc || oldRes?.doc || null,
+              fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_Aadhaar.pdf',
+              size: newRes?.size || oldRes?.size || null,
+              isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
+              isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+              rejection: appRej,
+            },
+          }));
+        });
+      } else {
+        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 3, docTypeMasterMap);
+        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc);
+
+        if (targetDoc) {
+          downloadAndPrepareDoc(targetDoc).then((res) => {
             setDocPreviews((prev) => ({
               ...prev,
               aadhaar: {
                 loading: false,
-                error: null,
-                isComparison: true,
-                comparison: {
-                  oldDoc: oldRes,
-                  newDoc: newRes,
-                  hasOldVersion: Boolean(oldRes?.url),
-                  hasNewVersion: Boolean(newRes?.url),
-                  note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
-                  rejection: appRej,
+                error: res ? null : 'Failed to download Aadhaar document.',
+                isComparison: false,
+                comparison: null,
+                url: res?.url || null,
+                doc: targetDoc,
+                fileName: res?.fileName || targetDoc.fileName || 'Applicant_Aadhaar.pdf',
+                size: res?.size || null,
+                isPdf: Boolean(res?.isPdf),
+                isImage: Boolean(res?.isImage),
+                rejection: appRej,
+              },
+            }));
+          });
+        } else if (appRej?.currentDocumentPath) {
+          fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Aadhaar').then((res) => {
+            setDocPreviews((prev) => ({
+              ...prev,
+              aadhaar: {
+                ...res,
+                isComparison: false,
+                comparison: null,
+                rejection: appRej,
+              },
+            }));
+          });
+        } else if (applicantKycId) {
+          fetchKycDocBlob(applicantKycId, 'aadhar', 'Applicant_Aadhaar').then((res) => {
+            setDocPreviews((prev) => ({ ...prev, aadhaar: { ...res, isComparison: false, comparison: null, rejection: appRej } }));
+          });
+        } else {
+          setDocPreviews((prev) => ({ ...prev, aadhaar: { loading: false, error: null, doc: null, url: null, rejection: appRej } }));
+        }
+      }
+    }
+
+    // Co-Applicants Aadhaar
+    coApplicants.forEach((co) => {
+      const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 3, co.sequence || co.number || (co.index + 1));
+      const prevCoAadhaarRejId = coDocPreviews[co.index]?.aadhaar?.comparison?.rejection?.backOfficeDocumentRejectionId || coDocPreviews[co.index]?.aadhaar?.rejection?.backOfficeDocumentRejectionId;
+      const currentCoAadhaarRejId = coRej?.backOfficeDocumentRejectionId;
+      const coAadhaarNeedsRefresh =
+        !coDocPreviews[co.index]?.aadhaar ||
+        (currentCoAadhaarRejId && prevCoAadhaarRejId !== currentCoAadhaarRejId) ||
+        (coRej?.status === 'Resubmitted' && !coDocPreviews[co.index]?.aadhaar?.isComparison);
+
+      if (coAadhaarNeedsRefresh && co.kycDocumentId) {
+        setCoDocPreviews((prev) => ({
+          ...prev,
+          [co.index]: {
+            ...(prev[co.index] || {}),
+            aadhaar: { loading: true, error: null, url: null },
+          },
+        }));
+
+        if (coRej && coRej.status === 'Resubmitted') {
+          const oldPromise = coRej.originalDocumentPath
+            ? fetchKycDocByPath(coRej.originalDocumentPath, `CoApplicant_${co.number}_Aadhaar_Old`)
+            : Promise.resolve(null);
+          const newPromise = coRej.currentDocumentPath
+            ? fetchKycDocByPath(coRej.currentDocumentPath, `CoApplicant_${co.number}_Aadhaar`)
+            : fetchKycDocBlob(co.kycDocumentId, 'aadhar', `CoApplicant_${co.number}_Aadhaar`);
+
+          Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
+            setCoDocPreviews((prev) => ({
+              ...prev,
+              [co.index]: {
+                ...(prev[co.index] || {}),
+                aadhaar: {
+                  loading: false,
+                  error: null,
+                  isComparison: true,
+                  comparison: {
+                    oldDoc: oldRes,
+                    newDoc: newRes,
+                    hasOldVersion: Boolean(oldRes?.url),
+                    hasNewVersion: Boolean(newRes?.url),
+                    note: !oldRes?.url
+                      ? (!coRej.originalDocumentPath
+                          ? 'Prior version path was not recorded for this rejection.'
+                          : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                      : null,
+                    rejection: coRej,
+                  },
+                  url: newRes?.url || oldRes?.url || null,
+                  fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_Aadhaar`,
+                  size: newRes?.size || oldRes?.size || null,
+                  isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
+                  isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+                  rejection: coRej,
                 },
-                url: newRes?.url || oldRes?.url || null,
-                doc: newRes?.doc || oldRes?.doc || null,
-                fileName: newRes?.fileName || oldRes?.fileName || 'Aadhaar Card',
-                size: newRes?.size || oldRes?.size || null,
-                isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
-                isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
               },
             }));
           });
         } else {
-          const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 3, docTypeMasterMap);
-          const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc);
-
-          if (targetDoc) {
-            downloadAndPrepareDoc(targetDoc).then((res) => {
-              setDocPreviews((prev) => ({
-                ...prev,
-                aadhaar: {
-                  loading: false,
-                  error: res ? null : 'Failed to download Aadhaar document.',
-                  isComparison: false,
-                  comparison: null,
-                  url: res?.url || null,
-                  doc: targetDoc,
-                  fileName: res?.fileName || targetDoc.fileName || 'Aadhaar Card',
-                  size: res?.size || null,
-                  isPdf: Boolean(res?.isPdf),
-                  isImage: Boolean(res?.isImage),
-                },
-              }));
-            });
-          } else if (applicantKycId) {
-            fetchKycDocBlob(applicantKycId, 'aadhar', 'Applicant_Aadhaar').then((res) => {
-              setDocPreviews((prev) => ({ ...prev, aadhaar: { ...res, isComparison: false, comparison: null } }));
-            });
-          } else {
-            setDocPreviews((prev) => ({ ...prev, aadhaar: { loading: false, error: null, doc: null, url: null } }));
-          }
+          fetchKycDocBlob(co.kycDocumentId, 'aadhar', `CoApplicant_${co.number}_Aadhaar`).then((res) => {
+            setCoDocPreviews((prev) => ({
+              ...prev,
+              [co.index]: {
+                ...(prev[co.index] || {}),
+                aadhaar: { ...res, isComparison: false, comparison: null, rejection: coRej },
+              },
+            }));
+          });
         }
       }
-
-      // Co-Applicants Aadhaar
-      coApplicants.forEach((co) => {
-        if (!coDocPreviews[co.index]?.aadhaar && co.kycDocumentId) {
-          setCoDocPreviews((prev) => ({
-            ...prev,
-            [co.index]: {
-              ...(prev[co.index] || {}),
-              aadhaar: { loading: true, error: null, url: null },
-            },
-          }));
-          const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 3);
-
-          if (coRej && coRej.status === 'Resubmitted') {
-            const oldPromise = coRej.originalDocumentPath
-              ? fetchKycDocByPath(coRej.originalDocumentPath, `CoApplicant_${co.number}_Aadhaar_Old`)
-              : Promise.resolve(null);
-            const newPromise = coRej.currentDocumentPath
-              ? fetchKycDocByPath(coRej.currentDocumentPath, `CoApplicant_${co.number}_Aadhaar`)
-              : fetchKycDocBlob(co.kycDocumentId, 'aadhar', `CoApplicant_${co.number}_Aadhaar`);
-
-            Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
-              setCoDocPreviews((prev) => ({
-                ...prev,
-                [co.index]: {
-                  ...(prev[co.index] || {}),
-                  aadhaar: {
-                    loading: false,
-                    error: null,
-                    isComparison: true,
-                    comparison: {
-                      oldDoc: oldRes,
-                      newDoc: newRes,
-                      hasOldVersion: Boolean(oldRes?.url),
-                      hasNewVersion: Boolean(newRes?.url),
-                      note: !oldRes?.url
-                        ? (!coRej.originalDocumentPath
-                            ? 'Prior version path was not recorded for this rejection.'
-                            : (oldRes?.error || 'Previous version could not be retrieved from server.'))
-                        : null,
-                      rejection: coRej,
-                    },
-                    url: newRes?.url || oldRes?.url || null,
-                    fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_Aadhaar`,
-                    size: newRes?.size || oldRes?.size || null,
-                    isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
-                    isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
-                  },
-                },
-              }));
-            });
-          } else {
-            fetchKycDocBlob(co.kycDocumentId, 'aadhar', `CoApplicant_${co.number}_Aadhaar`).then((res) => {
-              setCoDocPreviews((prev) => ({
-                ...prev,
-                [co.index]: {
-                  ...(prev[co.index] || {}),
-                  aadhaar: { ...res, isComparison: false, comparison: null },
-                },
-              }));
-            });
-          }
-        }
-      });
-    }
+    });
 
     // ── STEP 4: PAN CARD ───────────────────────────────────────────
-    if (activeStep === 4) {
-      const appRej = getActiveRejectionForApplicant(4);
-      if (!docPreviews.pan) {
-        setDocPreviews((prev) => ({ ...prev, pan: { loading: true, error: null, url: null } }));
+    const appPanRej = getActiveRejectionForApplicant(4, panDocTypeId);
+    const prevPanRejId = docPreviews.pan?.comparison?.rejection?.backOfficeDocumentRejectionId || docPreviews.pan?.rejection?.backOfficeDocumentRejectionId;
+    const currentPanRejId = appPanRej?.backOfficeDocumentRejectionId;
+    const panNeedsRefresh =
+      !docPreviews.pan ||
+      (currentPanRejId && prevPanRejId !== currentPanRejId) ||
+      (appPanRej?.status === 'Resubmitted' && !docPreviews.pan?.isComparison);
 
-        if (appRej && appRej.status === 'Resubmitted') {
-          const { oldDoc, newDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 4, docTypeMasterMap);
-          Promise.all([
-            oldDoc ? downloadAndPrepareDoc(oldDoc) : Promise.resolve(null),
-            newDoc ? downloadAndPrepareDoc(newDoc) : (applicantKycId ? fetchKycDocBlob(applicantKycId, 'pan', 'Applicant_PAN') : Promise.resolve(null)),
-          ]).then(([oldRes, newRes]) => {
+    if (panNeedsRefresh) {
+      const appRej = appPanRej;
+      setDocPreviews((prev) => ({ ...prev, pan: { loading: true, error: null, url: null } }));
+
+      if (appRej && appRej.status === 'Resubmitted') {
+        const { oldDoc, newDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 4, docTypeMasterMap);
+        const oldPromise = appRej.originalDocumentPath
+          ? fetchKycDocByPath(appRej.originalDocumentPath, 'Applicant_PAN_Old')
+          : (oldDoc ? downloadAndPrepareDoc(oldDoc) : Promise.resolve(null));
+        const newPromise = appRej.currentDocumentPath
+          ? fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_PAN')
+          : (newDoc ? downloadAndPrepareDoc(newDoc) : (applicantKycId ? fetchKycDocBlob(applicantKycId, 'pan', 'Applicant_PAN') : Promise.resolve(null)));
+
+        Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
+          setDocPreviews((prev) => ({
+            ...prev,
+            pan: {
+              loading: false,
+              error: null,
+              isComparison: true,
+              comparison: {
+                oldDoc: oldRes,
+                newDoc: newRes,
+                hasOldVersion: Boolean(oldRes?.url),
+                hasNewVersion: Boolean(newRes?.url),
+                note: !oldRes?.url
+                  ? (!appRej.originalDocumentPath
+                      ? 'Prior version path was not recorded for this rejection.'
+                      : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                  : null,
+                rejection: appRej,
+              },
+              url: newRes?.url || oldRes?.url || null,
+              doc: newRes?.doc || oldRes?.doc || null,
+              fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_PAN.pdf',
+              size: newRes?.size || oldRes?.size || null,
+              isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
+              isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+              rejection: appRej,
+            },
+          }));
+        });
+      } else {
+        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 4, docTypeMasterMap);
+        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc);
+
+        if (targetDoc) {
+          downloadAndPrepareDoc(targetDoc).then((res) => {
             setDocPreviews((prev) => ({
               ...prev,
               pan: {
                 loading: false,
-                error: null,
-                isComparison: true,
-                comparison: {
-                  oldDoc: oldRes,
-                  newDoc: newRes,
-                  hasOldVersion: Boolean(oldRes?.url),
-                  hasNewVersion: Boolean(newRes?.url),
-                  note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
-                  rejection: appRej,
+                error: res ? null : 'Failed to download PAN document.',
+                isComparison: false,
+                comparison: null,
+                url: res?.url || null,
+                doc: targetDoc,
+                fileName: res?.fileName || targetDoc.fileName || 'Applicant_PAN.pdf',
+                size: res?.size || null,
+                isPdf: Boolean(res?.isPdf),
+                isImage: Boolean(res?.isImage),
+                rejection: appRej,
+              },
+            }));
+          });
+        } else if (appRej?.currentDocumentPath) {
+          fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_PAN').then((res) => {
+            setDocPreviews((prev) => ({
+              ...prev,
+              pan: {
+                ...res,
+                isComparison: false,
+                comparison: null,
+                rejection: appRej,
+              },
+            }));
+          });
+        } else if (applicantKycId) {
+          fetchKycDocBlob(applicantKycId, 'pan', 'Applicant_PAN').then((res) => {
+            setDocPreviews((prev) => ({ ...prev, pan: { ...res, isComparison: false, comparison: null, rejection: appRej } }));
+          });
+        } else {
+          setDocPreviews((prev) => ({ ...prev, pan: { loading: false, error: null, doc: null, url: null, rejection: appRej } }));
+        }
+      }
+    }
+
+    // Co-Applicants PAN
+    coApplicants.forEach((co) => {
+      const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 4, co.sequence || co.number || (co.index + 1));
+      const prevCoPanRejId = coDocPreviews[co.index]?.pan?.comparison?.rejection?.backOfficeDocumentRejectionId || coDocPreviews[co.index]?.pan?.rejection?.backOfficeDocumentRejectionId;
+      const currentCoPanRejId = coRej?.backOfficeDocumentRejectionId;
+      const coPanNeedsRefresh =
+        !coDocPreviews[co.index]?.pan ||
+        (currentCoPanRejId && prevCoPanRejId !== currentCoPanRejId) ||
+        (coRej?.status === 'Resubmitted' && !coDocPreviews[co.index]?.pan?.isComparison);
+
+      if (coPanNeedsRefresh && co.kycDocumentId) {
+        setCoDocPreviews((prev) => ({
+          ...prev,
+          [co.index]: {
+            ...(prev[co.index] || {}),
+            pan: { loading: true, error: null, url: null },
+          },
+        }));
+
+        if (coRej && coRej.status === 'Resubmitted') {
+          const oldPromise = coRej.originalDocumentPath
+            ? fetchKycDocByPath(coRej.originalDocumentPath, `CoApplicant_${co.number}_PAN_Old`)
+            : Promise.resolve(null);
+          const newPromise = coRej.currentDocumentPath
+            ? fetchKycDocByPath(coRej.currentDocumentPath, `CoApplicant_${co.number}_PAN`)
+            : fetchKycDocBlob(co.kycDocumentId, 'pan', `CoApplicant_${co.number}_PAN`);
+
+          Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
+            setCoDocPreviews((prev) => ({
+              ...prev,
+              [co.index]: {
+                ...(prev[co.index] || {}),
+                pan: {
+                  loading: false,
+                  error: null,
+                  isComparison: true,
+                  comparison: {
+                    oldDoc: oldRes,
+                    newDoc: newRes,
+                    hasOldVersion: Boolean(oldRes?.url),
+                    hasNewVersion: Boolean(newRes?.url),
+                    note: !oldRes?.url
+                      ? (!coRej.originalDocumentPath
+                          ? 'Prior version path was not recorded for this rejection.'
+                          : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                      : null,
+                    rejection: coRej,
+                  },
+                  url: newRes?.url || oldRes?.url || null,
+                  fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_PAN`,
+                  size: newRes?.size || oldRes?.size || null,
+                  isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
+                  isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+                  rejection: coRej,
                 },
-                url: newRes?.url || oldRes?.url || null,
-                doc: newRes?.doc || oldRes?.doc || null,
-                fileName: newRes?.fileName || oldRes?.fileName || 'PAN Card',
-                size: newRes?.size || oldRes?.size || null,
-                isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
-                isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
               },
             }));
           });
         } else {
-          const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 4, docTypeMasterMap);
-          const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc);
-
-          if (targetDoc) {
-            downloadAndPrepareDoc(targetDoc).then((res) => {
-              setDocPreviews((prev) => ({
-                ...prev,
-                pan: {
-                  loading: false,
-                  error: res ? null : 'Failed to download PAN document.',
-                  isComparison: false,
-                  comparison: null,
-                  url: res?.url || null,
-                  doc: targetDoc,
-                  fileName: res?.fileName || targetDoc.fileName || 'PAN Card',
-                  size: res?.size || null,
-                  isPdf: Boolean(res?.isPdf),
-                  isImage: Boolean(res?.isImage),
-                },
-              }));
-            });
-          } else if (applicantKycId) {
-            fetchKycDocBlob(applicantKycId, 'pan', 'Applicant_PAN').then((res) => {
-              setDocPreviews((prev) => ({ ...prev, pan: { ...res, isComparison: false, comparison: null } }));
-            });
-          } else {
-            setDocPreviews((prev) => ({ ...prev, pan: { loading: false, error: null, doc: null, url: null } }));
-          }
+          fetchKycDocBlob(co.kycDocumentId, 'pan', `CoApplicant_${co.number}_PAN`).then((res) => {
+            setCoDocPreviews((prev) => ({
+              ...prev,
+              [co.index]: {
+                ...(prev[co.index] || {}),
+                pan: { ...res, isComparison: false, comparison: null, rejection: coRej },
+              },
+            }));
+          });
         }
       }
-
-      // Co-Applicants PAN
-      coApplicants.forEach((co) => {
-        if (!coDocPreviews[co.index]?.pan && co.kycDocumentId) {
-          setCoDocPreviews((prev) => ({
-            ...prev,
-            [co.index]: {
-              ...(prev[co.index] || {}),
-              pan: { loading: true, error: null, url: null },
-            },
-          }));
-          const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 4);
-
-          if (coRej && coRej.status === 'Resubmitted') {
-            const oldPromise = coRej.originalDocumentPath
-              ? fetchKycDocByPath(coRej.originalDocumentPath, `CoApplicant_${co.number}_PAN_Old`)
-              : Promise.resolve(null);
-            const newPromise = coRej.currentDocumentPath
-              ? fetchKycDocByPath(coRej.currentDocumentPath, `CoApplicant_${co.number}_PAN`)
-              : fetchKycDocBlob(co.kycDocumentId, 'pan', `CoApplicant_${co.number}_PAN`);
-
-            Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
-              setCoDocPreviews((prev) => ({
-                ...prev,
-                [co.index]: {
-                  ...(prev[co.index] || {}),
-                  pan: {
-                    loading: false,
-                    error: null,
-                    isComparison: true,
-                    comparison: {
-                      oldDoc: oldRes,
-                      newDoc: newRes,
-                      hasOldVersion: Boolean(oldRes?.url),
-                      hasNewVersion: Boolean(newRes?.url),
-                      note: !oldRes?.url
-                        ? (!coRej.originalDocumentPath
-                            ? 'Prior version path was not recorded for this rejection.'
-                            : (oldRes?.error || 'Previous version could not be retrieved from server.'))
-                        : null,
-                      rejection: coRej,
-                    },
-                    url: newRes?.url || oldRes?.url || null,
-                    fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_PAN`,
-                    size: newRes?.size || oldRes?.size || null,
-                    isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
-                    isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
-                  },
-                },
-              }));
-            });
-          } else {
-            fetchKycDocBlob(co.kycDocumentId, 'pan', `CoApplicant_${co.number}_PAN`).then((res) => {
-              setCoDocPreviews((prev) => ({
-                ...prev,
-                [co.index]: {
-                  ...(prev[co.index] || {}),
-                  pan: { ...res, isComparison: false, comparison: null },
-                },
-              }));
-            });
-          }
-        }
-      });
-    }
+    });
 
     // ── STEP 7: ZIP ARCHIVE ────────────────────────────────────────
-    if (activeStep === 7 && !docPreviews.zip) {
+    if (!docPreviews.zip) {
       const zipDoc = combinedDocs.find(
         (d) =>
           /\.zip$/i.test(d.fileName || '') ||
@@ -4629,6 +4902,9 @@ export default function CustomerVerification() {
     getActiveRejectionForApplicant,
     getActiveRejectionForCoApplicant,
     resolveOldAndNewDocs,
+    profileDocTypeId,
+    aadhaarDocTypeId,
+    panDocTypeId,
   ]);
 
   // Reject / Send to RM Handler for Steps 2, 3, 4, 5 (supporting KYC & composite tuple documents)
@@ -4639,9 +4915,10 @@ export default function CustomerVerification() {
     isCoApplicant = false,
     customAppSeq = null,
     customDocTypeId = null,
-    customRejectedType = null
+    customRejectedType = null,
+    customRemarks = null
   ) => {
-    const remarks = (stepRemarks[stepNum] || '').trim();
+    const remarks = (customRemarks !== null ? customRemarks : (stepRemarks[stepNum] || '')).trim();
     if (!remarks) {
       setStepFeedback((prev) => ({
         ...prev,
@@ -4764,7 +5041,7 @@ export default function CustomerVerification() {
     return `Are you sure you want to reject this ${stepLabel}?`;
   };
 
-  // Open Reject Confirmation Modal after verifying non-empty remarks
+    // Open Return to RM Confirmation Modal
   const handleOpenRejectConfirm = (
     stepNum,
     stepLabel,
@@ -4774,17 +5051,7 @@ export default function CustomerVerification() {
     documentTypeId = null,
     rejectedDocumentType = null
   ) => {
-    const remarks = (stepRemarks[stepNum] || '').trim();
-    if (!remarks) {
-      setStepFeedback((prev) => ({
-        ...prev,
-        [stepNum]: {
-          type: 'error',
-          message: `Please enter remarks before rejecting / sending ${stepLabel} to RM.`,
-        },
-      }));
-      return;
-    }
+    const existingRemarks = (stepRemarks[stepNum] || '').trim();
     setRejectConfirmModal({
       open: true,
       stepNum,
@@ -4794,11 +5061,12 @@ export default function CustomerVerification() {
       applicantSequence,
       documentTypeId,
       rejectedDocumentType,
-      remarks,
+      remarks: existingRemarks,
+      error: '',
     });
   };
 
-  // Cancel Reject Confirmation
+  // Cancel Return to RM Confirmation
   const handleCancelReject = () => {
     setRejectConfirmModal({
       open: false,
@@ -4810,10 +5078,11 @@ export default function CustomerVerification() {
       documentTypeId: null,
       rejectedDocumentType: null,
       remarks: '',
+      error: '',
     });
   };
 
-  // Confirm and Execute Document Rejection
+  // Confirm and Execute Return Document to RM (with mandatory remarks validation)
   const handleConfirmReject = async () => {
     const {
       stepNum,
@@ -4823,7 +5092,20 @@ export default function CustomerVerification() {
       applicantSequence,
       documentTypeId,
       rejectedDocumentType,
+      remarks,
     } = rejectConfirmModal;
+
+    const trimmed = (remarks || '').trim();
+    if (!trimmed) {
+      setRejectConfirmModal((prev) => ({
+        ...prev,
+        error: 'Remarks are required.',
+      }));
+      return;
+    }
+
+    setStepRemarks((prev) => ({ ...prev, [stepNum]: trimmed }));
+
     setRejectConfirmModal({
       open: false,
       stepNum: null,
@@ -4834,7 +5116,9 @@ export default function CustomerVerification() {
       documentTypeId: null,
       rejectedDocumentType: null,
       remarks: '',
+      error: '',
     });
+
     await handleRejectOrSendToRm(
       stepNum,
       stepLabel,
@@ -4842,7 +5126,8 @@ export default function CustomerVerification() {
       isCoApplicant,
       applicantSequence,
       documentTypeId,
-      rejectedDocumentType
+      rejectedDocumentType,
+      trimmed
     );
   };
 
@@ -4866,19 +5151,34 @@ export default function CustomerVerification() {
       // 1. Refetch rejection records to confirm status = Verified
       await fetchApplicationRejections();
 
-      // 2. Refetch full customer documents from server
+      // 2. Automatically persist step verification to true for this step
+      const stepCode = stepNumToStepCode(stepNum);
+      if (stepCode) {
+        try {
+          await handleSaveStepVerification({
+            stepCode,
+            isVerified: true,
+            remarks: (stepRemarks[stepNum] || '').trim(),
+            stepNum,
+          });
+        } catch (saveErr) {
+          console.warn('Auto-save step verification after rejection verify note:', saveErr);
+        }
+      }
+
+      // 3. Refetch full customer documents from server
       await fetchAllCustomerDocs();
 
-      // 3. Refetch financial documents
+      // 4. Refetch financial documents
       await fetchFinancialDocuments();
 
-      // 4. Reset document previews for this step so fresh verified document loads
+      // 5. Reset document previews for this step so fresh verified document loads
       handleRefreshDocumentPreview(stepNum);
 
-      // 5. Force refresh Step 01 View Form
+      // 6. Force refresh Step 01 View Form
       setViewFormRefreshKey((prev) => prev + 1);
 
-      // 6. Force refresh workspace data
+      // 7. Force refresh workspace data
       if (typeof refetch === 'function') {
         refetch();
       }
@@ -5583,6 +5883,549 @@ export default function CustomerVerification() {
     }
   };
 
+  // ── Compact Document Verification Row Data & Handlers ──
+  const applicantDocRows = useMemo(() => {
+    const rows = [];
+
+    // 1. Profile Image (Step 02 / PROFILE_IMAGE)
+    const profileRej = getActiveRejectionForApplicant(2, profileDocTypeId);
+    const hasProfileFile = Boolean(docPreviews.profile?.url || docPreviews.profile?.doc || profileRej?.currentDocumentPath);
+    const profileVerified = Boolean(stepVerifications.PROFILE_IMAGE?.isVerified) && !hasUnresolvedRejectionForStep('PROFILE_IMAGE');
+    const profileStatus = resolveRowStatus({ rejection: profileRej, hasFile: hasProfileFile, isVerified: profileVerified });
+
+    rows.push({
+      id: 'applicant-profile',
+      stepNum: 2,
+      stepCode: 'PROFILE_IMAGE',
+      docType: 'Profile Image',
+      icon: CameraIcon || UserIcon,
+      hasFile: hasProfileFile,
+      loading: Boolean(docPreviews.profile?.loading),
+      url: docPreviews.profile?.url || null,
+      isImage: true,
+      isPdf: false,
+      isZip: false,
+      fileName: docPreviews.profile?.fileName || (hasProfileFile ? 'Applicant_Profile.jpg' : '—'),
+      fileSize: docPreviews.profile?.size || null,
+      uploadDate: docPreviews.profile?.doc?.createdAt || null,
+      status: profileStatus,
+      isVerified: profileVerified,
+      rejection: profileRej,
+      comparison: docPreviews.profile?.comparison || null,
+      kycId: applicantKycId,
+      isCoApplicant: false,
+      applicantSequence: 0,
+      documentTypeId: profileDocTypeId,
+      rejectedDocumentType: 'PROFILE_IMAGE',
+    });
+
+    // 2. Aadhaar Card (Step 03 / AADHAAR)
+    const aadhaarRej = getActiveRejectionForApplicant(3, aadhaarDocTypeId);
+    const hasAadhaarFile = Boolean(docPreviews.aadhaar?.url || docPreviews.aadhaar?.doc || aadhaarRej?.currentDocumentPath);
+    const aadhaarVerified = Boolean(stepVerifications.AADHAAR?.isVerified) && !hasUnresolvedRejectionForStep('AADHAAR');
+    const aadhaarStatus = resolveRowStatus({ rejection: aadhaarRej, hasFile: hasAadhaarFile, isVerified: aadhaarVerified });
+
+    rows.push({
+      id: 'applicant-aadhaar',
+      stepNum: 3,
+      stepCode: 'AADHAAR',
+      docType: 'Aadhaar Card',
+      icon: ShieldCheckIcon || FileTextIcon,
+      hasFile: hasAadhaarFile,
+      loading: Boolean(docPreviews.aadhaar?.loading),
+      url: docPreviews.aadhaar?.url || null,
+      isImage: isDocImage(docPreviews.aadhaar),
+      isPdf: isDocPdf(docPreviews.aadhaar) || Boolean(docPreviews.aadhaar?.isPdf),
+      isZip: false,
+      fileName: docPreviews.aadhaar?.fileName || docPreviews.aadhaar?.doc?.fileName || (hasAadhaarFile ? 'Applicant_Aadhaar.pdf' : '—'),
+      fileSize: docPreviews.aadhaar?.size || docPreviews.aadhaar?.doc?.fileSize || null,
+      uploadDate: docPreviews.aadhaar?.doc?.createdAt || null,
+      status: aadhaarStatus,
+      isVerified: aadhaarVerified,
+      rejection: aadhaarRej,
+      comparison: docPreviews.aadhaar?.comparison || null,
+      kycId: applicantKycId,
+      isCoApplicant: false,
+      applicantSequence: 0,
+      documentTypeId: aadhaarDocTypeId,
+      rejectedDocumentType: 'AADHAAR',
+    });
+
+    // 3. PAN Card (Step 04 / PAN)
+    const panRej = getActiveRejectionForApplicant(4, panDocTypeId);
+    const hasPanFile = Boolean(docPreviews.pan?.url || docPreviews.pan?.doc || panRej?.currentDocumentPath);
+    const panVerified = Boolean(stepVerifications.PAN?.isVerified) && !hasUnresolvedRejectionForStep('PAN');
+    const panStatus = resolveRowStatus({ rejection: panRej, hasFile: hasPanFile, isVerified: panVerified });
+
+    rows.push({
+      id: 'applicant-pan',
+      stepNum: 4,
+      stepCode: 'PAN',
+      docType: 'PAN Card',
+      icon: LandmarkIcon || FileTextIcon,
+      hasFile: hasPanFile,
+      loading: Boolean(docPreviews.pan?.loading),
+      url: docPreviews.pan?.url || null,
+      isImage: isDocImage(docPreviews.pan),
+      isPdf: isDocPdf(docPreviews.pan) || Boolean(docPreviews.pan?.isPdf),
+      isZip: false,
+      fileName: docPreviews.pan?.fileName || docPreviews.pan?.doc?.fileName || (hasPanFile ? 'Applicant_PAN.pdf' : '—'),
+      fileSize: docPreviews.pan?.size || docPreviews.pan?.doc?.fileSize || null,
+      uploadDate: docPreviews.pan?.doc?.createdAt || null,
+      status: panStatus,
+      isVerified: panVerified,
+      rejection: panRej,
+      comparison: docPreviews.pan?.comparison || null,
+      kycId: applicantKycId,
+      isCoApplicant: false,
+      applicantSequence: 0,
+      documentTypeId: panDocTypeId,
+      rejectedDocumentType: 'PAN',
+    });
+
+    // 4. Salary Slip (Step 05 / SALARY_SLIP)
+    const salaryRej = applicantFinancialDocs.salarySlip?.rejection || getActiveRejectionForApplicantDoc(salarySlipDocTypeId, 'SALARY_SLIP');
+    const salaryPreview = applicantFinancialDocs.salarySlip?.preview;
+    const salaryData = applicantFinancialDocs.salarySlip?.data;
+    const hasSalaryFile = Boolean(salaryPreview?.url || salaryData || salaryRej?.currentDocumentPath);
+    const salaryVerified = Boolean(stepVerifications.SALARY_SLIP?.isVerified) && !hasUnresolvedRejectionForStep('SALARY_SLIP');
+    const salaryStatus = resolveRowStatus({ rejection: salaryRej, hasFile: hasSalaryFile, isVerified: salaryVerified });
+
+    rows.push({
+      id: 'applicant-salary',
+      stepNum: 5,
+      stepCode: 'SALARY_SLIP',
+      docType: 'Salary Slip',
+      icon: BadgeIndianRupeeIcon || FileTextIcon,
+      hasFile: hasSalaryFile,
+      loading: Boolean(applicantFinancialDocs.salarySlip?.loading),
+      url: salaryPreview?.url || null,
+      isImage: isDocImage(salaryPreview),
+      isPdf: isDocPdf(salaryPreview) || Boolean(salaryPreview?.isPdf),
+      isZip: false,
+      fileName: salaryPreview?.fileName || (hasSalaryFile ? 'Applicant_Salary_Slip.pdf' : '—'),
+      fileSize: salaryPreview?.size || null,
+      uploadDate: salaryData?.createdAt || salaryData?.uploadedAt || null,
+      status: salaryStatus,
+      isVerified: salaryVerified,
+      rejection: salaryRej,
+      comparison: applicantFinancialDocs.salarySlip?.comparison || null,
+      kycId: null,
+      isCoApplicant: false,
+      applicantSequence: 0,
+      documentTypeId: salarySlipDocTypeId,
+      rejectedDocumentType: 'SALARY_SLIP',
+    });
+
+    // 5. Bank Statement (Step 06 / BANK_STATEMENT)
+    const bankRej = applicantFinancialDocs.bankStatement?.rejection || getActiveRejectionForApplicantDoc(bankStatementDocTypeId, 'BANK_STATEMENT');
+    const bankPreview = applicantFinancialDocs.bankStatement?.preview;
+    const bankData = applicantFinancialDocs.bankStatement?.data;
+    const hasBankFile = Boolean(bankPreview?.url || bankData || bankRej?.currentDocumentPath);
+    const bankVerified = Boolean(stepVerifications.BANK_STATEMENT?.isVerified) && !hasUnresolvedRejectionForStep('BANK_STATEMENT');
+    const bankStatus = resolveRowStatus({ rejection: bankRej, hasFile: hasBankFile, isVerified: bankVerified });
+
+    rows.push({
+      id: 'applicant-bank',
+      stepNum: 6,
+      stepCode: 'BANK_STATEMENT',
+      docType: 'Bank Statement',
+      icon: BuildingIcon || FileTextIcon,
+      hasFile: hasBankFile,
+      loading: Boolean(applicantFinancialDocs.bankStatement?.loading),
+      url: bankPreview?.url || null,
+      isImage: isDocImage(bankPreview),
+      isPdf: isDocPdf(bankPreview) || Boolean(bankPreview?.isPdf),
+      isZip: false,
+      fileName: bankPreview?.fileName || (hasBankFile ? 'Applicant_Bank_Statement.pdf' : '—'),
+      fileSize: bankPreview?.size || null,
+      uploadDate: bankData?.createdAt || bankData?.uploadedAt || null,
+      status: bankStatus,
+      isVerified: bankVerified,
+      rejection: bankRej,
+      comparison: applicantFinancialDocs.bankStatement?.comparison || null,
+      kycId: null,
+      isCoApplicant: false,
+      applicantSequence: 0,
+      documentTypeId: bankStatementDocTypeId,
+      rejectedDocumentType: 'BANK_STATEMENT',
+    });
+
+    // 6. ZIP / Archive Package (Step 07 / ZIP_ARCHIVE)
+    const zipRej = getActiveRejectionForApplicant(7);
+    const hasZipFile = Boolean(docPreviews.zip?.doc || docPreviews.zip?.url || applicantManualDocs?.length > 0 || zipRej?.currentDocumentPath);
+    const zipVerified = Boolean(stepVerifications.ZIP_ARCHIVE?.isVerified) && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE');
+    const zipStatus = resolveRowStatus({ rejection: zipRej, hasFile: hasZipFile, isVerified: zipVerified });
+
+    rows.push({
+      id: 'applicant-zip',
+      stepNum: 7,
+      stepCode: 'ZIP_ARCHIVE',
+      docType: 'ZIP / Archive Package',
+      icon: FileCheckIcon || FileTextIcon,
+      hasFile: hasZipFile,
+      loading: Boolean(docPreviews.zip?.loading),
+      url: docPreviews.zip?.url || (applicantManualDocs?.length > 0 ? applicantManualDocs[0]?.downloadUrl : null),
+      isImage: false,
+      isPdf: false,
+      isZip: true,
+      fileName: docPreviews.zip?.doc?.fileName || docPreviews.zip?.fileName || (applicantManualDocs?.length > 0 ? `${applicantManualDocs.length} Document(s) Package` : (hasZipFile ? 'Customer_Documents.zip' : '—')),
+      fileSize: docPreviews.zip?.size || (applicantManualDocs?.length > 0 ? applicantManualDocs[0]?.size : null),
+      uploadDate: docPreviews.zip?.doc?.createdAt || (applicantManualDocs?.length > 0 ? applicantManualDocs[0]?.uploadedOn : null),
+      status: zipStatus,
+      isVerified: zipVerified,
+      rejection: zipRej,
+      comparison: docPreviews.zip?.comparison || null,
+      kycId: applicantKycId,
+      isCoApplicant: false,
+      applicantSequence: 0,
+      documentTypeId: null,
+      rejectedDocumentType: 'ZIP_ARCHIVE',
+      manualDocs: applicantManualDocs,
+    });
+
+    return rows;
+  }, [
+    getActiveRejectionForApplicant,
+    docPreviews,
+    stepVerifications,
+    hasUnresolvedRejectionForStep,
+    CameraIcon,
+    UserIcon,
+    applicantKycId,
+    profileDocTypeId,
+    ShieldCheckIcon,
+    FileTextIcon,
+    aadhaarDocTypeId,
+    LandmarkIcon,
+    panDocTypeId,
+    applicantFinancialDocs,
+    getActiveRejectionForApplicantDoc,
+    salarySlipDocTypeId,
+    BadgeIndianRupeeIcon,
+    bankStatementDocTypeId,
+    BuildingIcon,
+    applicantManualDocs,
+    FileCheckIcon,
+  ]);
+
+  const selectedCoApplicant = useMemo(() => {
+    if (!Array.isArray(coApplicants) || coApplicants.length === 0) return null;
+    return coApplicants[selectedCoApplicantIndex] || coApplicants[0] || null;
+  }, [coApplicants, selectedCoApplicantIndex]);
+
+  const coApplicantDocRows = useMemo(() => {
+    if (!selectedCoApplicant) return [];
+    const co = selectedCoApplicant;
+    const coIdx = co.index !== undefined ? co.index : 0;
+    const coSeq = co.sequence !== undefined ? co.sequence : (coIdx + 1);
+    const coKycId = co.kycDocumentId;
+    const coNumber = co.number || (coIdx + 1);
+
+    const rows = [];
+    const coPrev = coDocPreviews[coIdx] || {};
+    const coFin = coApplicantsFinancialDocs[coIdx] || {};
+    const coManual = coApplicantsManualDocs[coIdx] || [];
+
+    // 1. Profile Image
+    const profileRej = getActiveRejectionForCoApplicant(coKycId, 2, coSeq);
+    const hasProfile = Boolean(coPrev.profile?.url || profileRej?.currentDocumentPath);
+    const profileVerified = Boolean(stepVerifications.PROFILE_IMAGE?.isVerified) && !hasUnresolvedRejectionForStep('PROFILE_IMAGE');
+    const profileStatus = resolveRowStatus({ rejection: profileRej, hasFile: hasProfile, isVerified: profileVerified });
+
+    rows.push({
+      id: `co-${coIdx}-profile`,
+      stepNum: 2,
+      stepCode: 'PROFILE_IMAGE',
+      docType: 'Profile Image',
+      icon: CameraIcon || UserIcon,
+      hasFile: hasProfile,
+      loading: Boolean(coPrev.profile?.loading),
+      url: coPrev.profile?.url || null,
+      isImage: true,
+      isPdf: false,
+      isZip: false,
+      fileName: coPrev.profile?.fileName || (hasProfile ? `CoApplicant_${coNumber}_Profile.jpg` : '—'),
+      fileSize: coPrev.profile?.size || null,
+      uploadDate: null,
+      status: profileStatus,
+      isVerified: profileVerified,
+      rejection: profileRej,
+      comparison: coPrev.profile?.comparison || null,
+      kycId: coKycId,
+      isCoApplicant: true,
+      applicantSequence: coSeq,
+      documentTypeId: profileDocTypeId,
+      rejectedDocumentType: 'PROFILE_IMAGE',
+      coNumber,
+    });
+
+    // 2. Aadhaar Card
+    const aadhaarRej = getActiveRejectionForCoApplicant(coKycId, 3, coSeq);
+    const hasAadhaar = Boolean(coPrev.aadhaar?.url || aadhaarRej?.currentDocumentPath);
+    const aadhaarVerified = Boolean(stepVerifications.AADHAAR?.isVerified) && !hasUnresolvedRejectionForStep('AADHAAR');
+    const aadhaarStatus = resolveRowStatus({ rejection: aadhaarRej, hasFile: hasAadhaar, isVerified: aadhaarVerified });
+
+    rows.push({
+      id: `co-${coIdx}-aadhaar`,
+      stepNum: 3,
+      stepCode: 'AADHAAR',
+      docType: 'Aadhaar Card',
+      icon: ShieldCheckIcon || FileTextIcon,
+      hasFile: hasAadhaar,
+      loading: Boolean(coPrev.aadhaar?.loading),
+      url: coPrev.aadhaar?.url || null,
+      isImage: isDocImage(coPrev.aadhaar),
+      isPdf: isDocPdf(coPrev.aadhaar) || Boolean(coPrev.aadhaar?.isPdf),
+      isZip: false,
+      fileName: coPrev.aadhaar?.fileName || (hasAadhaar ? `CoApplicant_${coNumber}_Aadhaar.pdf` : '—'),
+      fileSize: coPrev.aadhaar?.size || null,
+      uploadDate: null,
+      status: aadhaarStatus,
+      isVerified: aadhaarVerified,
+      rejection: aadhaarRej,
+      comparison: coPrev.aadhaar?.comparison || null,
+      kycId: coKycId,
+      isCoApplicant: true,
+      applicantSequence: coSeq,
+      documentTypeId: aadhaarDocTypeId,
+      rejectedDocumentType: 'AADHAAR',
+      coNumber,
+    });
+
+    // 3. PAN Card
+    const panRej = getActiveRejectionForCoApplicant(coKycId, 4, coSeq);
+    const hasPan = Boolean(coPrev.pan?.url || panRej?.currentDocumentPath);
+    const panVerified = Boolean(stepVerifications.PAN?.isVerified) && !hasUnresolvedRejectionForStep('PAN');
+    const panStatus = resolveRowStatus({ rejection: panRej, hasFile: hasPan, isVerified: panVerified });
+
+    rows.push({
+      id: `co-${coIdx}-pan`,
+      stepNum: 4,
+      stepCode: 'PAN',
+      docType: 'PAN Card',
+      icon: LandmarkIcon || FileTextIcon,
+      hasFile: hasPan,
+      loading: Boolean(coPrev.pan?.loading),
+      url: coPrev.pan?.url || null,
+      isImage: isDocImage(coPrev.pan),
+      isPdf: isDocPdf(coPrev.pan) || Boolean(coPrev.pan?.isPdf),
+      isZip: false,
+      fileName: coPrev.pan?.fileName || (hasPan ? `CoApplicant_${coNumber}_PAN.pdf` : '—'),
+      fileSize: coPrev.pan?.size || null,
+      uploadDate: null,
+      status: panStatus,
+      isVerified: panVerified,
+      rejection: panRej,
+      comparison: coPrev.pan?.comparison || null,
+      kycId: coKycId,
+      isCoApplicant: true,
+      applicantSequence: coSeq,
+      documentTypeId: panDocTypeId,
+      rejectedDocumentType: 'PAN',
+      coNumber,
+    });
+
+    // 4. Salary Slip
+    const salRej = coFin.salarySlip?.rejection || getActiveRejectionForCoApplicantDoc(coSeq, salarySlipDocTypeId, 'SALARY_SLIP');
+    const salPrev = coFin.salarySlip?.preview;
+    const salData = coFin.salarySlip?.data;
+    const hasSal = Boolean(salPrev?.url || salData || salRej?.currentDocumentPath);
+    const salVerified = Boolean(stepVerifications.SALARY_SLIP?.isVerified) && !hasUnresolvedRejectionForStep('SALARY_SLIP');
+    const salStatus = resolveRowStatus({ rejection: salRej, hasFile: hasSal, isVerified: salVerified });
+
+    rows.push({
+      id: `co-${coIdx}-salary`,
+      stepNum: 5,
+      stepCode: 'SALARY_SLIP',
+      docType: 'Salary Slip',
+      icon: BadgeIndianRupeeIcon || FileTextIcon,
+      hasFile: hasSal,
+      loading: Boolean(coFin.salarySlip?.loading),
+      url: salPrev?.url || null,
+      isImage: isDocImage(salPrev),
+      isPdf: isDocPdf(salPrev) || Boolean(salPrev?.isPdf),
+      isZip: false,
+      fileName: salPrev?.fileName || (hasSal ? `CoApplicant_${coNumber}_Salary_Slip.pdf` : '—'),
+      fileSize: salPrev?.size || null,
+      uploadDate: salData?.createdAt || salData?.uploadedAt || null,
+      status: salStatus,
+      isVerified: salVerified,
+      rejection: salRej,
+      comparison: coFin.salarySlip?.comparison || null,
+      kycId: null,
+      isCoApplicant: true,
+      applicantSequence: coSeq,
+      documentTypeId: salarySlipDocTypeId,
+      rejectedDocumentType: 'SALARY_SLIP',
+      coNumber,
+    });
+
+    // 5. Bank Statement
+    const bankRej = coFin.bankStatement?.rejection || getActiveRejectionForCoApplicantDoc(coSeq, bankStatementDocTypeId, 'BANK_STATEMENT');
+    const bankPrev = coFin.bankStatement?.preview;
+    const bankData = coFin.bankStatement?.data;
+    const hasBank = Boolean(bankPrev?.url || bankData || bankRej?.currentDocumentPath);
+    const bankVerified = Boolean(stepVerifications.BANK_STATEMENT?.isVerified) && !hasUnresolvedRejectionForStep('BANK_STATEMENT');
+    const bankStatus = resolveRowStatus({ rejection: bankRej, hasFile: hasBank, isVerified: bankVerified });
+
+    rows.push({
+      id: `co-${coIdx}-bank`,
+      stepNum: 6,
+      stepCode: 'BANK_STATEMENT',
+      docType: 'Bank Statement',
+      icon: BuildingIcon || FileTextIcon,
+      hasFile: hasBank,
+      loading: Boolean(coFin.bankStatement?.loading),
+      url: bankPrev?.url || null,
+      isImage: isDocImage(bankPrev),
+      isPdf: isDocPdf(bankPrev) || Boolean(bankPrev?.isPdf),
+      isZip: false,
+      fileName: bankPrev?.fileName || (hasBank ? `CoApplicant_${coNumber}_Bank_Statement.pdf` : '—'),
+      fileSize: bankPrev?.size || null,
+      uploadDate: bankData?.createdAt || bankData?.uploadedAt || null,
+      status: bankStatus,
+      isVerified: bankVerified,
+      rejection: bankRej,
+      comparison: coFin.bankStatement?.comparison || null,
+      kycId: null,
+      isCoApplicant: true,
+      applicantSequence: coSeq,
+      documentTypeId: bankStatementDocTypeId,
+      rejectedDocumentType: 'BANK_STATEMENT',
+      coNumber,
+    });
+
+    // 6. ZIP / Archive Package
+    const zipRej = getActiveRejectionForCoApplicant(coKycId, 7, coSeq);
+    const hasZip = Boolean(coPrev.zip?.url || coManual.length > 0 || zipRej?.currentDocumentPath);
+    const zipVerified = Boolean(stepVerifications.ZIP_ARCHIVE?.isVerified) && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE');
+    const zipStatus = resolveRowStatus({ rejection: zipRej, hasFile: hasZip, isVerified: zipVerified });
+
+    rows.push({
+      id: `co-${coIdx}-zip`,
+      stepNum: 7,
+      stepCode: 'ZIP_ARCHIVE',
+      docType: 'ZIP / Archive Package',
+      icon: FileCheckIcon || FileTextIcon,
+      hasFile: hasZip,
+      loading: Boolean(coPrev.zip?.loading),
+      url: coPrev.zip?.url || (coManual.length > 0 ? coManual[0]?.downloadUrl : null),
+      isImage: false,
+      isPdf: false,
+      isZip: true,
+      fileName: coPrev.zip?.fileName || (coManual.length > 0 ? `CoApplicant_${coNumber}_Manual_Docs (${coManual.length})` : (hasZip ? `CoApplicant_${coNumber}_Documents.zip` : '—')),
+      fileSize: coPrev.zip?.size || (coManual.length > 0 ? coManual[0]?.size : null),
+      uploadDate: coManual.length > 0 ? coManual[0]?.uploadedOn : null,
+      status: zipStatus,
+      isVerified: zipVerified,
+      rejection: zipRej,
+      comparison: coPrev.zip?.comparison || null,
+      kycId: coKycId,
+      isCoApplicant: true,
+      applicantSequence: coSeq,
+      documentTypeId: null,
+      rejectedDocumentType: 'ZIP_ARCHIVE',
+      manualDocs: coManual,
+      coNumber,
+    });
+
+    return rows;
+  }, [
+    selectedCoApplicant,
+    coDocPreviews,
+    coApplicantsFinancialDocs,
+    coApplicantsManualDocs,
+    getActiveRejectionForCoApplicant,
+    stepVerifications,
+    hasUnresolvedRejectionForStep,
+    CameraIcon,
+    UserIcon,
+    profileDocTypeId,
+    ShieldCheckIcon,
+    FileTextIcon,
+    aadhaarDocTypeId,
+    LandmarkIcon,
+    panDocTypeId,
+    getActiveRejectionForCoApplicantDoc,
+    salarySlipDocTypeId,
+    BadgeIndianRupeeIcon,
+    bankStatementDocTypeId,
+    BuildingIcon,
+    FileCheckIcon,
+  ]);
+
+  const handleRowView = useCallback((row) => {
+    if (!row.hasFile) return;
+    handleOpenPreviewModal({
+      title: `${row.docType} — ${row.isCoApplicant ? `Co-Applicant ${row.coNumber || selectedCoApplicantIndex + 1}` : 'Applicant'}`,
+      docType: row.docType,
+      personLabel: row.isCoApplicant ? `Co-Applicant ${row.coNumber || selectedCoApplicantIndex + 1}` : 'Applicant',
+      personName: row.isCoApplicant
+        ? (selectedCoApplicant?.customerName || selectedCoApplicant?.name || `Co-Applicant ${row.coNumber || selectedCoApplicantIndex + 1}`)
+        : applicantName,
+      url: row.url,
+      isPdf: row.isPdf,
+      isImage: row.isImage,
+      isZip: row.isZip,
+      fileName: row.fileName,
+      fileSize: row.fileSize,
+      uploadDate: row.uploadDate,
+      comparison: row.comparison,
+      rejectionId: row.rejection?.backOfficeDocumentRejectionId || row.rejection?.id || row.rejection?.agentCustomerRejectionId,
+      stepLabel: `${row.isCoApplicant ? `Co-Applicant ${row.coNumber || selectedCoApplicantIndex + 1}` : 'Applicant'} ${row.docType}`,
+      stepNum: row.stepNum,
+      kycId: row.kycId,
+      isCoApplicant: row.isCoApplicant,
+      applicantSequence: row.applicantSequence,
+      documentTypeId: row.documentTypeId,
+      rejectedDocumentType: row.rejectedDocumentType,
+      manualDocs: row.manualDocs,
+    });
+  }, [handleOpenPreviewModal, selectedCoApplicantIndex, selectedCoApplicant, applicantName]);
+
+  const handleRowDownload = useCallback((row) => {
+    if (!row.hasFile) return;
+    if (row.url) {
+      handleDownloadFile(row.url, row.fileName || `${row.docType}.${row.isPdf ? 'pdf' : (row.isImage ? 'jpg' : 'zip')}`);
+    } else if (row.manualDocs && row.manualDocs.length > 0) {
+      handleDownloadManualDoc(row.manualDocs[0]);
+    }
+  }, [handleDownloadFile, handleDownloadManualDoc]);
+
+    const handleRowReturn = useCallback((row) => {
+    if (!row.hasFile) return;
+    const label = `${row.isCoApplicant ? `Co-Applicant ${row.coNumber || selectedCoApplicantIndex + 1}` : 'Applicant'} ${row.docType}`;
+    handleOpenRejectConfirm(
+      row.stepNum,
+      label,
+      row.kycId,
+      row.isCoApplicant,
+      row.applicantSequence,
+      row.documentTypeId,
+      row.rejectedDocumentType
+    );
+  }, [selectedCoApplicantIndex, handleOpenRejectConfirm]);
+
+  const handleToggleRowVerification = useCallback(async (row) => {
+    if (!row || !row.hasFile) return;
+    if (row.status === 'Returned to RM' || row.status === 'Returned' || row.status === 'Resubmitted') return;
+    if (hasUnresolvedRejectionForStep(row.stepCode)) return;
+    if (isSavingStepVerification) return;
+
+    const currentVerified = Boolean(row.isVerified);
+    const nextVerified = !currentVerified;
+    const currentRemarks = (stepRemarks[row.stepNum] || '').trim();
+
+    await handleSaveStepVerification({
+      stepCode: row.stepCode,
+      isVerified: nextVerified,
+      remarks: currentRemarks,
+      stepNum: row.stepNum,
+    });
+  }, [hasUnresolvedRejectionForStep, isSavingStepVerification, stepRemarks, handleSaveStepVerification]);
+
+
   // 5a. Initial Load: Fetch latest FOIR calculation snapshot via GET /by-customer/{agentCustomerId}
   useEffect(() => {
     const rawCustomer = verificationData?.raw?.customer || verificationData?.customer || {};
@@ -6121,13 +6964,13 @@ export default function CustomerVerification() {
           </aside>
         )}
 
-        {/* ── 17-STEP VERIFICATION WORKFLOW SIDEBAR (SIVELS FINANCE) ── */}
-        <aside className="bo-cv-left-sidebar" aria-label={`${VERIFICATION_WORKFLOW_STEPS.length}-Step Underwriting Verification Workflow`}>
+        {/* ── 12-STEP VERIFICATION WORKFLOW SIDEBAR (SIVELS FINANCE) ── */}
+        <aside className="bo-cv-left-sidebar" aria-label="12-Step Underwriting Verification Workflow">
           <div className="bo-cv-sidebar-header">
             <div className="bo-cv-sidebar-heading-row">
               <div>
                 <h2 className="bo-cv-sidebar-title">Verification Steps</h2>
-                <span className="bo-cv-sidebar-subtitle">{VERIFICATION_WORKFLOW_STEPS.length}-Step Underwriting</span>
+                <span className="bo-cv-sidebar-subtitle">12-Step Underwriting</span>
               </div>
               <span className="bo-cv-step-count">{VERIFICATION_WORKFLOW_STEPS.length}</span>
             </div>
@@ -6135,22 +6978,33 @@ export default function CustomerVerification() {
 
           <nav className="bo-cv-steps-nav">
             <ul className="bo-cv-steps-list" role="list">
-              {/* 1. FORM REVIEW */}
-              <li className="bo-cv-sidebar-group-header">
-                <span className="bo-cv-sidebar-group-title">FORM REVIEW</span>
-              </li>
-              {VERIFICATION_WORKFLOW_STEPS.filter((s) => s.group === 'FORM REVIEW').map((step) => {
+              {VERIFICATION_WORKFLOW_STEPS.map((step) => {
                 const stepNum = step.number;
-                const isSelected = activeStep === stepNum;
-                const formattedNum = String(stepNum).padStart(2, '0');
+                const isDocStep = step.id === 2;
+                const isSelected = isDocStep
+                  ? (activeStep >= 2 && activeStep <= 7)
+                  : (activeStep === stepNum);
+                const allVerified = verifiedDocumentCount === 6;
+                const formattedNum = step.visibleNum || String(stepNum).padStart(2, '0');
+                const subtitle = isDocStep
+                  ? (allVerified ? '6/6 Verified' : `${verifiedDocumentCount}/6 Verified`)
+                  : step.subtitle;
 
                 return (
                   <li key={step.id} className="bo-cv-step-item">
                     <button
                       type="button"
                       className={`bo-cv-step-card ${isSelected ? 'is-active' : ''}`}
-                      onClick={() => setActiveStep(stepNum)}
-                      aria-label={`Step ${stepNum}: ${step.title}. Click to view.`}
+                      onClick={() => {
+                        if (isDocStep) {
+                          if (activeStep < 2 || activeStep > 7) {
+                            setActiveStep(2);
+                          }
+                        } else {
+                          setActiveStep(stepNum);
+                        }
+                      }}
+                      aria-label={`Step ${formattedNum}: ${step.title}. ${isDocStep ? `${verifiedDocumentCount} of 6 verified.` : ''} Click to view.`}
                     >
                       <div className="bo-cv-step-num-box" aria-hidden="true">
                         {formattedNum}
@@ -6158,147 +7012,29 @@ export default function CustomerVerification() {
 
                       <div className="bo-cv-step-details">
                         <strong className="bo-cv-step-name">{step.title}</strong>
-                        <span className="bo-cv-step-desc">{step.subtitle}</span>
-                      </div>
-
-                      {!isSelected && (
-                        <div className="bo-cv-step-action">
-                          <span className="bo-cv-view-btn">
-                            {EyeIcon && <EyeIcon size={11} />}
-                            <span>View</span>
-                          </span>
-                        </div>
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-
-              {/* 2. DOCUMENT VERIFICATION */}
-              <li className="bo-cv-sidebar-group-header">
-                <span className="bo-cv-sidebar-group-title">DOCUMENT VERIFICATION</span>
-              </li>
-              {(() => {
-                const isDocActive = activeStep >= 2 && activeStep <= 7;
-                const allVerified = verifiedDocumentCount === 6;
-
-                return (
-                  <li key="sidebar-doc-verification-step" className="bo-cv-step-item">
-                    <button
-                      type="button"
-                      className={`bo-cv-step-card ${isDocActive ? 'is-active' : ''}`}
-                      onClick={() => {
-                        if (activeStep < 2 || activeStep > 7) {
-                          setActiveStep(2);
-                        }
-                      }}
-                      aria-label={`Steps 02–07: Document Verification. ${verifiedDocumentCount} of 6 verified. Click to view.`}
-                    >
-                      <div
-                        className={`bo-cv-step-num-box bo-cv-step-num-box--range ${allVerified ? 'is-verified-num' : ''}`}
-                        aria-hidden="true"
-                      >
-                        {allVerified ? '✓' : '02–07'}
-                      </div>
-
-                      <div className="bo-cv-step-details">
-                        <strong className="bo-cv-step-name">Document Verification</strong>
-                        <span className="bo-cv-step-desc">
-                          {allVerified ? '6/6 Verified' : `${verifiedDocumentCount}/6 Verified`}
-                        </span>
+                        <span className="bo-cv-step-desc">{subtitle}</span>
                       </div>
 
                       <div className="bo-cv-step-action">
-                        <span
-                          className={`bo-cv-sidebar-progress-pill ${
-                            allVerified
-                              ? 'is-completed'
-                              : verifiedDocumentCount > 0
-                              ? 'is-progressing'
-                              : ''
-                          }`}
-                        >
-                          {allVerified ? '6/6 ✓' : `${verifiedDocumentCount}/6`}
-                        </span>
-                      </div>
-                    </button>
-                  </li>
-                );
-              })()}
-
-              {/* 3. FIELD INVESTIGATION */}
-              <li className="bo-cv-sidebar-group-header">
-                <span className="bo-cv-sidebar-group-title">FIELD INVESTIGATION</span>
-              </li>
-              {VERIFICATION_WORKFLOW_STEPS.filter((s) => s.group === 'FIELD INVESTIGATION').map((step) => {
-                const stepNum = step.number;
-                const isSelected = activeStep === stepNum;
-                const formattedNum = String(stepNum).padStart(2, '0');
-
-                return (
-                  <li key={step.id} className="bo-cv-step-item">
-                    <button
-                      type="button"
-                      className={`bo-cv-step-card ${isSelected ? 'is-active' : ''}`}
-                      onClick={() => setActiveStep(stepNum)}
-                      aria-label={`Step ${stepNum}: ${step.title}. Click to view.`}
-                    >
-                      <div className="bo-cv-step-num-box" aria-hidden="true">
-                        {formattedNum}
-                      </div>
-
-                      <div className="bo-cv-step-details">
-                        <strong className="bo-cv-step-name">{step.title}</strong>
-                        <span className="bo-cv-step-desc">{step.subtitle}</span>
-                      </div>
-
-                      {!isSelected && (
-                        <div className="bo-cv-step-action">
+                        {isDocStep && isSelected ? (
+                          <span
+                            className={`bo-cv-sidebar-progress-pill ${
+                              allVerified
+                                ? 'is-completed'
+                                : verifiedDocumentCount > 0
+                                ? 'is-progressing'
+                                : ''
+                            }`}
+                          >
+                            {allVerified ? '6/6 ✓' : `${verifiedDocumentCount}/6`}
+                          </span>
+                        ) : !isSelected ? (
                           <span className="bo-cv-view-btn">
                             {EyeIcon && <EyeIcon size={11} />}
                             <span>View</span>
                           </span>
-                        </div>
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-
-              {/* 4. CREDIT & ASSESSMENT */}
-              <li className="bo-cv-sidebar-group-header">
-                <span className="bo-cv-sidebar-group-title">CREDIT & ASSESSMENT</span>
-              </li>
-              {VERIFICATION_WORKFLOW_STEPS.filter((s) => s.group === 'CREDIT & ASSESSMENT').map((step) => {
-                const stepNum = step.number;
-                const isSelected = activeStep === stepNum;
-                const formattedNum = String(stepNum).padStart(2, '0');
-
-                return (
-                  <li key={step.id} className="bo-cv-step-item">
-                    <button
-                      type="button"
-                      className={`bo-cv-step-card ${isSelected ? 'is-active' : ''}`}
-                      onClick={() => setActiveStep(stepNum)}
-                      aria-label={`Step ${stepNum}: ${step.title}. Click to view.`}
-                    >
-                      <div className="bo-cv-step-num-box" aria-hidden="true">
-                        {formattedNum}
+                        ) : null}
                       </div>
-
-                      <div className="bo-cv-step-details">
-                        <strong className="bo-cv-step-name">{step.title}</strong>
-                        <span className="bo-cv-step-desc">{step.subtitle}</span>
-                      </div>
-
-                      {!isSelected && (
-                        <div className="bo-cv-step-action">
-                          <span className="bo-cv-view-btn">
-                            {EyeIcon && <EyeIcon size={11} />}
-                            <span>View</span>
-                          </span>
-                        </div>
-                      )}
                     </button>
                   </li>
                 );
@@ -6325,7 +7061,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 01 of 17</span>
+                <span className="bo-cv-step-tag-pill">Step 01 of 12</span>
               </div>
 
               <div className="bo-cv-view-form-embed-wrapper">
@@ -6344,7 +7080,7 @@ export default function CustomerVerification() {
               {/* Workspace Persistent Header */}
               <div className="bo-cv-step-panel-header bo-cv-doc-workspace-header">
                 <div className="bo-cv-doc-header-left">
-                  <div className="bo-cv-step-badge-num bo-cv-step-badge-num--range">02–07</div>
+                  <div className="bo-cv-step-badge-num">02</div>
                   <div className="bo-cv-doc-header-text">
                     <div className="bo-cv-doc-workspace-title-row">
                       <h2 className="bo-cv-step-panel-title">DOCUMENT VERIFICATION</h2>
@@ -6367,3100 +7103,415 @@ export default function CustomerVerification() {
                   </div>
                 </div>
                 <div className="bo-cv-doc-header-right">
-                  <span className="bo-cv-step-tag-pill">Steps 02–07 of 17</span>
+                  <span className="bo-cv-step-tag-pill">Step 02 of 12</span>
                 </div>
               </div>
 
-              {/* Document Sub-Tabs Navigation Bar */}
-              <nav className="bo-cv-doc-subtabs-nav" aria-label="Document Verification Steps">
-                {[
-                  { stepNum: 2, label: 'Profile Image', shortLabel: 'Profile', code: 'PROFILE_IMAGE' },
-                  { stepNum: 3, label: 'Aadhaar Card', shortLabel: 'Aadhaar', code: 'AADHAAR' },
-                  { stepNum: 4, label: 'PAN Card', shortLabel: 'PAN', code: 'PAN' },
-                  { stepNum: 5, label: 'Salary Slip', shortLabel: 'Salary Slip', code: 'SALARY_SLIP' },
-                  { stepNum: 6, label: 'Bank Statement', shortLabel: 'Bank Statement', code: 'BANK_STATEMENT' },
-                  { stepNum: 7, label: 'ZIP / Archive', shortLabel: 'ZIP / Archive', code: 'ZIP_ARCHIVE' },
-                ].map((tab) => {
-                  const isTabActive = activeStep === tab.stepNum;
-                  const hasUnresolved = hasUnresolvedRejectionForStep(tab.code);
-                  const isTabVerified = Boolean(stepVerifications[tab.code]?.isVerified) && !hasUnresolved;
-                  const isTabRejected = hasUnresolved;
+              {/* Unified 2-Card Layout (Applicant & Co-Applicant Tables with Row Verification) */}
+              <div className="bo-cv-doc-unified-container">
+                {/* ── CARD 1: APPLICANT DOCUMENTS TABLE ── */}
+                <div className="bo-cv-doc-card">
+                  <div className="bo-cv-doc-card-header">
+                    <div className="bo-cv-doc-card-header-left">
+                      <div className="bo-cv-doc-card-icon">
+                        {UserIcon ? <UserIcon size={18} /> : <span>👤</span>}
+                      </div>
+                      <div>
+                        <h3 className="bo-cv-doc-card-title">Applicant Documents</h3>
+                        <span className="bo-cv-doc-card-subtitle">
+                          Primary Applicant: {applicantName}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="bo-cv-doc-card-header-right">
+                      <span className="bo-cv-doc-card-count-badge">
+                        {applicantDocRows.filter((r) => r.hasFile).length} of {applicantDocRows.length} Available
+                      </span>
+                    </div>
+                  </div>
 
-                  return (
-                    <button
-                      key={tab.stepNum}
-                      type="button"
-                      className={`bo-cv-doc-subtab-btn ${isTabActive ? 'is-active' : ''} ${
-                        isTabRejected ? 'is-rejected' : (isTabVerified ? 'is-verified' : '')
-                      }`}
-                      onClick={() => setActiveStep(tab.stepNum)}
-                      aria-current={isTabActive ? 'page' : undefined}
-                    >
-                      <span className="bo-cv-doc-subtab-badge">0{tab.stepNum}</span>
-                      <span className="bo-cv-doc-subtab-label">{tab.shortLabel}</span>
-                      {isTabRejected ? (
-                        <span className="bo-cv-doc-subtab-alert" title="Returned to RM / Pending Verification">⚠️</span>
-                      ) : isTabVerified ? (
-                        <span className="bo-cv-doc-subtab-check" title="Verified">✓</span>
+                  <div className="bo-cv-doc-table-wrapper">
+                    <table className="bo-cv-doc-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: '40px', textAlign: 'center' }}>#</th>
+                          <th style={{ width: '180px' }}>Document</th>
+                          <th style={{ width: '65px', textAlign: 'center' }}>Preview</th>
+                          <th>File Name</th>
+                          <th style={{ width: '115px', textAlign: 'center' }}>Verified</th>
+                          <th style={{ width: '120px', textAlign: 'center' }}>Status</th>
+                          <th style={{ width: '120px', textAlign: 'center' }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {applicantDocRows.map((row, idx) => {
+                          const IconComp = row.icon;
+                          const isCheckboxDisabled =
+                            !row.hasFile ||
+                            row.status === 'Returned to RM' ||
+                            row.status === 'Returned' ||
+                            row.status === 'Resubmitted' ||
+                            hasUnresolvedRejectionForStep(row.stepCode) ||
+                            isSavingStepVerification;
+
+                          return (
+                            <tr key={row.id} className="bo-cv-doc-tr">
+                              <td className="bo-cv-doc-td-num">
+                                <span className="bo-cv-doc-num-badge">0{idx + 1}</span>
+                              </td>
+                              <td className="bo-cv-doc-td-type">
+                                <div className="bo-cv-doc-type-cell">
+                                  <div className="bo-cv-doc-type-icon">
+                                    {IconComp ? <IconComp size={15} /> : <span>📄</span>}
+                                  </div>
+                                  <span className="bo-cv-doc-type-name">{row.docType}</span>
+                                </div>
+                              </td>
+                              <td className="bo-cv-doc-td-thumb" style={{ textAlign: 'center' }}>
+                                <div
+                                  className={`bo-cv-doc-thumb-box ${row.hasFile ? 'is-clickable' : 'is-empty'} ${row.loading ? 'is-loading' : ''}`}
+                                  onClick={() => row.hasFile && handleRowView(row)}
+                                  title={row.hasFile ? 'Click to preview' : 'No document uploaded'}
+                                >
+                                  {row.loading ? (
+                                    <div className="bo-cv-doc-thumb-spinner" />
+                                  ) : row.url && row.isImage ? (
+                                    <img src={row.url} alt={row.fileName} className="bo-cv-doc-thumb-img" />
+                                  ) : row.url && row.isPdf ? (
+                                    <div className="bo-cv-doc-thumb-pdf">PDF</div>
+                                  ) : row.isZip && row.hasFile ? (
+                                    <div className="bo-cv-doc-thumb-zip">ZIP</div>
+                                  ) : (
+                                    <div className="bo-cv-doc-thumb-placeholder">—</div>
+                                  )}
+                                  {row.hasFile && (
+                                    <div className="bo-cv-doc-thumb-hover-overlay">
+                                      {EyeIcon ? <EyeIcon size={12} /> : <span>👁</span>}
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="bo-cv-doc-td-details">
+                                <div className="bo-cv-doc-file-info">
+                                  <span className="bo-cv-doc-filename" title={row.fileName}>
+                                    {row.fileName}
+                                  </span>
+                                  <div className="bo-cv-doc-file-meta">
+                                    {row.fileSize && <span>{formatFileSize(row.fileSize)}</span>}
+                                    {row.fileSize && row.uploadDate && <span>•</span>}
+                                    {row.uploadDate && <span>{formatUploadDate(row.uploadDate)}</span>}
+                                    {!row.fileSize && !row.uploadDate && (
+                                      <span className="bo-cv-doc-meta-empty">{row.hasFile ? 'Uploaded' : 'Not available'}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="bo-cv-doc-td-verify" style={{ textAlign: 'center' }}>
+                                <label
+                                  className={`bo-cv-doc-verify-checkbox-label ${isCheckboxDisabled ? 'is-disabled' : ''} ${row.isVerified ? 'is-checked' : ''}`}
+                                  title={
+                                    !row.hasFile
+                                      ? 'Cannot verify: Document not uploaded'
+                                      : row.status === 'Returned to RM' || row.status === 'Returned'
+                                      ? 'Cannot verify: Document is returned to RM'
+                                      : row.status === 'Resubmitted'
+                                      ? 'Cannot verify: Resubmitted document must be verified via comparison review'
+                                      : hasUnresolvedRejectionForStep(row.stepCode)
+                                      ? 'Cannot verify: Unresolved rejection pending for this step'
+                                      : row.isVerified
+                                      ? 'Click to unverify document'
+                                      : 'Click to mark document as verified'
+                                  }
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="bo-cv-doc-verify-checkbox"
+                                    checked={Boolean(row.isVerified)}
+                                    disabled={isCheckboxDisabled}
+                                    onChange={() => handleToggleRowVerification(row)}
+                                  />
+                                  <span className={`bo-cv-doc-verify-checkbox-text ${row.isVerified ? 'is-verified' : ''}`}>
+                                    {row.isVerified ? 'Verified' : ''}
+                                  </span>
+                                </label>
+                              </td>
+                              <td className="bo-cv-doc-td-status" style={{ textAlign: 'center' }}>
+                                <span className={`bo-cv-status-badge bo-cv-status-badge--${row.status.toLowerCase().replace(/\s+/g, '-')}`}>
+                                  <span className="bo-cv-badge-dot" />
+                                  {row.status}
+                                </span>
+                              </td>
+                              <td className="bo-cv-doc-td-actions" style={{ textAlign: 'center' }}>
+                                <div className="bo-cv-doc-actions-group">
+                                  <button
+                                    type="button"
+                                    className="bo-cv-doc-action-btn bo-cv-doc-action-btn--view"
+                                    title={row.hasFile ? 'View document' : 'Document not available'}
+                                    disabled={!row.hasFile}
+                                    onClick={() => handleRowView(row)}
+                                  >
+                                    {EyeIcon ? <EyeIcon size={14} /> : <span>👁</span>}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="bo-cv-doc-action-btn bo-cv-doc-action-btn--download"
+                                    title={row.hasFile ? 'Download document' : 'Document not available'}
+                                    disabled={!row.hasFile}
+                                    onClick={() => handleRowDownload(row)}
+                                  >
+                                    {DownloadIcon ? <DownloadIcon size={14} /> : <span>⬇</span>}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="bo-cv-doc-action-btn bo-cv-doc-action-btn--return"
+                                    title={row.hasFile ? 'Return document to RM' : 'Document not available'}
+                                    disabled={!row.hasFile}
+                                    onClick={() => handleRowReturn(row)}
+                                  >
+                                    {RotateCcwIcon ? <RotateCcwIcon size={14} /> : <span>↩</span>}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* ── CARD 2: CO-APPLICANT DOCUMENTS TABLE ── */}
+                <div className="bo-cv-doc-card">
+                  <div className="bo-cv-doc-card-header">
+                    <div className="bo-cv-doc-card-header-left">
+                      <div className="bo-cv-doc-card-icon is-coapp">
+                        {UsersIcon ? <UsersIcon size={18} /> : <span>👥</span>}
+                      </div>
+                      <div>
+                        <h3 className="bo-cv-doc-card-title">Co-Applicant Documents</h3>
+                        {selectedCoApplicant && (
+                          <span className="bo-cv-doc-card-subtitle">
+                            {selectedCoApplicant.customerName || `Co-Applicant ${selectedCoApplicant.number || selectedCoApplicantIndex + 1}`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="bo-cv-doc-card-header-right">
+                      {coApplicants.length > 1 ? (
+                        <div className="bo-cv-coapp-nav">
+                          <button
+                            type="button"
+                            className="bo-cv-coapp-nav-btn"
+                            disabled={selectedCoApplicantIndex === 0}
+                            onClick={() => setSelectedCoApplicantIndex((prev) => Math.max(0, prev - 1))}
+                            title="Previous Co-Applicant"
+                            aria-label="Previous Co-Applicant"
+                          >
+                            {ChevronLeftIcon ? <ChevronLeftIcon size={16} /> : <span>‹</span>}
+                          </button>
+                          <span className="bo-cv-coapp-nav-label">
+                            Co-Applicant {selectedCoApplicant?.number || selectedCoApplicantIndex + 1}
+                            {selectedCoApplicant?.customerName ? `: ${selectedCoApplicant.customerName}` : ''}
+                          </span>
+                          <span className="bo-cv-coapp-nav-counter">
+                            {selectedCoApplicantIndex + 1}/{coApplicants.length}
+                          </span>
+                          <button
+                            type="button"
+                            className="bo-cv-coapp-nav-btn"
+                            disabled={selectedCoApplicantIndex >= coApplicants.length - 1}
+                            onClick={() => setSelectedCoApplicantIndex((prev) => Math.min(coApplicants.length - 1, prev + 1))}
+                            title="Next Co-Applicant"
+                            aria-label="Next Co-Applicant"
+                          >
+                            {ChevronRightIcon ? <ChevronRightIcon size={16} /> : <span>›</span>}
+                          </button>
+                        </div>
+                      ) : coApplicants.length === 1 ? (
+                        <span className="bo-cv-doc-card-count-badge">
+                          {selectedCoApplicant?.customerName || 'Co-Applicant 1'} (1 Attached)
+                        </span>
                       ) : null}
-                    </button>
-                  );
-                })}
-              </nav>
-
-              {/* Workspace Content Area: active document step */}
-              <div className="bo-cv-doc-workspace-content">
-          {/* ══════════════════════════════════════════════════════════════════
-              STEP 02: PROFILE IMAGE
-          ══════════════════════════════════════════════════════════════════ */}
-          {activeStep === 2 && (
-            <div className="bo-cv-doc-step-inner">
-              <div className="bo-cv-step-panel-header">
-                <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">02</div>
-                  <div>
-                    <h2 className="bo-cv-step-panel-title">Customer Profile Images</h2>
-                    <p className="bo-cv-step-panel-desc">
-                      Inspect authentic photographs uploaded during customer onboarding for Applicant and Co-Applicant(s).
-                    </p>
-                  </div>
-                </div>
-                <span className="bo-cv-step-tag-pill">Step 02 of 17</span>
-              </div>
-
-              <div className="bo-cv-doc-display-container">
-                {/* Active Rejection Banner if any */}
-                {(() => {
-                  const rej = getActiveRejectionForStep(2);
-                  if (!rej) return null;
-                  return (
-                    <div className={`rejection-status-banner rejection-status--${(rej.status || '').toLowerCase()}`}>
-                      <div className="rejection-status-header">
-                        <strong>
-                          {rej.status === 'ReturnedToRM' && '⚠️ Document Returned to RM for Correction'}
-                          {rej.status === 'Resubmitted' && '🔄 Document Resubmitted by RM (Ready for Verification)'}
-                          {rej.status === 'Verified' && '✓ Document Verified & Approved'}
-                        </strong>
-                        <span className="rejection-status-date">
-                          {rej.resubmittedAt
-                            ? `Resubmitted: ${new Date(rej.resubmittedAt).toLocaleString()}`
-                            : rej.createdAt
-                            ? `Returned: ${new Date(rej.createdAt).toLocaleString()}`
-                            : ''}
-                        </span>
-                      </div>
-                      {rej.rejectionRemarks && (
-                        <p className="rejection-status-remarks">
-                          <strong>Remarks:</strong> {rej.rejectionRemarks}
-                        </p>
-                      )}
                     </div>
-                  );
-                })()}
-
-                {/* 1. Applicant Profile Image Card */}
-                <div className="bo-cv-person-doc-card">
-                  <div className="bo-cv-person-doc-header">
-                    <div className="bo-cv-person-doc-badge">Applicant</div>
-                    <div className="bo-cv-person-doc-title">{verificationData.customerName}</div>
                   </div>
 
-                  {docPreviews.profile?.loading ? (
-                    <div className="bo-cv-doc-loading-box">
-                      <div className="bo-cv-loading-spinner" />
-                      <span>Loading applicant profile photograph...</span>
-                    </div>
-                  ) : docPreviews.profile?.isComparison ? (
-                    <div className="bo-cv-comparison-container">
-                      <div className="bo-cv-comparison-grid">
-                        {/* Old / Rejected Version */}
-                        <div className="bo-cv-comparison-card bo-cv-comparison-card--old">
-                          <div className="bo-cv-comparison-card-header">
-                            <span className="bo-cv-comparison-tag">Old / Rejected Version</span>
-                            <span className="bo-cv-comparison-subtag">Previously Rejected</span>
-                          </div>
-                          {docPreviews.profile.comparison?.oldDoc?.url ? (
-                            <div className="bo-cv-image-preview-frame">
-                              <img
-                                src={docPreviews.profile.comparison.oldDoc.url}
-                                alt="Previous Applicant Profile"
-                                className="bo-cv-uncropped-img"
-                              />
-                              <div className="bo-cv-doc-meta-row">
-                                <div className="bo-cv-doc-meta-left">
-                                  <span><strong>File:</strong> {docPreviews.profile.comparison.oldDoc.fileName || 'Old Profile Image'}</span>
-                                  {docPreviews.profile.comparison.oldDoc.uploadDate && (
-                                    <span><strong>Uploaded:</strong> {docPreviews.profile.comparison.oldDoc.uploadDate}</span>
-                                  )}
-                                  {docPreviews.profile.comparison.oldDoc.size && (
-                                    <span><strong>Size:</strong> {formatFileSize(docPreviews.profile.comparison.oldDoc.size)}</span>
-                                  )}
-                                </div>
-                                <button
-                                  type="button"
-                                  className="bo-btn bo-btn--outline bo-btn--sm"
-                                  onClick={() => handleDownloadFile(docPreviews.profile.comparison.oldDoc.url, docPreviews.profile.comparison.oldDoc.fileName || 'old_profile.jpg')}
-                                >
-                                  {DownloadIcon && <DownloadIcon size={13} />}
-                                  <span>Download</span>
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="bo-cv-empty-doc-card--comparison">
-                              <div className="bo-cv-empty-doc-icon">
-                                {UserIcon && <UserIcon size={28} />}
-                              </div>
-                              <h4>No Archived Prior Version</h4>
-                              <p>{docPreviews.profile.comparison?.note || 'Previous file version is not available from the document repository.'}</p>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* New / Resubmitted Version */}
-                        <div className="bo-cv-comparison-card bo-cv-comparison-card--new">
-                          <div className="bo-cv-comparison-card-header">
-                            <span className="bo-cv-comparison-tag">New / Resubmitted Version</span>
-                            <span className="bo-cv-comparison-subtag">Ready for Review</span>
-                          </div>
-                          {docPreviews.profile.comparison?.newDoc?.url ? (
-                            <div className="bo-cv-image-preview-frame">
-                              <img
-                                src={docPreviews.profile.comparison.newDoc.url}
-                                alt="New Resubmitted Applicant Profile"
-                                className="bo-cv-uncropped-img"
-                              />
-                              <div className="bo-cv-doc-meta-row">
-                                <div className="bo-cv-doc-meta-left">
-                                  <span><strong>File:</strong> {docPreviews.profile.comparison.newDoc.fileName || 'New Profile Image'}</span>
-                                  {docPreviews.profile.comparison.newDoc.uploadDate && (
-                                    <span><strong>Uploaded:</strong> {docPreviews.profile.comparison.newDoc.uploadDate}</span>
-                                  )}
-                                  {docPreviews.profile.comparison.newDoc.size && (
-                                    <span><strong>Size:</strong> {formatFileSize(docPreviews.profile.comparison.newDoc.size)}</span>
-                                  )}
-                                </div>
-                                <button
-                                  type="button"
-                                  className="bo-btn bo-btn--outline bo-btn--sm"
-                                  onClick={() => handleDownloadFile(docPreviews.profile.comparison.newDoc.url, docPreviews.profile.comparison.newDoc.fileName || 'new_profile.jpg')}
-                                >
-                                  {DownloadIcon && <DownloadIcon size={13} />}
-                                  <span>Download</span>
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="bo-cv-empty-doc-card--comparison">
-                              <div className="bo-cv-empty-doc-icon">
-                                {UserIcon && <UserIcon size={28} />}
-                              </div>
-                              <h4>No Resubmitted Image</h4>
-                              <p>RM has not uploaded a replacement photograph yet.</p>
-                            </div>
-                          )}
-                        </div>
+                  {coApplicants.length === 0 ? (
+                    <div className="bo-cv-doc-empty-card-state">
+                      <div className="bo-cv-doc-empty-icon">
+                        {UsersIcon ? <UsersIcon size={24} /> : <span>👥</span>}
                       </div>
-                    </div>
-                  ) : docPreviews.profile?.url ? (
-                    <div className="bo-cv-image-preview-frame">
-                      <img
-                        src={docPreviews.profile.url}
-                        alt={`Profile of ${verificationData.customerName}`}
-                        className="bo-cv-uncropped-img"
-                      />
-                      <div className="bo-cv-doc-meta-row">
-                        <div className="bo-cv-doc-meta-left">
-                          <span><strong>File:</strong> {docPreviews.profile.fileName || docPreviews.profile.doc?.fileName || 'Profile Image'}</span>
-                          {docPreviews.profile.doc?.uploadedOn && (
-                            <span><strong>Uploaded:</strong> {docPreviews.profile.doc.uploadedOn}</span>
-                          )}
-                          {docPreviews.profile.size && (
-                            <span><strong>Size:</strong> {formatFileSize(docPreviews.profile.size)}</span>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          className="bo-btn bo-btn--outline bo-btn--sm"
-                          onClick={() => handleDownloadFile(docPreviews.profile.url, docPreviews.profile.fileName || docPreviews.profile.doc?.fileName || 'profile_image.jpg')}
-                        >
-                          {DownloadIcon && <DownloadIcon size={13} />}
-                          <span>Download</span>
-                        </button>
-                      </div>
+                      <h4>No Co-Applicants Attached</h4>
+                      <p>This loan application does not currently have any co-applicants registered.</p>
                     </div>
                   ) : (
-                    <div className="bo-cv-empty-doc-card">
-                      <div className="bo-cv-empty-doc-icon">
-                        {UserIcon && <UserIcon size={36} />}
-                      </div>
-                      <h4>No Profile Image Document Found</h4>
-                      <p>
-                        {docPreviews.profile?.error ||
-                          `No uploaded customer photograph is currently available for applicant ${verificationData.customerName}.`}
-                      </p>
+                    <div className="bo-cv-doc-table-wrapper">
+                      <table className="bo-cv-doc-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: '40px', textAlign: 'center' }}>#</th>
+                            <th style={{ width: '180px' }}>Document</th>
+                            <th style={{ width: '65px', textAlign: 'center' }}>Preview</th>
+                            <th>File Name</th>
+                            <th style={{ width: '115px', textAlign: 'center' }}>Verified</th>
+                            <th style={{ width: '120px', textAlign: 'center' }}>Status</th>
+                            <th style={{ width: '120px', textAlign: 'center' }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {coApplicantDocRows.map((row, idx) => {
+                            const IconComp = row.icon;
+                            const isCheckboxDisabled =
+                              !row.hasFile ||
+                              row.status === 'Returned' ||
+                              row.status === 'Resubmitted' ||
+                              hasUnresolvedRejectionForStep(row.stepCode) ||
+                              isSavingStepVerification;
+
+                            return (
+                              <tr key={row.id} className="bo-cv-doc-tr">
+                                <td className="bo-cv-doc-td-num">
+                                  <span className="bo-cv-doc-num-badge">0{idx + 1}</span>
+                                </td>
+                                <td className="bo-cv-doc-td-type">
+                                  <div className="bo-cv-doc-type-cell">
+                                    <div className="bo-cv-doc-type-icon">
+                                      {IconComp ? <IconComp size={15} /> : <span>📄</span>}
+                                    </div>
+                                    <span className="bo-cv-doc-type-name">{row.docType}</span>
+                                  </div>
+                                </td>
+                                <td className="bo-cv-doc-td-thumb" style={{ textAlign: 'center' }}>
+                                  <div
+                                    className={`bo-cv-doc-thumb-box ${row.hasFile ? 'is-clickable' : 'is-empty'} ${row.loading ? 'is-loading' : ''}`}
+                                    onClick={() => row.hasFile && handleRowView(row)}
+                                    title={row.hasFile ? 'Click to preview' : 'No document uploaded'}
+                                  >
+                                    {row.loading ? (
+                                      <div className="bo-cv-doc-thumb-spinner" />
+                                    ) : row.url && row.isImage ? (
+                                      <img src={row.url} alt={row.fileName} className="bo-cv-doc-thumb-img" />
+                                    ) : row.url && row.isPdf ? (
+                                      <div className="bo-cv-doc-thumb-pdf">PDF</div>
+                                    ) : row.isZip && row.hasFile ? (
+                                      <div className="bo-cv-doc-thumb-zip">ZIP</div>
+                                    ) : (
+                                      <div className="bo-cv-doc-thumb-placeholder">—</div>
+                                    )}
+                                    {row.hasFile && (
+                                      <div className="bo-cv-doc-thumb-hover-overlay">
+                                        {EyeIcon ? <EyeIcon size={12} /> : <span>👁</span>}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="bo-cv-doc-td-details">
+                                  <div className="bo-cv-doc-file-info">
+                                    <span className="bo-cv-doc-filename" title={row.fileName}>
+                                      {row.fileName}
+                                    </span>
+                                    <div className="bo-cv-doc-file-meta">
+                                      {row.fileSize && <span>{formatFileSize(row.fileSize)}</span>}
+                                      {row.fileSize && row.uploadDate && <span>•</span>}
+                                      {row.uploadDate && <span>{formatUploadDate(row.uploadDate)}</span>}
+                                      {!row.fileSize && !row.uploadDate && (
+                                        <span className="bo-cv-doc-meta-empty">{row.hasFile ? 'Uploaded' : 'Not available'}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="bo-cv-doc-td-verify" style={{ textAlign: 'center' }}>
+                                  <label
+                                    className={`bo-cv-doc-verify-checkbox-label ${isCheckboxDisabled ? 'is-disabled' : ''} ${row.isVerified ? 'is-checked' : ''}`}
+                                    title={
+                                      !row.hasFile
+                                        ? 'Cannot verify: Document not uploaded'
+                                        : row.status === 'Returned'
+                                        ? 'Cannot verify: Document is returned to RM'
+                                        : row.status === 'Resubmitted'
+                                        ? 'Cannot verify: Resubmitted document must be verified via comparison review'
+                                        : hasUnresolvedRejectionForStep(row.stepCode)
+                                        ? 'Cannot verify: Unresolved rejection pending for this step'
+                                        : row.isVerified
+                                        ? 'Click to unverify document'
+                                        : 'Click to mark document as verified'
+                                    }
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="bo-cv-doc-verify-checkbox"
+                                      checked={Boolean(row.isVerified)}
+                                      disabled={isCheckboxDisabled}
+                                      onChange={() => handleToggleRowVerification(row)}
+                                    />
+                                    <span className={`bo-cv-doc-verify-checkbox-text ${row.isVerified ? 'is-verified' : ''}`}>
+                                      {row.isVerified ? 'Verified' : ''}
+                                    </span>
+                                  </label>
+                                </td>
+                                <td className="bo-cv-doc-td-status" style={{ textAlign: 'center' }}>
+                                  <span className={`bo-cv-status-badge bo-cv-status-badge--${row.status.toLowerCase().replace(/\s+/g, '-')}`}>
+                                    <span className="bo-cv-badge-dot" />
+                                    {row.status === 'Resubmitted' && 'Resubmitted'}
+                                    {row.status === 'Returned' && 'Returned'}
+                                    {row.status === 'Verified' && 'Verified'}
+                                    {row.status === 'Available' && 'Available'}
+                                    {row.status === 'Not Uploaded' && 'Not Uploaded'}
+                                  </span>
+                                </td>
+                                <td className="bo-cv-doc-td-actions" style={{ textAlign: 'center' }}>
+                                  <div className="bo-cv-doc-actions-group">
+                                    <button
+                                      type="button"
+                                      className="bo-cv-doc-action-btn bo-cv-doc-action-btn--view"
+                                      title={row.hasFile ? 'View document' : 'Document not available'}
+                                      disabled={!row.hasFile}
+                                      onClick={() => handleRowView(row)}
+                                    >
+                                      {EyeIcon ? <EyeIcon size={14} /> : <span>👁</span>}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="bo-cv-doc-action-btn bo-cv-doc-action-btn--download"
+                                      title={row.hasFile ? 'Download document' : 'Document not available'}
+                                      disabled={!row.hasFile}
+                                      onClick={() => handleRowDownload(row)}
+                                    >
+                                      {DownloadIcon ? <DownloadIcon size={14} /> : <span>⬇</span>}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="bo-cv-doc-action-btn bo-cv-doc-action-btn--return"
+                                      title={row.hasFile ? 'Return document to RM' : 'Document not available'}
+                                      disabled={!row.hasFile}
+                                      onClick={() => handleRowReturn(row)}
+                                    >
+                                      {RotateCcwIcon ? <RotateCcwIcon size={14} /> : <span>↩</span>}
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>
-
-                {/* 2. Co-Applicant Profile Images (Dynamic) */}
-                {coApplicants.map((co) => {
-                  const coProfile = coDocPreviews[co.index]?.profile;
-                  return (
-                    <div className="bo-cv-person-doc-card" key={`co-profile-${co.index}`}>
-                      <div className="bo-cv-person-doc-header">
-                        <div className="bo-cv-person-doc-badge co-app">Co-Applicant {co.number}</div>
-                        <div className="bo-cv-person-doc-title">{co.name}</div>
-                      </div>
-
-                      {coProfile?.loading ? (
-                        <div className="bo-cv-doc-loading-box">
-                          <div className="bo-cv-loading-spinner" />
-                          <span>Loading Co-Applicant {co.number} profile photograph...</span>
-                        </div>
-                      ) : coProfile?.isComparison ? (
-                        <div className="bo-cv-comparison-container">
-                          <div className="bo-cv-comparison-grid">
-                            {/* Old Version Card */}
-                            <div className="bo-cv-comparison-card bo-cv-comparison-card--old">
-                              <div className="bo-cv-comparison-card-header">
-                                <span className="bo-cv-comparison-tag">Old / Rejected Version</span>
-                                <span className="bo-cv-comparison-subtag">Prior Document</span>
-                              </div>
-                              {coProfile.comparison?.oldDoc?.url ? (
-                                <div className="bo-cv-image-preview-frame">
-                                  {isDocPdf(coProfile.comparison.oldDoc) ? (
-                                    <div className="bo-cv-pdf-frame-wrapper">
-                                      <iframe
-                                        src={coProfile.comparison.oldDoc.url}
-                                        title={`Co-Applicant ${co.number} Old Profile PDF`}
-                                        className="bo-cv-doc-iframe"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <img
-                                      src={coProfile.comparison.oldDoc.url}
-                                      alt={`Old Profile of ${co.name}`}
-                                      className="bo-cv-uncropped-img"
-                                    />
-                                  )}
-                                  <div className="bo-cv-doc-meta-row">
-                                    <div className="bo-cv-doc-meta-left">
-                                      <span><strong>File:</strong> {coProfile.comparison.oldDoc.fileName || `CoApplicant_${co.number}_Profile_Old.jpg`}</span>
-                                      {coProfile.comparison.oldDoc.size && (
-                                        <span><strong>Size:</strong> {formatFileSize(coProfile.comparison.oldDoc.size)}</span>
-                                      )}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="bo-btn bo-btn--outline bo-btn--sm"
-                                      onClick={() => handleDownloadFile(coProfile.comparison.oldDoc.url, coProfile.comparison.oldDoc.fileName || `CoApplicant_${co.number}_Profile_Old.${isDocPdf(coProfile.comparison.oldDoc) ? 'pdf' : 'jpg'}`)}
-                                    >
-                                      {DownloadIcon && <DownloadIcon size={13} />}
-                                      <span>Download</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="bo-cv-empty-doc-card--comparison">
-                                  <div className="bo-cv-empty-doc-icon">
-                                    {UserIcon && <UserIcon size={28} />}
-                                  </div>
-                                  <h4>Prior Version In-Place Updated</h4>
-                                  <p>{coProfile.comparison?.note || 'Prior version path was not recorded for this rejection.'}</p>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* New Version Card */}
-                            <div className="bo-cv-comparison-card bo-cv-comparison-card--new">
-                              <div className="bo-cv-comparison-card-header">
-                                <span className="bo-cv-comparison-tag">New / Resubmitted Version</span>
-                                <span className="bo-cv-comparison-subtag">Ready for Review</span>
-                              </div>
-                              {coProfile.comparison?.newDoc?.url || coProfile.url ? (
-                                <div className="bo-cv-image-preview-frame">
-                                  {isDocPdf(coProfile.comparison?.newDoc || coProfile) ? (
-                                    <div className="bo-cv-pdf-frame-wrapper">
-                                      <iframe
-                                        src={coProfile.comparison?.newDoc?.url || coProfile.url}
-                                        title={`Profile of ${co.name} PDF`}
-                                        className="bo-cv-doc-iframe"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <img
-                                      src={coProfile.comparison?.newDoc?.url || coProfile.url}
-                                      alt={`Profile of ${co.name}`}
-                                      className="bo-cv-uncropped-img"
-                                    />
-                                  )}
-                                  <div className="bo-cv-doc-meta-row">
-                                    <div className="bo-cv-doc-meta-left">
-                                      <span><strong>File:</strong> {coProfile.comparison?.newDoc?.fileName || coProfile.fileName || `CoApplicant_${co.number}_Profile.jpg`}</span>
-                                      {(coProfile.comparison?.newDoc?.size || coProfile.size) && (
-                                        <span><strong>Size:</strong> {formatFileSize(coProfile.comparison?.newDoc?.size || coProfile.size)}</span>
-                                      )}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="bo-btn bo-btn--outline bo-btn--sm"
-                                      onClick={() => handleDownloadFile(coProfile.comparison?.newDoc?.url || coProfile.url, coProfile.comparison?.newDoc?.fileName || coProfile.fileName || `CoApplicant_${co.number}_Profile.${isDocPdf(coProfile.comparison?.newDoc || coProfile) ? 'pdf' : 'jpg'}`)}
-                                    >
-                                      {DownloadIcon && <DownloadIcon size={13} />}
-                                      <span>Download</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="bo-cv-empty-doc-card--comparison">
-                                  <div className="bo-cv-empty-doc-icon">
-                                    {UserIcon && <UserIcon size={28} />}
-                                  </div>
-                                  <h4>No Resubmitted Image</h4>
-                                  <p>RM has not uploaded a replacement photograph yet.</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ) : coProfile?.url ? (
-                        <div className="bo-cv-image-preview-frame">
-                          <img
-                            src={coProfile.url}
-                            alt={`Profile of ${co.name}`}
-                            className="bo-cv-uncropped-img"
-                          />
-                          <div className="bo-cv-doc-meta-row">
-                            <div className="bo-cv-doc-meta-left">
-                              <span><strong>File:</strong> {coProfile.fileName || `CoApplicant_${co.number}_Profile.jpg`}</span>
-                              {coProfile.size && (
-                                <span><strong>Size:</strong> {formatFileSize(coProfile.size)}</span>
-                              )}
-                            </div>
-                            <button
-                              type="button"
-                              className="bo-btn bo-btn--outline bo-btn--sm"
-                              onClick={() => handleDownloadFile(coProfile.url, coProfile.fileName || `CoApplicant_${co.number}_Profile.jpg`)}
-                            >
-                              {DownloadIcon && <DownloadIcon size={13} />}
-                              <span>Download</span>
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="bo-cv-empty-doc-card">
-                          <div className="bo-cv-empty-doc-icon">
-                            {UserIcon && <UserIcon size={36} />}
-                          </div>
-                          <h4>No Profile Image Document Found</h4>
-                          <p>
-                            No uploaded photograph is currently available for Co-Applicant {co.number} ({co.name}).
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {/* Step Verification Control & Remarks & Reject / Send to RM */}
-                <div className="verification-action-bar">
-                  <div className="bo-cv-verify-row">
-                    <label className="bo-cv-checkbox-label">
-                      <input
-                        type="checkbox"
-                        className="bo-cv-verify-checkbox"
-                        checked={Boolean(stepVerifications['PROFILE_IMAGE']?.isVerified) && !hasUnresolvedRejectionForStep('PROFILE_IMAGE')}
-                        disabled={isSavingStepVerification || hasUnresolvedRejectionForStep('PROFILE_IMAGE')}
-                        title={hasUnresolvedRejectionForStep('PROFILE_IMAGE') ? 'Resolve all returned/resubmitted documents before marking as Verified' : undefined}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          handleSaveStepVerification({
-                            stepCode: 'PROFILE_IMAGE',
-                            isVerified: checked,
-                            remarks: stepRemarks[2] || '',
-                          });
-                        }}
-                      />
-                      <span className="bo-cv-verify-text">
-                        Mark Profile Image as <strong>Verified</strong>
-                      </span>
-                    </label>
-                    {stepVerifications['PROFILE_IMAGE']?.isVerified && !hasUnresolvedRejectionForStep('PROFILE_IMAGE') && (
-                      <span className="bo-cv-verified-tag">
-                        ✓ Verified by {stepVerifications['PROFILE_IMAGE']?.verifiedByBackOfficeId ? `Operator #${stepVerifications['PROFILE_IMAGE'].verifiedByBackOfficeId}` : 'Back Office'}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="verification-remarks-field">
-                    <label htmlFor="bo-cv-remarks-profile">VERIFICATION REMARKS</label>
-                    <textarea
-                      id="bo-cv-remarks-profile"
-                      className="bo-cv-remarks-input"
-                      rows={3}
-                      placeholder="Enter remarks or discrepancy details for profile image verification..."
-                      value={stepRemarks[2] || ''}
-                      onChange={(e) => {
-                        setStepRemarks({ ...stepRemarks, 2: e.target.value });
-                        if (stepFeedback[2]) setStepFeedback({ ...stepFeedback, 2: null });
-                      }}
-                      onBlur={() => {
-                        if (stepVerifications['PROFILE_IMAGE']?.isVerified && !hasUnresolvedRejectionForStep('PROFILE_IMAGE')) {
-                          handleSaveStepVerification({
-                            stepCode: 'PROFILE_IMAGE',
-                            isVerified: true,
-                            remarks: stepRemarks[2] || '',
-                          });
-                        }
-                      }}
-                    />
-                  </div>
-
-                  <div className="verification-buttons-row">
-                    {/* Verify Resubmitted Applicant Profile */}
-                    {(() => {
-                      const appRej = getActiveRejectionForApplicant(2);
-                      if (appRej && appRej.status === 'Resubmitted') {
-                        return (
-                          <button
-                            type="button"
-                            className="verify-resubmit-btn"
-                            disabled={isVerifyingRejection}
-                            onClick={() => handleVerifyRejection(appRej.backOfficeDocumentRejectionId, 'Applicant Profile Image', 2)}
-                          >
-                            <span>{isVerifyingRejection ? 'Verifying...' : '✓ Verify Applicant Profile'}</span>
-                          </button>
-                        );
-                      }
-                      return null;
-                    })()}
-
-                    {/* Verify Resubmitted Co-Applicant Profiles */}
-                    {coApplicants.map((co) => {
-                      const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 2);
-                      if (coRej && coRej.status === 'Resubmitted') {
-                        return (
-                          <button
-                            key={`verify-co-profile-${co.index}`}
-                            type="button"
-                            className="verify-resubmit-btn"
-                            style={{ background: '#047857' }}
-                            disabled={isVerifyingRejection}
-                            onClick={() => handleVerifyRejection(coRej.backOfficeDocumentRejectionId, `Co-Applicant ${co.number} Profile Image`, 2)}
-                          >
-                            <span>{isVerifyingRejection ? 'Verifying...' : `✓ Verify Co-App ${co.number} Profile`}</span>
-                          </button>
-                        );
-                      }
-                      return null;
-                    })}
-
-                    <button
-                      type="button"
-                      className="reject-rm-btn"
-                      disabled={isSubmittingRejection}
-                      onClick={() => handleOpenRejectConfirm(2, 'Applicant Profile Image', null, false)}
-                    >
-                      <span>{isSubmittingRejection ? 'Submitting...' : 'Return Applicant to RM'}</span>
-                    </button>
-
-                    {coApplicants.map((co) => (
-                      <button
-                        key={`reject-co-profile-${co.index}`}
-                        type="button"
-                        className="reject-rm-btn"
-                        style={{ background: '#fff1f2', color: '#be123c', border: '1px solid #fecdd3' }}
-                        disabled={isSubmittingRejection}
-                        onClick={() => handleOpenRejectConfirm(2, `Co-Applicant ${co.number} Profile Image`, co.kycDocumentId, true)}
-                      >
-                        <span>{isSubmittingRejection ? 'Submitting...' : `Return Co-Applicant ${co.number} to RM`}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {stepFeedback[2] && (
-                  <div className={`bo-cv-feedback-alert ${stepFeedback[2].type === 'error' ? 'is-error' : 'is-success'}`}>
-                    {stepFeedback[2].message}
-                  </div>
-                )}
               </div>
             </div>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
-              STEP 03: AADHAAR CARD
-          ══════════════════════════════════════════════════════════════════ */}
-          {activeStep === 3 && (
-            <div className="bo-cv-doc-step-inner">
-              <div className="bo-cv-step-panel-header">
-                <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">03</div>
-                  <div>
-                    <h2 className="bo-cv-step-panel-title">Customer Aadhaar Cards</h2>
-                    <p className="bo-cv-step-panel-desc">
-                      Verify Aadhaar identity cards and address documentation for Applicant and Co-Applicant(s).
-                    </p>
-                  </div>
-                </div>
-                <span className="bo-cv-step-tag-pill">Step 03 of 17</span>
-              </div>
-
-              <div className="bo-cv-doc-display-container">
-                {/* Active Rejection Banner if any */}
-                {(() => {
-                  const rej = getActiveRejectionForStep(3);
-                  if (!rej) return null;
-                  return (
-                    <div className={`rejection-status-banner rejection-status--${(rej.status || '').toLowerCase()}`}>
-                      <div className="rejection-status-header">
-                        <strong>
-                          {rej.status === 'ReturnedToRM' && '⚠️ Document Returned to RM for Correction'}
-                          {rej.status === 'Resubmitted' && '🔄 Document Resubmitted by RM (Ready for Verification)'}
-                          {rej.status === 'Verified' && '✓ Document Verified & Approved'}
-                        </strong>
-                        <span className="rejection-status-date">
-                          {rej.resubmittedAt
-                            ? `Resubmitted: ${new Date(rej.resubmittedAt).toLocaleString()}`
-                            : rej.createdAt
-                            ? `Returned: ${new Date(rej.createdAt).toLocaleString()}`
-                            : ''}
-                        </span>
-                      </div>
-                      {rej.rejectionRemarks && (
-                        <p className="rejection-status-remarks">
-                          <strong>Remarks:</strong> {rej.rejectionRemarks}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* 1. Applicant Aadhaar Card */}
-                <div className="bo-cv-person-doc-card">
-                  <div className="bo-cv-person-doc-header">
-                    <div className="bo-cv-person-doc-badge">Applicant</div>
-                    <div className="bo-cv-person-doc-title">{verificationData.customerName}</div>
-                  </div>
-
-                  {docPreviews.aadhaar?.loading ? (
-                    <div className="bo-cv-doc-loading-box">
-                      <div className="bo-cv-loading-spinner" />
-                      <span>Loading applicant Aadhaar document...</span>
-                    </div>
-                  ) : docPreviews.aadhaar?.isComparison ? (
-                    <div className="bo-cv-comparison-container">
-                      <div className="bo-cv-comparison-grid">
-                        {/* Old / Rejected Version */}
-                        <div className="bo-cv-comparison-card bo-cv-comparison-card--old">
-                          <div className="bo-cv-comparison-card-header">
-                            <span className="bo-cv-comparison-tag">Old / Rejected Version</span>
-                            <span className="bo-cv-comparison-subtag">Previously Rejected</span>
-                          </div>
-                          {docPreviews.aadhaar.comparison?.oldDoc?.url ? (
-                            <div className="bo-cv-image-preview-frame">
-                              {isDocPdf(docPreviews.aadhaar.comparison.oldDoc) ? (
-                                <div className="bo-cv-pdf-frame-wrapper">
-                                  <iframe
-                                    src={docPreviews.aadhaar.comparison.oldDoc.url}
-                                    title="Previous Aadhaar Document PDF"
-                                    className="bo-cv-doc-iframe"
-                                  />
-                                </div>
-                              ) : (
-                                <img
-                                  src={docPreviews.aadhaar.comparison.oldDoc.url}
-                                  alt="Previous Aadhaar Card"
-                                  className="bo-cv-uncropped-img"
-                                />
-                              )}
-                              <div className="bo-cv-doc-meta-row">
-                                <div className="bo-cv-doc-meta-left">
-                                  <span><strong>Document:</strong> {docPreviews.aadhaar.comparison.oldDoc.fileName || 'Old Aadhaar Card'}</span>
-                                  {docPreviews.aadhaar.comparison.oldDoc.uploadDate && (
-                                    <span><strong>Uploaded:</strong> {docPreviews.aadhaar.comparison.oldDoc.uploadDate}</span>
-                                  )}
-                                  {docPreviews.aadhaar.comparison.oldDoc.size && (
-                                    <span><strong>Size:</strong> {formatFileSize(docPreviews.aadhaar.comparison.oldDoc.size)}</span>
-                                  )}
-                                </div>
-                                <button
-                                  type="button"
-                                  className="bo-btn bo-btn--outline bo-btn--sm"
-                                  onClick={() => handleDownloadFile(docPreviews.aadhaar.comparison.oldDoc.url, docPreviews.aadhaar.comparison.oldDoc.fileName || `old_aadhaar.${isDocPdf(docPreviews.aadhaar.comparison.oldDoc) ? 'pdf' : 'jpg'}`)}
-                                >
-                                  {DownloadIcon && <DownloadIcon size={13} />}
-                                  <span>Download</span>
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="bo-cv-empty-doc-card--comparison">
-                              <div className="bo-cv-empty-doc-icon">
-                                {ShieldCheckIcon && <ShieldCheckIcon size={28} />}
-                              </div>
-                              <h4>No Archived Prior Version</h4>
-                              <p>{docPreviews.aadhaar.comparison?.note || 'Previous file version is not available from the document repository.'}</p>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* New / Resubmitted Version */}
-                        <div className="bo-cv-comparison-card bo-cv-comparison-card--new">
-                          <div className="bo-cv-comparison-card-header">
-                            <span className="bo-cv-comparison-tag">New / Resubmitted Version</span>
-                            <span className="bo-cv-comparison-subtag">Ready for Review</span>
-                          </div>
-                          {docPreviews.aadhaar.comparison?.newDoc?.url ? (
-                            <div className="bo-cv-image-preview-frame">
-                              {isDocPdf(docPreviews.aadhaar.comparison.newDoc) ? (
-                                <div className="bo-cv-pdf-frame-wrapper">
-                                  <iframe
-                                    src={docPreviews.aadhaar.comparison.newDoc.url}
-                                    title="New Resubmitted Aadhaar Document PDF"
-                                    className="bo-cv-doc-iframe"
-                                  />
-                                </div>
-                              ) : (
-                                <img
-                                  src={docPreviews.aadhaar.comparison.newDoc.url}
-                                  alt="New Resubmitted Aadhaar Card"
-                                  className="bo-cv-uncropped-img"
-                                />
-                              )}
-                              <div className="bo-cv-doc-meta-row">
-                                <div className="bo-cv-doc-meta-left">
-                                  <span><strong>Document:</strong> {docPreviews.aadhaar.comparison.newDoc.fileName || 'New Aadhaar Card'}</span>
-                                  {docPreviews.aadhaar.comparison.newDoc.uploadDate && (
-                                    <span><strong>Uploaded:</strong> {docPreviews.aadhaar.comparison.newDoc.uploadDate}</span>
-                                  )}
-                                  {docPreviews.aadhaar.comparison.newDoc.size && (
-                                    <span><strong>Size:</strong> {formatFileSize(docPreviews.aadhaar.comparison.newDoc.size)}</span>
-                                  )}
-                                </div>
-                                <button
-                                  type="button"
-                                  className="bo-btn bo-btn--outline bo-btn--sm"
-                                  onClick={() => handleDownloadFile(docPreviews.aadhaar.comparison.newDoc.url, docPreviews.aadhaar.comparison.newDoc.fileName || `new_aadhaar.${isDocPdf(docPreviews.aadhaar.comparison.newDoc) ? 'pdf' : 'jpg'}`)}
-                                >
-                                  {DownloadIcon && <DownloadIcon size={13} />}
-                                  <span>Download</span>
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="bo-cv-empty-doc-card--comparison">
-                              <div className="bo-cv-empty-doc-icon">
-                                {ShieldCheckIcon && <ShieldCheckIcon size={28} />}
-                              </div>
-                              <h4>No Resubmitted Document</h4>
-                              <p>RM has not uploaded a replacement Aadhaar document yet.</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ) : docPreviews.aadhaar?.url ? (
-                    <div className="bo-cv-image-preview-frame">
-                      {isDocPdf(docPreviews.aadhaar) ? (
-                        <div className="bo-cv-pdf-frame-wrapper">
-                          <iframe
-                            src={docPreviews.aadhaar.url}
-                            title="Aadhaar Document PDF"
-                            className="bo-cv-doc-iframe"
-                          />
-                        </div>
-                      ) : (
-                        <img
-                          src={docPreviews.aadhaar.url}
-                          alt="Aadhaar Card"
-                          className="bo-cv-uncropped-img"
-                        />
-                      )}
-
-                      <div className="bo-cv-doc-meta-row">
-                        <div className="bo-cv-doc-meta-left">
-                          <span><strong>Document:</strong> {docPreviews.aadhaar.fileName || docPreviews.aadhaar.doc?.fileName || 'Aadhaar Card'}</span>
-                          {verificationData.personalInformation?.aadhaarNumber && (
-                            <span><strong>Aadhaar No:</strong> {verificationData.personalInformation.aadhaarNumber}</span>
-                          )}
-                          {docPreviews.aadhaar.doc?.uploadedOn && (
-                            <span><strong>Uploaded:</strong> {docPreviews.aadhaar.doc.uploadedOn}</span>
-                          )}
-                          {docPreviews.aadhaar.size && (
-                            <span><strong>Size:</strong> {formatFileSize(docPreviews.aadhaar.size)}</span>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          className="bo-btn bo-btn--outline bo-btn--sm"
-                          onClick={() => handleDownloadFile(docPreviews.aadhaar.url, docPreviews.aadhaar.fileName || docPreviews.aadhaar.doc?.fileName || `aadhaar_card.${isDocPdf(docPreviews.aadhaar) ? 'pdf' : 'jpg'}`)}
-                        >
-                          {DownloadIcon && <DownloadIcon size={13} />}
-                          <span>Download Document</span>
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bo-cv-empty-doc-card">
-                      <div className="bo-cv-empty-doc-icon">
-                        {ShieldCheckIcon && <ShieldCheckIcon size={36} />}
-                      </div>
-                      <h4>No Aadhaar Document Found</h4>
-                      <p>
-                        {docPreviews.aadhaar?.error ||
-                          `No uploaded Aadhaar proof is currently available for applicant ${verificationData.customerName}.`}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* 2. Co-Applicant Aadhaar Cards (Dynamic) */}
-                {coApplicants.map((co) => {
-                  const coAadhaar = coDocPreviews[co.index]?.aadhaar;
-                  return (
-                    <div className="bo-cv-person-doc-card" key={`co-aadhaar-${co.index}`}>
-                      <div className="bo-cv-person-doc-header">
-                        <div className="bo-cv-person-doc-badge co-app">Co-Applicant {co.number}</div>
-                        <div className="bo-cv-person-doc-title">{co.name}</div>
-                      </div>
-
-                      {coAadhaar?.loading ? (
-                        <div className="bo-cv-doc-loading-box">
-                          <div className="bo-cv-doc-loading-spinner" />
-                          <span>Loading Co-Applicant {co.number} Aadhaar document...</span>
-                        </div>
-                      ) : coAadhaar?.isComparison ? (
-                        <div className="bo-cv-comparison-container">
-                          <div className="bo-cv-comparison-grid">
-                            {/* Old Version Card */}
-                            <div className="bo-cv-comparison-card bo-cv-comparison-card--old">
-                              <div className="bo-cv-comparison-card-header">
-                                <span className="bo-cv-comparison-tag">Old / Rejected Version</span>
-                                <span className="bo-cv-comparison-subtag">Prior Document</span>
-                              </div>
-                              {coAadhaar.comparison?.oldDoc?.url ? (
-                                <div className="bo-cv-image-preview-frame">
-                                  {isDocPdf(coAadhaar.comparison.oldDoc) ? (
-                                    <div className="bo-cv-pdf-frame-wrapper">
-                                      <iframe
-                                        src={coAadhaar.comparison.oldDoc.url}
-                                        title={`Co-Applicant ${co.number} Old Aadhaar PDF`}
-                                        className="bo-cv-doc-iframe"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <img
-                                      src={coAadhaar.comparison.oldDoc.url}
-                                      alt={`Co-Applicant ${co.number} Old Aadhaar Card`}
-                                      className="bo-cv-uncropped-img"
-                                    />
-                                  )}
-                                  <div className="bo-cv-doc-meta-row">
-                                    <div className="bo-cv-doc-meta-left">
-                                      <span><strong>Document:</strong> {coAadhaar.comparison.oldDoc.fileName || `CoApplicant_${co.number}_Aadhaar_Old`}</span>
-                                      {co.aadhaarDisplay && (
-                                        <span><strong>Aadhaar No:</strong> {co.aadhaarDisplay}</span>
-                                      )}
-                                      {coAadhaar.comparison.oldDoc.size && (
-                                        <span><strong>Size:</strong> {formatFileSize(coAadhaar.comparison.oldDoc.size)}</span>
-                                      )}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="bo-btn bo-btn--outline bo-btn--sm"
-                                      onClick={() => handleDownloadFile(coAadhaar.comparison.oldDoc.url, coAadhaar.comparison.oldDoc.fileName || `CoApplicant_${co.number}_Aadhaar_Old.${isDocPdf(coAadhaar.comparison.oldDoc) ? 'pdf' : 'jpg'}`)}
-                                    >
-                                      {DownloadIcon && <DownloadIcon size={13} />}
-                                      <span>Download Document</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="bo-cv-empty-doc-card--comparison">
-                                  <div className="bo-cv-empty-doc-icon">
-                                    {ShieldCheckIcon && <ShieldCheckIcon size={28} />}
-                                  </div>
-                                  <h4>Prior Version In-Place Updated</h4>
-                                  <p>{coAadhaar.comparison?.note || 'Prior version path was not recorded for this rejection.'}</p>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* New Version Card */}
-                            <div className="bo-cv-comparison-card bo-cv-comparison-card--new">
-                              <div className="bo-cv-comparison-card-header">
-                                <span className="bo-cv-comparison-tag">New / Resubmitted Version</span>
-                                <span className="bo-cv-comparison-subtag">Ready for Review</span>
-                              </div>
-                              {coAadhaar.comparison?.newDoc?.url || coAadhaar.url ? (
-                                <div className="bo-cv-image-preview-frame">
-                                  {isDocPdf(coAadhaar.comparison?.newDoc || coAadhaar) ? (
-                                    <div className="bo-cv-pdf-frame-wrapper">
-                                      <iframe
-                                        src={coAadhaar.comparison?.newDoc?.url || coAadhaar.url}
-                                        title={`Co-Applicant ${co.number} Aadhaar PDF`}
-                                        className="bo-cv-doc-iframe"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <img
-                                      src={coAadhaar.comparison?.newDoc?.url || coAadhaar.url}
-                                      alt={`Co-Applicant ${co.number} Aadhaar Card`}
-                                      className="bo-cv-uncropped-img"
-                                    />
-                                  )}
-                                  <div className="bo-cv-doc-meta-row">
-                                    <div className="bo-cv-doc-meta-left">
-                                      <span><strong>Document:</strong> {coAadhaar.comparison?.newDoc?.fileName || coAadhaar.fileName || `CoApplicant_${co.number}_Aadhaar`}</span>
-                                      {co.aadhaarDisplay && (
-                                        <span><strong>Aadhaar No:</strong> {co.aadhaarDisplay}</span>
-                                      )}
-                                      {(coAadhaar.comparison?.newDoc?.size || coAadhaar.size) && (
-                                        <span><strong>Size:</strong> {formatFileSize(coAadhaar.comparison?.newDoc?.size || coAadhaar.size)}</span>
-                                      )}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="bo-btn bo-btn--outline bo-btn--sm"
-                                      onClick={() => handleDownloadFile(coAadhaar.comparison?.newDoc?.url || coAadhaar.url, coAadhaar.comparison?.newDoc?.fileName || coAadhaar.fileName || `CoApplicant_${co.number}_Aadhaar.${isDocPdf(coAadhaar.comparison?.newDoc || coAadhaar) ? 'pdf' : 'jpg'}`)}
-                                    >
-                                      {DownloadIcon && <DownloadIcon size={13} />}
-                                      <span>Download Document</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="bo-cv-empty-doc-card--comparison">
-                                  <div className="bo-cv-empty-doc-icon">
-                                    {ShieldCheckIcon && <ShieldCheckIcon size={28} />}
-                                  </div>
-                                  <h4>No Resubmitted Document</h4>
-                                  <p>RM has not uploaded a replacement Aadhaar document yet.</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ) : coAadhaar?.url ? (
-                        <div className="bo-cv-image-preview-frame">
-                          {isDocPdf(coAadhaar) ? (
-                            <div className="bo-cv-pdf-frame-wrapper">
-                              <iframe
-                                src={coAadhaar.url}
-                                title={`Co-Applicant ${co.number} Aadhaar PDF`}
-                                className="bo-cv-doc-iframe"
-                              />
-                            </div>
-                          ) : (
-                            <img
-                              src={coAadhaar.url}
-                              alt={`Co-Applicant ${co.number} Aadhaar Card`}
-                              className="bo-cv-uncropped-img"
-                            />
-                          )}
-
-                          <div className="bo-cv-doc-meta-row">
-                            <div className="bo-cv-doc-meta-left">
-                              <span><strong>Document:</strong> {coAadhaar.fileName || `CoApplicant_${co.number}_Aadhaar`}</span>
-                              {co.aadhaarDisplay && (
-                                <span><strong>Aadhaar No:</strong> {co.aadhaarDisplay}</span>
-                              )}
-                              {coAadhaar.size && (
-                                <span><strong>Size:</strong> {formatFileSize(coAadhaar.size)}</span>
-                              )}
-                            </div>
-                            <button
-                              type="button"
-                              className="bo-btn bo-btn--outline bo-btn--sm"
-                              onClick={() => handleDownloadFile(coAadhaar.url, coAadhaar.fileName || `CoApplicant_${co.number}_Aadhaar.${isDocPdf(coAadhaar) ? 'pdf' : 'jpg'}`)}
-                            >
-                              {DownloadIcon && <DownloadIcon size={13} />}
-                              <span>Download Document</span>
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="bo-cv-empty-doc-card">
-                          <div className="bo-cv-empty-doc-icon">
-                            {ShieldCheckIcon && <ShieldCheckIcon size={36} />}
-                          </div>
-                          <h4>No Aadhaar Document Found</h4>
-                          <p>
-                            No uploaded Aadhaar proof is currently available for Co-Applicant {co.number} ({co.name}).
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {/* Step Verification Control & Remarks & Reject / Send to RM */}
-                <div className="verification-action-bar">
-                  <div className="bo-cv-verify-row">
-                    <label className="bo-cv-checkbox-label">
-                      <input
-                        type="checkbox"
-                        className="bo-cv-verify-checkbox"
-                        checked={Boolean(stepVerifications['AADHAAR']?.isVerified) && !hasUnresolvedRejectionForStep('AADHAAR')}
-                        disabled={isSavingStepVerification || hasUnresolvedRejectionForStep('AADHAAR')}
-                        title={hasUnresolvedRejectionForStep('AADHAAR') ? 'Resolve all returned/resubmitted documents before marking as Verified' : undefined}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          handleSaveStepVerification({
-                            stepCode: 'AADHAAR',
-                            isVerified: checked,
-                            remarks: stepRemarks[3] || '',
-                          });
-                        }}
-                      />
-                      <span className="bo-cv-verify-text">
-                        Mark Aadhaar Card as <strong>Verified</strong>
-                      </span>
-                    </label>
-                    {stepVerifications['AADHAAR']?.isVerified && !hasUnresolvedRejectionForStep('AADHAAR') && (
-                      <span className="bo-cv-verified-tag">
-                        ✓ Verified by {stepVerifications['AADHAAR']?.verifiedByBackOfficeId ? `Operator #${stepVerifications['AADHAAR'].verifiedByBackOfficeId}` : 'Back Office'}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="verification-remarks-field">
-                    <label htmlFor="bo-cv-remarks-aadhaar">VERIFICATION REMARKS</label>
-                    <textarea
-                      id="bo-cv-remarks-aadhaar"
-                      className="bo-cv-remarks-input"
-                      rows={3}
-                      placeholder="Enter remarks or discrepancy details for Aadhaar verification..."
-                      value={stepRemarks[3] || ''}
-                      onChange={(e) => {
-                        setStepRemarks({ ...stepRemarks, 3: e.target.value });
-                        if (stepFeedback[3]) setStepFeedback({ ...stepFeedback, 3: null });
-                      }}
-                      onBlur={() => {
-                        if (stepVerifications['AADHAAR']?.isVerified && !hasUnresolvedRejectionForStep('AADHAAR')) {
-                          handleSaveStepVerification({
-                            stepCode: 'AADHAAR',
-                            isVerified: true,
-                            remarks: stepRemarks[3] || '',
-                          });
-                        }
-                      }}
-                    />
-                  </div>
-
-                  <div className="verification-buttons-row">
-                    {/* Verify Resubmitted Applicant Aadhaar */}
-                    {(() => {
-                      const appRej = getActiveRejectionForApplicant(3);
-                      if (appRej && appRej.status === 'Resubmitted') {
-                        return (
-                          <button
-                            type="button"
-                            className="verify-resubmit-btn"
-                            disabled={isVerifyingRejection}
-                            onClick={() => handleVerifyRejection(appRej.backOfficeDocumentRejectionId, 'Applicant Aadhaar Card', 3)}
-                          >
-                            <span>{isVerifyingRejection ? 'Verifying...' : '✓ Verify Applicant Aadhaar'}</span>
-                          </button>
-                        );
-                      }
-                      return null;
-                    })()}
-
-                    {/* Verify Resubmitted Co-Applicant Aadhaar */}
-                    {coApplicants.map((co) => {
-                      const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 3);
-                      if (coRej && coRej.status === 'Resubmitted') {
-                        return (
-                          <button
-                            key={`verify-co-aadhaar-${co.index}`}
-                            type="button"
-                            className="verify-resubmit-btn"
-                            style={{ background: '#047857' }}
-                            disabled={isVerifyingRejection}
-                            onClick={() => handleVerifyRejection(coRej.backOfficeDocumentRejectionId, `Co-Applicant ${co.number} Aadhaar Card`, 3)}
-                          >
-                            <span>{isVerifyingRejection ? 'Verifying...' : `✓ Verify Co-App ${co.number} Aadhaar`}</span>
-                          </button>
-                        );
-                      }
-                      return null;
-                    })}
-
-                    <button
-                      type="button"
-                      className="reject-rm-btn"
-                      disabled={isSubmittingRejection}
-                      onClick={() => handleOpenRejectConfirm(3, 'Applicant Aadhaar Card', null, false)}
-                    >
-                      <span>{isSubmittingRejection ? 'Submitting...' : 'Return Applicant to RM'}</span>
-                    </button>
-
-                    {coApplicants.map((co) => (
-                      <button
-                        key={`reject-co-aadhaar-${co.index}`}
-                        type="button"
-                        className="reject-rm-btn"
-                        style={{ background: '#fff1f2', color: '#be123c', border: '1px solid #fecdd3' }}
-                        disabled={isSubmittingRejection}
-                        onClick={() => handleOpenRejectConfirm(3, `Co-Applicant ${co.number} Aadhaar Card`, co.kycDocumentId, true)}
-                      >
-                        <span>{isSubmittingRejection ? 'Submitting...' : `Return Co-Applicant ${co.number} to RM`}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {stepFeedback[3] && (
-                  <div className={`bo-cv-feedback-alert ${stepFeedback[3].type === 'error' ? 'is-error' : 'is-success'}`}>
-                    {stepFeedback[3].message}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════════════
-              STEP 04: PAN CARD
-          ══════════════════════════════════════════════════════════════════ */}
-          {activeStep === 4 && (
-            <div className="bo-cv-doc-step-inner">
-              <div className="bo-cv-step-panel-header">
-                <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">04</div>
-                  <div>
-                    <h2 className="bo-cv-step-panel-title">Customer PAN Cards</h2>
-                    <p className="bo-cv-step-panel-desc">
-                      Inspect Permanent Account Number tax identification documents for Applicant and Co-Applicant(s).
-                    </p>
-                  </div>
-                </div>
-                <span className="bo-cv-step-tag-pill">Step 04 of 17</span>
-              </div>
-
-              <div className="bo-cv-doc-display-container">
-                {/* Active Rejection Banner if any */}
-                {(() => {
-                  const rej = getActiveRejectionForStep(4);
-                  if (!rej) return null;
-                  return (
-                    <div className={`rejection-status-banner rejection-status--${(rej.status || '').toLowerCase()}`}>
-                      <div className="rejection-status-header">
-                        <strong>
-                          {rej.status === 'ReturnedToRM' && '⚠️ Document Returned to RM for Correction'}
-                          {rej.status === 'Resubmitted' && '🔄 Document Resubmitted by RM (Ready for Verification)'}
-                          {rej.status === 'Verified' && '✓ Document Verified & Approved'}
-                        </strong>
-                        <span className="rejection-status-date">
-                          {rej.resubmittedAt
-                            ? `Resubmitted: ${new Date(rej.resubmittedAt).toLocaleString()}`
-                            : rej.createdAt
-                            ? `Returned: ${new Date(rej.createdAt).toLocaleString()}`
-                            : ''}
-                        </span>
-                      </div>
-                      {rej.rejectionRemarks && (
-                        <p className="rejection-status-remarks">
-                          <strong>Remarks:</strong> {rej.rejectionRemarks}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* 1. Applicant PAN Card */}
-                <div className="bo-cv-person-doc-card">
-                  <div className="bo-cv-person-doc-header">
-                    <div className="bo-cv-person-doc-badge">Applicant</div>
-                    <div className="bo-cv-person-doc-title">{verificationData.customerName}</div>
-                  </div>
-
-                  {docPreviews.pan?.loading ? (
-                    <div className="bo-cv-doc-loading-box">
-                      <div className="bo-cv-doc-loading-spinner" />
-                      <span>Loading applicant PAN Card document...</span>
-                    </div>
-                  ) : docPreviews.pan?.isComparison ? (
-                    <div className="bo-cv-comparison-container">
-                      <div className="bo-cv-comparison-grid">
-                        {/* Old / Rejected Version */}
-                        <div className="bo-cv-comparison-card bo-cv-comparison-card--old">
-                          <div className="bo-cv-comparison-card-header">
-                            <span className="bo-cv-comparison-tag">Old / Rejected Version</span>
-                            <span className="bo-cv-comparison-subtag">Previously Rejected</span>
-                          </div>
-                          {docPreviews.pan.comparison?.oldDoc?.url ? (
-                            <div className="bo-cv-image-preview-frame">
-                              {isDocPdf(docPreviews.pan.comparison.oldDoc) ? (
-                                <div className="bo-cv-pdf-frame-wrapper">
-                                  <iframe
-                                    src={docPreviews.pan.comparison.oldDoc.url}
-                                    title="Previous PAN Document PDF"
-                                    className="bo-cv-doc-iframe"
-                                  />
-                                </div>
-                              ) : (
-                                <img
-                                  src={docPreviews.pan.comparison.oldDoc.url}
-                                  alt="Previous PAN Card"
-                                  className="bo-cv-uncropped-img"
-                                />
-                              )}
-                              <div className="bo-cv-doc-meta-row">
-                                <div className="bo-cv-doc-meta-left">
-                                  <span><strong>Document:</strong> {docPreviews.pan.comparison.oldDoc.fileName || 'Old PAN Card'}</span>
-                                  {docPreviews.pan.comparison.oldDoc.uploadDate && (
-                                    <span><strong>Uploaded:</strong> {docPreviews.pan.comparison.oldDoc.uploadDate}</span>
-                                  )}
-                                  {docPreviews.pan.comparison.oldDoc.size && (
-                                    <span><strong>Size:</strong> {formatFileSize(docPreviews.pan.comparison.oldDoc.size)}</span>
-                                  )}
-                                </div>
-                                <button
-                                  type="button"
-                                  className="bo-btn bo-btn--outline bo-btn--sm"
-                                  onClick={() => handleDownloadFile(docPreviews.pan.comparison.oldDoc.url, docPreviews.pan.comparison.oldDoc.fileName || `old_pan.${isDocPdf(docPreviews.pan.comparison.oldDoc) ? 'pdf' : 'jpg'}`)}
-                                >
-                                  {DownloadIcon && <DownloadIcon size={13} />}
-                                  <span>Download</span>
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="bo-cv-empty-doc-card--comparison">
-                              <div className="bo-cv-empty-doc-icon">
-                                {FileTextIcon && <FileTextIcon size={28} />}
-                              </div>
-                              <h4>No Archived Prior Version</h4>
-                              <p>{docPreviews.pan.comparison?.note || 'Previous file version is not available from the document repository.'}</p>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* New / Resubmitted Version */}
-                        <div className="bo-cv-comparison-card bo-cv-comparison-card--new">
-                          <div className="bo-cv-comparison-card-header">
-                            <span className="bo-cv-comparison-tag">New / Resubmitted Version</span>
-                            <span className="bo-cv-comparison-subtag">Ready for Review</span>
-                          </div>
-                          {docPreviews.pan.comparison?.newDoc?.url ? (
-                            <div className="bo-cv-image-preview-frame">
-                              {isDocPdf(docPreviews.pan.comparison.newDoc) ? (
-                                <div className="bo-cv-pdf-frame-wrapper">
-                                  <iframe
-                                    src={docPreviews.pan.comparison.newDoc.url}
-                                    title="New Resubmitted PAN Document PDF"
-                                    className="bo-cv-doc-iframe"
-                                  />
-                                </div>
-                              ) : (
-                                <img
-                                  src={docPreviews.pan.comparison.newDoc.url}
-                                  alt="New Resubmitted PAN Card"
-                                  className="bo-cv-uncropped-img"
-                                />
-                              )}
-                              <div className="bo-cv-doc-meta-row">
-                                <div className="bo-cv-doc-meta-left">
-                                  <span><strong>Document:</strong> {docPreviews.pan.comparison.newDoc.fileName || 'New PAN Card'}</span>
-                                  {docPreviews.pan.comparison.newDoc.uploadDate && (
-                                    <span><strong>Uploaded:</strong> {docPreviews.pan.comparison.newDoc.uploadDate}</span>
-                                  )}
-                                  {docPreviews.pan.comparison.newDoc.size && (
-                                    <span><strong>Size:</strong> {formatFileSize(docPreviews.pan.comparison.newDoc.size)}</span>
-                                  )}
-                                </div>
-                                <button
-                                  type="button"
-                                  className="bo-btn bo-btn--outline bo-btn--sm"
-                                  onClick={() => handleDownloadFile(docPreviews.pan.comparison.newDoc.url, docPreviews.pan.comparison.newDoc.fileName || `new_pan.${isDocPdf(docPreviews.pan.comparison.newDoc) ? 'pdf' : 'jpg'}`)}
-                                >
-                                  {DownloadIcon && <DownloadIcon size={13} />}
-                                  <span>Download</span>
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="bo-cv-empty-doc-card--comparison">
-                              <div className="bo-cv-empty-doc-icon">
-                                {FileTextIcon && <FileTextIcon size={28} />}
-                              </div>
-                              <h4>No Resubmitted Document</h4>
-                              <p>RM has not uploaded a replacement PAN document yet.</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ) : docPreviews.pan?.url ? (
-                    <div className="bo-cv-image-preview-frame">
-                      {isDocPdf(docPreviews.pan) ? (
-                        <div className="bo-cv-pdf-frame-wrapper">
-                          <iframe
-                            src={docPreviews.pan.url}
-                            title="PAN Document PDF"
-                            className="bo-cv-doc-iframe"
-                          />
-                        </div>
-                      ) : (
-                        <img
-                          src={docPreviews.pan.url}
-                          alt="PAN Card"
-                          className="bo-cv-uncropped-img"
-                        />
-                      )}
-
-                      <div className="bo-cv-doc-meta-row">
-                        <div className="bo-cv-doc-meta-left">
-                          <span><strong>Document:</strong> {docPreviews.pan.fileName || docPreviews.pan.doc?.fileName || 'PAN Card'}</span>
-                          <span><strong>PAN:</strong> {panNumber}</span>
-                          {docPreviews.pan.doc?.uploadedOn && (
-                            <span><strong>Uploaded:</strong> {docPreviews.pan.doc.uploadedOn}</span>
-                          )}
-                          {docPreviews.pan.size && (
-                            <span><strong>Size:</strong> {formatFileSize(docPreviews.pan.size)}</span>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          className="bo-btn bo-btn--outline bo-btn--sm"
-                          onClick={() => handleDownloadFile(docPreviews.pan.url, docPreviews.pan.fileName || docPreviews.pan.doc?.fileName || `pan_card.${isDocPdf(docPreviews.pan) ? 'pdf' : 'jpg'}`)}
-                        >
-                          {DownloadIcon && <DownloadIcon size={13} />}
-                          <span>Download Document</span>
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bo-cv-empty-doc-card">
-                      <div className="bo-cv-empty-doc-icon">
-                        {FileTextIcon && <FileTextIcon size={36} />}
-                      </div>
-                      <h4>No PAN Card Document Found</h4>
-                      <p>
-                        {docPreviews.pan?.error ||
-                          `No uploaded PAN document is currently available for applicant ${verificationData.customerName}.`}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* 2. Co-Applicant PAN Cards (Dynamic) */}
-                {coApplicants.map((co) => {
-                  const coPan = coDocPreviews[co.index]?.pan;
-                  return (
-                    <div className="bo-cv-person-doc-card" key={`co-pan-${co.index}`}>
-                      <div className="bo-cv-person-doc-header">
-                        <div className="bo-cv-person-doc-badge co-app">Co-Applicant {co.number}</div>
-                        <div className="bo-cv-person-doc-title">{co.name}</div>
-                      </div>
-
-                      {coPan?.loading ? (
-                        <div className="bo-cv-doc-loading-box">
-                          <div className="bo-cv-doc-loading-spinner" />
-                          <span>Loading Co-Applicant {co.number} PAN Card document...</span>
-                        </div>
-                      ) : coPan?.isComparison ? (
-                        <div className="bo-cv-comparison-container">
-                          <div className="bo-cv-comparison-grid">
-                            {/* Old Version Card */}
-                            <div className="bo-cv-comparison-card bo-cv-comparison-card--old">
-                              <div className="bo-cv-comparison-card-header">
-                                <span className="bo-cv-comparison-tag">Old / Rejected Version</span>
-                                <span className="bo-cv-comparison-subtag">Prior Document</span>
-                              </div>
-                              {coPan.comparison?.oldDoc?.url ? (
-                                <div className="bo-cv-image-preview-frame">
-                                  {isDocPdf(coPan.comparison.oldDoc) ? (
-                                    <div className="bo-cv-pdf-frame-wrapper">
-                                      <iframe
-                                        src={coPan.comparison.oldDoc.url}
-                                        title={`Co-Applicant ${co.number} Old PAN PDF`}
-                                        className="bo-cv-doc-iframe"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <img
-                                      src={coPan.comparison.oldDoc.url}
-                                      alt={`Co-Applicant ${co.number} Old PAN Card`}
-                                      className="bo-cv-uncropped-img"
-                                    />
-                                  )}
-                                  <div className="bo-cv-doc-meta-row">
-                                    <div className="bo-cv-doc-meta-left">
-                                      <span><strong>Document:</strong> {coPan.comparison.oldDoc.fileName || `CoApplicant_${co.number}_PAN_Old`}</span>
-                                      {co.pan && (
-                                        <span><strong>PAN:</strong> {co.pan}</span>
-                                      )}
-                                      {coPan.comparison.oldDoc.size && (
-                                        <span><strong>Size:</strong> {formatFileSize(coPan.comparison.oldDoc.size)}</span>
-                                      )}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="bo-btn bo-btn--outline bo-btn--sm"
-                                      onClick={() => handleDownloadFile(coPan.comparison.oldDoc.url, coPan.comparison.oldDoc.fileName || `CoApplicant_${co.number}_PAN_Old.${isDocPdf(coPan.comparison.oldDoc) ? 'pdf' : 'jpg'}`)}
-                                    >
-                                      {DownloadIcon && <DownloadIcon size={13} />}
-                                      <span>Download Document</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="bo-cv-empty-doc-card--comparison">
-                                  <div className="bo-cv-empty-doc-icon">
-                                    {FileTextIcon && <FileTextIcon size={28} />}
-                                  </div>
-                                  <h4>Prior Version In-Place Updated</h4>
-                                  <p>{coPan.comparison?.note || 'Prior version path was not recorded for this rejection.'}</p>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* New Version Card */}
-                            <div className="bo-cv-comparison-card bo-cv-comparison-card--new">
-                              <div className="bo-cv-comparison-card-header">
-                                <span className="bo-cv-comparison-tag">New / Resubmitted Version</span>
-                                <span className="bo-cv-comparison-subtag">Ready for Review</span>
-                              </div>
-                              {coPan.comparison?.newDoc?.url || coPan.url ? (
-                                <div className="bo-cv-image-preview-frame">
-                                  {isDocPdf(coPan.comparison?.newDoc || coPan) ? (
-                                    <div className="bo-cv-pdf-frame-wrapper">
-                                      <iframe
-                                        src={coPan.comparison?.newDoc?.url || coPan.url}
-                                        title={`Co-Applicant ${co.number} PAN PDF`}
-                                        className="bo-cv-doc-iframe"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <img
-                                      src={coPan.comparison?.newDoc?.url || coPan.url}
-                                      alt={`Co-Applicant ${co.number} PAN Card`}
-                                      className="bo-cv-uncropped-img"
-                                    />
-                                  )}
-                                  <div className="bo-cv-doc-meta-row">
-                                    <div className="bo-cv-doc-meta-left">
-                                      <span><strong>Document:</strong> {coPan.comparison?.newDoc?.fileName || coPan.fileName || `CoApplicant_${co.number}_PAN`}</span>
-                                      {co.pan && (
-                                        <span><strong>PAN:</strong> {co.pan}</span>
-                                      )}
-                                      {(coPan.comparison?.newDoc?.size || coPan.size) && (
-                                        <span><strong>Size:</strong> {formatFileSize(coPan.comparison?.newDoc?.size || coPan.size)}</span>
-                                      )}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="bo-btn bo-btn--outline bo-btn--sm"
-                                      onClick={() => handleDownloadFile(coPan.comparison?.newDoc?.url || coPan.url, coPan.comparison?.newDoc?.fileName || coPan.fileName || `CoApplicant_${co.number}_PAN.${isDocPdf(coPan.comparison?.newDoc || coPan) ? 'pdf' : 'jpg'}`)}
-                                    >
-                                      {DownloadIcon && <DownloadIcon size={13} />}
-                                      <span>Download Document</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="bo-cv-empty-doc-card--comparison">
-                                  <div className="bo-cv-empty-doc-icon">
-                                    {FileTextIcon && <FileTextIcon size={28} />}
-                                  </div>
-                                  <h4>No Resubmitted Document</h4>
-                                  <p>RM has not uploaded a replacement PAN document yet.</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ) : coPan?.url ? (
-                        <div className="bo-cv-image-preview-frame">
-                          {isDocPdf(coPan) ? (
-                            <div className="bo-cv-pdf-frame-wrapper">
-                              <iframe
-                                src={coPan.url}
-                                title={`Co-Applicant ${co.number} PAN PDF`}
-                                className="bo-cv-doc-iframe"
-                              />
-                            </div>
-                          ) : (
-                            <img
-                              src={coPan.url}
-                              alt={`Co-Applicant ${co.number} PAN Card`}
-                              className="bo-cv-uncropped-img"
-                            />
-                          )}
-
-                          <div className="bo-cv-doc-meta-row">
-                            <div className="bo-cv-doc-meta-left">
-                              <span><strong>Document:</strong> {coPan.fileName || `CoApplicant_${co.number}_PAN`}</span>
-                              {co.pan && (
-                                <span><strong>PAN:</strong> {co.pan}</span>
-                              )}
-                              {coPan.size && (
-                                <span><strong>Size:</strong> {formatFileSize(coPan.size)}</span>
-                              )}
-                            </div>
-                            <button
-                              type="button"
-                              className="bo-btn bo-btn--outline bo-btn--sm"
-                              onClick={() => handleDownloadFile(coPan.url, coPan.fileName || `CoApplicant_${co.number}_PAN.${isDocPdf(coPan) ? 'pdf' : 'jpg'}`)}
-                            >
-                              {DownloadIcon && <DownloadIcon size={13} />}
-                              <span>Download Document</span>
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="bo-cv-empty-doc-card">
-                          <div className="bo-cv-empty-doc-icon">
-                            {FileTextIcon && <FileTextIcon size={36} />}
-                          </div>
-                          <h4>No PAN Card Document Found</h4>
-                          <p>
-                            No uploaded PAN document is currently available for Co-Applicant {co.number} ({co.name}).
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {/* Step Verification Control & Remarks & Reject / Send to RM */}
-                <div className="verification-action-bar">
-                  <div className="bo-cv-verify-row">
-                    <label className="bo-cv-checkbox-label">
-                      <input
-                        type="checkbox"
-                        className="bo-cv-verify-checkbox"
-                        checked={Boolean(stepVerifications['PAN']?.isVerified) && !hasUnresolvedRejectionForStep('PAN')}
-                        disabled={isSavingStepVerification || hasUnresolvedRejectionForStep('PAN')}
-                        title={hasUnresolvedRejectionForStep('PAN') ? 'Resolve all returned/resubmitted documents before marking as Verified' : undefined}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          handleSaveStepVerification({
-                            stepCode: 'PAN',
-                            isVerified: checked,
-                            remarks: stepRemarks[4] || '',
-                          });
-                        }}
-                      />
-                      <span className="bo-cv-verify-text">
-                        Mark PAN Card as <strong>Verified</strong>
-                      </span>
-                    </label>
-                    {stepVerifications['PAN']?.isVerified && !hasUnresolvedRejectionForStep('PAN') && (
-                      <span className="bo-cv-verified-tag">
-                        ✓ Verified by {stepVerifications['PAN']?.verifiedByBackOfficeId ? `Operator #${stepVerifications['PAN'].verifiedByBackOfficeId}` : 'Back Office'}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="verification-remarks-field">
-                    <label htmlFor="bo-cv-remarks-pan">VERIFICATION REMARKS</label>
-                    <textarea
-                      id="bo-cv-remarks-pan"
-                      className="bo-cv-remarks-input"
-                      rows={3}
-                      placeholder="Enter remarks or discrepancy details for PAN verification..."
-                      value={stepRemarks[4] || ''}
-                      onChange={(e) => {
-                        setStepRemarks({ ...stepRemarks, 4: e.target.value });
-                        if (stepFeedback[4]) setStepFeedback({ ...stepFeedback, 4: null });
-                      }}
-                      onBlur={() => {
-                        if (stepVerifications['PAN']?.isVerified && !hasUnresolvedRejectionForStep('PAN')) {
-                          handleSaveStepVerification({
-                            stepCode: 'PAN',
-                            isVerified: true,
-                            remarks: stepRemarks[4] || '',
-                          });
-                        }
-                      }}
-                    />
-                  </div>
-
-                  <div className="verification-buttons-row">
-                    {/* Verify Resubmitted Applicant PAN */}
-                    {(() => {
-                      const appRej = getActiveRejectionForApplicant(4);
-                      if (appRej && appRej.status === 'Resubmitted') {
-                        return (
-                          <button
-                            type="button"
-                            className="verify-resubmit-btn"
-                            disabled={isVerifyingRejection}
-                            onClick={() => handleVerifyRejection(appRej.backOfficeDocumentRejectionId, 'Applicant PAN Card', 4)}
-                          >
-                            <span>{isVerifyingRejection ? 'Verifying...' : '✓ Verify Applicant PAN'}</span>
-                          </button>
-                        );
-                      }
-                      return null;
-                    })()}
-
-                    {/* Verify Resubmitted Co-Applicant PAN */}
-                    {coApplicants.map((co) => {
-                      const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 4);
-                      if (coRej && coRej.status === 'Resubmitted') {
-                        return (
-                          <button
-                            key={`verify-co-pan-${co.index}`}
-                            type="button"
-                            className="verify-resubmit-btn"
-                            style={{ background: '#047857' }}
-                            disabled={isVerifyingRejection}
-                            onClick={() => handleVerifyRejection(coRej.backOfficeDocumentRejectionId, `Co-Applicant ${co.number} PAN Card`, 4)}
-                          >
-                            <span>{isVerifyingRejection ? 'Verifying...' : `✓ Verify Co-App ${co.number} PAN`}</span>
-                          </button>
-                        );
-                      }
-                      return null;
-                    })}
-
-                    <button
-                      type="button"
-                      className="reject-rm-btn"
-                      disabled={isSubmittingRejection}
-                      onClick={() => handleOpenRejectConfirm(4, 'Applicant PAN Card', null, false)}
-                    >
-                      <span>{isSubmittingRejection ? 'Submitting...' : 'Return Applicant to RM'}</span>
-                    </button>
-
-                    {coApplicants.map((co) => (
-                      <button
-                        key={`reject-co-pan-${co.index}`}
-                        type="button"
-                        className="reject-rm-btn"
-                        style={{ background: '#fff1f2', color: '#be123c', border: '1px solid #fecdd3' }}
-                        disabled={isSubmittingRejection}
-                        onClick={() => handleOpenRejectConfirm(4, `Co-Applicant ${co.number} PAN Card`, co.kycDocumentId, true)}
-                      >
-                        <span>{isSubmittingRejection ? 'Submitting...' : `Return Co-Applicant ${co.number} to RM`}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {stepFeedback[4] && (
-                  <div className={`bo-cv-feedback-alert ${stepFeedback[4].type === 'error' ? 'is-error' : 'is-success'}`}>
-                    {stepFeedback[4].message}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════════════
-              STEP 05: SALARY SLIP / INCOME PROOF
-          ══════════════════════════════════════════════════════════════════ */}
-          {activeStep === 5 && (
-            <div className="bo-cv-doc-step-inner">
-              <div className="bo-cv-step-panel-header">
-                <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">05</div>
-                  <div>
-                    <h2 className="bo-cv-step-panel-title">Salary Slip / Income Proof</h2>
-                    <p className="bo-cv-step-panel-desc">
-                      Inspect and verify Applicant and Co-Applicant(s) income proof, payslips, and salary certificates.
-                    </p>
-                  </div>
-                </div>
-                <span className="bo-cv-step-tag-pill">Step 05 of 17</span>
-              </div>
-
-              <div className="bo-cv-doc-display-container">
-                {/* Active Rejection Banners across Step 05 */}
-                {(() => {
-                  const allStep5Rejections = [
-                    getActiveRejectionForApplicantDoc(salarySlipDocTypeId, 'SALARY_SLIP'),
-                    ...coApplicants.flatMap((co) => {
-                      const seq = co.sequence !== undefined ? co.sequence : (co.index !== undefined ? co.index + 1 : co.number);
-                      return [
-                        getActiveRejectionForCoApplicantDoc(seq, salarySlipDocTypeId, 'SALARY_SLIP'),
-                      ];
-                    }),
-                  ].filter(Boolean);
-
-                  if (allStep5Rejections.length === 0) return null;
-
-                  return (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-                      {allStep5Rejections.map((rej) => (
-                        <div
-                          key={`step5-rej-banner-${rej.backOfficeDocumentRejectionId}`}
-                          className={`rejection-status-banner rejection-status--${(rej.status || '').toLowerCase()}`}
-                        >
-                          <div className="rejection-status-header">
-                            <strong>
-                              {rej.status === 'ReturnedToRM' && `⚠️ Document Returned to RM: ${rej.rejectedDocumentType || 'Salary Slip'}`}
-                              {rej.status === 'Resubmitted' && `🔄 Document Resubmitted by RM: ${rej.rejectedDocumentType || 'Salary Slip'} (Ready for Verification)`}
-                              {rej.status === 'Verified' && `✓ Document Verified & Approved: ${rej.rejectedDocumentType || 'Salary Slip'}`}
-                            </strong>
-                            <span className="rejection-status-date">
-                              {rej.resubmittedAt
-                                ? `Resubmitted: ${new Date(rej.resubmittedAt).toLocaleString()}`
-                                : rej.createdAt
-                                ? `Returned: ${new Date(rej.createdAt).toLocaleString()}`
-                                : ''}
-                            </span>
-                          </div>
-                          {rej.rejectionRemarks && (
-                            <p className="rejection-status-remarks">
-                              <strong>Remarks:</strong> {rej.rejectionRemarks}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-
-                {/* 1. Applicant Salary Slip */}
-                <div className="bo-cv-person-doc-card">
-                  <div className="bo-cv-person-doc-header">
-                    <div className="bo-cv-person-doc-badge">Applicant</div>
-                    <div className="bo-cv-person-doc-title">{verificationData.customerName}</div>
-                  </div>
-
-                  <div className="bo-cv-financial-docs-container">
-                    <div className="bo-cv-subdoc-card">
-                      <div className="bo-cv-subdoc-header">
-                        <div className="bo-cv-subdoc-header-left">
-                          {FileTextIcon && <FileTextIcon size={16} />}
-                          <h4 className="bo-cv-subdoc-title">Salary Slip / Income Sheet</h4>
-                        </div>
-                        <div className="bo-cv-subdoc-actions">
-                          {applicantFinancialDocs.salarySlip.rejection?.status === 'Resubmitted' && (
-                            <span className="bo-cv-pill-fetching">Resubmitted</span>
-                          )}
-                          {applicantFinancialDocs.salarySlip.rejection?.status === 'ReturnedToRM' && (
-                            <span className="bo-cv-pill-pending">Returned to RM</span>
-                          )}
-                          {applicantFinancialDocs.salarySlip.preview?.url && !applicantFinancialDocs.salarySlip.rejection && (
-                            <span className="bo-cv-pill-verified">Uploaded</span>
-                          )}
-                        </div>
-                      </div>
-
-                      {applicantFinancialDocs.salarySlip.loading ? (
-                        <div className="bo-cv-doc-loading-box">
-                          <div className="bo-cv-doc-loading-spinner" />
-                          <span>Loading applicant salary slip...</span>
-                        </div>
-                      ) : applicantFinancialDocs.salarySlip.comparison ? (
-                        <div className="bo-cv-comparison-container">
-                          <div className="bo-cv-comparison-grid">
-                            {/* Old Version */}
-                            <div className="bo-cv-comparison-card bo-cv-comparison-card--old">
-                              <div className="bo-cv-comparison-card-header">
-                                <span className="bo-cv-comparison-tag">Old / Rejected Version</span>
-                                <span className="bo-cv-comparison-subtag">Previously Rejected</span>
-                              </div>
-                              {applicantFinancialDocs.salarySlip.comparison.oldDoc?.url ? (
-                                <div className="bo-cv-image-preview-frame">
-                                  {isDocPdf(applicantFinancialDocs.salarySlip.comparison.oldDoc) ? (
-                                    <div className="bo-cv-pdf-frame-wrapper">
-                                      <iframe
-                                        src={applicantFinancialDocs.salarySlip.comparison.oldDoc.url}
-                                        title="Previous Salary Slip PDF"
-                                        className="bo-cv-doc-iframe"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <img
-                                      src={applicantFinancialDocs.salarySlip.comparison.oldDoc.url}
-                                      alt="Previous Salary Slip"
-                                      className="bo-cv-uncropped-img"
-                                    />
-                                  )}
-                                  <div className="bo-cv-doc-meta-row">
-                                    <div className="bo-cv-doc-meta-left">
-                                      <span><strong>File:</strong> {applicantFinancialDocs.salarySlip.comparison.oldDoc.fileName || 'Old Salary Slip'}</span>
-                                      {applicantFinancialDocs.salarySlip.comparison.oldDoc.size && (
-                                        <span><strong>Size:</strong> {formatFileSize(applicantFinancialDocs.salarySlip.comparison.oldDoc.size)}</span>
-                                      )}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="bo-btn bo-btn--outline bo-btn--sm"
-                                      onClick={() => handleDownloadFile(applicantFinancialDocs.salarySlip.comparison.oldDoc.url, applicantFinancialDocs.salarySlip.comparison.oldDoc.fileName || `Applicant_Salary_Slip_Old.${isDocPdf(applicantFinancialDocs.salarySlip.comparison.oldDoc) ? 'pdf' : 'jpg'}`)}
-                                    >
-                                      {DownloadIcon && <DownloadIcon size={13} />}
-                                      <span>Download</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="bo-cv-empty-doc-card--comparison">
-                                  <div className="bo-cv-empty-doc-icon">
-                                    {FileTextIcon && <FileTextIcon size={28} />}
-                                  </div>
-                                  <h4>No Archived Prior Version</h4>
-                                  <p>{applicantFinancialDocs.salarySlip.comparison.note || 'Previous file version is not available from the document repository.'}</p>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* New Resubmitted Version */}
-                            <div className="bo-cv-comparison-card bo-cv-comparison-card--new">
-                              <div className="bo-cv-comparison-card-header">
-                                <span className="bo-cv-comparison-tag">New / Resubmitted Version</span>
-                                <span className="bo-cv-comparison-subtag">Ready for Review</span>
-                              </div>
-                              {applicantFinancialDocs.salarySlip.comparison.newDoc?.url ? (
-                                <div className="bo-cv-image-preview-frame">
-                                  {isDocPdf(applicantFinancialDocs.salarySlip.comparison.newDoc) ? (
-                                    <div className="bo-cv-pdf-frame-wrapper">
-                                      <iframe
-                                        src={applicantFinancialDocs.salarySlip.comparison.newDoc.url}
-                                        title="New Resubmitted Salary Slip PDF"
-                                        className="bo-cv-doc-iframe"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <img
-                                      src={applicantFinancialDocs.salarySlip.comparison.newDoc.url}
-                                      alt="New Resubmitted Salary Slip"
-                                      className="bo-cv-uncropped-img"
-                                    />
-                                  )}
-                                  <div className="bo-cv-doc-meta-row">
-                                    <div className="bo-cv-doc-meta-left">
-                                      <span><strong>File:</strong> {applicantFinancialDocs.salarySlip.comparison.newDoc.fileName || 'New Salary Slip'}</span>
-                                      {applicantFinancialDocs.salarySlip.comparison.newDoc.size && (
-                                        <span><strong>Size:</strong> {formatFileSize(applicantFinancialDocs.salarySlip.comparison.newDoc.size)}</span>
-                                      )}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="bo-btn bo-btn--outline bo-btn--sm"
-                                      onClick={() => handleDownloadFile(applicantFinancialDocs.salarySlip.comparison.newDoc.url, applicantFinancialDocs.salarySlip.comparison.newDoc.fileName || `Applicant_Salary_Slip.${isDocPdf(applicantFinancialDocs.salarySlip.comparison.newDoc) ? 'pdf' : 'jpg'}`)}
-                                    >
-                                      {DownloadIcon && <DownloadIcon size={13} />}
-                                      <span>Download</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="bo-cv-empty-doc-card--comparison">
-                                  <div className="bo-cv-empty-doc-icon">
-                                    {FileTextIcon && <FileTextIcon size={28} />}
-                                  </div>
-                                  <h4>No Resubmitted Document</h4>
-                                  <p>RM has not uploaded a replacement Salary Slip yet.</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ) : applicantFinancialDocs.salarySlip.preview?.url ? (
-                        <div className="bo-cv-image-preview-frame">
-                          {isDocPdf(applicantFinancialDocs.salarySlip.preview) ? (
-                            <div className="bo-cv-pdf-frame-wrapper">
-                              <iframe
-                                src={applicantFinancialDocs.salarySlip.preview.url}
-                                title="Salary Slip Document PDF"
-                                className="bo-cv-doc-iframe"
-                              />
-                            </div>
-                          ) : (
-                            <img
-                              src={applicantFinancialDocs.salarySlip.preview.url}
-                              alt="Salary Slip Document"
-                              className="bo-cv-uncropped-img"
-                            />
-                          )}
-                          <div className="bo-cv-doc-meta-row">
-                            <div className="bo-cv-doc-meta-left">
-                              <span><strong>File:</strong> {applicantFinancialDocs.salarySlip.preview.fileName || 'Salary Slip'}</span>
-                              {applicantFinancialDocs.salarySlip.preview.size && (
-                                <span><strong>Size:</strong> {formatFileSize(applicantFinancialDocs.salarySlip.preview.size)}</span>
-                              )}
-                            </div>
-                            <button
-                              type="button"
-                              className="bo-btn bo-btn--outline bo-btn--sm"
-                              onClick={() => handleDownloadFile(applicantFinancialDocs.salarySlip.preview.url, applicantFinancialDocs.salarySlip.preview.fileName || `Applicant_Salary_Slip.${isDocPdf(applicantFinancialDocs.salarySlip.preview) ? 'pdf' : 'jpg'}`)}
-                            >
-                              {DownloadIcon && <DownloadIcon size={13} />}
-                              <span>Download</span>
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="bo-cv-empty-doc-card">
-                          <div className="bo-cv-empty-doc-icon">
-                            {FileTextIcon && <FileTextIcon size={32} />}
-                          </div>
-                          <h4>No Salary Slip Found</h4>
-                          <p>No salary slip or income sheet was uploaded for applicant {verificationData.customerName}.</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Co-Applicant Salary Slip */}
-                {coApplicants.map((co) => {
-                  const seq = co.sequence !== undefined ? co.sequence : (co.index !== undefined ? co.index + 1 : co.number);
-                  const idxKey = co.index !== undefined ? co.index : (seq - 1);
-                  const coFin = coApplicantsFinancialDocs[idxKey] || {
-                    salarySlip: { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null },
-                    bankStatement: { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null },
-                  };
-
-                  return (
-                    <div className="bo-cv-person-doc-card" key={`co-salary-card-${co.index}`}>
-                      <div className="bo-cv-person-doc-header">
-                        <div className="bo-cv-person-doc-badge co-app">Co-Applicant {co.number}</div>
-                        <div className="bo-cv-person-doc-title">{co.name}</div>
-                      </div>
-
-                      <div className="bo-cv-financial-docs-container">
-                        <div className="bo-cv-subdoc-card">
-                          <div className="bo-cv-subdoc-header">
-                            <div className="bo-cv-subdoc-header-left">
-                              {FileTextIcon && <FileTextIcon size={16} />}
-                              <h4 className="bo-cv-subdoc-title">Co-Applicant {co.number} Salary Slip / Income Sheet</h4>
-                            </div>
-                            <div className="bo-cv-subdoc-actions">
-                              {coFin.salarySlip?.rejection?.status === 'Resubmitted' && (
-                                <span className="bo-cv-pill-fetching">Resubmitted</span>
-                              )}
-                              {coFin.salarySlip?.rejection?.status === 'ReturnedToRM' && (
-                                <span className="bo-cv-pill-pending">Returned to RM</span>
-                              )}
-                              {coFin.salarySlip?.preview?.url && !coFin.salarySlip?.rejection && (
-                                <span className="bo-cv-pill-verified">Uploaded</span>
-                              )}
-                            </div>
-                          </div>
-
-                          {coFin.salarySlip?.loading ? (
-                            <div className="bo-cv-doc-loading-box">
-                              <div className="bo-cv-doc-loading-spinner" />
-                              <span>Loading Co-Applicant {co.number} salary slip...</span>
-                            </div>
-                          ) : coFin.salarySlip?.comparison ? (
-                            <div className="bo-cv-comparison-container">
-                              <div className="bo-cv-comparison-grid">
-                                {/* Old Version */}
-                                <div className="bo-cv-comparison-card bo-cv-comparison-card--old">
-                                  <div className="bo-cv-comparison-card-header">
-                                    <span className="bo-cv-comparison-tag">Old / Rejected Version</span>
-                                    <span className="bo-cv-comparison-subtag">Previously Rejected</span>
-                                  </div>
-                                  {coFin.salarySlip.comparison.oldDoc?.url ? (
-                                    <div className="bo-cv-image-preview-frame">
-                                      {isDocPdf(coFin.salarySlip.comparison.oldDoc) ? (
-                                        <div className="bo-cv-pdf-frame-wrapper">
-                                          <iframe
-                                            src={coFin.salarySlip.comparison.oldDoc.url}
-                                            title={`Co-Applicant ${co.number} Previous Salary Slip PDF`}
-                                            className="bo-cv-doc-iframe"
-                                          />
-                                        </div>
-                                      ) : (
-                                        <img
-                                          src={coFin.salarySlip.comparison.oldDoc.url}
-                                          alt={`Co-Applicant ${co.number} Previous Salary Slip`}
-                                          className="bo-cv-uncropped-img"
-                                        />
-                                      )}
-                                      <div className="bo-cv-doc-meta-row">
-                                        <div className="bo-cv-doc-meta-left">
-                                          <span><strong>File:</strong> {coFin.salarySlip.comparison.oldDoc.fileName || `CoApplicant_${co.number}_Salary_Slip_Old`}</span>
-                                          {coFin.salarySlip.comparison.oldDoc.size && (
-                                            <span><strong>Size:</strong> {formatFileSize(coFin.salarySlip.comparison.oldDoc.size)}</span>
-                                          )}
-                                        </div>
-                                        <button
-                                          type="button"
-                                          className="bo-btn bo-btn--outline bo-btn--sm"
-                                          onClick={() => handleDownloadFile(coFin.salarySlip.comparison.oldDoc.url, coFin.salarySlip.comparison.oldDoc.fileName || `CoApplicant_${co.number}_Salary_Slip_Old.${isDocPdf(coFin.salarySlip.comparison.oldDoc) ? 'pdf' : 'jpg'}`)}
-                                        >
-                                          {DownloadIcon && <DownloadIcon size={13} />}
-                                          <span>Download</span>
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="bo-cv-empty-doc-card--comparison">
-                                      <div className="bo-cv-empty-doc-icon">
-                                        {FileTextIcon && <FileTextIcon size={28} />}
-                                      </div>
-                                      <h4>No Archived Prior Version</h4>
-                                      <p>{coFin.salarySlip.comparison.note || 'Previous file version is not available from the document repository.'}</p>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* New Resubmitted Version */}
-                                <div className="bo-cv-comparison-card bo-cv-comparison-card--new">
-                                  <div className="bo-cv-comparison-card-header">
-                                    <span className="bo-cv-comparison-tag">New / Resubmitted Version</span>
-                                    <span className="bo-cv-comparison-subtag">Ready for Review</span>
-                                  </div>
-                                  {coFin.salarySlip.comparison.newDoc?.url ? (
-                                    <div className="bo-cv-image-preview-frame">
-                                      {isDocPdf(coFin.salarySlip.comparison.newDoc) ? (
-                                        <div className="bo-cv-pdf-frame-wrapper">
-                                          <iframe
-                                            src={coFin.salarySlip.comparison.newDoc.url}
-                                            title={`Co-Applicant ${co.number} New Salary Slip PDF`}
-                                            className="bo-cv-doc-iframe"
-                                          />
-                                        </div>
-                                      ) : (
-                                        <img
-                                          src={coFin.salarySlip.comparison.newDoc.url}
-                                          alt={`Co-Applicant ${co.number} New Salary Slip`}
-                                          className="bo-cv-uncropped-img"
-                                        />
-                                      )}
-                                      <div className="bo-cv-doc-meta-row">
-                                        <div className="bo-cv-doc-meta-left">
-                                          <span><strong>File:</strong> {coFin.salarySlip.comparison.newDoc.fileName || `CoApplicant_${co.number}_Salary_Slip_New`}</span>
-                                          {coFin.salarySlip.comparison.newDoc.size && (
-                                            <span><strong>Size:</strong> {formatFileSize(coFin.salarySlip.comparison.newDoc.size)}</span>
-                                          )}
-                                        </div>
-                                        <button
-                                          type="button"
-                                          className="bo-btn bo-btn--outline bo-btn--sm"
-                                          onClick={() => handleDownloadFile(coFin.salarySlip.comparison.newDoc.url, coFin.salarySlip.comparison.newDoc.fileName || `CoApplicant_${co.number}_Salary_Slip.${isDocPdf(coFin.salarySlip.comparison.newDoc) ? 'pdf' : 'jpg'}`)}
-                                        >
-                                          {DownloadIcon && <DownloadIcon size={13} />}
-                                          <span>Download</span>
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="bo-cv-empty-doc-card--comparison">
-                                      <div className="bo-cv-empty-doc-icon">
-                                        {FileTextIcon && <FileTextIcon size={28} />}
-                                      </div>
-                                      <h4>No Resubmitted Document</h4>
-                                      <p>RM has not uploaded a replacement Salary Slip yet.</p>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          ) : coFin.salarySlip?.preview?.url ? (
-                            <div className="bo-cv-image-preview-frame">
-                              {isDocPdf(coFin.salarySlip.preview) ? (
-                                <div className="bo-cv-pdf-frame-wrapper">
-                                  <iframe
-                                    src={coFin.salarySlip.preview.url}
-                                    title={`Co-Applicant ${co.number} Salary Slip PDF`}
-                                    className="bo-cv-doc-iframe"
-                                  />
-                                </div>
-                              ) : (
-                                <img
-                                  src={coFin.salarySlip.preview.url}
-                                  alt={`Co-Applicant ${co.number} Salary Slip`}
-                                  className="bo-cv-uncropped-img"
-                                />
-                              )}
-                              <div className="bo-cv-doc-meta-row">
-                                <div className="bo-cv-doc-meta-left">
-                                  <span><strong>File:</strong> {coFin.salarySlip.preview.fileName || `CoApplicant_${co.number}_Salary_Slip`}</span>
-                                  {coFin.salarySlip.preview.size && (
-                                    <span><strong>Size:</strong> {formatFileSize(coFin.salarySlip.preview.size)}</span>
-                                  )}
-                                </div>
-                                <button
-                                  type="button"
-                                  className="bo-btn bo-btn--outline bo-btn--sm"
-                                  onClick={() => handleDownloadFile(coFin.salarySlip.preview.url, coFin.salarySlip.preview.fileName || `CoApplicant_${co.number}_Salary_Slip.${isDocPdf(coFin.salarySlip.preview) ? 'pdf' : 'jpg'}`)}
-                                >
-                                  {DownloadIcon && <DownloadIcon size={13} />}
-                                  <span>Download</span>
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="bo-cv-empty-doc-card">
-                              <div className="bo-cv-empty-doc-icon">
-                                {FileTextIcon && <FileTextIcon size={32} />}
-                              </div>
-                              <h4>No Salary Slip Found</h4>
-                              <p>No salary slip was uploaded for Co-Applicant {co.number} ({co.name}).</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Step Verification Control & Remarks & Reject / Send to RM */}
-                <div className="verification-action-bar">
-                  <div className="bo-cv-verify-row">
-                    <label className="bo-cv-checkbox-label">
-                      <input
-                        type="checkbox"
-                        className="bo-cv-verify-checkbox"
-                        checked={Boolean(stepVerifications['SALARY_SLIP']?.isVerified) && !hasUnresolvedRejectionForStep('SALARY_SLIP')}
-                        disabled={isSavingStepVerification || hasUnresolvedRejectionForStep('SALARY_SLIP')}
-                        title={hasUnresolvedRejectionForStep('SALARY_SLIP') ? 'Resolve all returned/resubmitted documents before marking as Verified' : undefined}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          handleSaveStepVerification({
-                            stepCode: 'SALARY_SLIP',
-                            isVerified: checked,
-                            remarks: stepRemarks[5] || '',
-                          });
-                        }}
-                      />
-                      <span className="bo-cv-verify-text">
-                        Mark Salary Slip as <strong>Verified</strong>
-                      </span>
-                    </label>
-                    {stepVerifications['SALARY_SLIP']?.isVerified && !hasUnresolvedRejectionForStep('SALARY_SLIP') && (
-                      <span className="bo-cv-verified-tag">
-                        ✓ Verified by {stepVerifications['SALARY_SLIP']?.verifiedByBackOfficeId ? `Operator #${stepVerifications['SALARY_SLIP'].verifiedByBackOfficeId}` : 'Back Office'}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="verification-remarks-field">
-                    <label htmlFor="bo-cv-remarks-salary">VERIFICATION REMARKS</label>
-                    <textarea
-                      id="bo-cv-remarks-salary"
-                      className="bo-cv-remarks-input"
-                      rows={3}
-                      placeholder="Enter remarks or discrepancy details for salary slip / income verification..."
-                      value={stepRemarks[5] || ''}
-                      onChange={(e) => {
-                        setStepRemarks({ ...stepRemarks, 5: e.target.value });
-                        if (stepFeedback[5]) setStepFeedback({ ...stepFeedback, 5: null });
-                      }}
-                      onBlur={() => {
-                        if (stepVerifications['SALARY_SLIP']?.isVerified && !hasUnresolvedRejectionForStep('SALARY_SLIP')) {
-                          handleSaveStepVerification({
-                            stepCode: 'SALARY_SLIP',
-                            isVerified: true,
-                            remarks: stepRemarks[5] || '',
-                          });
-                        }
-                      }}
-                    />
-                  </div>
-
-                  <div className="verification-buttons-row">
-                    {/* Verify Resubmitted Applicant Salary Slip */}
-                    {(() => {
-                      const rej = getActiveRejectionForApplicantDoc(salarySlipDocTypeId, 'SALARY_SLIP');
-                      if (rej && rej.status === 'Resubmitted') {
-                        return (
-                          <button
-                            type="button"
-                            className="verify-resubmit-btn"
-                            disabled={isVerifyingRejection}
-                            onClick={() => handleVerifyRejection(rej.backOfficeDocumentRejectionId, 'Applicant Salary Slip', 5)}
-                          >
-                            <span>{isVerifyingRejection ? 'Verifying...' : '✓ Verify Applicant Salary Slip'}</span>
-                          </button>
-                        );
-                      }
-                      return null;
-                    })()}
-
-                    {/* Verify Resubmitted Co-Applicant Salary Slip */}
-                    {coApplicants.map((co) => {
-                      const seq = co.sequence !== undefined ? co.sequence : (co.index !== undefined ? co.index + 1 : co.number);
-                      const coSalaryRej = getActiveRejectionForCoApplicantDoc(seq, salarySlipDocTypeId, 'SALARY_SLIP');
-                      if (coSalaryRej && coSalaryRej.status === 'Resubmitted') {
-                        return (
-                          <button
-                            key={`verify-co-salary-${co.index}`}
-                            type="button"
-                            className="verify-resubmit-btn"
-                            style={{ background: '#047857' }}
-                            disabled={isVerifyingRejection}
-                            onClick={() => handleVerifyRejection(coSalaryRej.backOfficeDocumentRejectionId, `Co-Applicant ${co.number} Salary Slip`, 5)}
-                          >
-                            <span>{isVerifyingRejection ? 'Verifying...' : `✓ Verify Co-App ${co.number} Salary Slip`}</span>
-                          </button>
-                        );
-                      }
-                      return null;
-                    })}
-
-                    {/* Reject Applicant Salary Slip */}
-                    <button
-                      type="button"
-                      className="reject-rm-btn"
-                      disabled={isSubmittingRejection}
-                      onClick={() => handleOpenRejectConfirm(5, 'Applicant Salary Slip', null, false, 0, salarySlipDocTypeId, 'APPLICANT_SALARY_SLIP')}
-                    >
-                      <span>{isSubmittingRejection ? 'Submitting...' : 'Return Applicant to RM'}</span>
-                    </button>
-
-                    {/* Reject Co-Applicant Salary Slip */}
-                    {coApplicants.map((co) => {
-                      const seq = co.sequence !== undefined ? co.sequence : (co.index !== undefined ? co.index + 1 : co.number);
-                      return (
-                        <button
-                          key={`reject-co-salary-${co.index}`}
-                          type="button"
-                          className="reject-rm-btn"
-                          style={{ background: '#fff1f2', color: '#be123c', border: '1px solid #fecdd3' }}
-                          disabled={isSubmittingRejection}
-                          onClick={() => handleOpenRejectConfirm(5, `Co-Applicant ${co.number} Salary Slip`, null, true, seq, salarySlipDocTypeId, `CO_APPLICANT_${seq}_SALARY_SLIP`)}
-                        >
-                          <span>{isSubmittingRejection ? 'Submitting...' : `Return Co-Applicant ${co.number} to RM`}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {stepFeedback[5] && (
-                  <div className={`bo-cv-feedback-alert ${stepFeedback[5].type === 'error' ? 'is-error' : 'is-success'}`}>
-                    {stepFeedback[5].message}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════════════
-              STEP 06: BANK STATEMENT
-          ══════════════════════════════════════════════════════════════════ */}
-          {activeStep === 6 && (
-            <div className="bo-cv-doc-step-inner">
-              <div className="bo-cv-step-panel-header">
-                <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">06</div>
-                  <div>
-                    <h2 className="bo-cv-step-panel-title">Bank Statement</h2>
-                    <p className="bo-cv-step-panel-desc">
-                      Inspect and verify Applicant and Co-Applicant(s) banking statements, records, and passbooks.
-                    </p>
-                  </div>
-                </div>
-                <span className="bo-cv-step-tag-pill">Step 06 of 17</span>
-              </div>
-
-              <div className="bo-cv-doc-display-container">
-                {/* Active Rejection Banners across Step 06 */}
-                {(() => {
-                  const allStep6Rejections = [
-                    getActiveRejectionForApplicantDoc(bankStatementDocTypeId, 'BANK_STATEMENT'),
-                    ...coApplicants.flatMap((co) => {
-                      const seq = co.sequence !== undefined ? co.sequence : (co.index !== undefined ? co.index + 1 : co.number);
-                      return [
-                        getActiveRejectionForCoApplicantDoc(seq, bankStatementDocTypeId, 'BANK_STATEMENT'),
-                      ];
-                    }),
-                  ].filter(Boolean);
-
-                  if (allStep6Rejections.length === 0) return null;
-
-                  return (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-                      {allStep6Rejections.map((rej) => (
-                        <div
-                          key={`step6-rej-banner-${rej.backOfficeDocumentRejectionId}`}
-                          className={`rejection-status-banner rejection-status--${(rej.status || '').toLowerCase()}`}
-                        >
-                          <div className="rejection-status-header">
-                            <strong>
-                              {rej.status === 'ReturnedToRM' && `⚠️ Document Returned to RM: ${rej.rejectedDocumentType || 'Bank Statement'}`}
-                              {rej.status === 'Resubmitted' && `🔄 Document Resubmitted by RM: ${rej.rejectedDocumentType || 'Bank Statement'} (Ready for Verification)`}
-                              {rej.status === 'Verified' && `✓ Document Verified & Approved: ${rej.rejectedDocumentType || 'Bank Statement'}`}
-                            </strong>
-                            <span className="rejection-status-date">
-                              {rej.resubmittedAt
-                                ? `Resubmitted: ${new Date(rej.resubmittedAt).toLocaleString()}`
-                                : rej.createdAt
-                                ? `Returned: ${new Date(rej.createdAt).toLocaleString()}`
-                                : ''}
-                            </span>
-                          </div>
-                          {rej.rejectionRemarks && (
-                            <p className="rejection-status-remarks">
-                              <strong>Remarks:</strong> {rej.rejectionRemarks}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-
-                {/* 1. Applicant Bank Statement */}
-                <div className="bo-cv-person-doc-card">
-                  <div className="bo-cv-person-doc-header">
-                    <div className="bo-cv-person-doc-badge">Applicant</div>
-                    <div className="bo-cv-person-doc-title">{verificationData.customerName}</div>
-                  </div>
-
-                  <div className="bo-cv-financial-docs-container">
-                    <div className="bo-cv-subdoc-card">
-                      <div className="bo-cv-subdoc-header">
-                        <div className="bo-cv-subdoc-header-left">
-                          {LandmarkIcon ? <LandmarkIcon size={16} /> : (FileTextIcon && <FileTextIcon size={16} />)}
-                          <h4 className="bo-cv-subdoc-title">Bank Statement</h4>
-                        </div>
-                        <div className="bo-cv-subdoc-actions">
-                          {applicantFinancialDocs.bankStatement.rejection?.status === 'Resubmitted' && (
-                            <span className="bo-cv-pill-fetching">Resubmitted</span>
-                          )}
-                          {applicantFinancialDocs.bankStatement.rejection?.status === 'ReturnedToRM' && (
-                            <span className="bo-cv-pill-pending">Returned to RM</span>
-                          )}
-                          {applicantFinancialDocs.bankStatement.preview?.url && !applicantFinancialDocs.bankStatement.rejection && (
-                            <span className="bo-cv-pill-verified">Uploaded</span>
-                          )}
-                        </div>
-                      </div>
-
-                      {applicantFinancialDocs.bankStatement.loading ? (
-                        <div className="bo-cv-doc-loading-box">
-                          <div className="bo-cv-doc-loading-spinner" />
-                          <span>Loading applicant bank statement...</span>
-                        </div>
-                      ) : applicantFinancialDocs.bankStatement.comparison ? (
-                        <div className="bo-cv-comparison-container">
-                          <div className="bo-cv-comparison-grid">
-                            {/* Old Version */}
-                            <div className="bo-cv-comparison-card bo-cv-comparison-card--old">
-                              <div className="bo-cv-comparison-card-header">
-                                <span className="bo-cv-comparison-tag">Old / Rejected Version</span>
-                                <span className="bo-cv-comparison-subtag">Previously Rejected</span>
-                              </div>
-                              {applicantFinancialDocs.bankStatement.comparison.oldDoc?.url ? (
-                                <div className="bo-cv-image-preview-frame">
-                                  {isDocPdf(applicantFinancialDocs.bankStatement.comparison.oldDoc) ? (
-                                    <div className="bo-cv-pdf-frame-wrapper">
-                                      <iframe
-                                        src={applicantFinancialDocs.bankStatement.comparison.oldDoc.url}
-                                        title="Previous Bank Statement PDF"
-                                        className="bo-cv-doc-iframe"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <img
-                                      src={applicantFinancialDocs.bankStatement.comparison.oldDoc.url}
-                                      alt="Previous Bank Statement"
-                                      className="bo-cv-uncropped-img"
-                                    />
-                                  )}
-                                  <div className="bo-cv-doc-meta-row">
-                                    <div className="bo-cv-doc-meta-left">
-                                      <span><strong>File:</strong> {applicantFinancialDocs.bankStatement.comparison.oldDoc.fileName || 'Old Bank Statement'}</span>
-                                      {applicantFinancialDocs.bankStatement.comparison.oldDoc.size && (
-                                        <span><strong>Size:</strong> {formatFileSize(applicantFinancialDocs.bankStatement.comparison.oldDoc.size)}</span>
-                                      )}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="bo-btn bo-btn--outline bo-btn--sm"
-                                      onClick={() => handleDownloadFile(applicantFinancialDocs.bankStatement.comparison.oldDoc.url, applicantFinancialDocs.bankStatement.comparison.oldDoc.fileName || `Applicant_Bank_Statement_Old.${isDocPdf(applicantFinancialDocs.bankStatement.comparison.oldDoc) ? 'pdf' : 'jpg'}`)}
-                                    >
-                                      {DownloadIcon && <DownloadIcon size={13} />}
-                                      <span>Download</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="bo-cv-empty-doc-card--comparison">
-                                  <div className="bo-cv-empty-doc-icon">
-                                    {FileTextIcon && <FileTextIcon size={28} />}
-                                  </div>
-                                  <h4>No Archived Prior Version</h4>
-                                  <p>{applicantFinancialDocs.bankStatement.comparison.note || 'Previous file version is not available from the document repository.'}</p>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* New Resubmitted Version */}
-                            <div className="bo-cv-comparison-card bo-cv-comparison-card--new">
-                              <div className="bo-cv-comparison-card-header">
-                                <span className="bo-cv-comparison-tag">New / Resubmitted Version</span>
-                                <span className="bo-cv-comparison-subtag">Ready for Review</span>
-                              </div>
-                              {applicantFinancialDocs.bankStatement.comparison.newDoc?.url ? (
-                                <div className="bo-cv-image-preview-frame">
-                                  {isDocPdf(applicantFinancialDocs.bankStatement.comparison.newDoc) ? (
-                                    <div className="bo-cv-pdf-frame-wrapper">
-                                      <iframe
-                                        src={applicantFinancialDocs.bankStatement.comparison.newDoc.url}
-                                        title="New Resubmitted Bank Statement PDF"
-                                        className="bo-cv-doc-iframe"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <img
-                                      src={applicantFinancialDocs.bankStatement.comparison.newDoc.url}
-                                      alt="New Resubmitted Bank Statement"
-                                      className="bo-cv-uncropped-img"
-                                    />
-                                  )}
-                                  <div className="bo-cv-doc-meta-row">
-                                    <div className="bo-cv-doc-meta-left">
-                                      <span><strong>File:</strong> {applicantFinancialDocs.bankStatement.comparison.newDoc.fileName || 'New Bank Statement'}</span>
-                                      {applicantFinancialDocs.bankStatement.comparison.newDoc.size && (
-                                        <span><strong>Size:</strong> {formatFileSize(applicantFinancialDocs.bankStatement.comparison.newDoc.size)}</span>
-                                      )}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="bo-btn bo-btn--outline bo-btn--sm"
-                                      onClick={() => handleDownloadFile(applicantFinancialDocs.bankStatement.comparison.newDoc.url, applicantFinancialDocs.bankStatement.comparison.newDoc.fileName || `Applicant_Bank_Statement.${isDocPdf(applicantFinancialDocs.bankStatement.comparison.newDoc) ? 'pdf' : 'jpg'}`)}
-                                    >
-                                      {DownloadIcon && <DownloadIcon size={13} />}
-                                      <span>Download</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="bo-cv-empty-doc-card--comparison">
-                                  <div className="bo-cv-empty-doc-icon">
-                                    {FileTextIcon && <FileTextIcon size={28} />}
-                                  </div>
-                                  <h4>No Resubmitted Document</h4>
-                                  <p>RM has not uploaded a replacement Bank Statement yet.</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ) : applicantFinancialDocs.bankStatement.preview?.url ? (
-                        <div className="bo-cv-image-preview-frame">
-                          {isDocPdf(applicantFinancialDocs.bankStatement.preview) ? (
-                            <div className="bo-cv-pdf-frame-wrapper">
-                              <iframe
-                                src={applicantFinancialDocs.bankStatement.preview.url}
-                                title="Bank Statement Document PDF"
-                                className="bo-cv-doc-iframe"
-                              />
-                            </div>
-                          ) : (
-                            <img
-                              src={applicantFinancialDocs.bankStatement.preview.url}
-                              alt="Bank Statement Document"
-                              className="bo-cv-uncropped-img"
-                            />
-                          )}
-                          <div className="bo-cv-doc-meta-row">
-                            <div className="bo-cv-doc-meta-left">
-                              <span><strong>File:</strong> {applicantFinancialDocs.bankStatement.preview.fileName || 'Bank Statement'}</span>
-                              {applicantFinancialDocs.bankStatement.preview.size && (
-                                <span><strong>Size:</strong> {formatFileSize(applicantFinancialDocs.bankStatement.preview.size)}</span>
-                              )}
-                            </div>
-                            <button
-                              type="button"
-                              className="bo-btn bo-btn--outline bo-btn--sm"
-                              onClick={() => handleDownloadFile(applicantFinancialDocs.bankStatement.preview.url, applicantFinancialDocs.bankStatement.preview.fileName || `Applicant_Bank_Statement.${isDocPdf(applicantFinancialDocs.bankStatement.preview) ? 'pdf' : 'jpg'}`)}
-                            >
-                              {DownloadIcon && <DownloadIcon size={13} />}
-                              <span>Download</span>
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="bo-cv-empty-doc-card">
-                          <div className="bo-cv-empty-doc-icon">
-                            {LandmarkIcon ? <LandmarkIcon size={32} /> : (FileTextIcon && <FileTextIcon size={32} />)}
-                          </div>
-                          <h4>No Bank Statement Found</h4>
-                          <p>No bank statement document was uploaded for applicant {verificationData.customerName}.</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Co-Applicant Bank Statement */}
-                {coApplicants.map((co) => {
-                  const seq = co.sequence !== undefined ? co.sequence : (co.index !== undefined ? co.index + 1 : co.number);
-                  const idxKey = co.index !== undefined ? co.index : (seq - 1);
-                  const coFin = coApplicantsFinancialDocs[idxKey] || {
-                    salarySlip: { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null },
-                    bankStatement: { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null },
-                  };
-
-                  return (
-                    <div className="bo-cv-person-doc-card" key={`co-bank-card-${co.index}`}>
-                      <div className="bo-cv-person-doc-header">
-                        <div className="bo-cv-person-doc-badge co-app">Co-Applicant {co.number}</div>
-                        <div className="bo-cv-person-doc-title">{co.name}</div>
-                      </div>
-
-                      <div className="bo-cv-financial-docs-container">
-                        <div className="bo-cv-subdoc-card">
-                          <div className="bo-cv-subdoc-header">
-                            <div className="bo-cv-subdoc-header-left">
-                              {LandmarkIcon ? <LandmarkIcon size={16} /> : (FileTextIcon && <FileTextIcon size={16} />)}
-                              <h4 className="bo-cv-subdoc-title">Co-Applicant {co.number} Bank Statement</h4>
-                            </div>
-                            <div className="bo-cv-subdoc-actions">
-                              {coFin.bankStatement?.rejection?.status === 'Resubmitted' && (
-                                <span className="bo-cv-pill-fetching">Resubmitted</span>
-                              )}
-                              {coFin.bankStatement?.rejection?.status === 'ReturnedToRM' && (
-                                <span className="bo-cv-pill-pending">Returned to RM</span>
-                              )}
-                              {coFin.bankStatement?.preview?.url && !coFin.bankStatement?.rejection && (
-                                <span className="bo-cv-pill-verified">Uploaded</span>
-                              )}
-                            </div>
-                          </div>
-
-                          {coFin.bankStatement?.loading ? (
-                            <div className="bo-cv-doc-loading-box">
-                              <div className="bo-cv-doc-loading-spinner" />
-                              <span>Loading Co-Applicant {co.number} bank statement...</span>
-                            </div>
-                          ) : coFin.bankStatement?.comparison ? (
-                            <div className="bo-cv-comparison-container">
-                              <div className="bo-cv-comparison-grid">
-                                {/* Old Version */}
-                                <div className="bo-cv-comparison-card bo-cv-comparison-card--old">
-                                  <div className="bo-cv-comparison-card-header">
-                                    <span className="bo-cv-comparison-tag">Old / Rejected Version</span>
-                                    <span className="bo-cv-comparison-subtag">Previously Rejected</span>
-                                  </div>
-                                  {coFin.bankStatement.comparison.oldDoc?.url ? (
-                                    <div className="bo-cv-image-preview-frame">
-                                      {isDocPdf(coFin.bankStatement.comparison.oldDoc) ? (
-                                        <div className="bo-cv-pdf-frame-wrapper">
-                                          <iframe
-                                            src={coFin.bankStatement.comparison.oldDoc.url}
-                                            title={`Co-Applicant ${co.number} Previous Bank Statement PDF`}
-                                            className="bo-cv-doc-iframe"
-                                          />
-                                        </div>
-                                      ) : (
-                                        <img
-                                          src={coFin.bankStatement.comparison.oldDoc.url}
-                                          alt={`Co-Applicant ${co.number} Previous Bank Statement`}
-                                          className="bo-cv-uncropped-img"
-                                        />
-                                      )}
-                                      <div className="bo-cv-doc-meta-row">
-                                        <div className="bo-cv-doc-meta-left">
-                                          <span><strong>File:</strong> {coFin.bankStatement.comparison.oldDoc.fileName || `CoApplicant_${co.number}_Bank_Statement_Old`}</span>
-                                          {coFin.bankStatement.comparison.oldDoc.size && (
-                                            <span><strong>Size:</strong> {formatFileSize(coFin.bankStatement.comparison.oldDoc.size)}</span>
-                                          )}
-                                        </div>
-                                        <button
-                                          type="button"
-                                          className="bo-btn bo-btn--outline bo-btn--sm"
-                                          onClick={() => handleDownloadFile(coFin.bankStatement.comparison.oldDoc.url, coFin.bankStatement.comparison.oldDoc.fileName || `CoApplicant_${co.number}_Bank_Statement_Old.${isDocPdf(coFin.bankStatement.comparison.oldDoc) ? 'pdf' : 'jpg'}`)}
-                                        >
-                                          {DownloadIcon && <DownloadIcon size={13} />}
-                                          <span>Download</span>
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="bo-cv-empty-doc-card--comparison">
-                                      <div className="bo-cv-empty-doc-icon">
-                                        {FileTextIcon && <FileTextIcon size={28} />}
-                                      </div>
-                                      <h4>No Archived Prior Version</h4>
-                                      <p>{coFin.bankStatement.comparison.note || 'Previous file version is not available from the document repository.'}</p>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* New Resubmitted Version */}
-                                <div className="bo-cv-comparison-card bo-cv-comparison-card--new">
-                                  <div className="bo-cv-comparison-card-header">
-                                    <span className="bo-cv-comparison-tag">New / Resubmitted Version</span>
-                                    <span className="bo-cv-comparison-subtag">Ready for Review</span>
-                                  </div>
-                                  {coFin.bankStatement.comparison.newDoc?.url ? (
-                                    <div className="bo-cv-image-preview-frame">
-                                      {isDocPdf(coFin.bankStatement.comparison.newDoc) ? (
-                                        <div className="bo-cv-pdf-frame-wrapper">
-                                          <iframe
-                                            src={coFin.bankStatement.comparison.newDoc.url}
-                                            title={`Co-Applicant ${co.number} New Bank Statement PDF`}
-                                            className="bo-cv-doc-iframe"
-                                          />
-                                        </div>
-                                      ) : (
-                                        <img
-                                          src={coFin.bankStatement.comparison.newDoc.url}
-                                          alt={`Co-Applicant ${co.number} New Bank Statement`}
-                                          className="bo-cv-uncropped-img"
-                                        />
-                                      )}
-                                      <div className="bo-cv-doc-meta-row">
-                                        <div className="bo-cv-doc-meta-left">
-                                          <span><strong>File:</strong> {coFin.bankStatement.comparison.newDoc.fileName || `CoApplicant_${co.number}_Bank_Statement_New`}</span>
-                                          {coFin.bankStatement.comparison.newDoc.size && (
-                                            <span><strong>Size:</strong> {formatFileSize(coFin.bankStatement.comparison.newDoc.size)}</span>
-                                          )}
-                                        </div>
-                                        <button
-                                          type="button"
-                                          className="bo-btn bo-btn--outline bo-btn--sm"
-                                          onClick={() => handleDownloadFile(coFin.bankStatement.comparison.newDoc.url, coFin.bankStatement.comparison.newDoc.fileName || `CoApplicant_${co.number}_Bank_Statement.${isDocPdf(coFin.bankStatement.comparison.newDoc) ? 'pdf' : 'jpg'}`)}
-                                        >
-                                          {DownloadIcon && <DownloadIcon size={13} />}
-                                          <span>Download</span>
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="bo-cv-empty-doc-card--comparison">
-                                      <div className="bo-cv-empty-doc-icon">
-                                        {FileTextIcon && <FileTextIcon size={28} />}
-                                      </div>
-                                      <h4>No Resubmitted Document</h4>
-                                      <p>RM has not uploaded a replacement Bank Statement yet.</p>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          ) : coFin.bankStatement?.preview?.url ? (
-                            <div className="bo-cv-image-preview-frame">
-                              {isDocPdf(coFin.bankStatement.preview) ? (
-                                <div className="bo-cv-pdf-frame-wrapper">
-                                  <iframe
-                                    src={coFin.bankStatement.preview.url}
-                                    title={`Co-Applicant ${co.number} Bank Statement PDF`}
-                                    className="bo-cv-doc-iframe"
-                                  />
-                                </div>
-                              ) : (
-                                <img
-                                  src={coFin.bankStatement.preview.url}
-                                  alt={`Co-Applicant ${co.number} Bank Statement`}
-                                  className="bo-cv-uncropped-img"
-                                />
-                              )}
-                              <div className="bo-cv-doc-meta-row">
-                                <div className="bo-cv-doc-meta-left">
-                                  <span><strong>File:</strong> {coFin.bankStatement.preview.fileName || `CoApplicant_${co.number}_Bank_Statement`}</span>
-                                  {coFin.bankStatement.preview.size && (
-                                    <span><strong>Size:</strong> {formatFileSize(coFin.bankStatement.preview.size)}</span>
-                                  )}
-                                </div>
-                                <button
-                                  type="button"
-                                  className="bo-btn bo-btn--outline bo-btn--sm"
-                                  onClick={() => handleDownloadFile(coFin.bankStatement.preview.url, coFin.bankStatement.preview.fileName || `CoApplicant_${co.number}_Bank_Statement.${isDocPdf(coFin.bankStatement.preview) ? 'pdf' : 'jpg'}`)}
-                                >
-                                  {DownloadIcon && <DownloadIcon size={13} />}
-                                  <span>Download</span>
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="bo-cv-empty-doc-card">
-                              <div className="bo-cv-empty-doc-icon">
-                                {LandmarkIcon ? <LandmarkIcon size={32} /> : (FileTextIcon && <FileTextIcon size={32} />)}
-                              </div>
-                              <h4>No Bank Statement Found</h4>
-                              <p>No bank statement was uploaded for Co-Applicant {co.number} ({co.name}).</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Step Verification Control & Remarks & Reject / Send to RM */}
-                <div className="verification-action-bar">
-                  <div className="bo-cv-verify-row">
-                    <label className="bo-cv-checkbox-label">
-                      <input
-                        type="checkbox"
-                        className="bo-cv-verify-checkbox"
-                        checked={Boolean(stepVerifications['BANK_STATEMENT']?.isVerified) && !hasUnresolvedRejectionForStep('BANK_STATEMENT')}
-                        disabled={isSavingStepVerification || hasUnresolvedRejectionForStep('BANK_STATEMENT')}
-                        title={hasUnresolvedRejectionForStep('BANK_STATEMENT') ? 'Resolve all returned/resubmitted documents before marking as Verified' : undefined}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          handleSaveStepVerification({
-                            stepCode: 'BANK_STATEMENT',
-                            isVerified: checked,
-                            remarks: stepRemarks[6] || '',
-                          });
-                        }}
-                      />
-                      <span className="bo-cv-verify-text">
-                        Mark Bank Statement as <strong>Verified</strong>
-                      </span>
-                    </label>
-                    {stepVerifications['BANK_STATEMENT']?.isVerified && !hasUnresolvedRejectionForStep('BANK_STATEMENT') && (
-                      <span className="bo-cv-verified-tag">
-                        ✓ Verified by {stepVerifications['BANK_STATEMENT']?.verifiedByBackOfficeId ? `Operator #${stepVerifications['BANK_STATEMENT'].verifiedByBackOfficeId}` : 'Back Office'}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="verification-remarks-field">
-                    <label htmlFor="bo-cv-remarks-bank">VERIFICATION REMARKS</label>
-                    <textarea
-                      id="bo-cv-remarks-bank"
-                      className="bo-cv-remarks-input"
-                      rows={3}
-                      placeholder="Enter remarks or discrepancy details for bank statement verification..."
-                      value={stepRemarks[6] || ''}
-                      onChange={(e) => {
-                        setStepRemarks({ ...stepRemarks, 6: e.target.value });
-                        if (stepFeedback[6]) setStepFeedback({ ...stepFeedback, 6: null });
-                      }}
-                      onBlur={() => {
-                        if (stepVerifications['BANK_STATEMENT']?.isVerified && !hasUnresolvedRejectionForStep('BANK_STATEMENT')) {
-                          handleSaveStepVerification({
-                            stepCode: 'BANK_STATEMENT',
-                            isVerified: true,
-                            remarks: stepRemarks[6] || '',
-                          });
-                        }
-                      }}
-                    />
-                  </div>
-
-                  <div className="verification-buttons-row">
-                    {/* Verify Resubmitted Applicant Bank Statement */}
-                    {(() => {
-                      const rej = getActiveRejectionForApplicantDoc(bankStatementDocTypeId, 'BANK_STATEMENT');
-                      if (rej && rej.status === 'Resubmitted') {
-                        return (
-                          <button
-                            type="button"
-                            className="verify-resubmit-btn"
-                            disabled={isVerifyingRejection}
-                            onClick={() => handleVerifyRejection(rej.backOfficeDocumentRejectionId, 'Applicant Bank Statement', 6)}
-                          >
-                            <span>{isVerifyingRejection ? 'Verifying...' : '✓ Verify Applicant Bank Statement'}</span>
-                          </button>
-                        );
-                      }
-                      return null;
-                    })()}
-
-                    {/* Verify Resubmitted Co-Applicant Bank Statement */}
-                    {coApplicants.map((co) => {
-                      const seq = co.sequence !== undefined ? co.sequence : (co.index !== undefined ? co.index + 1 : co.number);
-                      const coBankRej = getActiveRejectionForCoApplicantDoc(seq, bankStatementDocTypeId, 'BANK_STATEMENT');
-                      if (coBankRej && coBankRej.status === 'Resubmitted') {
-                        return (
-                          <button
-                            key={`verify-co-bank-${co.index}`}
-                            type="button"
-                            className="verify-resubmit-btn"
-                            style={{ background: '#047857' }}
-                            disabled={isVerifyingRejection}
-                            onClick={() => handleVerifyRejection(coBankRej.backOfficeDocumentRejectionId, `Co-Applicant ${co.number} Bank Statement`, 6)}
-                          >
-                            <span>{isVerifyingRejection ? 'Verifying...' : `✓ Verify Co-App ${co.number} Bank Statement`}</span>
-                          </button>
-                        );
-                      }
-                      return null;
-                    })}
-
-                    {/* Reject Applicant Bank Statement */}
-                    <button
-                      type="button"
-                      className="reject-rm-btn"
-                      disabled={isSubmittingRejection}
-                      onClick={() => handleOpenRejectConfirm(6, 'Applicant Bank Statement', null, false, 0, bankStatementDocTypeId, 'APPLICANT_BANK_STATEMENT')}
-                    >
-                      <span>{isSubmittingRejection ? 'Submitting...' : 'Return Applicant to RM'}</span>
-                    </button>
-
-                    {/* Reject Co-Applicant Bank Statement */}
-                    {coApplicants.map((co) => {
-                      const seq = co.sequence !== undefined ? co.sequence : (co.index !== undefined ? co.index + 1 : co.number);
-                      return (
-                        <button
-                          key={`reject-co-bank-${co.index}`}
-                          type="button"
-                          className="reject-rm-btn"
-                          style={{ background: '#fff1f2', color: '#be123c', border: '1px solid #fecdd3' }}
-                          disabled={isSubmittingRejection}
-                          onClick={() => handleOpenRejectConfirm(6, `Co-Applicant ${co.number} Bank Statement`, null, true, seq, bankStatementDocTypeId, `CO_APPLICANT_${seq}_BANK_STATEMENT`)}
-                        >
-                          <span>{isSubmittingRejection ? 'Submitting...' : `Return Co-Applicant ${co.number} to RM`}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {stepFeedback[6] && (
-                  <div className={`bo-cv-feedback-alert ${stepFeedback[6].type === 'error' ? 'is-error' : 'is-success'}`}>
-                    {stepFeedback[6].message}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════════════
-              STEP 07: ZIP / CUSTOMER ARCHIVE
-          ══════════════════════════════════════════════════════════════════ */}
-          {activeStep === 7 && (
-            <div className="bo-cv-doc-step-inner">
-              <div className="bo-cv-step-panel-header">
-                <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">07</div>
-                  <div>
-                    <h2 className="bo-cv-step-panel-title">ZIP / Customer Archive</h2>
-                    <p className="bo-cv-step-panel-desc">
-                      Inspect and download customer ZIP archives, manual document packages, and supplementary uploads.
-                    </p>
-                  </div>
-                </div>
-                <span className="bo-cv-step-tag-pill">Step 07 of 17</span>
-              </div>
-
-              <div className="bo-cv-doc-display-container">
-                {/* Active Rejection Banners across Step 07 */}
-                {(() => {
-                  const allStep7Rejections = [
-                    getActiveRejectionForApplicant(7),
-                    ...coApplicants.flatMap((co) => {
-                      return [
-                        getActiveRejectionForCoApplicant(co.kycDocumentId, 7),
-                      ];
-                    }),
-                  ].filter(Boolean);
-
-                  if (allStep7Rejections.length === 0) return null;
-
-                  return (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-                      {allStep7Rejections.map((rej) => (
-                        <div
-                          key={`step7-rej-banner-${rej.backOfficeDocumentRejectionId}`}
-                          className={`rejection-status-banner rejection-status--${(rej.status || '').toLowerCase()}`}
-                        >
-                          <div className="rejection-status-header">
-                            <strong>
-                              {rej.status === 'ReturnedToRM' && `⚠️ Document Returned to RM: ${rej.rejectedDocumentType || 'ZIP Archive'}`}
-                              {rej.status === 'Resubmitted' && `🔄 Document Resubmitted by RM: ${rej.rejectedDocumentType || 'ZIP Archive'} (Ready for Verification)`}
-                              {rej.status === 'Verified' && `✓ Document Verified & Approved: ${rej.rejectedDocumentType || 'ZIP Archive'}`}
-                            </strong>
-                            <span className="rejection-status-date">
-                              {rej.resubmittedAt
-                                ? `Resubmitted: ${new Date(rej.resubmittedAt).toLocaleString()}`
-                                : rej.createdAt
-                                ? `Returned: ${new Date(rej.createdAt).toLocaleString()}`
-                                : ''}
-                            </span>
-                          </div>
-                          {rej.rejectionRemarks && (
-                            <p className="rejection-status-remarks">
-                              <strong>Remarks:</strong> {rej.rejectionRemarks}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-
-                {/* 1. Applicant Manual / ZIP Documents */}
-                <div className="bo-cv-person-doc-card">
-                  <div className="bo-cv-person-doc-header">
-                    <div className="bo-cv-person-doc-badge">Applicant</div>
-                    <div className="bo-cv-person-doc-title">{verificationData.customerName}</div>
-                  </div>
-
-                  <div className="bo-cv-financial-docs-container">
-                    <div className="bo-cv-subdoc-card">
-                      <div className="bo-cv-subdoc-header">
-                        <div className="bo-cv-subdoc-header-left">
-                          {FileCheckIcon && <FileCheckIcon size={16} />}
-                          <h4 className="bo-cv-subdoc-title">ZIP Archive & Manual Documents</h4>
-                        </div>
-                        <div className="bo-cv-subdoc-actions">
-                          {applicantManualDocs.length > 0 && (
-                            <span className="bo-cv-pill-verified">{applicantManualDocs.length} {applicantManualDocs.length === 1 ? 'file' : 'files'}</span>
-                          )}
-                        </div>
-                      </div>
-
-                      {applicantManualDocs.length > 0 ? (
-                        <div className="bo-cv-manual-docs-list" style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-                          {applicantManualDocs.map((doc, idx) => (
-                            <div className="bo-cv-file-card" key={doc.id || `app-manual-${idx}`}>
-                              <div className="bo-cv-file-card-info">
-                                <div className="bo-cv-file-card-icon">
-                                  {FileCheckIcon && <FileCheckIcon size={22} />}
-                                </div>
-                                <div>
-                                  <h4 className="bo-cv-file-name" title={doc.fileName}>{doc.fileName}</h4>
-                                  <div className="bo-cv-file-size" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
-                                    <span>{doc.fileTypeLabel}</span>
-                                    <span>•</span>
-                                    <span style={{ color: '#15803d', fontWeight: 600 }}>Uploaded successfully</span>
-                                    {doc.size && <span>• {formatFileSize(doc.size)}</span>}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="bo-cv-file-card-actions">
-                                <button
-                                  type="button"
-                                  className="bo-btn bo-btn--primary bo-btn--sm"
-                                  onClick={() => handleDownloadManualDoc(doc)}
-                                  title={`Download ${doc.fileName}`}
-                                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                                >
-                                  {DownloadIcon && <DownloadIcon size={13} />}
-                                  <span>Download</span>
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="bo-cv-empty-doc-card">
-                          <div className="bo-cv-empty-doc-icon">
-                            {FileCheckIcon && <FileCheckIcon size={36} />}
-                          </div>
-                          <h4>No ZIP / Manual Documents Found</h4>
-                          <p>No compressed document bundle was uploaded for applicant {verificationData.customerName}.</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Co-Applicant Manual / ZIP Documents */}
-                {coApplicants.map((co) => {
-                  const coDocs = coApplicantsManualDocs[co.index] || [];
-
-                  return (
-                    <div className="bo-cv-person-doc-card" key={`co-zip-card-${co.index}`}>
-                      <div className="bo-cv-person-doc-header">
-                        <div className="bo-cv-person-doc-badge co-app">Co-Applicant {co.number}</div>
-                        <div className="bo-cv-person-doc-title">{co.name}</div>
-                      </div>
-
-                      <div className="bo-cv-financial-docs-container">
-                        <div className="bo-cv-subdoc-card">
-                          <div className="bo-cv-subdoc-header">
-                            <div className="bo-cv-subdoc-header-left">
-                              {FileCheckIcon && <FileCheckIcon size={16} />}
-                              <h4 className="bo-cv-subdoc-title">Co-Applicant {co.number} ZIP & Manual Documents</h4>
-                            </div>
-                            <div className="bo-cv-subdoc-actions">
-                              {coDocs.length > 0 && (
-                                <span className="bo-cv-pill-verified">{coDocs.length} {coDocs.length === 1 ? 'file' : 'files'}</span>
-                              )}
-                            </div>
-                          </div>
-
-                          {coDocs.length > 0 ? (
-                            <div className="bo-cv-manual-docs-list" style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-                              {coDocs.map((doc, idx) => (
-                                <div className="bo-cv-file-card" key={doc.id || `co-manual-${co.index}-${idx}`}>
-                                  <div className="bo-cv-file-card-info">
-                                    <div className="bo-cv-file-card-icon">
-                                      {FileCheckIcon && <FileCheckIcon size={22} />}
-                                    </div>
-                                    <div>
-                                      <h4 className="bo-cv-file-name" title={doc.fileName}>{doc.fileName}</h4>
-                                      <div className="bo-cv-file-size" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
-                                        <span>{doc.fileTypeLabel}</span>
-                                        <span>•</span>
-                                        <span style={{ color: '#15803d', fontWeight: 600 }}>Uploaded successfully</span>
-                                        {doc.size && <span>• {formatFileSize(doc.size)}</span>}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="bo-cv-file-card-actions">
-                                    <button
-                                      type="button"
-                                      className="bo-btn bo-btn--primary bo-btn--sm"
-                                      onClick={() => handleDownloadManualDoc(doc)}
-                                      title={`Download ${doc.fileName}`}
-                                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                                    >
-                                      {DownloadIcon && <DownloadIcon size={13} />}
-                                      <span>Download</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="bo-cv-empty-doc-card">
-                              <div className="bo-cv-empty-doc-icon">
-                                {FileCheckIcon && <FileCheckIcon size={36} />}
-                              </div>
-                              <h4>No ZIP / Manual Documents Found</h4>
-                              <p>No compressed archive was uploaded for Co-Applicant {co.number} ({co.name}).</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Step Verification Control & Remarks & Reject / Send to RM */}
-                <div className="verification-action-bar">
-                  <div className="bo-cv-verify-row">
-                    <label className="bo-cv-checkbox-label">
-                      <input
-                        type="checkbox"
-                        className="bo-cv-verify-checkbox"
-                        checked={Boolean(stepVerifications['ZIP_ARCHIVE']?.isVerified) && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE')}
-                        disabled={isSavingStepVerification || hasUnresolvedRejectionForStep('ZIP_ARCHIVE')}
-                        title={hasUnresolvedRejectionForStep('ZIP_ARCHIVE') ? 'Resolve all returned/resubmitted documents before marking as Verified' : undefined}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          handleSaveStepVerification({
-                            stepCode: 'ZIP_ARCHIVE',
-                            isVerified: checked,
-                            remarks: stepRemarks[7] || '',
-                          });
-                        }}
-                      />
-                      <span className="bo-cv-verify-text">
-                        Mark ZIP / Customer Archive as <strong>Verified</strong>
-                      </span>
-                    </label>
-                    {stepVerifications['ZIP_ARCHIVE']?.isVerified && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE') && (
-                      <span className="bo-cv-verified-tag">
-                        ✓ Verified by {stepVerifications['ZIP_ARCHIVE']?.verifiedByBackOfficeId ? `Operator #${stepVerifications['ZIP_ARCHIVE'].verifiedByBackOfficeId}` : 'Back Office'}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="verification-remarks-field">
-                    <label htmlFor="bo-cv-remarks-zip">VERIFICATION REMARKS</label>
-                    <textarea
-                      id="bo-cv-remarks-zip"
-                      className="bo-cv-remarks-input"
-                      rows={3}
-                      placeholder="Enter remarks or discrepancy details for customer archive / ZIP documents..."
-                      value={stepRemarks[7] || ''}
-                      onChange={(e) => {
-                        setStepRemarks({ ...stepRemarks, 7: e.target.value });
-                        if (stepFeedback[7]) setStepFeedback({ ...stepFeedback, 7: null });
-                      }}
-                      onBlur={() => {
-                        if (stepVerifications['ZIP_ARCHIVE']?.isVerified && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE')) {
-                          handleSaveStepVerification({
-                            stepCode: 'ZIP_ARCHIVE',
-                            isVerified: true,
-                            remarks: stepRemarks[7] || '',
-                          });
-                        }
-                      }}
-                    />
-                  </div>
-
-                  <div className="verification-buttons-row">
-                    {/* Verify Resubmitted Applicant ZIP */}
-                    {(() => {
-                      const appRej = getActiveRejectionForApplicant(7);
-                      if (appRej && appRej.status === 'Resubmitted') {
-                        return (
-                          <button
-                            type="button"
-                            className="verify-resubmit-btn"
-                            disabled={isVerifyingRejection}
-                            onClick={() => handleVerifyRejection(appRej.backOfficeDocumentRejectionId, 'Applicant ZIP File', 7)}
-                          >
-                            <span>{isVerifyingRejection ? 'Verifying...' : '✓ Verify Applicant ZIP'}</span>
-                          </button>
-                        );
-                      }
-                      return null;
-                    })()}
-
-                    {/* Verify Resubmitted Co-Applicant ZIP */}
-                    {coApplicants.map((co) => {
-                      const coZipRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 7);
-                      if (coZipRej && coZipRej.status === 'Resubmitted') {
-                        return (
-                          <button
-                            key={`verify-co-zip-${co.index}`}
-                            type="button"
-                            className="verify-resubmit-btn"
-                            style={{ background: '#047857' }}
-                            disabled={isVerifyingRejection}
-                            onClick={() => handleVerifyRejection(coZipRej.backOfficeDocumentRejectionId, `Co-Applicant ${co.number} ZIP File`, 7)}
-                          >
-                            <span>{isVerifyingRejection ? 'Verifying...' : `✓ Verify Co-App ${co.number} ZIP`}</span>
-                          </button>
-                        );
-                      }
-                      return null;
-                    })}
-
-                    {/* Reject Applicant ZIP */}
-                    <button
-                      type="button"
-                      className="reject-rm-btn"
-                      disabled={isSubmittingRejection}
-                      onClick={() => handleOpenRejectConfirm(7, 'Applicant ZIP File', null, false, 0, null, 'APPLICANT_ZIP')}
-                    >
-                      <span>{isSubmittingRejection ? 'Submitting...' : 'Return Applicant to RM'}</span>
-                    </button>
-
-                    {/* Reject Co-Applicant ZIP */}
-                    {coApplicants.map((co) => {
-                      const seq = co.sequence !== undefined ? co.sequence : (co.index !== undefined ? co.index + 1 : co.number);
-                      return (
-                        <button
-                          key={`reject-co-zip-${co.index}`}
-                          type="button"
-                          className="reject-rm-btn"
-                          style={{ background: '#fff1f2', color: '#be123c', border: '1px solid #fecdd3' }}
-                          disabled={isSubmittingRejection}
-                          onClick={() => handleOpenRejectConfirm(7, `Co-Applicant ${co.number} ZIP File`, co.kycDocumentId, true, seq, null, `CO_APPLICANT_${co.number}_ZIP`)}
-                        >
-                          <span>{isSubmittingRejection ? 'Submitting...' : `Return Co-Applicant ${co.number} to RM`}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {stepFeedback[7] && (
-                  <div className={`bo-cv-feedback-alert ${stepFeedback[7].type === 'error' ? 'is-error' : 'is-success'}`}>
-                    {stepFeedback[7].message}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-              </div>
-            </div>
-          )}
-
-{/* ══════════════════════════════════════════════════════════════════
-              STEP 08: PROPERTY FI (PLACEHOLDER)
-          ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 8 && (
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">08</div>
+                  <div className="bo-cv-step-badge-num">03</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Property FI</h2>
                     <p className="bo-cv-step-panel-desc">Property Field Investigation details and collateral valuation.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 08 of 17</span>
+                <span className="bo-cv-step-tag-pill">Step 03 of 12</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -9481,13 +7532,13 @@ export default function CustomerVerification() {
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">09</div>
+                  <div className="bo-cv-step-badge-num">04</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Office FI</h2>
                     <p className="bo-cv-step-panel-desc">Workplace and business establishment field investigation.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 09 of 17</span>
+                <span className="bo-cv-step-tag-pill">Step 04 of 12</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -9508,13 +7559,13 @@ export default function CustomerVerification() {
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">10</div>
+                  <div className="bo-cv-step-badge-num">05</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Residence FI</h2>
                     <p className="bo-cv-step-panel-desc">Physical residence field verification and neighbor check.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 10 of 17</span>
+                <span className="bo-cv-step-tag-pill">Step 05 of 12</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -9535,7 +7586,7 @@ export default function CustomerVerification() {
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">11</div>
+                  <div className="bo-cv-step-badge-num">06</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Legal Opinion</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -9543,7 +7594,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 11 of 17</span>
+                <span className="bo-cv-step-tag-pill">Step 06 of 12</span>
               </div>
 
               <div className="bo-cv-upload-container">
@@ -9677,7 +7728,7 @@ export default function CustomerVerification() {
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">12</div>
+                  <div className="bo-cv-step-badge-num">07</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Technical Value</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -9685,7 +7736,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 12 of 17</span>
+                <span className="bo-cv-step-tag-pill">Step 07 of 12</span>
               </div>
 
               <div className="bo-cv-upload-container">
@@ -9827,7 +7878,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 13 of 17</span>
+                <span className="bo-cv-step-tag-pill">Step 08 of 12</span>
               </div>
 
               {/* Manual CIBIL PAN Card Upload Reference Section */}
@@ -10367,7 +8418,7 @@ export default function CustomerVerification() {
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">14</div>
+                  <div className="bo-cv-step-badge-num">09</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Personal Discussion (PD) Verification</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -10375,7 +8426,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 14 of 17</span>
+                <span className="bo-cv-step-tag-pill">Step 09 of 12</span>
               </div>
 
               <div className="bo-cv-pd-container">
@@ -10454,7 +8505,7 @@ export default function CustomerVerification() {
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">15</div>
+                  <div className="bo-cv-step-badge-num">10</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Eligibility Calculation (FOIR)</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -10462,7 +8513,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 15 of 17</span>
+                <span className="bo-cv-step-tag-pill">Step 10 of 12</span>
               </div>
 
               {/* ── 9. FOIR ELIGIBILITY CALCULATION SECTION ─────────────────── */}
@@ -10690,7 +8741,7 @@ export default function CustomerVerification() {
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">16</div>
+                  <div className="bo-cv-step-badge-num">11</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Eligibility Assessment</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -10698,7 +8749,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 16 of 17</span>
+                <span className="bo-cv-step-tag-pill">Step 11 of 12</span>
               </div>
 
               <div className="bo-cv-assess-container">
@@ -12711,7 +10762,7 @@ export default function CustomerVerification() {
                       </p>
                     </div>
                   </div>
-                  <span className="bo-cv-step-tag-pill">Step 17 of 17</span>
+                  <span className="bo-cv-step-tag-pill">Step 12 of 12</span>
                 </div>
 
                 <div className="bo-cv-placeholder-panel">
@@ -12893,15 +10944,15 @@ export default function CustomerVerification() {
         >
           <div className="bo-cv-confirm-modal-card">
             <div className="bo-cv-confirm-modal-header">
-              <div className="bo-cv-confirm-modal-icon-badge">
-                {AlertTriangleIcon ? <AlertTriangleIcon size={20} /> : <span>⚠️</span>}
+              <div className="bo-cv-confirm-modal-icon-badge" style={{ background: '#fef2f2', color: '#dc2626' }}>
+                {RotateCcwIcon ? <RotateCcwIcon size={18} /> : <span>↩</span>}
               </div>
               <div className="bo-cv-confirm-modal-title-group">
                 <h3 id="bo-cv-confirm-modal-title" className="bo-cv-confirm-modal-title">
-                  Confirm Document Rejection
+                  Return Document to RM
                 </h3>
                 <p className="bo-cv-confirm-modal-subtitle">
-                  This action will return the document to the RM for re-upload.
+                  {rejectConfirmModal.stepLabel ? `Document: ${rejectConfirmModal.stepLabel}` : 'This action will return the document to the RM for re-upload.'}
                 </p>
               </div>
               <button
@@ -12917,14 +10968,34 @@ export default function CustomerVerification() {
 
             <div className="bo-cv-confirm-modal-body">
               <p className="bo-cv-confirm-modal-question">
-                {getRejectConfirmMessage(rejectConfirmModal.stepLabel)}
+                Are you sure you want to return this document?
               </p>
 
               <div className="bo-cv-confirm-remarks-block">
-                <span className="bo-cv-confirm-remarks-label">ENTERED REMARKS</span>
-                <div className="bo-cv-confirm-remarks-preview">
-                  {rejectConfirmModal.remarks}
-                </div>
+                <label className="bo-cv-confirm-remarks-label" htmlFor="return-modal-remarks">
+                  Remarks <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <textarea
+                  id="return-modal-remarks"
+                  className={`bo-cv-confirm-remarks-textarea ${rejectConfirmModal.error ? 'is-invalid' : ''}`}
+                  value={rejectConfirmModal.remarks || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setRejectConfirmModal((prev) => ({
+                      ...prev,
+                      remarks: val,
+                      error: val.trim() ? '' : prev.error,
+                    }));
+                  }}
+                  placeholder="Enter rejection reason / remarks for RM..."
+                  rows={3}
+                  autoFocus
+                />
+                {rejectConfirmModal.error && (
+                  <div className="bo-cv-confirm-remarks-error">
+                    {rejectConfirmModal.error}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -12943,7 +11014,7 @@ export default function CustomerVerification() {
                 onClick={handleConfirmReject}
                 disabled={isSubmittingRejection}
               >
-                {isSubmittingRejection ? 'Rejecting...' : 'Yes, Reject'}
+                {isSubmittingRejection ? 'Sending...' : 'Send to RM'}
               </button>
             </div>
           </div>
@@ -13092,6 +11163,246 @@ export default function CustomerVerification() {
           </div>
         </div>
       )}
+      {/* ── Document Preview / Comparison Lightbox Modal ── */}
+      {previewModal.open && (
+        <div
+          className="bo-cv-preview-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bo-cv-preview-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              handleClosePreviewModal();
+            }
+          }}
+        >
+          <div className={`bo-cv-preview-modal-dialog ${previewModal.comparison ? 'bo-cv-preview-modal-dialog--comparison' : ''}`}>
+            {/* Modal Header */}
+            <div className="bo-cv-preview-modal-header">
+              <div className="bo-cv-preview-modal-title-group">
+                <div className="bo-cv-preview-modal-icon-badge">
+                  {FileTextIcon ? <FileTextIcon size={18} /> : <span>📄</span>}
+                </div>
+                <div>
+                  <h3 id="bo-cv-preview-modal-title" className="bo-cv-preview-modal-title">
+                    {previewModal.title}
+                  </h3>
+                  <p className="bo-cv-preview-modal-subtitle">
+                    {previewModal.personName ? `${previewModal.personLabel}: ${previewModal.personName}` : previewModal.personLabel}
+                    {previewModal.fileName && previewModal.fileName !== '—' && ` • ${previewModal.fileName}`}
+                    {previewModal.fileSize && ` (${formatFileSize(previewModal.fileSize)})`}
+                    {previewModal.uploadDate && ` • Uploaded: ${formatUploadDate(previewModal.uploadDate)}`}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="bo-cv-preview-modal-close"
+                onClick={handleClosePreviewModal}
+                aria-label="Close preview modal"
+              >
+                {XIcon ? <XIcon size={18} /> : <span>×</span>}
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="bo-cv-preview-modal-body">
+              {/* If comparison exists (Resubmitted document) */}
+              {previewModal.comparison ? (
+                <div className="bo-cv-preview-comparison-container">
+                  <div className="bo-cv-preview-resubmit-alert">
+                    <div className="bo-cv-preview-resubmit-alert-left">
+                      <strong>🔄 Resubmitted Document Comparison</strong>
+                      <span>Compare previous rejected document with new resubmitted document.</span>
+                    </div>
+                    {previewModal.rejectionId && (
+                      <button
+                        type="button"
+                        className="bo-cv-preview-btn-verify-resubmitted"
+                        disabled={isVerifyingRejection}
+                        onClick={async () => {
+                          await handleVerifyRejection(
+                            previewModal.rejectionId,
+                            previewModal.stepLabel,
+                            previewModal.stepNum
+                          );
+                          handleClosePreviewModal();
+                        }}
+                      >
+                        {isVerifyingRejection ? 'Verifying...' : '✓ Verify Resubmitted Document'}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="bo-cv-preview-comparison-grid">
+                    {/* Previous (Rejected) Document */}
+                    <div className="bo-cv-preview-comp-col is-previous">
+                      <div className="bo-cv-preview-comp-header">
+                        <span className="bo-cv-preview-comp-badge is-rejected">Previous Version (Rejected)</span>
+                        {(previewModal.comparison.rejection?.rejectionRemarks || previewModal.comparison.rejection?.remarks) && (
+                          <div className="bo-cv-preview-comp-reason">
+                            <strong>Reason: </strong>{previewModal.comparison.rejection.rejectionRemarks || previewModal.comparison.rejection.remarks}
+                          </div>
+                        )}
+                      </div>
+                      <div className="bo-cv-preview-comp-content">
+                        {previewModal.comparison.oldDoc?.url ? (
+                          isDocPdf(previewModal.comparison.oldDoc) ? (
+                            <iframe
+                              src={`${previewModal.comparison.oldDoc.url}#toolbar=0`}
+                              title="Previous Version"
+                              className="bo-cv-preview-comp-iframe"
+                            />
+                          ) : (
+                            <img
+                              src={previewModal.comparison.oldDoc.url}
+                              alt="Previous Version"
+                              className="bo-cv-preview-comp-img"
+                            />
+                          )
+                        ) : (
+                          <div className="bo-cv-preview-empty-box">
+                            <span>Previous version not available for preview</span>
+                          </div>
+                        )}
+                      </div>
+                      {previewModal.comparison.oldDoc?.url && (
+                        <div className="bo-cv-preview-comp-footer">
+                          <button
+                            type="button"
+                            className="bo-cv-btn-download-sm"
+                            onClick={() => handleDownloadFile(previewModal.comparison.oldDoc.url, previewModal.comparison.oldDoc.fileName || 'previous_document')}
+                          >
+                            {DownloadIcon ? <DownloadIcon size={13} /> : '⬇'} Download Old File
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* New (Resubmitted) Document */}
+                    <div className="bo-cv-preview-comp-col is-resubmitted">
+                      <div className="bo-cv-preview-comp-header">
+                        <span className="bo-cv-preview-comp-badge is-resubmitted">New Version (Resubmitted)</span>
+                        <div className="bo-cv-preview-comp-reason">
+                          Ready for Underwriting Verification
+                        </div>
+                      </div>
+                      <div className="bo-cv-preview-comp-content">
+                        {previewModal.comparison.newDoc?.url ? (
+                          isDocPdf(previewModal.comparison.newDoc) ? (
+                            <iframe
+                              src={`${previewModal.comparison.newDoc.url}#toolbar=1`}
+                              title="Resubmitted Version"
+                              className="bo-cv-preview-comp-iframe"
+                            />
+                          ) : (
+                            <img
+                              src={previewModal.comparison.newDoc.url}
+                              alt="Resubmitted Version"
+                              className="bo-cv-preview-comp-img"
+                            />
+                          )
+                        ) : (
+                          <div className="bo-cv-preview-empty-box">
+                            <span>Resubmitted document preview loading or not available</span>
+                          </div>
+                        )}
+                      </div>
+                      {previewModal.comparison.newDoc?.url && (
+                        <div className="bo-cv-preview-comp-footer">
+                          <button
+                            type="button"
+                            className="bo-cv-btn-download-sm"
+                            onClick={() => handleDownloadFile(previewModal.comparison.newDoc.url, previewModal.comparison.newDoc.fileName || 'resubmitted_document')}
+                          >
+                            {DownloadIcon ? <DownloadIcon size={13} /> : '⬇'} Download New File
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : previewModal.isZip ? (
+                /* ZIP / Archive manual docs view */
+                <div className="bo-cv-preview-zip-view">
+                  <div className="bo-cv-preview-zip-banner">
+                    <div className="bo-cv-preview-zip-icon">
+                      {FileCheckIcon ? <FileCheckIcon size={32} /> : <span>📦</span>}
+                    </div>
+                    <div>
+                      <h4>{previewModal.fileName || 'Customer Document Archive'}</h4>
+                      <p>
+                        {previewModal.manualDocs?.length > 0
+                          ? `${previewModal.manualDocs.length} persistent document(s) uploaded in customer archive.`
+                          : 'Archive package uploaded for customer verification.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {previewModal.manualDocs && previewModal.manualDocs.length > 0 && (
+                    <div className="bo-cv-preview-zip-list">
+                      <div className="bo-cv-preview-zip-list-title">Archive Files</div>
+                      {previewModal.manualDocs.map((doc, idx) => (
+                        <div key={doc.id || doc.agentCustomerDocumentId || idx} className="bo-cv-preview-zip-item">
+                          <div className="bo-cv-preview-zip-item-left">
+                            <span className="bo-cv-preview-zip-item-num">{idx + 1}</span>
+                            <span className="bo-cv-preview-zip-item-name">{doc.fileName || doc.documentTypeName || `Document_${idx + 1}`}</span>
+                            {doc.fileSize && <span className="bo-cv-preview-zip-item-size">({formatFileSize(doc.fileSize)})</span>}
+                          </div>
+                          <button
+                            type="button"
+                            className="bo-cv-btn-download-sm"
+                            onClick={() => handleDownloadManualDoc(doc)}
+                          >
+                            {DownloadIcon ? <DownloadIcon size={13} /> : '⬇'} Download
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : previewModal.url ? (
+                /* Regular document preview: Image or PDF */
+                <div className="bo-cv-preview-standard-view">
+                  {previewModal.isPdf ? (
+                    <div className="bo-cv-preview-iframe-wrapper">
+                      <iframe
+                        src={`${previewModal.url}#toolbar=1`}
+                        title={previewModal.fileName || 'Document Preview'}
+                        className="bo-cv-preview-iframe"
+                      />
+                    </div>
+                  ) : (
+                    <div className="bo-cv-preview-img-wrapper">
+                      <img
+                        src={previewModal.url}
+                        alt={previewModal.fileName || 'Document Preview'}
+                        className="bo-cv-preview-img"
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="bo-cv-preview-empty-box">
+                  <p>Document preview is currently unavailable or still loading.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bo-cv-preview-modal-footer">
+              <button
+                type="button"
+                className="bo-cv-preview-btn-close"
+                onClick={handleClosePreviewModal}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
