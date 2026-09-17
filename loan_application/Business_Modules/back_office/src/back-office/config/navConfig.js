@@ -77,6 +77,14 @@ export const NAV_ITEMS = [
     badgeKey: null,
     section:  'OPERATIONS',
   },
+  {
+    id:       'submit-to-credit',
+    label:    'Submit to Credit Manager',
+    icon:     'Send',
+    route:    ROUTES.SUBMIT_TO_CREDIT,
+    badgeKey: null,
+    section:  'OPERATIONS',
+  },
 
   /* ==========================================
      BOTTOM (pinned — Profile, Logout)

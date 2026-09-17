@@ -28,6 +28,8 @@ import RMMonitoring from '../pages/RMMonitoring/RMMonitoring';
 import AgentMonitoring from '../pages/AgentMonitoring/AgentMonitoring';
 import CustomerMonitoring from '../pages/CustomerMonitoring/CustomerMonitoring';
 import CustomerVerification from '../pages/CustomerVerification/CustomerVerification';
+import SubmitToCredit from '../pages/SubmitToCredit/SubmitToCredit';
+import SubmitToCreditDetail from '../pages/SubmitToCredit/SubmitToCreditDetail';
 import Profile from '../pages/Profile/Profile';
 import PdfView from '../../../../rm_modules/src/pages/PdfView/PdfView';
 import { ApplicationDraftProvider } from '../../../../rm_modules/src/state/ApplicationDraftContext';
@@ -214,6 +216,36 @@ export default function AppRoutes() {
               <ApplicationDraftProvider>
                 <PdfView />
               </ApplicationDraftProvider>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ---- Submit to Credit Manager (Queue - Protected) ---- */}
+        <Route
+          path={ROUTES.SUBMIT_TO_CREDIT}
+          element={
+            <ProtectedRoute>
+              <LayoutWrapper
+                title="Submit to Credit Manager"
+                subtitle="Review completed applications and prepare documents for Credit Manager submission."
+              >
+                <SubmitToCredit />
+              </LayoutWrapper>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ---- Submit to Credit Manager Detail (Review & Documents - Protected) ---- */}
+        <Route
+          path={ROUTES.SUBMIT_TO_CREDIT_DETAIL}
+          element={
+            <ProtectedRoute>
+              <LayoutWrapper
+                title="Application Review & Documents"
+                subtitle="Review submitted loan application form and Back Office verification report before submission."
+              >
+                <SubmitToCreditDetail />
+              </LayoutWrapper>
             </ProtectedRoute>
           }
         />

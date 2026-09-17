@@ -14,7 +14,8 @@ const Roles = () => {
   const [rolesData, setRolesData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null, name: '' });
+  const [isDeleting, setIsDeleting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(5);
 
@@ -35,17 +36,22 @@ const Roles = () => {
   };
 
   const handleDeleteClick = (id) => {
-    setDeleteModal({ isOpen: true, id });
+    const role = rolesData.find(r => (r.id || r.roleId || r.permissionId) === id);
+    setDeleteModal({ isOpen: true, id, name: role?.name || '' });
   };
 
   const confirmDelete = async () => {
+    if (!deleteModal.id || isDeleting) return;
+    setIsDeleting(true);
     try {
       await permissionService.deletePermission(deleteModal.id);
       await fetchPermissions(); // Refresh
+      setDeleteModal({ isOpen: false, id: null, name: '' });
     } catch (err) {
-      alert(err.message || 'Failed to delete role');
+      setError(err.message || 'Failed to delete role');
+      setDeleteModal({ isOpen: false, id: null, name: '' });
     } finally {
-      setDeleteModal({ isOpen: false, id: null });
+      setIsDeleting(false);
     }
   };
 
@@ -201,10 +207,13 @@ const Roles = () => {
       
       <ConfirmModal 
         isOpen={deleteModal.isOpen}
-        onClose={() => setDeleteModal({ isOpen: false, id: null })}
+        onClose={() => !isDeleting && setDeleteModal({ isOpen: false, id: null, name: '' })}
         onConfirm={confirmDelete}
         title="Delete Role"
         message="Are you sure you want to delete this role? This action cannot be undone."
+        details={deleteModal.name ? `Role: "${deleteModal.name}"` : null}
+        confirmText="Delete Role"
+        isLoading={isDeleting}
       />
     </DashboardLayout>
   );

@@ -15,6 +15,14 @@ export default function CustomerAllocations() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
+
+  const showToast = (message, type = 'info') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast({ show: false, message: '', type: 'info' });
+    }, 3500);
+  };
 
   const SearchIcon = iconMap['Search'];
   const DownloadIcon = iconMap['Download'];
@@ -23,6 +31,7 @@ export default function CustomerAllocations() {
   const CalendarIcon = iconMap['Calendar'];
   const LandmarkIcon = iconMap['Landmark'];
   const IndianRupee = iconMap['IndianRupee'];
+  const InfoIcon = iconMap['Info'];
 
   const filteredCustomers = useMemo(() => {
     return INITIAL_CUSTOMERS.filter((item) => {
@@ -279,7 +288,7 @@ export default function CustomerAllocations() {
                 type="button"
                 className="modal-btn-download"
                 onClick={() => {
-                  alert(`Downloading allocation summary for ${selectedCustomer.name}`);
+                  showToast(`Downloading allocation summary for ${selectedCustomer.name}...`, 'info');
                 }}
               >
                 {DownloadIcon && <DownloadIcon size={16} />} Download Summary
@@ -288,6 +297,32 @@ export default function CustomerAllocations() {
           </div>
         )}
       </Modal>
+
+      {/* Floating Non-blocking Toast */}
+      {toast.show && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            zIndex: 9999,
+            backgroundColor: toast.type === 'error' ? '#fee2e2' : toast.type === 'success' ? '#dcfce7' : '#eff6ff',
+            color: toast.type === 'error' ? '#991b1b' : toast.type === 'success' ? '#166534' : '#1e40af',
+            border: `1px solid ${toast.type === 'error' ? '#fca5a5' : toast.type === 'success' ? '#bbf7d0' : '#bfdbfe'}`,
+            padding: '12px 18px',
+            borderRadius: '8px',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+          }}
+        >
+          {InfoIcon && <InfoIcon size={18} />}
+          <span>{toast.message}</span>
+        </div>
+      )}
     </div>
   );
 }

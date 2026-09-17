@@ -97,3 +97,21 @@
   from { opacity: 0; transform: scale(0.95) translateY(10px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
+
+.confirm-modal-details-box {
+  margin-top: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  background-color: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #0F172A;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.modal-close:disabled,
+.std-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

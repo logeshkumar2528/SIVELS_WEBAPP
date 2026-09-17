@@ -36,7 +36,7 @@ function LayoutWrapper({ children, title, subtitle }) {
       title={title}
       subtitle={subtitle}
       onUserMenuClick={() => navigate(ROUTES.PROFILE)}
-      onNotificationsClick={() => alert('Notifications clicked')}
+      onNotificationsClick={() => {}}
     >
       {children}
     </MainLayout>

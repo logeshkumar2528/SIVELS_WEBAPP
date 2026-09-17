@@ -48,7 +48,7 @@ const Users = () => {
 
 
   const confirmDelete = () => {
-    alert("User deletion is not currently supported via API in read-only management.");
+    setError("User deletion is not currently supported via API in read-only management.");
     setDeleteModal({ isOpen: false, id: null });
   };
 

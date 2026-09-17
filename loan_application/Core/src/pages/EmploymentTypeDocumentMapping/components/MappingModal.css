@@ -67,6 +67,20 @@
   font-size: 0.95rem;
 }
 
+.mapping-modal-error {
+  margin-bottom: 1rem;
+  padding: 0.625rem 0.875rem;
+  background-color: #FEF2F2;
+  border: 1px solid #FECACA;
+  border-radius: 6px;
+  color: #DC2626;
+  font-size: 0.875rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .form-group {
   margin-bottom: 1rem;
 }

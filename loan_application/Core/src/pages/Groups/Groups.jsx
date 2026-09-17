@@ -13,7 +13,8 @@ const Groups = () => {
   const [groupsData, setGroupsData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null, name: '' });
+  const [isDeleting, setIsDeleting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(5);
@@ -36,17 +37,22 @@ const Groups = () => {
   };
 
   const handleDeleteClick = (id) => {
-    setDeleteModal({ isOpen: true, id });
+    const group = groupsData.find(g => (g.id || g.roleId || g.groupId) === id);
+    setDeleteModal({ isOpen: true, id, name: group?.name || '' });
   };
 
   const confirmDelete = async () => {
+    if (!deleteModal.id || isDeleting) return;
+    setIsDeleting(true);
     try {
       await roleService.deleteRole(deleteModal.id);
       await fetchGroups(); // Refresh after delete
+      setDeleteModal({ isOpen: false, id: null, name: '' });
     } catch (err) {
-      alert(err.message || 'Failed to delete group');
+      setError(err.message || 'Failed to delete group');
+      setDeleteModal({ isOpen: false, id: null, name: '' });
     } finally {
-      setDeleteModal({ isOpen: false, id: null });
+      setIsDeleting(false);
     }
   };
 
@@ -200,10 +206,13 @@ const Groups = () => {
       
       <ConfirmModal 
         isOpen={deleteModal.isOpen}
-        onClose={() => setDeleteModal({ isOpen: false, id: null })}
+        onClose={() => !isDeleting && setDeleteModal({ isOpen: false, id: null, name: '' })}
         onConfirm={confirmDelete}
         title="Delete Group"
         message="Are you sure you want to delete this group? This action cannot be undone."
+        details={deleteModal.name ? `Group: "${deleteModal.name}"` : null}
+        confirmText="Delete Group"
+        isLoading={isDeleting}
       />
     </DashboardLayout>
   );

@@ -95,9 +95,14 @@ export const useCustomerProfile = () => {
   }, [watchedValues]);
 
   const saveDraft = () => {
-    const currentValues = getValues();
-    sessionStorage.setItem('customerProfileDraft', JSON.stringify(currentValues));
-    alert('Draft saved successfully to local storage!');
+    try {
+      const currentValues = getValues();
+      sessionStorage.setItem('customerProfileDraft', JSON.stringify(currentValues));
+      return { success: true, message: 'Draft saved successfully to local storage!' };
+    } catch (err) {
+      console.error('Failed to save customer profile draft:', err);
+      return { success: false, message: 'Failed to save draft to storage.' };
+    }
   };
 
   return {

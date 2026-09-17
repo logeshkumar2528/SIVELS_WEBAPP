@@ -20,6 +20,7 @@ const TABS = [
 
 const CustomerProfile = () => {
   const [activeTab, setActiveTab] = useState('personal');
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const navigate = useNavigate();
   
   const { methods, completionPercentage, saveDraft } = useCustomerProfile();
@@ -27,8 +28,10 @@ const CustomerProfile = () => {
 
   const onSubmit = async (data) => {
     console.log('Form Data (Proceed to KYC):', data);
-    alert('Profile is complete! Redirecting to KYC...');
-    navigate('/kyc');
+    setToast({ show: true, message: 'Profile is complete! Redirecting to KYC...', type: 'success' });
+    setTimeout(() => {
+      navigate('/kyc');
+    }, 800);
   };
 
 
@@ -124,6 +127,30 @@ const CustomerProfile = () => {
         </div>
       </div>
 
+      {/* Toast Notification Banner */}
+      {toast.show && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          zIndex: 9999,
+          backgroundColor: toast.type === 'error' ? '#fee2e2' : toast.type === 'info' ? '#eff6ff' : '#dcfce7',
+          color: toast.type === 'error' ? '#991b1b' : toast.type === 'info' ? '#1e40af' : '#166534',
+          border: `1px solid ${toast.type === 'error' ? '#fca5a5' : toast.type === 'info' ? '#bfdbfe' : '#bbf7d0'}`,
+          padding: '12px 18px',
+          borderRadius: '8px',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          fontSize: '0.875rem',
+          fontWeight: 600,
+          animation: 'modalPopIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}>
+          <CheckCircle2 size={18} />
+          <span>{toast.message}</span>
+        </div>
+      )}
     </div>
   );
 };

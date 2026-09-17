@@ -9,8 +9,11 @@ const MappingModal = ({ isOpen, onClose, onSave, mapping, employmentTypes, docum
     documentTypeCode: '',
     isActive: true,
   });
+  const [validationError, setValidationError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
+    setValidationError('');
     if (mapping) {
       const doc = documentTypes.find(d => (d.id || d.documentTypeId) == mapping.documentTypeId);
       setFormData({
@@ -36,20 +39,20 @@ const MappingModal = ({ isOpen, onClose, onSave, mapping, employmentTypes, docum
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    if (validationError) setValidationError('');
     setFormData((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
     }));
   };
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.employmentTypeId || !formData.documentTypeName || !formData.documentTypeCode) {
-      alert("Please fill all required fields.");
+      setValidationError("Please fill all required fields.");
       return;
     }
+    setValidationError('');
     
     setIsSubmitting(true);
     try {
@@ -78,6 +81,11 @@ const MappingModal = ({ isOpen, onClose, onSave, mapping, employmentTypes, docum
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
+            {validationError && (
+              <div className="mapping-modal-error" role="alert">
+                {validationError}
+              </div>
+            )}
             <div className="form-group">
               <label>Employment Type <span style={{ color: 'red' }}>*</span></label>
               <select
