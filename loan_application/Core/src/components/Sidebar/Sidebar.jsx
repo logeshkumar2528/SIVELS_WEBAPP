@@ -3,10 +3,12 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Hexagon } from 'lucide-react';
 import SidebarItem from './SidebarItem';
 import SidebarProfile from './SidebarProfile';
+import ConfirmModal from '../common/ConfirmModal/ConfirmModal';
 import './Sidebar.css';
 
 const Sidebar = ({ items, profile, onLogout }) => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -17,6 +19,15 @@ const Sidebar = ({ items, profile, onLogout }) => {
 
   const handleNavClick = (path) => {
     navigate(path);
+  };
+
+  const handleConfirmLogout = () => {
+    setShowLogoutModal(false);
+    if (onLogout) {
+      onLogout();
+    } else if (logoutItem) {
+      handleNavClick(logoutItem.path);
+    }
   };
 
   // Separate regular nav items and logout
@@ -69,10 +80,21 @@ const Sidebar = ({ items, profile, onLogout }) => {
             label={logoutItem.label}
             icon={logoutItem.icon}
             isLogout={true}
-            onClick={() => onLogout ? onLogout() : handleNavClick(logoutItem.path)}
+            onClick={() => setShowLogoutModal(true)}
           />
         )}
       </aside>
+
+      <ConfirmModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={handleConfirmLogout}
+        title="Confirm Logout"
+        message="Are you sure you want to logout?"
+        confirmText="Yes, Logout"
+        cancelText="Cancel"
+        variant="danger"
+      />
     </>
   );
 };

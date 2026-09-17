@@ -1,15 +1,22 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import iconMap from '../../config/iconMap';
 import logoImg from '../../../../../../Core/Logo_img/Logo.png';
+import Modal from '../Modal/Modal';
 import './Sidebar.css';
 
 const BOTTOM_SECTION = 'BOTTOM';
 
-const NavItem = memo(function NavItem({ item, isActive, badgeCount, onNavigate }) {
+const NavItem = memo(function NavItem({ item, isActive, badgeCount, onNavigate, onLogoutClick }) {
   const Icon = iconMap[item.icon];
 
   function handleClick(e) {
     e.preventDefault();
+    if (item.id === 'logout') {
+      if (onLogoutClick) {
+        onLogoutClick(item.route);
+      }
+      return;
+    }
     onNavigate(item.route);
   }
 
@@ -36,7 +43,7 @@ const NavItem = memo(function NavItem({ item, isActive, badgeCount, onNavigate }
   );
 });
 
-function NavSection({ sectionTitle, items, activeRoute, badgeCounts, onNavigate }) {
+function NavSection({ sectionTitle, items, activeRoute, badgeCounts, onNavigate, onLogoutClick }) {
   return (
     <div className="sidebar-section">
       {sectionTitle && (
@@ -52,6 +59,7 @@ function NavSection({ sectionTitle, items, activeRoute, badgeCounts, onNavigate 
               isActive={activeRoute === item.route}
               badgeCount={item.badgeKey != null ? (badgeCounts[item.badgeKey] ?? null) : null}
               onNavigate={onNavigate}
+              onLogoutClick={onLogoutClick}
             />
           </li>
         ))}
@@ -61,10 +69,25 @@ function NavSection({ sectionTitle, items, activeRoute, badgeCounts, onNavigate 
 }
 
 function Sidebar({ menu = [], activeRoute = '', badgeCounts = {}, isOpen = false, onNavigate, onClose }) {
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [pendingLogoutRoute, setPendingLogoutRoute] = useState('');
+
   const mainItems = menu.filter((item) => item.section !== BOTTOM_SECTION);
   const bottomItems = menu.filter((item) => item.section === BOTTOM_SECTION);
   const sectionKeys = [...new Set(mainItems.map((item) => item.section))];
   const SupportIcon = iconMap['Headphones'];
+
+  const handleLogoutClick = (route) => {
+    setPendingLogoutRoute(route);
+    setShowLogoutModal(true);
+  };
+
+  const handleConfirmLogout = () => {
+    setShowLogoutModal(false);
+    if (pendingLogoutRoute) {
+      onNavigate(pendingLogoutRoute);
+    }
+  };
 
   return (
     <>
@@ -97,6 +120,7 @@ function Sidebar({ menu = [], activeRoute = '', badgeCounts = {}, isOpen = false
               activeRoute={activeRoute}
               badgeCounts={badgeCounts}
               onNavigate={onNavigate}
+              onLogoutClick={handleLogoutClick}
             />
           ))}
         </nav>
@@ -110,6 +134,7 @@ function Sidebar({ menu = [], activeRoute = '', badgeCounts = {}, isOpen = false
                   isActive={activeRoute === item.route}
                   badgeCount={null}
                   onNavigate={onNavigate}
+                  onLogoutClick={handleLogoutClick}
                 />
               </li>
             ))}
@@ -131,6 +156,54 @@ function Sidebar({ menu = [], activeRoute = '', badgeCounts = {}, isOpen = false
           </div>
         </div>
       </aside>
+
+      {showLogoutModal && (
+        <Modal
+          isOpen={showLogoutModal}
+          onClose={() => setShowLogoutModal(false)}
+          title="Confirm Logout"
+        >
+          <div style={{ padding: '0.5rem 0' }}>
+            <p style={{ margin: '0 0 1.25rem 0', color: '#475569', fontSize: '0.95rem' }}>
+              Are you sure you want to logout?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                type="button"
+                style={{
+                  padding: '0.5rem 1rem',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  color: '#334155',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setShowLogoutModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                style={{
+                  padding: '0.5rem 1rem',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: '#dc2626',
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  cursor: 'pointer',
+                }}
+                onClick={handleConfirmLogout}
+              >
+                Yes, Logout
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }
