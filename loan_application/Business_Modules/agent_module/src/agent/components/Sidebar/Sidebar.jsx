@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -23,6 +24,7 @@ const bottomItems = [
 ]
 
 function Sidebar({ isOpen = false, onClose }) {
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const { logout } = useAuth()
@@ -39,17 +41,22 @@ function Sidebar({ isOpen = false, onClose }) {
     return location.pathname === route
   }
 
+  const handleConfirmLogout = () => {
+    setShowLogoutModal(false)
+    try {
+      if (logout) logout()
+    } catch (err) {
+      console.error('Logout error:', err)
+    }
+    localStorage.removeItem('sivels_currentUser')
+    localStorage.removeItem('sivels_permissions')
+    localStorage.removeItem('sivels_roles')
+    window.location.href = '/login'
+  }
+
   const handleNavigate = (item) => {
     if (item.id === 'logout') {
-      try {
-        if (logout) logout()
-      } catch (err) {
-        console.error('Logout error:', err)
-      }
-      localStorage.removeItem('sivels_currentUser')
-      localStorage.removeItem('sivels_permissions')
-      localStorage.removeItem('sivels_roles')
-      window.location.href = '/login'
+      setShowLogoutModal(true)
       return
     }
     navigate(item.route)
@@ -141,6 +148,96 @@ function Sidebar({ isOpen = false, onClose }) {
           </div>
         </div>
       </aside>
+
+      {showLogoutModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(15, 23, 42, 0.5)',
+            backdropFilter: 'blur(4px)',
+            padding: '1rem',
+          }}
+          onClick={() => setShowLogoutModal(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '14px',
+              border: '1px solid #e2e8f0',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+              width: '100%',
+              maxWidth: '420px',
+              padding: '1.5rem',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1rem' }}>
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '10px',
+                  backgroundColor: '#fef2f2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#dc2626',
+                  flexShrink: 0,
+                }}
+              >
+                <LogOut size={20} />
+              </div>
+              <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600, color: '#0f172a' }}>
+                Confirm Logout
+              </h3>
+            </div>
+            <p style={{ margin: '0 0 1.5rem 0', color: '#64748b', fontSize: '0.925rem', lineHeight: '1.5' }}>
+              Are you sure you want to logout?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                type="button"
+                style={{
+                  padding: '0.5rem 1rem',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  backgroundColor: '#ffffff',
+                  color: '#334155',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+                onClick={() => setShowLogoutModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                style={{
+                  padding: '0.5rem 1rem',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: '#dc2626',
+                  color: '#ffffff',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+                onClick={handleConfirmLogout}
+              >
+                Yes, Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

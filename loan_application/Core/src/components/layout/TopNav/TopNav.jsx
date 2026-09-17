@@ -5,9 +5,11 @@ import Logo from '../../common/Logo/Logo';
 import { ChevronDown, Users, Shield, UserCog, LogOut } from 'lucide-react';
 import userLogo from '../../../assets/user.png';
 import HasPermission from '../../common/HasPermission/HasPermission';
+import ConfirmModal from '../../common/ConfirmModal/ConfirmModal';
 
 const TopNav = ({ title, subtitle, headerContent, rightContent, hideProfile = false }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
@@ -20,6 +22,12 @@ const TopNav = ({ title, subtitle, headerContent, rightContent, hideProfile = fa
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const handleConfirmLogout = () => {
+    setShowLogoutModal(false);
+    navigate('/signup');
+  };
+
   return (
     <header className="topnav">
       <div className="topnav-brand">
@@ -92,7 +100,7 @@ const TopNav = ({ title, subtitle, headerContent, rightContent, hideProfile = fa
                   </div>
                 </HasPermission>
                 <div className="dropdown-divider"></div>
-                <div className="dropdown-item logout" onClick={() => { navigate('/signup'); setIsDropdownOpen(false); }}>
+                <div className="dropdown-item logout" onClick={() => { setIsDropdownOpen(false); setShowLogoutModal(true); }}>
                   <LogOut size={16} />
                   <span>Sign Out</span>
                 </div>
@@ -101,6 +109,17 @@ const TopNav = ({ title, subtitle, headerContent, rightContent, hideProfile = fa
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={handleConfirmLogout}
+        title="Confirm Logout"
+        message="Are you sure you want to logout?"
+        confirmText="Yes, Logout"
+        cancelText="Cancel"
+        variant="danger"
+      />
     </header>
   );
 };

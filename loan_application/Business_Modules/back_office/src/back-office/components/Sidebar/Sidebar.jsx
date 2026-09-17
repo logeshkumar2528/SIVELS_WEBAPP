@@ -29,7 +29,7 @@
  *   - No inline styles — all values via CSS variables in Sidebar.css.
  */
 
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import iconMap from '../../config/iconMap';
 import logoImg from '../../../../../../Core/Logo_img/Logo.png';
 import { removeBackOfficeAuth } from '../../auth/authStorage';
@@ -38,16 +38,15 @@ import './Sidebar.css';
 /* ==========================================
    BADGE COLOR MAP
    Maps a badgeKey → CSS modifier class.
-   Color values live in variables.css.
+   Matches badge types defined in navConfig.js.
 ========================================== */
 const BADGE_CLASS_MAP = {
-  newApplications:     'sidebar-badge--new',
-  inReview:            'sidebar-badge--review',
-  returned:            'sidebar-badge--return',
-  pendingApplications: 'sidebar-badge--review',
-  rejected:            'sidebar-badge--rejected',
-  approved:            'sidebar-badge--approved',
-  disbursed:           'sidebar-badge--pending',
+  newApplications: 'sidebar-badge--new',
+  verification:    'sidebar-badge--review',
+  fieldInvest:     'sidebar-badge--pending',
+  underwriting:    'sidebar-badge--underwriting',
+  approved:        'sidebar-badge--approved',
+  rejected:        'sidebar-badge--return',
 };
 
 /* ==========================================
@@ -61,15 +60,16 @@ const BOTTOM_SECTION = 'BOTTOM';
    prevent re-renders when sibling items
    or unrelated state changes occur.
 ------------------------------------------ */
-const NavItem = memo(function NavItem({ item, isActive, badgeCount, onNavigate }) {
+const NavItem = memo(function NavItem({ item, isActive, badgeCount, onNavigate, onLogoutClick }) {
   const Icon       = iconMap[item.icon];
   const badgeClass = BADGE_CLASS_MAP[item.badgeKey] ?? '';
 
   function handleClick(e) {
     e.preventDefault();
     if (item.id === 'logout') {
-      removeBackOfficeAuth();
-      window.location.href = '/login';
+      if (onLogoutClick) {
+        onLogoutClick();
+      }
       return;
     }
     onNavigate(item.route);
@@ -79,8 +79,9 @@ const NavItem = memo(function NavItem({ item, isActive, badgeCount, onNavigate }
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       if (item.id === 'logout') {
-        removeBackOfficeAuth();
-        window.location.href = '/login';
+        if (onLogoutClick) {
+          onLogoutClick();
+        }
         return;
       }
       onNavigate(item.route);
@@ -119,7 +120,7 @@ const NavItem = memo(function NavItem({ item, isActive, badgeCount, onNavigate }
    NavSection
    Renders a labelled group of nav items.
 ------------------------------------------ */
-function NavSection({ sectionTitle, items, activeRoute, badgeCounts, onNavigate }) {
+function NavSection({ sectionTitle, items, activeRoute, badgeCounts, onNavigate, onLogoutClick }) {
   return (
     <div className="sidebar-section">
       {sectionTitle && (
@@ -135,6 +136,7 @@ function NavSection({ sectionTitle, items, activeRoute, badgeCounts, onNavigate 
               isActive={activeRoute === item.route}
               badgeCount={item.badgeKey != null ? (badgeCounts[item.badgeKey] ?? null) : null}
               onNavigate={onNavigate}
+              onLogoutClick={onLogoutClick}
             />
           </li>
         ))}
@@ -147,6 +149,7 @@ function NavSection({ sectionTitle, items, activeRoute, badgeCounts, onNavigate 
    Sidebar — root component
 ------------------------------------------ */
 function Sidebar({ menu = [], activeRoute = '', badgeCounts = {}, isOpen = false, onNavigate, onClose }) {
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   /* Split flat menu into main (scrollable) and bottom (pinned) */
   const mainItems   = menu.filter((item) => item.section !== BOTTOM_SECTION);
@@ -156,6 +159,13 @@ function Sidebar({ menu = [], activeRoute = '', badgeCounts = {}, isOpen = false
   const sectionKeys = [...new Set(mainItems.map((item) => item.section))];
 
   const SupportIcon = iconMap['Headphones'];
+  const LogOutIcon = iconMap['LogOut'];
+
+  const handleConfirmLogout = () => {
+    setShowLogoutModal(false);
+    removeBackOfficeAuth();
+    window.location.href = '/login';
+  };
 
   return (
     <>
@@ -192,6 +202,7 @@ function Sidebar({ menu = [], activeRoute = '', badgeCounts = {}, isOpen = false
               activeRoute={activeRoute}
               badgeCounts={badgeCounts}
               onNavigate={onNavigate}
+              onLogoutClick={() => setShowLogoutModal(true)}
             />
           ))}
         </nav>
@@ -206,6 +217,7 @@ function Sidebar({ menu = [], activeRoute = '', badgeCounts = {}, isOpen = false
                   isActive={activeRoute === item.route}
                   badgeCount={null}
                   onNavigate={onNavigate}
+                  onLogoutClick={() => setShowLogoutModal(true)}
                 />
               </li>
             ))}
@@ -230,6 +242,96 @@ function Sidebar({ menu = [], activeRoute = '', badgeCounts = {}, isOpen = false
         </div>
 
       </aside>
+
+      {showLogoutModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(15, 23, 42, 0.5)',
+            backdropFilter: 'blur(4px)',
+            padding: '1rem',
+          }}
+          onClick={() => setShowLogoutModal(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '14px',
+              border: '1px solid #e2e8f0',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+              width: '100%',
+              maxWidth: '420px',
+              padding: '1.5rem',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1rem' }}>
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '10px',
+                  backgroundColor: '#fef2f2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#dc2626',
+                  flexShrink: 0,
+                }}
+              >
+                {LogOutIcon && <LogOutIcon size={20} />}
+              </div>
+              <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600, color: '#0f172a' }}>
+                Confirm Logout
+              </h3>
+            </div>
+            <p style={{ margin: '0 0 1.5rem 0', color: '#64748b', fontSize: '0.925rem', lineHeight: '1.5' }}>
+              Are you sure you want to logout?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                type="button"
+                style={{
+                  padding: '0.5rem 1rem',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  backgroundColor: '#ffffff',
+                  color: '#334155',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+                onClick={() => setShowLogoutModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                style={{
+                  padding: '0.5rem 1rem',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: '#dc2626',
+                  color: '#ffffff',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+                onClick={handleConfirmLogout}
+              >
+                Yes, Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

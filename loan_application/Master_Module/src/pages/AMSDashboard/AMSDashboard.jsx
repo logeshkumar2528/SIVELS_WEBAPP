@@ -33,6 +33,7 @@ import { getAllAgents } from '../../api/agentApi';
 import { agentCustomerService } from '../../../../Core/src/services/agentCustomerService';
 import axiosInstance from '../../api/axiosInstance';
 import { getProfileImageUrl, updateProfileImage } from '../../utils/profileImageHelper';
+import { MasterModal } from '../../components/masters/MasterModal/MasterModal';
 import './AMSDashboard.css';
 
 const unwrap = (response) => {
@@ -198,6 +199,14 @@ export default function AMSDashboard() {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedAgent, setSelectedAgent] = useState(null);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  const handleConfirmLogout = () => {
+    setShowLogoutModal(false);
+    localStorage.removeItem('sivels_currentUser');
+    localStorage.removeItem('amsData');
+    window.location.href = '/login';
+  };
 
   // AMS Profile Image Upload State
   const [amsImageVersion, setAmsImageVersion] = useState(Date.now());
@@ -774,11 +783,7 @@ export default function AMSDashboard() {
           <button
             type="button"
             className="ams-sidebar-logout"
-            onClick={() => {
-              localStorage.removeItem('sivels_currentUser');
-              localStorage.removeItem('amsData');
-              window.location.href = '/login';
-            }}
+            onClick={() => setShowLogoutModal(true)}
           >
             <LogOut size={17} /> Logout
           </button>
@@ -1409,6 +1414,37 @@ export default function AMSDashboard() {
           </div>
         )}
       </main>
+
+      {showLogoutModal && (
+        <MasterModal
+          isOpen={showLogoutModal}
+          onClose={() => setShowLogoutModal(false)}
+          title="Confirm Logout"
+        >
+          <div style={{ padding: 'var(--spacing-md, 1rem) 0' }}>
+            <p style={{ marginBottom: 'var(--spacing-md, 1rem)', color: '#1e293b', fontSize: '0.95rem' }}>
+              Are you sure you want to logout?
+            </p>
+          </div>
+          <div className="form-actions" style={{ marginTop: 'var(--spacing-xl, 1.5rem)', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+            <button
+              type="button"
+              className="masters-btn-secondary"
+              onClick={() => setShowLogoutModal(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="masters-btn-primary"
+              style={{ backgroundColor: 'var(--color-danger, #dc2626)', borderColor: 'var(--color-danger, #dc2626)' }}
+              onClick={handleConfirmLogout}
+            >
+              Yes, Logout
+            </button>
+          </div>
+        </MasterModal>
+      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   Layers, ShieldCheck, Home, Key, GraduationCap, Star, Contact, Shield, TrendingUp, LogOut, ArrowLeft,
   Factory, Clock, Calculator, UserCheck
 } from 'lucide-react';
+import { MasterModal } from '../masters/MasterModal/MasterModal';
 import './Navbar.css';
 
 const MASTERS_MENU = [
@@ -51,6 +52,7 @@ export function Navbar() {
   const [isMastersOpen, setIsMastersOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const dropdownRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -195,8 +197,39 @@ export function Navbar() {
             </div>
           </div>
         )}
-        <button className="navbar-logout" onClick={handleLogout}><LogOut size={17} /> <span>Logout</span></button>
+        <button className="navbar-logout" onClick={() => setShowLogoutModal(true)}><LogOut size={17} /> <span>Logout</span></button>
       </div>
+
+      {showLogoutModal && (
+        <MasterModal
+          isOpen={showLogoutModal}
+          onClose={() => setShowLogoutModal(false)}
+          title="Confirm Logout"
+        >
+          <div style={{ padding: 'var(--spacing-md, 1rem) 0' }}>
+            <p style={{ marginBottom: 'var(--spacing-md, 1rem)', color: '#1e293b', fontSize: '0.95rem' }}>
+              Are you sure you want to logout?
+            </p>
+          </div>
+          <div className="form-actions" style={{ marginTop: 'var(--spacing-xl, 1.5rem)', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+            <button
+              type="button"
+              className="masters-btn-secondary"
+              onClick={() => setShowLogoutModal(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="masters-btn-primary"
+              style={{ backgroundColor: 'var(--color-danger, #dc2626)', borderColor: 'var(--color-danger, #dc2626)' }}
+              onClick={handleLogout}
+            >
+              Yes, Logout
+            </button>
+          </div>
+        </MasterModal>
+      )}
     </nav>
   );
 }
