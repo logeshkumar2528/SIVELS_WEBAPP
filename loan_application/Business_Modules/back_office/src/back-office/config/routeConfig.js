@@ -27,6 +27,8 @@ export const ROUTES = {
   CUSTOMER_DETAIL:      `${BASE}/customers/:customerId`,
   CUSTOMER_VERIFICATION: `${BASE}/customers/:customerId/verify`,
   CUSTOMER_VIEW_FORM:   `${BASE}/customers/:customerId/view-form`,
+  SUBMIT_TO_CREDIT:     `${BASE}/submit-to-credit`,
+  SUBMIT_TO_CREDIT_DETAIL: `${BASE}/submit-to-credit/:customerId`,
 
   /* ==========================================
      ACCOUNT & SYSTEM
@@ -50,6 +52,8 @@ export const buildRoute = {
   customerDetail: (customerId) => `${BASE}/customers/${customerId}`,
   customerVerification: (customerId) => `${BASE}/customers/${customerId}/verify`,
   customerViewForm: (customerId) => `${BASE}/customers/${customerId}/view-form`,
+  submitToCredit: () => ROUTES.SUBMIT_TO_CREDIT,
+  submitToCreditDetail: (customerId) => `${BASE}/submit-to-credit/${customerId}`,
   profile: () => ROUTES.PROFILE,
   logout: () => ROUTES.LOGOUT,
 };

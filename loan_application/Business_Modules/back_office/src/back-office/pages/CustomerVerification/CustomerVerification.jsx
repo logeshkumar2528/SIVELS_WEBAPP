@@ -891,6 +891,18 @@ export default function CustomerVerification() {
     setter: null,
   });
 
+  // 7c. Document Delete Confirmation Modal State (Steps 09, 10, 11/13)
+  const [deleteDocModal, setDeleteDocModal] = useState({
+    open: false,
+    stepType: null,
+    stepLabel: '',
+    docId: null,
+    fileName: '',
+    docState: null,
+    setter: null,
+    isDeleting: false,
+  });
+
   // 8. PD Verification Master State for Step 12
   const [pdVerificationTypes, setPdVerificationTypes] = useState([]);
   const [pdVerificationTypesLoading, setPdVerificationTypesLoading] = useState(false);
@@ -5128,12 +5140,9 @@ export default function CustomerVerification() {
     }
   };
 
-  const handleDeleteBackOfficeDocument = async (stepType, docState, setter) => {
+  const handleDeleteBackOfficeDocument = (stepType, docState, setter) => {
     const docId = docState?.backOfficeApplicationDocumentId;
     if (!docId) return;
-
-    const confirmed = window.confirm('Are you sure you want to delete this document?');
-    if (!confirmed) return;
 
     let docTitle = 'Legal Opinion Report';
     if (stepType === 'TECHNICAL_VALUATION') {
@@ -5142,12 +5151,45 @@ export default function CustomerVerification() {
       docTitle = 'Manual CIBIL PAN Card';
     }
 
+    setDeleteDocModal({
+      open: true,
+      stepType,
+      stepLabel: docTitle,
+      docId,
+      fileName: docState?.fileName || docState?.file?.name || '',
+      docState,
+      setter,
+      isDeleting: false,
+    });
+  };
+
+  const handleCancelDeleteDocument = () => {
+    if (deleteDocModal.isDeleting) return;
+    setDeleteDocModal({
+      open: false,
+      stepType: null,
+      stepLabel: '',
+      docId: null,
+      fileName: '',
+      docState: null,
+      setter: null,
+      isDeleting: false,
+    });
+  };
+
+  const handleConfirmDeleteDocument = async () => {
+    const { docId, stepType, stepLabel, docState, setter, isDeleting } = deleteDocModal;
+    if (!docId || !setter || isDeleting) return;
+
+    setDeleteDocModal((prev) => ({ ...prev, isDeleting: true }));
     setter((prev) => ({ ...prev, loading: true, error: null, successMsg: '' }));
+
+    const docTitle = stepLabel || 'Document';
 
     try {
       await backOfficeService.deleteApplicationDocument(docId);
 
-      if (docState.fileUrl) {
+      if (docState?.fileUrl) {
         try {
           URL.revokeObjectURL(docState.fileUrl);
         } catch {}
@@ -5175,6 +5217,16 @@ export default function CustomerVerification() {
       });
 
       fetchBackOfficeDocuments();
+      setDeleteDocModal({
+        open: false,
+        stepType: null,
+        stepLabel: '',
+        docId: null,
+        fileName: '',
+        docState: null,
+        setter: null,
+        isDeleting: false,
+      });
     } catch (err) {
       console.error(`Failed to delete ${docTitle}:`, err);
       setter((prev) => ({
@@ -5182,6 +5234,16 @@ export default function CustomerVerification() {
         loading: false,
         error: err?.response?.data?.message || err?.message || `Failed to delete ${docTitle}. Please try again.`,
       }));
+      setDeleteDocModal({
+        open: false,
+        stepType: null,
+        stepLabel: '',
+        docId: null,
+        fileName: '',
+        docState: null,
+        setter: null,
+        isDeleting: false,
+      });
     }
   };
 
@@ -12951,6 +13013,80 @@ export default function CustomerVerification() {
                 onClick={handleConfirmSaveRemarks}
               >
                 Yes, Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Document Delete Confirmation Modal (Steps 09, 10, 11/13) ── */}
+      {deleteDocModal.open && (
+        <div
+          className="bo-cv-confirm-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bo-cv-delete-doc-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !deleteDocModal.isDeleting) {
+              handleCancelDeleteDocument();
+            }
+          }}
+        >
+          <div className="bo-cv-confirm-modal-card">
+            <div className="bo-cv-confirm-modal-header">
+              <div className="bo-cv-confirm-modal-icon-badge">
+                {Trash2Icon ? <Trash2Icon size={20} /> : (AlertTriangleIcon ? <AlertTriangleIcon size={20} /> : <span>🗑</span>)}
+              </div>
+              <div className="bo-cv-confirm-modal-title-group">
+                <h3 id="bo-cv-delete-doc-modal-title" className="bo-cv-confirm-modal-title">
+                  Delete Document
+                </h3>
+                <p className="bo-cv-confirm-modal-subtitle">
+                  {deleteDocModal.stepLabel || 'Back Office Document'}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="bo-cv-confirm-modal-close"
+                onClick={handleCancelDeleteDocument}
+                disabled={deleteDocModal.isDeleting}
+                aria-label="Close modal"
+              >
+                {XIcon ? <XIcon size={16} /> : <span>×</span>}
+              </button>
+            </div>
+
+            <div className="bo-cv-confirm-modal-body">
+              <p className="bo-cv-confirm-modal-question">
+                Are you sure you want to delete this document?
+              </p>
+
+              {deleteDocModal.fileName && (
+                <div className="bo-cv-confirm-remarks-block">
+                  <span className="bo-cv-confirm-remarks-label">ATTACHED FILE</span>
+                  <div className="bo-cv-confirm-remarks-preview">
+                    {deleteDocModal.fileName}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="bo-cv-confirm-modal-footer">
+              <button
+                type="button"
+                className="bo-cv-confirm-btn-cancel"
+                onClick={handleCancelDeleteDocument}
+                disabled={deleteDocModal.isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="bo-cv-confirm-btn-reject"
+                onClick={handleConfirmDeleteDocument}
+                disabled={deleteDocModal.isDeleting}
+              >
+                {deleteDocModal.isDeleting ? 'Deleting...' : 'Delete Document'}
               </button>
             </div>
           </div>

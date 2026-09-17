@@ -244,6 +244,8 @@ export function CompanyConfiguration() {
   const [formError, setFormError] = useState('');
   const [formRecord, setFormRecord] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [deleteRecord, setDeleteRecord] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [openGroups, setOpenGroups] = useState(() => Object.fromEntries(COMPANY_GROUPS.map((group) => [group.label, true])));
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -349,15 +351,29 @@ export function CompanyConfiguration() {
     }
   };
 
-  const handleDelete = async (record) => {
-    const id = getRecordId(record, section.apiKey);
-    if (!id || !window.confirm(`Delete this ${section.singular.toLowerCase()}? This action cannot be undone.`)) return;
+  const handleDelete = (record) => {
+    setDeleteRecord(record);
+  };
+
+  const handleCancelDelete = () => {
+    if (deleting) return;
+    setDeleteRecord(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteRecord || deleting) return;
+    const id = getRecordId(deleteRecord, section.apiKey);
+    if (!id) return;
+    setDeleting(true);
     try {
       const response = await companyApis[section.apiKey].remove(id);
       toast.success(response?.message || `${section.singular} deleted successfully.`);
+      setDeleteRecord(null);
       await loadRecords();
     } catch (requestError) {
       toast.error(getErrorMessage(requestError, `Unable to delete ${section.singular.toLowerCase()}.`));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -531,6 +547,62 @@ export function CompanyConfiguration() {
           }}
           onSubmit={handleSubmit}
         />
+      )}
+
+      {deleteRecord !== null && (
+        <MasterModal
+          isOpen={deleteRecord !== null}
+          onClose={handleCancelDelete}
+          title={`Delete ${section.singular}?`}
+        >
+          <div style={{ padding: 'var(--spacing-md, 1rem) 0' }}>
+            <p style={{ marginBottom: 'var(--spacing-md, 1rem)', color: '#1e293b', fontSize: '0.95rem' }}>
+              Are you sure you want to delete this {section.singular.toLowerCase()}? This action cannot be undone.
+            </p>
+            {(() => {
+              const displayName = getDisplayValue(deleteRecord, 'companyName') !== '-'
+                ? getDisplayValue(deleteRecord, 'companyName')
+                : (deleteRecord.companyTypeName || deleteRecord.addressTypeName || deleteRecord.addressLine1 || deleteRecord.accountNo || deleteRecord.personName || deleteRecord.description || '');
+              return displayName ? (
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '0.5rem',
+                  fontSize: '0.875rem',
+                  color: '#0f172a',
+                  fontWeight: 600,
+                  marginBottom: 'var(--spacing-md, 1rem)'
+                }}>
+                  {displayName}
+                </div>
+              ) : null;
+            })()}
+            <p style={{ color: 'var(--color-text-secondary, #64748b)', fontSize: 'var(--font-size-sm, 0.875rem)', margin: 0 }}>
+              This action will remove the record permanently.
+            </p>
+          </div>
+
+          <div className="form-actions" style={{ marginTop: 'var(--spacing-xl, 1.5rem)', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+            <button
+              type="button"
+              className="masters-btn-secondary"
+              onClick={handleCancelDelete}
+              disabled={deleting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="masters-btn-primary"
+              style={{ backgroundColor: 'var(--color-danger, #dc2626)', borderColor: 'var(--color-danger, #dc2626)' }}
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+          </div>
+        </MasterModal>
       )}
     </div>
   );
