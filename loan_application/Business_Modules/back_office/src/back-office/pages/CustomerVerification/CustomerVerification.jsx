@@ -166,13 +166,17 @@ function stepNumToStepCode(num) {
   }
 }
 
-const INITIAL_STEP_VERIFICATIONS = {
+const createEmptyStepVerifications = () => ({
   PROFILE_IMAGE: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
   AADHAAR: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
   PAN: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
   SALARY_SLIP: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
   BANK_STATEMENT: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
   ZIP_ARCHIVE: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
+});
+
+const INITIAL_STEP_VERIFICATIONS = {
+  0: createEmptyStepVerifications(),
 };
 
 /**
@@ -857,7 +861,7 @@ export default function CustomerVerification() {
   const [stepVerifications, setStepVerifications] = useState(INITIAL_STEP_VERIFICATIONS);
   const reconciledStepsRef = useRef(new Set());
   const [isFetchingStepVerifications, setIsFetchingStepVerifications] = useState(false);
-  const [isSavingStepVerification, setIsSavingStepVerification] = useState(false);
+  const [savingVerificationKey, setSavingVerificationKey] = useState(null);
   const [stepVerificationError, setStepVerificationError] = useState(null);
 
   // 6. Upload States for Steps 9 & 10 (Legal Opinion & Technical Value, Max 150MB)
@@ -3402,12 +3406,7 @@ export default function CustomerVerification() {
       const list = Array.isArray(res) ? res : (res?.value || res?.data || []);
 
       const nextState = {
-        PROFILE_IMAGE: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
-        AADHAAR: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
-        PAN: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
-        SALARY_SLIP: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
-        BANK_STATEMENT: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
-        ZIP_ARCHIVE: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
+        0: createEmptyStepVerifications(),
       };
 
       const remarksToHydrate = {};
@@ -3415,24 +3414,34 @@ export default function CustomerVerification() {
       list.forEach((item) => {
         if (!item || item.isActive === false) return;
         const code = item.stepCode;
-        if (nextState[code]) {
-          nextState[code] = {
-            backOfficeStepVerificationId: item.backOfficeStepVerificationId || null,
-            isVerified: Boolean(item.isVerified),
-            remarks: item.remarks || '',
-            verifiedAt: item.verifiedAt || null,
-            verifiedByBackOfficeId: item.verifiedByBackOfficeId || null,
-          };
+        if (!SUPPORTED_STEP_CODES.includes(code)) return;
 
-          // Hydrate remarks into 17-step stepRemarks (2: Profile, 3: Aadhaar, 4: PAN, 5: Salary, 6: Bank, 7: ZIP)
-          if (item.remarks && typeof item.remarks === 'string' && item.remarks.trim()) {
-            if (code === 'PROFILE_IMAGE') remarksToHydrate[2] = item.remarks;
-            else if (code === 'AADHAAR') remarksToHydrate[3] = item.remarks;
-            else if (code === 'PAN') remarksToHydrate[4] = item.remarks;
-            else if (code === 'SALARY_SLIP') remarksToHydrate[5] = item.remarks;
-            else if (code === 'BANK_STATEMENT') remarksToHydrate[6] = item.remarks;
-            else if (code === 'ZIP_ARCHIVE') remarksToHydrate[7] = item.remarks;
-          }
+        const seq =
+          item.applicantSequence !== undefined && item.applicantSequence !== null && !isNaN(Number(item.applicantSequence))
+            ? Number(item.applicantSequence)
+            : 0;
+
+        if (!nextState[seq]) {
+          nextState[seq] = createEmptyStepVerifications();
+        }
+
+        nextState[seq][code] = {
+          backOfficeStepVerificationId: item.backOfficeStepVerificationId || null,
+          isVerified: Boolean(item.isVerified),
+          remarks: item.remarks || '',
+          verifiedAt: item.verifiedAt || null,
+          verifiedByBackOfficeId: item.verifiedByBackOfficeId || null,
+          applicantSequence: seq,
+        };
+
+        // Hydrate remarks for Primary Applicant (seq 0) into 17-step stepRemarks (2: Profile, 3: Aadhaar, 4: PAN, 5: Salary, 6: Bank, 7: ZIP)
+        if (seq === 0 && item.remarks && typeof item.remarks === 'string' && item.remarks.trim()) {
+          if (code === 'PROFILE_IMAGE') remarksToHydrate[2] = item.remarks;
+          else if (code === 'AADHAAR') remarksToHydrate[3] = item.remarks;
+          else if (code === 'PAN') remarksToHydrate[4] = item.remarks;
+          else if (code === 'SALARY_SLIP') remarksToHydrate[5] = item.remarks;
+          else if (code === 'BANK_STATEMENT') remarksToHydrate[6] = item.remarks;
+          else if (code === 'ZIP_ARCHIVE') remarksToHydrate[7] = item.remarks;
         }
       });
 
@@ -3524,7 +3533,7 @@ export default function CustomerVerification() {
   );
 
   const getUnresolvedRejectionsForStep = useCallback(
-    (stepIdentifier) => {
+    (stepIdentifier, targetSequence = null) => {
       if (!Array.isArray(applicationRejections) || applicationRejections.length === 0) return [];
 
       const getRejectionEntityKey = (r) => {
@@ -3544,7 +3553,12 @@ export default function CustomerVerification() {
 
       const matchingRejections = applicationRejections.filter((r) => {
         if (r.isActive === false) return false;
-        return isRejectionMatchingStep(r, stepIdentifier);
+        if (!isRejectionMatchingStep(r, stepIdentifier)) return false;
+        if (targetSequence !== null && targetSequence !== undefined) {
+          const seq = getRejectionEntityKey(r);
+          return seq === Number(targetSequence);
+        }
+        return true;
       });
 
       if (matchingRejections.length === 0) return [];
@@ -3584,31 +3598,39 @@ export default function CustomerVerification() {
   );
 
   const hasUnresolvedRejectionForStep = useCallback(
-    (stepIdentifier) => {
-      return getUnresolvedRejectionsForStep(stepIdentifier).length > 0;
+    (stepIdentifier, targetSequence = null) => {
+      return getUnresolvedRejectionsForStep(stepIdentifier, targetSequence).length > 0;
     },
     [getUnresolvedRejectionsForStep]
   );
 
   // Reusable PUT handler to create / update step verification
   const handleSaveStepVerification = useCallback(async ({
+    applicantSequence = 0,
     stepCode,
     isVerified,
     remarks = '',
+    stepNum = null,
   }) => {
-    if (isSavingStepVerification) {
-      return { success: false, error: 'A verification save is already in progress.' };
+    const seq =
+      applicantSequence !== undefined && applicantSequence !== null && !isNaN(Number(applicantSequence))
+        ? Number(applicantSequence)
+        : 0;
+
+    const rowKey = `${seq}_${stepCode}`;
+    if (savingVerificationKey === rowKey) {
+      return { success: false, error: 'A verification save is already in progress for this document.' };
     }
 
-    // Defensive Guard (Rule 4): Block marking a step as Verified if unresolved rejections exist
-    if (Boolean(isVerified) && hasUnresolvedRejectionForStep(stepCode)) {
+    // Defensive Guard (Rule 4): Block marking a step as Verified if unresolved rejections exist for this person
+    if (Boolean(isVerified) && hasUnresolvedRejectionForStep(stepCode, seq)) {
       const err = 'Resolve all returned/resubmitted documents before marking this step as Verified.';
       setStepVerificationError(err);
-      const stepNum = stepCodeToStepNum(stepCode);
-      if (stepNum) {
+      const effectiveStepNum = stepNum || stepCodeToStepNum(stepCode);
+      if (effectiveStepNum) {
         setStepFeedback((prev) => ({
           ...prev,
-          [stepNum]: { type: 'error', message: err },
+          [effectiveStepNum]: { type: 'error', message: err },
         }));
       }
       return { success: false, error: err };
@@ -3618,7 +3640,7 @@ export default function CustomerVerification() {
       throw new Error(`Unsupported verification step code: ${stepCode}`);
     }
 
-    const stepNum = stepCodeToStepNum(stepCode);
+    const effectiveStepNum = stepNum || stepCodeToStepNum(stepCode);
 
     const targetAppProdId = Number(
       resolvedAppProdId ||
@@ -3632,10 +3654,10 @@ export default function CustomerVerification() {
     if (!targetAppProdId || targetAppProdId <= 0) {
       const err = 'Application details ID not found. Unable to persist step verification.';
       setStepVerificationError(err);
-      if (stepNum) {
+      if (effectiveStepNum) {
         setStepFeedback((prev) => ({
           ...prev,
-          [stepNum]: { type: 'error', message: err },
+          [effectiveStepNum]: { type: 'error', message: err },
         }));
       }
       return { success: false, error: err };
@@ -3645,23 +3667,29 @@ export default function CustomerVerification() {
     if (!backOfficeId) {
       const err = 'Unable to identify the logged-in Back Office operator. Please login again.';
       setStepVerificationError(err);
-      if (stepNum) {
+      if (effectiveStepNum) {
         setStepFeedback((prev) => ({
           ...prev,
-          [stepNum]: { type: 'error', message: err },
+          [effectiveStepNum]: { type: 'error', message: err },
         }));
       }
       return { success: false, error: err };
     }
 
-    setIsSavingStepVerification(true);
+    setSavingVerificationKey(rowKey);
     setStepVerificationError(null);
 
-    const previousRecord = stepVerifications[stepCode];
+    const previousRecord = stepVerifications[seq]?.[stepCode] || {
+      isVerified: false,
+      remarks: '',
+      verifiedAt: null,
+      verifiedByBackOfficeId: null,
+    };
 
     try {
       const payload = {
         applicationProductDetailsId: targetAppProdId,
+        applicantSequence: Number(seq),
         stepCode,
         isVerified: Boolean(isVerified),
         remarks: (remarks || '').trim(),
@@ -3676,51 +3704,82 @@ export default function CustomerVerification() {
         remarks: result?.remarks !== undefined ? result.remarks : remarks,
         verifiedAt: result?.verifiedAt || new Date().toISOString(),
         verifiedByBackOfficeId: result?.verifiedByBackOfficeId || backOfficeId,
+        applicantSequence: seq,
       };
 
-      setStepVerifications((prev) => ({
-        ...prev,
-        [stepCode]: updatedRecord,
-      }));
+      setStepVerifications((prev) => {
+        const currentSeqObj = prev[seq] ? { ...prev[seq] } : createEmptyStepVerifications();
+        return {
+          ...prev,
+          [seq]: {
+            ...currentSeqObj,
+            [stepCode]: updatedRecord,
+          },
+        };
+      });
 
-      if (stepNum) {
-        const stepLabel = VERIFICATION_WORKFLOW_STEPS.find((s) => s.number === stepNum)?.title || stepCode;
+      if (effectiveStepNum) {
+        const stepLabel = VERIFICATION_WORKFLOW_STEPS.find((s) => s.number === effectiveStepNum)?.title || stepCode;
+        const personPrefix = seq === 0 ? 'Applicant' : `Co-Applicant ${seq}`;
         setStepFeedback((prev) => ({
           ...prev,
-          [stepNum]: {
+          [effectiveStepNum]: {
             type: 'success',
-            message: `${stepLabel} successfully ${isVerified ? 'marked as Verified' : 'unmarked as Verified'}.`,
+            message: `${personPrefix} ${stepLabel} successfully ${isVerified ? 'marked as Verified' : 'unmarked as Verified'}.`,
           },
         }));
       }
 
       return { success: true, data: result || updatedRecord };
     } catch (err) {
-      console.error(`[CustomerVerification] Failed to save step verification for ${stepCode}:`, err);
+      console.error(`[CustomerVerification] Failed to save step verification for ${stepCode} (seq ${seq}):`, err);
       const errMsg = err?.response?.data?.message || err?.message || `Failed to save ${stepCode} verification.`;
       setStepVerificationError(errMsg);
-      if (stepNum) {
+      if (effectiveStepNum) {
         setStepFeedback((prev) => ({
           ...prev,
-          [stepNum]: { type: 'error', message: errMsg },
+          [effectiveStepNum]: { type: 'error', message: errMsg },
         }));
       }
       // Revert to previous state on failure
-      setStepVerifications((prev) => ({
-        ...prev,
-        [stepCode]: previousRecord,
-      }));
+      setStepVerifications((prev) => {
+        const currentSeqObj = prev[seq] ? { ...prev[seq] } : createEmptyStepVerifications();
+        return {
+          ...prev,
+          [seq]: {
+            ...currentSeqObj,
+            [stepCode]: previousRecord,
+          },
+        };
+      });
       return { success: false, error: errMsg };
     } finally {
-      setIsSavingStepVerification(false);
+      setSavingVerificationKey((prev) => (prev === rowKey ? null : prev));
     }
-  }, [isSavingStepVerification, resolvedAppProdId, verificationData, getAuthenticatedBackOfficeId, stepVerifications, hasUnresolvedRejectionForStep]);
+  }, [savingVerificationKey, resolvedAppProdId, verificationData, getAuthenticatedBackOfficeId, stepVerifications, hasUnresolvedRejectionForStep]);
 
   const verifiedDocumentCount = useMemo(() => {
-    return DOCUMENT_STEP_CODES.filter(
-      (code) => stepVerifications[code]?.isVerified === true && !hasUnresolvedRejectionForStep(code)
-    ).length;
-  }, [stepVerifications, hasUnresolvedRejectionForStep]);
+    const applicableSequences = [
+      0,
+      ...(Array.isArray(coApplicants)
+        ? coApplicants.map((co) =>
+            co.sequence !== undefined
+              ? Number(co.sequence)
+              : co.number !== undefined
+              ? Number(co.number)
+              : Number(co.index || 0) + 1
+          )
+        : []),
+    ];
+
+    return DOCUMENT_STEP_CODES.filter((code) => {
+      return applicableSequences.every(
+        (seq) =>
+          Boolean(stepVerifications[seq]?.[code]?.isVerified) === true &&
+          !hasUnresolvedRejectionForStep(code, seq)
+      );
+    }).length;
+  }, [stepVerifications, hasUnresolvedRejectionForStep, coApplicants]);
 
   // Reconcile legacy contradictory state: persist isVerified: false for steps with unresolved rejections (Rule 9)
   useEffect(() => {
@@ -3728,25 +3787,31 @@ export default function CustomerVerification() {
       return;
     }
 
-    DOCUMENT_STEP_CODES.forEach(async (code) => {
-      const recKey = `${resolvedAppProdId}_${code}`;
-      if (reconciledStepsRef.current.has(recKey)) return;
+    Object.keys(stepVerifications).forEach((seqKey) => {
+      const seq = Number(seqKey);
+      if (isNaN(seq)) return;
 
-      const isPersistedTrue = stepVerifications[code]?.isVerified === true;
-      const hasUnresolved = hasUnresolvedRejectionForStep(code);
+      DOCUMENT_STEP_CODES.forEach(async (code) => {
+        const recKey = `${resolvedAppProdId}_${seq}_${code}`;
+        if (reconciledStepsRef.current.has(recKey)) return;
 
-      if (isPersistedTrue && hasUnresolved) {
-        reconciledStepsRef.current.add(recKey);
-        try {
-          await handleSaveStepVerification({
-            stepCode: code,
-            isVerified: false,
-            remarks: stepVerifications[code]?.remarks || '',
-          });
-        } catch (recErr) {
-          console.warn(`[CustomerVerification] Auto-reconciliation failed for ${code}:`, recErr);
+        const isPersistedTrue = stepVerifications[seq]?.[code]?.isVerified === true;
+        const hasUnresolved = hasUnresolvedRejectionForStep(code, seq);
+
+        if (isPersistedTrue && hasUnresolved) {
+          reconciledStepsRef.current.add(recKey);
+          try {
+            await handleSaveStepVerification({
+              applicantSequence: seq,
+              stepCode: code,
+              isVerified: false,
+              remarks: stepVerifications[seq]?.[code]?.remarks || '',
+            });
+          } catch (recErr) {
+            console.warn(`[CustomerVerification] Auto-reconciliation failed for seq ${seq} ${code}:`, recErr);
+          }
         }
-      }
+      });
     });
   }, [
     resolvedAppProdId,
@@ -4996,17 +5061,24 @@ export default function CustomerVerification() {
       }));
       setStepRemarks((prev) => ({ ...prev, [stepNum]: '' }));
 
-      // Rule 2: If rejected step was previously verified, invalidate and persist isVerified: false
+      // Rule 2: If rejected step was previously verified, invalidate and persist isVerified: false for this person only
       const rejectedStepCode = stepNumToStepCode(stepNum);
-      if (rejectedStepCode && stepVerifications[rejectedStepCode]?.isVerified === true) {
+      const targetSeq =
+        customAppSeq !== null && customAppSeq !== undefined
+          ? Number(customAppSeq)
+          : (isCoApplicant ? 1 : 0);
+
+      if (rejectedStepCode && stepVerifications[targetSeq]?.[rejectedStepCode]?.isVerified === true) {
         try {
           await handleSaveStepVerification({
+            applicantSequence: targetSeq,
             stepCode: rejectedStepCode,
             isVerified: false,
-            remarks: stepVerifications[rejectedStepCode]?.remarks || '',
+            remarks: stepVerifications[targetSeq]?.[rejectedStepCode]?.remarks || '',
+            stepNum,
           });
         } catch (unverifyErr) {
-          console.warn(`[CustomerVerification] Auto-unverify failed for ${rejectedStepCode}:`, unverifyErr);
+          console.warn(`[CustomerVerification] Auto-unverify failed for seq ${targetSeq} ${rejectedStepCode}:`, unverifyErr);
         }
       }
 
@@ -5132,7 +5204,7 @@ export default function CustomerVerification() {
   };
 
   // Back Office Verify Resubmitted Rejection Handler
-  const handleVerifyRejection = async (rejectionId, stepLabel, stepNum) => {
+  const handleVerifyRejection = async (rejectionId, stepLabel, stepNum, applicantSequence = null) => {
     if (!rejectionId) return;
     const boAuth = getBackOfficeAuth();
     const backOfficeId = Number(boAuth?.id || boAuth?.backOfficeId || localStorage.getItem('backOfficeId') || 4);
@@ -5151,11 +5223,27 @@ export default function CustomerVerification() {
       // 1. Refetch rejection records to confirm status = Verified
       await fetchApplicationRejections();
 
-      // 2. Automatically persist step verification to true for this step
+      // Determine target applicant sequence for this rejection
+      let targetSeq = applicantSequence;
+      if (targetSeq === null || targetSeq === undefined) {
+        const rej = applicationRejections.find(
+          (r) =>
+            Number(r.backOfficeDocumentRejectionId) === Number(rejectionId) ||
+            Number(r.id) === Number(rejectionId)
+        );
+        if (rej?.applicantSequence !== undefined && rej?.applicantSequence !== null && !isNaN(Number(rej.applicantSequence))) {
+          targetSeq = Number(rej.applicantSequence);
+        } else {
+          targetSeq = 0;
+        }
+      }
+
+      // 2. Automatically persist step verification to true for this step and applicant sequence
       const stepCode = stepNumToStepCode(stepNum);
       if (stepCode) {
         try {
           await handleSaveStepVerification({
+            applicantSequence: Number(targetSeq || 0),
             stepCode,
             isVerified: true,
             remarks: (stepRemarks[stepNum] || '').trim(),
@@ -5890,7 +5978,7 @@ export default function CustomerVerification() {
     // 1. Profile Image (Step 02 / PROFILE_IMAGE)
     const profileRej = getActiveRejectionForApplicant(2, profileDocTypeId);
     const hasProfileFile = Boolean(docPreviews.profile?.url || docPreviews.profile?.doc || profileRej?.currentDocumentPath);
-    const profileVerified = Boolean(stepVerifications.PROFILE_IMAGE?.isVerified) && !hasUnresolvedRejectionForStep('PROFILE_IMAGE');
+    const profileVerified = Boolean(stepVerifications[0]?.PROFILE_IMAGE?.isVerified) && !hasUnresolvedRejectionForStep('PROFILE_IMAGE', 0);
     const profileStatus = resolveRowStatus({ rejection: profileRej, hasFile: hasProfileFile, isVerified: profileVerified });
 
     rows.push({
@@ -5922,7 +6010,7 @@ export default function CustomerVerification() {
     // 2. Aadhaar Card (Step 03 / AADHAAR)
     const aadhaarRej = getActiveRejectionForApplicant(3, aadhaarDocTypeId);
     const hasAadhaarFile = Boolean(docPreviews.aadhaar?.url || docPreviews.aadhaar?.doc || aadhaarRej?.currentDocumentPath);
-    const aadhaarVerified = Boolean(stepVerifications.AADHAAR?.isVerified) && !hasUnresolvedRejectionForStep('AADHAAR');
+    const aadhaarVerified = Boolean(stepVerifications[0]?.AADHAAR?.isVerified) && !hasUnresolvedRejectionForStep('AADHAAR', 0);
     const aadhaarStatus = resolveRowStatus({ rejection: aadhaarRej, hasFile: hasAadhaarFile, isVerified: aadhaarVerified });
 
     rows.push({
@@ -5954,7 +6042,7 @@ export default function CustomerVerification() {
     // 3. PAN Card (Step 04 / PAN)
     const panRej = getActiveRejectionForApplicant(4, panDocTypeId);
     const hasPanFile = Boolean(docPreviews.pan?.url || docPreviews.pan?.doc || panRej?.currentDocumentPath);
-    const panVerified = Boolean(stepVerifications.PAN?.isVerified) && !hasUnresolvedRejectionForStep('PAN');
+    const panVerified = Boolean(stepVerifications[0]?.PAN?.isVerified) && !hasUnresolvedRejectionForStep('PAN', 0);
     const panStatus = resolveRowStatus({ rejection: panRej, hasFile: hasPanFile, isVerified: panVerified });
 
     rows.push({
@@ -5988,7 +6076,7 @@ export default function CustomerVerification() {
     const salaryPreview = applicantFinancialDocs.salarySlip?.preview;
     const salaryData = applicantFinancialDocs.salarySlip?.data;
     const hasSalaryFile = Boolean(salaryPreview?.url || salaryData || salaryRej?.currentDocumentPath);
-    const salaryVerified = Boolean(stepVerifications.SALARY_SLIP?.isVerified) && !hasUnresolvedRejectionForStep('SALARY_SLIP');
+    const salaryVerified = Boolean(stepVerifications[0]?.SALARY_SLIP?.isVerified) && !hasUnresolvedRejectionForStep('SALARY_SLIP', 0);
     const salaryStatus = resolveRowStatus({ rejection: salaryRej, hasFile: hasSalaryFile, isVerified: salaryVerified });
 
     rows.push({
@@ -6022,7 +6110,7 @@ export default function CustomerVerification() {
     const bankPreview = applicantFinancialDocs.bankStatement?.preview;
     const bankData = applicantFinancialDocs.bankStatement?.data;
     const hasBankFile = Boolean(bankPreview?.url || bankData || bankRej?.currentDocumentPath);
-    const bankVerified = Boolean(stepVerifications.BANK_STATEMENT?.isVerified) && !hasUnresolvedRejectionForStep('BANK_STATEMENT');
+    const bankVerified = Boolean(stepVerifications[0]?.BANK_STATEMENT?.isVerified) && !hasUnresolvedRejectionForStep('BANK_STATEMENT', 0);
     const bankStatus = resolveRowStatus({ rejection: bankRej, hasFile: hasBankFile, isVerified: bankVerified });
 
     rows.push({
@@ -6054,7 +6142,7 @@ export default function CustomerVerification() {
     // 6. ZIP / Archive Package (Step 07 / ZIP_ARCHIVE)
     const zipRej = getActiveRejectionForApplicant(7);
     const hasZipFile = Boolean(docPreviews.zip?.doc || docPreviews.zip?.url || applicantManualDocs?.length > 0 || zipRej?.currentDocumentPath);
-    const zipVerified = Boolean(stepVerifications.ZIP_ARCHIVE?.isVerified) && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE');
+    const zipVerified = Boolean(stepVerifications[0]?.ZIP_ARCHIVE?.isVerified) && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE', 0);
     const zipStatus = resolveRowStatus({ rejection: zipRej, hasFile: hasZipFile, isVerified: zipVerified });
 
     rows.push({
@@ -6130,7 +6218,7 @@ export default function CustomerVerification() {
     // 1. Profile Image
     const profileRej = getActiveRejectionForCoApplicant(coKycId, 2, coSeq);
     const hasProfile = Boolean(coPrev.profile?.url || profileRej?.currentDocumentPath);
-    const profileVerified = Boolean(stepVerifications.PROFILE_IMAGE?.isVerified) && !hasUnresolvedRejectionForStep('PROFILE_IMAGE');
+    const profileVerified = Boolean(stepVerifications[coSeq]?.PROFILE_IMAGE?.isVerified) && !hasUnresolvedRejectionForStep('PROFILE_IMAGE', coSeq);
     const profileStatus = resolveRowStatus({ rejection: profileRej, hasFile: hasProfile, isVerified: profileVerified });
 
     rows.push({
@@ -6163,7 +6251,7 @@ export default function CustomerVerification() {
     // 2. Aadhaar Card
     const aadhaarRej = getActiveRejectionForCoApplicant(coKycId, 3, coSeq);
     const hasAadhaar = Boolean(coPrev.aadhaar?.url || aadhaarRej?.currentDocumentPath);
-    const aadhaarVerified = Boolean(stepVerifications.AADHAAR?.isVerified) && !hasUnresolvedRejectionForStep('AADHAAR');
+    const aadhaarVerified = Boolean(stepVerifications[coSeq]?.AADHAAR?.isVerified) && !hasUnresolvedRejectionForStep('AADHAAR', coSeq);
     const aadhaarStatus = resolveRowStatus({ rejection: aadhaarRej, hasFile: hasAadhaar, isVerified: aadhaarVerified });
 
     rows.push({
@@ -6196,7 +6284,7 @@ export default function CustomerVerification() {
     // 3. PAN Card
     const panRej = getActiveRejectionForCoApplicant(coKycId, 4, coSeq);
     const hasPan = Boolean(coPrev.pan?.url || panRej?.currentDocumentPath);
-    const panVerified = Boolean(stepVerifications.PAN?.isVerified) && !hasUnresolvedRejectionForStep('PAN');
+    const panVerified = Boolean(stepVerifications[coSeq]?.PAN?.isVerified) && !hasUnresolvedRejectionForStep('PAN', coSeq);
     const panStatus = resolveRowStatus({ rejection: panRej, hasFile: hasPan, isVerified: panVerified });
 
     rows.push({
@@ -6231,7 +6319,7 @@ export default function CustomerVerification() {
     const salPrev = coFin.salarySlip?.preview;
     const salData = coFin.salarySlip?.data;
     const hasSal = Boolean(salPrev?.url || salData || salRej?.currentDocumentPath);
-    const salVerified = Boolean(stepVerifications.SALARY_SLIP?.isVerified) && !hasUnresolvedRejectionForStep('SALARY_SLIP');
+    const salVerified = Boolean(stepVerifications[coSeq]?.SALARY_SLIP?.isVerified) && !hasUnresolvedRejectionForStep('SALARY_SLIP', coSeq);
     const salStatus = resolveRowStatus({ rejection: salRej, hasFile: hasSal, isVerified: salVerified });
 
     rows.push({
@@ -6266,7 +6354,7 @@ export default function CustomerVerification() {
     const bankPrev = coFin.bankStatement?.preview;
     const bankData = coFin.bankStatement?.data;
     const hasBank = Boolean(bankPrev?.url || bankData || bankRej?.currentDocumentPath);
-    const bankVerified = Boolean(stepVerifications.BANK_STATEMENT?.isVerified) && !hasUnresolvedRejectionForStep('BANK_STATEMENT');
+    const bankVerified = Boolean(stepVerifications[coSeq]?.BANK_STATEMENT?.isVerified) && !hasUnresolvedRejectionForStep('BANK_STATEMENT', coSeq);
     const bankStatus = resolveRowStatus({ rejection: bankRej, hasFile: hasBank, isVerified: bankVerified });
 
     rows.push({
@@ -6299,7 +6387,7 @@ export default function CustomerVerification() {
     // 6. ZIP / Archive Package
     const zipRej = getActiveRejectionForCoApplicant(coKycId, 7, coSeq);
     const hasZip = Boolean(coPrev.zip?.url || coManual.length > 0 || zipRej?.currentDocumentPath);
-    const zipVerified = Boolean(stepVerifications.ZIP_ARCHIVE?.isVerified) && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE');
+    const zipVerified = Boolean(stepVerifications[coSeq]?.ZIP_ARCHIVE?.isVerified) && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE', coSeq);
     const zipStatus = resolveRowStatus({ rejection: zipRej, hasFile: hasZip, isVerified: zipVerified });
 
     rows.push({
@@ -6410,20 +6498,26 @@ export default function CustomerVerification() {
   const handleToggleRowVerification = useCallback(async (row) => {
     if (!row || !row.hasFile) return;
     if (row.status === 'Returned to RM' || row.status === 'Returned' || row.status === 'Resubmitted') return;
-    if (hasUnresolvedRejectionForStep(row.stepCode)) return;
-    if (isSavingStepVerification) return;
+    const seq =
+      row.applicantSequence !== undefined && row.applicantSequence !== null && !isNaN(Number(row.applicantSequence))
+        ? Number(row.applicantSequence)
+        : (row.isCoApplicant ? 1 : 0);
+    if (hasUnresolvedRejectionForStep(row.stepCode, seq)) return;
+    const rowKey = `${seq}_${row.stepCode}`;
+    if (savingVerificationKey === rowKey) return;
 
     const currentVerified = Boolean(row.isVerified);
     const nextVerified = !currentVerified;
     const currentRemarks = (stepRemarks[row.stepNum] || '').trim();
 
     await handleSaveStepVerification({
+      applicantSequence: seq,
       stepCode: row.stepCode,
       isVerified: nextVerified,
       remarks: currentRemarks,
       stepNum: row.stepNum,
     });
-  }, [hasUnresolvedRejectionForStep, isSavingStepVerification, stepRemarks, handleSaveStepVerification]);
+  }, [hasUnresolvedRejectionForStep, savingVerificationKey, stepRemarks, handleSaveStepVerification]);
 
 
   // 5a. Initial Load: Fetch latest FOIR calculation snapshot via GET /by-customer/{agentCustomerId}
@@ -7146,13 +7240,14 @@ export default function CustomerVerification() {
                       <tbody>
                         {applicantDocRows.map((row, idx) => {
                           const IconComp = row.icon;
+                          const isThisRowSaving = savingVerificationKey === `${row.applicantSequence || 0}_${row.stepCode}`;
                           const isCheckboxDisabled =
                             !row.hasFile ||
                             row.status === 'Returned to RM' ||
                             row.status === 'Returned' ||
                             row.status === 'Resubmitted' ||
-                            hasUnresolvedRejectionForStep(row.stepCode) ||
-                            isSavingStepVerification;
+                            hasUnresolvedRejectionForStep(row.stepCode, 0) ||
+                            isThisRowSaving;
 
                           return (
                             <tr key={row.id} className="bo-cv-doc-tr">
@@ -7216,8 +7311,8 @@ export default function CustomerVerification() {
                                       ? 'Cannot verify: Document is returned to RM'
                                       : row.status === 'Resubmitted'
                                       ? 'Cannot verify: Resubmitted document must be verified via comparison review'
-                                      : hasUnresolvedRejectionForStep(row.stepCode)
-                                      ? 'Cannot verify: Unresolved rejection pending for this step'
+                                      : hasUnresolvedRejectionForStep(row.stepCode, 0)
+                                      ? 'Cannot verify: Unresolved rejection pending for this document'
                                       : row.isVerified
                                       ? 'Click to unverify document'
                                       : 'Click to mark document as verified'
@@ -7360,12 +7455,13 @@ export default function CustomerVerification() {
                         <tbody>
                           {coApplicantDocRows.map((row, idx) => {
                             const IconComp = row.icon;
+                            const isThisRowSaving = savingVerificationKey === `${row.applicantSequence}_${row.stepCode}`;
                             const isCheckboxDisabled =
                               !row.hasFile ||
                               row.status === 'Returned' ||
                               row.status === 'Resubmitted' ||
-                              hasUnresolvedRejectionForStep(row.stepCode) ||
-                              isSavingStepVerification;
+                              hasUnresolvedRejectionForStep(row.stepCode, row.applicantSequence) ||
+                              isThisRowSaving;
 
                             return (
                               <tr key={row.id} className="bo-cv-doc-tr">
@@ -7429,8 +7525,8 @@ export default function CustomerVerification() {
                                         ? 'Cannot verify: Document is returned to RM'
                                         : row.status === 'Resubmitted'
                                         ? 'Cannot verify: Resubmitted document must be verified via comparison review'
-                                        : hasUnresolvedRejectionForStep(row.stepCode)
-                                        ? 'Cannot verify: Unresolved rejection pending for this step'
+                                        : hasUnresolvedRejectionForStep(row.stepCode, row.applicantSequence)
+                                        ? 'Cannot verify: Unresolved rejection pending for this document'
                                         : row.isVerified
                                         ? 'Click to unverify document'
                                         : 'Click to mark document as verified'
@@ -11224,7 +11320,8 @@ export default function CustomerVerification() {
                           await handleVerifyRejection(
                             previewModal.rejectionId,
                             previewModal.stepLabel,
-                            previewModal.stepNum
+                            previewModal.stepNum,
+                            previewModal.applicantSequence
                           );
                           handleClosePreviewModal();
                         }}

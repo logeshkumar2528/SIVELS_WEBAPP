@@ -662,7 +662,7 @@ export const backOfficeService = {
 
   /**
    * Create or update a step verification record (PUT /api/BackOfficeStepVerification).
-   * @param {object} payload - { applicationProductDetailsId, stepCode, isVerified, remarks, verifiedByBackOfficeId }
+   * @param {object} payload - { applicationProductDetailsId, applicantSequence, stepCode, isVerified, remarks, verifiedByBackOfficeId }
    */
   saveStepVerification: async (payload) => {
     const response = await axiosInstance.put(
