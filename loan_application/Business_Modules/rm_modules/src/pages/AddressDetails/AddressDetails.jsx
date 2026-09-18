@@ -16,6 +16,8 @@ import {
   createArray,
   getApplicantCount,
   getSectionState,
+  resolveLatestApplicantAadhaar,
+  resolveLatestCoApplicantAadhaar,
   loadApplicantAadhaarUrl,
   loadCoApplicantAadhaarUrl,
 } from '../applicationWizard/flowUtils';
@@ -240,7 +242,7 @@ export default function AddressDetails() {
     ensureApplication(appId);
   }, [appId, ensureApplication]);
 
-  const appData = getApplication(appId);
+  const appData = useMemo(() => getApplication(appId), [getApplication, appId]);
   const activeCount = useMemo(() => getApplicantCount(appData), [appData]);
   const ArrowLeftIcon = iconMap['ArrowLeft'];
   const InfoIcon = iconMap['Info'];
@@ -259,21 +261,22 @@ export default function AddressDetails() {
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
     const kycDocs = appData.sections?.kycDocuments || appData.kycDocuments || {};
 
-    // 1. Load Applicant Aadhaar (Original Agent-uploaded Aadhaar only)
-    loadApplicantAadhaarUrl({ appData, appId, baseUrl, headers }).then((url) => {
+    // 1. Load Applicant Aadhaar (Latest updated with original Agent-uploaded fallback)
+    resolveLatestApplicantAadhaar({ appData, appId, baseUrl, headers }).then((url) => {
       if (isMounted && url) {
         blobUrlsRef.current.push(url);
         setAadhaarPreviews((prev) => ({ ...prev, applicant: url }));
       }
     });
 
-    // 2. Load Co-Applicants Aadhaar (RM-uploaded Co-Applicant Aadhaar only)
+    // 2. Load Co-Applicants Aadhaar (Latest updated with original RM-uploaded fallback)
     form.coApplicants.forEach((coPerson, idx) => {
       const coKyc = kycDocs.coApplicants?.[idx] || {};
-      loadCoApplicantAadhaarUrl({
+      resolveLatestCoApplicantAadhaar({
         coKyc,
         coPersonalInfo: coPerson,
         coIndex: idx,
+        appData,
         appId,
         baseUrl,
         headers,
