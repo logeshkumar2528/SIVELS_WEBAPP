@@ -425,6 +425,7 @@ export default function CustomerVerification() {
   const [docPreviews, setDocPreviews] = useState({});
   const [coDocPreviews, setCoDocPreviews] = useState({});
   const blobUrlsRef = useRef([]);
+  const previewCacheRef = useRef(new Map());
 
   // Supplementary server tables if not fully populated in ApplicationFullDetails
   const [kycRecordsList, setKycRecordsList] = useState([]);
@@ -432,6 +433,10 @@ export default function CustomerVerification() {
   const [docTypesList, setDocTypesList] = useState([]);
   const [docTypeMasterMap, setDocTypeMasterMap] = useState({});
   const [allCustomerDocs, setAllCustomerDocs] = useState([]);
+  const [isCustomerDocsLoading, setIsCustomerDocsLoading] = useState(true);
+  const [isSupplementaryKycLoading, setIsSupplementaryKycLoading] = useState(true);
+  const previewFetchGenRef = useRef(0);
+  const financialFetchGenRef = useRef(0);
 
   // Dynamically resolved DocumentTypeMaster IDs for KYC and Financial documents
   const profileDocTypeId = useMemo(() => resolveDocumentTypeId(docTypesList, 'Profile') || resolveDocumentTypeId(docTypesList, 'Photo') || resolveDocumentTypeId(docTypesList, 'Profile Photo'), [docTypesList]);
@@ -442,8 +447,8 @@ export default function CustomerVerification() {
 
   // Persisted applicant and co-applicants financial documents (Salary Slip, Bank Statement)
   const [applicantFinancialDocs, setApplicantFinancialDocs] = useState({
-    salarySlip: { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null },
-    bankStatement: { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null },
+    salarySlip: { loading: true, data: null, preview: null, comparison: null, rejection: null, error: null },
+    bankStatement: { loading: true, data: null, preview: null, comparison: null, rejection: null, error: null },
   });
   const [coApplicantsFinancialDocs, setCoApplicantsFinancialDocs] = useState({});
 
@@ -490,7 +495,11 @@ export default function CustomerVerification() {
       rawCust?.AgentCustomerId ||
       customerId;
 
-    if (!targetCustomerId) return;
+    if (!targetCustomerId) {
+      setIsCustomerDocsLoading(false);
+      return;
+    }
+    setIsCustomerDocsLoading(true);
     try {
       const token = localStorage.getItem('authToken');
       const headers = {};
@@ -503,6 +512,8 @@ export default function CustomerVerification() {
       }
     } catch (e) {
       console.warn('Could not fetch all customer documents:', e);
+    } finally {
+      setIsCustomerDocsLoading(false);
     }
   }, [customerId, verificationData?.customerId]);
 
@@ -520,9 +531,13 @@ export default function CustomerVerification() {
       rawCust?.AgentCustomerId ||
       customerId;
 
-    if (!targetCustomerId) return;
+    if (!targetCustomerId) {
+      setIsSupplementaryKycLoading(false);
+      return;
+    }
 
     let isMounted = true;
+    setIsSupplementaryKycLoading(true);
     async function fetchSupplementaryData() {
       const token = localStorage.getItem('authToken');
       const headers = {};
@@ -561,7 +576,9 @@ export default function CustomerVerification() {
       }
     }
 
-    fetchSupplementaryData();
+    fetchSupplementaryData().finally(() => {
+      if (isMounted) setIsSupplementaryKycLoading(false);
+    });
     return () => {
       isMounted = false;
     };
@@ -642,6 +659,10 @@ export default function CustomerVerification() {
   // Generic KYC binary file loader helper
   const fetchKycDocBlob = useCallback(async (kycId, route, defaultName) => {
     if (!kycId) return { loading: false, url: null, error: null };
+    const cacheKey = `kycBlob_${kycId}_${route}`;
+    if (previewCacheRef.current.has(cacheKey)) {
+      return previewCacheRef.current.get(cacheKey);
+    }
     try {
       const token = localStorage.getItem('authToken');
       const headers = {};
@@ -673,7 +694,7 @@ export default function CustomerVerification() {
       const objectUrl = window.URL.createObjectURL(blob);
       blobUrlsRef.current.push(objectUrl);
 
-      return {
+      const result = {
         loading: false,
         error: null,
         url: objectUrl,
@@ -682,6 +703,8 @@ export default function CustomerVerification() {
         fileName,
         size: blob.size,
       };
+      previewCacheRef.current.set(cacheKey, result);
+      return result;
     } catch (err) {
       console.warn(`Could not load KYC doc for kycId ${kycId} route ${route}:`, err);
       return { loading: false, url: null, error: null };
@@ -693,15 +716,18 @@ export default function CustomerVerification() {
     if (!rawPath || typeof rawPath !== 'string' || !rawPath.trim()) {
       return { loading: false, url: null, error: null, fileName: defaultName || '' };
     }
+    const normalizeDocPath = (val) =>
+      String(val || '')
+        .trim()
+        .replace(/\\/g, '/')
+        .replace(/^\/+/, '');
+
+    const normalizedPath = normalizeDocPath(rawPath);
+    const cacheKey = `kycPath_${normalizedPath.toLowerCase()}`;
+    if (previewCacheRef.current.has(cacheKey)) {
+      return previewCacheRef.current.get(cacheKey);
+    }
     try {
-      const normalizeDocPath = (val) =>
-        String(val || '')
-          .trim()
-          .replace(/\\/g, '/')
-          .replace(/^\/+/, '');
-
-      const normalizedPath = normalizeDocPath(rawPath);
-
       // ── CASE A: AGENT CUSTOMER DOCUMENT ──────────────────────────
       // If path belongs to AgentCustomers (UploadedFiles/AgentCustomers/...),
       // match against allCustomerDocs and download via backOfficeService.downloadCustomerDocument(docId)
@@ -717,6 +743,12 @@ export default function CustomerVerification() {
         if (matchedDoc) {
           const docId = matchedDoc.agentCustomerDocumentId || matchedDoc.id;
           if (docId) {
+            const agentCacheKey = `agentDoc_${docId}`;
+            if (previewCacheRef.current.has(agentCacheKey)) {
+              const cached = previewCacheRef.current.get(agentCacheKey);
+              previewCacheRef.current.set(cacheKey, cached);
+              return cached;
+            }
             try {
               const blobData = await backOfficeService.downloadCustomerDocument(docId);
               const fileName = matchedDoc.fileName || matchedDoc.name || defaultName || 'document';
@@ -732,7 +764,7 @@ export default function CustomerVerification() {
               const objectUrl = window.URL.createObjectURL(typedBlob);
               blobUrlsRef.current.push(objectUrl);
 
-              return {
+              const result = {
                 loading: false,
                 error: null,
                 url: objectUrl,
@@ -751,6 +783,9 @@ export default function CustomerVerification() {
                     })
                   : matchedDoc.uploadedOn || '',
               };
+              previewCacheRef.current.set(agentCacheKey, result);
+              previewCacheRef.current.set(cacheKey, result);
+              return result;
             } catch (dlErr) {
               console.warn(`[CustomerVerification] Failed to download AgentCustomerDocument ID ${docId}:`, dlErr);
               return {
@@ -828,7 +863,7 @@ export default function CustomerVerification() {
       const objectUrl = window.URL.createObjectURL(typedBlob);
       blobUrlsRef.current.push(objectUrl);
 
-      return {
+      const result = {
         loading: false,
         error: null,
         url: objectUrl,
@@ -838,6 +873,8 @@ export default function CustomerVerification() {
         size: typedBlob.size,
         path: rawPath,
       };
+      previewCacheRef.current.set(cacheKey, result);
+      return result;
     } catch (err) {
       console.warn(`[CustomerVerification] Could not load document from path ${rawPath}:`, err);
       return {
@@ -860,6 +897,7 @@ export default function CustomerVerification() {
         }
       });
       blobUrlsRef.current = [];
+      previewCacheRef.current.clear();
     };
   }, []);
 
@@ -4067,6 +4105,10 @@ export default function CustomerVerification() {
   const downloadAndPrepareDoc = useCallback(async (doc) => {
     const docId = doc?.agentCustomerDocumentId || doc?.id;
     if (!docId) return null;
+    const cacheKey = `agentDoc_${docId}`;
+    if (previewCacheRef.current.has(cacheKey)) {
+      return previewCacheRef.current.get(cacheKey);
+    }
     try {
       const blobData = await backOfficeService.downloadCustomerDocument(docId);
       const fileName = doc?.fileName || doc?.name || '';
@@ -4082,7 +4124,7 @@ export default function CustomerVerification() {
       const objectUrl = window.URL.createObjectURL(typedBlob);
       blobUrlsRef.current.push(objectUrl);
 
-      return {
+      const result = {
         doc,
         url: objectUrl,
         fileName,
@@ -4099,21 +4141,63 @@ export default function CustomerVerification() {
             })
           : doc.uploadedOn || '',
       };
+      previewCacheRef.current.set(cacheKey, result);
+      return result;
     } catch (err) {
       console.warn(`[CustomerVerification] Could not download document ${docId}:`, err?.message);
       return null;
     }
   }, []);
 
+  // Deterministically selects the latest active applicant document from an array of documents
+  const selectLatestApplicantDoc = useCallback((docs, stepNum, masterMap) => {
+    if (!Array.isArray(docs) || docs.length === 0) return null;
+    const matching = docs.filter((doc) => {
+      if (!doc || doc.isActive === false) return false;
+      const seq = doc.applicantSequence !== undefined && doc.applicantSequence !== null
+        ? Number(doc.applicantSequence)
+        : (doc.ApplicantSequence !== undefined && doc.ApplicantSequence !== null ? Number(doc.ApplicantSequence) : null);
+      if (seq !== null && seq > 0) return false;
+      return isMatchingApplicantDoc(doc, stepNum, masterMap);
+    });
+
+    if (matching.length === 0) return null;
+
+    matching.sort((a, b) => {
+      const modTimeA = new Date(a.modifiedAt || a.updatedAt || a.ModifiedAt || a.UpdatedAt || 0).getTime();
+      const modTimeB = new Date(b.modifiedAt || b.updatedAt || b.ModifiedAt || b.UpdatedAt || 0).getTime();
+      if (modTimeA > 0 && modTimeB > 0 && modTimeA !== modTimeB) {
+        return modTimeB - modTimeA;
+      }
+      const createTimeA = new Date(a.createdAt || a.uploadedOn || a.CreatedAt || a.UploadedOn || 0).getTime();
+      const createTimeB = new Date(b.createdAt || b.uploadedOn || b.CreatedAt || b.UploadedOn || 0).getTime();
+      if (createTimeA !== createTimeB) {
+        return createTimeB - createTimeA;
+      }
+      const idA = Number(a.agentCustomerDocumentId || a.applicationKYCDocumentId || a.id || 0);
+      const idB = Number(b.agentCustomerDocumentId || b.applicationKYCDocumentId || b.id || 0);
+      return idB - idA;
+    });
+
+    return matching[0];
+  }, [isMatchingApplicantDoc]);
+
   // Safely resolves Old and New document versions for Applicant
   const resolveOldAndNewDocs = useCallback(
     (docs, rejection, stepNum, masterMap) => {
-      const matching = (docs || []).filter((d) => isMatchingApplicantDoc(d, stepNum, masterMap));
+      const matching = (docs || []).filter((d) => {
+        if (!d || d.isActive === false) return false;
+        const seq = d.applicantSequence !== undefined && d.applicantSequence !== null
+          ? Number(d.applicantSequence)
+          : (d.ApplicantSequence !== undefined && d.ApplicantSequence !== null ? Number(d.ApplicantSequence) : null);
+        if (seq !== null && seq > 0) return false;
+        return isMatchingApplicantDoc(d, stepNum, masterMap);
+      });
       matching.sort((a, b) => {
-        const timeA = new Date(a.createdAt || 0).getTime();
-        const timeB = new Date(b.createdAt || 0).getTime();
+        const timeA = new Date(a.createdAt || a.uploadedOn || 0).getTime();
+        const timeB = new Date(b.createdAt || b.uploadedOn || 0).getTime();
         if (timeA !== timeB) return timeA - timeB;
-        return (a.agentCustomerDocumentId || 0) - (b.agentCustomerDocumentId || 0);
+        return (Number(a.agentCustomerDocumentId || a.id) || 0) - (Number(b.agentCustomerDocumentId || b.id) || 0);
       });
 
       if (matching.length === 0) return { oldDoc: null, newDoc: null };
@@ -4125,12 +4209,12 @@ export default function CustomerVerification() {
       }
 
       const beforeRej = matching.filter((d) => {
-        const t = new Date(d.createdAt || 0).getTime();
+        const t = new Date(d.createdAt || d.uploadedOn || 0).getTime();
         return rejTime === 0 || t <= rejTime + 5000;
       });
 
       const afterRej = matching.filter((d) => {
-        const t = new Date(d.createdAt || 0).getTime();
+        const t = new Date(d.createdAt || d.uploadedOn || 0).getTime();
         return rejTime > 0 && t > rejTime + 5000;
       });
 
@@ -4887,8 +4971,12 @@ export default function CustomerVerification() {
     [applicationRejections]
   );
 
-  // Fetch applicant & co-applicants Salary Slip and Bank Statement documents
+  // Fetch applicant & co-applicants Salary Slip and Bank Statement documents concurrently
   const fetchFinancialDocuments = useCallback(async () => {
+    if (isCustomerDocsLoading || isSupplementaryKycLoading) {
+      return;
+    }
+
     const appProdId =
       verificationData?.application?.applicationProductDetailsId ||
       verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
@@ -4897,261 +4985,300 @@ export default function CustomerVerification() {
 
     const sTypeId = salarySlipDocTypeId;
     const bTypeId = bankStatementDocTypeId;
+    const currentGen = ++financialFetchGenRef.current;
 
-    // 1. Applicant Salary Slip (sourced from allCustomerDocs / AgentCustomerDocument)
+    // 1. Applicant Salary Slip (Parallel Task)
     setApplicantFinancialDocs((prev) => ({
       ...prev,
       salarySlip: { ...(prev.salarySlip || {}), loading: true, error: null },
     }));
-    try {
-      const rej = getActiveRejectionForApplicantDoc(sTypeId, 'SALARY_SLIP');
-      let preview = null;
-      let comparison = null;
-      let docData = null;
+    const fetchSalaryPromise = (async () => {
+      try {
+        const rej = getActiveRejectionForApplicantDoc(sTypeId, 'SALARY_SLIP');
+        let preview = null;
+        let comparison = null;
+        let docData = null;
 
-      if (rej && rej.status === 'Resubmitted') {
-        const { oldDoc, newDoc } = resolveOldAndNewDocs(allCustomerDocs, rej, 'SALARY_SLIP', docTypeMasterMap);
-        const oldPromise = rej.originalDocumentPath
-          ? fetchKycDocByPath(rej.originalDocumentPath, 'Applicant_Salary_Slip_Old')
-          : (oldDoc ? downloadAndPrepareDoc(oldDoc) : Promise.resolve(null));
-        const newPromise = rej.currentDocumentPath
-          ? fetchKycDocByPath(rej.currentDocumentPath, 'Applicant_Salary_Slip')
-          : (newDoc ? downloadAndPrepareDoc(newDoc) : Promise.resolve(null));
-        const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
-        comparison = {
-          oldDoc: oldRes,
-          newDoc: newRes,
-          hasOldVersion: Boolean(oldRes?.url),
-          hasNewVersion: Boolean(newRes?.url),
-          note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
-          rejection: rej,
-        };
-        preview = newRes || oldRes;
-        docData = newDoc || oldDoc;
-      } else {
-        const normalizeDocPath = (val) =>
-          String(val || '')
-            .trim()
-            .replace(/\\/g, '/')
-            .replace(/^\/+/, '');
-
-        let slipDoc = null;
-
-        // PRIORITY 1: Match against Verified rejection currentDocumentPath if available
-        if (rej && rej.status === 'Verified' && rej.currentDocumentPath) {
-          const targetNorm = normalizeDocPath(rej.currentDocumentPath).toLowerCase();
-          slipDoc = (allCustomerDocs || []).find((doc) => {
-            const candidate = normalizeDocPath(
-              doc.filePath || doc.documentPath || doc.path
-            ).toLowerCase();
-            return candidate === targetNorm;
-          });
-        }
-
-        // PRIORITY 2: Filter active Salary Slip documents and sort CreatedAt DESC, AgentCustomerDocumentId DESC
-        if (!slipDoc) {
-          const matchingSalaryDocs = (allCustomerDocs || [])
-            .filter((doc) => doc.isActive !== false && isMatchingApplicantDoc(doc, 'SALARY_SLIP', docTypeMasterMap))
-            .sort((a, b) => {
-              const timeA = new Date(a.createdAt || 0).getTime();
-              const timeB = new Date(b.createdAt || 0).getTime();
-              if (timeA !== timeB) return timeB - timeA;
-              return (b.agentCustomerDocumentId || 0) - (a.agentCustomerDocumentId || 0);
-            });
-          slipDoc = matchingSalaryDocs[0] || null;
-        }
-
-        if (slipDoc) {
-          docData = slipDoc;
-          preview = await downloadAndPrepareDoc(slipDoc);
-        } else if (rej && rej.status === 'Verified' && rej.currentDocumentPath) {
-          preview = await fetchKycDocByPath(rej.currentDocumentPath, 'Applicant_Salary_Slip');
-          docData = {
-            filePath: rej.currentDocumentPath,
-            fileName: preview?.fileName || 'Applicant_Salary_Slip',
+        if (rej && rej.status === 'Resubmitted') {
+          const { oldDoc, newDoc } = resolveOldAndNewDocs(allCustomerDocs, rej, 'SALARY_SLIP', docTypeMasterMap);
+          const oldPromise = rej.originalDocumentPath
+            ? fetchKycDocByPath(rej.originalDocumentPath, 'Applicant_Salary_Slip_Old')
+            : (oldDoc ? downloadAndPrepareDoc(oldDoc) : Promise.resolve(null));
+          const newPromise = rej.currentDocumentPath
+            ? fetchKycDocByPath(rej.currentDocumentPath, 'Applicant_Salary_Slip')
+            : (newDoc ? downloadAndPrepareDoc(newDoc) : Promise.resolve(null));
+          const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+          comparison = {
+            oldDoc: oldRes,
+            newDoc: newRes,
+            hasOldVersion: Boolean(oldRes?.url),
+            hasNewVersion: Boolean(newRes?.url),
+            note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
+            rejection: rej,
           };
+          preview = newRes || oldRes;
+          docData = newDoc || oldDoc;
+        } else {
+          const normalizeDocPath = (val) =>
+            String(val || '')
+              .trim()
+              .replace(/\\/g, '/')
+              .replace(/^\/+/, '');
+
+          let slipDoc = null;
+
+          if (rej && rej.status === 'Verified' && rej.currentDocumentPath) {
+            const targetNorm = normalizeDocPath(rej.currentDocumentPath).toLowerCase();
+            slipDoc = (allCustomerDocs || []).find((doc) => {
+              const candidate = normalizeDocPath(
+                doc.filePath || doc.documentPath || doc.path
+              ).toLowerCase();
+              return candidate === targetNorm;
+            });
+          }
+
+          if (!slipDoc) {
+            slipDoc = selectLatestApplicantDoc(allCustomerDocs, 'SALARY_SLIP', docTypeMasterMap);
+          }
+
+          if (slipDoc) {
+            docData = slipDoc;
+            preview = await downloadAndPrepareDoc(slipDoc);
+          } else if (rej && rej.status === 'Verified' && rej.currentDocumentPath) {
+            preview = await fetchKycDocByPath(rej.currentDocumentPath, 'Applicant_Salary_Slip');
+            docData = {
+              filePath: rej.currentDocumentPath,
+              fileName: preview?.fileName || 'Applicant_Salary_Slip',
+            };
+          }
+        }
+
+        if (currentGen === financialFetchGenRef.current) {
+          setApplicantFinancialDocs((prev) => ({
+            ...prev,
+            salarySlip: {
+              loading: false,
+              data: docData,
+              preview,
+              comparison,
+              rejection: rej,
+              error: null,
+            },
+          }));
+        }
+      } catch (err) {
+        console.warn('Could not load applicant salary slip:', err);
+        if (currentGen === financialFetchGenRef.current) {
+          setApplicantFinancialDocs((prev) => ({
+            ...prev,
+            salarySlip: { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null },
+          }));
         }
       }
+    })();
 
-      setApplicantFinancialDocs((prev) => ({
-        ...prev,
-        salarySlip: {
-          loading: false,
-          data: docData,
-          preview,
-          comparison,
-          rejection: rej,
-          error: null,
-        },
-      }));
-    } catch (err) {
-      console.warn('Could not load applicant salary slip from customer documents:', err);
-      setApplicantFinancialDocs((prev) => ({
-        ...prev,
-        salarySlip: { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null },
-      }));
-    }
-
-    // 2. Applicant Bank Statement (sourced from allCustomerDocs / AgentCustomerDocument)
+    // 2. Applicant Bank Statement (Parallel Task)
     setApplicantFinancialDocs((prev) => ({
       ...prev,
       bankStatement: { ...(prev.bankStatement || {}), loading: true, error: null },
     }));
-    try {
-      const rej = getActiveRejectionForApplicantDoc(bTypeId, 'BANK_STATEMENT');
-      let preview = null;
-      let comparison = null;
-      let docData = null;
+    const fetchBankPromise = (async () => {
+      try {
+        const rej = getActiveRejectionForApplicantDoc(bTypeId, 'BANK_STATEMENT');
+        let preview = null;
+        let comparison = null;
+        let docData = null;
 
-      if (rej && rej.status === 'Resubmitted') {
-        const { oldDoc, newDoc } = resolveOldAndNewDocs(allCustomerDocs, rej, 'BANK_STATEMENT', docTypeMasterMap);
-        const oldPromise = rej.originalDocumentPath
-          ? fetchKycDocByPath(rej.originalDocumentPath, 'Applicant_Bank_Statement_Old')
-          : (oldDoc ? downloadAndPrepareDoc(oldDoc) : Promise.resolve(null));
-        const newPromise = rej.currentDocumentPath
-          ? fetchKycDocByPath(rej.currentDocumentPath, 'Applicant_Bank_Statement')
-          : (newDoc ? downloadAndPrepareDoc(newDoc) : Promise.resolve(null));
-        const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
-        comparison = {
-          oldDoc: oldRes,
-          newDoc: newRes,
-          hasOldVersion: Boolean(oldRes?.url),
-          hasNewVersion: Boolean(newRes?.url),
-          note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
-          rejection: rej,
-        };
-        preview = newRes || oldRes;
-        docData = newDoc || oldDoc;
-      } else {
-        const bankDoc = (allCustomerDocs || []).find((doc) =>
-          isMatchingApplicantDoc(doc, 'BANK_STATEMENT', docTypeMasterMap)
-        );
-        if (bankDoc) {
-          docData = bankDoc;
-          preview = await downloadAndPrepareDoc(bankDoc);
-        }
-      }
+        if (rej && rej.status === 'Resubmitted') {
+          const { oldDoc, newDoc } = resolveOldAndNewDocs(allCustomerDocs, rej, 'BANK_STATEMENT', docTypeMasterMap);
+          const oldPromise = rej.originalDocumentPath
+            ? fetchKycDocByPath(rej.originalDocumentPath, 'Applicant_Bank_Statement_Old')
+            : (oldDoc ? downloadAndPrepareDoc(oldDoc) : Promise.resolve(null));
+          const newPromise = rej.currentDocumentPath
+            ? fetchKycDocByPath(rej.currentDocumentPath, 'Applicant_Bank_Statement')
+            : (newDoc ? downloadAndPrepareDoc(newDoc) : Promise.resolve(null));
+          const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+          comparison = {
+            oldDoc: oldRes,
+            newDoc: newRes,
+            hasOldVersion: Boolean(oldRes?.url),
+            hasNewVersion: Boolean(newRes?.url),
+            note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
+            rejection: rej,
+          };
+          preview = newRes || oldRes;
+          docData = newDoc || oldDoc;
+        } else {
+          const normalizeDocPath = (val) =>
+            String(val || '')
+              .trim()
+              .replace(/\\/g, '/')
+              .replace(/^\/+/, '');
 
-      setApplicantFinancialDocs((prev) => ({
-        ...prev,
-        bankStatement: {
-          loading: false,
-          data: docData,
-          preview,
-          comparison,
-          rejection: rej,
-          error: null,
-        },
-      }));
-    } catch (err) {
-      console.warn('Could not load applicant bank statement from customer documents:', err);
-      setApplicantFinancialDocs((prev) => ({
-        ...prev,
-        bankStatement: { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null },
-      }));
-    }
+          let bankDoc = null;
 
-    // 3. Co-Applicants Salary Slips & Bank Statements (sequence 1, 2, 3... sourced from ApplicationKYCDocuments)
-    if (appProdId && coApplicants && coApplicants.length > 0) {
-      const coMap = {};
-      for (const co of coApplicants) {
-        const seq = co.sequence !== undefined ? co.sequence : (co.index !== undefined ? co.index + 1 : co.number);
-        const idxKey = co.index !== undefined ? co.index : (seq - 1);
+          if (rej && rej.status === 'Verified' && rej.currentDocumentPath) {
+            const targetNorm = normalizeDocPath(rej.currentDocumentPath).toLowerCase();
+            bankDoc = (allCustomerDocs || []).find((doc) => {
+              const candidate = normalizeDocPath(
+                doc.filePath || doc.documentPath || doc.path
+              ).toLowerCase();
+              return candidate === targetNorm;
+            });
+          }
 
-        let coSalarySlip = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
-        let coBankStatement = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
+          if (!bankDoc) {
+            bankDoc = selectLatestApplicantDoc(allCustomerDocs, 'BANK_STATEMENT', docTypeMasterMap);
+          }
 
-        if (sTypeId) {
-          try {
-            const docRes = await backOfficeService.getApplicantDocument(appProdId, seq, sTypeId);
-            const docData = docRes?.data || docRes?.value || docRes;
-            const docPath = docData?.documentPath || docData?.DocumentPath || docData?.filePath || docData?.FilePath;
-            const rej = getActiveRejectionForCoApplicantDoc(seq, sTypeId, 'SALARY_SLIP');
-            let preview = null;
-            let comparison = null;
-
-            if (rej && rej.status === 'Resubmitted') {
-              const oldPromise = rej.originalDocumentPath
-                ? fetchKycDocByPath(rej.originalDocumentPath, `CoApplicant_${co.number}_Salary_Slip_Old`)
-                : Promise.resolve(null);
-              const newPromise = rej.currentDocumentPath
-                ? fetchKycDocByPath(rej.currentDocumentPath, `CoApplicant_${co.number}_Salary_Slip`)
-                : (docPath ? fetchKycDocByPath(docPath, `CoApplicant_${co.number}_Salary_Slip`) : Promise.resolve(null));
-              const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
-              comparison = {
-                oldDoc: oldRes,
-                newDoc: newRes,
-                hasOldVersion: Boolean(oldRes?.url),
-                hasNewVersion: Boolean(newRes?.url),
-                note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
-                rejection: rej,
-              };
-              preview = newRes || oldRes;
-            } else if (docPath) {
-              preview = await fetchKycDocByPath(docPath, `CoApplicant_${co.number}_Salary_Slip`);
-            }
-
-            coSalarySlip = { loading: false, data: docData, preview, comparison, rejection: rej, error: null };
-          } catch (err) {
-            coSalarySlip = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
+          if (bankDoc) {
+            docData = bankDoc;
+            preview = await downloadAndPrepareDoc(bankDoc);
+          } else if (rej && rej.status === 'Verified' && rej.currentDocumentPath) {
+            preview = await fetchKycDocByPath(rej.currentDocumentPath, 'Applicant_Bank_Statement');
+            docData = {
+              filePath: rej.currentDocumentPath,
+              fileName: preview?.fileName || 'Applicant_Bank_Statement',
+            };
           }
         }
 
-        if (bTypeId) {
-          try {
-            const docRes = await backOfficeService.getApplicantDocument(appProdId, seq, bTypeId);
-            const docData = docRes?.data || docRes?.value || docRes;
-            const docPath = docData?.documentPath || docData?.DocumentPath || docData?.filePath || docData?.FilePath;
-            const rej = getActiveRejectionForCoApplicantDoc(seq, bTypeId, 'BANK_STATEMENT');
-            let preview = null;
-            let comparison = null;
-
-            if (rej && rej.status === 'Resubmitted') {
-              const oldPromise = rej.originalDocumentPath
-                ? fetchKycDocByPath(rej.originalDocumentPath, `CoApplicant_${co.number}_Bank_Statement_Old`)
-                : Promise.resolve(null);
-              const newPromise = rej.currentDocumentPath
-                ? fetchKycDocByPath(rej.currentDocumentPath, `CoApplicant_${co.number}_Bank_Statement`)
-                : (docPath ? fetchKycDocByPath(docPath, `CoApplicant_${co.number}_Bank_Statement`) : Promise.resolve(null));
-              const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
-              comparison = {
-                oldDoc: oldRes,
-                newDoc: newRes,
-                hasOldVersion: Boolean(oldRes?.url),
-                hasNewVersion: Boolean(newRes?.url),
-                note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
-                rejection: rej,
-              };
-              preview = newRes || oldRes;
-            } else if (docPath) {
-              preview = await fetchKycDocByPath(docPath, `CoApplicant_${co.number}_Bank_Statement`);
-            }
-
-            coBankStatement = { loading: false, data: docData, preview, comparison, rejection: rej, error: null };
-          } catch (err) {
-            coBankStatement = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
-          }
+        if (currentGen === financialFetchGenRef.current) {
+          setApplicantFinancialDocs((prev) => ({
+            ...prev,
+            bankStatement: {
+              loading: false,
+              data: docData,
+              preview,
+              comparison,
+              rejection: rej,
+              error: null,
+            },
+          }));
         }
-
-        coMap[idxKey] = {
-          salarySlip: coSalarySlip,
-          bankStatement: coBankStatement,
-        };
+      } catch (err) {
+        console.warn('Could not load applicant bank statement:', err);
+        if (currentGen === financialFetchGenRef.current) {
+          setApplicantFinancialDocs((prev) => ({
+            ...prev,
+            bankStatement: { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null },
+          }));
+        }
       }
-      setCoApplicantsFinancialDocs(coMap);
-    }
+    })();
+
+    // 3. Co-Applicants Salary Slips & Bank Statements (All Co-Applicants Concurrently)
+    const coPromises = (appProdId && coApplicants && coApplicants.length > 0)
+      ? coApplicants.map(async (co) => {
+          const seq = co.sequence !== undefined ? co.sequence : (co.index !== undefined ? co.index + 1 : co.number);
+          const idxKey = co.index !== undefined ? co.index : (seq - 1);
+
+          let coSalarySlip = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
+          let coBankStatement = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
+
+          const salaryCoPromise = (async () => {
+            if (!sTypeId) return;
+            try {
+              const docRes = await backOfficeService.getApplicantDocument(appProdId, seq, sTypeId);
+              const docData = docRes?.data || docRes?.value || docRes;
+              const docPath = docData?.documentPath || docData?.DocumentPath || docData?.filePath || docData?.FilePath;
+              const rej = getActiveRejectionForCoApplicantDoc(seq, sTypeId, 'SALARY_SLIP');
+              let preview = null;
+              let comparison = null;
+
+              if (rej && rej.status === 'Resubmitted') {
+                const oldPromise = rej.originalDocumentPath
+                  ? fetchKycDocByPath(rej.originalDocumentPath, `CoApplicant_${co.number}_Salary_Slip_Old`)
+                  : Promise.resolve(null);
+                const newPromise = rej.currentDocumentPath
+                  ? fetchKycDocByPath(rej.currentDocumentPath, `CoApplicant_${co.number}_Salary_Slip`)
+                  : (docPath ? fetchKycDocByPath(docPath, `CoApplicant_${co.number}_Salary_Slip`) : Promise.resolve(null));
+                const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+                comparison = {
+                  oldDoc: oldRes,
+                  newDoc: newRes,
+                  hasOldVersion: Boolean(oldRes?.url),
+                  hasNewVersion: Boolean(newRes?.url),
+                  note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
+                  rejection: rej,
+                };
+                preview = newRes || oldRes;
+              } else if (docPath) {
+                preview = await fetchKycDocByPath(docPath, `CoApplicant_${co.number}_Salary_Slip`);
+              }
+
+              coSalarySlip = { loading: false, data: docData, preview, comparison, rejection: rej, error: null };
+            } catch (err) {
+              coSalarySlip = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
+            }
+          })();
+
+          const bankCoPromise = (async () => {
+            if (!bTypeId) return;
+            try {
+              const docRes = await backOfficeService.getApplicantDocument(appProdId, seq, bTypeId);
+              const docData = docRes?.data || docRes?.value || docRes;
+              const docPath = docData?.documentPath || docData?.DocumentPath || docData?.filePath || docData?.FilePath;
+              const rej = getActiveRejectionForCoApplicantDoc(seq, bTypeId, 'BANK_STATEMENT');
+              let preview = null;
+              let comparison = null;
+
+              if (rej && rej.status === 'Resubmitted') {
+                const oldPromise = rej.originalDocumentPath
+                  ? fetchKycDocByPath(rej.originalDocumentPath, `CoApplicant_${co.number}_Bank_Statement_Old`)
+                  : Promise.resolve(null);
+                const newPromise = rej.currentDocumentPath
+                  ? fetchKycDocByPath(rej.currentDocumentPath, `CoApplicant_${co.number}_Bank_Statement`)
+                  : (docPath ? fetchKycDocByPath(docPath, `CoApplicant_${co.number}_Bank_Statement`) : Promise.resolve(null));
+                const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+                comparison = {
+                  oldDoc: oldRes,
+                  newDoc: newRes,
+                  hasOldVersion: Boolean(oldRes?.url),
+                  hasNewVersion: Boolean(newRes?.url),
+                  note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
+                  rejection: rej,
+                };
+                preview = newRes || oldRes;
+              } else if (docPath) {
+                preview = await fetchKycDocByPath(docPath, `CoApplicant_${co.number}_Bank_Statement`);
+              }
+
+              coBankStatement = { loading: false, data: docData, preview, comparison, rejection: rej, error: null };
+            } catch (err) {
+              coBankStatement = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
+            }
+          })();
+
+          await Promise.allSettled([salaryCoPromise, bankCoPromise]);
+
+          if (currentGen === financialFetchGenRef.current) {
+            setCoApplicantsFinancialDocs((prev) => ({
+              ...prev,
+              [idxKey]: {
+                salarySlip: coSalarySlip,
+                bankStatement: coBankStatement,
+              },
+            }));
+          }
+        })
+      : [];
+
+    await Promise.allSettled([fetchSalaryPromise, fetchBankPromise, ...coPromises]);
   }, [
     verificationData,
     salarySlipDocTypeId,
     bankStatementDocTypeId,
     coApplicants,
     allCustomerDocs,
+    isCustomerDocsLoading,
+    isSupplementaryKycLoading,
     docTypeMasterMap,
     getActiveRejectionForApplicantDoc,
     getActiveRejectionForCoApplicantDoc,
     downloadAndPrepareDoc,
     fetchKycDocByPath,
-    isMatchingApplicantDoc,
+    selectLatestApplicantDoc,
     resolveOldAndNewDocs,
   ]);
 
@@ -5162,6 +5289,7 @@ export default function CustomerVerification() {
   }, [activeStep, verificationData, fetchFinancialDocuments]);
 
   const handleRefreshDocumentPreview = useCallback((stepNum) => {
+    previewCacheRef.current.clear();
     if (stepNum === 2) {
       setDocPreviews((prev) => {
         if (prev?.profile?.comparison?.oldDoc?.url) {
@@ -5265,10 +5393,13 @@ export default function CustomerVerification() {
     }
   }, [fetchFinancialDocuments]);
 
-  // Fetch document previews whenever active document verification workspace is open (Applicant + Co-Applicants)
+  // Fetch document previews concurrently whenever active document verification workspace is open (Applicant + Co-Applicants)
   useEffect(() => {
     if (!verificationData) return;
     if (activeStep < 2 || activeStep > 7) return;
+    if (isCustomerDocsLoading || isSupplementaryKycLoading) return;
+
+    const currentGen = ++previewFetchGenRef.current;
 
     const combinedDocs = [...(allCustomerDocs || [])];
     const initialDocs = verificationData?.kycDocuments?.documents || [];
@@ -5278,21 +5409,12 @@ export default function CustomerVerification() {
       }
     });
 
-    // ── STEP 2: PROFILE IMAGE ──────────────────────────────────────
-    const appProfileRej = getActiveRejectionForApplicant(2, profileDocTypeId);
-    const prevProfileRejId = docPreviews.profile?.comparison?.rejection?.backOfficeDocumentRejectionId || docPreviews.profile?.rejection?.backOfficeDocumentRejectionId;
-    const currentProfileRejId = appProfileRej?.backOfficeDocumentRejectionId;
-    const profileNeedsRefresh =
-      !docPreviews.profile ||
-      (currentProfileRejId && prevProfileRejId !== currentProfileRejId) ||
-      (appProfileRej?.status === 'Resubmitted' && !docPreviews.profile?.isComparison);
-
-    if (profileNeedsRefresh) {
+    // ── STEP 2: PROFILE IMAGE (CONCURRENT TASK) ──────────────────────
+    (async () => {
+      const appProfileRej = getActiveRejectionForApplicant(2, profileDocTypeId);
       const appRej = appProfileRej;
-      setDocPreviews((prev) => ({ ...prev, profile: { loading: true, error: null, url: null } }));
 
       if (appRej && appRej.status === 'Resubmitted') {
-        // Resolve Old vs New documents
         const { oldDoc, newDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 2, docTypeMasterMap);
         const oldPromise = appRej.originalDocumentPath
           ? fetchKycDocByPath(appRej.originalDocumentPath, 'Applicant_Profile_Old.jpg')
@@ -5301,100 +5423,93 @@ export default function CustomerVerification() {
           ? fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Profile.jpg')
           : (newDoc ? downloadAndPrepareDoc(newDoc) : (applicantKycId ? fetchKycDocBlob(applicantKycId, 'profile-image', 'Applicant_Profile') : Promise.resolve(null)));
 
-        Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
+        const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+        if (currentGen !== previewFetchGenRef.current) return;
+        setDocPreviews((prev) => ({
+          ...prev,
+          profile: {
+            loading: false,
+            error: null,
+            isComparison: true,
+            comparison: {
+              oldDoc: oldRes,
+              newDoc: newRes,
+              hasOldVersion: Boolean(oldRes?.url),
+              hasNewVersion: Boolean(newRes?.url),
+              note: !oldRes?.url
+                ? (!appRej.originalDocumentPath
+                    ? 'Prior version path was not recorded for this rejection.'
+                    : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                : null,
+              rejection: appRej,
+            },
+            url: newRes?.url || oldRes?.url || null,
+            doc: newRes?.doc || oldRes?.doc || null,
+            fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_Profile.jpg',
+            size: newRes?.size || oldRes?.size || null,
+            isImage: true,
+            isPdf: false,
+            rejection: appRej,
+          },
+        }));
+      } else {
+        const latestDoc = selectLatestApplicantDoc(combinedDocs, 'PROFILE_IMAGE', docTypeMasterMap, 0);
+        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 2, docTypeMasterMap);
+        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc || latestDoc);
+
+        if (targetDoc) {
+          const res = await downloadAndPrepareDoc(targetDoc);
+          if (currentGen !== previewFetchGenRef.current) return;
           setDocPreviews((prev) => ({
             ...prev,
             profile: {
               loading: false,
-              error: null,
-              isComparison: true,
-              comparison: {
-                oldDoc: oldRes,
-                newDoc: newRes,
-                hasOldVersion: Boolean(oldRes?.url),
-                hasNewVersion: Boolean(newRes?.url),
-                note: !oldRes?.url
-                  ? (!appRej.originalDocumentPath
-                      ? 'Prior version path was not recorded for this rejection.'
-                      : (oldRes?.error || 'Previous version could not be retrieved from server.'))
-                  : null,
-                rejection: appRej,
-              },
-              url: newRes?.url || oldRes?.url || null,
-              doc: newRes?.doc || oldRes?.doc || null,
-              fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_Profile.jpg',
-              size: newRes?.size || oldRes?.size || null,
+              error: res ? null : 'Failed to download document.',
+              isComparison: false,
+              comparison: null,
+              url: res?.url || null,
+              doc: targetDoc,
+              fileName: res?.fileName || targetDoc.fileName || 'Applicant_Profile.jpg',
+              size: res?.size || null,
               isImage: true,
               isPdf: false,
               rejection: appRej,
             },
           }));
-        });
-      } else {
-        // Standard / Verified / ReturnedToRM single preview
-        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 2, docTypeMasterMap);
-        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc);
-
-        if (targetDoc) {
-          downloadAndPrepareDoc(targetDoc).then((res) => {
-            setDocPreviews((prev) => ({
-              ...prev,
-              profile: {
-                loading: false,
-                error: res ? null : 'Failed to download document.',
-                isComparison: false,
-                comparison: null,
-                url: res?.url || null,
-                doc: targetDoc,
-                fileName: res?.fileName || targetDoc.fileName || 'Applicant_Profile.jpg',
-                size: res?.size || null,
-                isImage: true,
-                isPdf: false,
-                rejection: appRej,
-              },
-            }));
-          });
         } else if (appRej?.currentDocumentPath) {
-          fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Profile.jpg').then((res) => {
-            setDocPreviews((prev) => ({
-              ...prev,
-              profile: {
-                ...res,
-                isComparison: false,
-                comparison: null,
-                rejection: appRej,
-              },
-            }));
-          });
+          const res = await fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Profile.jpg');
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            profile: {
+              ...res,
+              isComparison: false,
+              comparison: null,
+              rejection: appRej,
+            },
+          }));
         } else if (applicantKycId) {
-          fetchKycDocBlob(applicantKycId, 'profile-image', 'Applicant_Profile').then((res) => {
-            setDocPreviews((prev) => ({ ...prev, profile: { ...res, isComparison: false, comparison: null, rejection: appRej } }));
-          });
+          const res = await fetchKycDocBlob(applicantKycId, 'profile-image', 'Applicant_Profile');
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            profile: { ...res, isComparison: false, comparison: null, rejection: appRej },
+          }));
         } else {
-          setDocPreviews((prev) => ({ ...prev, profile: { loading: false, error: null, doc: null, url: null, rejection: appRej } }));
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            profile: { loading: false, error: null, doc: null, url: null, rejection: appRej },
+          }));
         }
       }
-    }
+    })();
 
-    // Co-Applicants Profile Images
-    coApplicants.forEach((co) => {
-      const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 2, co.sequence || co.number || (co.index + 1));
-      const prevCoRejId = coDocPreviews[co.index]?.profile?.comparison?.rejection?.backOfficeDocumentRejectionId || coDocPreviews[co.index]?.profile?.rejection?.backOfficeDocumentRejectionId;
-      const currentCoRejId = coRej?.backOfficeDocumentRejectionId;
-      const coNeedsRefresh =
-        !coDocPreviews[co.index]?.profile ||
-        (currentCoRejId && prevCoRejId !== currentCoRejId) ||
-        (coRej?.status === 'Resubmitted' && !coDocPreviews[co.index]?.profile?.isComparison);
-
-      if (coNeedsRefresh && co.kycDocumentId) {
-        setCoDocPreviews((prev) => ({
-          ...prev,
-          [co.index]: {
-            ...(prev[co.index] || {}),
-            profile: { loading: true, error: null, url: null },
-          },
-        }));
-
+    // ── STEP 2: CO-APPLICANTS PROFILE IMAGES (CONCURRENT TASKS) ──────
+    (coApplicants || []).forEach((co) => {
+      if (!co.kycDocumentId) return;
+      (async () => {
+        const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 2, co.sequence || co.number || (co.index + 1));
         if (coRej && coRej.status === 'Resubmitted') {
           const oldPromise = coRej.originalDocumentPath
             ? fetchKycDocByPath(coRej.originalDocumentPath, `CoApplicant_${co.number}_Profile_Old.jpg`)
@@ -5403,63 +5518,55 @@ export default function CustomerVerification() {
             ? fetchKycDocByPath(coRej.currentDocumentPath, `CoApplicant_${co.number}_Profile.jpg`)
             : fetchKycDocBlob(co.kycDocumentId, 'profile-image', `CoApplicant_${co.number}_Profile`);
 
-          Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
-            setCoDocPreviews((prev) => ({
-              ...prev,
-              [co.index]: {
-                ...(prev[co.index] || {}),
-                profile: {
-                  loading: false,
-                  error: null,
-                  isComparison: true,
-                  comparison: {
-                    oldDoc: oldRes,
-                    newDoc: newRes,
-                    hasOldVersion: Boolean(oldRes?.url),
-                    hasNewVersion: Boolean(newRes?.url),
-                    note: !oldRes?.url
-                      ? (!coRej.originalDocumentPath
-                          ? 'Prior version path was not recorded for this rejection.'
-                          : (oldRes?.error || 'Previous version could not be retrieved from server.'))
-                      : null,
-                    rejection: coRej,
-                  },
-                  url: newRes?.url || oldRes?.url || null,
-                  fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_Profile.jpg`,
-                  size: newRes?.size || oldRes?.size || null,
-                  isImage: true,
-                  isPdf: false,
+          const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+          if (currentGen !== previewFetchGenRef.current) return;
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              profile: {
+                loading: false,
+                error: null,
+                isComparison: true,
+                comparison: {
+                  oldDoc: oldRes,
+                  newDoc: newRes,
+                  hasOldVersion: Boolean(oldRes?.url),
+                  hasNewVersion: Boolean(newRes?.url),
+                  note: !oldRes?.url
+                    ? (!coRej.originalDocumentPath
+                        ? 'Prior version path was not recorded for this rejection.'
+                        : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                    : null,
                   rejection: coRej,
                 },
+                url: newRes?.url || oldRes?.url || null,
+                fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_Profile.jpg`,
+                size: newRes?.size || oldRes?.size || null,
+                isImage: true,
+                isPdf: false,
+                rejection: coRej,
               },
-            }));
-          });
+            },
+          }));
         } else {
-          fetchKycDocBlob(co.kycDocumentId, 'profile-image', `CoApplicant_${co.number}_Profile`).then((res) => {
-            setCoDocPreviews((prev) => ({
-              ...prev,
-              [co.index]: {
-                ...(prev[co.index] || {}),
-                profile: { ...res, isComparison: false, comparison: null, rejection: coRej },
-              },
-            }));
-          });
+          const res = await fetchKycDocBlob(co.kycDocumentId, 'profile-image', `CoApplicant_${co.number}_Profile`);
+          if (currentGen !== previewFetchGenRef.current) return;
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              profile: { ...res, isComparison: false, comparison: null, rejection: coRej },
+            },
+          }));
         }
-      }
+      })();
     });
 
-    // ── STEP 3: AADHAAR CARD ───────────────────────────────────────
-    const appAadhaarRej = getActiveRejectionForApplicant(3, aadhaarDocTypeId);
-    const prevAadhaarRejId = docPreviews.aadhaar?.comparison?.rejection?.backOfficeDocumentRejectionId || docPreviews.aadhaar?.rejection?.backOfficeDocumentRejectionId;
-    const currentAadhaarRejId = appAadhaarRej?.backOfficeDocumentRejectionId;
-    const aadhaarNeedsRefresh =
-      !docPreviews.aadhaar ||
-      (currentAadhaarRejId && prevAadhaarRejId !== currentAadhaarRejId) ||
-      (appAadhaarRej?.status === 'Resubmitted' && !docPreviews.aadhaar?.isComparison);
-
-    if (aadhaarNeedsRefresh) {
+    // ── STEP 3: AADHAAR CARD (CONCURRENT TASK) ───────────────────────
+    (async () => {
+      const appAadhaarRej = getActiveRejectionForApplicant(3, aadhaarDocTypeId);
       const appRej = appAadhaarRej;
-      setDocPreviews((prev) => ({ ...prev, aadhaar: { loading: true, error: null, url: null } }));
 
       if (appRej && appRej.status === 'Resubmitted') {
         const { oldDoc, newDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 3, docTypeMasterMap);
@@ -5470,99 +5577,93 @@ export default function CustomerVerification() {
           ? fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Aadhaar')
           : (newDoc ? downloadAndPrepareDoc(newDoc) : (applicantKycId ? fetchKycDocBlob(applicantKycId, 'aadhar', 'Applicant_Aadhaar') : Promise.resolve(null)));
 
-        Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
+        const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+        if (currentGen !== previewFetchGenRef.current) return;
+        setDocPreviews((prev) => ({
+          ...prev,
+          aadhaar: {
+            loading: false,
+            error: null,
+            isComparison: true,
+            comparison: {
+              oldDoc: oldRes,
+              newDoc: newRes,
+              hasOldVersion: Boolean(oldRes?.url),
+              hasNewVersion: Boolean(newRes?.url),
+              note: !oldRes?.url
+                ? (!appRej.originalDocumentPath
+                    ? 'Prior version path was not recorded for this rejection.'
+                    : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                : null,
+              rejection: appRej,
+            },
+            url: newRes?.url || oldRes?.url || null,
+            doc: newRes?.doc || oldRes?.doc || null,
+            fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_Aadhaar.pdf',
+            size: newRes?.size || oldRes?.size || null,
+            isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
+            isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+            rejection: appRej,
+          },
+        }));
+      } else {
+        const latestDoc = selectLatestApplicantDoc(combinedDocs, 'AADHAAR', docTypeMasterMap, 0);
+        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 3, docTypeMasterMap);
+        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc || latestDoc);
+
+        if (targetDoc) {
+          const res = await downloadAndPrepareDoc(targetDoc);
+          if (currentGen !== previewFetchGenRef.current) return;
           setDocPreviews((prev) => ({
             ...prev,
             aadhaar: {
               loading: false,
-              error: null,
-              isComparison: true,
-              comparison: {
-                oldDoc: oldRes,
-                newDoc: newRes,
-                hasOldVersion: Boolean(oldRes?.url),
-                hasNewVersion: Boolean(newRes?.url),
-                note: !oldRes?.url
-                  ? (!appRej.originalDocumentPath
-                      ? 'Prior version path was not recorded for this rejection.'
-                      : (oldRes?.error || 'Previous version could not be retrieved from server.'))
-                  : null,
-                rejection: appRej,
-              },
-              url: newRes?.url || oldRes?.url || null,
-              doc: newRes?.doc || oldRes?.doc || null,
-              fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_Aadhaar.pdf',
-              size: newRes?.size || oldRes?.size || null,
-              isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
-              isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+              error: res ? null : 'Failed to download Aadhaar document.',
+              isComparison: false,
+              comparison: null,
+              url: res?.url || null,
+              doc: targetDoc,
+              fileName: res?.fileName || targetDoc.fileName || 'Applicant_Aadhaar.pdf',
+              size: res?.size || null,
+              isPdf: Boolean(res?.isPdf),
+              isImage: Boolean(res?.isImage),
               rejection: appRej,
             },
           }));
-        });
-      } else {
-        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 3, docTypeMasterMap);
-        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc);
-
-        if (targetDoc) {
-          downloadAndPrepareDoc(targetDoc).then((res) => {
-            setDocPreviews((prev) => ({
-              ...prev,
-              aadhaar: {
-                loading: false,
-                error: res ? null : 'Failed to download Aadhaar document.',
-                isComparison: false,
-                comparison: null,
-                url: res?.url || null,
-                doc: targetDoc,
-                fileName: res?.fileName || targetDoc.fileName || 'Applicant_Aadhaar.pdf',
-                size: res?.size || null,
-                isPdf: Boolean(res?.isPdf),
-                isImage: Boolean(res?.isImage),
-                rejection: appRej,
-              },
-            }));
-          });
         } else if (appRej?.currentDocumentPath) {
-          fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Aadhaar').then((res) => {
-            setDocPreviews((prev) => ({
-              ...prev,
-              aadhaar: {
-                ...res,
-                isComparison: false,
-                comparison: null,
-                rejection: appRej,
-              },
-            }));
-          });
+          const res = await fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Aadhaar');
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            aadhaar: {
+              ...res,
+              isComparison: false,
+              comparison: null,
+              rejection: appRej,
+            },
+          }));
         } else if (applicantKycId) {
-          fetchKycDocBlob(applicantKycId, 'aadhar', 'Applicant_Aadhaar').then((res) => {
-            setDocPreviews((prev) => ({ ...prev, aadhaar: { ...res, isComparison: false, comparison: null, rejection: appRej } }));
-          });
+          const res = await fetchKycDocBlob(applicantKycId, 'aadhar', 'Applicant_Aadhaar');
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            aadhaar: { ...res, isComparison: false, comparison: null, rejection: appRej },
+          }));
         } else {
-          setDocPreviews((prev) => ({ ...prev, aadhaar: { loading: false, error: null, doc: null, url: null, rejection: appRej } }));
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            aadhaar: { loading: false, error: null, doc: null, url: null, rejection: appRej },
+          }));
         }
       }
-    }
+    })();
 
-    // Co-Applicants Aadhaar
-    coApplicants.forEach((co) => {
-      const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 3, co.sequence || co.number || (co.index + 1));
-      const prevCoAadhaarRejId = coDocPreviews[co.index]?.aadhaar?.comparison?.rejection?.backOfficeDocumentRejectionId || coDocPreviews[co.index]?.aadhaar?.rejection?.backOfficeDocumentRejectionId;
-      const currentCoAadhaarRejId = coRej?.backOfficeDocumentRejectionId;
-      const coAadhaarNeedsRefresh =
-        !coDocPreviews[co.index]?.aadhaar ||
-        (currentCoAadhaarRejId && prevCoAadhaarRejId !== currentCoAadhaarRejId) ||
-        (coRej?.status === 'Resubmitted' && !coDocPreviews[co.index]?.aadhaar?.isComparison);
-
-      if (coAadhaarNeedsRefresh && co.kycDocumentId) {
-        setCoDocPreviews((prev) => ({
-          ...prev,
-          [co.index]: {
-            ...(prev[co.index] || {}),
-            aadhaar: { loading: true, error: null, url: null },
-          },
-        }));
-
+    // ── STEP 3: CO-APPLICANTS AADHAAR (CONCURRENT TASKS) ─────────────
+    (coApplicants || []).forEach((co) => {
+      if (!co.kycDocumentId) return;
+      (async () => {
+        const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 3, co.sequence || co.number || (co.index + 1));
         if (coRej && coRej.status === 'Resubmitted') {
           const oldPromise = coRej.originalDocumentPath
             ? fetchKycDocByPath(coRej.originalDocumentPath, `CoApplicant_${co.number}_Aadhaar_Old`)
@@ -5571,63 +5672,55 @@ export default function CustomerVerification() {
             ? fetchKycDocByPath(coRej.currentDocumentPath, `CoApplicant_${co.number}_Aadhaar`)
             : fetchKycDocBlob(co.kycDocumentId, 'aadhar', `CoApplicant_${co.number}_Aadhaar`);
 
-          Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
-            setCoDocPreviews((prev) => ({
-              ...prev,
-              [co.index]: {
-                ...(prev[co.index] || {}),
-                aadhaar: {
-                  loading: false,
-                  error: null,
-                  isComparison: true,
-                  comparison: {
-                    oldDoc: oldRes,
-                    newDoc: newRes,
-                    hasOldVersion: Boolean(oldRes?.url),
-                    hasNewVersion: Boolean(newRes?.url),
-                    note: !oldRes?.url
-                      ? (!coRej.originalDocumentPath
-                          ? 'Prior version path was not recorded for this rejection.'
-                          : (oldRes?.error || 'Previous version could not be retrieved from server.'))
-                      : null,
-                    rejection: coRej,
-                  },
-                  url: newRes?.url || oldRes?.url || null,
-                  fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_Aadhaar`,
-                  size: newRes?.size || oldRes?.size || null,
-                  isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
-                  isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+          const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+          if (currentGen !== previewFetchGenRef.current) return;
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              aadhaar: {
+                loading: false,
+                error: null,
+                isComparison: true,
+                comparison: {
+                  oldDoc: oldRes,
+                  newDoc: newRes,
+                  hasOldVersion: Boolean(oldRes?.url),
+                  hasNewVersion: Boolean(newRes?.url),
+                  note: !oldRes?.url
+                    ? (!coRej.originalDocumentPath
+                        ? 'Prior version path was not recorded for this rejection.'
+                        : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                    : null,
                   rejection: coRej,
                 },
+                url: newRes?.url || oldRes?.url || null,
+                fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_Aadhaar`,
+                size: newRes?.size || oldRes?.size || null,
+                isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
+                isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+                rejection: coRej,
               },
-            }));
-          });
+            },
+          }));
         } else {
-          fetchKycDocBlob(co.kycDocumentId, 'aadhar', `CoApplicant_${co.number}_Aadhaar`).then((res) => {
-            setCoDocPreviews((prev) => ({
-              ...prev,
-              [co.index]: {
-                ...(prev[co.index] || {}),
-                aadhaar: { ...res, isComparison: false, comparison: null, rejection: coRej },
-              },
-            }));
-          });
+          const res = await fetchKycDocBlob(co.kycDocumentId, 'aadhar', `CoApplicant_${co.number}_Aadhaar`);
+          if (currentGen !== previewFetchGenRef.current) return;
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              aadhaar: { ...res, isComparison: false, comparison: null, rejection: coRej },
+            },
+          }));
         }
-      }
+      })();
     });
 
-    // ── STEP 4: PAN CARD ───────────────────────────────────────────
-    const appPanRej = getActiveRejectionForApplicant(4, panDocTypeId);
-    const prevPanRejId = docPreviews.pan?.comparison?.rejection?.backOfficeDocumentRejectionId || docPreviews.pan?.rejection?.backOfficeDocumentRejectionId;
-    const currentPanRejId = appPanRej?.backOfficeDocumentRejectionId;
-    const panNeedsRefresh =
-      !docPreviews.pan ||
-      (currentPanRejId && prevPanRejId !== currentPanRejId) ||
-      (appPanRej?.status === 'Resubmitted' && !docPreviews.pan?.isComparison);
-
-    if (panNeedsRefresh) {
+    // ── STEP 4: PAN CARD (CONCURRENT TASK) ───────────────────────────
+    (async () => {
+      const appPanRej = getActiveRejectionForApplicant(4, panDocTypeId);
       const appRej = appPanRej;
-      setDocPreviews((prev) => ({ ...prev, pan: { loading: true, error: null, url: null } }));
 
       if (appRej && appRej.status === 'Resubmitted') {
         const { oldDoc, newDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 4, docTypeMasterMap);
@@ -5638,99 +5731,93 @@ export default function CustomerVerification() {
           ? fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_PAN')
           : (newDoc ? downloadAndPrepareDoc(newDoc) : (applicantKycId ? fetchKycDocBlob(applicantKycId, 'pan', 'Applicant_PAN') : Promise.resolve(null)));
 
-        Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
+        const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+        if (currentGen !== previewFetchGenRef.current) return;
+        setDocPreviews((prev) => ({
+          ...prev,
+          pan: {
+            loading: false,
+            error: null,
+            isComparison: true,
+            comparison: {
+              oldDoc: oldRes,
+              newDoc: newRes,
+              hasOldVersion: Boolean(oldRes?.url),
+              hasNewVersion: Boolean(newRes?.url),
+              note: !oldRes?.url
+                ? (!appRej.originalDocumentPath
+                    ? 'Prior version path was not recorded for this rejection.'
+                    : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                : null,
+              rejection: appRej,
+            },
+            url: newRes?.url || oldRes?.url || null,
+            doc: newRes?.doc || oldRes?.doc || null,
+            fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_PAN.pdf',
+            size: newRes?.size || oldRes?.size || null,
+            isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
+            isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+            rejection: appRej,
+          },
+        }));
+      } else {
+        const latestDoc = selectLatestApplicantDoc(combinedDocs, 'PAN', docTypeMasterMap, 0);
+        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 4, docTypeMasterMap);
+        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc || latestDoc);
+
+        if (targetDoc) {
+          const res = await downloadAndPrepareDoc(targetDoc);
+          if (currentGen !== previewFetchGenRef.current) return;
           setDocPreviews((prev) => ({
             ...prev,
             pan: {
               loading: false,
-              error: null,
-              isComparison: true,
-              comparison: {
-                oldDoc: oldRes,
-                newDoc: newRes,
-                hasOldVersion: Boolean(oldRes?.url),
-                hasNewVersion: Boolean(newRes?.url),
-                note: !oldRes?.url
-                  ? (!appRej.originalDocumentPath
-                      ? 'Prior version path was not recorded for this rejection.'
-                      : (oldRes?.error || 'Previous version could not be retrieved from server.'))
-                  : null,
-                rejection: appRej,
-              },
-              url: newRes?.url || oldRes?.url || null,
-              doc: newRes?.doc || oldRes?.doc || null,
-              fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_PAN.pdf',
-              size: newRes?.size || oldRes?.size || null,
-              isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
-              isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+              error: res ? null : 'Failed to download PAN document.',
+              isComparison: false,
+              comparison: null,
+              url: res?.url || null,
+              doc: targetDoc,
+              fileName: res?.fileName || targetDoc.fileName || 'Applicant_PAN.pdf',
+              size: res?.size || null,
+              isPdf: Boolean(res?.isPdf),
+              isImage: Boolean(res?.isImage),
               rejection: appRej,
             },
           }));
-        });
-      } else {
-        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 4, docTypeMasterMap);
-        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc);
-
-        if (targetDoc) {
-          downloadAndPrepareDoc(targetDoc).then((res) => {
-            setDocPreviews((prev) => ({
-              ...prev,
-              pan: {
-                loading: false,
-                error: res ? null : 'Failed to download PAN document.',
-                isComparison: false,
-                comparison: null,
-                url: res?.url || null,
-                doc: targetDoc,
-                fileName: res?.fileName || targetDoc.fileName || 'Applicant_PAN.pdf',
-                size: res?.size || null,
-                isPdf: Boolean(res?.isPdf),
-                isImage: Boolean(res?.isImage),
-                rejection: appRej,
-              },
-            }));
-          });
         } else if (appRej?.currentDocumentPath) {
-          fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_PAN').then((res) => {
-            setDocPreviews((prev) => ({
-              ...prev,
-              pan: {
-                ...res,
-                isComparison: false,
-                comparison: null,
-                rejection: appRej,
-              },
-            }));
-          });
+          const res = await fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_PAN');
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            pan: {
+              ...res,
+              isComparison: false,
+              comparison: null,
+              rejection: appRej,
+            },
+          }));
         } else if (applicantKycId) {
-          fetchKycDocBlob(applicantKycId, 'pan', 'Applicant_PAN').then((res) => {
-            setDocPreviews((prev) => ({ ...prev, pan: { ...res, isComparison: false, comparison: null, rejection: appRej } }));
-          });
+          const res = await fetchKycDocBlob(applicantKycId, 'pan', 'Applicant_PAN');
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            pan: { ...res, isComparison: false, comparison: null, rejection: appRej },
+          }));
         } else {
-          setDocPreviews((prev) => ({ ...prev, pan: { loading: false, error: null, doc: null, url: null, rejection: appRej } }));
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            pan: { loading: false, error: null, doc: null, url: null, rejection: appRej },
+          }));
         }
       }
-    }
+    })();
 
-    // Co-Applicants PAN
-    coApplicants.forEach((co) => {
-      const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 4, co.sequence || co.number || (co.index + 1));
-      const prevCoPanRejId = coDocPreviews[co.index]?.pan?.comparison?.rejection?.backOfficeDocumentRejectionId || coDocPreviews[co.index]?.pan?.rejection?.backOfficeDocumentRejectionId;
-      const currentCoPanRejId = coRej?.backOfficeDocumentRejectionId;
-      const coPanNeedsRefresh =
-        !coDocPreviews[co.index]?.pan ||
-        (currentCoPanRejId && prevCoPanRejId !== currentCoPanRejId) ||
-        (coRej?.status === 'Resubmitted' && !coDocPreviews[co.index]?.pan?.isComparison);
-
-      if (coPanNeedsRefresh && co.kycDocumentId) {
-        setCoDocPreviews((prev) => ({
-          ...prev,
-          [co.index]: {
-            ...(prev[co.index] || {}),
-            pan: { loading: true, error: null, url: null },
-          },
-        }));
-
+    // ── STEP 4: CO-APPLICANTS PAN (CONCURRENT TASKS) ─────────────────
+    (coApplicants || []).forEach((co) => {
+      if (!co.kycDocumentId) return;
+      (async () => {
+        const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 4, co.sequence || co.number || (co.index + 1));
         if (coRej && coRej.status === 'Resubmitted') {
           const oldPromise = coRej.originalDocumentPath
             ? fetchKycDocByPath(coRej.originalDocumentPath, `CoApplicant_${co.number}_PAN_Old`)
@@ -5739,75 +5826,73 @@ export default function CustomerVerification() {
             ? fetchKycDocByPath(coRej.currentDocumentPath, `CoApplicant_${co.number}_PAN`)
             : fetchKycDocBlob(co.kycDocumentId, 'pan', `CoApplicant_${co.number}_PAN`);
 
-          Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
-            setCoDocPreviews((prev) => ({
-              ...prev,
-              [co.index]: {
-                ...(prev[co.index] || {}),
-                pan: {
-                  loading: false,
-                  error: null,
-                  isComparison: true,
-                  comparison: {
-                    oldDoc: oldRes,
-                    newDoc: newRes,
-                    hasOldVersion: Boolean(oldRes?.url),
-                    hasNewVersion: Boolean(newRes?.url),
-                    note: !oldRes?.url
-                      ? (!coRej.originalDocumentPath
-                          ? 'Prior version path was not recorded for this rejection.'
-                          : (oldRes?.error || 'Previous version could not be retrieved from server.'))
-                      : null,
-                    rejection: coRej,
-                  },
-                  url: newRes?.url || oldRes?.url || null,
-                  fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_PAN`,
-                  size: newRes?.size || oldRes?.size || null,
-                  isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
-                  isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+          const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+          if (currentGen !== previewFetchGenRef.current) return;
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              pan: {
+                loading: false,
+                error: null,
+                isComparison: true,
+                comparison: {
+                  oldDoc: oldRes,
+                  newDoc: newRes,
+                  hasOldVersion: Boolean(oldRes?.url),
+                  hasNewVersion: Boolean(newRes?.url),
+                  note: !oldRes?.url
+                    ? (!coRej.originalDocumentPath
+                        ? 'Prior version path was not recorded for this rejection.'
+                        : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                    : null,
                   rejection: coRej,
                 },
+                url: newRes?.url || oldRes?.url || null,
+                fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_PAN`,
+                size: newRes?.size || oldRes?.size || null,
+                isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
+                isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+                rejection: coRej,
               },
-            }));
-          });
+            },
+          }));
         } else {
-          fetchKycDocBlob(co.kycDocumentId, 'pan', `CoApplicant_${co.number}_PAN`).then((res) => {
-            setCoDocPreviews((prev) => ({
-              ...prev,
-              [co.index]: {
-                ...(prev[co.index] || {}),
-                pan: { ...res, isComparison: false, comparison: null, rejection: coRej },
-              },
-            }));
-          });
+          const res = await fetchKycDocBlob(co.kycDocumentId, 'pan', `CoApplicant_${co.number}_PAN`);
+          if (currentGen !== previewFetchGenRef.current) return;
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              pan: { ...res, isComparison: false, comparison: null, rejection: coRej },
+            },
+          }));
         }
-      }
+      })();
     });
 
-    // ── STEP 7: ZIP ARCHIVE ────────────────────────────────────────
-    if (!docPreviews.zip) {
-      const zipDoc = combinedDocs.find(
-        (d) =>
-          /\.zip$/i.test(d.fileName || '') ||
-          /(zip|archive)/i.test(d.documentTypeName || d.name || d.fileName || '')
-      );
-      if (zipDoc) {
-        setDocPreviews((prev) => ({
-          ...prev,
-          zip: { loading: false, error: null, doc: zipDoc, url: null },
-        }));
-      } else {
-        setDocPreviews((prev) => ({ ...prev, zip: { loading: false, error: null, doc: null, url: null } }));
-      }
+    // ── STEP 7: ZIP ARCHIVE ──────────────────────────────────────────
+    const zipDoc = combinedDocs.find(
+      (d) =>
+        /\.zip$/i.test(d.fileName || '') ||
+        /(zip|archive)/i.test(d.documentTypeName || d.name || d.fileName || '')
+    );
+    if (zipDoc) {
+      setDocPreviews((prev) => ({
+        ...prev,
+        zip: { loading: false, error: null, doc: zipDoc, url: null },
+      }));
+    } else {
+      setDocPreviews((prev) => ({ ...prev, zip: { loading: false, error: null, doc: null, url: null } }));
     }
   }, [
     activeStep,
     verificationData,
+    isCustomerDocsLoading,
+    isSupplementaryKycLoading,
     allCustomerDocs,
     docTypeMasterMap,
     applicationRejections,
-    docPreviews,
-    coDocPreviews,
     downloadAndPrepareDoc,
     fetchKycDocBlob,
     fetchKycDocByPath,
@@ -5816,6 +5901,7 @@ export default function CustomerVerification() {
     getActiveRejectionForApplicant,
     getActiveRejectionForCoApplicant,
     resolveOldAndNewDocs,
+    selectLatestApplicantDoc,
     profileDocTypeId,
     aadhaarDocTypeId,
     panDocTypeId,
@@ -6792,7 +6878,7 @@ export default function CustomerVerification() {
         const blobData = await backOfficeService.downloadCustomerDocument(doc.agentCustomerDocumentId);
         const blobUrl = URL.createObjectURL(new Blob([blobData]));
         handleDownloadFile(blobUrl, fileName);
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
         return;
       } catch (e) {
         console.error('Failed to download customer document:', e);
@@ -6810,7 +6896,7 @@ export default function CustomerVerification() {
           const blob = await res.blob();
           const blobUrl = URL.createObjectURL(blob);
           handleDownloadFile(blobUrl, fileName);
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
           return;
         }
       } catch (err) {
@@ -7950,14 +8036,20 @@ export default function CustomerVerification() {
                               <td className="bo-cv-doc-td-details">
                                 <div className="bo-cv-doc-file-info">
                                   <span className="bo-cv-doc-filename" title={row.fileName}>
-                                    {row.fileName}
+                                    {row.loading ? 'Loading document...' : row.fileName}
                                   </span>
                                   <div className="bo-cv-doc-file-meta">
-                                    {row.fileSize && <span>{formatFileSize(row.fileSize)}</span>}
-                                    {row.fileSize && row.uploadDate && <span>•</span>}
-                                    {row.uploadDate && <span>{formatUploadDate(row.uploadDate)}</span>}
-                                    {!row.fileSize && !row.uploadDate && (
-                                      <span className="bo-cv-doc-meta-empty">{row.hasFile ? 'Uploaded' : 'Not available'}</span>
+                                    {row.loading ? (
+                                      <span className="bo-cv-doc-meta-loading">Fetching preview...</span>
+                                    ) : (
+                                      <>
+                                        {row.fileSize && <span>{formatFileSize(row.fileSize)}</span>}
+                                        {row.fileSize && row.uploadDate && <span>•</span>}
+                                        {row.uploadDate && <span>{formatUploadDate(row.uploadDate)}</span>}
+                                        {!row.fileSize && !row.uploadDate && (
+                                          <span className="bo-cv-doc-meta-empty">{row.hasFile ? 'Uploaded' : 'Not available'}</span>
+                                        )}
+                                      </>
                                     )}
                                   </div>
                                 </div>
@@ -8164,14 +8256,20 @@ export default function CustomerVerification() {
                                 <td className="bo-cv-doc-td-details">
                                   <div className="bo-cv-doc-file-info">
                                     <span className="bo-cv-doc-filename" title={row.fileName}>
-                                      {row.fileName}
+                                      {row.loading ? 'Loading document...' : row.fileName}
                                     </span>
                                     <div className="bo-cv-doc-file-meta">
-                                      {row.fileSize && <span>{formatFileSize(row.fileSize)}</span>}
-                                      {row.fileSize && row.uploadDate && <span>•</span>}
-                                      {row.uploadDate && <span>{formatUploadDate(row.uploadDate)}</span>}
-                                      {!row.fileSize && !row.uploadDate && (
-                                        <span className="bo-cv-doc-meta-empty">{row.hasFile ? 'Uploaded' : 'Not available'}</span>
+                                      {row.loading ? (
+                                        <span className="bo-cv-doc-meta-loading">Fetching preview...</span>
+                                      ) : (
+                                        <>
+                                          {row.fileSize && <span>{formatFileSize(row.fileSize)}</span>}
+                                          {row.fileSize && row.uploadDate && <span>•</span>}
+                                          {row.uploadDate && <span>{formatUploadDate(row.uploadDate)}</span>}
+                                          {!row.fileSize && !row.uploadDate && (
+                                            <span className="bo-cv-doc-meta-empty">{row.hasFile ? 'Uploaded' : 'Not available'}</span>
+                                          )}
+                                        </>
                                       )}
                                     </div>
                                   </div>
