@@ -86,6 +86,16 @@ export const BACK_OFFICE_ENDPOINTS = {
   CALCULATION_ASSESSMENT_RECOMMENDATION: (loanEligibilityAssessmentId) =>
     `/calculation/assessments/${encodeURIComponent(loanEligibilityAssessmentId)}/recommendation`,
 
+  // RTR (Repayment Track Record) Calculation APIs
+  CALCULATION_RTR_LOANS: '/calculation/rtr/loans',
+  CALCULATION_RTR_LOAN_BY_ID: (id) =>
+    `/calculation/rtr/loans/${encodeURIComponent(id)}`,
+  CALCULATION_RTR_LOANS_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
+    `/calculation/rtr/loans/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
+  CALCULATION_RTR_CALCULATE: '/calculation/rtr/calculate',
+  CALCULATION_RTR_ASSESSMENTS_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
+    `/calculation/rtr/assessments/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
+
   // Document Rejection & Returned Application Workflow
   DOCUMENT_REJECTIONS: '/BackOfficeDocumentRejection',
   DOCUMENT_REJECTION_BY_ID: (id) =>

@@ -4638,6 +4638,40 @@
   text-align: center;
 }
 
+.bo-cv-salary-table thead th.th-action,
+.bo-cv-salary-table tbody td.td-action {
+  text-align: center;
+  width: 50px;
+  min-width: 50px;
+}
+
+.bo-cv-loan-row-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #dc2626;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.bo-cv-loan-row-remove-btn:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #f87171;
+  color: #b91c1c;
+}
+
+.bo-cv-loan-row-remove-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .bo-cv-salary-input {
   width: 100%;
   max-width: 82px;
@@ -8248,3 +8282,20 @@
   background: #ffffff !important;
   border-top: 1px solid #e2e8f0 !important;
 }
+
+/* RTR Loan Facility Row Highlights */
+.is-rtr-selected-row {
+  background: #f0fdf4 !important;
+  border-left: 3px solid #22c55e !important;
+}
+
+.is-rtr-selected-row td {
+  background: #f0fdf4 !important;
+}
+
+.bo-cv-rtr-assessment-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+

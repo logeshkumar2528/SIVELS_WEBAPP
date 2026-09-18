@@ -39,6 +39,7 @@ import { IndustryType } from './pages/masters/IndustryType/IndustryType';
 import { LoanProductTenure } from './pages/masters/LoanProductTenure/LoanProductTenure';
 import { AssessmentMethod } from './pages/masters/AssessmentMethod/AssessmentMethod';
 import { PDVerificationType } from './pages/masters/PDVerificationType/PDVerificationType';
+import { RTRNormMaster } from './pages/masters/RTRNormMaster/RTRNormMaster';
 import { CompanyConfiguration } from './features/company/CompanyConfiguration';
 import AgentCreate from './pages/Agent/AgentCreate';
 import RelationshipManagerCreate from './pages/RelationshipManager/RelationshipManagerCreate';
@@ -120,6 +121,7 @@ function App() {
             <Route path="loan-product-tenure" element={<LoanProductTenure />} />
             <Route path="assessment-method" element={<AssessmentMethod />} />
             <Route path="pd-verification-type" element={<PDVerificationType />} />
+            <Route path="rtr-norm-master" element={<RTRNormMaster />} />
           </Route>
         </Route>
       </Routes>

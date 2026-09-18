@@ -6,7 +6,7 @@ import {
   CreditCard, Package, Target, Repeat, User, Heart, Building, 
   Map, Building2, Briefcase, Landmark, Globe, MapPin, Link, 
   Layers, ShieldCheck, Home, Key, GraduationCap, Star, Contact, Shield, TrendingUp, LogOut, ArrowLeft,
-  Factory, Clock, Calculator, UserCheck
+  Factory, Clock, Calculator, UserCheck, FileSpreadsheet
 } from 'lucide-react';
 import { MasterModal } from '../masters/MasterModal/MasterModal';
 import './Navbar.css';
@@ -45,6 +45,7 @@ const MASTERS_MENU = [
   { label: 'Loan Product Tenure', path: '/masters/loan-product-tenure', icon: Clock },
   { label: 'Assessment Method', path: '/masters/assessment-method', icon: Calculator },
   { label: 'PD Verification Type', path: '/masters/pd-verification-type', icon: UserCheck },
+  { label: 'RTR Norm Master', path: '/masters/rtr-norm-master', icon: FileSpreadsheet },
   { label: 'Company Configuration', path: '/company', icon: Building2 }
 ];
 

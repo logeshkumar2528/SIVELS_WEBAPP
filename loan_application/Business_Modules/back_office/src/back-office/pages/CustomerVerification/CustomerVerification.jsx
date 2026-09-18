@@ -37,6 +37,34 @@ import './CustomerVerification.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
+const ArrowLeftIcon = iconMap['ArrowLeft'];
+const ArrowRightIcon = iconMap['ArrowRight'];
+const CheckCircleIcon = iconMap['CheckCircle'] || iconMap['CheckCircle2'];
+const ShieldCheckIcon = iconMap['ShieldCheck'];
+const AlertTriangleIcon = iconMap['AlertTriangle'];
+const AlertCircleIcon = iconMap['AlertCircle'];
+const InfoIcon = iconMap['Info'];
+const BuildingIcon = iconMap['Building2'] || iconMap['Landmark'];
+const LandmarkIcon = iconMap['Landmark'];
+const UserIcon = iconMap['User'];
+const UsersIcon = iconMap['Users'];
+const PlusIcon = iconMap['Plus'] || iconMap['FilePlus'];
+const XIcon = iconMap['X'];
+const RefreshCwIcon = iconMap['RefreshCw'];
+const SaveIcon = iconMap['Save'];
+const BadgeIndianRupeeIcon = iconMap['BadgeIndianRupee'];
+const EyeIcon = iconMap['Eye'];
+const DownloadIcon = iconMap['Download'];
+const FileTextIcon = iconMap['FileText'];
+const ChevronLeftIcon = iconMap['ChevronLeft'];
+const ChevronRightIcon = iconMap['ChevronRight'];
+const SendIcon = iconMap['Send'];
+const PhoneIcon = iconMap['Phone'];
+const CameraIcon = iconMap['Camera'];
+const FileCheckIcon = iconMap['FileCheck'];
+const RotateCcwIcon = iconMap['RotateCcw'];
+const CreditCardIcon = iconMap['CreditCard'];
+
 function formatCurrency(amount) {
   if (amount === null || amount === undefined || isNaN(amount) || amount === 0) return '₹0';
   return `₹${Number(amount).toLocaleString('en-IN')}`;
@@ -2495,6 +2523,454 @@ export default function CustomerVerification() {
     };
   }, [abbAccounts, accountBalances]);
 
+  // Phase 2G: RTR (Repayment Track Record) Method State for Step 14
+  const [rtrLoans, setRtrLoans] = useState([]);
+  const [rtrDraftLoans, setRtrDraftLoans] = useState([]);
+  const [rtrLoansLoading, setRtrLoansLoading] = useState(false);
+  const [rtrLoansError, setRtrLoansError] = useState(null);
+  const [rtrLoansSaving, setRtrLoansSaving] = useState(false);
+  const [rtrLoansBanner, setRtrLoansBanner] = useState(null);
+
+  const [rtrAssessmentsList, setRtrAssessmentsList] = useState([]);
+  const [rtrAssessmentsLoading, setRtrAssessmentsLoading] = useState(false);
+  const [rtrAssessmentsError, setRtrAssessmentsError] = useState(null);
+
+  // Helper to generate default 3 empty RTR loan draft rows
+  const getDefaultRtrDraftLoans = useCallback((appProdId, seq) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    return [
+      {
+        id: `rtr-draft-${seq}-0`,
+        applicationRTRLoanDetailsId: 0,
+        applicationProductDetailsId: Number(appProdId) || 0,
+        applicantSequence: Number(seq) || 0,
+        lenderName: '',
+        sanctionAmount: '',
+        currentPOS: '',
+        emiStartDate: todayStr,
+        emiAmount: '',
+        mob: '',
+        odCount: 0,
+        bounceCount: 0,
+        isSelectedForRTR: false,
+        isActive: true,
+        isPersisted: false,
+        isModified: false,
+        saveStatus: 'idle',
+        errorMsg: null,
+      },
+      {
+        id: `rtr-draft-${seq}-1`,
+        applicationRTRLoanDetailsId: 0,
+        applicationProductDetailsId: Number(appProdId) || 0,
+        applicantSequence: Number(seq) || 0,
+        lenderName: '',
+        sanctionAmount: '',
+        currentPOS: '',
+        emiStartDate: todayStr,
+        emiAmount: '',
+        mob: '',
+        odCount: 0,
+        bounceCount: 0,
+        isSelectedForRTR: false,
+        isActive: true,
+        isPersisted: false,
+        isModified: false,
+        saveStatus: 'idle',
+        errorMsg: null,
+      },
+      {
+        id: `rtr-draft-${seq}-2`,
+        applicationRTRLoanDetailsId: 0,
+        applicationProductDetailsId: Number(appProdId) || 0,
+        applicantSequence: Number(seq) || 0,
+        lenderName: '',
+        sanctionAmount: '',
+        currentPOS: '',
+        emiStartDate: todayStr,
+        emiAmount: '',
+        mob: '',
+        odCount: 0,
+        bounceCount: 0,
+        isSelectedForRTR: false,
+        isActive: true,
+        isPersisted: false,
+        isModified: false,
+        saveStatus: 'idle',
+        errorMsg: null,
+      },
+    ];
+  }, []);
+
+  // Hydrate RTR loans via GET /api/calculation/rtr/loans/{applicationProductDetailsId}/{applicantSequence}
+  const fetchRTRLoans = useCallback(
+    async (appProdId, seq) => {
+      if (!appProdId || isNaN(appProdId) || appProdId <= 0) return;
+      setRtrLoansLoading(true);
+      setRtrLoansError(null);
+      try {
+        const res = await backOfficeService.getRTRLoansBySeq(appProdId, seq);
+        const records = Array.isArray(res) ? res : (res?.value ?? res?.data ?? []);
+        const activeRecords = records.filter((r) => r.isActive !== false);
+        setRtrLoans(activeRecords);
+
+        if (activeRecords.length > 0) {
+          const rows = activeRecords.map((r, i) => ({
+            id: `rtr-loan-${r.applicationRTRLoanDetailsId || i}`,
+            applicationRTRLoanDetailsId: r.applicationRTRLoanDetailsId || 0,
+            applicationProductDetailsId: Number(appProdId),
+            applicantSequence: Number(seq),
+            lenderName: r.lenderName || '',
+            sanctionAmount: r.sanctionAmount ?? '',
+            currentPOS: r.currentPOS ?? '',
+            emiStartDate: r.emiStartDate ? String(r.emiStartDate).split('T')[0] : '',
+            emiAmount: r.emiAmount ?? '',
+            mob: r.mob ?? '',
+            odCount: r.odCount ?? 0,
+            bounceCount: r.bounceCount ?? 0,
+            isSelectedForRTR: Boolean(r.isSelectedForRTR),
+            isActive: r.isActive !== false,
+            isPersisted: true,
+            isModified: false,
+            saveStatus: 'saved',
+            errorMsg: null,
+          }));
+          setRtrDraftLoans(rows);
+        } else {
+          setRtrDraftLoans(getDefaultRtrDraftLoans(appProdId, seq));
+        }
+      } catch (err) {
+        console.warn('Failed to fetch RTR loans:', err);
+        setRtrLoansError(err?.response?.data?.message || err?.message || 'Unable to load RTR loans from server.');
+        setRtrLoans([]);
+        setRtrDraftLoans(getDefaultRtrDraftLoans(appProdId, seq));
+      } finally {
+        setRtrLoansLoading(false);
+      }
+    },
+    [getDefaultRtrDraftLoans]
+  );
+
+  // Hydrate RTR assessments via GET /api/calculation/rtr/assessments/{applicationProductDetailsId}/{applicantSequence}
+  const fetchRTRAssessments = useCallback(async (appProdId, seq) => {
+    if (!appProdId || isNaN(appProdId) || appProdId <= 0) return;
+    setRtrAssessmentsLoading(true);
+    setRtrAssessmentsError(null);
+    try {
+      const res = await backOfficeService.getRTRAssessmentsBySeq(appProdId, seq);
+      const records = Array.isArray(res) ? res : (res?.value ?? res?.data ?? []);
+      setRtrAssessmentsList(records);
+    } catch (err) {
+      console.warn('Failed to fetch RTR assessments:', err);
+      setRtrAssessmentsError(err?.response?.data?.message || err?.message || 'Unable to load RTR assessments.');
+      setRtrAssessmentsList([]);
+    } finally {
+      setRtrAssessmentsLoading(false);
+    }
+  }, []);
+
+  // Current active RTR assessment based on applicant sequence
+  const currentRtrAssessment = useMemo(() => {
+    if (!Array.isArray(rtrAssessmentsList) || rtrAssessmentsList.length === 0) return null;
+    const currentOne = rtrAssessmentsList.find((m) => m.isCurrent === true);
+    if (currentOne) return currentOne;
+    const sorted = [...rtrAssessmentsList].sort(
+      (a, b) => new Date(b.createdAt || b.calculatedAt || 0) - new Date(a.createdAt || a.calculatedAt || 0)
+    );
+    return sorted[0];
+  }, [rtrAssessmentsList]);
+
+  // Resolve selected RTR loan facility object strictly by database primary key matching currentRtrAssessment.selectedRTRLoanDetailsId
+  const selectedRtrLoan = useMemo(() => {
+    if (!currentRtrAssessment?.selectedRTRLoanDetailsId) return null;
+    const targetId = Number(currentRtrAssessment.selectedRTRLoanDetailsId);
+    if (!targetId || isNaN(targetId)) return null;
+
+    const foundInDraft = (Array.isArray(rtrDraftLoans) ? rtrDraftLoans : []).find(
+      (l) => Number(l.applicationRTRLoanDetailsId) === targetId && Number(l.applicationRTRLoanDetailsId) > 0
+    );
+    if (foundInDraft) return foundInDraft;
+
+    const foundInSaved = (Array.isArray(rtrLoans) ? rtrLoans : []).find(
+      (l) => Number(l.applicationRTRLoanDetailsId) === targetId && Number(l.applicationRTRLoanDetailsId) > 0
+    );
+    return foundInSaved || null;
+  }, [currentRtrAssessment, rtrDraftLoans, rtrLoans]);
+
+  // RTR Summary metrics for the active loans table header/summary
+  const rtrSummaryMetrics = useMemo(() => {
+    const totalLoans = rtrDraftLoans.length;
+    const validLoans = rtrDraftLoans.filter(
+      (r) => r.lenderName && r.sanctionAmount !== '' && !isNaN(Number(r.sanctionAmount)) && Number(r.sanctionAmount) > 0
+    );
+    const validCount = validLoans.length;
+
+    let totalSanction = 0;
+    let totalPOS = 0;
+    let totalEmi = 0;
+    let maxMob = 0;
+    let selectedCount = 0;
+
+    const targetSelectedId =
+      currentRtrAssessment?.selectedRTRLoanDetailsId != null
+        ? Number(currentRtrAssessment.selectedRTRLoanDetailsId)
+        : null;
+
+    validLoans.forEach((l) => {
+      totalSanction += Number(l.sanctionAmount) || 0;
+      totalPOS += Number(l.currentPOS) || 0;
+      totalEmi += Number(l.emiAmount) || 0;
+      if (Number(l.mob) > maxMob) maxMob = Number(l.mob);
+
+      const loanPk = Number(l.applicationRTRLoanDetailsId);
+      const isSelected =
+        targetSelectedId != null && loanPk > 0
+          ? loanPk === targetSelectedId
+          : Boolean(l.isSelectedForRTR);
+      if (isSelected) selectedCount++;
+    });
+
+    return {
+      totalLoans,
+      validCount,
+      totalSanction,
+      totalPOS,
+      totalEmi,
+      maxMob,
+      selectedCount,
+    };
+  }, [rtrDraftLoans, currentRtrAssessment]);
+
+  // Trigger RTR hydration when Step 16 (Step 10 Underwriting) is active and method is RTR
+  useEffect(() => {
+    if (activeStep === 16 && selectedMethodCode === 'RTR' && calculationAppProdId > 0) {
+      fetchRTRLoans(calculationAppProdId, selectedApplicantSequence);
+      fetchRTRAssessments(calculationAppProdId, selectedApplicantSequence);
+    }
+  }, [activeStep, selectedMethodCode, calculationAppProdId, selectedApplicantSequence, fetchRTRLoans, fetchRTRAssessments]);
+
+  // Handle RTR Draft Loan field change
+  const handleRtrLoanRowChange = (index, field, value) => {
+    setRtrDraftLoans((prev) => {
+      const next = [...prev];
+      const row = { ...next[index] };
+
+      if (field === 'lenderName') {
+        row.lenderName = value;
+      } else if (field === 'emiStartDate') {
+        row.emiStartDate = value;
+      } else if (field === 'isActive') {
+        row.isActive = Boolean(value);
+      } else {
+        if (value === '') {
+          row[field] = '';
+        } else {
+          const num = Math.max(0, Number(value) || 0);
+          row[field] = num;
+        }
+      }
+
+      if (row.isPersisted) {
+        row.isModified = true;
+      }
+      row.errorMsg = null;
+      next[index] = row;
+      return next;
+    });
+  };
+
+  // Handle Add RTR Loan row
+  const handleAddRtrLoanRow = () => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    setRtrDraftLoans((prev) => [
+      ...prev,
+      {
+        id: `rtr-loan-new-${Date.now()}-${prev.length}`,
+        applicationRTRLoanDetailsId: 0,
+        applicationProductDetailsId: Number(calculationAppProdId) || 0,
+        applicantSequence: Number(selectedApplicantSequence) || 0,
+        lenderName: '',
+        sanctionAmount: '',
+        currentPOS: '',
+        emiStartDate: todayStr,
+        emiAmount: '',
+        mob: '',
+        odCount: 0,
+        bounceCount: 0,
+        isSelectedForRTR: false,
+        isActive: true,
+        isPersisted: false,
+        isModified: false,
+        saveStatus: 'idle',
+        errorMsg: null,
+      },
+    ]);
+  };
+
+  // Handle Remove RTR Draft Loan row (frontend state only, strictly for unsaved draft rows)
+  const handleRemoveRtrDraftRow = (indexToRemove) => {
+    setRtrDraftLoans((prev) => {
+      const targetRow = prev[indexToRemove];
+      // Guard: do not delete saved rows via frontend remove
+      if (targetRow && (Number(targetRow.applicationRTRLoanDetailsId) > 0 || targetRow.isPersisted)) {
+        return prev;
+      }
+      return prev.filter((_, idx) => idx !== indexToRemove);
+    });
+  };
+
+  // Handle Save / Synchronize RTR Loans (strictly no delete)
+  const handleSaveRtrLoans = async () => {
+    setRtrLoansBanner(null);
+    const currentUserId = resolveAuthenticatedUserId();
+    if (!currentUserId) {
+      setRtrLoansBanner({
+        type: 'error',
+        message: 'Unable to resolve authenticated Back Office user ID. Please log out and log in again.',
+      });
+      return { success: false, message: 'Authentication missing.' };
+    }
+
+    if (!calculationAppProdId || calculationAppProdId <= 0) {
+      setRtrLoansBanner({
+        type: 'error',
+        message: 'Application Product Details ID is missing. Please refresh the application.',
+      });
+      return { success: false, message: 'Application Product Details ID is missing.' };
+    }
+
+    const filledRows = rtrDraftLoans.filter((r) => {
+      const hasLender = r.lenderName && String(r.lenderName).trim() !== '';
+      const hasSanction = r.sanctionAmount !== '' && !isNaN(Number(r.sanctionAmount)) && Number(r.sanctionAmount) > 0;
+      return hasLender || hasSanction || r.isPersisted;
+    });
+
+    if (filledRows.length === 0) {
+      setRtrLoansBanner({
+        type: 'error',
+        message: 'Please enter details for at least one RTR loan facility.',
+      });
+      return { success: false, message: 'No loan facilities entered.' };
+    }
+
+    // Validation
+    for (let i = 0; i < filledRows.length; i++) {
+      const r = filledRows[i];
+      if (!r.lenderName || !String(r.lenderName).trim()) {
+        setRtrLoansBanner({
+          type: 'error',
+          message: `Lender Name is required for Loan #${i + 1}.`,
+        });
+        return { success: false, message: `Lender Name is required for Loan #${i + 1}.` };
+      }
+      if (r.sanctionAmount === '' || isNaN(Number(r.sanctionAmount)) || Number(r.sanctionAmount) <= 0) {
+        setRtrLoansBanner({
+          type: 'error',
+          message: `Valid positive Sanction Amount is required for Loan #${i + 1} (${r.lenderName}).`,
+        });
+        return { success: false, message: `Valid positive Sanction Amount is required for Loan #${i + 1}.` };
+      }
+      if (r.currentPOS === '' || isNaN(Number(r.currentPOS)) || Number(r.currentPOS) < 0) {
+        setRtrLoansBanner({
+          type: 'error',
+          message: `Valid Current POS (>= 0) is required for Loan #${i + 1} (${r.lenderName}).`,
+        });
+        return { success: false, message: `Valid Current POS is required for Loan #${i + 1}.` };
+      }
+      if (Number(r.currentPOS) > Number(r.sanctionAmount)) {
+        setRtrLoansBanner({
+          type: 'error',
+          message: `Current POS cannot exceed Sanction Amount for Loan #${i + 1} (${r.lenderName}).`,
+        });
+        return { success: false, message: `Current POS cannot exceed Sanction Amount for Loan #${i + 1}.` };
+      }
+      if (!r.emiStartDate) {
+        setRtrLoansBanner({
+          type: 'error',
+          message: `EMI Start Date is required for Loan #${i + 1} (${r.lenderName}).`,
+        });
+        return { success: false, message: `EMI Start Date is required for Loan #${i + 1}.` };
+      }
+      if (r.emiAmount === '' || isNaN(Number(r.emiAmount)) || Number(r.emiAmount) <= 0) {
+        setRtrLoansBanner({
+          type: 'error',
+          message: `Valid EMI Amount (> 0) is required for Loan #${i + 1} (${r.lenderName}).`,
+        });
+        return { success: false, message: `Valid EMI Amount is required for Loan #${i + 1}.` };
+      }
+      if (r.mob === '' || isNaN(Number(r.mob)) || Number(r.mob) < 0) {
+        setRtrLoansBanner({
+          type: 'error',
+          message: `Valid MOB (Months On Book >= 0) is required for Loan #${i + 1} (${r.lenderName}).`,
+        });
+        return { success: false, message: `Valid MOB is required for Loan #${i + 1}.` };
+      }
+    }
+
+    setRtrLoansSaving(true);
+    let saveCount = 0;
+    const failedLoans = [];
+
+    for (let i = 0; i < filledRows.length; i++) {
+      const row = filledRows[i];
+      const isNew = !row.isPersisted || !row.applicationRTRLoanDetailsId;
+      if (!isNew && !row.isModified) {
+        continue;
+      }
+
+      const payload = {
+        applicationRTRLoanDetailsId: isNew ? 0 : Number(row.applicationRTRLoanDetailsId),
+        applicationProductDetailsId: Number(calculationAppProdId),
+        applicantSequence: Number(selectedApplicantSequence),
+        lenderName: String(row.lenderName).trim(),
+        sanctionAmount: Number(row.sanctionAmount),
+        currentPOS: Number(row.currentPOS),
+        emiStartDate: String(row.emiStartDate).split('T')[0],
+        emiAmount: Number(row.emiAmount),
+        mob: Number(row.mob),
+        odCount: Number(row.odCount) || 0,
+        bounceCount: Number(row.bounceCount) || 0,
+        isSelectedForRTR: Boolean(row.isSelectedForRTR),
+        isActive: row.isActive !== false,
+        createdBy: Number(currentUserId),
+        modifiedBy: isNew ? null : Number(currentUserId),
+      };
+
+      try {
+        if (isNew) {
+          await backOfficeService.createRTRLoan(payload);
+        } else {
+          await backOfficeService.updateRTRLoan(row.applicationRTRLoanDetailsId, payload);
+        }
+        saveCount++;
+      } catch (err) {
+        console.error(`Failed to save RTR loan #${i + 1}:`, err);
+        const errMsg = err?.response?.data?.message || err?.message || 'Save failed.';
+        failedLoans.push({ lender: row.lenderName, error: errMsg });
+      }
+    }
+
+    setRtrLoansSaving(false);
+
+    if (failedLoans.length === 0) {
+      setRtrLoansBanner({
+        type: 'success',
+        message: saveCount > 0
+          ? `Successfully saved ${saveCount} RTR loan ${saveCount === 1 ? 'record' : 'records'}.`
+          : 'All RTR loan records are up to date.',
+      });
+      await fetchRTRLoans(calculationAppProdId, selectedApplicantSequence);
+      return { success: true, count: saveCount };
+    } else {
+      setRtrLoansBanner({
+        type: 'error',
+        message: `Failed to save ${failedLoans.length} loan records: ${failedLoans.map((f) => `${f.lender} (${f.error})`).join(', ')}`,
+      });
+      await fetchRTRLoans(calculationAppProdId, selectedApplicantSequence);
+      return { success: false, message: 'Some loan records failed to save.' };
+    }
+  };
+
   // Phase 2D: Final Eligibility Calculation & Assessment Result State for Step 14
   const [assessmentsList, setAssessmentsList] = useState([]);
   const [assessmentsLoading, setAssessmentsLoading] = useState(false);
@@ -2520,6 +2996,7 @@ export default function CustomerVerification() {
         manualObligationInput: '',
         isEditingFoir: false,
         manualFoirInput: '',
+        emiAmountFactor: '',
       }
     );
   }, [calcSettingsMap, currentSettingsKey]);
@@ -2537,6 +3014,7 @@ export default function CustomerVerification() {
           manualObligationInput: '',
           isEditingFoir: false,
           manualFoirInput: '',
+          emiAmountFactor: '',
         };
         const nextSettings = typeof updater === 'function' ? updater(existing) : { ...existing, ...updater };
         return {
@@ -2676,6 +3154,9 @@ export default function CustomerVerification() {
   }, [selectedMethodCode, foirMasterList, selectedEmploymentTypeId]);
 
   const resolvedPolicyFoir = useMemo(() => {
+    if (selectedMethodCode === 'RTR') {
+      return 'Not Applicable (RTR Method)';
+    }
     if (selectedMethodCode !== 'INCOME') {
       return 'Not Applicable (ABB Method)';
     }
@@ -2751,6 +3232,95 @@ export default function CustomerVerification() {
       });
       return;
     }
+
+    // 3. RTR Assessment Method Execution
+    if (selectedMethodCode === 'RTR') {
+      // Step 3a: Save / synchronize any draft RTR loans
+      const syncRes = await handleSaveRtrLoans();
+      if (!syncRes.success) {
+        setCalcBanner({
+          type: 'error',
+          message: syncRes.message || 'RTR loan facilities could not be saved. Please review loan details and try again.',
+        });
+        return;
+      }
+
+      // Step 3b: Verify at least one active saved RTR loan exists
+      const loanRes = await backOfficeService.getRTRLoansBySeq(calculationAppProdId, selectedApplicantSequence);
+      const loans = Array.isArray(loanRes) ? loanRes : (loanRes?.value ?? loanRes?.data ?? []);
+      const activeSavedLoans = loans.filter((l) => l.isActive !== false);
+
+      if (activeSavedLoans.length === 0) {
+        setCalcBanner({
+          type: 'error',
+          message: 'At least one active RTR loan facility is required in the database before calculating RTR eligibility.',
+        });
+        return;
+      }
+
+      // Step 3c: Validate emiAmountFactor (required, numeric, > 0)
+      const factorStr =
+        currentCalcSettings.emiAmountFactor != null ? String(currentCalcSettings.emiAmountFactor).trim() : '';
+      if (!factorStr) {
+        setCalcBanner({
+          type: 'error',
+          message: 'EMI Amount Factor is required before calculating RTR eligibility. Please enter a valid factor.',
+        });
+        return;
+      }
+      const factorNum = Number(factorStr);
+      if (isNaN(factorNum) || factorNum <= 0) {
+        setCalcBanner({
+          type: 'error',
+          message: 'Valid positive numeric EMI Amount Factor is required (e.g. 36).',
+        });
+        return;
+      }
+
+      setCalculating(true);
+      try {
+        const rtrPayload = {
+          applicationProductDetailsId: Number(calculationAppProdId),
+          applicantSequence: Number(selectedApplicantSequence),
+          emiAmountFactor: factorNum,
+          createdBy: Number(auth.userId),
+        };
+
+        const res = await backOfficeService.calculateRTR(rtrPayload);
+        const rtrRecord = Array.isArray(res) ? res[0] : (res?.value ?? res?.data ?? res);
+
+        if (rtrRecord && (rtrRecord.applicationRTRAssessmentId || rtrRecord.finalLoanEligibility != null)) {
+          setCalcBanner({
+            type: 'success',
+            message: `RTR Eligibility calculated successfully! Final Loan Eligibility: ${formatCurrency(
+              rtrRecord.finalLoanEligibility
+            )}${rtrRecord.applicableEMIMultiplier ? ` (Multiplier: ${rtrRecord.applicableEMIMultiplier}x)` : ''}.`,
+          });
+
+          // Re-fetch RTR assessments and RTR loans so evaluated flags (isSelectedForRTR) update in the UI
+          await fetchRTRAssessments(calculationAppProdId, selectedApplicantSequence);
+          await fetchRTRLoans(calculationAppProdId, selectedApplicantSequence);
+        } else {
+          throw new Error('RTR Calculation engine returned an unexpected response structure.');
+        }
+      } catch (err) {
+        console.error('Failed to calculate RTR eligibility:', err);
+        const errMsg =
+          err?.response?.data?.message ||
+          err?.response?.data?.title ||
+          err?.message ||
+          'RTR Eligibility calculation failed. Please ensure an active RTR Norm matches the loan criteria.';
+        setCalcBanner({
+          type: 'error',
+          message: errMsg,
+        });
+      } finally {
+        setCalculating(false);
+      }
+      return;
+    }
+
+    // 4. INCOME / ABB Validations & Pre-calculation Persistence
     if (!calculationAgentCustId || calculationAgentCustId <= 0) {
       setCalcBanner({
         type: 'error',
@@ -2759,7 +3329,6 @@ export default function CustomerVerification() {
       return;
     }
 
-    // 3. Employment Details ID
     if (!selectedEmploymentIncomeDetailsId) {
       setCalcBanner({
         type: 'error',
@@ -2768,7 +3337,6 @@ export default function CustomerVerification() {
       return;
     }
 
-    // 4. Method Specific Validations & Pre-calculation Persistence
     if (selectedMethodCode === 'INCOME') {
       // Step 4a: Synchronize salary rows (POST new rows, PUT modified persisted rows)
       const syncRes = await synchronizeSalaryRows();
@@ -3042,11 +3610,29 @@ export default function CustomerVerification() {
     try {
       const res = await backOfficeService.getCalculationMethods();
       const records = Array.isArray(res) ? res : (res?.value ?? res?.data ?? []);
-      const activeMethods = records.filter((m) => m.isActive !== false);
+      let activeMethods = records.filter((m) => m.isActive !== false);
+
+      // Ensure RTR Method is present if not already returned by server
+      const hasRtr = activeMethods.some(
+        (m) => (m.methodCode && m.methodCode.toUpperCase() === 'RTR') || Number(m.assessmentMethodId) === 3
+      );
+      if (!hasRtr) {
+        activeMethods = [
+          ...activeMethods,
+          {
+            assessmentMethodId: 3,
+            methodCode: 'RTR',
+            methodName: 'RTR Method',
+            description: 'Repayment Track Record (RTR) eligibility assessment based on live loan performance and norm multipliers.',
+            isActive: true,
+          },
+        ];
+      }
+
       setAssessmentMethods(activeMethods);
 
       if (activeMethods.length > 0) {
-        const exists = activeMethods.some((m) => m.methodCode === selectedMethodCode);
+        const exists = activeMethods.some((m) => (m.methodCode || '').toUpperCase() === selectedMethodCode.toUpperCase());
         if (!exists) {
           setSelectedMethodCode(activeMethods[0].methodCode || 'INCOME');
         }
@@ -8725,19 +9311,23 @@ export default function CustomerVerification() {
                   ) : (
                     <div className="bo-cv-method-cards-grid">
                       {assessmentMethods.map((method) => {
-                        const isSelected = (method.methodCode || '').toUpperCase() === selectedMethodCode.toUpperCase();
-                        const isIncome = (method.methodCode || '').toUpperCase() === 'INCOME';
+                        const code = (method.methodCode || '').toUpperCase();
+                        const isSelected = code === selectedMethodCode.toUpperCase();
+                        const isIncome = code === 'INCOME';
+                        const isRtr = code === 'RTR';
                         return (
                           <button
                             key={method.assessmentMethodId || method.methodCode}
                             type="button"
                             className={`bo-cv-method-card ${isSelected ? 'is-selected' : ''}`}
-                            onClick={() => setSelectedMethodCode((method.methodCode || 'INCOME').toUpperCase())}
+                            onClick={() => setSelectedMethodCode(code || 'INCOME')}
                           >
                             <div className="bo-cv-method-card-header">
                               <div className="bo-cv-method-card-icon-wrap">
                                 {isIncome ? (
                                   BadgeIndianRupeeIcon && <BadgeIndianRupeeIcon size={22} />
+                                ) : isRtr ? (
+                                  CreditCardIcon && <CreditCardIcon size={22} />
                                 ) : (
                                   BuildingIcon && <BuildingIcon size={22} />
                                 )}
@@ -8748,11 +9338,13 @@ export default function CustomerVerification() {
                             </div>
                             <div className="bo-cv-method-card-content">
                               <h4 className="bo-cv-method-title">
-                                {method.methodName || (isIncome ? 'Income Method' : 'ABB Method')}
+                                {method.methodName || (isIncome ? 'Income Method' : isRtr ? 'RTR Method' : 'ABB Method')}
                               </h4>
                               <p className="bo-cv-method-desc">
                                 {isIncome
                                   ? 'Evaluates eligibility from 3-month salary breakdown (Basic, HRA, CCA, TA, Incentives) and policy FOIR.'
+                                  : isRtr
+                                  ? 'Evaluates eligibility from live loan repayment track records (MOB, ODs, Bounces) and RTR Norm multiplier rules.'
                                   : 'Evaluates eligibility from multi-account banking conduct and 3-point monthly average balances (5th, 15th, 25th).'}
                               </p>
                             </div>
@@ -8825,8 +9417,8 @@ export default function CustomerVerification() {
                     </div>
                   </div>
 
-                  {/* Missing Employment Warning Strip */}
-                  {!selectedEmploymentIncomeDetailsId && (
+                  {/* Missing Employment Warning Strip (Income/ABB methods only) */}
+                  {!selectedEmploymentIncomeDetailsId && selectedMethodCode !== 'RTR' && (
                     <div className="bo-cv-assess-warning-strip">
                       <div className="bo-cv-assess-warning-icon">
                         {AlertCircleIcon && <AlertCircleIcon size={18} />}
@@ -8905,7 +9497,7 @@ export default function CustomerVerification() {
                     <div className="bo-cv-assess-info-cell">
                       <span className="bo-cv-assess-info-label">Assessment Method</span>
                       <strong className="bo-cv-assess-info-val bo-cv-method-val">
-                        {selectedMethodCode === 'INCOME' ? 'Income Method' : 'ABB Method'}
+                        {selectedMethodCode === 'INCOME' ? 'Income Method' : selectedMethodCode === 'RTR' ? 'RTR Method' : 'ABB Method'}
                       </strong>
                     </div>
 
@@ -8970,17 +9562,21 @@ export default function CustomerVerification() {
                         <h3 className="bo-cv-assess-section-title">
                           {selectedMethodCode === 'INCOME'
                             ? 'Manual Income Assessment Workspace'
+                            : selectedMethodCode === 'RTR'
+                            ? 'Repayment Track Record (RTR) Loan Facilities'
                             : 'Average Bank Balance (ABB) Method Workspace'}
                         </h3>
                         <p className="bo-cv-assess-section-sub">
                           {selectedMethodCode === 'INCOME'
                             ? `Enter & review 3-month salary breakdown and allowances for ${selectedApplicant?.name || 'Applicant'}.`
+                            : selectedMethodCode === 'RTR'
+                            ? `Configure and review active loan repayment track records and performance history for ${selectedApplicant?.name || 'Applicant'}.`
                             : `Multi-account banking analysis and monthly 3-point average balance verification for ${selectedApplicant?.name || 'Applicant'}.`}
                         </p>
                       </div>
                     </div>
                     <span className="bo-cv-phase-tag is-method">
-                      {selectedMethodCode === 'INCOME' ? 'Income Method' : 'ABB Method'}
+                      {selectedMethodCode === 'INCOME' ? 'Income Method' : selectedMethodCode === 'RTR' ? 'RTR Method' : 'ABB Method'}
                     </span>
                   </div>
 
@@ -9421,6 +10017,322 @@ export default function CustomerVerification() {
                               {liveTotalOtherIncome > 0
                                 ? `${formatCurrency(liveSalaryAverage)} (Salary) + ${formatCurrency(liveTotalOtherIncome)} (Other)`
                                 : 'Salary income baseline for FOIR capacity'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : selectedMethodCode === 'RTR' ? (
+                    /* Repayment Track Record (RTR) Method Workspace */
+                    <div className="bo-cv-rtr-assessment-wrap">
+                      {/* Loading State */}
+                      {rtrLoansLoading ? (
+                        <div className="bo-cv-assess-loading-box">
+                          <div className="bo-cv-loading-spinner" />
+                          <span>Loading RTR loan facilities...</span>
+                        </div>
+                      ) : rtrLoansError ? (
+                        <div className="bo-cv-assess-error-box">
+                          <div className="bo-cv-assess-error-msg">
+                            {AlertTriangleIcon && <AlertTriangleIcon size={16} />}
+                            <span>{rtrLoansError}</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="bo-btn bo-btn--outline bo-btn--sm"
+                            onClick={() => fetchRTRLoans(calculationAppProdId, selectedApplicantSequence)}
+                          >
+                            {RefreshCwIcon && <RefreshCwIcon size={12} />}
+                            <span>Retry</span>
+                          </button>
+                        </div>
+                      ) : null}
+
+                      {/* RTR Loans Notification Banner */}
+                      {rtrLoansBanner && (
+                        <div className={`bo-cv-salary-banner is-${rtrLoansBanner.type}`}>
+                          <div className="bo-cv-salary-banner-icon">
+                            {rtrLoansBanner.type === 'success' && (CheckCircleIcon ? <CheckCircleIcon size={16} /> : '✓')}
+                            {rtrLoansBanner.type === 'error' && (AlertTriangleIcon ? <AlertTriangleIcon size={16} /> : '⚠️')}
+                            {rtrLoansBanner.type === 'warning' && (AlertCircleIcon ? <AlertCircleIcon size={16} /> : 'ℹ️')}
+                            {rtrLoansBanner.type === 'info' && (InfoIcon ? <InfoIcon size={16} /> : 'ℹ️')}
+                          </div>
+                          <div className="bo-cv-salary-banner-msg">{rtrLoansBanner.message}</div>
+                        </div>
+                      )}
+
+                      {/* Top Bar with Add Loan Action */}
+                      <div className="bo-cv-salary-top-bar">
+                        <div className="bo-cv-salary-top-left">
+                          <h4 className="bo-cv-salary-top-title">Active Loan Facilities</h4>
+                          <span className="bo-cv-salary-count-badge">
+                            {rtrDraftLoans.length} {rtrDraftLoans.length === 1 ? 'Loan' : 'Loans'} Configured
+                          </span>
+                          {rtrSummaryMetrics.validCount > 0 && (
+                            <span className="bo-cv-salary-count-badge" style={{ background: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0' }}>
+                              Total Sanction: {formatCurrency(rtrSummaryMetrics.totalSanction)}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="bo-btn bo-btn--outline bo-btn--sm bo-cv-salary-add-btn"
+                          onClick={handleAddRtrLoanRow}
+                          disabled={rtrLoansSaving}
+                        >
+                          {PlusIcon ? <PlusIcon size={13} /> : '+'}
+                          <span>Add Loan Facility</span>
+                        </button>
+                      </div>
+
+                      {/* RTR Loans Table */}
+                      <div className="bo-cv-salary-table-wrapper">
+                        <table className="bo-cv-salary-table" aria-label="RTR Loan Facilities Table">
+                          <thead>
+                            <tr>
+                              <th style={{ minWidth: '160px' }}>Lender / Bank</th>
+                              <th className="th-num" style={{ minWidth: '130px' }}>Sanction Amount (₹)</th>
+                              <th className="th-num" style={{ minWidth: '130px' }}>Current POS (₹)</th>
+                              <th className="th-month" style={{ minWidth: '130px' }}>EMI Start Date</th>
+                              <th className="th-num" style={{ minWidth: '120px' }}>Monthly EMI (₹)</th>
+                              <th className="th-num" style={{ minWidth: '80px' }}>MOB</th>
+                              <th className="th-num" style={{ minWidth: '85px' }}>OD Count</th>
+                              <th className="th-num" style={{ minWidth: '95px' }}>Bounce Count</th>
+                              <th className="th-status" style={{ minWidth: '110px' }}>RTR Evaluated</th>
+                              <th className="th-action" style={{ minWidth: '60px', textAlign: 'center' }}>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rtrDraftLoans.length === 0 ? (
+                              <tr>
+                                <td colSpan={10} style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>
+                                  No RTR loan facilities configured. Click &quot;Add Loan Facility&quot; below to add a facility.
+                                </td>
+                              </tr>
+                            ) : (
+                              rtrDraftLoans.map((row, idx) => {
+                                const loanPk = Number(row.applicationRTRLoanDetailsId);
+                                const isDraft =
+                                  !row.isPersisted ||
+                                  !row.applicationRTRLoanDetailsId ||
+                                  Number(row.applicationRTRLoanDetailsId) === 0;
+                                const targetSelectedId =
+                                  currentRtrAssessment?.selectedRTRLoanDetailsId != null
+                                    ? Number(currentRtrAssessment.selectedRTRLoanDetailsId)
+                                    : null;
+                                const isSelected =
+                                  targetSelectedId != null && loanPk > 0
+                                    ? loanPk === targetSelectedId
+                                    : Boolean(row.isSelectedForRTR);
+                                return (
+                                  <tr
+                                    key={row.id || `rtr-loan-row-${idx}`}
+                                    className={isSelected ? 'is-rtr-selected-row' : ''}
+                                  >
+                                    <td>
+                                      <input
+                                        type="text"
+                                        placeholder="e.g. HDFC Bank, SBI"
+                                        className="bo-cv-salary-input"
+                                        value={row.lenderName || ''}
+                                        onChange={(e) => handleRtrLoanRowChange(idx, 'lenderName', e.target.value)}
+                                        disabled={rtrLoansSaving}
+                                        style={{ textAlign: 'left' }}
+                                        aria-label={`Lender Name for Loan ${idx + 1}`}
+                                      />
+                                    </td>
+                                    <td className="td-num">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="1000"
+                                        placeholder="0"
+                                        className="bo-cv-salary-input"
+                                        value={row.sanctionAmount === 0 ? '0' : row.sanctionAmount || ''}
+                                        onChange={(e) => handleRtrLoanRowChange(idx, 'sanctionAmount', e.target.value)}
+                                        disabled={rtrLoansSaving}
+                                        aria-label={`Sanction Amount for Loan ${idx + 1}`}
+                                      />
+                                    </td>
+                                    <td className="td-num">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="1000"
+                                        placeholder="0"
+                                        className="bo-cv-salary-input"
+                                        value={row.currentPOS === 0 ? '0' : row.currentPOS || ''}
+                                        onChange={(e) => handleRtrLoanRowChange(idx, 'currentPOS', e.target.value)}
+                                        disabled={rtrLoansSaving}
+                                        aria-label={`Current POS for Loan ${idx + 1}`}
+                                      />
+                                    </td>
+                                    <td className="td-month">
+                                      <input
+                                        type="date"
+                                        className="bo-cv-salary-input is-month"
+                                        value={row.emiStartDate || ''}
+                                        onChange={(e) => handleRtrLoanRowChange(idx, 'emiStartDate', e.target.value)}
+                                        disabled={rtrLoansSaving}
+                                        aria-label={`EMI Start Date for Loan ${idx + 1}`}
+                                      />
+                                    </td>
+                                    <td className="td-num">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="500"
+                                        placeholder="0"
+                                        className="bo-cv-salary-input"
+                                        value={row.emiAmount === 0 ? '0' : row.emiAmount || ''}
+                                        onChange={(e) => handleRtrLoanRowChange(idx, 'emiAmount', e.target.value)}
+                                        disabled={rtrLoansSaving}
+                                        aria-label={`Monthly EMI for Loan ${idx + 1}`}
+                                      />
+                                    </td>
+                                    <td className="td-num">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        placeholder="0"
+                                        className="bo-cv-salary-input"
+                                        value={row.mob === 0 ? '0' : row.mob || ''}
+                                        onChange={(e) => handleRtrLoanRowChange(idx, 'mob', e.target.value)}
+                                        disabled={rtrLoansSaving}
+                                        aria-label={`Months on Book for Loan ${idx + 1}`}
+                                      />
+                                    </td>
+                                    <td className="td-num">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        placeholder="0"
+                                        className="bo-cv-salary-input"
+                                        value={row.odCount === 0 ? '0' : row.odCount ?? 0}
+                                        onChange={(e) => handleRtrLoanRowChange(idx, 'odCount', e.target.value)}
+                                        disabled={rtrLoansSaving}
+                                        aria-label={`OD Count for Loan ${idx + 1}`}
+                                      />
+                                    </td>
+                                    <td className="td-num">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        placeholder="0"
+                                        className="bo-cv-salary-input"
+                                        value={row.bounceCount === 0 ? '0' : row.bounceCount ?? 0}
+                                        onChange={(e) => handleRtrLoanRowChange(idx, 'bounceCount', e.target.value)}
+                                        disabled={rtrLoansSaving}
+                                        aria-label={`Bounce Count for Loan ${idx + 1}`}
+                                      />
+                                    </td>
+                                    <td className="td-status">
+                                      {isSelected ? (
+                                        <span className="bo-cv-salary-status-badge is-saved" title="Selected for RTR assessment by calculation engine">
+                                          Selected ✓
+                                        </span>
+                                      ) : (
+                                        <span className="bo-cv-salary-readonly-val" style={{ color: '#94a3b8' }}>
+                                          —
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="td-action" style={{ textAlign: 'center' }}>
+                                      {isDraft ? (
+                                        <button
+                                          type="button"
+                                          className="bo-cv-loan-row-remove-btn"
+                                          title="Remove unsaved draft facility"
+                                          aria-label={`Remove draft loan facility ${idx + 1}`}
+                                          onClick={() => handleRemoveRtrDraftRow(idx)}
+                                          disabled={rtrLoansSaving}
+                                        >
+                                          {XIcon ? <XIcon size={13} /> : '✕'}
+                                        </button>
+                                      ) : (
+                                        <span className="bo-cv-salary-readonly-val" style={{ color: '#94a3b8' }}>
+                                          —
+                                        </span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* RTR Action Bar (Add Loan Facility) */}
+                      <div className="bo-cv-salary-action-bar">
+                        <div className="bo-cv-salary-action-hint">
+                          <span className="bo-cv-salary-hint-dot" />
+                          <span>
+                            <strong>Note:</strong> RTR loan facilities are automatically verified and saved when running the eligibility calculation.
+                          </span>
+                        </div>
+                        <div className="bo-cv-salary-action-buttons">
+                          <button
+                            type="button"
+                            className="bo-btn bo-btn--outline bo-btn--sm"
+                            onClick={handleAddRtrLoanRow}
+                            disabled={rtrLoansSaving}
+                          >
+                            {PlusIcon ? <PlusIcon size={13} /> : '+'}
+                            <span>Add Loan Facility</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* RTR Summary Card */}
+                      <div className="bo-cv-salary-summary-card">
+                        <div className="bo-cv-salary-summary-header">
+                          <h4 className="bo-cv-salary-summary-title">Repayment Track Record (RTR) Summary</h4>
+                          <span className="bo-cv-salary-summary-count">
+                            Configured Loans: {rtrSummaryMetrics.validCount} / {rtrSummaryMetrics.totalLoans}
+                          </span>
+                        </div>
+                        <div className="bo-cv-salary-summary-grid">
+                          <div className="bo-cv-salary-summary-item">
+                            <span className="bo-cv-salary-summary-label">Total Sanction Amount</span>
+                            <strong className="bo-cv-salary-summary-val">
+                              {formatCurrency(rtrSummaryMetrics.totalSanction)}
+                            </strong>
+                            <span className="bo-cv-salary-summary-sub">
+                              Across {rtrSummaryMetrics.validCount} active {rtrSummaryMetrics.validCount === 1 ? 'facility' : 'facilities'}
+                            </span>
+                          </div>
+
+                          <div className="bo-cv-salary-summary-item">
+                            <span className="bo-cv-salary-summary-label">Total Current POS</span>
+                            <strong className="bo-cv-salary-summary-val">
+                              {formatCurrency(rtrSummaryMetrics.totalPOS)}
+                            </strong>
+                            <span className="bo-cv-salary-summary-sub">
+                              Outstanding principal balance
+                            </span>
+                          </div>
+
+                          <div className="bo-cv-salary-summary-item">
+                            <span className="bo-cv-salary-summary-label">Total Monthly EMI</span>
+                            <strong className="bo-cv-salary-summary-val">
+                              {formatCurrency(rtrSummaryMetrics.totalEmi)}
+                            </strong>
+                            <span className="bo-cv-salary-summary-sub">
+                              Cumulative monthly outflow
+                            </span>
+                          </div>
+
+                          <div className="bo-cv-salary-summary-item is-average">
+                            <span className="bo-cv-salary-summary-label">Highest Months On Book (MOB)</span>
+                            <strong className="bo-cv-salary-summary-val is-engine">
+                              {rtrSummaryMetrics.maxMob > 0 ? `${rtrSummaryMetrics.maxMob} Months` : '—'}
+                            </strong>
+                            <span className="bo-cv-salary-summary-sub">
+                              Evaluated against Min MOB / Max MOB norms
                             </span>
                           </div>
                         </div>
@@ -10019,85 +10931,13 @@ export default function CustomerVerification() {
                       </span>
                     </div>
 
-                    {/* 2. ROI (% p.a.) with Edit / Override */}
-                    <div className="bo-cv-calc-setting-card">
-                      <div className="bo-cv-calc-setting-header">
-                        <span className="bo-cv-calc-setting-label">Interest Rate (ROI % p.a.)</span>
-                        <button
-                          type="button"
-                          className="bo-cv-setting-action-btn"
-                          onClick={() =>
-                            updateCurrentCalcSettings((prev) => ({
-                              ...prev,
-                              isEditingRoi: !prev.isEditingRoi,
-                              manualRoiInput:
-                                !prev.isEditingRoi && prev.manualRoiInput === ''
-                                  ? resolvedAppRoi != null
-                                    ? String(resolvedAppRoi)
-                                    : ''
-                                  : prev.manualRoiInput,
-                            }))
-                          }
-                        >
-                          {currentCalcSettings.isEditingRoi ? 'Use Application ROI' : 'Override ROI'}
-                        </button>
-                      </div>
-
-                      {currentCalcSettings.isEditingRoi ? (
-                        <div className="bo-cv-setting-override-row">
-                          <input
-                            type="number"
-                            step="0.1"
-                            min="1"
-                            max="100"
-                            className="bo-cv-setting-input"
-                            placeholder={resolvedAppRoi != null ? String(resolvedAppRoi) : 'e.g. 10.5'}
-                            value={currentCalcSettings.manualRoiInput}
-                            onChange={(e) =>
-                              updateCurrentCalcSettings((prev) => ({ ...prev, manualRoiInput: e.target.value }))
-                            }
-                            aria-label="Manual ROI Override"
-                          />
-                          <span className="bo-cv-setting-unit">% p.a.</span>
+                    {selectedMethodCode === 'RTR' ? (
+                      /* 2. EMI Amount Factor for RTR Assessment */
+                      <div className="bo-cv-calc-setting-card">
+                        <div className="bo-cv-calc-setting-header">
+                          <span className="bo-cv-calc-setting-label">EMI Amount Factor <span className="req">*</span></span>
+                          <span className="bo-cv-readonly-tag" style={{ background: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0' }}>Manual Input</span>
                         </div>
-                      ) : (
-                        <div className="bo-cv-calc-setting-value">
-                          {resolvedAppRoi != null ? `${resolvedAppRoi}% p.a.` : 'Not Specified'}
-                        </div>
-                      )}
-
-                      <span className="bo-cv-calc-setting-hint">
-                        {currentCalcSettings.isEditingRoi && currentCalcSettings.manualRoiInput !== ''
-                          ? `Calculation override: ${currentCalcSettings.manualRoiInput}% (App ROI: ${resolvedAppRoi ?? '—'}%)`
-                          : 'Using Application ROI (No override applied)'}
-                      </span>
-                    </div>
-
-                    {/* 3. Tenure (Months) with Edit / Override */}
-                    <div className="bo-cv-calc-setting-card">
-                      <div className="bo-cv-calc-setting-header">
-                        <span className="bo-cv-calc-setting-label">Loan Tenure (Months)</span>
-                        <button
-                          type="button"
-                          className="bo-cv-setting-action-btn"
-                          onClick={() =>
-                            updateCurrentCalcSettings((prev) => ({
-                              ...prev,
-                              isEditingTenure: !prev.isEditingTenure,
-                              manualTenureInput:
-                                !prev.isEditingTenure && prev.manualTenureInput === ''
-                                  ? resolvedAppTenure != null
-                                    ? String(resolvedAppTenure)
-                                    : ''
-                                  : prev.manualTenureInput,
-                            }))
-                          }
-                        >
-                          {currentCalcSettings.isEditingTenure ? 'Use Application Tenure' : 'Override Tenure'}
-                        </button>
-                      </div>
-
-                      {currentCalcSettings.isEditingTenure ? (
                         <div className="bo-cv-setting-override-row">
                           <input
                             type="number"
@@ -10105,32 +10945,138 @@ export default function CustomerVerification() {
                             min="1"
                             max="360"
                             className="bo-cv-setting-input"
-                            placeholder={resolvedAppTenure != null ? String(resolvedAppTenure) : 'e.g. 24'}
-                            value={currentCalcSettings.manualTenureInput}
+                            placeholder="Enter EMI amount factor"
+                            value={currentCalcSettings.emiAmountFactor ?? ''}
                             onChange={(e) =>
-                              updateCurrentCalcSettings((prev) => ({ ...prev, manualTenureInput: e.target.value }))
+                              updateCurrentCalcSettings((prev) => ({ ...prev, emiAmountFactor: e.target.value }))
                             }
-                            aria-label="Manual Tenure Override"
+                            aria-label="EMI Amount Factor"
                           />
-                          <span className="bo-cv-setting-unit">Months</span>
+                          <span className="bo-cv-setting-unit">Factor</span>
                         </div>
-                      ) : (
-                        <div className="bo-cv-calc-setting-value">
-                          {resolvedAppTenure != null ? `${resolvedAppTenure} Months` : 'Not Specified'}
-                        </div>
-                      )}
+                        <span className="bo-cv-calc-setting-hint">
+                          {currentCalcSettings.emiAmountFactor
+                            ? `Applied Factor: ${currentCalcSettings.emiAmountFactor} (Manual input)`
+                            : 'Enter factor multiplier for RTR assessed income calculation (Required)'}
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        {/* 2. ROI (% p.a.) with Edit / Override */}
+                        <div className="bo-cv-calc-setting-card">
+                          <div className="bo-cv-calc-setting-header">
+                            <span className="bo-cv-calc-setting-label">Interest Rate (ROI % p.a.)</span>
+                            <button
+                              type="button"
+                              className="bo-cv-setting-action-btn"
+                              onClick={() =>
+                                updateCurrentCalcSettings((prev) => ({
+                                  ...prev,
+                                  isEditingRoi: !prev.isEditingRoi,
+                                  manualRoiInput:
+                                    !prev.isEditingRoi && prev.manualRoiInput === ''
+                                      ? resolvedAppRoi != null
+                                        ? String(resolvedAppRoi)
+                                        : ''
+                                      : prev.manualRoiInput,
+                                }))
+                              }
+                            >
+                              {currentCalcSettings.isEditingRoi ? 'Use Application ROI' : 'Override ROI'}
+                            </button>
+                          </div>
 
-                      <span className="bo-cv-calc-setting-hint">
-                        {currentCalcSettings.isEditingTenure && currentCalcSettings.manualTenureInput !== ''
-                          ? `Calculation override: ${currentCalcSettings.manualTenureInput} Months (App Tenure: ${resolvedAppTenure ?? '—'} M)`
-                          : 'Using Application Loan Tenure (No override applied)'}
-                      </span>
-                    </div>
+                          {currentCalcSettings.isEditingRoi ? (
+                            <div className="bo-cv-setting-override-row">
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="1"
+                                max="100"
+                                className="bo-cv-setting-input"
+                                placeholder={resolvedAppRoi != null ? String(resolvedAppRoi) : 'e.g. 10.5'}
+                                value={currentCalcSettings.manualRoiInput}
+                                onChange={(e) =>
+                                  updateCurrentCalcSettings((prev) => ({ ...prev, manualRoiInput: e.target.value }))
+                                }
+                                aria-label="Manual ROI Override"
+                              />
+                              <span className="bo-cv-setting-unit">% p.a.</span>
+                            </div>
+                          ) : (
+                            <div className="bo-cv-calc-setting-value">
+                              {resolvedAppRoi != null ? `${resolvedAppRoi}% p.a.` : 'Not Specified'}
+                            </div>
+                          )}
+
+                          <span className="bo-cv-calc-setting-hint">
+                            {currentCalcSettings.isEditingRoi && currentCalcSettings.manualRoiInput !== ''
+                              ? `Calculation override: ${currentCalcSettings.manualRoiInput}% (App ROI: ${resolvedAppRoi ?? '—'}%)`
+                              : 'Using Application ROI (No override applied)'}
+                          </span>
+                        </div>
+
+                        {/* 3. Tenure (Months) with Edit / Override */}
+                        <div className="bo-cv-calc-setting-card">
+                          <div className="bo-cv-calc-setting-header">
+                            <span className="bo-cv-calc-setting-label">Loan Tenure (Months)</span>
+                            <button
+                              type="button"
+                              className="bo-cv-setting-action-btn"
+                              onClick={() =>
+                                updateCurrentCalcSettings((prev) => ({
+                                  ...prev,
+                                  isEditingTenure: !prev.isEditingTenure,
+                                  manualTenureInput:
+                                    !prev.isEditingTenure && prev.manualTenureInput === ''
+                                      ? resolvedAppTenure != null
+                                        ? String(resolvedAppTenure)
+                                        : ''
+                                      : prev.manualTenureInput,
+                                }))
+                              }
+                            >
+                              {currentCalcSettings.isEditingTenure ? 'Use Application Tenure' : 'Override Tenure'}
+                            </button>
+                          </div>
+
+                          {currentCalcSettings.isEditingTenure ? (
+                            <div className="bo-cv-setting-override-row">
+                              <input
+                                type="number"
+                                step="1"
+                                min="1"
+                                max="360"
+                                className="bo-cv-setting-input"
+                                placeholder={resolvedAppTenure != null ? String(resolvedAppTenure) : 'e.g. 24'}
+                                value={currentCalcSettings.manualTenureInput}
+                                onChange={(e) =>
+                                  updateCurrentCalcSettings((prev) => ({ ...prev, manualTenureInput: e.target.value }))
+                                }
+                                aria-label="Manual Tenure Override"
+                              />
+                              <span className="bo-cv-setting-unit">Months</span>
+                            </div>
+                          ) : (
+                            <div className="bo-cv-calc-setting-value">
+                              {resolvedAppTenure != null ? `${resolvedAppTenure} Months` : 'Not Specified'}
+                            </div>
+                          )}
+
+                          <span className="bo-cv-calc-setting-hint">
+                            {currentCalcSettings.isEditingTenure && currentCalcSettings.manualTenureInput !== ''
+                              ? `Calculation override: ${currentCalcSettings.manualTenureInput} Months (App Tenure: ${resolvedAppTenure ?? '—'} M)`
+                              : 'Using Application Loan Tenure (No override applied)'}
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
                 {/* ── Section 6: Existing Active Obligations & Policy FOIR ─────── */}
-                <div className="bo-cv-assess-section">
+                {selectedMethodCode !== 'RTR' && (
+                  <div className="bo-cv-assess-section">
                   <div className="bo-cv-assess-section-header">
                     <div className="bo-cv-assess-section-title-wrap">
                       <span className="bo-cv-assess-section-num">6</span>
@@ -10500,6 +11446,8 @@ export default function CustomerVerification() {
                             ? basePolicyFoir != null
                               ? `${basePolicyFoir}%`
                               : '65%'
+                            : selectedMethodCode === 'RTR'
+                            ? 'Not Applicable (RTR Method)'
                             : 'Not Applicable (ABB Method)'}
                         </div>
                       )}
@@ -10514,6 +11462,7 @@ export default function CustomerVerification() {
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* ── Section 7: Calculate Eligibility Action ─────────────────── */}
                 <div className="bo-cv-assess-section bo-cv-calc-action-section">
@@ -10525,7 +11474,13 @@ export default function CustomerVerification() {
                     <div className="bo-cv-calc-pre-items">
                       <div className="bo-cv-calc-pre-item">
                         <span className="bo-cv-calc-pre-item-label">Method:</span>
-                        <strong>{selectedMethodCode === 'INCOME' ? 'Income Method' : 'ABB Method'}</strong>
+                        <strong>
+                          {selectedMethodCode === 'RTR'
+                            ? 'RTR Method'
+                            : selectedMethodCode === 'INCOME'
+                            ? 'Income Method'
+                            : 'ABB Method'}
+                        </strong>
                       </div>
                       <span className="bo-cv-calc-pre-dot">•</span>
                       <div className="bo-cv-calc-pre-item">
@@ -10537,50 +11492,67 @@ export default function CustomerVerification() {
                         <span className="bo-cv-calc-pre-item-label">Requested:</span>
                         <strong>{formatCurrency(appDetails.loanAmount)}</strong>
                       </div>
-                      <span className="bo-cv-calc-pre-dot">•</span>
-                      <div className="bo-cv-calc-pre-item">
-                        <span className="bo-cv-calc-pre-item-label">ROI:</span>
-                        <strong>
-                          {currentCalcSettings.isEditingRoi && currentCalcSettings.manualRoiInput !== ''
-                            ? `${currentCalcSettings.manualRoiInput}% (Override)`
-                            : resolvedAppRoi != null
-                            ? `${resolvedAppRoi}% p.a.`
-                            : '—'}
-                        </strong>
-                      </div>
-                      <span className="bo-cv-calc-pre-dot">•</span>
-                      <div className="bo-cv-calc-pre-item">
-                        <span className="bo-cv-calc-pre-item-label">Tenure:</span>
-                        <strong>
-                          {currentCalcSettings.isEditingTenure && currentCalcSettings.manualTenureInput !== ''
-                            ? `${currentCalcSettings.manualTenureInput} M (Override)`
-                            : resolvedAppTenure != null
-                            ? `${resolvedAppTenure} Months`
-                            : '—'}
-                        </strong>
-                      </div>
-                      <span className="bo-cv-calc-pre-dot">•</span>
-                      <div className="bo-cv-calc-pre-item">
-                        <span className="bo-cv-calc-pre-item-label">Existing EMI:</span>
-                        <strong>
-                          {currentCalcSettings.isEditingObligation && currentCalcSettings.manualObligationInput !== ''
-                            ? `${formatCurrency(currentCalcSettings.manualObligationInput)} (Override)`
-                            : formatCurrency(totalDeclaredMonthlyEmi)}
-                        </strong>
-                      </div>
-                      {selectedMethodCode === 'INCOME' && (
+                      {selectedMethodCode === 'RTR' ? (
                         <>
                           <span className="bo-cv-calc-pre-dot">•</span>
                           <div className="bo-cv-calc-pre-item">
-                            <span className="bo-cv-calc-pre-item-label">Policy FOIR:</span>
+                            <span className="bo-cv-calc-pre-item-label">EMI Factor:</span>
+                            <strong>{currentCalcSettings.emiAmountFactor ? currentCalcSettings.emiAmountFactor : '— (Required)'}</strong>
+                          </div>
+                          <span className="bo-cv-calc-pre-dot">•</span>
+                          <div className="bo-cv-calc-pre-item">
+                            <span className="bo-cv-calc-pre-item-label">RTR Facilities:</span>
+                            <strong>{rtrSummaryMetrics.validCount} Active</strong>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <span className="bo-cv-calc-pre-dot">•</span>
+                          <div className="bo-cv-calc-pre-item">
+                            <span className="bo-cv-calc-pre-item-label">ROI:</span>
                             <strong>
-                              {currentCalcSettings.isEditingFoir && currentCalcSettings.manualFoirInput !== ''
-                                ? `${currentCalcSettings.manualFoirInput}% (Override)`
-                                : basePolicyFoir != null
-                                ? `${basePolicyFoir}%`
-                                : '65%'}
+                              {currentCalcSettings.isEditingRoi && currentCalcSettings.manualRoiInput !== ''
+                                ? `${currentCalcSettings.manualRoiInput}% (Override)`
+                                : resolvedAppRoi != null
+                                ? `${resolvedAppRoi}% p.a.`
+                                : '—'}
                             </strong>
                           </div>
+                          <span className="bo-cv-calc-pre-dot">•</span>
+                          <div className="bo-cv-calc-pre-item">
+                            <span className="bo-cv-calc-pre-item-label">Tenure:</span>
+                            <strong>
+                              {currentCalcSettings.isEditingTenure && currentCalcSettings.manualTenureInput !== ''
+                                ? `${currentCalcSettings.manualTenureInput} M (Override)`
+                                : resolvedAppTenure != null
+                                ? `${resolvedAppTenure} Months`
+                                : '—'}
+                            </strong>
+                          </div>
+                          <span className="bo-cv-calc-pre-dot">•</span>
+                          <div className="bo-cv-calc-pre-item">
+                            <span className="bo-cv-calc-pre-item-label">Existing EMI:</span>
+                            <strong>
+                              {currentCalcSettings.isEditingObligation && currentCalcSettings.manualObligationInput !== ''
+                                ? `${formatCurrency(currentCalcSettings.manualObligationInput)} (Override)`
+                                : formatCurrency(totalDeclaredMonthlyEmi)}
+                            </strong>
+                          </div>
+                          {selectedMethodCode === 'INCOME' && (
+                            <>
+                              <span className="bo-cv-calc-pre-dot">•</span>
+                              <div className="bo-cv-calc-pre-item">
+                                <span className="bo-cv-calc-pre-item-label">Policy FOIR:</span>
+                                <strong>
+                                  {currentCalcSettings.isEditingFoir && currentCalcSettings.manualFoirInput !== ''
+                                    ? `${currentCalcSettings.manualFoirInput}% (Override)`
+                                    : basePolicyFoir != null
+                                    ? `${basePolicyFoir}%`
+                                    : '65%'}
+                                </strong>
+                              </div>
+                            </>
+                          )}
                         </>
                       )}
                     </div>
@@ -10588,10 +11560,19 @@ export default function CustomerVerification() {
 
                   <div className="bo-cv-calc-trigger-wrap">
                     <div className="bo-cv-calc-trigger-info">
-                      <h4 className="bo-cv-calc-trigger-title">Run Eligibility Calculation Engine</h4>
+                      <h4 className="bo-cv-calc-trigger-title">
+                        {selectedMethodCode === 'RTR'
+                          ? 'Run RTR Eligibility Calculation Engine'
+                          : 'Run Eligibility Calculation Engine'}
+                      </h4>
                       <p className="bo-cv-calc-trigger-sub">
-                        Submits verified income/banking inputs and settings to the SIVELS eligibility calculation engine for{' '}
-                        <strong>{selectedApplicant?.name || 'Applicant'}</strong> ({selectedMethodCode === 'INCOME' ? 'Income Method' : 'ABB Method'}).
+                        {selectedMethodCode === 'RTR'
+                          ? `Submits verified loan repayment track records to the SIVELS RTR calculation engine for ${
+                              selectedApplicant?.name || 'Applicant'
+                            } to evaluate maximum top-up, EMI multiplier, and final loan eligibility.`
+                          : `Submits verified income/banking inputs and settings to the SIVELS eligibility calculation engine for ${
+                              selectedApplicant?.name || 'Applicant'
+                            } (${selectedMethodCode === 'INCOME' ? 'Income Method' : 'ABB Method'}).`}
                       </p>
                     </div>
 
@@ -10599,17 +11580,22 @@ export default function CustomerVerification() {
                       type="button"
                       className="bo-btn bo-btn--primary bo-cv-calculate-btn"
                       onClick={handleCalculateEligibility}
-                      disabled={calculating || !calculationAppProdId || !selectedEmploymentIncomeDetailsId}
+                      disabled={
+                        calculating ||
+                        !calculationAppProdId ||
+                        (selectedMethodCode !== 'RTR' && !selectedEmploymentIncomeDetailsId) ||
+                        (selectedMethodCode === 'RTR' && rtrSummaryMetrics.validCount === 0)
+                      }
                     >
                       {calculating ? (
                         <>
                           <span className="bo-cv-btn-spinner" />
-                          <span>Calculating Eligibility...</span>
+                          <span>{selectedMethodCode === 'RTR' ? 'Calculating RTR Eligibility...' : 'Calculating Eligibility...'}</span>
                         </>
                       ) : (
                         <>
                           {ShieldCheckIcon && <ShieldCheckIcon size={16} />}
-                          <span>Calculate Eligibility</span>
+                          <span>{selectedMethodCode === 'RTR' ? 'Calculate RTR Eligibility' : 'Calculate Eligibility'}</span>
                         </>
                       )}
                     </button>
@@ -10629,199 +11615,370 @@ export default function CustomerVerification() {
                 </div>
 
                 {/* ── Section 8: Eligibility Assessment Result ─────────────────── */}
-                {currentAssessment && (
-                  <div className="bo-cv-assess-section bo-cv-result-section">
-                    <div className="bo-cv-assess-section-header">
-                      <div className="bo-cv-assess-section-title-wrap">
-                        <span className="bo-cv-assess-section-num is-result">✓</span>
-                        <div>
-                          <h3 className="bo-cv-assess-section-title">Eligibility Assessment Result</h3>
-                          <p className="bo-cv-assess-section-sub">
-                            Authoritative decision engine output for {selectedApplicant?.name || 'Applicant'} &bull;{' '}
-                            {currentAssessment.assessmentMethodId === 1 ? 'Income Method' : 'ABB Method'}.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="bo-cv-result-header-badges">
-                        <span className="bo-cv-result-method-badge">
-                          {currentAssessment.assessmentMethodId === 1 ? 'Income Method' : 'ABB Method'}
-                        </span>
-                        <span
-                          className={`bo-cv-result-status-badge ${
-                            String(currentAssessment.status || '').toLowerCase().includes('eligible')
-                              ? 'is-eligible'
-                              : 'is-shortfall'
-                          }`}
-                        >
-                          {currentAssessment.status || 'Calculated'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Hero Card: Maximum Eligible Loan Amount */}
-                    <div className="bo-cv-result-hero-card">
-                      <div className="bo-cv-result-hero-main">
-                        <span className="bo-cv-result-hero-label">Maximum Eligible Loan Amount</span>
-                        <div className="bo-cv-result-hero-amount">
-                          {formatCurrency(currentAssessment.maximumEligibleLoanAmount)}
-                        </div>
-                        <div className="bo-cv-result-hero-sub-row">
-                          <div className="bo-cv-result-hero-sub-item">
-                            <span>Requested: </span>
-                            <strong>{formatCurrency(currentAssessment.requestedLoanAmount)}</strong>
+                {selectedMethodCode === 'RTR' ? (
+                  currentRtrAssessment && (
+                    <div className="bo-cv-assess-section bo-cv-result-section">
+                      <div className="bo-cv-assess-section-header">
+                        <div className="bo-cv-assess-section-title-wrap">
+                          <span className="bo-cv-assess-section-num is-result">✓</span>
+                          <div>
+                            <h3 className="bo-cv-assess-section-title">RTR Eligibility Assessment Result</h3>
+                            <p className="bo-cv-assess-section-sub">
+                              Authoritative decision engine output for {selectedApplicant?.name || 'Applicant'} &bull; RTR Method (Repayment Track Record).
+                            </p>
                           </div>
-                          {currentCalcSettings.recommendedLoanAmount || currentAssessment.recommendedLoanAmount ? (
-                            <>
-                              <div className="bo-cv-result-hero-sub-divider">•</div>
-                              <div className="bo-cv-result-hero-sub-item">
-                                <span>Recommended: </span>
-                                <strong>
-                                  {formatCurrency(
-                                    currentCalcSettings.recommendedLoanAmount || currentAssessment.recommendedLoanAmount
-                                  )}
-                                </strong>
-                              </div>
-                            </>
-                          ) : null}
+                        </div>
+                        <div className="bo-cv-result-header-badges">
+                          <span className="bo-cv-result-method-badge">RTR Method</span>
+                          <span className="bo-cv-result-status-badge is-eligible">
+                            {Number(currentRtrAssessment.finalLoanEligibility) > 0 ? 'Eligible' : 'Calculated'}
+                          </span>
                         </div>
                       </div>
 
-                      <div className="bo-cv-result-hero-status-box">
-                        <span className="bo-cv-result-hero-status-label">Assessment Status</span>
-                        <strong
-                          className={`bo-cv-result-hero-status-val ${
-                            String(currentAssessment.status || '').toLowerCase().includes('eligible')
-                              ? 'is-eligible'
-                              : 'is-shortfall'
-                          }`}
-                        >
-                          {currentAssessment.status || 'Calculated'}
-                        </strong>
+                      {/* Hero Card: Final Loan Eligibility */}
+                      <div className="bo-cv-result-hero-card">
+                        <div className="bo-cv-result-hero-main">
+                          <span className="bo-cv-result-hero-label">Final Loan Eligibility</span>
+                          <div className="bo-cv-result-hero-amount">
+                            {formatCurrency(currentRtrAssessment.finalLoanEligibility)}
+                          </div>
+                          <div className="bo-cv-result-hero-sub-row">
+                            <div className="bo-cv-result-hero-sub-item">
+                              <span>Requested: </span>
+                              <strong>{formatCurrency(appDetails.loanAmount)}</strong>
+                            </div>
+                            <div className="bo-cv-result-hero-sub-divider">•</div>
+                            <div className="bo-cv-result-hero-sub-item">
+                              <span>EMI Factor: </span>
+                              <strong>{currentRtrAssessment.emiAmountFactor != null ? currentRtrAssessment.emiAmountFactor : '—'}</strong>
+                            </div>
+                            {(selectedRtrLoan?.lenderName || currentRtrAssessment.selectedRTRLoanDetailsId) && (
+                              <>
+                                <div className="bo-cv-result-hero-sub-divider">•</div>
+                                <div className="bo-cv-result-hero-sub-item">
+                                  <span>Selected Facility: </span>
+                                  <strong>
+                                    {selectedRtrLoan?.lenderName ||
+                                      `RTR Loan ID: ${currentRtrAssessment.selectedRTRLoanDetailsId}`}
+                                  </strong>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="bo-cv-result-hero-status-box">
+                          <span className="bo-cv-result-hero-status-label">Assessment Status</span>
+                          <strong className="bo-cv-result-hero-status-val is-eligible">
+                            {Number(currentRtrAssessment.finalLoanEligibility) > 0 ? 'Eligible' : 'Calculated'}
+                          </strong>
+                        </div>
+                      </div>
+
+                      {/* Result Metrics Grid */}
+                      <div className="bo-cv-result-metrics-grid">
+                        {/* Assessed Income */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Assessed Income</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentRtrAssessment.assessedIncome != null ? formatCurrency(currentRtrAssessment.assessedIncome) : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">EMI × Multiplier evaluated capacity</span>
+                        </div>
+
+                        {/* Final Loan Eligibility */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Final Loan Eligibility</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentRtrAssessment.finalLoanEligibility != null ? formatCurrency(currentRtrAssessment.finalLoanEligibility) : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Net computed loan ceiling</span>
+                        </div>
+
+                        {/* Selected RTR Facility */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Selected Facility</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {selectedRtrLoan?.lenderName ||
+                              (currentRtrAssessment.selectedRTRLoanDetailsId
+                                ? `RTR Loan ID: ${currentRtrAssessment.selectedRTRLoanDetailsId}`
+                                : '—')}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">
+                            {currentRtrAssessment.selectedRTRLoanDetailsId
+                              ? `RTR Loan ID: ${currentRtrAssessment.selectedRTRLoanDetailsId}`
+                              : 'Norm matched facility'}
+                          </span>
+                        </div>
+
+                        {/* Paid Amount */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Paid Amount (Sanction - POS)</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentRtrAssessment.paidAmount != null ? formatCurrency(currentRtrAssessment.paidAmount) : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Total principal repaid</span>
+                        </div>
+
+                        {/* Applicable EMI Multiplier */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Applicable EMI Multiplier</span>
+                          <strong className="bo-cv-result-metric-val bo-cv-foir-val">
+                            {currentRtrAssessment.applicableEMIMultiplier != null ? `${currentRtrAssessment.applicableEMIMultiplier}x` : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Norm multiplier applied</span>
+                        </div>
+
+                        {/* Max Top Up Amount */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Max Top-Up Amount</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentRtrAssessment.maxTopUpAmount != null ? formatCurrency(currentRtrAssessment.maxTopUpAmount) : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Based on norm top-up %</span>
+                        </div>
+
+                        {/* Selected Facility Monthly EMI */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Benchmark Monthly EMI</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentRtrAssessment.emiAmount != null ? formatCurrency(currentRtrAssessment.emiAmount) : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Selected facility EMI</span>
+                        </div>
+
+                        {/* EMI Amount Factor */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">EMI Amount Factor</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentRtrAssessment.emiAmountFactor != null ? String(currentRtrAssessment.emiAmountFactor) : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Underwriting tenure factor</span>
+                        </div>
+                      </div>
+
+                      {/* Metadata Footer */}
+                      <div className="bo-cv-result-footer">
+                        <div className="bo-cv-result-footer-left">
+                          <span className="bo-cv-result-version-pill">
+                            Assessment #{currentRtrAssessment.applicationRTRAssessmentId}
+                          </span>
+                          <span className="bo-cv-result-time">
+                            Calculated:{' '}
+                            {currentRtrAssessment.createdAt
+                              ? new Date(currentRtrAssessment.createdAt).toLocaleString('en-IN')
+                              : '—'}
+                          </span>
+                          {currentRtrAssessment.createdBy && (
+                            <span className="bo-cv-result-user">
+                              User #{currentRtrAssessment.createdBy}
+                            </span>
+                          )}
+                        </div>
+                        <div className="bo-cv-result-footer-right">
+                          {currentRtrAssessment.isCurrent && (
+                            <span className="bo-cv-current-active-tag">Current Active RTR Assessment ✓</span>
+                          )}
+                        </div>
                       </div>
                     </div>
-
-                    {/* Result Metrics Grid */}
-                    <div className="bo-cv-result-metrics-grid">
-                      {/* Considered Income / ABB */}
-                      <div className="bo-cv-result-metric-card">
-                        <span className="bo-cv-result-metric-label">
-                          {currentAssessment.assessmentMethodId === 1 ? 'Total Considered Income' : 'Average Monthly ABB'}
-                        </span>
-                        <strong className="bo-cv-result-metric-val">
-                          {currentAssessment.assessmentMethodId === 1
-                            ? currentAssessment.totalConsideredIncome != null
-                              ? formatCurrency(currentAssessment.totalConsideredIncome)
-                              : 'Not Applicable'
-                            : currentAssessment.averageABB != null
-                            ? formatCurrency(currentAssessment.averageABB)
-                            : 'Not Applicable'}
-                        </strong>
-                        <span className="bo-cv-result-metric-sub">
-                          {currentAssessment.assessmentMethodId === 1
-                            ? '3-Month considered salary income'
-                            : 'Multi-account monthly average balance'}
-                        </span>
+                  )
+                ) : (
+                  currentAssessment && (
+                    <div className="bo-cv-assess-section bo-cv-result-section">
+                      <div className="bo-cv-assess-section-header">
+                        <div className="bo-cv-assess-section-title-wrap">
+                          <span className="bo-cv-assess-section-num is-result">✓</span>
+                          <div>
+                            <h3 className="bo-cv-assess-section-title">Eligibility Assessment Result</h3>
+                            <p className="bo-cv-assess-section-sub">
+                              Authoritative decision engine output for {selectedApplicant?.name || 'Applicant'} &bull;{' '}
+                              {currentAssessment.assessmentMethodId === 1 ? 'Income Method' : 'ABB Method'}.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="bo-cv-result-header-badges">
+                          <span className="bo-cv-result-method-badge">
+                            {currentAssessment.assessmentMethodId === 1 ? 'Income Method' : 'ABB Method'}
+                          </span>
+                          <span
+                            className={`bo-cv-result-status-badge ${
+                              String(currentAssessment.status || '').toLowerCase().includes('eligible')
+                                ? 'is-eligible'
+                                : 'is-shortfall'
+                            }`}
+                          >
+                            {currentAssessment.status || 'Calculated'}
+                          </span>
+                        </div>
                       </div>
 
-                      {/* Existing EMI */}
-                      <div className="bo-cv-result-metric-card">
-                        <span className="bo-cv-result-metric-label">Existing Monthly EMI</span>
-                        <strong className="bo-cv-result-metric-val">
-                          {currentAssessment.existingEMI != null ? formatCurrency(currentAssessment.existingEMI) : '₹0'}
-                        </strong>
-                        <span className="bo-cv-result-metric-sub">Active debt obligations</span>
+                      {/* Hero Card: Maximum Eligible Loan Amount */}
+                      <div className="bo-cv-result-hero-card">
+                        <div className="bo-cv-result-hero-main">
+                          <span className="bo-cv-result-hero-label">Maximum Eligible Loan Amount</span>
+                          <div className="bo-cv-result-hero-amount">
+                            {formatCurrency(currentAssessment.maximumEligibleLoanAmount)}
+                          </div>
+                          <div className="bo-cv-result-hero-sub-row">
+                            <div className="bo-cv-result-hero-sub-item">
+                              <span>Requested: </span>
+                              <strong>{formatCurrency(currentAssessment.requestedLoanAmount)}</strong>
+                            </div>
+                            {currentCalcSettings.recommendedLoanAmount || currentAssessment.recommendedLoanAmount ? (
+                              <>
+                                <div className="bo-cv-result-hero-sub-divider">•</div>
+                                <div className="bo-cv-result-hero-sub-item">
+                                  <span>Recommended: </span>
+                                  <strong>
+                                    {formatCurrency(
+                                      currentCalcSettings.recommendedLoanAmount || currentAssessment.recommendedLoanAmount
+                                    )}
+                                  </strong>
+                                </div>
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="bo-cv-result-hero-status-box">
+                          <span className="bo-cv-result-hero-status-label">Assessment Status</span>
+                          <strong
+                            className={`bo-cv-result-hero-status-val ${
+                              String(currentAssessment.status || '').toLowerCase().includes('eligible')
+                                ? 'is-eligible'
+                                : 'is-shortfall'
+                            }`}
+                          >
+                            {currentAssessment.status || 'Calculated'}
+                          </strong>
+                        </div>
                       </div>
 
-                      {/* Policy FOIR Limit */}
-                      <div className="bo-cv-result-metric-card">
-                        <span className="bo-cv-result-metric-label">Policy FOIR Applied</span>
-                        <strong className="bo-cv-result-metric-val bo-cv-foir-val">
-                          {currentAssessment.foirPercentApplied != null ? `${currentAssessment.foirPercentApplied}%` : '—'}
-                        </strong>
-                        <span className="bo-cv-result-metric-sub">Underwriting policy cap</span>
+                      {/* Result Metrics Grid */}
+                      <div className="bo-cv-result-metrics-grid">
+                        {/* Considered Income / ABB */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">
+                            {currentAssessment.assessmentMethodId === 1 ? 'Total Considered Income' : 'Average Monthly ABB'}
+                          </span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentAssessment.assessmentMethodId === 1
+                              ? currentAssessment.totalConsideredIncome != null
+                                ? formatCurrency(currentAssessment.totalConsideredIncome)
+                                : 'Not Applicable'
+                              : currentAssessment.averageABB != null
+                              ? formatCurrency(currentAssessment.averageABB)
+                              : 'Not Applicable'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">
+                            {currentAssessment.assessmentMethodId === 1
+                              ? '3-Month considered salary income'
+                              : 'Multi-account monthly average balance'}
+                          </span>
+                        </div>
+
+                        {/* Existing EMI */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Existing Monthly EMI</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentAssessment.existingEMI != null ? formatCurrency(currentAssessment.existingEMI) : '₹0'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Active debt obligations</span>
+                        </div>
+
+                        {/* Policy FOIR Limit */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Policy FOIR Applied</span>
+                          <strong className="bo-cv-result-metric-val bo-cv-foir-val">
+                            {currentAssessment.foirPercentApplied != null ? `${currentAssessment.foirPercentApplied}%` : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Underwriting policy cap</span>
+                        </div>
+
+                        {/* Eligible EMI */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Eligible Monthly EMI</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentAssessment.eligibleEMI != null ? formatCurrency(currentAssessment.eligibleEMI) : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Net repayment capacity</span>
+                        </div>
+
+                        {/* Proposed ROI */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Proposed ROI</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentAssessment.proposedROI != null ? `${currentAssessment.proposedROI}% p.a.` : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Annual interest rate applied</span>
+                        </div>
+
+                        {/* Proposed Tenure */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Proposed Tenure</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentAssessment.proposedTenureMonths != null ? `${currentAssessment.proposedTenureMonths} Months` : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Amortization duration</span>
+                        </div>
+
+                        {/* EMI Factor */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">EMI Factor</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentAssessment.emiFactor != null
+                              ? Number(currentAssessment.emiFactor).toLocaleString('en-IN', { maximumFractionDigits: 2 })
+                              : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Per lakh factor coefficient</span>
+                        </div>
+
+                        {/* Actual FOIR */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Actual Calculated FOIR</span>
+                          <strong
+                            className={`bo-cv-result-metric-val ${
+                              currentAssessment.foirPercentApplied != null &&
+                              currentAssessment.actualFOIR != null &&
+                              Number(currentAssessment.actualFOIR) > Number(currentAssessment.foirPercentApplied)
+                                ? 'is-over-foir'
+                                : ''
+                            }`}
+                          >
+                            {currentAssessment.actualFOIR != null ? `${Number(currentAssessment.actualFOIR).toFixed(2)}%` : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">
+                            Benchmark: {currentAssessment.foirPercentApplied ? `${currentAssessment.foirPercentApplied}%` : '—'}
+                          </span>
+                        </div>
                       </div>
 
-                      {/* Eligible EMI */}
-                      <div className="bo-cv-result-metric-card">
-                        <span className="bo-cv-result-metric-label">Eligible Monthly EMI</span>
-                        <strong className="bo-cv-result-metric-val">
-                          {currentAssessment.eligibleEMI != null ? formatCurrency(currentAssessment.eligibleEMI) : '—'}
-                        </strong>
-                        <span className="bo-cv-result-metric-sub">Net repayment capacity</span>
-                      </div>
-
-                      {/* Proposed ROI */}
-                      <div className="bo-cv-result-metric-card">
-                        <span className="bo-cv-result-metric-label">Proposed ROI</span>
-                        <strong className="bo-cv-result-metric-val">
-                          {currentAssessment.proposedROI != null ? `${currentAssessment.proposedROI}% p.a.` : '—'}
-                        </strong>
-                        <span className="bo-cv-result-metric-sub">Annual interest rate applied</span>
-                      </div>
-
-                      {/* Proposed Tenure */}
-                      <div className="bo-cv-result-metric-card">
-                        <span className="bo-cv-result-metric-label">Proposed Tenure</span>
-                        <strong className="bo-cv-result-metric-val">
-                          {currentAssessment.proposedTenureMonths != null ? `${currentAssessment.proposedTenureMonths} Months` : '—'}
-                        </strong>
-                        <span className="bo-cv-result-metric-sub">Amortization duration</span>
-                      </div>
-
-                      {/* EMI Factor */}
-                      <div className="bo-cv-result-metric-card">
-                        <span className="bo-cv-result-metric-label">EMI Factor</span>
-                        <strong className="bo-cv-result-metric-val">
-                          {currentAssessment.emiFactor != null
-                            ? Number(currentAssessment.emiFactor).toLocaleString('en-IN', { maximumFractionDigits: 2 })
-                            : '—'}
-                        </strong>
-                        <span className="bo-cv-result-metric-sub">Per lakh factor coefficient</span>
-                      </div>
-
-                      {/* Actual FOIR */}
-                      <div className="bo-cv-result-metric-card">
-                        <span className="bo-cv-result-metric-label">Actual Calculated FOIR</span>
-                        <strong
-                          className={`bo-cv-result-metric-val ${
-                            currentAssessment.foirPercentApplied != null &&
-                            currentAssessment.actualFOIR != null &&
-                            Number(currentAssessment.actualFOIR) > Number(currentAssessment.foirPercentApplied)
-                              ? 'is-over-foir'
-                              : ''
-                          }`}
-                        >
-                          {currentAssessment.actualFOIR != null ? `${Number(currentAssessment.actualFOIR).toFixed(2)}%` : '—'}
-                        </strong>
-                        <span className="bo-cv-result-metric-sub">
-                          Benchmark: {currentAssessment.foirPercentApplied ? `${currentAssessment.foirPercentApplied}%` : '—'}
-                        </span>
+                      {/* Metadata Footer */}
+                      <div className="bo-cv-result-footer">
+                        <div className="bo-cv-result-footer-left">
+                          <span className="bo-cv-result-version-pill">
+                            Version {currentAssessment.calculationVersion || 1}
+                          </span>
+                          <span className="bo-cv-result-time">
+                            Calculated:{' '}
+                            {currentAssessment.calculatedAt
+                              ? new Date(currentAssessment.calculatedAt).toLocaleString('en-IN')
+                              : '—'}
+                          </span>
+                          <span className="bo-cv-result-user">
+                            By: {currentAssessment.calculatedByRole || 'BackOffice'} (User #{currentAssessment.calculatedByUserId})
+                          </span>
+                        </div>
+                        <div className="bo-cv-result-footer-right">
+                          {currentAssessment.isCurrent && (
+                            <span className="bo-cv-current-active-tag">Current Active Assessment ✓</span>
+                          )}
+                        </div>
                       </div>
                     </div>
-
-                    {/* Metadata Footer */}
-                    <div className="bo-cv-result-footer">
-                      <div className="bo-cv-result-footer-left">
-                        <span className="bo-cv-result-version-pill">
-                          Version {currentAssessment.calculationVersion || 1}
-                        </span>
-                        <span className="bo-cv-result-time">
-                          Calculated:{' '}
-                          {currentAssessment.calculatedAt
-                            ? new Date(currentAssessment.calculatedAt).toLocaleString('en-IN')
-                            : '—'}
-                        </span>
-                        <span className="bo-cv-result-user">
-                          By: {currentAssessment.calculatedByRole || 'BackOffice'} (User #{currentAssessment.calculatedByUserId})
-                        </span>
-                      </div>
-                      <div className="bo-cv-result-footer-right">
-                        {currentAssessment.isCurrent && (
-                          <span className="bo-cv-current-active-tag">Current Active Assessment ✓</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  )
                 )}
 
                 {/* ── Section 9: Company Recommendation ────────────────────────── */}

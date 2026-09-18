@@ -457,6 +457,71 @@ export const backOfficeService = {
   },
 
   /* ==========================================
+     8c. RTR (REPAYMENT TRACK RECORD) CALCULATION APIs
+  ========================================== */
+
+  /**
+   * Retrieve RTR loan records for a specific application product and applicant sequence.
+   * @param {string|number} applicationProductDetailsId
+   * @param {string|number} applicantSequence
+   */
+  getRTRLoansBySeq: async (applicationProductDetailsId, applicantSequence) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_RTR_LOANS_BY_SEQ(applicationProductDetailsId, applicantSequence)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Create a new RTR loan record.
+   * @param {object} payload - { applicationRTRLoanDetailsId: 0, applicationProductDetailsId, applicantSequence, lenderName, sanctionAmount, currentPOS, emiStartDate, emiAmount, mob, odCount, bounceCount, isSelectedForRTR, isActive, createdBy, modifiedBy }
+   */
+  createRTRLoan: async (payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_RTR_LOANS,
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Update an existing RTR loan record.
+   * @param {string|number} id - applicationRTRLoanDetailsId
+   * @param {object} payload - { applicationRTRLoanDetailsId, applicationProductDetailsId, applicantSequence, lenderName, sanctionAmount, currentPOS, emiStartDate, emiAmount, mob, odCount, bounceCount, isSelectedForRTR, isActive, modifiedBy }
+   */
+  updateRTRLoan: async (id, payload) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_RTR_LOAN_BY_ID(id),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Run authoritative RTR Eligibility Calculation engine.
+   * @param {object} payload - { applicationProductDetailsId, applicantSequence, emiAmountFactor, createdBy }
+   */
+  calculateRTR: async (payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_RTR_CALCULATE,
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve saved RTR calculation assessments for an application product and applicant sequence.
+   * @param {string|number} applicationProductDetailsId
+   * @param {string|number} applicantSequence
+   */
+  getRTRAssessmentsBySeq: async (applicationProductDetailsId, applicantSequence) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_RTR_ASSESSMENTS_BY_SEQ(applicationProductDetailsId, applicantSequence)
+    );
+    return unwrapResponse(response);
+  },
+
+  /* ==========================================
      9. DOCUMENT REJECTION & RETURNED WORKFLOW
   ========================================== */
 
