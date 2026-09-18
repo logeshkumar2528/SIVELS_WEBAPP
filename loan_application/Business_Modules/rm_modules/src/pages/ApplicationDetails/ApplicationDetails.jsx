@@ -129,8 +129,55 @@ async function updateCustomerStatusToInProgress(baseUrl, customerId, record = {}
   }
 }
 
-function validateApplication(record) {
-  return {};
+function validateApplication(record = {}, requiresVariation = false, isRmSourced = false) {
+  const errors = {};
+
+  if (!isRmSourced && (record.sourcingChannel === '' || record.sourcingChannel === null || record.sourcingChannel === undefined)) {
+    errors.sourcingChannel = 'Sourcing channel is required';
+  }
+
+  if (!record.loanProduct || String(record.loanProduct).trim() === '') {
+    errors.loanProduct = 'Loan product is required';
+  }
+
+  if (!record.loanTransactionType || String(record.loanTransactionType).trim() === '') {
+    errors.loanTransactionType = 'Loan transaction type is required';
+  }
+
+  if (!record.purposeOfLoan || String(record.purposeOfLoan).trim() === '') {
+    errors.purposeOfLoan = 'Purpose of loan is required';
+  }
+
+  const parsedAmount = parseAmountToNumber(record.loanAmount);
+  if (record.loanAmount === '' || record.loanAmount === null || record.loanAmount === undefined || isNaN(parsedAmount) || parsedAmount <= 0) {
+    errors.loanAmount = 'Loan amount must be greater than 0';
+  }
+
+  if (record.loanTenureMonths === '' || record.loanTenureMonths === null || record.loanTenureMonths === undefined || Number(record.loanTenureMonths) <= 0) {
+    errors.loanTenureMonths = 'Loan tenure is required';
+  }
+
+  if (!record.interestType || String(record.interestType).trim() === '') {
+    errors.interestType = 'Rate of interest is required';
+  }
+
+  if (record.roi === '' || record.roi === null || record.roi === undefined) {
+    errors.roi = 'ROI (%) is required';
+  }
+
+  if (record.coApplicantsCount === '' || record.coApplicantsCount === null || record.coApplicantsCount === undefined || Number(record.coApplicantsCount) < 0) {
+    errors.coApplicantsCount = 'Number of co-applicants is required';
+  }
+
+  if (record.distanceFromBranchKm === '' || record.distanceFromBranchKm === null || record.distanceFromBranchKm === undefined || Number(record.distanceFromBranchKm) < 0) {
+    errors.distanceFromBranchKm = 'Distance from branch is required';
+  }
+
+  if (requiresVariation && (!record.loanVariation || String(record.loanVariation).trim() === '')) {
+    errors.loanVariation = 'HL / LAP variation is required';
+  }
+
+  return errors;
 }
 
 export default function ApplicationDetails() {
@@ -509,7 +556,7 @@ export default function ApplicationDetails() {
   };
 
   const handleProceed = async () => {
-    const validationErrors = validateApplication(appData);
+    const validationErrors = validateApplication(appData, requiresVariation, isRmSourced);
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) {

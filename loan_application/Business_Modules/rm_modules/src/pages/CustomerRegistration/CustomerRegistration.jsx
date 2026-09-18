@@ -228,12 +228,64 @@ function buildRegistrationPayload(form, baseData = {}, applicantDisplayName = ''
 function validatePerson(person, { isCoApplicant = false } = {}) {
   const errors = {};
 
+  if (isCoApplicant && (!person.relationshipWithApplicant || String(person.relationshipWithApplicant).trim() === '')) {
+    errors.relationshipWithApplicant = 'Relationship with Applicant is required';
+  }
+
+  if (!person.title || String(person.title).trim() === '') {
+    errors.title = 'Title is required';
+  }
+
   if (!String(person.firstName || '').trim()) {
     errors.firstName = 'First name is required';
   }
 
+  // middleName is OPTIONAL
+
   if (!String(person.lastName || '').trim()) {
     errors.lastName = 'Last name is required';
+  }
+
+  if (!String(person.fatherOrSpouseName || '').trim()) {
+    errors.fatherOrSpouseName = "Father's / Spouse name is required";
+  }
+
+  if (!String(person.mothersMaidenName || '').trim()) {
+    errors.mothersMaidenName = "Mother's maiden name is required";
+  }
+
+  if (!person.dateOfBirth || !String(person.dateOfBirth).trim()) {
+    errors.dateOfBirth = 'Date of birth is required';
+  } else if (!isValidDate(person.dateOfBirth)) {
+    errors.dateOfBirth = 'Please enter a valid date of birth';
+  }
+
+  if (!person.religion || String(person.religion).trim() === '') {
+    errors.religion = 'Religion is required';
+  }
+
+  if (!person.category || String(person.category).trim() === '') {
+    errors.category = 'Category is required';
+  }
+
+  if (!person.gender || String(person.gender).trim() === '') {
+    errors.gender = 'Gender is required';
+  }
+
+  if (!person.maritalStatus || String(person.maritalStatus).trim() === '') {
+    errors.maritalStatus = 'Marital status is required';
+  }
+
+  const mobileClean = digitsOnly(person.mobileNo);
+  if (!mobileClean) {
+    errors.mobileNo = 'Mobile number is required';
+  } else if (mobileClean.length !== 10) {
+    errors.mobileNo = 'Mobile number must be exactly 10 digits';
+  }
+
+  // emailId is OPTIONAL; if provided, must be valid email format
+  if (person.emailId && String(person.emailId).trim() && !isValidEmail(person.emailId)) {
+    errors.emailId = 'Please enter a valid email address';
   }
 
   return errors;
@@ -377,12 +429,13 @@ function PersonCard({
             <div className="cr-input-wrapper">
               <User className="cr-input-icon" size={14} />
               <input
-                className="form-input cr-input cr-input--with-icon"
+                className={`form-input cr-input cr-input--with-icon ${errors.mothersMaidenName ? 'cr-input--invalid' : ''}`}
                 type="text"
                 value={person.mothersMaidenName}
                 onChange={(event) => handleChange('mothersMaidenName', event.target.value)}
               />
             </div>
+            {errors.mothersMaidenName && <span className="cr-field-error">{errors.mothersMaidenName}</span>}
           </div>
 
           <div className="cr-field">
@@ -405,6 +458,7 @@ function PersonCard({
             <label className="form-label">Religion</label>
             <div className="cr-input-wrapper">
               <Select
+                error={!!errors.religion}
                 value={person.religion}
                 onChange={(val) => handleChange('religion', val)}
                 placeholder={isLoadingMasters ? "Loading..." : "Select religion"}
@@ -413,12 +467,14 @@ function PersonCard({
                 icon={<FileText size={14} />}
               />
             </div>
+            {errors.religion && <span className="cr-field-error">{errors.religion}</span>}
           </div>
 
           <div className="cr-field">
             <label className="form-label">Category</label>
             <div className="cr-input-wrapper">
               <Select
+                error={!!errors.category}
                 value={person.category}
                 onChange={(val) => handleChange('category', val)}
                 placeholder={isLoadingMasters ? "Loading..." : "Select category"}
@@ -427,6 +483,7 @@ function PersonCard({
                 icon={<FileText size={14} />}
               />
             </div>
+            {errors.category && <span className="cr-field-error">{errors.category}</span>}
           </div>
 
           <div className="cr-field">
@@ -739,6 +796,11 @@ export default function CustomerRegistration() {
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) {
+      setErrorPopup({
+        title: 'Validation Error',
+        message: 'Please fill all required personal information fields before continuing.',
+        variant: 'validation',
+      });
       return;
     }
 

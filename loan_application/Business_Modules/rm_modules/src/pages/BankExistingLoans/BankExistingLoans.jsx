@@ -49,10 +49,51 @@ function buildBankState(appData) {
   };
 }
 
+function isBankPartiallyFilled(bank) {
+  if (!bank) return false;
+  const hasBankName = Boolean(bank.bankName && String(bank.bankName).trim() !== '');
+  const hasBranch = Boolean(bank.branch && String(bank.branch).trim() !== '');
+  const hasAccount = Boolean(String(bank.accountNumber || '').trim());
+  const hasLoans = Boolean(bank.noOfActiveLoans !== '' && bank.noOfActiveLoans !== null && Number(bank.noOfActiveLoans) > 0);
+  const hasCards = Boolean(bank.noOfActiveCreditCards !== '' && bank.noOfActiveCreditCards !== null && Number(bank.noOfActiveCreditCards) > 0);
+  return hasBankName || hasBranch || hasAccount || hasLoans || hasCards;
+}
+
+function validateBank(bank = {}, isPrimary = false) {
+  const errors = {};
+
+  if (!isPrimary && !isBankPartiallyFilled(bank)) {
+    return errors;
+  }
+
+  if (!bank.bankName || String(bank.bankName).trim() === '') {
+    errors.bankName = 'Bank name is required';
+  }
+
+  if (!bank.branch || String(bank.branch).trim() === '') {
+    errors.branch = 'Branch is required';
+  }
+
+  if (!String(bank.accountNumber || '').trim()) {
+    errors.accountNumber = 'Account number is required';
+  }
+
+  if (bank.noOfActiveLoans === '' || bank.noOfActiveLoans === null || bank.noOfActiveLoans === undefined || isNaN(Number(bank.noOfActiveLoans)) || Number(bank.noOfActiveLoans) < 0) {
+    errors.noOfActiveLoans = 'Number of active loans is required';
+  }
+
+  if (bank.noOfActiveCreditCards === '' || bank.noOfActiveCreditCards === null || bank.noOfActiveCreditCards === undefined || isNaN(Number(bank.noOfActiveCreditCards)) || Number(bank.noOfActiveCreditCards) < 0) {
+    errors.noOfActiveCreditCards = 'Number of active credit cards is required';
+  }
+
+  return errors;
+}
+
 function BankCard({ 
   title, 
   bank, 
   onChange, 
+  errors = {},
   onViewLoans,
   onViewCreditCards,
   bankOptions = [],
@@ -73,6 +114,7 @@ function BankCard({
             <label className="form-label">Bank Name</label>
             <div className="aw-input-wrapper">
               <Select
+                error={!!errors.bankName}
                 value={bank.bankName}
                 onChange={(val) => {
                   onChange({ bankName: val, branch: '' });
@@ -83,11 +125,13 @@ function BankCard({
                 icon={<Building2 size={14} />}
               />
             </div>
+            {errors.bankName && <span className="aw-field-error">{errors.bankName}</span>}
           </div>
           <div className="aw-field">
             <label className="form-label">Branch</label>
             <div className="aw-input-wrapper">
               <Select
+                error={!!errors.branch}
                 value={bank.branch}
                 onChange={(val) => onChange('branch', val)}
                 placeholder={isLoadingMasters ? "Loading..." : "Select Branch"}
@@ -96,33 +140,69 @@ function BankCard({
                 icon={<MapPin size={14} />}
               />
             </div>
+            {errors.branch && <span className="aw-field-error">{errors.branch}</span>}
           </div>
           <div className="aw-field">
             <label className="form-label">Account Number</label>
             <div className="aw-input-wrapper">
               <CreditCard className="aw-input-icon" size={14} />
-              <input className="form-input aw-input aw-input--with-icon" value={bank.accountNumber} onChange={(e) => onChange('accountNumber', e.target.value)} />
+              <input
+                className={`form-input aw-input aw-input--with-icon ${errors.accountNumber ? 'aw-input--invalid' : ''}`}
+                value={bank.accountNumber}
+                onChange={(e) => onChange('accountNumber', e.target.value)}
+              />
             </div>
+            {errors.accountNumber && <span className="aw-field-error">{errors.accountNumber}</span>}
           </div>
           <div className="aw-field">
             <label className="form-label">No. of Active Loans</label>
             <div className="aw-input-wrapper" style={{ position: 'relative' }}>
               <Files className="aw-input-icon" size={14} />
-              <input className="form-input aw-input aw-input--with-icon" type="number" min="0" step="1" value={bank.noOfActiveLoans} onChange={(e) => onChange('noOfActiveLoans', e.target.value)} style={{ paddingRight: parseInt(bank.noOfActiveLoans) > 0 ? '55px' : '32px' }} />
+              <input
+                className={`form-input aw-input aw-input--with-icon ${errors.noOfActiveLoans ? 'aw-input--invalid' : ''}`}
+                type="number"
+                min="0"
+                step="1"
+                value={bank.noOfActiveLoans}
+                onChange={(e) => onChange('noOfActiveLoans', e.target.value)}
+                style={{ paddingRight: parseInt(bank.noOfActiveLoans) > 0 ? '55px' : '32px' }}
+              />
               {parseInt(bank.noOfActiveLoans) > 0 && (
-                <button type="button" onClick={onViewLoans} style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: '#e0f2fe', color: '#0369a1', border: '1px solid #7dd3fc', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
+                <button
+                  type="button"
+                  onClick={onViewLoans}
+                  style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: '#e0f2fe', color: '#0369a1', border: '1px solid #7dd3fc', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+                >
                   View
                 </button>
               )}
             </div>
+            {errors.noOfActiveLoans && <span className="aw-field-error">{errors.noOfActiveLoans}</span>}
           </div>
           <div className="aw-field">
             <label className="form-label">No. of Active Credit Cards</label>
             <div className="aw-input-wrapper" style={{ position: 'relative' }}>
               <CreditCard className="aw-input-icon" size={14} />
-              <input className="form-input aw-input aw-input--with-icon" type="number" min="0" step="1" value={bank.noOfActiveCreditCards} onChange={(e) => onChange('noOfActiveCreditCards', e.target.value)} style={{ paddingRight: parseInt(bank.noOfActiveCreditCards) > 0 ? '55px' : '32px' }} />
-              {parseInt(bank.noOfActiveCreditCards) > 0 && <button type="button" onClick={onViewCreditCards} style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: '#e0f2fe', color: '#0369a1', border: '1px solid #7dd3fc', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>View</button>}
+              <input
+                className={`form-input aw-input aw-input--with-icon ${errors.noOfActiveCreditCards ? 'aw-input--invalid' : ''}`}
+                type="number"
+                min="0"
+                step="1"
+                value={bank.noOfActiveCreditCards}
+                onChange={(e) => onChange('noOfActiveCreditCards', e.target.value)}
+                style={{ paddingRight: parseInt(bank.noOfActiveCreditCards) > 0 ? '55px' : '32px' }}
+              />
+              {parseInt(bank.noOfActiveCreditCards) > 0 && (
+                <button
+                  type="button"
+                  onClick={onViewCreditCards}
+                  style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: '#e0f2fe', color: '#0369a1', border: '1px solid #7dd3fc', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  View
+                </button>
+              )}
             </div>
+            {errors.noOfActiveCreditCards && <span className="aw-field-error">{errors.noOfActiveCreditCards}</span>}
           </div>
         </div>
       </div>
@@ -391,6 +471,7 @@ export default function BankExistingLoans() {
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildBankState(getApplication(appId)));
+  const [errors, setErrors] = useState({});
   const [errorPopup, setErrorPopup] = useState(null);
   const [viewingLoansFor, setViewingLoansFor] = useState(null);
   const [isLoadingActiveLoans, setIsLoadingActiveLoans] = useState(false);
@@ -601,6 +682,13 @@ export default function BankExistingLoans() {
       },
     };
     persist(nextForm);
+    setErrors((prev) => {
+      const next = { ...prev };
+      Object.keys(updates).forEach((f) => {
+        delete next[`applicant.${scope}.${f}`];
+      });
+      return next;
+    });
   };
 
   const updateCoApplicantBank = (index, scope, fieldOrObj, value) => {
@@ -620,6 +708,41 @@ export default function BankExistingLoans() {
       ),
     };
     persist(nextForm);
+    setErrors((prev) => {
+      const next = { ...prev };
+      Object.keys(updates).forEach((f) => {
+        delete next[`coApplicants.${index}.${scope}.${f}`];
+      });
+      return next;
+    });
+  };
+
+  const validateForm = () => {
+    const nextErrors = {};
+
+    const appPrimaryErrs = validateBank(form.applicant.primaryBank, true);
+    Object.entries(appPrimaryErrs).forEach(([field, msg]) => {
+      nextErrors[`applicant.primaryBank.${field}`] = msg;
+    });
+
+    const appOtherErrs = validateBank(form.applicant.otherBank, false);
+    Object.entries(appOtherErrs).forEach(([field, msg]) => {
+      nextErrors[`applicant.otherBank.${field}`] = msg;
+    });
+
+    form.coApplicants.forEach((co, idx) => {
+      const coPrimaryErrs = validateBank(co.primaryBank, true);
+      Object.entries(coPrimaryErrs).forEach(([field, msg]) => {
+        nextErrors[`coApplicants.${idx}.primaryBank.${field}`] = msg;
+      });
+
+      const coOtherErrs = validateBank(co.otherBank, false);
+      Object.entries(coOtherErrs).forEach(([field, msg]) => {
+        nextErrors[`coApplicants.${idx}.otherBank.${field}`] = msg;
+      });
+    });
+
+    return nextErrors;
   };
 
   const getTargetKey = (target) => {
@@ -985,6 +1108,18 @@ export default function BankExistingLoans() {
   };
 
   const handleContinue = async () => {
+    const validationErrors = validateForm();
+    setErrors(validationErrors);
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrorPopup({
+        title: 'Validation Error',
+        message: 'Please fill all required banking details before continuing.',
+        variant: 'validation',
+      });
+      return;
+    }
+
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
     const allPersons = [
       { banks: form.applicant, isPrimary: true },
@@ -1149,6 +1284,11 @@ export default function BankExistingLoans() {
           title="Primary Bank"
           bank={form.applicant.primaryBank}
           onChange={(field, value) => updateApplicantBank('primaryBank', field, value)}
+          errors={Object.fromEntries(
+            Object.entries(errors)
+              .filter(([k]) => k.startsWith('applicant.primaryBank.'))
+              .map(([k, v]) => [k.replace('applicant.primaryBank.', ''), v])
+          )}
           onViewLoans={() => handleOpenLoansModal({ type: 'applicant', scope: 'primaryBank' })}
           onViewCreditCards={() => handleOpenCardsModal({ type: 'applicant', scope: 'primaryBank' })}
           bankOptions={bankOptions}
@@ -1159,6 +1299,11 @@ export default function BankExistingLoans() {
           title="Other Bank"
           bank={form.applicant.otherBank}
           onChange={(field, value) => updateApplicantBank('otherBank', field, value)}
+          errors={Object.fromEntries(
+            Object.entries(errors)
+              .filter(([k]) => k.startsWith('applicant.otherBank.'))
+              .map(([k, v]) => [k.replace('applicant.otherBank.', ''), v])
+          )}
           onViewLoans={() => handleOpenLoansModal({ type: 'applicant', scope: 'otherBank' })}
           onViewCreditCards={() => handleOpenCardsModal({ type: 'applicant', scope: 'otherBank' })}
           bankOptions={bankOptions}
@@ -1177,6 +1322,11 @@ export default function BankExistingLoans() {
               title="Primary Bank"
               bank={coApp.primaryBank}
               onChange={(field, value) => updateCoApplicantBank(index, 'primaryBank', field, value)}
+              errors={Object.fromEntries(
+                Object.entries(errors)
+                  .filter(([k]) => k.startsWith(`coApplicants.${index}.primaryBank.`))
+                  .map(([k, v]) => [k.replace(`coApplicants.${index}.primaryBank.`, ''), v])
+              )}
               onViewLoans={() => handleOpenLoansModal({ type: 'coApplicant', index, scope: 'primaryBank' })}
               onViewCreditCards={() => handleOpenCardsModal({ type: 'coApplicant', index, scope: 'primaryBank' })}
               bankOptions={bankOptions}
@@ -1187,6 +1337,11 @@ export default function BankExistingLoans() {
               title="Other Bank"
               bank={coApp.otherBank}
               onChange={(field, value) => updateCoApplicantBank(index, 'otherBank', field, value)}
+              errors={Object.fromEntries(
+                Object.entries(errors)
+                  .filter(([k]) => k.startsWith(`coApplicants.${index}.otherBank.`))
+                  .map(([k, v]) => [k.replace(`coApplicants.${index}.otherBank.`, ''), v])
+              )}
               onViewLoans={() => handleOpenLoansModal({ type: 'coApplicant', index, scope: 'otherBank' })}
               onViewCreditCards={() => handleOpenCardsModal({ type: 'coApplicant', index, scope: 'otherBank' })}
               bankOptions={bankOptions}

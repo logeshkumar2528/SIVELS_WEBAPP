@@ -27,10 +27,36 @@ function buildReferenceState(appData) {
   };
 }
 
+function validateReference(ref = {}) {
+  const errors = {};
+
+  if (!String(ref.fullName || '').trim()) {
+    errors.fullName = 'Full name is required';
+  }
+
+  if (!ref.relationship || String(ref.relationship).trim() === '') {
+    errors.relationship = 'Relationship is required';
+  }
+
+  const mobileClean = String(ref.mobileNo || '').replace(/\D/g, '');
+  if (!mobileClean) {
+    errors.mobileNo = 'Mobile number is required';
+  } else if (mobileClean.length !== 10) {
+    errors.mobileNo = 'Mobile number must be exactly 10 digits';
+  }
+
+  if (!String(ref.address || '').trim()) {
+    errors.address = 'Address is required';
+  }
+
+  return errors;
+}
+
 function ReferenceCard({ 
   title, 
   reference, 
   onChange,
+  errors = {},
   relationshipOptions = [],
   isLoadingMasters = false
 }) {
@@ -48,13 +74,19 @@ function ReferenceCard({
             <label className="form-label">Name</label>
             <div className="aw-input-wrapper">
               <User className="aw-input-icon" size={14} />
-              <input className="form-input aw-input aw-input--with-icon" value={reference.fullName} onChange={(e) => onChange('fullName', e.target.value)} />
+              <input
+                className={`form-input aw-input aw-input--with-icon ${errors.fullName ? 'aw-input--invalid' : ''}`}
+                value={reference.fullName}
+                onChange={(e) => onChange('fullName', e.target.value)}
+              />
             </div>
+            {errors.fullName && <span className="aw-field-error">{errors.fullName}</span>}
           </div>
           <div className="aw-field">
             <label className="form-label">Relationship</label>
             <div className="aw-input-wrapper">
               <Select
+                error={!!errors.relationship}
                 value={reference.relationship}
                 onChange={(val) => onChange('relationship', val)}
                 placeholder={isLoadingMasters ? "Loading..." : "Select Relationship"}
@@ -63,20 +95,33 @@ function ReferenceCard({
                 icon={<Users size={14} />}
               />
             </div>
+            {errors.relationship && <span className="aw-field-error">{errors.relationship}</span>}
           </div>
           <div className="aw-field">
             <label className="form-label">Mobile No.</label>
             <div className="aw-input-wrapper">
               <Phone className="aw-input-icon" size={14} />
-              <input className="form-input aw-input aw-input--with-icon" value={reference.mobileNo} onChange={(e) => onChange('mobileNo', e.target.value)} />
+              <input
+                className={`form-input aw-input aw-input--with-icon ${errors.mobileNo ? 'aw-input--invalid' : ''}`}
+                value={reference.mobileNo}
+                maxLength={10}
+                inputMode="numeric"
+                onChange={(e) => onChange('mobileNo', e.target.value)}
+              />
             </div>
+            {errors.mobileNo && <span className="aw-field-error">{errors.mobileNo}</span>}
           </div>
           <div className="aw-field">
             <label className="form-label">Address</label>
             <div className="aw-input-wrapper">
               <MapPin className="aw-input-icon" size={14} />
-              <input className="form-input aw-input aw-input--with-icon" value={reference.address} onChange={(e) => onChange('address', e.target.value)} />
+              <input
+                className={`form-input aw-input aw-input--with-icon ${errors.address ? 'aw-input--invalid' : ''}`}
+                value={reference.address}
+                onChange={(e) => onChange('address', e.target.value)}
+              />
             </div>
+            {errors.address && <span className="aw-field-error">{errors.address}</span>}
           </div>
         </div>
       </div>
@@ -90,6 +135,7 @@ export default function ReferenceDetails() {
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildReferenceState(getApplication(appId)));
+  const [errors, setErrors] = useState({});
   const [errorPopup, setErrorPopup] = useState(null);
 
   const [isLoadingMasters, setIsLoadingMasters] = useState(false);
@@ -137,9 +183,36 @@ export default function ReferenceDetails() {
         [field]: value,
       },
     });
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[`${scope}.${field}`];
+      return next;
+    });
   };
 
   const handleContinue = async () => {
+    const nextErrors = {};
+    const ref1Errors = validateReference(form.reference1);
+    Object.entries(ref1Errors).forEach(([k, v]) => {
+      nextErrors[`reference1.${k}`] = v;
+    });
+
+    const ref2Errors = validateReference(form.reference2);
+    Object.entries(ref2Errors).forEach(([k, v]) => {
+      nextErrors[`reference2.${k}`] = v;
+    });
+
+    setErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrorPopup({
+        title: 'Validation Error',
+        message: 'Please fill all required fields for Reference 1 and Reference 2 before continuing.',
+        variant: 'validation',
+      });
+      return;
+    }
+
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
     const prodId = appData.applicationProductDetailsId;
 
@@ -251,6 +324,11 @@ export default function ReferenceDetails() {
           title="REFERENCE 1"
           reference={form.reference1}
           onChange={(field, value) => updateReference('reference1', field, value)}
+          errors={Object.fromEntries(
+            Object.entries(errors)
+              .filter(([k]) => k.startsWith('reference1.'))
+              .map(([k, v]) => [k.replace('reference1.', ''), v])
+          )}
           relationshipOptions={relationshipOptions}
           isLoadingMasters={isLoadingMasters}
         />
@@ -258,6 +336,11 @@ export default function ReferenceDetails() {
           title="REFERENCE 2"
           reference={form.reference2}
           onChange={(field, value) => updateReference('reference2', field, value)}
+          errors={Object.fromEntries(
+            Object.entries(errors)
+              .filter(([k]) => k.startsWith('reference2.'))
+              .map(([k, v]) => [k.replace('reference2.', ''), v])
+          )}
           relationshipOptions={relationshipOptions}
           isLoadingMasters={isLoadingMasters}
         />

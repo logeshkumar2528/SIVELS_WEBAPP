@@ -130,7 +130,46 @@ function buildKycState(appData) {
 }
 
 function validateKyc(person) {
-  return {};
+  const errors = {};
+
+  const aadhaarClean = String(person?.aadhaarLast4 || '').replace(/\D/g, '');
+  if (!aadhaarClean) {
+    errors.aadhaarLast4 = 'Aadhaar last 4 digits are required';
+  } else if (aadhaarClean.length !== 4) {
+    errors.aadhaarLast4 = 'Aadhaar must be exactly 4 digits';
+  }
+
+  const panClean = String(person?.panCardNo || '').trim();
+  if (!panClean) {
+    errors.panCardNo = 'PAN card number is required';
+  } else if (!/^[A-Z0-9]{10}$/i.test(panClean)) {
+    errors.panCardNo = 'PAN card number must be 10 characters';
+  }
+
+  if (!person?.identityDocumentType) {
+    errors.identityDocumentType = 'Verification document type is required';
+  }
+
+  if (!String(person?.identityDocumentNo || '').trim()) {
+    errors.identityDocumentNo = 'Document number is required';
+  }
+
+  if (!person?.verificationStatus) {
+    errors.verificationStatus = 'Verification status is required';
+  }
+
+  if (person?.identityDocumentType) {
+    const hasFiles =
+      (Array.isArray(person.identityDocumentFiles) && person.identityDocumentFiles.filter(Boolean).length > 0) ||
+      (Array.isArray(person.identityDocumentRawFiles) && person.identityDocumentRawFiles.filter(Boolean).length > 0) ||
+      Boolean(person.documentPath) ||
+      Boolean(person.manualDocuments);
+    if (!hasFiles) {
+      errors.identityDocumentFiles = 'Verification document file upload is required';
+    }
+  }
+
+  return errors;
 }
 
 function KycCard({
@@ -2785,6 +2824,11 @@ export default function KycDocuments() {
     });
     if (Object.keys(currentErrors).length > 0) {
       setErrors(currentErrors);
+      setErrorPopup({
+        title: 'Validation Error',
+        message: 'Please fill all required KYC fields and upload required documents before continuing.',
+        variant: 'validation',
+      });
       return;
     }
 

@@ -42,7 +42,50 @@ function buildEmploymentState(appData) {
   };
 }
 
-function validateEmployment(person) { return {}; }
+function validateEmployment(person = {}) {
+  const errors = {};
+
+  if (!String(person.employerBusinessName || '').trim()) {
+    errors.employerBusinessName = 'Employer / Business name is required';
+  }
+
+  if (!String(person.designationNatureOfBusiness || '').trim()) {
+    errors.designationNatureOfBusiness = 'Designation / Nature of business is required';
+  }
+
+  if (!person.employmentNature || String(person.employmentNature).trim() === '') {
+    errors.employmentNature = 'Employment nature is required';
+  }
+
+  if (!person.qualification || String(person.qualification).trim() === '') {
+    errors.qualification = 'Qualification is required';
+  }
+
+  if (!person.industryType || String(person.industryType).trim() === '') {
+    errors.industryType = 'Industry type is required';
+  }
+
+  if (person.totalExperienceYears === '' || person.totalExperienceYears === null || person.totalExperienceYears === undefined || isNaN(Number(person.totalExperienceYears)) || Number(person.totalExperienceYears) < 0) {
+    errors.totalExperienceYears = 'Total experience is required';
+  }
+
+  const grossMonthly = parseAmountToNumber(person.grossMonthlyIncome);
+  if (person.grossMonthlyIncome === '' || person.grossMonthlyIncome === null || person.grossMonthlyIncome === undefined || isNaN(grossMonthly) || grossMonthly <= 0) {
+    errors.grossMonthlyIncome = 'Gross monthly income is required';
+  }
+
+  const netMonthly = parseAmountToNumber(person.netMonthlyIncome);
+  if (person.netMonthlyIncome === '' || person.netMonthlyIncome === null || person.netMonthlyIncome === undefined || isNaN(netMonthly) || netMonthly <= 0) {
+    errors.netMonthlyIncome = 'Net monthly income is required';
+  }
+
+  const grossAnnual = parseAmountToNumber(person.grossAnnualIncome);
+  if (person.grossAnnualIncome === '' || person.grossAnnualIncome === null || person.grossAnnualIncome === undefined || isNaN(grossAnnual) || grossAnnual <= 0) {
+    errors.grossAnnualIncome = 'Gross annual income is required';
+  }
+
+  return errors;
+}
 
 function EmploymentCard({ 
   title, 
@@ -330,6 +373,11 @@ export default function EmploymentIncome() {
 
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
+      setErrorPopup({
+        title: 'Validation Error',
+        message: 'Please fill all required employment and income fields before continuing.',
+        variant: 'validation',
+      });
       return;
     }
 

@@ -38,13 +38,42 @@ function buildAddressState(appData) {
   };
 }
 
-function validateAddress(address) { return {}; }
+function validateAddress(address = {}) {
+  const errors = {};
+
+  if (!String(address.addressLine1 || '').trim()) {
+    errors.addressLine1 = 'Address Line 1 is required';
+  }
+
+  // addressLine2 is OPTIONAL
+
+  if (!String(address.landmark || '').trim()) {
+    errors.landmark = 'Landmark is required';
+  }
+
+  if (!address.city || String(address.city).trim() === '') {
+    errors.city = 'City is required';
+  }
+
+  if (!address.state || String(address.state).trim() === '') {
+    errors.state = 'State is required';
+  }
+
+  const pinClean = String(address.pincode || '').replace(/\D/g, '');
+  if (!pinClean) {
+    errors.pincode = 'Pincode is required';
+  } else if (pinClean.length !== 6) {
+    errors.pincode = 'Pincode must be 6 digits';
+  }
+
+  return errors;
+}
 
 function AddressCard({ 
   title, 
   address, 
   onChange, 
-  errors,
+  errors = {},
   cityOptions = [],
   stateOptions = [],
   isLoadingMasters = false
@@ -90,11 +119,12 @@ function AddressCard({
             <div className="aw-input-wrapper">
               <Map className="aw-input-icon" size={14} />
               <input
-                className="form-input aw-input aw-input--with-icon"
+                className={`form-input aw-input aw-input--with-icon ${errors.landmark ? 'aw-input--invalid' : ''}`}
                 value={address.landmark}
                 onChange={(e) => onChange('landmark', e.target.value)}
               />
             </div>
+            {errors.landmark && <span className="aw-field-error">{errors.landmark}</span>}
           </div>
 
           <div className="aw-field">
@@ -280,6 +310,11 @@ export default function AddressDetails() {
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) {
+      setErrorPopup({
+        title: 'Validation Error',
+        message: 'Please fill all required address fields before continuing.',
+        variant: 'validation',
+      });
       return;
     }
 

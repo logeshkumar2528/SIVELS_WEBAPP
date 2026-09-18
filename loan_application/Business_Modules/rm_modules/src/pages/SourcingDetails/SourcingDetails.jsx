@@ -42,19 +42,17 @@ function isObsoleteMock(val) {
   );
 }
 
-function buildSourcingState(appData) {
+function buildSourcingState(appData = {}) {
+  const backendRmName = appData.rmName || appData.RMName || appData.agentName || appData.AgentName || '';
+  const backendRmCode = appData.rmCode || appData.RMCode || appData.agentCode || appData.AgentCode || '';
+
   const saved = getSectionState(appData, 'sourcing', {});
   const rawSourcedBy = saved.sourcedBy;
   const rawEmployeeId = saved.employeeId;
 
-  const currentRmObj = getLoggedInRMFromStorage();
-  const fallbackRmId = currentRmObj.rmId || currentRmObj.RMId || currentRmObj.id || localStorage.getItem('rmId');
-  const fallbackName = currentRmObj.fullName || currentRmObj.name || '';
-  const fallbackCode = currentRmObj.rmCode || currentRmObj.employeeId || (fallbackRmId ? `RM${String(fallbackRmId).padStart(4, '0')}` : '');
-
   return {
-    sourcedBy: !isObsoleteMock(rawSourcedBy) && rawSourcedBy ? rawSourcedBy : fallbackName,
-    employeeId: !isObsoleteMock(rawEmployeeId) && rawEmployeeId ? rawEmployeeId : fallbackCode,
+    sourcedBy: backendRmName || (!isObsoleteMock(rawSourcedBy) && rawSourcedBy ? rawSourcedBy : ''),
+    employeeId: backendRmCode || (!isObsoleteMock(rawEmployeeId) && rawEmployeeId ? rawEmployeeId : ''),
   };
 }
 
