@@ -367,74 +367,52 @@ export default function PdfView() {
             }
           }
 
-          if (rmRes.status === 'fulfilled' && rmRes.value) {
+          // Resolve RM & Ownership strictly from backend ApplicationFullDetails
+          let resolvedOwnership = null;
+          if (fullDetailsRes?.status === 'fulfilled' && fullDetailsRes.value) {
+            const rawVal = fullDetailsRes.value?.value || fullDetailsRes.value?.data || fullDetailsRes.value;
+            const fullRmName = rawVal?.rmName ?? rawVal?.RmName ?? rawVal?.customer?.rmName ?? rawVal?.customer?.RmName ?? null;
+            const fullRmCode = rawVal?.rmCode ?? rawVal?.RmCode ?? rawVal?.customer?.rmCode ?? rawVal?.customer?.RmCode ?? null;
+            const fullCustomerSource = rawVal?.customerSource ?? rawVal?.CustomerSource ?? rawVal?.customer?.customerSource ?? null;
+            const fullAgentName = rawVal?.agentName ?? rawVal?.AgentName ?? rawVal?.customer?.agentName ?? null;
+            const fullAgentId = rawVal?.agentId ?? rawVal?.AgentId ?? rawVal?.customer?.agentId ?? null;
+
+            if (fullRmName || fullRmCode) {
+              resolvedOwnership = {
+                name: fullRmName || '',
+                employeeId: fullRmCode || '',
+                customerSource: fullCustomerSource || '',
+                agentName: fullAgentName || '',
+                agentId: fullAgentId ?? null,
+              };
+            }
+          }
+
+          // Secondary fallback to RMMaster only if ApplicationFullDetails didn't include rmName/rmCode
+          if (!resolvedOwnership && rmRes.status === 'fulfilled' && rmRes.value) {
             const data = rmRes.value;
             const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);
-
-            // Resolve the RM assigned to this application/customer first. The
-            // previous fallback selected the first active RM, which could put
-            // another RM's name on the generated PDF.
             const rmIdFromRecord = Number(
               currentCust?.rmId ||
               currentCust?.RMId ||
-              currentCust?.relationshipManagerId ||
-              currentCust?.RelationshipManagerId ||
-              currentCust?.assignedRmId ||
-              currentCust?.AssignedRmId ||
               0
             );
-
-            let currentRmObj = {};
-            try {
-              const rmDataRaw = localStorage.getItem('rmData');
-              if (rmDataRaw) currentRmObj = JSON.parse(rmDataRaw);
-              if (!currentRmObj || Object.keys(currentRmObj).length === 0) {
-                const raw = localStorage.getItem('sivels_currentUser');
-                if (raw) currentRmObj = JSON.parse(raw);
+            if (rmIdFromRecord > 0) {
+              const matched = rows.find((r) => Number(r.rmId || r.RMId || r.id) === rmIdFromRecord);
+              if (matched) {
+                resolvedOwnership = {
+                  name: matched.fullName || matched.name || '',
+                  employeeId: matched.rmCode || matched.employeeId || `RM${String(matched.rmId).padStart(4, '0')}`,
+                  customerSource: currentCust?.customerSource || '',
+                  agentName: currentCust?.agentName || '',
+                  agentId: currentCust?.agentId ?? null,
+                };
               }
-            } catch {
-              // Ignore malformed session data and rely on application data.
             }
-            const sessionRmId = Number(
-              currentRmObj?.rmId ||
-              currentRmObj?.RMId ||
-              currentRmObj?.id ||
-              currentRmObj?.userId ||
-              localStorage.getItem('rmId') ||
-              0
-            );
-            const currentMobile = String(
-              currentRmObj?.mobileNumber ||
-              currentRmObj?.phone ||
-              ''
-            ).replace(/\D/g, '');
-            const currentEmail = String(
-              currentRmObj?.emailAddress ||
-              currentRmObj?.email ||
-              ''
-            ).trim().toLowerCase();
-            const currentName = String(
-              currentRmObj?.fullName ||
-              currentRmObj?.name ||
-              ''
-            ).trim().toLowerCase();
+          }
 
-            const matched =
-              rows.find((r) => Number(r.rmId || r.RMId || r.id) === rmIdFromRecord && rmIdFromRecord > 0) ||
-              (sessionRmId > 0 && rows.find((r) => Number(r.rmId || r.RMId || r.id) === sessionRmId)) ||
-              (currentMobile && rows.find((r) => String(r.mobileNumber || '').replace(/\D/g, '') === currentMobile)) ||
-              (currentEmail && rows.find((r) => String(r.emailAddress || '').trim().toLowerCase() === currentEmail)) ||
-              (currentName && rows.find((r) => String(r.fullName || r.name || '').trim().toLowerCase() === currentName)) ||
-              null;
-
-            const resolvedRM = matched || (currentRmObj && (currentRmObj.fullName || currentRmObj.name) ? currentRmObj : null);
-
-            if (resolvedRM) {
-              setLiveRM({
-                name: resolvedRM.fullName || resolvedRM.name || '',
-                employeeId: resolvedRM.rmCode || resolvedRM.employeeId || (resolvedRM.rmId ? `RM${String(resolvedRM.rmId).padStart(4, '0')}` : ''),
-              });
-            }
+          if (resolvedOwnership) {
+            setLiveRM(resolvedOwnership);
           }
 
           setMasterMaps({
@@ -930,8 +908,16 @@ export default function PdfView() {
 
   const loanAmount = appData.loanAmount || liveCustomer?.expectedLoanAmount || '';
   const loanTenure = appData.loanTenureMonths || '';
-  const resolvedRMName = liveRM?.name || (isObsoleteMock(sourcingData.sourcedBy) ? '' : sourcingData.sourcedBy) || '';
-  const resolvedEmployeeId = liveRM?.employeeId || (isObsoleteMock(sourcingData.employeeId) ? '' : sourcingData.employeeId) || '';
+  const resolvedRMName =
+    liveRM?.name ||
+    appData.rmName ||
+    (isObsoleteMock(sourcingData.sourcedBy) ? '' : sourcingData.sourcedBy) ||
+    '';
+  const resolvedEmployeeId =
+    liveRM?.employeeId ||
+    appData.rmCode ||
+    (isObsoleteMock(sourcingData.employeeId) ? '' : sourcingData.employeeId) ||
+    '';
 
   const todayFormatted = toIstDateInput();
 
@@ -1146,7 +1132,7 @@ export default function PdfView() {
               <div className="pdf-office-row">
                 <span className="pdf-office-label">Sourcing Channel:</span>
                 <div className="pdf-office-value">
-                  {resolveSourcingChannel(appData.sourcingChannel || sourcingData.sourcingChannel)}
+                  {resolveSourcingChannel(appData.sourcingChannel || sourcingData.sourcingChannel) || '-'}
                 </div>
               </div>
               <div className="pdf-office-row">
@@ -1813,13 +1799,13 @@ export default function PdfView() {
             <tbody>
               <tr>
                 <td className="pdf-row-header">Sourcing Channel</td>
-                <td>{resolveSourcingChannel(appData.sourcingChannel || sourcingData.sourcingChannel)}</td>
+                <td>{resolveSourcingChannel(appData.sourcingChannel || sourcingData.sourcingChannel) || '-'}</td>
                 <td className="pdf-row-header">Sourced By (RM Name)</td>
-                <td>{resolvedRMName}</td>
+                <td>{resolvedRMName || '-'}</td>
               </tr>
               <tr>
                 <td className="pdf-row-header">Employee ID</td>
-                <td>{resolvedEmployeeId}</td>
+                <td>{resolvedEmployeeId || '-'}</td>
                 <td className="pdf-row-header">Admin Fee Status</td>
                 <td>{chargesData.adminFeePaid ? 'Paid' : 'Pending / Not Applicable'}</td>
               </tr>
