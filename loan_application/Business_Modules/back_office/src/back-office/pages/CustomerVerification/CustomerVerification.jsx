@@ -6,23 +6,19 @@
  * Route: /backoffice/customers/:customerId/verify
  *
  * Architecture:
- * - 15-Step Underwriting Verification Workflow (Sidebar: 01–15).
+ * - 11-Step Underwriting Verification Workflow (Sidebar: 01–11).
  * - Step 01: View Form (Direct embedded PdfView with ApplicationDraftProvider).
- * - Step 02: Profile Image (Applicant photograph with uncropped preview, remarks, Reject/Send to RM).
- * - Step 03: Aadhaar Card (Applicant KYC Aadhaar with image/PDF preview, remarks, Reject/Send to RM).
- * - Step 04: PAN Card (Applicant KYC PAN with image/PDF preview, remarks, Reject/Send to RM).
- * - Step 05: ZIP File (Customer document ZIP archive package or graceful empty state).
- * - Step 06: Property FI (Field Investigation placeholder).
- * - Step 07: Office FI (Office Investigation placeholder).
- * - Step 08: Residence FI (Residence Investigation placeholder).
- * - Step 09: Legal Opinion (File upload dropzone with <= 150 MB validation, View, Download, Remove).
- * - Step 10: Technical Value (File upload dropzone with <= 150 MB validation, View, Download, Remove).
- * - Step 11: CIBIL Check (Preserved Credit Bureau verification simulation + Manual CIBIL PAN Upload).
- * - Step 12: PD Verification (Personal Discussion mode selector from dynamic PDVerificationTypeMaster).
- * - Step 13: Eligibility Calculation (Preserved live FOIR calculation, recalculate, Approve/Not Approve modal).
- * - Step 14: Eligibility Fit (Underwriting Fit selector: Fit / Conditional Fit / Not Fit).
- * - Step 15: Recommendation Sheet (Credit underwriter recommendation placeholder).
- * - Legacy 8-step sidebar code and VerificationStepModal are preserved in code for easy restoration.
+ * - Step 02: Document Verification (Applicant & Co-Applicant KYC documents).
+ * - Step 03: Property FI (Field Investigation placeholder).
+ * - Step 04: Office FI (Office Investigation placeholder).
+ * - Step 05: Residence FI (Residence Investigation placeholder).
+ * - Step 06: Legal Opinion (File upload dropzone with <= 150 MB validation, View, Download, Remove).
+ * - Step 07: Technical Value (File upload dropzone with <= 150 MB validation, View, Download, Remove).
+ * - Step 08: CIBIL Check (Preserved Credit Bureau verification simulation + Manual CIBIL PAN Upload).
+ * - Step 09: PD Verification (Personal Discussion mode selector from dynamic PDVerificationTypeMaster).
+ * - Step 10: Eligibility Assessment (Methodology & multi-applicant credit assessment engine).
+ * - Step 11: Recommendation Sheet (Credit underwriter recommendation placeholder).
+ * - Single-fetch shared data and VerificationStepModal are preserved in code for easy inspection.
  */
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
@@ -114,13 +110,6 @@ const STAGES = [
   { id: 4, label: 'Credit Bureau Report Successfully Retrieved' },
 ];
 
-const FOIR_LOADING_STAGES = [
-  'Reading applicant income details',
-  'Checking existing monthly obligations',
-  'Applying the FOIR policy threshold',
-  'Preparing the eligibility summary',
-];
-
 /**
  * Supported Step Verification Codes for BackOfficeStepVerification API
  */
@@ -180,7 +169,7 @@ const INITIAL_STEP_VERIFICATIONS = {
 };
 
 /**
- * 17-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
+ * 11-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
  */
 const VERIFICATION_WORKFLOW_STEPS = [
   { id: 1, number: 1, visibleNum: '01', title: 'View Form', subtitle: 'Application form', group: 'FORM REVIEW' },
@@ -192,9 +181,8 @@ const VERIFICATION_WORKFLOW_STEPS = [
   { id: 12, number: 12, visibleNum: '07', title: 'Technical Value', subtitle: 'Valuation report upload', group: 'CREDIT & ASSESSMENT' },
   { id: 13, number: 13, visibleNum: '08', title: 'CIBIL Check', subtitle: 'Credit Bureau & PAN', group: 'CREDIT & ASSESSMENT' },
   { id: 14, number: 14, visibleNum: '09', title: 'PD Verification', subtitle: 'Personal discussion', group: 'CREDIT & ASSESSMENT' },
-  { id: 15, number: 15, visibleNum: '10', title: 'Eligibility Calculation', subtitle: 'FOIR ratio calculation', group: 'CREDIT & ASSESSMENT' },
-  { id: 16, number: 16, visibleNum: '11', title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
-  { id: 17, number: 17, visibleNum: '12', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
+  { id: 16, number: 16, visibleNum: '10', title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
+  { id: 17, number: 17, visibleNum: '11', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
 ];
 
 /**
@@ -2960,19 +2948,6 @@ export default function CustomerVerification() {
   const [bureauState, setBureauState] = useState('idle');
   const [loadingStage, setLoadingStage] = useState(0);
 
-  // 11. FOIR Calculation State: 'idle' | 'loading' | 'success' | 'empty' | 'error'
-  const [foirState, setFoirState] = useState('idle');
-  const [foirData, setFoirData] = useState(null);
-  const [foirError, setFoirError] = useState(null);
-  const [foirLoadingStage, setFoirLoadingStage] = useState(0);
-
-  // 12. FOIR Decision Remarks Modal State (Approve / Not Approve)
-  const [decisionModalOpen, setDecisionModalOpen] = useState(false);
-  const [decisionType, setDecisionType] = useState(null); // 'approve' | 'notApprove'
-  const [decisionRemarks, setDecisionRemarks] = useState('');
-  const [decisionError, setDecisionError] = useState('');
-  const [, setConfirmedDecision] = useState(null);
-
   // 12b. Reject Confirmation Modal State
   const [rejectConfirmModal, setRejectConfirmModal] = useState({
     open: false,
@@ -3113,36 +3088,6 @@ export default function CustomerVerification() {
   // Top View Form Button handler: activates Step 1
   const handleViewForm = () => {
     setActiveStep(1);
-  };
-
-  const handleOpenDecisionModal = (type) => {
-    setDecisionType(type);
-    setDecisionRemarks('');
-    setDecisionError('');
-    setDecisionModalOpen(true);
-  };
-
-  const handleCloseDecisionModal = () => {
-    setDecisionModalOpen(false);
-    setDecisionType(null);
-    setDecisionRemarks('');
-    setDecisionError('');
-  };
-
-  const handleConfirmDecision = () => {
-    const trimmed = decisionRemarks.trim();
-    if (!trimmed) {
-      setDecisionError('Remarks are required.');
-      return;
-    }
-    setConfirmedDecision({
-      type: decisionType,
-      remarks: trimmed,
-      date: new Date().toISOString(),
-    });
-    setDecisionModalOpen(false);
-    setDecisionType(null);
-    setDecisionRemarks('');
   };
   // ----------------------------------------------------
   // Document Resolution & Preview Loader (Old vs New & Dynamic Master)
@@ -6520,162 +6465,6 @@ export default function CustomerVerification() {
   }, [hasUnresolvedRejectionForStep, savingVerificationKey, stepRemarks, handleSaveStepVerification]);
 
 
-  // 5a. Initial Load: Fetch latest FOIR calculation snapshot via GET /by-customer/{agentCustomerId}
-  useEffect(() => {
-    const rawCustomer = verificationData?.raw?.customer || verificationData?.customer || {};
-    const rawCust = Array.isArray(rawCustomer) ? rawCustomer[0] : rawCustomer;
-    const targetCustomerId =
-      verificationData?.customerId ||
-      rawCust?.agentCustomerId ||
-      rawCust?.AgentCustomerId ||
-      customerId;
-
-    if (!targetCustomerId) return;
-
-    let isMounted = true;
-
-    const fetchLatestFoir = async () => {
-      try {
-        const res = await backOfficeService.getFoirCalculationsByCustomer(targetCustomerId);
-        if (!isMounted) return;
-
-        const records = Array.isArray(res) ? res : (res?.value ?? res?.data ?? res?.result ?? []);
-        // Backend returns records newest-first (latest calculation snapshot at index 0)
-        const latestResult = records.length > 0 ? records[0] : null;
-
-        if (latestResult) {
-          setFoirData(latestResult);
-          setFoirState('success');
-        } else {
-          setFoirData(null);
-          setFoirState('idle');
-        }
-      } catch (err) {
-        if (!isMounted) return;
-        // If 404 or no calculation records exist yet, keep idle state for user to trigger first calculation
-        console.warn('No existing FOIR records found for customer:', err?.message);
-        setFoirData(null);
-        setFoirState('idle');
-      }
-    };
-
-    fetchLatestFoir();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [verificationData?.customerId, customerId]);
-
-  const handleCalculateFoir = async () => {
-    if (foirState === 'loading') return;
-
-    const startedAt = Date.now();
-    setFoirState('loading');
-    setFoirLoadingStage(0);
-    setFoirError(null);
-
-    try {
-      // Resolve application IDs from current verification data
-      const rawCustomer = verificationData?.raw?.customer || verificationData?.customer || {};
-      const rawCust = Array.isArray(rawCustomer) ? rawCustomer[0] : rawCustomer;
-      const rawEmp = verificationData?.raw?.employmentIncome || verificationData?.employmentIncome?.raw || verificationData?.raw?.EmploymentIncome || {};
-      const rawEmpItem = Array.isArray(rawEmp) ? rawEmp[0] : rawEmp;
-      const rawProd = verificationData?.raw?.productDetails || verificationData?.applicationDetails?.raw || verificationData?.raw?.ProductDetails || verificationData?.raw?.applicationProductDetails || {};
-      const rawProdItem = Array.isArray(rawProd) ? rawProd[0] : rawProd;
-
-      const agentCustId =
-        verificationData?.customerId ||
-        rawCust?.agentCustomerId ||
-        rawCust?.AgentCustomerId ||
-        verificationData?.raw?.agentCustomerId ||
-        verificationData?.raw?.AgentCustomerId ||
-        customerId;
-
-      const empIncomeId =
-        rawEmpItem?.applicationEmploymentIncomeDetailsId ||
-        rawEmpItem?.ApplicationEmploymentIncomeDetailsId ||
-        rawEmpItem?.employmentIncomeDetailsId ||
-        rawEmpItem?.EmploymentIncomeDetailsId ||
-        rawEmpItem?.id ||
-        rawEmpItem?.Id ||
-        verificationData?.employmentIncome?.raw?.applicationEmploymentIncomeDetailsId ||
-        verificationData?.employmentIncome?.raw?.ApplicationEmploymentIncomeDetailsId;
-
-      const prodDetailsId =
-        rawProdItem?.applicationProductDetailsId ||
-        rawProdItem?.ApplicationProductDetailsId ||
-        rawProdItem?.productDetailsId ||
-        rawProdItem?.ProductDetailsId ||
-        rawProdItem?.id ||
-        rawProdItem?.Id ||
-        verificationData?.applicationDetails?.raw?.applicationProductDetailsId ||
-        verificationData?.applicationDetails?.raw?.ApplicationProductDetailsId;
-
-      const auth = getBackOfficeAuth();
-      const loggedInUserId =
-        auth?.id ||
-        localStorage.getItem('backOfficeId') ||
-        (() => {
-          try {
-            const bo = JSON.parse(localStorage.getItem('backOfficeData') || 'null');
-            if (bo?.backOfficeId || bo?.id || bo?.userId) return bo.backOfficeId || bo.id || bo.userId;
-            const cu = JSON.parse(localStorage.getItem('sivels_currentUser') || 'null');
-            if (cu?.backOfficeId || cu?.userId || cu?.id) return cu.backOfficeId || cu.userId || cu.id;
-          } catch {}
-          return null;
-        })() ||
-        1;
-
-      if (!agentCustId || !empIncomeId || !prodDetailsId) {
-        const missing = [];
-        if (!agentCustId) missing.push('Customer ID');
-        if (!empIncomeId) missing.push('Employment Income ID');
-        if (!prodDetailsId) missing.push('Product Details ID');
-        throw new Error(`Unable to calculate FOIR: Required identifier(s) [${missing.join(', ')}] not found in application data.`);
-      }
-
-      const payload = {
-        agentCustomerId: Number(agentCustId),
-        applicationEmploymentIncomeDetailsId: Number(empIncomeId),
-        applicationProductDetailsId: Number(prodDetailsId),
-        createdBy: Number(loggedInUserId) || 1,
-      };
-
-      const res = await backOfficeService.calculateFoir(payload);
-
-      // Smooth visual transition for progress stages
-      const elapsed = Date.now() - startedAt;
-      if (elapsed < 800) {
-        await new Promise((resolve) => setTimeout(resolve, 800 - elapsed));
-      }
-
-      const freshResult = (res && typeof res === 'object' && !Array.isArray(res))
-        ? res
-        : (Array.isArray(res) ? res[0] : (res?.data ?? res?.value ?? res?.result ?? res));
-
-      if (freshResult) {
-        setFoirData(freshResult);
-        setFoirState('success');
-      } else {
-        throw new Error('Calculation service did not return a result record.');
-      }
-    } catch (err) {
-      console.error('Error calculating FOIR:', err);
-      setFoirError(err?.response?.data?.message || err?.message || 'Unable to connect to FOIR calculation service.');
-      setFoirState('error');
-    }
-  };
-
-  useEffect(() => {
-    if (foirState !== 'loading') return undefined;
-
-    const timers = FOIR_LOADING_STAGES.slice(1).map((_, index) => (
-      setTimeout(() => setFoirLoadingStage(index + 1), (index + 1) * 360)
-    ));
-
-    return () => timers.forEach(clearTimeout);
-  }, [foirState]);
-
   // Staged loading effect for CIBIL simulation (approx 2.3s)
   useEffect(() => {
     let t1, t2, t3, t4;
@@ -7058,13 +6847,13 @@ export default function CustomerVerification() {
           </aside>
         )}
 
-        {/* ── 12-STEP VERIFICATION WORKFLOW SIDEBAR (SIVELS FINANCE) ── */}
-        <aside className="bo-cv-left-sidebar" aria-label="12-Step Underwriting Verification Workflow">
+        {/* ── 11-STEP VERIFICATION WORKFLOW SIDEBAR (SIVELS FINANCE) ── */}
+        <aside className="bo-cv-left-sidebar" aria-label="11-Step Underwriting Verification Workflow">
           <div className="bo-cv-sidebar-header">
             <div className="bo-cv-sidebar-heading-row">
               <div>
                 <h2 className="bo-cv-sidebar-title">Verification Steps</h2>
-                <span className="bo-cv-sidebar-subtitle">12-Step Underwriting</span>
+                <span className="bo-cv-sidebar-subtitle">11-Step Underwriting</span>
               </div>
               <span className="bo-cv-step-count">{VERIFICATION_WORKFLOW_STEPS.length}</span>
             </div>
@@ -7137,7 +6926,7 @@ export default function CustomerVerification() {
           </nav>
         </aside>
 
-        {/* ── RIGHT MAIN WORKSPACE: 15-STEP UNDERWRITING CONTENT ─────────── */}
+        {/* ── RIGHT MAIN WORKSPACE: 11-STEP UNDERWRITING CONTENT ─────────── */}
         <main className="bo-cv-main-content" id="main-verification-content">
 
           {/* ══════════════════════════════════════════════════════════════════
@@ -7155,7 +6944,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 01 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 01 of 11</span>
               </div>
 
               <div className="bo-cv-view-form-embed-wrapper">
@@ -7197,7 +6986,7 @@ export default function CustomerVerification() {
                   </div>
                 </div>
                 <div className="bo-cv-doc-header-right">
-                  <span className="bo-cv-step-tag-pill">Step 02 of 12</span>
+                  <span className="bo-cv-step-tag-pill">Step 02 of 11</span>
                 </div>
               </div>
 
@@ -7607,7 +7396,7 @@ export default function CustomerVerification() {
                     <p className="bo-cv-step-panel-desc">Property Field Investigation details and collateral valuation.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 03 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 03 of 11</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -7634,7 +7423,7 @@ export default function CustomerVerification() {
                     <p className="bo-cv-step-panel-desc">Workplace and business establishment field investigation.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 04 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 04 of 11</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -7661,7 +7450,7 @@ export default function CustomerVerification() {
                     <p className="bo-cv-step-panel-desc">Physical residence field verification and neighbor check.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 05 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 05 of 11</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -7690,7 +7479,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 06 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 06 of 11</span>
               </div>
 
               <div className="bo-cv-upload-container">
@@ -7832,7 +7621,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 07 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 07 of 11</span>
               </div>
 
               <div className="bo-cv-upload-container">
@@ -7966,7 +7755,7 @@ export default function CustomerVerification() {
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">13</div>
+                  <div className="bo-cv-step-badge-num">08</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Credit Bureau &amp; CIBIL Verification</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -7974,7 +7763,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 08 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 08 of 11</span>
               </div>
 
               {/* Manual CIBIL PAN Card Upload Reference Section */}
@@ -8522,7 +8311,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 09 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 09 of 11</span>
               </div>
 
               <div className="bo-cv-pd-container">
@@ -8595,249 +8384,13 @@ export default function CustomerVerification() {
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
-              STEP 13: ELIGIBILITY CALCULATION (FOIR)
-          ══════════════════════════════════════════════════════════════════ */}
-          {activeStep === 15 && (
-            <div className="bo-cv-step-panel">
-              <div className="bo-cv-step-panel-header">
-                <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">10</div>
-                  <div>
-                    <h2 className="bo-cv-step-panel-title">Eligibility Calculation (FOIR)</h2>
-                    <p className="bo-cv-step-panel-desc">
-                      Calculate Fixed Obligation to Income Ratio, determine loan eligibility, and sign off underwriting decision.
-                    </p>
-                  </div>
-                </div>
-                <span className="bo-cv-step-tag-pill">Step 10 of 12</span>
-              </div>
-
-              {/* ── 9. FOIR ELIGIBILITY CALCULATION SECTION ─────────────────── */}
-              <div className="bo-cv-foir-section" id="foir-calculation-section">
-                {foirState === 'idle' && (
-                  <div className="bo-cv-foir-idle-card">
-                    <div className="bo-cv-foir-idle-content">
-                      <div className="bo-cv-foir-idle-icon">
-                        {BadgeIndianRupeeIcon ? <BadgeIndianRupeeIcon size={22} /> : <FileCheckIcon size={22} />}
-                      </div>
-                      <div>
-                        <h3 className="bo-cv-foir-title">FOIR Eligibility Calculation</h3>
-                        <p className="bo-cv-foir-subtitle">
-                          Calculate Fixed Obligation to Income Ratio and evaluate applicant loan eligibility.
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="bo-btn bo-btn--primary bo-cv-calc-foir-btn"
-                      onClick={handleCalculateFoir}
-                      disabled={foirState === 'loading'}
-                    >
-                      {RefreshCwIcon && <RefreshCwIcon size={14} className={foirState === 'loading' ? 'bo-cv-spin' : ''} />}
-                      <span>{foirState === 'loading' ? 'Calculating FOIR...' : 'Calculate FOIR'}</span>
-                    </button>
-                  </div>
-                )}
-
-                {foirState === 'loading' && (
-                  <div className="bo-cv-foir-card bo-cv-foir-loading-card">
-                    <div className="bo-cv-foir-processing-head">
-                      <div className="bo-cv-foir-processing-orb"><span /></div>
-                      <div>
-                        <span className="bo-cv-foir-processing-kicker">LIVE ELIGIBILITY CHECK</span>
-                        <h4 className="bo-cv-foir-title">Calculating FOIR<span className="bo-cv-running-dots" aria-hidden="true">...</span></h4>
-                        <p className="bo-cv-foir-subtitle">Applicant #{verificationData?.customerId} · secure calculation in progress</p>
-                      </div>
-                    </div>
-                    <div className="bo-cv-foir-processing-body">
-                      <div className="bo-cv-foir-progress-track"><i style={{ width: `${((foirLoadingStage + 1) / FOIR_LOADING_STAGES.length) * 100}%` }} /></div>
-                      <div className="bo-cv-foir-processing-meta"><strong>{FOIR_LOADING_STAGES[foirLoadingStage]}</strong><span>{Math.round(((foirLoadingStage + 1) / FOIR_LOADING_STAGES.length) * 100)}%</span></div>
-                      <div className="bo-cv-foir-process-steps">
-                        {FOIR_LOADING_STAGES.map((stage, index) => (
-                          <span key={stage} className={index <= foirLoadingStage ? 'is-complete' : ''}><i>{index < foirLoadingStage ? '✓' : index === foirLoadingStage ? '•' : ''}</i>{stage}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {foirState === 'error' && (
-                  <div className="bo-cv-foir-card bo-cv-foir-error-card">
-                    <div className="bo-cv-foir-header">
-                      <div className="bo-cv-foir-title-group">
-                        <h3 className="bo-cv-foir-title text-danger">FOIR Calculation Failed</h3>
-                        <p className="bo-cv-foir-subtitle">{foirError}</p>
-                      </div>
-                      <button
-                        type="button"
-                        className="bo-btn bo-btn--outline bo-cv-foir-recalc-btn"
-                        onClick={handleCalculateFoir}
-                        disabled={foirState === 'loading'}
-                      >
-                        {RefreshCwIcon && <RefreshCwIcon size={13} className={foirState === 'loading' ? 'bo-cv-spin' : ''} />}
-                        <span>{foirState === 'loading' ? 'Calculating FOIR...' : 'Retry Calculation'}</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {foirState === 'empty' && (
-                  <div className="bo-cv-foir-card bo-cv-foir-empty-card">
-                    <div className="bo-cv-foir-header">
-                      <div className="bo-cv-foir-title-group">
-                        <h3 className="bo-cv-foir-title">FOIR Calculation Result</h3>
-                        <p className="bo-cv-foir-subtitle">
-                          No matching FOIR calculation record was found for this applicant (Customer #{verificationData?.customerId}).
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        className="bo-btn bo-btn--primary bo-cv-calc-foir-btn"
-                        onClick={handleCalculateFoir}
-                        disabled={foirState === 'loading'}
-                      >
-                        {RefreshCwIcon && <RefreshCwIcon size={13} className={foirState === 'loading' ? 'bo-cv-spin' : ''} />}
-                        <span>{foirState === 'loading' ? 'Calculating FOIR...' : 'Calculate Again'}</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {foirState === 'success' && foirData && (() => {
-                  const monthlyIncome = foirData.monthlyIncome ?? foirData.MonthlyIncome;
-                  const existingEMI = foirData.existingEMI ?? foirData.ExistingEMI ?? foirData.existingEmi ?? foirData.ExistingEmi ?? 0;
-                  const eligibleIncome = foirData.eligibleIncome ?? foirData.EligibleIncome;
-                  const netServiceableIncome = foirData.netServiceableIncome ?? foirData.NetServiceableIncome;
-                  const foirPercentApplied = foirData.foirPercentApplied ?? foirData.FoirPercentApplied ?? foirData.proposedFOIR ?? foirData.ProposedFOIR;
-                  const requestedLoanAmount = foirData.requestedLoanAmount ?? foirData.RequestedLoanAmount;
-                  const proposedTenureMonths = foirData.proposedTenureMonths ?? foirData.ProposedTenureMonths ?? foirData.tenureMonths;
-                  const status = foirData.status ?? foirData.Status ?? 'Under Review';
-                  const isEligible = String(status).trim().toLowerCase() === 'eligible';
-
-                  return (
-                    <div className="bo-cv-foir-card bo-cv-foir-success-card">
-                      <div className="bo-cv-foir-header">
-                        <div className="bo-cv-foir-title-group">
-                          <div className="bo-cv-foir-title-row">
-                            <div className="bo-cv-foir-badge-icon">
-                              {BadgeIndianRupeeIcon ? <BadgeIndianRupeeIcon size={18} /> : <FileCheckIcon size={18} />}
-                            </div>
-                            <h3 className="bo-cv-foir-title">FOIR Calculation Result</h3>
-                            <span className={`bo-cv-foir-status-badge ${isEligible ? 'is-eligible' : 'is-not-eligible'}`}>
-                              {status}
-                            </span>
-                          </div>
-                          <p className="bo-cv-foir-subtitle">
-                            Fixed Obligation to Income Ratio analysis based on applicant income and existing debt obligations.
-                          </p>
-                        </div>
-
-                        <button
-                          type="button"
-                          className="bo-btn bo-btn--outline bo-cv-foir-recalc-btn"
-                          onClick={handleCalculateFoir}
-                          disabled={foirState === 'loading'}
-                          title="Re-run FOIR calculation"
-                        >
-                          {RefreshCwIcon && <RefreshCwIcon size={13} className={foirState === 'loading' ? 'bo-cv-spin' : ''} />}
-                          <span>{foirState === 'loading' ? 'Calculating FOIR...' : 'Re-calculate FOIR'}</span>
-                        </button>
-                      </div>
-
-                      <div className="bo-cv-foir-result-strip">
-                        <div className="bo-cv-foir-result-status">
-                          <span className="bo-cv-foir-result-label">Decision snapshot</span>
-                          <strong>{isEligible ? 'Applicant appears eligible' : 'Additional review recommended'}</strong>
-                          <small>Based on the returned income and obligation values</small>
-                        </div>
-                        <div className="bo-cv-foir-result-actions">
-                          <button
-                            type="button"
-                            className="bo-cv-foir-btn-approve"
-                            onClick={() => handleOpenDecisionModal('approve')}
-                          >
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            className="bo-cv-foir-btn-not-approve"
-                            onClick={() => handleOpenDecisionModal('notApprove')}
-                          >
-                            Not Approve
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="bo-cv-foir-grid">
-                        {/* 1. Monthly Income */}
-                        <div className="bo-cv-foir-cell">
-                          <span className="bo-cv-foir-cell-lbl">Monthly Income</span>
-                          <strong className="bo-cv-foir-cell-val text-primary">{formatFoirCurrency(monthlyIncome)}</strong>
-                        </div>
-
-                        {/* 2. Existing EMI */}
-                        <div className="bo-cv-foir-cell">
-                          <span className="bo-cv-foir-cell-lbl">Existing EMI</span>
-                          <strong className="bo-cv-foir-cell-val">{formatFoirCurrency(existingEMI)}</strong>
-                        </div>
-
-                        {/* 3. Eligible Income */}
-                        <div className="bo-cv-foir-cell">
-                          <span className="bo-cv-foir-cell-lbl">Eligible Income</span>
-                          <strong className="bo-cv-foir-cell-val text-success">{formatFoirCurrency(eligibleIncome)}</strong>
-                        </div>
-
-                        {/* 4. Net Serviceable Income */}
-                        <div className="bo-cv-foir-cell">
-                          <span className="bo-cv-foir-cell-lbl">Net Serviceable Income</span>
-                          <strong className="bo-cv-foir-cell-val text-success">{formatFoirCurrency(netServiceableIncome)}</strong>
-                        </div>
-
-                        {/* 5. FOIR % */}
-                        <div className="bo-cv-foir-cell">
-                          <span className="bo-cv-foir-cell-lbl">FOIR %</span>
-                          <strong className="bo-cv-foir-cell-val">
-                            {foirPercentApplied !== undefined && foirPercentApplied !== null && foirPercentApplied !== '' ? `${foirPercentApplied}%` : '—'}
-                          </strong>
-                        </div>
-
-                        {/* 6. Requested Loan Amount */}
-                        <div className="bo-cv-foir-cell">
-                          <span className="bo-cv-foir-cell-lbl">Requested Loan Amount</span>
-                          <strong className="bo-cv-foir-cell-val">{formatFoirCurrency(requestedLoanAmount)}</strong>
-                        </div>
-
-                        {/* 7. Proposed Tenure (Months) */}
-                        <div className="bo-cv-foir-cell">
-                          <span className="bo-cv-foir-cell-lbl">Proposed Tenure (Months)</span>
-                          <strong className="bo-cv-foir-cell-val">
-                            {proposedTenureMonths !== undefined && proposedTenureMonths !== null && proposedTenureMonths !== '' ? `${proposedTenureMonths} Months` : '—'}
-                          </strong>
-                        </div>
-
-                        {/* 8. Status */}
-                        <div className="bo-cv-foir-cell">
-                          <span className="bo-cv-foir-cell-lbl">Status</span>
-                          <span className={`bo-cv-foir-status-pill ${isEligible ? 'is-eligible' : 'is-not-eligible'}`}>
-                            {status}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════════════
               STEP 14: ELIGIBILITY ASSESSMENT (PHASE 2A)
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 16 && (
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">11</div>
+                  <div className="bo-cv-step-badge-num">10</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Eligibility Assessment</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -8845,7 +8398,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 11 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 10 of 11</span>
               </div>
 
               <div className="bo-cv-assess-container">
@@ -10850,7 +10403,7 @@ export default function CustomerVerification() {
               <div className="bo-cv-step-panel">
                 <div className="bo-cv-step-panel-header">
                   <div className="bo-cv-step-header-left">
-                    <div className="bo-cv-step-badge-num">17</div>
+                    <div className="bo-cv-step-badge-num">11</div>
                     <div>
                       <h2 className="bo-cv-step-panel-title">Recommendation Sheet</h2>
                       <p className="bo-cv-step-panel-desc">
@@ -10858,7 +10411,7 @@ export default function CustomerVerification() {
                       </p>
                     </div>
                   </div>
-                  <span className="bo-cv-step-tag-pill">Step 12 of 12</span>
+                  <span className="bo-cv-step-tag-pill">Step 11 of 11</span>
                 </div>
 
                 <div className="bo-cv-placeholder-panel">
@@ -10931,7 +10484,7 @@ export default function CustomerVerification() {
         </main>
       </div>
 
-      {/* ── View-Only 12-Step Inspection Modal (Single-Fetch Shared Data) ── */}
+      {/* ── View-Only 11-Step Inspection Modal (Single-Fetch Shared Data) ── */}
       {selectedStepNumber && selectedStepDef && (
         <VerificationStepModal
           stepNumber={selectedStepNumber}
@@ -10939,90 +10492,6 @@ export default function CustomerVerification() {
           customerData={verificationData}
           onClose={handleCloseModal}
         />
-      )}
-
-      {/* ── FOIR Decision Remarks Modal (Approve / Not Approve) ── */}
-      {decisionModalOpen && (
-        <div
-          className="bo-cv-decision-modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="bo-cv-decision-modal-title"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              handleCloseDecisionModal();
-            }
-          }}
-        >
-          <div className="bo-cv-decision-modal-card">
-            <div className="bo-cv-decision-modal-header">
-              <div className="bo-cv-decision-modal-title-group">
-                <h3 id="bo-cv-decision-modal-title" className="bo-cv-decision-modal-title">
-                  {decisionType === 'approve' ? 'Approve FOIR' : 'Not Approve FOIR'}
-                </h3>
-                <p className="bo-cv-decision-modal-subtitle">
-                  Add remarks before confirming this decision.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="bo-cv-decision-modal-close"
-                onClick={handleCloseDecisionModal}
-                aria-label="Close modal"
-              >
-                {XIcon ? <XIcon size={16} /> : <span>×</span>}
-              </button>
-            </div>
-
-            <div className="bo-cv-decision-modal-body">
-              <label htmlFor="bo-cv-decision-remarks" className="bo-cv-decision-label">
-                REMARKS
-              </label>
-              <textarea
-                id="bo-cv-decision-remarks"
-                className={`bo-cv-decision-textarea ${decisionError ? 'has-error' : ''}`}
-                rows={4}
-                value={decisionRemarks}
-                onChange={(e) => {
-                  setDecisionRemarks(e.target.value);
-                  if (decisionError && e.target.value.trim()) {
-                    setDecisionError('');
-                  }
-                }}
-                placeholder={
-                  decisionType === 'approve'
-                    ? 'Enter approval remarks...'
-                    : 'Enter reason / remarks...'
-                }
-                autoFocus
-              />
-              {decisionError && (
-                <span className="bo-cv-decision-error-msg">{decisionError}</span>
-              )}
-            </div>
-
-            <div className="bo-cv-decision-modal-footer">
-              <button
-                type="button"
-                className="bo-cv-decision-btn-cancel"
-                onClick={handleCloseDecisionModal}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className={
-                  decisionType === 'approve'
-                    ? 'bo-cv-decision-btn-confirm-approve'
-                    : 'bo-cv-decision-btn-confirm-reject'
-                }
-                onClick={handleConfirmDecision}
-              >
-                {decisionType === 'approve' ? 'Confirm Approve' : 'Confirm Not Approve'}
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* ── Document Rejection Confirmation Modal ── */}
