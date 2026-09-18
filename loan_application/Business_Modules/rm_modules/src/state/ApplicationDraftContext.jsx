@@ -688,22 +688,22 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   const coApplicantAddrs = addressList.slice(1);
   const addressDetails = {
     applicant: {
-      addressDetailsId: applicantAddr.applicationAddressDetailsId || existingDraft.addressDetails?.applicant?.addressDetailsId || null,
-      applicationAddressDetailsId: applicantAddr.applicationAddressDetailsId || existingDraft.addressDetails?.applicant?.applicationAddressDetailsId || null,
-      addressLine1: applicantAddr.addressLine1 || existingDraft.addressDetails?.applicant?.addressLine1 || '',
-      addressLine2: applicantAddr.addressLine2 || existingDraft.addressDetails?.applicant?.addressLine2 || '',
-      landmark: applicantAddr.landmark || existingDraft.addressDetails?.applicant?.landmark || '',
-      city: applicantAddr.cityId || existingDraft.addressDetails?.applicant?.city || '',
-      state: applicantAddr.stateId || existingDraft.addressDetails?.applicant?.state || '',
-      pincode: applicantAddr.pincode || applicantAddr.Pincode || applicantAddr.postalCode || applicantAddr.PostalCode || applicantAddr.pinCode || applicantAddr.PinCode || existingDraft.addressDetails?.applicant?.pincode || '',
-      mailingSameAsCurrent: applicantAddr.mailingAsCurrent !== undefined ? (applicantAddr.mailingAsCurrent ? 'Yes' : 'No') : (existingDraft.addressDetails?.applicant?.mailingSameAsCurrent || 'No'),
+      addressDetailsId: applicantAddr.applicationAddressDetailsId || null,
+      applicationAddressDetailsId: applicantAddr.applicationAddressDetailsId || null,
+      addressLine1: applicantAddr.addressLine1 || '',
+      addressLine2: applicantAddr.addressLine2 || '',
+      landmark: applicantAddr.landmark || '',
+      city: applicantAddr.cityId || '',
+      state: applicantAddr.stateId || '',
+      pincode: applicantAddr.pincode || applicantAddr.Pincode || applicantAddr.postalCode || applicantAddr.PostalCode || applicantAddr.pinCode || applicantAddr.PinCode || '',
+      mailingSameAsCurrent: applicantAddr.mailingAsCurrent !== undefined ? (applicantAddr.mailingAsCurrent ? 'Yes' : 'No') : 'No',
       current: {
-        addressLine1: applicantAddr.addressLine1 || existingDraft.addressDetails?.applicant?.current?.addressLine1 || '',
-        addressLine2: applicantAddr.addressLine2 || existingDraft.addressDetails?.applicant?.current?.addressLine2 || '',
-        landmark: applicantAddr.landmark || existingDraft.addressDetails?.applicant?.current?.landmark || '',
-        city: applicantAddr.cityId || existingDraft.addressDetails?.applicant?.current?.city || '',
-        state: applicantAddr.stateId || existingDraft.addressDetails?.applicant?.current?.state || '',
-        pincode: applicantAddr.pincode || applicantAddr.Pincode || applicantAddr.postalCode || applicantAddr.PostalCode || applicantAddr.pinCode || applicantAddr.PinCode || existingDraft.addressDetails?.applicant?.current?.pincode || existingDraft.addressDetails?.applicant?.pincode || '',
+        addressLine1: applicantAddr.addressLine1 || '',
+        addressLine2: applicantAddr.addressLine2 || '',
+        landmark: applicantAddr.landmark || '',
+        city: applicantAddr.cityId || '',
+        state: applicantAddr.stateId || '',
+        pincode: applicantAddr.pincode || applicantAddr.Pincode || applicantAddr.postalCode || applicantAddr.PostalCode || applicantAddr.pinCode || applicantAddr.PinCode || '',
       },
     },
     coApplicants: coApplicantAddrs.map((coAddr, idx) => {
@@ -716,7 +716,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
         landmark: coAddr.landmark || draftCo.landmark || '',
         city: coAddr.cityId || draftCo.city || '',
         state: coAddr.stateId || draftCo.state || '',
-        pincode: coAddr.pincode || coAddr.Pincode || coAddr.postalCode || coAddr.PostalCode || coAddr.pinCode || coAddr.PinCode || draftCo.pincode || '',
+        pincode: coAddr.pincode || coAddr.Pincode || coAddr.postalCode || coAddr.PostalCode || coAddr.pinCode || coAddr.PinCode || '',
         mailingSameAsCurrent: coAddr.mailingAsCurrent !== undefined ? (coAddr.mailingAsCurrent ? 'Yes' : 'No') : (draftCo.mailingSameAsCurrent || 'No'),
         current: {
           addressLine1: coAddr.addressLine1 || draftCo.current?.addressLine1 || '',
@@ -724,35 +724,51 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
           landmark: coAddr.landmark || draftCo.current?.landmark || '',
           city: coAddr.cityId || draftCo.current?.city || '',
           state: coAddr.stateId || draftCo.current?.state || '',
-          pincode: coAddr.pincode || coAddr.Pincode || coAddr.postalCode || coAddr.PostalCode || coAddr.pinCode || coAddr.PinCode || draftCo.current?.pincode || draftCo.pincode || '',
+          pincode: coAddr.pincode || coAddr.Pincode || coAddr.postalCode || coAddr.PostalCode || coAddr.pinCode || coAddr.PinCode || '',
         },
       };
     }),
   };
 
   // 5. Employment & Income Details
-  const applicantEmp = empList[0] || {};
-  const coApplicantEmps = empList.slice(1);
+  const applicantAddrId = applicantAddr.applicationAddressDetailsId;
+  const applicantEmp =
+    (applicantAddrId && empList.find((e) => e.applicationAddressDetailsId === applicantAddrId)) ||
+    empList.find((e) => Number(e.applicantSequence) === 0) ||
+    empList[0] ||
+    {};
+
+  const coApplicantEmps = coApplicantPers.map((coPers, idx) => {
+    const coAddr = coApplicantAddrs[idx] || {};
+    const coAddrId = coAddr.applicationAddressDetailsId;
+    return (
+      (coAddrId && empList.find((e) => e.applicationAddressDetailsId === coAddrId)) ||
+      empList.find((e) => Number(e.applicantSequence) === idx + 1) ||
+      empList[idx + 1] ||
+      {}
+    );
+  });
+
   const employmentIncome = {
     applicant: {
-      employmentIncomeDetailsId: applicantEmp.applicationEmploymentIncomeDetailsId || existingDraft.employmentIncome?.applicant?.employmentIncomeDetailsId || null,
-      applicationEmploymentIncomeDetailsId: applicantEmp.applicationEmploymentIncomeDetailsId || existingDraft.employmentIncome?.applicant?.applicationEmploymentIncomeDetailsId || null,
-      employerBusinessName: applicantEmp.employerBusinessName || existingDraft.employmentIncome?.applicant?.employerBusinessName || '',
-      employerName: applicantEmp.employerBusinessName || existingDraft.employmentIncome?.applicant?.employerName || '',
-      designationNatureOfBusiness: applicantEmp.designationNatureOfBusiness || existingDraft.employmentIncome?.applicant?.designationNatureOfBusiness || '',
-      designation: applicantEmp.designationNatureOfBusiness || existingDraft.employmentIncome?.applicant?.designation || '',
-      employmentNature: applicantEmp.employmentTypeId || existingDraft.employmentIncome?.applicant?.employmentNature || '',
-      employmentType: applicantEmp.employmentTypeId || existingDraft.employmentIncome?.applicant?.employmentType || '',
-      qualification: applicantEmp.educationId || existingDraft.employmentIncome?.applicant?.qualification || '',
-      educationId: applicantEmp.educationId || existingDraft.employmentIncome?.applicant?.educationId || '',
-      industryType: applicantEmp.industryType || existingDraft.employmentIncome?.applicant?.industryType || '',
-      totalExperienceYears: applicantEmp.totalExperience !== undefined && applicantEmp.totalExperience !== null ? applicantEmp.totalExperience : (existingDraft.employmentIncome?.applicant?.totalExperienceYears || ''),
-      totalExperience: applicantEmp.totalExperience !== undefined && applicantEmp.totalExperience !== null ? applicantEmp.totalExperience : (existingDraft.employmentIncome?.applicant?.totalExperience || ''),
-      grossMonthlyIncome: applicantEmp.grossMonthlyIncome !== undefined && applicantEmp.grossMonthlyIncome !== null ? applicantEmp.grossMonthlyIncome : (existingDraft.employmentIncome?.applicant?.grossMonthlyIncome || ''),
-      otherIncomeMonthly: applicantEmp.otherMonthlyIncome !== undefined && applicantEmp.otherMonthlyIncome !== null ? applicantEmp.otherMonthlyIncome : (existingDraft.employmentIncome?.applicant?.otherIncomeMonthly || ''),
-      otherMonthlyIncome: applicantEmp.otherMonthlyIncome !== undefined && applicantEmp.otherMonthlyIncome !== null ? applicantEmp.otherMonthlyIncome : (existingDraft.employmentIncome?.applicant?.otherMonthlyIncome || ''),
-      netMonthlyIncome: applicantEmp.netMonthlyIncome !== undefined && applicantEmp.netMonthlyIncome !== null ? applicantEmp.netMonthlyIncome : (existingDraft.employmentIncome?.applicant?.netMonthlyIncome || ''),
-      grossAnnualIncome: applicantEmp.grossAnnualIncome !== undefined && applicantEmp.grossAnnualIncome !== null ? applicantEmp.grossAnnualIncome : (existingDraft.employmentIncome?.applicant?.grossAnnualIncome || ''),
+      employmentIncomeDetailsId: applicantEmp.applicationEmploymentIncomeDetailsId || null,
+      applicationEmploymentIncomeDetailsId: applicantEmp.applicationEmploymentIncomeDetailsId || null,
+      employerBusinessName: applicantEmp.employerBusinessName || '',
+      employerName: applicantEmp.employerBusinessName || '',
+      designationNatureOfBusiness: applicantEmp.designationNatureOfBusiness || '',
+      designation: applicantEmp.designationNatureOfBusiness || '',
+      employmentNature: applicantEmp.employmentTypeId || '',
+      employmentType: applicantEmp.employmentTypeId || '',
+      qualification: applicantEmp.educationId || '',
+      educationId: applicantEmp.educationId || '',
+      industryType: applicantEmp.industryType || '',
+      totalExperienceYears: applicantEmp.totalExperience !== undefined && applicantEmp.totalExperience !== null ? applicantEmp.totalExperience : '',
+      totalExperience: applicantEmp.totalExperience !== undefined && applicantEmp.totalExperience !== null ? applicantEmp.totalExperience : '',
+      grossMonthlyIncome: applicantEmp.grossMonthlyIncome !== undefined && applicantEmp.grossMonthlyIncome !== null ? applicantEmp.grossMonthlyIncome : '',
+      otherIncomeMonthly: applicantEmp.otherMonthlyIncome !== undefined && applicantEmp.otherMonthlyIncome !== null ? applicantEmp.otherMonthlyIncome : '',
+      otherMonthlyIncome: applicantEmp.otherMonthlyIncome !== undefined && applicantEmp.otherMonthlyIncome !== null ? applicantEmp.otherMonthlyIncome : '',
+      netMonthlyIncome: applicantEmp.netMonthlyIncome !== undefined && applicantEmp.netMonthlyIncome !== null ? applicantEmp.netMonthlyIncome : '',
+      grossAnnualIncome: applicantEmp.grossAnnualIncome !== undefined && applicantEmp.grossAnnualIncome !== null ? applicantEmp.grossAnnualIncome : '',
     },
     coApplicants: coApplicantEmps.map((coEmp, idx) => {
       const draftCo = existingDraft.employmentIncome?.coApplicants?.[idx] || {};
@@ -780,44 +796,92 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   };
 
   // 6. Bank & Existing Loans Details
-  const primaryBankRecord = bankList.find((b) => b.isPrimaryBank === true) || bankList[0] || {};
-  const otherBankRecord = bankList.find((b) => b.isPrimaryBank === false && b !== primaryBankRecord) || bankList[1] || {};
+  const applicantEmpId = applicantEmp.applicationEmploymentIncomeDetailsId;
+  const applicantBankList = bankList.filter((b) => {
+    if (applicantEmpId && b.applicationEmploymentIncomeDetailsId === applicantEmpId) return true;
+    if (b.applicantSequence !== undefined && b.applicantSequence !== null) return Number(b.applicantSequence) === 0;
+    return false;
+  });
+  const effectiveApplicantBanks = applicantBankList.length > 0 ? applicantBankList : [bankList[0]].filter(Boolean);
+  const primaryBankRecord = effectiveApplicantBanks.find((b) => b.isPrimaryBank === true) || effectiveApplicantBanks[0] || {};
+  const otherBankRecord = effectiveApplicantBanks.find((b) => b.isPrimaryBank === false && b !== primaryBankRecord) || effectiveApplicantBanks[1] || {};
+
+  const coApplicantBankList = coApplicantPers.map((coPers, idx) => {
+    const coEmp = coApplicantEmps[idx] || {};
+    const coEmpId = coEmp.applicationEmploymentIncomeDetailsId;
+    const matchedBanks = bankList.filter((b) => {
+      if (coEmpId && b.applicationEmploymentIncomeDetailsId === coEmpId) return true;
+      if (b.applicantSequence !== undefined && b.applicantSequence !== null) return Number(b.applicantSequence) === idx + 1;
+      return false;
+    });
+    const effectiveBanks = matchedBanks.length > 0 ? matchedBanks : [bankList[idx + 1]].filter(Boolean);
+    const coPrimary = effectiveBanks.find((b) => b.isPrimaryBank === true) || effectiveBanks[0] || {};
+    const coOther = effectiveBanks.find((b) => b.isPrimaryBank === false && b !== coPrimary) || effectiveBanks[1] || {};
+    const coName = [coPers.firstName, coPers.middleName, coPers.lastName].filter(Boolean).join(' ') || coPers.fullName || '';
+
+    return {
+      primaryBank: {
+        applicationBankExistingLoanDetailsId: coPrimary.applicationBankExistingLoanDetailsId || null,
+        bankName: coPrimary.bankId || '',
+        branch: coPrimary.bankBranchId || '',
+        ifscCode: '',
+        accountType: 'Savings',
+        accountNumber: coPrimary.accountNumber || '',
+        accountHolderName: coPrimary.accountHolderName || coName || '',
+        noOfActiveLoans: coPrimary.noOfActiveLoans !== undefined && coPrimary.noOfActiveLoans !== null ? coPrimary.noOfActiveLoans : '',
+        noOfActiveCreditCards: coPrimary.noOfActiveCreditCards !== undefined && coPrimary.noOfActiveCreditCards !== null ? coPrimary.noOfActiveCreditCards : '',
+      },
+      otherBank: {
+        applicationBankExistingLoanDetailsId: coOther.applicationBankExistingLoanDetailsId || null,
+        bankName: coOther.bankId || '',
+        branch: coOther.bankBranchId || '',
+        ifscCode: '',
+        accountType: 'Savings',
+        accountNumber: coOther.accountNumber || '',
+        accountHolderName: coOther.accountHolderName || coName || '',
+        noOfActiveLoans: coOther.noOfActiveLoans !== undefined && coOther.noOfActiveLoans !== null ? coOther.noOfActiveLoans : '',
+        noOfActiveCreditCards: coOther.noOfActiveCreditCards !== undefined && coOther.noOfActiveCreditCards !== null ? coOther.noOfActiveCreditCards : '',
+      },
+    };
+  });
+
   const bankExistingLoans = {
     applicant: {
       primaryBank: {
-        applicationBankExistingLoanDetailsId: primaryBankRecord.applicationBankExistingLoanDetailsId || existingDraft.bankExistingLoans?.applicant?.primaryBank?.applicationBankExistingLoanDetailsId || null,
-        bankName: primaryBankRecord.bankId || existingDraft.bankExistingLoans?.applicant?.primaryBank?.bankName || '',
-        branch: primaryBankRecord.bankBranchId || existingDraft.bankExistingLoans?.applicant?.primaryBank?.branch || '',
-        ifscCode: existingDraft.bankExistingLoans?.applicant?.primaryBank?.ifscCode || '',
-        accountType: existingDraft.bankExistingLoans?.applicant?.primaryBank?.accountType || 'Savings',
-        accountNumber: primaryBankRecord.accountNumber || existingDraft.bankExistingLoans?.applicant?.primaryBank?.accountNumber || '',
-        accountHolderName: customerName || existingDraft.bankExistingLoans?.applicant?.primaryBank?.accountHolderName || '',
-        noOfActiveLoans: primaryBankRecord.noOfActiveLoans !== undefined && primaryBankRecord.noOfActiveLoans !== null ? primaryBankRecord.noOfActiveLoans : (existingDraft.bankExistingLoans?.applicant?.primaryBank?.noOfActiveLoans ?? ''),
-        noOfActiveCreditCards: primaryBankRecord.noOfActiveCreditCards !== undefined && primaryBankRecord.noOfActiveCreditCards !== null ? primaryBankRecord.noOfActiveCreditCards : (existingDraft.bankExistingLoans?.applicant?.primaryBank?.noOfActiveCreditCards ?? ''),
-        activeLoansDetails: existingDraft.bankExistingLoans?.applicant?.primaryBank?.activeLoansDetails || [],
+        applicationBankExistingLoanDetailsId: primaryBankRecord.applicationBankExistingLoanDetailsId || null,
+        bankName: primaryBankRecord.bankId || '',
+        branch: primaryBankRecord.bankBranchId || '',
+        ifscCode: '',
+        accountType: 'Savings',
+        accountNumber: primaryBankRecord.accountNumber || '',
+        accountHolderName: primaryBankRecord.accountHolderName || customerName || '',
+        noOfActiveLoans: primaryBankRecord.noOfActiveLoans !== undefined && primaryBankRecord.noOfActiveLoans !== null ? primaryBankRecord.noOfActiveLoans : '',
+        noOfActiveCreditCards: primaryBankRecord.noOfActiveCreditCards !== undefined && primaryBankRecord.noOfActiveCreditCards !== null ? primaryBankRecord.noOfActiveCreditCards : '',
+        activeLoansDetails: [],
       },
       otherBank: {
-        applicationBankExistingLoanDetailsId: otherBankRecord.applicationBankExistingLoanDetailsId || existingDraft.bankExistingLoans?.applicant?.otherBank?.applicationBankExistingLoanDetailsId || null,
-        bankName: otherBankRecord.bankId || existingDraft.bankExistingLoans?.applicant?.otherBank?.bankName || '',
-        branch: otherBankRecord.bankBranchId || existingDraft.bankExistingLoans?.applicant?.otherBank?.branch || '',
-        ifscCode: existingDraft.bankExistingLoans?.applicant?.otherBank?.ifscCode || '',
-        accountType: existingDraft.bankExistingLoans?.applicant?.otherBank?.accountType || 'Savings',
-        accountNumber: otherBankRecord.accountNumber || existingDraft.bankExistingLoans?.applicant?.otherBank?.accountNumber || '',
-        noOfActiveLoans: otherBankRecord.noOfActiveLoans !== undefined && otherBankRecord.noOfActiveLoans !== null ? otherBankRecord.noOfActiveLoans : (existingDraft.bankExistingLoans?.applicant?.otherBank?.noOfActiveLoans ?? ''),
-        noOfActiveCreditCards: otherBankRecord.noOfActiveCreditCards !== undefined && otherBankRecord.noOfActiveCreditCards !== null ? otherBankRecord.noOfActiveCreditCards : (existingDraft.bankExistingLoans?.applicant?.otherBank?.noOfActiveCreditCards ?? ''),
-        activeLoansDetails: existingDraft.bankExistingLoans?.applicant?.otherBank?.activeLoansDetails || [],
+        applicationBankExistingLoanDetailsId: otherBankRecord.applicationBankExistingLoanDetailsId || null,
+        bankName: otherBankRecord.bankId || '',
+        branch: otherBankRecord.bankBranchId || '',
+        ifscCode: '',
+        accountType: 'Savings',
+        accountNumber: otherBankRecord.accountNumber || '',
+        accountHolderName: otherBankRecord.accountHolderName || customerName || '',
+        noOfActiveLoans: otherBankRecord.noOfActiveLoans !== undefined && otherBankRecord.noOfActiveLoans !== null ? otherBankRecord.noOfActiveLoans : '',
+        noOfActiveCreditCards: otherBankRecord.noOfActiveCreditCards !== undefined && otherBankRecord.noOfActiveCreditCards !== null ? otherBankRecord.noOfActiveCreditCards : '',
+        activeLoansDetails: [],
       },
     },
     primaryBank: {
-      applicationBankExistingLoanDetailsId: primaryBankRecord.applicationBankExistingLoanDetailsId || existingDraft.bankExistingLoans?.primaryBank?.applicationBankExistingLoanDetailsId || null,
-      bankName: primaryBankRecord.bankId || existingDraft.bankExistingLoans?.primaryBank?.bankName || '',
-      branch: primaryBankRecord.bankBranchId || existingDraft.bankExistingLoans?.primaryBank?.branch || '',
-      accountNumber: primaryBankRecord.accountNumber || existingDraft.bankExistingLoans?.primaryBank?.accountNumber || '',
-      accountHolderName: customerName || existingDraft.bankExistingLoans?.primaryBank?.accountHolderName || '',
-      noOfActiveLoans: primaryBankRecord.noOfActiveLoans !== undefined && primaryBankRecord.noOfActiveLoans !== null ? primaryBankRecord.noOfActiveLoans : (existingDraft.bankExistingLoans?.primaryBank?.noOfActiveLoans ?? ''),
-      noOfActiveCreditCards: primaryBankRecord.noOfActiveCreditCards !== undefined && primaryBankRecord.noOfActiveCreditCards !== null ? primaryBankRecord.noOfActiveCreditCards : (existingDraft.bankExistingLoans?.primaryBank?.noOfActiveCreditCards ?? ''),
+      applicationBankExistingLoanDetailsId: primaryBankRecord.applicationBankExistingLoanDetailsId || null,
+      bankName: primaryBankRecord.bankId || '',
+      branch: primaryBankRecord.bankBranchId || '',
+      accountNumber: primaryBankRecord.accountNumber || '',
+      accountHolderName: primaryBankRecord.accountHolderName || customerName || '',
+      noOfActiveLoans: primaryBankRecord.noOfActiveLoans !== undefined && primaryBankRecord.noOfActiveLoans !== null ? primaryBankRecord.noOfActiveLoans : '',
+      noOfActiveCreditCards: primaryBankRecord.noOfActiveCreditCards !== undefined && primaryBankRecord.noOfActiveCreditCards !== null ? primaryBankRecord.noOfActiveCreditCards : '',
     },
-    coApplicants: existingDraft.bankExistingLoans?.coApplicants || [],
+    coApplicants: coApplicantBankList,
   };
 
   // 7. Collateral Details
@@ -876,13 +940,13 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   // 10. Declaration & Other Sections
   const declaration = existingDraft.declaration || {
     applicantSignature: customerName,
-    applicantDate: createdDate ? toIstDateInput(createdDate) : toIstDateInput(),
+    applicantDate: '',
     coApplicantSignature: '',
     coApplicantDate: '',
     ackApplicantName: customerName,
     ackProduct: '',
     ackReceivedBy: rmName || '',
-    ackDate: createdDate ? toIstDateInput(createdDate) : toIstDateInput(),
+    ackDate: '',
   };
 
   const scheduleCharges = existingDraft.scheduleCharges || existingDraft.scheduleOfCharges || { values: {} };

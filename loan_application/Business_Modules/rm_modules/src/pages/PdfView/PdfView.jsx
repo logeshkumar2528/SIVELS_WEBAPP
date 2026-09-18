@@ -203,7 +203,6 @@ export default function PdfView() {
           }
 
           if (empDetailsRes.status === 'fulfilled' && empDetailsRes.value) {
-            console.log('RAW Employment & Income API Response:', empDetailsRes.value);
             const empList = Array.isArray(empDetailsRes.value) ? empDetailsRes.value : [];
             const addrList = addrDetailsRes.status === 'fulfilled' && Array.isArray(addrDetailsRes.value) ? addrDetailsRes.value : [];
             const persList = persInfoRes.status === 'fulfilled' && Array.isArray(persInfoRes.value) ? persInfoRes.value : [];
@@ -214,7 +213,7 @@ export default function PdfView() {
             const matchedPers = persList.find((p) =>
               (custMobile && p.mobileNumber === custMobile) ||
               (custName && (p.firstName?.toLowerCase() === custName || p.lastName?.toLowerCase() === custName))
-            );
+            ) || persList[0];
 
             let matchedAddrId = null;
             if (matchedPers) {
@@ -224,34 +223,50 @@ export default function PdfView() {
 
             const matchedEmp =
               (matchedAddrId && empList.find((e) => e.applicationAddressDetailsId === matchedAddrId)) ||
-              (appData.employmentIncome?.applicant?.employmentIncomeDetailsId &&
-                empList.find((e) => e.applicationEmploymentIncomeDetailsId === appData.employmentIncome.applicant.employmentIncomeDetailsId)) ||
+              empList.find((e) => Number(e.applicantSequence) === 0) ||
+              empList[0] ||
               null;
 
-            if (matchedEmp) {
+            const transformEmp = (e) => {
+              if (!e) return null;
+              return {
+                employerBusinessName: e.employerBusinessName || '',
+                employerName: e.employerBusinessName || '',
+                designationNatureOfBusiness: e.designationNatureOfBusiness || '',
+                designation: e.designationNatureOfBusiness || '',
+                employmentNature: e.employmentTypeId,
+                employmentType: e.employmentTypeId,
+                employmentTypeId: e.employmentTypeId,
+                qualification: e.educationId,
+                educationId: e.educationId,
+                industryType: e.industryType || '',
+                totalExperienceYears: e.totalExperience,
+                totalExperience: e.totalExperience,
+                grossMonthlyIncome: e.grossMonthlyIncome,
+                otherIncomeMonthly: e.otherMonthlyIncome,
+                otherMonthlyIncome: e.otherMonthlyIncome,
+                netMonthlyIncome: e.netMonthlyIncome,
+                grossAnnualIncome: e.grossAnnualIncome,
+              };
+            };
+
+            const coPersList = persList.slice(1);
+            const matchedCoEmps = coPersList.map((coP, idx) => {
+              const coAddr = addrList.find((a) => a.personalInformationId === coP.personalInformationId);
+              const coAddrId = coAddr?.applicationAddressDetailsId;
+              const coE =
+                (coAddrId && empList.find((e) => e.applicationAddressDetailsId === coAddrId)) ||
+                empList.find((e) => Number(e.applicantSequence) === idx + 1) ||
+                empList[idx + 1];
+              return transformEmp(coE);
+            }).filter(Boolean);
+
+            if (matchedEmp || matchedCoEmps.length > 0) {
               const liveEmpObj = {
-                applicant: {
-                  employerBusinessName: matchedEmp.employerBusinessName || '',
-                  employerName: matchedEmp.employerBusinessName || '',
-                  designationNatureOfBusiness: matchedEmp.designationNatureOfBusiness || '',
-                  designation: matchedEmp.designationNatureOfBusiness || '',
-                  employmentNature: matchedEmp.employmentTypeId,
-                  employmentType: matchedEmp.employmentTypeId,
-                  employmentTypeId: matchedEmp.employmentTypeId,
-                  qualification: matchedEmp.educationId,
-                  educationId: matchedEmp.educationId,
-                  industryType: matchedEmp.industryType || '',
-                  totalExperienceYears: matchedEmp.totalExperience,
-                  totalExperience: matchedEmp.totalExperience,
-                  grossMonthlyIncome: matchedEmp.grossMonthlyIncome,
-                  otherIncomeMonthly: matchedEmp.otherMonthlyIncome,
-                  otherMonthlyIncome: matchedEmp.otherMonthlyIncome,
-                  netMonthlyIncome: matchedEmp.netMonthlyIncome,
-                  grossAnnualIncome: matchedEmp.grossAnnualIncome,
-                }
+                applicant: transformEmp(matchedEmp) || {},
+                coApplicants: matchedCoEmps,
               };
               setLiveEmployment(liveEmpObj);
-              console.log('TRANSFORMED liveEmployment object:', liveEmpObj);
             }
           }
 
@@ -907,41 +922,20 @@ export default function PdfView() {
     '';
 
   const loanAmount = appData.loanAmount || liveCustomer?.expectedLoanAmount || '';
-  const loanTenure = appData.loanTenureMonths || '';
-  const resolvedRMName =
-    liveRM?.name ||
-    appData.rmName ||
-    (isObsoleteMock(sourcingData.sourcedBy) ? '' : sourcingData.sourcedBy) ||
-    '';
-  const resolvedEmployeeId =
-    liveRM?.employeeId ||
-    appData.rmCode ||
-    (isObsoleteMock(sourcingData.employeeId) ? '' : sourcingData.employeeId) ||
-    '';
+  const resolvedRMName = appData.rmName || '-';
+  const resolvedEmployeeId = appData.rmCode || '-';
 
-  const todayFormatted = toIstDateInput();
-
-  // Resolved Applicant Signature & Date
-  const resolvedApplicantSignature =
-    !isObsoleteMock(declarationData.applicantSignature) && declarationData.applicantSignature
-      ? declarationData.applicantSignature
-      : '-';
+  // Resolved Applicant Signature & Date (Uses real backend identity)
+  const resolvedApplicantSignature = customerDisplayName || '-';
 
   const resolvedApplicantDate =
-    !isObsoleteMock(declarationData.applicantDate)
-      ? declarationData.applicantDate
-      : todayFormatted;
+    (!isObsoleteMock(declarationData.applicantDate) && declarationData.applicantDate) || '-';
 
   // Resolved RM Signature & Date
-  const resolvedRMSignature =
-    !isObsoleteMock(declarationData.ackReceivedBy) && declarationData.ackReceivedBy
-      ? declarationData.ackReceivedBy
-      : (resolvedRMName || '-');
+  const resolvedRMSignature = appData.rmName || '-';
 
   const resolvedRMDate =
-    !isObsoleteMock(declarationData.ackDate)
-      ? declarationData.ackDate
-      : todayFormatted;
+    (!isObsoleteMock(declarationData.ackDate) && declarationData.ackDate) || '-';
 
   const effectiveDocs = downloadedDocs;
 
@@ -977,19 +971,46 @@ export default function PdfView() {
     }
 
     documents.forEach((document) => {
-      addName(document.documentTypeName || document.fileName);
+      const docTypeResolved = resolveDocType(document.documentTypeId);
+      addName(docTypeResolved || document.documentTypeName || document.fileName);
     });
 
     return names;
   };
 
+  const applicantDocs = useMemo(() => {
+    return effectiveDocs.filter((d) => {
+      const seq = Number(d.applicantSequence);
+      if (!isNaN(seq) && seq > 0) return false;
+      const kycId = d.applicationKYCDocumentId || d.kycDocumentId;
+      if (kycId && coApplicantKycIds.some((cId) => cId && String(cId) === String(kycId))) return false;
+      return true;
+    });
+  }, [effectiveDocs, coApplicantKycIds]);
+
+  const coApplicantDocsMap = useMemo(() => {
+    const map = {};
+    coApplicants.forEach((_, idx) => {
+      const targetSeq = idx + 1;
+      const targetKycId = coApplicantKycIds[idx];
+      map[idx] = effectiveDocs.filter((d) => {
+        const seq = Number(d.applicantSequence);
+        if (!isNaN(seq) && seq === targetSeq) return true;
+        const kycId = d.applicationKYCDocumentId || d.kycDocumentId;
+        if (targetKycId && kycId && String(kycId) === String(targetKycId)) return true;
+        return false;
+      });
+    });
+    return map;
+  }, [effectiveDocs, coApplicants, coApplicantKycIds]);
+
   const documentPeople = [
-    { label: 'Applicant', kyc: kycData.applicant || {}, documents: effectiveDocs },
+    { label: 'Applicant', kyc: kycData.applicant || {}, documents: applicantDocs },
     ...(hasCoApplicants
       ? coApplicants.map((_, index) => ({
           label: `Co-Applicant ${index + 1}`,
           kyc: kycData.coApplicants?.[index] || {},
-          documents: [],
+          documents: coApplicantDocsMap[index] || [],
         }))
       : []),
   ];
@@ -1869,17 +1890,16 @@ export default function PdfView() {
 
             {hasCoApplicants &&
               coApplicants.map((co, i) => {
-                const coSigRaw =
-                  declarationData.coApplicants?.[i]?.signature ||
-                  (i === 0 ? declarationData.coApplicantSignature : '');
-                const coSig =
-                  !isObsoleteMock(coSigRaw) && coSigRaw
-                    ? coSigRaw
-                    : '-';
+                const coFullName =
+                  composeFullName(co) ||
+                  co.firstName ||
+                  (co.lastName ? `${co.lastName}` : '') ||
+                  '-';
+                const coSig = coFullName;
                 const coDate =
-                  declarationData.coApplicants?.[i]?.date ||
-                  (i === 0 ? declarationData.coApplicantDate : '') ||
-                  todayFormatted;
+                  (!isObsoleteMock(declarationData.coApplicants?.[i]?.date) && declarationData.coApplicants?.[i]?.date) ||
+                  (i === 0 && !isObsoleteMock(declarationData.coApplicantDate) && declarationData.coApplicantDate) ||
+                  '-';
                 return (
                   <div key={i}>
                     <div style={{ fontWeight: '700', marginBottom: '4px', fontSize: '11px' }}>
