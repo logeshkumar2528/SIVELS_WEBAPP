@@ -348,5 +348,202 @@ export function buildApplicationDisplayId(record = {}, fallbackId = '') {
   const applicationDay = dateMatch ? dateMatch[1] || String(applicationDate).slice(0, 2) : '00';
   const mobile = String(applicant.mobileNo || applicant.MobileNo || applicant.mobileNumber || applicant.MobileNumber || record.mobileNumber || record.MobileNumber || record.mobile || record.Mobile || '').replace(/\D/g, '');
   const mobileTail = mobile.slice(-3).padStart(3, '0');
-  return `${initials}-${applicationDay}-${mobileTail}`;
+  return `${initials}${applicationDay}${mobileTail}`;
 }
+
+/**
+ * Loads the ORIGINAL Applicant Aadhaar uploaded by the Agent.
+ * Strictly checks documentTypeId === 1 / Aadhaar, excludes Bank Statements/Salary/Photo/PAN,
+ * and sorts to pick the original document rather than update history.
+ */
+export async function loadApplicantAadhaarUrl({ appData = {}, appId = '', baseUrl = '', headers = {} }) {
+  const isAadhaarDoc = (doc) => {
+    if (!doc) return false;
+    const typeId = Number(doc.documentTypeId || doc.DocumentTypeId);
+    if (typeId === 1) return true;
+    if (typeId === 2 || typeId === 3 || typeId === 4 || typeId === 6) return false;
+    const typeName = String(doc.documentTypeName || doc.documentType || doc.DocumentTypeName || '').toLowerCase();
+    if (
+      typeName.includes('bank') ||
+      typeName.includes('salary') ||
+      typeName.includes('income') ||
+      typeName.includes('photo') ||
+      typeName.includes('profile') ||
+      typeName.includes('pan')
+    ) {
+      return false;
+    }
+    return typeName.includes('aadhaar') || typeName.includes('aadhar');
+  };
+
+  // 1. Primary Source: AgentCustomerDocument (Original Agent-uploaded Aadhaar)
+  const candidateCustomerIds = [
+    appData.agentCustomerId,
+    appData.AgentCustomerId,
+    appData.customerId,
+    appData.CustomerId,
+    appData.Applicant?.agentCustomerId,
+    appData.applicant?.agentCustomerId,
+    appData.Applicant?.customerId,
+    appData.applicant?.customerId,
+    appId,
+  ].filter(Boolean);
+
+  for (const custId of candidateCustomerIds) {
+    try {
+      const res = await fetch(`${baseUrl}/AgentCustomerDocument/bycustomer/${custId}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        const docList = Array.isArray(data) ? data : (data?.data || data?.value || data?.items || []);
+        const activeApplicantDocs = docList.filter(
+          (d) =>
+            d &&
+            d.isActive !== false &&
+            (d.applicantSequence === 0 || d.applicantSequence === '0' || d.applicantSequence === null || d.applicantSequence === undefined) &&
+            isAadhaarDoc(d)
+        );
+
+        if (activeApplicantDocs.length > 0) {
+          // Sort to pick ORIGINAL document (earliest / isOriginal)
+          activeApplicantDocs.sort((a, b) => {
+            if (a.isOriginal && !b.isOriginal) return -1;
+            if (!a.isOriginal && b.isOriginal) return 1;
+            const timeA = new Date(a.createdAt || a.createdDate || 0).getTime();
+            const timeB = new Date(b.createdAt || b.createdDate || 0).getTime();
+            if (timeA && timeB && timeA !== timeB) return timeA - timeB;
+            return (Number(a.agentCustomerDocumentId || a.id) || 0) - (Number(b.agentCustomerDocumentId || b.id) || 0);
+          });
+
+          const originalDoc = activeApplicantDocs[0];
+          const docId = originalDoc.agentCustomerDocumentId || originalDoc.id;
+          if (docId) {
+            const dlRes = await fetch(`${baseUrl}/AgentCustomerDocument/download/${docId}`, { headers });
+            if (dlRes.ok) {
+              const blob = await dlRes.blob();
+              if (blob && blob.size > 0) {
+                const ext = String(originalDoc.fileName || '').split('.').pop()?.toLowerCase();
+                let mimeType = blob.type || 'image/jpeg';
+                if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+                else if (ext === 'png') mimeType = 'image/png';
+                else if (ext === 'webp') mimeType = 'image/webp';
+                else if (ext === 'pdf') mimeType = 'application/pdf';
+                const typedBlob = new Blob([blob], { type: mimeType });
+                return URL.createObjectURL(typedBlob);
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // Continue
+    }
+  }
+
+  // 2. Secondary Source: ApplicationKYCDocuments aadharDocumentPath (strictly Aadhaar path, NEVER generic documentPath)
+  const kycDocs = appData.sections?.kycDocuments || appData.kycDocuments || {};
+  const applicantKyc = kycDocs.applicant || {};
+  const aadharPath = applicantKyc.aadharDocumentPath || applicantKyc.AadharDocumentPath;
+  if (aadharPath) {
+    const cleanPath = String(aadharPath).replace(/^[\\/]+/, '').replace(/\\/g, '/');
+    try {
+      const res = await fetch(`${baseUrl}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`, { headers });
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob && blob.size > 0) {
+          const mimeType = blob.type || 'image/jpeg';
+          const typedBlob = new Blob([blob], { type: mimeType });
+          return URL.createObjectURL(typedBlob);
+        }
+      }
+    } catch {}
+  }
+
+  // 3. Direct route: ApplicationKYCDocuments/{kycId}/aadhar
+  const applicantKycId = applicantKyc.kycDocumentId || applicantKyc.applicationKYCDocumentId;
+  if (applicantKycId) {
+    try {
+      const res = await fetch(`${baseUrl}/ApplicationKYCDocuments/${applicantKycId}/aadhar`, { headers });
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob && blob.size > 0) {
+          const mimeType = blob.type || 'image/jpeg';
+          const typedBlob = new Blob([blob], { type: mimeType });
+          return URL.createObjectURL(typedBlob);
+        }
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
+/**
+ * Loads the RM-uploaded Aadhaar for a specific Co-Applicant.
+ * Relates strictly to that Co-Applicant's KYC ID, sequence tuple, or aadharDocumentPath.
+ */
+export async function loadCoApplicantAadhaarUrl({
+  coKyc = {},
+  coPersonalInfo = {},
+  coIndex = 0,
+  appId = '',
+  baseUrl = '',
+  headers = {},
+}) {
+  // 1. ApplicationKYCDocuments aadharDocumentPath (strictly Aadhaar path, NEVER generic documentPath)
+  const aadharPath = coKyc.aadharDocumentPath || coKyc.AadharDocumentPath;
+  if (aadharPath) {
+    const cleanPath = String(aadharPath).replace(/^[\\/]+/, '').replace(/\\/g, '/');
+    try {
+      const res = await fetch(`${baseUrl}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`, { headers });
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob && blob.size > 0) {
+          const mimeType = blob.type || 'image/jpeg';
+          const typedBlob = new Blob([blob], { type: mimeType });
+          return URL.createObjectURL(typedBlob);
+        }
+      }
+    } catch {}
+  }
+
+  // 2. Direct route: ApplicationKYCDocuments/{kycId}/aadhar
+  const kycId =
+    coKyc.kycDocumentId ||
+    coKyc.applicationKYCDocumentId ||
+    coPersonalInfo.applicationKYCDocumentId ||
+    coPersonalInfo.kycDocumentId;
+  if (kycId) {
+    try {
+      const res = await fetch(`${baseUrl}/ApplicationKYCDocuments/${kycId}/aadhar`, { headers });
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob && blob.size > 0) {
+          const mimeType = blob.type || 'image/jpeg';
+          const typedBlob = new Blob([blob], { type: mimeType });
+          return URL.createObjectURL(typedBlob);
+        }
+      }
+    } catch {}
+  }
+
+  // 3. Composite tuple lookup: sequence = coIndex + 1 and documentTypeId = 1 (Aadhaar)
+  if (appId) {
+    try {
+      const res = await fetch(
+        `${baseUrl}/ApplicationKYCDocuments/applicant-document?applicationProductDetailsId=${encodeURIComponent(appId)}&applicantSequence=${encodeURIComponent(coIndex + 1)}&documentTypeId=1`,
+        { headers }
+      );
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob && blob.size > 0) {
+          const mimeType = blob.type || 'image/jpeg';
+          const typedBlob = new Blob([blob], { type: mimeType });
+          return URL.createObjectURL(typedBlob);
+        }
+      }
+    } catch {}
+  }
+
+  return null;
+}
+

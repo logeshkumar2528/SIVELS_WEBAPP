@@ -10,8 +10,7 @@ import DatePicker from '../../components/DatePicker/DatePicker';
 import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
-import { getApplicantCount } from '../applicationWizard/flowUtils';
-import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
+import { getApplicantCount, buildApplicationDisplayId, loadApplicantAadhaarUrl, loadCoApplicantAadhaarUrl } from '../applicationWizard/flowUtils';
 import Modal from '../../components/Modal/Modal';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { formatDateTime, toIstDateInput } from '../../utils/dateHelper';
@@ -49,11 +48,6 @@ function composeFullName(person = {}) {
     .map((part) => String(part || '').trim())
     .filter(Boolean)
     .join(' ');
-}
-
-function getAadhaarPreviewUrl(kycPerson = {}, side, personLabel) {
-  const document = kycPerson[`aadhaar${side}`];
-  return document?.preview || document?.url || kycPerson[`aadhaar${side}Url`] || `https://via.placeholder.com/400x250?text=${encodeURIComponent(`${personLabel}+Aadhaar+${side}+Not+Uploaded`)}`;
 }
 
 function createEmptyPerson(overrides = {}) {
@@ -228,12 +222,64 @@ function buildRegistrationPayload(form, baseData = {}, applicantDisplayName = ''
 function validatePerson(person, { isCoApplicant = false } = {}) {
   const errors = {};
 
+  if (isCoApplicant && (!person.relationshipWithApplicant || String(person.relationshipWithApplicant).trim() === '')) {
+    errors.relationshipWithApplicant = 'Relationship with Applicant is required';
+  }
+
+  if (!person.title || String(person.title).trim() === '') {
+    errors.title = 'Title is required';
+  }
+
   if (!String(person.firstName || '').trim()) {
     errors.firstName = 'First name is required';
   }
 
+  // middleName is OPTIONAL
+
   if (!String(person.lastName || '').trim()) {
     errors.lastName = 'Last name is required';
+  }
+
+  if (!String(person.fatherOrSpouseName || '').trim()) {
+    errors.fatherOrSpouseName = "Father's / Spouse name is required";
+  }
+
+  if (!String(person.mothersMaidenName || '').trim()) {
+    errors.mothersMaidenName = "Mother's maiden name is required";
+  }
+
+  if (!person.dateOfBirth || !String(person.dateOfBirth).trim()) {
+    errors.dateOfBirth = 'Date of birth is required';
+  } else if (!isValidDate(person.dateOfBirth)) {
+    errors.dateOfBirth = 'Please enter a valid date of birth';
+  }
+
+  if (!person.religion || String(person.religion).trim() === '') {
+    errors.religion = 'Religion is required';
+  }
+
+  if (!person.category || String(person.category).trim() === '') {
+    errors.category = 'Category is required';
+  }
+
+  if (!person.gender || String(person.gender).trim() === '') {
+    errors.gender = 'Gender is required';
+  }
+
+  if (!person.maritalStatus || String(person.maritalStatus).trim() === '') {
+    errors.maritalStatus = 'Marital status is required';
+  }
+
+  const mobileClean = digitsOnly(person.mobileNo);
+  if (!mobileClean) {
+    errors.mobileNo = 'Mobile number is required';
+  } else if (mobileClean.length !== 10) {
+    errors.mobileNo = 'Mobile number must be exactly 10 digits';
+  }
+
+  // emailId is OPTIONAL; if provided, must be valid email format
+  if (person.emailId && String(person.emailId).trim() && !isValidEmail(person.emailId)) {
+    errors.emailId = 'Please enter a valid email address';
   }
 
   return errors;
@@ -377,12 +423,13 @@ function PersonCard({
             <div className="cr-input-wrapper">
               <User className="cr-input-icon" size={14} />
               <input
-                className="form-input cr-input cr-input--with-icon"
+                className={`form-input cr-input cr-input--with-icon ${errors.mothersMaidenName ? 'cr-input--invalid' : ''}`}
                 type="text"
                 value={person.mothersMaidenName}
                 onChange={(event) => handleChange('mothersMaidenName', event.target.value)}
               />
             </div>
+            {errors.mothersMaidenName && <span className="cr-field-error">{errors.mothersMaidenName}</span>}
           </div>
 
           <div className="cr-field">
@@ -405,6 +452,7 @@ function PersonCard({
             <label className="form-label">Religion</label>
             <div className="cr-input-wrapper">
               <Select
+                error={!!errors.religion}
                 value={person.religion}
                 onChange={(val) => handleChange('religion', val)}
                 placeholder={isLoadingMasters ? "Loading..." : "Select religion"}
@@ -413,12 +461,14 @@ function PersonCard({
                 icon={<FileText size={14} />}
               />
             </div>
+            {errors.religion && <span className="cr-field-error">{errors.religion}</span>}
           </div>
 
           <div className="cr-field">
             <label className="form-label">Category</label>
             <div className="cr-input-wrapper">
               <Select
+                error={!!errors.category}
                 value={person.category}
                 onChange={(val) => handleChange('category', val)}
                 placeholder={isLoadingMasters ? "Loading..." : "Select category"}
@@ -427,6 +477,7 @@ function PersonCard({
                 icon={<FileText size={14} />}
               />
             </div>
+            {errors.category && <span className="cr-field-error">{errors.category}</span>}
           </div>
 
           <div className="cr-field">
@@ -739,6 +790,11 @@ export default function CustomerRegistration() {
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) {
+      setErrorPopup({
+        title: 'Validation Error',
+        message: 'Please fill all required personal information fields before continuing.',
+        variant: 'validation',
+      });
       return;
     }
 
@@ -860,15 +916,59 @@ export default function CustomerRegistration() {
   const applicant = form.applicant;
   const [showDocsModal, setShowDocsModal] = useState(false);
   const [fullViewImage, setFullViewImage] = useState(null);
-  const kycDocuments = appData.sections?.kycDocuments || appData.kycDocuments || {};
+  const [aadhaarPreviews, setAadhaarPreviews] = useState({});
+  const blobUrlsRef = useRef([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const token = localStorage.getItem('authToken');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+    const kycDocs = appData.sections?.kycDocuments || appData.kycDocuments || {};
+
+    // 1. Load Applicant Aadhaar (Original Agent-uploaded Aadhaar only)
+    loadApplicantAadhaarUrl({ appData, appId, baseUrl, headers }).then((url) => {
+      if (isMounted && url) {
+        blobUrlsRef.current.push(url);
+        setAadhaarPreviews((prev) => ({ ...prev, applicant: url }));
+      }
+    });
+
+    // 2. Load Co-Applicants Aadhaar (RM-uploaded Co-Applicant Aadhaar only)
+    form.coApplicants.forEach((coPerson, idx) => {
+      const coKyc = kycDocs.coApplicants?.[idx] || {};
+      loadCoApplicantAadhaarUrl({
+        coKyc,
+        coPersonalInfo: coPerson,
+        coIndex: idx,
+        appId,
+        baseUrl,
+        headers,
+      }).then((url) => {
+        if (isMounted && url) {
+          blobUrlsRef.current.push(url);
+          setAadhaarPreviews((prev) => ({ ...prev, [`co_${idx}`]: url }));
+        }
+      });
+    });
+
+    return () => {
+      isMounted = false;
+      blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      blobUrlsRef.current = [];
+    };
+  }, [appData, appId, form.coApplicants]);
+
   const aadhaarDocumentPeople = [
     {
       label: 'Applicant',
-      kyc: kycDocuments.applicant || {},
+      previewUrl: aadhaarPreviews['applicant'] || null,
     },
     ...form.coApplicants.map((_, index) => ({
       label: `Co-Applicant ${index + 1}`,
-      kyc: kycDocuments.coApplicants?.[index] || {},
+      previewUrl: aadhaarPreviews[`co_${index}`] || null,
     })),
   ];
 
@@ -931,23 +1031,22 @@ export default function CustomerRegistration() {
             </div>
           </div>
           <div className="ad-meta-divider" />
-            <div className="ad-meta-item">
-              <span className="ad-meta-label">Submitted</span>
-              <div className="ad-meta-value-group">
-                {iconMap['Calendar'] && (() => { const Calendar = iconMap['Calendar']; return <Calendar size={14} />; })()}
-                <span className="ad-meta-value">{formatDateTime(appData.createdDate || appData.createdAt, 'Not submitted')}</span>
-              </div>
+          <div className="ad-meta-item">
+            <span className="ad-meta-label">Submitted</span>
+            <div className="ad-meta-value-group">
+              {iconMap['Calendar'] && (() => { const Calendar = iconMap['Calendar']; return <Calendar size={14} />; })()}
+              <span className="ad-meta-value">{formatDateTime(appData.createdDate || appData.createdAt, 'Not submitted')}</span>
             </div>
-            <div className="ad-meta-divider" />
-            <div className="ad-meta-item" style={{ marginLeft: 'auto', paddingLeft: '16px' }}>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowDocsModal(true)}
-              >
-                View Aadhaar
-              </Button>
-            </div>
+          </div>
+          <div className="ad-meta-action">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDocsModal(true)}
+            >
+              View Aadhaar
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -1039,39 +1138,55 @@ export default function CustomerRegistration() {
         title="Aadhaar Document View"
         size="lg"
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '0 8px' }}>
-          {aadhaarDocumentPeople.map((person) => {
-            const frontUrl = getAadhaarPreviewUrl(person.kyc, 'Front', person.label);
-            const backUrl = getAadhaarPreviewUrl(person.kyc, 'Back', person.label);
-
-            return (
-              <section key={person.label}>
-                <h4 style={{ margin: '0 0 10px', fontSize: '14px', color: '#1e293b' }}>{person.label}</h4>
-                <div style={{ display: 'flex', flexDirection: 'row', gap: '16px' }}>
-                  <div style={{ flex: 1 }}>
-                    <h5 style={{ margin: '0 0 8px', fontSize: '12px', color: '#475569' }}>Aadhaar Front</h5>
-                    <div
-                      style={{ width: '100%', height: '180px', backgroundColor: '#f1f5f9', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', cursor: 'pointer' }}
-                      onClick={() => setFullViewImage(frontUrl)}
-                      title="Click to view full size"
-                    >
-                      <img src={frontUrl} alt={`${person.label} Aadhaar Front`} style={{ width: '100%', height: '100%', objectFit: 'contain', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'} onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'} />
-                    </div>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <h5 style={{ margin: '0 0 8px', fontSize: '12px', color: '#475569' }}>Aadhaar Back</h5>
-                    <div
-                      style={{ width: '100%', height: '180px', backgroundColor: '#f1f5f9', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', cursor: 'pointer' }}
-                      onClick={() => setFullViewImage(backUrl)}
-                      title="Click to view full size"
-                    >
-                      <img src={backUrl} alt={`${person.label} Aadhaar Back`} style={{ width: '100%', height: '100%', objectFit: 'contain', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'} onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'} />
-                    </div>
-                  </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '0 8px' }}>
+          {aadhaarDocumentPeople.map((person) => (
+            <div key={person.label} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 16px' }}>
+              <h4 style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>{person.label}</h4>
+              {person.previewUrl ? (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '240px',
+                    backgroundColor: '#ffffff',
+                    borderRadius: '6px',
+                    overflow: 'hidden',
+                    border: '1px solid #e2e8f0',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  onClick={() => setFullViewImage(person.previewUrl)}
+                  title="Click to view full size"
+                >
+                  <img
+                    src={person.previewUrl}
+                    alt={`${person.label} Aadhaar`}
+                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', transition: 'transform 0.2s' }}
+                    onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'}
+                    onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                  />
                 </div>
-              </section>
-            );
-          })}
+              ) : (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100px',
+                    backgroundColor: '#ffffff',
+                    borderRadius: '6px',
+                    border: '1px dashed #cbd5e1',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#64748b',
+                    fontSize: '13px'
+                  }}
+                >
+                  Aadhaar document not available
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </Modal>
 

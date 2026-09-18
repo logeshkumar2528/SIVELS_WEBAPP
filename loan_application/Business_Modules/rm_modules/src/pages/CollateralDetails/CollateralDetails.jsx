@@ -64,10 +64,47 @@ function isItemActive(item) {
   return val === true || val === 1 || val === '1' || val === 'true' || val === 'Active';
 }
 
+function isPropertyPartiallyFilled(prop) {
+  if (!prop) return false;
+  const hasType = Boolean(prop.typeOfProperty && String(prop.typeOfProperty).trim() !== '');
+  const hasUsage = Boolean(prop.usage && String(prop.usage).trim() !== '');
+  const hasAddress = Boolean(String(prop.locationAddress || '').trim());
+  const hasValue = Boolean(prop.estimatedValue && parseAmountToNumber(prop.estimatedValue) > 0);
+  return hasType || hasUsage || hasAddress || hasValue;
+}
+
+function validateProperty(prop = {}, isProperty1 = false) {
+  const errors = {};
+
+  if (!isProperty1 && !isPropertyPartiallyFilled(prop)) {
+    return errors;
+  }
+
+  if (!prop.typeOfProperty || String(prop.typeOfProperty).trim() === '') {
+    errors.typeOfProperty = 'Type of property is required';
+  }
+
+  if (!prop.usage || String(prop.usage).trim() === '') {
+    errors.usage = 'Usage is required';
+  }
+
+  if (!String(prop.locationAddress || '').trim()) {
+    errors.locationAddress = 'Location / Address is required';
+  }
+
+  const estVal = parseAmountToNumber(prop.estimatedValue);
+  if (prop.estimatedValue === '' || prop.estimatedValue === null || prop.estimatedValue === undefined || isNaN(estVal) || estVal <= 0) {
+    errors.estimatedValue = 'Estimated value must be greater than 0';
+  }
+
+  return errors;
+}
+
 function CollateralForm({ 
   title, 
   value = {}, 
   onChange,
+  errors = {},
   propertyOptions = [],
   usageOptions = [],
   isLoadingMasters = false,
@@ -98,6 +135,7 @@ function CollateralForm({
             <label className="form-label">Type of Property</label>
             <div className="aw-input-wrapper">
               <Select 
+                 error={!!errors.typeOfProperty}
                  value={value?.typeOfProperty ?? ''} 
                  onChange={(val) => onChange('typeOfProperty', val)}
                  placeholder={propertyPlaceholder}
@@ -106,11 +144,13 @@ function CollateralForm({
                  icon={<Home size={14} />}
               />
             </div>
+            {errors.typeOfProperty && <span className="aw-field-error">{errors.typeOfProperty}</span>}
           </div>
           <div className="aw-field">
             <label className="form-label">Usage</label>
             <div className="aw-input-wrapper">
               <Select 
+                 error={!!errors.usage}
                  value={value?.usage ?? ''} 
                  onChange={(val) => onChange('usage', val)}
                  placeholder={usagePlaceholder}
@@ -119,18 +159,20 @@ function CollateralForm({
                  icon={<UserCheck size={14} />}
               />
             </div>
+            {errors.usage && <span className="aw-field-error">{errors.usage}</span>}
           </div>
           <div className="aw-field">
             <label className="form-label">Location / Address</label>
             <div className="aw-input-wrapper">
               <MapPin className="aw-input-icon" size={14} />
               <input 
-                className="form-input aw-input aw-input--with-icon" 
+                className={`form-input aw-input aw-input--with-icon ${errors.locationAddress ? 'aw-input--invalid' : ''}`}
                 value={value?.locationAddress ?? ''} 
                 onChange={(e) => onChange('locationAddress', e.target.value)} 
                 placeholder="Enter property address"
               />
             </div>
+            {errors.locationAddress && <span className="aw-field-error">{errors.locationAddress}</span>}
           </div>
           <div className="aw-field">
             <label className="form-label">Estimated Value</label>
@@ -139,12 +181,13 @@ function CollateralForm({
               <input 
                 type="text" 
                 inputMode="numeric"
-                className="form-input aw-input aw-input--with-icon" 
+                className={`form-input aw-input aw-input--with-icon ${errors.estimatedValue ? 'aw-input--invalid' : ''}`}
                 value={formatIndianAmount(value?.estimatedValue ?? '')} 
-                onChange={(e) => onChange('estimatedValue', formatIndianAmount(e.target.value))} 
+                onChange={(e) => onChange('estimatedValue', e.target.value)} 
                 placeholder="0"
               />
             </div>
+            {errors.estimatedValue && <span className="aw-field-error">{errors.estimatedValue}</span>}
           </div>
         </div>
       </div>
@@ -158,6 +201,7 @@ export default function CollateralDetails() {
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildCollateralState(getApplication(appId)));
+  const [errors, setErrors] = useState({});
   const [errorPopup, setErrorPopup] = useState(null);
   const [isLoadingMasters, setIsLoadingMasters] = useState(true);
   const [isLoadingCollateralData, setIsLoadingCollateralData] = useState(false);
@@ -397,9 +441,38 @@ export default function CollateralDetails() {
       saveApplication(appId, buildSectionUpdate(currentAppData, 'collateral', nextForm));
       return nextForm;
     });
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[`${scope}.${field}`];
+      return next;
+    });
   };
 
   const handleContinue = async () => {
+    if (collateralRequired) {
+      const nextErrors = {};
+      const p1Errors = validateProperty(form.propertyOne, true);
+      Object.entries(p1Errors).forEach(([k, v]) => {
+        nextErrors[`propertyOne.${k}`] = v;
+      });
+
+      const p2Errors = validateProperty(form.propertyTwo, false);
+      Object.entries(p2Errors).forEach(([k, v]) => {
+        nextErrors[`propertyTwo.${k}`] = v;
+      });
+
+      setErrors(nextErrors);
+
+      if (Object.keys(nextErrors).length > 0) {
+        setErrorPopup({
+          title: 'Validation Error',
+          message: 'Please fill all required collateral details before continuing.',
+          variant: 'validation',
+        });
+        return;
+      }
+    }
+
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
     const prodId = appData.applicationProductDetailsId;
 
@@ -555,6 +628,11 @@ export default function CollateralDetails() {
               title="Property 1 Details" 
               value={form.propertyOne} 
               onChange={(field, val) => updateField('propertyOne', field, val)} 
+              errors={Object.fromEntries(
+                Object.entries(errors)
+                  .filter(([k]) => k.startsWith('propertyOne.'))
+                  .map(([k, v]) => [k.replace('propertyOne.', ''), v])
+              )}
               propertyOptions={propertyOptions}
               usageOptions={usageOptions}
               isLoadingMasters={isLoadingMasters}
@@ -563,6 +641,11 @@ export default function CollateralDetails() {
               title="Property 2 Details" 
               value={form.propertyTwo} 
               onChange={(field, val) => updateField('propertyTwo', field, val)} 
+              errors={Object.fromEntries(
+                Object.entries(errors)
+                  .filter(([k]) => k.startsWith('propertyTwo.'))
+                  .map(([k, v]) => [k.replace('propertyTwo.', ''), v])
+              )}
               propertyOptions={propertyOptions}
               usageOptions={usageOptions}
               isLoadingMasters={isLoadingMasters}

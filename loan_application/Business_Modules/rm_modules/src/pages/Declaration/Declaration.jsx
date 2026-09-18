@@ -174,6 +174,7 @@ export default function Declaration() {
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildDeclarationState(getApplication(appId)));
+  const [errors, setErrors] = useState({});
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [otpStep, setOtpStep] = useState('initial');
   const [otpValue, setOtpValue] = useState('');
@@ -267,7 +268,43 @@ export default function Declaration() {
     saveApplication(appId, buildSectionUpdate(appData, 'declaration', nextForm));
   };
 
+  const validateDeclaration = () => {
+    const nextErrors = {};
+
+    if (!String(form.applicantSignature || '').trim()) {
+      nextErrors.applicantSignature = 'Applicant signature is required';
+    }
+
+    if (!form.applicantDate) {
+      nextErrors.applicantDate = 'Applicant signature date is required';
+    }
+
+    for (let i = 0; i < coApplicantCount; i++) {
+      const coApp = form.coApplicants[i];
+      if (!coApp || !String(coApp.signature || '').trim()) {
+        nextErrors[`coApplicants.${i}.signature`] = `Co-Applicant ${i + 1} signature is required`;
+      }
+      if (!coApp || !coApp.date) {
+        nextErrors[`coApplicants.${i}.date`] = `Co-Applicant ${i + 1} date is required`;
+      }
+    }
+
+    return nextErrors;
+  };
+
   const handleSubmit = () => {
+    const validationErrors = validateDeclaration();
+    setErrors(validationErrors);
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrorPopup({
+        title: 'Signatures Required',
+        message: 'Applicant and all Co-Applicant signatures and dates are required before submitting.',
+        variant: 'validation',
+      });
+      return;
+    }
+
     saveApplication(appId, buildSectionUpdate(appData, 'declaration', form));
     setOtpStep('confirm_creation');
     setOtpValue('');
@@ -413,12 +450,22 @@ export default function Declaration() {
                 <div className="aw-input-wrapper">
                   <PenTool className="aw-input-icon" size={14} />
                   <input
-                    className="form-input aw-input aw-input--with-icon"
+                    className={`form-input aw-input aw-input--with-icon ${errors.applicantSignature ? 'aw-input--invalid' : ''}`}
                     value={form.applicantSignature}
-                    onChange={(e) => persist({ ...form, applicantSignature: e.target.value })}
+                    onChange={(e) => {
+                      persist({ ...form, applicantSignature: e.target.value });
+                      if (errors.applicantSignature) {
+                        setErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.applicantSignature;
+                          return next;
+                        });
+                      }
+                    }}
                     placeholder="Enter applicant signature"
                   />
                 </div>
+                {errors.applicantSignature && <span className="aw-field-error">{errors.applicantSignature}</span>}
               </div>
               <div className="aw-field">
                 <label className="form-label">Date</label>
@@ -426,11 +473,21 @@ export default function Declaration() {
                   <Calendar className="aw-input-icon" size={14} />
                   <input
                     type="date"
-                    className="form-input aw-input aw-input--with-icon"
+                    className={`form-input aw-input aw-input--with-icon ${errors.applicantDate ? 'aw-input--invalid' : ''}`}
                     value={form.applicantDate}
-                    onChange={(e) => persist({ ...form, applicantDate: e.target.value })}
+                    onChange={(e) => {
+                      persist({ ...form, applicantDate: e.target.value });
+                      if (errors.applicantDate) {
+                        setErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.applicantDate;
+                          return next;
+                        });
+                      }
+                    }}
                   />
                 </div>
+                {errors.applicantDate && <span className="aw-field-error">{errors.applicantDate}</span>}
               </div>
             </div>
           ) : (
@@ -441,12 +498,22 @@ export default function Declaration() {
                   <div className="aw-input-wrapper">
                     <PenTool className="aw-input-icon" size={14} />
                     <input
-                      className="form-input aw-input aw-input--with-icon"
+                      className={`form-input aw-input aw-input--with-icon ${errors.applicantSignature ? 'aw-input--invalid' : ''}`}
                       value={form.applicantSignature}
-                      onChange={(e) => persist({ ...form, applicantSignature: e.target.value })}
+                      onChange={(e) => {
+                        persist({ ...form, applicantSignature: e.target.value });
+                        if (errors.applicantSignature) {
+                          setErrors((prev) => {
+                            const next = { ...prev };
+                            delete next.applicantSignature;
+                            return next;
+                          });
+                        }
+                      }}
                       placeholder="Enter applicant signature"
                     />
                   </div>
+                  {errors.applicantSignature && <span className="aw-field-error">{errors.applicantSignature}</span>}
                 </div>
                 <div className="aw-field">
                   <label className="form-label">Date</label>
@@ -454,11 +521,21 @@ export default function Declaration() {
                     <Calendar className="aw-input-icon" size={14} />
                     <input
                       type="date"
-                      className="form-input aw-input aw-input--with-icon"
+                      className={`form-input aw-input aw-input--with-icon ${errors.applicantDate ? 'aw-input--invalid' : ''}`}
                       value={form.applicantDate}
-                      onChange={(e) => persist({ ...form, applicantDate: e.target.value })}
+                      onChange={(e) => {
+                        persist({ ...form, applicantDate: e.target.value });
+                        if (errors.applicantDate) {
+                          setErrors((prev) => {
+                            const next = { ...prev };
+                            delete next.applicantDate;
+                            return next;
+                          });
+                        }
+                      }}
                     />
                   </div>
+                  {errors.applicantDate && <span className="aw-field-error">{errors.applicantDate}</span>}
                 </div>
               </div>
 
@@ -471,7 +548,7 @@ export default function Declaration() {
                     <div className="aw-input-wrapper">
                       <PenTool className="aw-input-icon" size={14} />
                       <input
-                        className="form-input aw-input aw-input--with-icon"
+                        className={`form-input aw-input aw-input--with-icon ${errors[`coApplicants.${index}.signature`] ? 'aw-input--invalid' : ''}`}
                         value={coApp.signature}
                         onChange={(e) => {
                           const updated = [...form.coApplicants];
@@ -481,10 +558,20 @@ export default function Declaration() {
                             coApplicants: updated,
                             coApplicantSignature: updated[0]?.signature || '',
                           });
+                          if (errors[`coApplicants.${index}.signature`]) {
+                            setErrors((prev) => {
+                              const next = { ...prev };
+                              delete next[`coApplicants.${index}.signature`];
+                              return next;
+                            });
+                          }
                         }}
                         placeholder="Enter co-applicant signature"
                       />
                     </div>
+                    {errors[`coApplicants.${index}.signature`] && (
+                      <span className="aw-field-error">{errors[`coApplicants.${index}.signature`]}</span>
+                    )}
                   </div>
                   <div className="aw-field">
                     <label className="form-label">Date</label>
@@ -492,7 +579,7 @@ export default function Declaration() {
                       <Calendar className="aw-input-icon" size={14} />
                       <input
                         type="date"
-                        className="form-input aw-input aw-input--with-icon"
+                        className={`form-input aw-input aw-input--with-icon ${errors[`coApplicants.${index}.date`] ? 'aw-input--invalid' : ''}`}
                         value={coApp.date}
                         onChange={(e) => {
                           const updated = [...form.coApplicants];
@@ -502,9 +589,19 @@ export default function Declaration() {
                             coApplicants: updated,
                             coApplicantDate: updated[0]?.date || '',
                           });
+                          if (errors[`coApplicants.${index}.date`]) {
+                            setErrors((prev) => {
+                              const next = { ...prev };
+                              delete next[`coApplicants.${index}.date`];
+                              return next;
+                            });
+                          }
                         }}
                       />
                     </div>
+                    {errors[`coApplicants.${index}.date`] && (
+                      <span className="aw-field-error">{errors[`coApplicants.${index}.date`]}</span>
+                    )}
                   </div>
                 </div>
               ))}

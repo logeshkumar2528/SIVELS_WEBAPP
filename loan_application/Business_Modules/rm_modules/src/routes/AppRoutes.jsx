@@ -180,7 +180,7 @@ export default function AppRoutes() {
         <Route
           path={ROUTES.APPLICATION_DETAILS}
           element={
-            <LayoutWrapper title="New Application Wizard" subtitle="">
+            <LayoutWrapper title="Application & Product Details" subtitle="Step 1 of 12">
               <ApplicationDetails />
             </LayoutWrapper>
           }
@@ -189,7 +189,7 @@ export default function AppRoutes() {
         <Route
           path={ROUTES.PERSONAL_INFORMATION}
           element={
-            <LayoutWrapper title="Personal Information" subtitle="Step 2 of 12">
+            <LayoutWrapper title="Personal Information" subtitle="Step 3 of 12">
               <CustomerRegistration />
             </LayoutWrapper>
           }
@@ -198,7 +198,7 @@ export default function AppRoutes() {
         <Route
           path={ROUTES.ADDRESS_DETAILS}
           element={
-            <LayoutWrapper title="Address Details" subtitle="Step 3 of 12">
+            <LayoutWrapper title="Address Details" subtitle="Step 4 of 12">
               <AddressDetails />
             </LayoutWrapper>
           }
@@ -207,7 +207,7 @@ export default function AppRoutes() {
         <Route
           path={ROUTES.KYC_DOCUMENTS}
           element={
-            <LayoutWrapper title="KYC Documents" subtitle="Step 4 of 12">
+            <LayoutWrapper title="KYC Documents" subtitle="Step 2 of 12">
               <KycDocuments />
             </LayoutWrapper>
           }

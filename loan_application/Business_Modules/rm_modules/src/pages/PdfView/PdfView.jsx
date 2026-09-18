@@ -52,6 +52,7 @@ export default function PdfView() {
   const [liveEmployment, setLiveEmployment] = useState(null);
   const [liveCollateral, setLiveCollateral] = useState(null);
   const [liveKycCoApplicants, setLiveKycCoApplicants] = useState([]);
+  const [liveAllKycRecords, setLiveAllKycRecords] = useState([]);
   const [coApplicantPhotos, setCoApplicantPhotos] = useState({});
   const [downloadedDocs, setDownloadedDocs] = useState([]);
   const [masterMaps, setMasterMaps] = useState({
@@ -375,6 +376,7 @@ export default function PdfView() {
                 Number(a.applicationKYCDocumentId || a.kycDocumentId || 0) -
                 Number(b.applicationKYCDocumentId || b.kycDocumentId || 0)
             );
+            setLiveAllKycRecords(combinedKycList);
             if (combinedKycList.length > 1) {
               setLiveKycCoApplicants(combinedKycList.slice(1));
             } else if (combinedKycList.length === 1 && (appData.coApplicantsCount > 0 || getApplicantCount(appData) > 0)) {
@@ -481,10 +483,13 @@ export default function PdfView() {
           }
 
           if (activeDocs.length > 0) {
-            // Group documents by document type
+            // Group documents by person key + document type so Applicant and Co-Applicant don't collide
             const docsByType = {};
             activeDocs.forEach((d) => {
-              const typeKey = String(d.documentTypeId || d.documentTypeName || 'other').toLowerCase();
+              const seq = d.applicantSequence !== undefined && d.applicantSequence !== null ? String(d.applicantSequence) : '0';
+              const kycId = d.applicationKYCDocumentId || d.kycDocumentId || '';
+              const personKey = seq !== '0' ? `seq_${seq}` : (kycId ? `kyc_${kycId}` : 'applicant');
+              const typeKey = `${personKey}_${String(d.documentTypeId || d.documentTypeName || 'other').toLowerCase()}`;
               if (!docsByType[typeKey]) docsByType[typeKey] = [];
               docsByType[typeKey].push(d);
             });
@@ -528,9 +533,13 @@ export default function PdfView() {
 
                     return {
                       agentCustomerDocumentId: docId,
+                      applicantSequence: doc.applicantSequence !== undefined ? doc.applicantSequence : (doc.ApplicantSequence !== undefined ? doc.ApplicantSequence : null),
+                      applicationKYCDocumentId: doc.applicationKYCDocumentId || doc.ApplicationKYCDocumentId || doc.kycDocumentId || null,
+                      kycDocumentId: doc.applicationKYCDocumentId || doc.ApplicationKYCDocumentId || doc.kycDocumentId || null,
                       documentTypeId: doc.documentTypeId,
                       documentTypeName: doc.documentTypeName || doc.documentType || '',
                       fileName,
+                      filePath: doc.filePath,
                       fileType: isPdf ? 'pdf' : 'image',
                       previewUrl,
                       createdAt: doc.createdAt,
@@ -543,11 +552,15 @@ export default function PdfView() {
 
                 return {
                   agentCustomerDocumentId: docId,
+                  applicantSequence: doc.applicantSequence !== undefined ? doc.applicantSequence : (doc.ApplicantSequence !== undefined ? doc.ApplicantSequence : null),
+                  applicationKYCDocumentId: doc.applicationKYCDocumentId || doc.ApplicationKYCDocumentId || doc.kycDocumentId || null,
+                  kycDocumentId: doc.applicationKYCDocumentId || doc.ApplicationKYCDocumentId || doc.kycDocumentId || null,
                   documentTypeId: doc.documentTypeId,
                   documentTypeName: doc.documentTypeName || doc.documentType || '',
                   fileName,
+                  filePath: doc.filePath,
                   fileType: isPdf ? 'pdf' : 'image',
-                  previewUrl: null,
+                  previewUrl,
                   createdAt: doc.createdAt,
                   isActive: doc.isActive !== false,
                 };
@@ -668,9 +681,33 @@ export default function PdfView() {
   const resolveCategory = (val) => masterMaps.castes[val] || val || '';
   const resolveReligion = (val) => masterMaps.religions[val] || val || '';
   const resolveMaritalStatus = (val) => masterMaps.maritalStatuses[val] || val || '';
-  const resolveRelationship = (val) => masterMaps.relationships[val] || val || '';
-  const resolveDocType = (val) => masterMaps.documentTypes[val] || val || '';
-  const resolveVerification = (val) => masterMaps.verifications[val] || val || 'Verified';
+  const resolveRelationship = (val) => {
+    if (val === null || val === undefined || val === '') return '';
+    if (masterMaps.relationships && (masterMaps.relationships[val] !== undefined || masterMaps.relationships[String(val)] !== undefined)) {
+      return masterMaps.relationships[val] || masterMaps.relationships[String(val)] || '';
+    }
+    return String(val);
+  };
+  const resolveVerification = (val) => {
+    if (val === null || val === undefined || val === '') return 'Verified';
+    if (masterMaps.verifications && (masterMaps.verifications[val] !== undefined || masterMaps.verifications[String(val)] !== undefined)) {
+      return masterMaps.verifications[val] || masterMaps.verifications[String(val)] || 'Verified';
+    }
+    return String(val);
+  };
+  const resolveDocType = (val) => {
+    if (val === undefined || val === null || val === '') return '';
+    if (masterMaps.documentTypes && (masterMaps.documentTypes[val] || masterMaps.documentTypes[String(val)])) {
+      return masterMaps.documentTypes[val] || masterMaps.documentTypes[String(val)];
+    }
+    const num = Number(val);
+    if (num === 1) return 'Aadhaar';
+    if (num === 2) return 'PAN Card';
+    if (num === 3) return 'Bank Statement';
+    if (num === 4) return 'Salary Slip';
+    if (num === 6) return 'Photo';
+    return String(val);
+  };
   const resolveBank = (val) => {
     if (val === null || val === undefined || val === '') return '';
     if (masterMaps.banks && masterMaps.banks[val] !== undefined) {
@@ -922,6 +959,7 @@ export default function PdfView() {
     '';
 
   const loanAmount = appData.loanAmount || liveCustomer?.expectedLoanAmount || '';
+  const loanTenure = appData.loanTenureMonths || appData.loanTenure || '';
   const resolvedRMName = appData.rmName || '-';
   const resolvedEmployeeId = appData.rmCode || '-';
 
@@ -938,45 +976,6 @@ export default function PdfView() {
     (!isObsoleteMock(declarationData.ackDate) && declarationData.ackDate) || '-';
 
   const effectiveDocs = downloadedDocs;
-
-  const getCollectedDocumentNames = (person = {}, documents = []) => {
-    const names = [];
-
-    const normalizeBadgeName = (raw) => {
-      const s = String(raw || '').trim();
-      const lower = s.toLowerCase();
-      if (lower === 'aadhaar' || lower === 'aadhaar card' || lower === 'aadhaar proof') {
-        return 'Aadhaar';
-      }
-      return s;
-    };
-
-    const addName = (name) => {
-      const normalized = normalizeBadgeName(name);
-      if (normalized && !names.some((existing) => existing.toLowerCase() === normalized.toLowerCase())) {
-        names.push(normalized);
-      }
-    };
-
-    if (person.aadhaarLast4 || person.aadhaarNo) addName('Aadhaar');
-    if (person.panCardNo || person.panNumber) addName('PAN Card');
-
-    const identityDocumentType = resolveDocType(person.identityDocumentType);
-    if (identityDocumentType) addName(identityDocumentType);
-
-    if (!identityDocumentType && Array.isArray(person.identityDocumentFiles)) {
-      person.identityDocumentFiles.forEach((file) => {
-        addName(typeof file === 'string' ? file : file?.name || file?.fileName);
-      });
-    }
-
-    documents.forEach((document) => {
-      const docTypeResolved = resolveDocType(document.documentTypeId);
-      addName(docTypeResolved || document.documentTypeName || document.fileName);
-    });
-
-    return names;
-  };
 
   const applicantDocs = useMemo(() => {
     return effectiveDocs.filter((d) => {
@@ -1003,17 +1002,6 @@ export default function PdfView() {
     });
     return map;
   }, [effectiveDocs, coApplicants, coApplicantKycIds]);
-
-  const documentPeople = [
-    { label: 'Applicant', kyc: kycData.applicant || {}, documents: applicantDocs },
-    ...(hasCoApplicants
-      ? coApplicants.map((_, index) => ({
-          label: `Co-Applicant ${index + 1}`,
-          kyc: kycData.coApplicants?.[index] || {},
-          documents: coApplicantDocsMap[index] || [],
-        }))
-      : []),
-  ];
 
   // Resolve Applicant Profile Photo: Type-First & Latest Active Version
   const clientPhotoDoc = useMemo(() => {
@@ -1080,6 +1068,207 @@ export default function PdfView() {
 
     return {};
   }, [downloadedDocs]);
+
+  const getCollectedDocumentNames = (person = {}, documents = [], isCoApplicant = false, coIndex = null) => {
+    const names = [];
+
+    const normalizeBadgeName = (raw) => {
+      if (!raw || typeof raw !== 'string') return '';
+      const s = raw.trim();
+      if (!s) return '';
+
+      // Strictly reject raw filenames, paths, UUIDs, or numeric IDs
+      if (
+        s.includes('/') ||
+        s.includes('\\') ||
+        /\.(png|jpg|jpeg|pdf|webp|doc|docx|zip|rar|7z)$/i.test(s) ||
+        /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/i.test(s) ||
+        /^\d+$/.test(s)
+      ) {
+        return '';
+      }
+
+      const lower = s.toLowerCase();
+      if (
+        lower === 'aadhaar' ||
+        lower === 'aadhaar card' ||
+        lower === 'aadhaar proof' ||
+        lower === 'aadhar' ||
+        lower === 'aadhar card' ||
+        lower === 'aadhar proof' ||
+        lower.includes('aadhaar') ||
+        lower.includes('aadhar')
+      ) {
+        return 'Aadhaar';
+      }
+      if (
+        lower === 'pan' ||
+        lower === 'pan card' ||
+        lower === 'pancard' ||
+        lower === 'pan card proof' ||
+        lower === 'pan proof' ||
+        lower.includes('pan card') ||
+        lower.includes('pancard')
+      ) {
+        return 'PAN Card';
+      }
+      if (
+        lower === 'bank statement' ||
+        lower === 'bank' ||
+        lower === 'statement' ||
+        lower.includes('bank statement')
+      ) {
+        return 'Bank Statement';
+      }
+      if (
+        lower === 'salary slip' ||
+        lower === 'salary' ||
+        lower === 'salary slip / income sheet' ||
+        lower === 'income sheet' ||
+        lower.includes('salary slip') ||
+        lower.includes('income sheet')
+      ) {
+        return 'Salary Slip';
+      }
+      if (
+        lower === 'photo' ||
+        lower === 'profile' ||
+        lower === 'profile photo' ||
+        lower === 'profile image' ||
+        lower === 'applicant photo' ||
+        lower === 'client photo' ||
+        lower.includes('profile image') ||
+        lower.includes('profile photo')
+      ) {
+        return 'Photo';
+      }
+      return s;
+    };
+
+    const resolveLogicalDocumentName = (docTypeId, rawDocTypeName = '') => {
+      const idNum = Number(docTypeId);
+      if (idNum === 1) return 'Aadhaar';
+      if (idNum === 2) return 'PAN Card';
+      if (idNum === 3) return 'Bank Statement';
+      if (idNum === 4) return 'Salary Slip';
+      if (idNum === 6) return 'Photo';
+
+      const masterName =
+        (docTypeId !== undefined &&
+          docTypeId !== null &&
+          masterMaps.documentTypes &&
+          (masterMaps.documentTypes[docTypeId] || masterMaps.documentTypes[String(docTypeId)])) ||
+        '';
+
+      const candidate = masterName || rawDocTypeName;
+      if (!candidate || typeof candidate !== 'string') return '';
+
+      return normalizeBadgeName(candidate);
+    };
+
+    const addName = (name) => {
+      const normalized = normalizeBadgeName(name);
+      if (normalized && !names.some((existing) => existing.toLowerCase() === normalized.toLowerCase())) {
+        names.push(normalized);
+      }
+    };
+
+    // 1. Aadhaar & PAN from identity fields or file paths (as existence indicators)
+    if (person.aadhaarLast4 || person.aadhaarNo || person.aadharDocumentPath || person.AadharDocumentPath) {
+      addName('Aadhaar');
+    }
+    if (person.panCardNo || person.panNumber || person.panCardPath || person.PanCardPath) {
+      addName('PAN Card');
+    }
+
+    // 2. Specific identity document type
+    if (person.identityDocumentType) {
+      const identityDocName = resolveLogicalDocumentName(person.identityDocumentType);
+      if (identityDocName) addName(identityDocName);
+    }
+
+    // 3. Profile Photo verification
+    if (!isCoApplicant) {
+      if (clientPhotoDoc?.previewUrl || person.profileImagePath || person.ProfileImagePath) {
+        addName('Photo');
+      }
+    } else {
+      const targetKycId = coIndex !== null ? coApplicantKycIds[coIndex] : null;
+      const hasCoPhoto = Boolean(
+        (coIndex !== null && (coApplicantPhotos[coIndex] || coApplicantPhotos[String(coIndex)])) ||
+        (targetKycId && (coApplicantPhotos[targetKycId] || coApplicantPhotos[String(targetKycId)])) ||
+        person.profileImagePath ||
+        person.ProfileImagePath
+      );
+      if (hasCoPhoto) {
+        addName('Photo');
+      }
+    }
+
+    // 4. Downloaded / Uploaded documents from AgentCustomerDocument
+    documents.forEach((document) => {
+      const logicalName = resolveLogicalDocumentName(document.documentTypeId, document.documentTypeName);
+      if (logicalName) {
+        addName(logicalName);
+      }
+    });
+
+    // 5. Backend ApplicationKYCDocuments matching this person
+    const targetSeq = isCoApplicant ? (coIndex !== null ? coIndex + 1 : 1) : 0;
+    const targetKycId = isCoApplicant && coIndex !== null ? coApplicantKycIds[coIndex] : null;
+
+    liveAllKycRecords.forEach((k) => {
+      const seq = Number(k.applicantSequence);
+      const kycId = k.applicationKYCDocumentId || k.ApplicationKYCDocumentId || k.kycDocumentId || k.id;
+      let matches = false;
+
+      if (!isCoApplicant) {
+        // Applicant: sequence is 0 or null, not in coApplicantKycIds
+        if ((isNaN(seq) || seq === 0) && (!kycId || !coApplicantKycIds.some((cId) => cId && String(cId) === String(kycId)))) {
+          matches = true;
+        }
+      } else {
+        // Co-Applicant: sequence matches targetSeq OR kycId matches targetKycId
+        if ((!isNaN(seq) && seq === targetSeq) || (targetKycId && kycId && String(kycId) === String(targetKycId))) {
+          matches = true;
+        }
+      }
+
+      if (matches) {
+        if (k.documentTypeId) {
+          const typeName = resolveLogicalDocumentName(k.documentTypeId, k.documentTypeName);
+          if (typeName) addName(typeName);
+        } else if (k.documentTypeName) {
+          const typeName = normalizeBadgeName(k.documentTypeName);
+          if (typeName) addName(typeName);
+        }
+        if (k.aadharDocumentPath || k.AadharDocumentPath) addName('Aadhaar');
+        if (k.panCardPath || k.PanCardPath) addName('PAN Card');
+        if (k.profileImagePath || k.ProfileImagePath) addName('Photo');
+      }
+    });
+
+    return names;
+  };
+
+  const documentPeople = [
+    {
+      label: 'Applicant',
+      isCoApplicant: false,
+      coIndex: null,
+      kyc: kycData.applicant || {},
+      documents: applicantDocs,
+    },
+    ...(hasCoApplicants
+      ? coApplicants.map((_, index) => ({
+          label: `Co-Applicant ${index + 1}`,
+          isCoApplicant: true,
+          coIndex: index,
+          kyc: kycData.coApplicants?.[index] || {},
+          documents: coApplicantDocsMap[index] || [],
+        }))
+      : []),
+  ];
 
   const handleBack = () => {
     if (location.state?.returnTo) {
@@ -1172,7 +1361,7 @@ export default function PdfView() {
               <div className="pdf-office-row">
                 <span className="pdf-office-label">Loan Amount & Tenure:</span>
                 <div className="pdf-office-value">
-                  Rs. {loanAmount} for {loanTenure} months
+                  Rs. {loanAmount || '-'} for {loanTenure ? `${loanTenure} months` : '-'}
                 </div>
               </div>
             </div>
@@ -1389,7 +1578,7 @@ export default function PdfView() {
             }}
           >
             {documentPeople.map((person) => {
-              const documentNames = getCollectedDocumentNames(person.kyc, person.documents);
+              const documentNames = getCollectedDocumentNames(person.kyc, person.documents, person.isCoApplicant, person.coIndex);
 
               return (
                 <div

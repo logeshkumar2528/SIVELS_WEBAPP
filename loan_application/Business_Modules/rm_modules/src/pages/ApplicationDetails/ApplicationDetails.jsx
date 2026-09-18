@@ -26,7 +26,7 @@ import { APPLICATION_WIZARD_STEPS, getWizardActiveStepByPath } from '../../confi
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import { formatDateTimeSeconds as formatDateTime } from '../../utils/dateHelper';
 import { buildValidationPopup, parseApiErrorBody } from '../../utils/formatUserFacingError';
-import { resolveApplicantName } from '../applicationWizard/flowUtils';
+import { buildApplicationDisplayId, resolveApplicantName } from '../applicationWizard/flowUtils';
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 import './ApplicationDetails.css';
 
@@ -44,7 +44,7 @@ function formatRupeeValue(value) {
     return String(value);
   }
 
-  return `₹${Number(digits).toLocaleString('en-IN')}`;
+  return formatIndianAmount(digits);
 }
 
 function getCustomerInitials(name = '') {
@@ -55,16 +55,6 @@ function getCustomerInitials(name = '') {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() || '')
     .join('');
-}
-
-function buildApplicationDisplayId(record = {}, fallbackId = '') {
-  const applicant = record.registration?.personalInformation?.applicant || record.sections?.personalInformation?.applicant || {};
-  const firstName = String(applicant.firstName || record.firstName || record.fullName || record.customerName || '').trim().split(/\s+/)[0] || '';
-  const initials = firstName.slice(0, 2).toUpperCase().padEnd(2, 'X');
-  const dob = String(applicant.dateOfBirth || applicant.dob || record.dateOfBirth || record.dob || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  const formattedDob = dob ? `${dob[3]}${dob[2]}${dob[1]}` : '00000000';
-  const mobile = String(applicant.mobileNo || record.mobileNumber || record.mobile || '').replace(/\D/g, '');
-  return `${initials}-${formattedDob}-${mobile.slice(-3).padStart(3, '0')}`;
 }
 
 function isFieldAgentChannel(option) {
@@ -129,8 +119,55 @@ async function updateCustomerStatusToInProgress(baseUrl, customerId, record = {}
   }
 }
 
-function validateApplication(record) {
-  return {};
+function validateApplication(record = {}, requiresVariation = false, isRmSourced = false) {
+  const errors = {};
+
+  if (!isRmSourced && (record.sourcingChannel === '' || record.sourcingChannel === null || record.sourcingChannel === undefined)) {
+    errors.sourcingChannel = 'Sourcing channel is required';
+  }
+
+  if (!record.loanProduct || String(record.loanProduct).trim() === '') {
+    errors.loanProduct = 'Loan product is required';
+  }
+
+  if (!record.loanTransactionType || String(record.loanTransactionType).trim() === '') {
+    errors.loanTransactionType = 'Loan transaction type is required';
+  }
+
+  if (!record.purposeOfLoan || String(record.purposeOfLoan).trim() === '') {
+    errors.purposeOfLoan = 'Purpose of loan is required';
+  }
+
+  const parsedAmount = parseAmountToNumber(record.loanAmount);
+  if (record.loanAmount === '' || record.loanAmount === null || record.loanAmount === undefined || isNaN(parsedAmount) || parsedAmount <= 0) {
+    errors.loanAmount = 'Loan amount must be greater than 0';
+  }
+
+  if (record.loanTenureMonths === '' || record.loanTenureMonths === null || record.loanTenureMonths === undefined || Number(record.loanTenureMonths) <= 0) {
+    errors.loanTenureMonths = 'Loan tenure is required';
+  }
+
+  if (!record.interestType || String(record.interestType).trim() === '') {
+    errors.interestType = 'Rate of interest is required';
+  }
+
+  if (record.roi === '' || record.roi === null || record.roi === undefined) {
+    errors.roi = 'ROI (%) is required';
+  }
+
+  if (record.coApplicantsCount === '' || record.coApplicantsCount === null || record.coApplicantsCount === undefined || Number(record.coApplicantsCount) < 0) {
+    errors.coApplicantsCount = 'Number of co-applicants is required';
+  }
+
+  if (record.distanceFromBranchKm === '' || record.distanceFromBranchKm === null || record.distanceFromBranchKm === undefined || Number(record.distanceFromBranchKm) < 0) {
+    errors.distanceFromBranchKm = 'Distance from branch is required';
+  }
+
+  if (requiresVariation && (!record.loanVariation || String(record.loanVariation).trim() === '')) {
+    errors.loanVariation = 'HL / LAP variation is required';
+  }
+
+  return errors;
 }
 
 export default function ApplicationDetails() {
@@ -509,7 +546,7 @@ export default function ApplicationDetails() {
   };
 
   const handleProceed = async () => {
-    const validationErrors = validateApplication(appData);
+    const validationErrors = validateApplication(appData, requiresVariation, isRmSourced);
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) {
@@ -664,7 +701,7 @@ export default function ApplicationDetails() {
   });
   const branchName = agentBranch || appData.branch || displayRecord?.branch || 'Chennai Main Branch';
   const submittedTime = formatDateTime(appData.createdDate || displayRecord?.createdAt || displayRecord?.createdDate || '');
-  const applicationDisplayId = appData.applicationNumber || buildApplicationDisplayId(displayRecord || appData, appId) || appId;
+  const applicationDisplayId = buildApplicationDisplayId(displayRecord || appData, appId) || appId;
   const statusText = appData.status || displayRecord?.status || 'New';
   const isRmSourced = Boolean(
     sourcingInfo.isRmSourced ||
