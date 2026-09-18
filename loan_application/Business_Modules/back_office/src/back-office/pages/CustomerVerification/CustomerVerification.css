@@ -4578,19 +4578,19 @@
 .bo-cv-salary-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: 12px;
   text-align: left;
-  min-width: 780px;
+  min-width: 700px;
 }
 
 .bo-cv-salary-table thead th {
   background: #f8fafc;
   color: #475569;
   font-weight: 700;
-  font-size: 11px;
+  font-size: 10.5px;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 10px 10px;
+  letter-spacing: 0.02em;
+  padding: 8px 6px;
   border-bottom: 2px solid #e2e8f0;
   white-space: nowrap;
 }
@@ -4626,7 +4626,7 @@
 }
 
 .bo-cv-salary-table tbody td {
-  padding: 8px 10px;
+  padding: 6px 6px;
   vertical-align: middle;
 }
 
@@ -4640,12 +4640,12 @@
 
 .bo-cv-salary-input {
   width: 100%;
-  max-width: 96px;
-  padding: 5px 8px;
-  font-size: 12.5px;
+  max-width: 82px;
+  padding: 4px 6px;
+  font-size: 12px;
   font-family: inherit;
   border: 1.5px solid #cbd5e1;
-  border-radius: 6px;
+  border-radius: 5px;
   background: #ffffff;
   color: #0f172a;
   text-align: right;
@@ -4654,12 +4654,12 @@
 }
 
 .bo-cv-salary-input.is-month {
-  max-width: 125px;
+  max-width: 110px;
   text-align: left;
 }
 
 .bo-cv-salary-input.is-percent {
-  max-width: 65px;
+  max-width: 50px;
 }
 
 .bo-cv-salary-input:focus {
@@ -4677,32 +4677,34 @@
 .bo-cv-salary-month-badge {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
-  border-radius: 6px;
+  padding: 3px 8px;
+  border-radius: 5px;
   background: #f1f5f9;
   border: 1px solid #e2e8f0;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 11.5px;
   color: #1e293b;
   white-space: nowrap;
 }
 
 .bo-cv-salary-readonly-val {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #1e293b;
+  white-space: nowrap;
 }
 
 .bo-cv-salary-calc-val {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: #0f7a4c;
+  white-space: nowrap;
 }
 
 .bo-cv-salary-calc-val.is-total {
   color: #0f7a4c;
   background: #eaf5ee;
-  padding: 4px 8px;
+  padding: 3px 6px;
   border-radius: 4px;
 }
 

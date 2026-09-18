@@ -70,6 +70,11 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/calculation/salary-income/${encodeURIComponent(salaryIncomeDetailsId)}`,
   CALCULATION_SALARY_INCOME_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
     `/calculation/salary-income/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
+  CALCULATION_OTHER_INCOME: '/calculation/other-income',
+  CALCULATION_OTHER_INCOME_BY_ID: (applicationOtherIncomeDetailsId) =>
+    `/calculation/other-income/${encodeURIComponent(applicationOtherIncomeDetailsId)}`,
+  CALCULATION_OTHER_INCOME_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
+    `/calculation/other-income/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
   CALCULATION_ABB_ACCOUNTS: '/calculation/abb-accounts',
   CALCULATION_ABB_ACCOUNTS_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
     `/calculation/abb-accounts/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,

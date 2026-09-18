@@ -1260,6 +1260,13 @@ export default function CustomerVerification() {
   const [salarySaving, setSalarySaving] = useState(false);
   const [salarySaveBanner, setSalarySaveBanner] = useState(null);
 
+  // Other Income Assessment State for Step 14
+  const [otherIncomeRows, setOtherIncomeRows] = useState([]);
+  const [otherIncomeLoading, setOtherIncomeLoading] = useState(false);
+  const [otherIncomeError, setOtherIncomeError] = useState(null);
+  const [otherIncomeSaving, setOtherIncomeSaving] = useState(false);
+  const [otherIncomeSaveBanner, setOtherIncomeSaveBanner] = useState(null);
+
   // Authenticated user ID resolver for createdBy
   const resolveAuthenticatedUserId = useCallback(() => {
     const boAuth = getBackOfficeAuth();
@@ -1335,6 +1342,17 @@ export default function CustomerVerification() {
         if (existing) {
           const rawMonth = String(existing.salaryMonth || '').split('T')[0];
           const monthFormatted = rawMonth.length >= 7 ? `${rawMonth.substring(0, 7)}-01` : rawMonth;
+          const b = Number(existing.basicAmount) || 0;
+          const h = Number(existing.hraAmount) || 0;
+          const c = Number(existing.ccaAmount) || 0;
+          const t = Number(existing.taAmount) || 0;
+          const inc = Number(existing.incentiveAmount) || 0;
+          const pct = existing.incentivePercentApplied != null ? Number(existing.incentivePercentApplied) : 0;
+          const ded = Number(existing.deductionAmount) || 0;
+          const consInc = existing.consideredIncentiveAmount != null ? Number(existing.consideredIncentiveAmount) : (inc * pct) / 100;
+          // Required business calculation: Basic + HRA + CCA + TA + Considered Incentive + Deductions (ADDED)
+          const consIncome = b + h + c + t + consInc + ded;
+
           rows.push({
             id: `salary-row-${existing.salaryIncomeDetailsId || i}`,
             salaryIncomeDetailsId: existing.salaryIncomeDetailsId || null,
@@ -1345,11 +1363,12 @@ export default function CustomerVerification() {
             ccaAmount: existing.ccaAmount ?? 0,
             taAmount: existing.taAmount ?? 0,
             incentiveAmount: existing.incentiveAmount ?? 0,
+            deductionAmount: existing.deductionAmount ?? 0,
             incentivePercentApplied: existing.incentivePercentApplied ?? 0,
-            consideredIncentiveAmount: existing.consideredIncentiveAmount ?? null,
-            totalConsideredIncome: existing.totalConsideredIncome ?? null,
-            previewConsideredIncentive: existing.consideredIncentiveAmount ?? 0,
-            previewConsideredIncome: existing.totalConsideredIncome ?? 0,
+            consideredIncentiveAmount: consInc,
+            totalConsideredIncome: consIncome,
+            previewConsideredIncentive: consInc,
+            previewConsideredIncome: consIncome,
             isPersisted: true,
             isModified: false,
             errorMsg: null,
@@ -1366,6 +1385,7 @@ export default function CustomerVerification() {
             ccaAmount: '',
             taAmount: '',
             incentiveAmount: '',
+            deductionAmount: '',
             incentivePercentApplied: 50,
             consideredIncentiveAmount: null,
             totalConsideredIncome: null,
@@ -1393,6 +1413,7 @@ export default function CustomerVerification() {
           ccaAmount: '',
           taAmount: '',
           incentiveAmount: '',
+          deductionAmount: '',
           incentivePercentApplied: 50,
           consideredIncentiveAmount: null,
           totalConsideredIncome: null,
@@ -1440,6 +1461,7 @@ export default function CustomerVerification() {
         ccaAmount: '',
         taAmount: '',
         incentiveAmount: '',
+        deductionAmount: '',
         incentivePercentApplied: 50,
         consideredIncentiveAmount: null,
         totalConsideredIncome: null,
@@ -1461,13 +1483,6 @@ export default function CustomerVerification() {
       return prev.filter((_, idx) => idx !== indexToRemove);
     });
   };
-
-  // Trigger salary hydration when Step 14 is active and method is INCOME
-  useEffect(() => {
-    if (activeStep === 16 && selectedMethodCode === 'INCOME' && calculationAppProdId > 0) {
-      fetchSalaryRecords(calculationAppProdId, selectedApplicantSequence);
-    }
-  }, [activeStep, selectedMethodCode, calculationAppProdId, selectedApplicantSequence, fetchSalaryRecords]);
 
   // Handle row field edits (supported for both new draft entries and existing persisted rows)
   const handleSalaryRowChange = (index, field, value) => {
@@ -1505,10 +1520,14 @@ export default function CustomerVerification() {
       const c = Number(row.ccaAmount) || 0;
       const t = Number(row.taAmount) || 0;
       const inc = Number(row.incentiveAmount) || 0;
+      const ded = Number(row.deductionAmount) || 0;
       const pct = row.incentivePercentApplied === '' ? 0 : Number(row.incentivePercentApplied) || 0;
       const prevInc = (inc * pct) / 100;
+      // Deductions must be ADDED: basic + hra + cca + ta + consideredIncentive + deductionAmount
+      const prevIncome = b + h + c + t + prevInc + ded;
+
       row.previewConsideredIncentive = prevInc;
-      row.previewConsideredIncome = b + h + c + t + prevInc;
+      row.previewConsideredIncome = prevIncome;
 
       row.errorMsg = null;
       next[index] = row;
@@ -1618,6 +1637,7 @@ export default function CustomerVerification() {
         ccaAmount: Number(row.ccaAmount) || 0,
         taAmount: Number(row.taAmount) || 0,
         incentiveAmount: Number(row.incentiveAmount) || 0,
+        deductionAmount: Number(row.deductionAmount) || 0,
         incentivePercentApplied: Number(row.incentivePercentApplied) || 0,
         salarySlipPath: resolvedSalarySlipPath || null,
         modifiedBy: Number(currentUserId),
@@ -1651,6 +1671,7 @@ export default function CustomerVerification() {
         ccaAmount: Number(row.ccaAmount) || 0,
         taAmount: Number(row.taAmount) || 0,
         incentiveAmount: Number(row.incentiveAmount) || 0,
+        deductionAmount: Number(row.deductionAmount) || 0,
         incentivePercentApplied: Number(row.incentivePercentApplied) || 0,
         salarySlipPath: resolvedSalarySlipPath || null,
         createdBy: Number(currentUserId),
@@ -1673,6 +1694,203 @@ export default function CustomerVerification() {
     setSalarySaving(false);
     return { success: true, count: operationCount };
   };
+
+  // Hydrate other income records via GET /api/calculation/other-income/{appProdId}/{applicantSequence}
+  const fetchOtherIncomeRecords = useCallback(async (appProdId, seq) => {
+    if (!appProdId || isNaN(appProdId) || appProdId <= 0) return;
+    setOtherIncomeLoading(true);
+    setOtherIncomeError(null);
+    setOtherIncomeSaveBanner(null);
+    try {
+      const res = await backOfficeService.getOtherIncomeBySeq(appProdId, seq);
+      const records = Array.isArray(res) ? res : (res?.value ?? res?.data ?? []);
+      const activeRecords = records.filter((r) => r.isActive !== false);
+
+      const rows = activeRecords.map((r, i) => ({
+        id: `other-inc-row-${r.applicationOtherIncomeDetailsId || i}`,
+        applicationOtherIncomeDetailsId: r.applicationOtherIncomeDetailsId || null,
+        incomeName: r.incomeName || '',
+        incomeAmount: r.incomeAmount ?? '',
+        isPersisted: true,
+        isModified: false,
+        errorMsg: null,
+      }));
+      setOtherIncomeRows(rows);
+    } catch (err) {
+      console.warn('Failed to fetch other income records:', err);
+      setOtherIncomeRows([]);
+    } finally {
+      setOtherIncomeLoading(false);
+    }
+  }, []);
+
+  // Handle adding an additional other income row
+  const handleAddOtherIncomeRow = () => {
+    setOtherIncomeRows((prev) => [
+      ...prev,
+      {
+        id: `other-inc-new-${Date.now()}-${prev.length}`,
+        applicationOtherIncomeDetailsId: null,
+        incomeName: '',
+        incomeAmount: '',
+        isPersisted: false,
+        isModified: false,
+        errorMsg: null,
+      },
+    ]);
+  };
+
+  // Handle removing an other income row
+  const handleRemoveOtherIncomeRow = (indexToRemove) => {
+    setOtherIncomeRows((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  // Handle other income field edits
+  const handleOtherIncomeRowChange = (index, field, value) => {
+    setOtherIncomeRows((prev) => {
+      const next = [...prev];
+      const row = { ...next[index] };
+
+      if (field === 'incomeAmount') {
+        if (value === '') {
+          row.incomeAmount = '';
+        } else {
+          const num = Math.max(0, Number(value) || 0);
+          row.incomeAmount = num;
+        }
+      } else {
+        row[field] = value;
+      }
+
+      if (row.isPersisted) {
+        row.isModified = true;
+      }
+      row.errorMsg = null;
+      next[index] = row;
+      return next;
+    });
+  };
+
+  // Pre-calculation synchronization helper for other income rows (POST for new, PUT for modified)
+  const synchronizeOtherIncomeRows = async () => {
+    if (otherIncomeRows.length === 0) {
+      return { success: true, count: 0 };
+    }
+
+    const currentUserId = resolveAuthenticatedUserId();
+    if (!currentUserId) {
+      return {
+        success: false,
+        message: 'Unable to resolve authenticated Back Office user ID for operation. Please log out and re-login.',
+      };
+    }
+
+    if (!calculationAppProdId || calculationAppProdId <= 0) {
+      return {
+        success: false,
+        message: 'Application Product Details ID is missing or invalid. Please refresh the application.',
+      };
+    }
+
+    // Validate rows
+    for (let i = 0; i < otherIncomeRows.length; i++) {
+      const row = otherIncomeRows[i];
+      if (!row.incomeName || !String(row.incomeName).trim()) {
+        return {
+          success: false,
+          message: `Income Name is required for Other Income row ${i + 1}.`,
+        };
+      }
+      if (row.incomeAmount === '' || row.incomeAmount === null || isNaN(Number(row.incomeAmount)) || Number(row.incomeAmount) < 0) {
+        return {
+          success: false,
+          message: `Valid Income Amount (>= 0) is required for Other Income row ${i + 1} (${row.incomeName}).`,
+        };
+      }
+    }
+
+    const rowsToPost = [];
+    const rowsToPut = [];
+
+    otherIncomeRows.forEach((row, idx) => {
+      if (!row.isPersisted || !row.applicationOtherIncomeDetailsId) {
+        rowsToPost.push({ row, idx });
+      } else if (row.isModified) {
+        rowsToPut.push({ row, idx });
+      }
+    });
+
+    if (rowsToPost.length === 0 && rowsToPut.length === 0) {
+      return { success: true, count: 0 };
+    }
+
+    setOtherIncomeSaving(true);
+    let operationCount = 0;
+
+    // 1. Execute PUT requests for modified persisted rows
+    for (const item of rowsToPut) {
+      const row = item.row;
+      const payload = {
+        applicationOtherIncomeDetailsId: Number(row.applicationOtherIncomeDetailsId),
+        applicationProductDetailsId: Number(calculationAppProdId),
+        agentCustomerId: Number(calculationAgentCustId),
+        applicantSequence: Number(selectedApplicantSequence),
+        incomeName: String(row.incomeName).trim(),
+        incomeAmount: Number(row.incomeAmount) || 0,
+        modifiedBy: Number(currentUserId),
+      };
+
+      try {
+        await backOfficeService.updateOtherIncome(row.applicationOtherIncomeDetailsId, payload);
+        operationCount++;
+      } catch (err) {
+        console.error(`Failed to update other income row ${item.idx + 1}:`, err);
+        const errMsg = err?.response?.data?.message || err?.message || 'Failed to update other income record.';
+        setOtherIncomeSaving(false);
+        return {
+          success: false,
+          message: `Failed to update other income for ${row.incomeName || `Row ${item.idx + 1}`}: ${errMsg}`,
+        };
+      }
+    }
+
+    // 2. Execute POST requests for new draft rows
+    for (const item of rowsToPost) {
+      const row = item.row;
+      const payload = {
+        applicationProductDetailsId: Number(calculationAppProdId),
+        agentCustomerId: Number(calculationAgentCustId),
+        applicantSequence: Number(selectedApplicantSequence),
+        incomeName: String(row.incomeName).trim(),
+        incomeAmount: Number(row.incomeAmount) || 0,
+        createdBy: Number(currentUserId),
+      };
+
+      try {
+        await backOfficeService.createOtherIncome(payload);
+        operationCount++;
+      } catch (err) {
+        console.error(`Failed to save new other income row ${item.idx + 1}:`, err);
+        const errMsg = err?.response?.data?.message || err?.message || 'Failed to save other income record.';
+        setOtherIncomeSaving(false);
+        return {
+          success: false,
+          message: `Failed to save new other income record for ${row.incomeName || `Row ${item.idx + 1}`}: ${errMsg}`,
+        };
+      }
+    }
+
+    setOtherIncomeSaving(false);
+    return { success: true, count: operationCount };
+  };
+
+  // Trigger salary and other income hydration when Step 16 is active and method is INCOME
+  useEffect(() => {
+    if (activeStep === 16 && selectedMethodCode === 'INCOME' && calculationAppProdId > 0) {
+      fetchSalaryRecords(calculationAppProdId, selectedApplicantSequence);
+      fetchOtherIncomeRecords(calculationAppProdId, selectedApplicantSequence);
+    }
+  }, [activeStep, selectedMethodCode, calculationAppProdId, selectedApplicantSequence, fetchSalaryRecords, fetchOtherIncomeRecords]);
 
   // Phase 2C: Average Bank Balance (ABB) Method State for Step 14
   const [masterBanks, setMasterBanks] = useState([]);
@@ -2298,6 +2516,10 @@ export default function CustomerVerification() {
         manualRoiInput: '',
         isEditingTenure: false,
         manualTenureInput: '',
+        isEditingObligation: false,
+        manualObligationInput: '',
+        isEditingFoir: false,
+        manualFoirInput: '',
       }
     );
   }, [calcSettingsMap, currentSettingsKey]);
@@ -2311,6 +2533,10 @@ export default function CustomerVerification() {
           manualRoiInput: '',
           isEditingTenure: false,
           manualTenureInput: '',
+          isEditingObligation: false,
+          manualObligationInput: '',
+          isEditingFoir: false,
+          manualFoirInput: '',
         };
         const nextSettings = typeof updater === 'function' ? updater(existing) : { ...existing, ...updater };
         return {
@@ -2418,12 +2644,12 @@ export default function CustomerVerification() {
     return sorted[0];
   }, [assessmentsList, selectedApplicantSequence, selectedMethodCode]);
 
-  const resolvedPolicyFoir = useMemo(() => {
+  const basePolicyFoir = useMemo(() => {
     if (selectedMethodCode !== 'INCOME') {
-      return 'Not Applicable (ABB Method)';
+      return null;
     }
 
-    // 1. Dynamic lookup from FOIRMaster using applicant's employmentTypeId and Income Method (assessmentMethodId = 1)
+    // Dynamic lookup from FOIRMaster using applicant's employmentTypeId and Income Method (assessmentMethodId = 1)
     if (Array.isArray(foirMasterList) && foirMasterList.length > 0 && selectedEmploymentTypeId != null) {
       const now = new Date();
       const matchingFoir = foirMasterList.find((f) => {
@@ -2442,8 +2668,21 @@ export default function CustomerVerification() {
       });
 
       if (matchingFoir?.foirPercent != null) {
-        return `${matchingFoir.foirPercent}%`;
+        return Number(matchingFoir.foirPercent);
       }
+    }
+
+    return 65;
+  }, [selectedMethodCode, foirMasterList, selectedEmploymentTypeId]);
+
+  const resolvedPolicyFoir = useMemo(() => {
+    if (selectedMethodCode !== 'INCOME') {
+      return 'Not Applicable (ABB Method)';
+    }
+
+    // 1. Manual FOIR override if active
+    if (currentCalcSettings.isEditingFoir && currentCalcSettings.manualFoirInput !== '') {
+      return `${currentCalcSettings.manualFoirInput}% (Override)`;
     }
 
     // 2. If calculated assessment exists for this applicant and method, use authoritative backend foir
@@ -2451,8 +2690,44 @@ export default function CustomerVerification() {
       return `${currentAssessment.foirPercentApplied}%`;
     }
 
-    return '65%';
-  }, [selectedMethodCode, foirMasterList, selectedEmploymentTypeId, currentAssessment]);
+    // 3. Fallback to base policy from FOIR Master
+    return basePolicyFoir != null ? `${basePolicyFoir}%` : '65%';
+  }, [selectedMethodCode, currentCalcSettings.isEditingFoir, currentCalcSettings.manualFoirInput, currentAssessment, basePolicyFoir]);
+
+  // Salary & Other Income Dirty Check
+  const isSalaryDirty = useMemo(() => {
+    const salaryUnsaved = (Array.isArray(salaryRows) ? salaryRows : []).some((r) => !r.isPersisted || r.isModified);
+    const otherUnsaved = (Array.isArray(otherIncomeRows) ? otherIncomeRows : []).some((r) => !r.isPersisted || r.isModified);
+    return salaryUnsaved || otherUnsaved;
+  }, [salaryRows, otherIncomeRows]);
+
+  // Salary Multi-Month Average (N >= 3) based on Considered Income
+  const liveSalaryAverage = useMemo(() => {
+    const validRows = salaryRows.filter(
+      (r) => r.salaryMonth && r.basicAmount !== '' && !isNaN(Number(r.basicAmount))
+    );
+    if (validRows.length === 0) return 0;
+    const total = validRows.reduce((sum, r) => {
+      const val = r.previewConsideredIncome != null && r.previewConsideredIncome !== ''
+        ? Number(r.previewConsideredIncome)
+        : (Number(r.totalConsideredIncome) || 0);
+      return sum + val;
+    }, 0);
+    return Math.round(total / validRows.length);
+  }, [salaryRows]);
+
+  // Total Other Income
+  const liveTotalOtherIncome = useMemo(() => {
+    return otherIncomeRows.reduce((sum, r) => {
+      const amt = Number(r.incomeAmount) || 0;
+      return sum + amt;
+    }, 0);
+  }, [otherIncomeRows]);
+
+  // Final Combined Considered Income (Salary Avg Net + Total Other Income)
+  const liveFinalConsideredIncome = useMemo(() => {
+    return liveSalaryAverage + liveTotalOtherIncome;
+  }, [liveSalaryAverage, liveTotalOtherIncome]);
 
   // Calculate Eligibility handler
   const handleCalculateEligibility = async () => {
@@ -2510,15 +2785,30 @@ export default function CustomerVerification() {
         await fetchSalaryRecords(calculationAppProdId, selectedApplicantSequence);
       }
 
-      // Step 4c: Verify that exactly 3 active salary records exist in the database
+      // Step 4c: Synchronize other income rows (POST new rows, PUT modified persisted rows)
+      const otherSyncRes = await synchronizeOtherIncomeRows();
+      if (!otherSyncRes.success) {
+        setCalcBanner({
+          type: 'error',
+          message: otherSyncRes.message || 'Other income details could not be prepared for eligibility calculation. Please review the highlighted row and try again.',
+        });
+        return;
+      }
+
+      // Step 4d: Rehydrate authoritative other income state from server if changes were made
+      if (otherSyncRes.count > 0) {
+        await fetchOtherIncomeRecords(calculationAppProdId, selectedApplicantSequence);
+      }
+
+      // Step 4e: Verify that at least 3 active salary records exist in the database (N >= 3)
       const res = await backOfficeService.getSalaryIncomeBySeq(calculationAppProdId, selectedApplicantSequence);
       const records = Array.isArray(res) ? res : (res?.value ?? res?.data ?? []);
       const activeRecords = records.filter((r) => r.isActive !== false);
 
-      if (activeRecords.length !== 3) {
+      if (activeRecords.length < 3) {
         setCalcBanner({
           type: 'error',
-          message: `Exactly 3 active salary records are required in the database before calculating income eligibility (Found: ${activeRecords.length}/3).`,
+          message: `A minimum of 3 active salary records are required in the database before calculating income eligibility (Found: ${activeRecords.length}/3).`,
         });
         return;
       }
@@ -2578,6 +2868,32 @@ export default function CustomerVerification() {
       finalManualTenure = tenureNum;
     }
 
+    let finalManualFoir = null;
+    if (selectedMethodCode === 'INCOME' && currentCalcSettings.isEditingFoir && currentCalcSettings.manualFoirInput !== '') {
+      const foirNum = Number(currentCalcSettings.manualFoirInput);
+      if (isNaN(foirNum) || foirNum <= 0 || foirNum > 100) {
+        setCalcBanner({
+          type: 'error',
+          message: 'Manual FOIR override must be a valid percentage between 0.1 and 100 (e.g. 60).',
+        });
+        return;
+      }
+      finalManualFoir = foirNum;
+    }
+
+    let finalManualObligation = null;
+    if (currentCalcSettings.isEditingObligation && currentCalcSettings.manualObligationInput !== '') {
+      const oblNum = Number(currentCalcSettings.manualObligationInput);
+      if (isNaN(oblNum) || oblNum < 0) {
+        setCalcBanner({
+          type: 'error',
+          message: 'Manual Existing Obligation must be a valid positive amount or 0 (e.g. 8000).',
+        });
+        return;
+      }
+      finalManualObligation = oblNum;
+    }
+
     setCalculating(true);
     try {
       const payload = {
@@ -2588,6 +2904,8 @@ export default function CustomerVerification() {
         assessmentMethodId: selectedMethodCode === 'ABB' ? 2 : 1,
         manualROI: finalManualRoi,
         manualTenureMonths: finalManualTenure,
+        manualFOIR: finalManualFoir,
+        manualExistingObligation: finalManualObligation,
         recommendedLoanAmount: finalRecommendedAmount,
         pdDocumentPath: resolvedPdDocumentPath || null,
         calculatedByUserId: Number(auth.userId),
@@ -6565,47 +6883,15 @@ export default function CustomerVerification() {
 
   const totalDeclaredMonthlyEmi = useMemo(() => {
     if (selectedApplicantActiveLoans.length > 0) {
-      return selectedApplicantActiveLoans.reduce((sum, l) => sum + (Number(l.emiAmount) || 0), 0);
+      const activeOnly = selectedApplicantActiveLoans.filter((l) => {
+        if (l.isActive === false) return false;
+        if (l.status && String(l.status).toLowerCase() === 'closed') return false;
+        return true;
+      });
+      return activeOnly.reduce((sum, l) => sum + (Number(l.emiAmount) || 0), 0);
     }
     return currentAssessment?.existingEMI != null ? currentAssessment.existingEMI : 0;
   }, [selectedApplicantActiveLoans, currentAssessment]);
-
-  // Phase 2 Step 14: Track if manual salary entries are dirty / in live preview mode
-  const isSalaryDirty = useMemo(() => {
-    if (!Array.isArray(salaryRows) || salaryRows.length === 0) return false;
-    return salaryRows.some((r) => r.isModified === true || !r.isPersisted);
-  }, [salaryRows]);
-
-  // Phase 2 Step 14: Dynamic 3-month average salary calculation from current salary rows state
-  const liveThreeMonthAverage = useMemo(() => {
-    if (!Array.isArray(salaryRows) || salaryRows.length === 0) return null;
-    const values = salaryRows.map((r) => {
-      if (r.isModified || !r.isPersisted) {
-        if (r.previewConsideredIncome != null && !isNaN(r.previewConsideredIncome)) {
-          return Number(r.previewConsideredIncome) || 0;
-        }
-        const b = Number(r.basicAmount) || 0;
-        const h = Number(r.hraAmount) || 0;
-        const c = Number(r.ccaAmount) || 0;
-        const t = Number(r.taAmount) || 0;
-        const inc = Number(r.incentiveAmount) || 0;
-        const pct = r.incentivePercentApplied === '' ? 0 : Number(r.incentivePercentApplied) || 0;
-        return b + h + c + t + (inc * pct) / 100;
-      }
-      if (r.totalConsideredIncome != null && !isNaN(r.totalConsideredIncome)) {
-        return Number(r.totalConsideredIncome) || 0;
-      }
-      return Number(r.previewConsideredIncome) || 0;
-    });
-
-    const hasAny = values.some((v) => v > 0);
-    if (!hasAny) return null;
-    const sum = values.reduce((acc, v) => acc + v, 0);
-    const count = values.length || 3;
-    return sum / count;
-  }, [salaryRows]);
-
-  const computedPreviewAverage = liveThreeMonthAverage;
 
   // Handlers
   const handleFetchCreditReport = () => {
@@ -8779,6 +9065,7 @@ export default function CustomerVerification() {
                               <th className="th-num">TA (₹)</th>
                               <th className="th-num">Incentive (₹)</th>
                               <th className="th-num">Incentive Applied (%)</th>
+                              <th className="th-num">Deductions (₹)</th>
                               <th className="th-num th-readonly">Considered Incentive (₹)</th>
                               <th className="th-num th-readonly">Considered Income (₹)</th>
                               {salaryRows.length > 3 && <th className="th-action">Action</th>}
@@ -8883,6 +9170,19 @@ export default function CustomerVerification() {
                                       aria-label={`Incentive Percent Applied for Row ${idx + 1}`}
                                     />
                                   </td>
+                                  <td className="td-num">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="100"
+                                      placeholder="0"
+                                      className="bo-cv-salary-input"
+                                      value={row.deductionAmount === 0 ? '0' : row.deductionAmount || ''}
+                                      onChange={(e) => handleSalaryRowChange(idx, 'deductionAmount', e.target.value)}
+                                      disabled={salarySaving}
+                                      aria-label={`Deductions for Row ${idx + 1}`}
+                                    />
+                                  </td>
                                   <td className="td-num td-readonly">
                                     <span className="bo-cv-salary-calc-val">
                                       {row.previewConsideredIncentive != null
@@ -8925,13 +9225,111 @@ export default function CustomerVerification() {
                         </table>
                       </div>
 
+                      {/* Other Income Assessment Top Bar & Table */}
+                      <div className="bo-cv-salary-top-bar" style={{ marginTop: '20px' }}>
+                        <div className="bo-cv-salary-top-left">
+                          <h4 className="bo-cv-salary-top-title">Other Income Assessment</h4>
+                          <span className="bo-cv-salary-count-badge">
+                            {otherIncomeRows.length} {otherIncomeRows.length === 1 ? 'Source' : 'Sources'} Configured
+                          </span>
+                          {liveTotalOtherIncome > 0 && (
+                            <span className="bo-cv-salary-count-badge" style={{ background: '#e0f2fe', color: '#0369a1', borderColor: '#bae6fd' }}>
+                              Total Other Income: {formatCurrency(liveTotalOtherIncome)}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="bo-btn bo-btn--outline bo-btn--sm bo-cv-salary-add-btn"
+                          onClick={handleAddOtherIncomeRow}
+                          disabled={otherIncomeSaving}
+                        >
+                          {PlusIcon ? <PlusIcon size={13} /> : '+'}
+                          <span>Add Other Income</span>
+                        </button>
+                      </div>
+
+                      {otherIncomeLoading ? (
+                        <div className="bo-cv-assess-loading-box">
+                          <div className="bo-cv-loading-spinner" />
+                          <span>Loading applicant other income records...</span>
+                        </div>
+                      ) : otherIncomeError ? (
+                        <div className="bo-cv-assess-error-box">
+                          <div className="bo-cv-assess-error-msg">
+                            {AlertTriangleIcon && <AlertTriangleIcon size={16} />}
+                            <span>{otherIncomeError}</span>
+                          </div>
+                        </div>
+                      ) : otherIncomeRows.length === 0 ? (
+                        <div style={{ padding: '16px', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '8px', textAlign: 'center', marginBottom: '14px' }}>
+                          <p style={{ margin: 0, color: '#64748b', fontSize: '13px' }}>
+                            No additional income sources configured for {selectedApplicant?.name || 'this applicant'}. If the applicant has rental, agricultural, business profit, or other income streams, click <strong>"Add Other Income"</strong>.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="bo-cv-salary-table-wrapper" style={{ marginBottom: '14px' }}>
+                          <table className="bo-cv-salary-table" aria-label="Other Income Breakdown">
+                            <thead>
+                              <tr>
+                                <th style={{ minWidth: '220px' }}>Income Name</th>
+                                <th className="th-num" style={{ minWidth: '160px' }}>Income Amount (₹)</th>
+                                <th className="th-action" style={{ width: '60px' }}>Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {otherIncomeRows.map((row, idx) => (
+                                <tr key={row.id || `other-inc-${idx}`} className={row.isPersisted ? 'is-persisted-row' : 'is-draft-row'}>
+                                  <td>
+                                    <input
+                                      type="text"
+                                      placeholder="e.g. Rent, Business, Agriculture"
+                                      className="bo-cv-salary-input"
+                                      value={row.incomeName || ''}
+                                      onChange={(e) => handleOtherIncomeRowChange(idx, 'incomeName', e.target.value)}
+                                      disabled={otherIncomeSaving}
+                                      style={{ textAlign: 'left' }}
+                                      aria-label={`Income Name for Row ${idx + 1}`}
+                                    />
+                                  </td>
+                                  <td className="td-num">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="500"
+                                      placeholder="0"
+                                      className="bo-cv-salary-input"
+                                      value={row.incomeAmount === 0 ? '0' : row.incomeAmount || ''}
+                                      onChange={(e) => handleOtherIncomeRowChange(idx, 'incomeAmount', e.target.value)}
+                                      disabled={otherIncomeSaving}
+                                      aria-label={`Income Amount for Row ${idx + 1}`}
+                                    />
+                                  </td>
+                                  <td className="td-action">
+                                    <button
+                                      type="button"
+                                      className="bo-cv-salary-remove-btn"
+                                      onClick={() => handleRemoveOtherIncomeRow(idx)}
+                                      title="Remove this other income stream"
+                                      aria-label={`Remove Other Income Row ${idx + 1}`}
+                                    >
+                                      {XIcon ? <XIcon size={14} /> : '✕'}
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
                       {/* Underwriting Guidance Note */}
                       <div className="bo-cv-salary-info-strip">
                         <div className="bo-cv-salary-info-icon">
                           {InfoIcon && <InfoIcon size={16} />}
                         </div>
                         <div className="bo-cv-salary-info-text">
-                          <strong>Manual Salary Entry Workspace:</strong> Enter/edit salary breakdown values. Live previews update instantly on keystroke with zero network requests. Values will be automatically synchronized with the server upon running eligibility calculation.
+                          <strong>Manual Income Assessment Workspace:</strong> Enter/edit monthly salary breakdown and additional income sources. Live previews calculate dynamically with zero network requests. All values will be synchronized with the server upon running eligibility calculation.
                         </div>
                       </div>
 
@@ -8939,19 +9337,22 @@ export default function CustomerVerification() {
                       <div className="bo-cv-salary-summary-strip">
                         <div className="bo-cv-salary-summary-strip-header">
                           <div className="bo-cv-salary-summary-strip-title-wrap">
-                            <span className="bo-cv-salary-summary-strip-title">{salaryRows.length}-Month Income Summary</span>
+                            <span className="bo-cv-salary-summary-strip-title">
+                              Income Assessment Summary ({salaryRows.length} Months)
+                            </span>
                             <span className="bo-cv-salary-summary-strip-sub">
-                              {selectedApplicant?.name || 'Applicant'} &bull; Salaried Evaluation
+                              {selectedApplicant?.name || 'Applicant'} &bull; Salaried &amp; Other Income Evaluation
                             </span>
                           </div>
                           <span className="bo-cv-salary-summary-strip-meta">
                             Salary Months: {salaryRows.filter((r) => r.salaryMonth && r.basicAmount !== '' && !isNaN(Number(r.basicAmount))).length} / {salaryRows.length}
+                            {otherIncomeRows.length > 0 && ` • Other Sources: ${otherIncomeRows.length}`}
                           </span>
                         </div>
                         <div className="bo-cv-salary-summary-strip-grid">
                           {salaryRows.map((r, idx) => {
                             const isPersisted = r.isPersisted && !r.isModified;
-                            const val = r.previewConsideredIncome != null && r.previewConsideredIncome !== 0
+                            const val = r.previewConsideredIncome != null && r.previewConsideredIncome !== ''
                               ? r.previewConsideredIncome
                               : r.totalConsideredIncome;
                             const monthLabel = formatSalaryMonthDisplay(r.monthDisplay) || `Month ${idx + 1}`;
@@ -8970,31 +9371,58 @@ export default function CustomerVerification() {
                               </div>
                             );
                           })}
-                          {(() => {
-                            const isBackendConfirmed = !isSalaryDirty && currentAssessment?.totalConsideredIncome != null;
-                            const displayAverage = isBackendConfirmed
-                              ? currentAssessment.totalConsideredIncome
-                              : liveThreeMonthAverage;
 
-                            return (
-                              <div className="bo-cv-summary-strip-cell is-average">
-                                <div className="bo-cv-summary-strip-top">
-                                  <span className="bo-cv-summary-strip-label">{salaryRows.length}-Month Average</span>
-                                  <span className={`bo-cv-summary-strip-pill ${isBackendConfirmed ? 'is-backend' : 'is-preview'}`}>
-                                    {isBackendConfirmed ? 'Backend Confirmed' : 'Live Preview'}
-                                  </span>
-                                </div>
-                                <strong className="bo-cv-summary-strip-val is-avg">
-                                  {displayAverage != null ? formatFoirCurrency(displayAverage) : '—'}
-                                </strong>
-                                <span className="bo-cv-summary-strip-sub">
-                                  {isBackendConfirmed
-                                    ? 'Authoritative server average'
-                                    : 'Calculated from current salary entries'}
+                          {/* Multi-Month Average Salary */}
+                          <div className="bo-cv-summary-strip-cell is-average">
+                            <div className="bo-cv-summary-strip-top">
+                              <span className="bo-cv-summary-strip-label">Average Salary Income</span>
+                              <span className={`bo-cv-summary-strip-pill ${!isSalaryDirty ? 'is-backend' : 'is-preview'}`}>
+                                {!isSalaryDirty ? 'Confirmed' : 'Live Preview'}
+                              </span>
+                            </div>
+                            <strong className="bo-cv-summary-strip-val is-avg">
+                              {liveSalaryAverage != null ? formatFoirCurrency(liveSalaryAverage) : '—'}
+                            </strong>
+                            <span className="bo-cv-summary-strip-sub">
+                              Average across {salaryRows.length} configured months
+                            </span>
+                          </div>
+
+                          {/* Total Other Income Cell (if present) */}
+                          {liveTotalOtherIncome > 0 && (
+                            <div className="bo-cv-summary-strip-cell">
+                              <div className="bo-cv-summary-strip-top">
+                                <span className="bo-cv-summary-strip-label">Total Other Income</span>
+                                <span className="bo-cv-summary-strip-pill is-preview">
+                                  {otherIncomeRows.length} {otherIncomeRows.length === 1 ? 'Source' : 'Sources'}
                                 </span>
                               </div>
-                            );
-                          })()}
+                              <strong className="bo-cv-summary-strip-val" style={{ color: '#0369a1' }}>
+                                {formatFoirCurrency(liveTotalOtherIncome)}
+                              </strong>
+                              <span className="bo-cv-summary-strip-sub">
+                                Total additional income
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Final Combined Considered Income Cell */}
+                          <div className="bo-cv-summary-strip-cell is-average" style={{ background: '#ecfdf5', borderColor: '#a7f3d0' }}>
+                            <div className="bo-cv-summary-strip-top">
+                              <span className="bo-cv-summary-strip-label" style={{ color: '#065f46', fontWeight: 600 }}>Final Considered Income</span>
+                              <span className="bo-cv-summary-strip-pill" style={{ background: '#d1fae5', color: '#047857' }}>
+                                Total Considered
+                              </span>
+                            </div>
+                            <strong className="bo-cv-summary-strip-val is-avg" style={{ color: '#047857' }}>
+                              {liveFinalConsideredIncome != null ? formatFoirCurrency(liveFinalConsideredIncome) : '—'}
+                            </strong>
+                            <span className="bo-cv-summary-strip-sub" style={{ color: '#065f46' }}>
+                              {liveTotalOtherIncome > 0
+                                ? `${formatCurrency(liveSalaryAverage)} (Salary) + ${formatCurrency(liveTotalOtherIncome)} (Other)`
+                                : 'Salary income baseline for FOIR capacity'}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -9963,45 +10391,126 @@ export default function CustomerVerification() {
                       </div>
                       <div className="bo-cv-obligation-summary-total">
                         <span>Total Existing Monthly EMI:</span>
-                        <strong>
-                          {currentAssessment?.existingEMI != null
-                            ? formatCurrency(currentAssessment.existingEMI)
-                            : formatCurrency(totalDeclaredMonthlyEmi)}
-                        </strong>
+                        <strong>{formatCurrency(totalDeclaredMonthlyEmi)}</strong>
                       </div>
                     </div>
                   </div>
 
                   {/* Benchmark Cards Grid */}
-                  <div className="bo-cv-obligation-grid" style={{ marginTop: '16px' }}>
-                    <div className="bo-cv-obligation-card">
-                      <span className="bo-cv-obligation-label">Existing Monthly Obligation (Engine Evaluated)</span>
-                      <div className="bo-cv-obligation-val-row">
-                        <strong className="bo-cv-obligation-val">
-                          {currentAssessment?.existingEMI != null
-                            ? formatCurrency(currentAssessment.existingEMI)
-                            : formatCurrency(totalDeclaredMonthlyEmi)}
-                        </strong>
+                  <div className="bo-cv-calc-settings-grid" style={{ marginTop: '16px' }}>
+                    {/* 1. Existing Monthly Obligation Card with Override */}
+                    <div className="bo-cv-calc-setting-card">
+                      <div className="bo-cv-calc-setting-header">
+                        <span className="bo-cv-calc-setting-label">Existing Monthly Obligation</span>
+                        <button
+                          type="button"
+                          className="bo-cv-setting-action-btn"
+                          onClick={() =>
+                            updateCurrentCalcSettings((prev) => ({
+                              ...prev,
+                              isEditingObligation: !prev.isEditingObligation,
+                              manualObligationInput:
+                                !prev.isEditingObligation && prev.manualObligationInput === ''
+                                  ? totalDeclaredMonthlyEmi > 0
+                                    ? String(totalDeclaredMonthlyEmi)
+                                    : ''
+                                  : prev.manualObligationInput,
+                            }))
+                          }
+                        >
+                          {currentCalcSettings.isEditingObligation ? 'Use Calculated EMI' : 'Override Obligation'}
+                        </button>
                       </div>
-                      <p className="bo-cv-obligation-desc">
-                        {currentAssessment?.existingEMI != null
-                          ? 'Authoritative existing EMI deducted by calculation engine.'
-                          : 'Will be confirmed and deducted by the calculation engine.'}
-                      </p>
+
+                      {currentCalcSettings.isEditingObligation ? (
+                        <div className="bo-cv-setting-override-row">
+                          <span className="bo-cv-setting-currency-symbol">₹</span>
+                          <input
+                            type="number"
+                            step="100"
+                            min="0"
+                            className="bo-cv-setting-input is-amount"
+                            placeholder={String(totalDeclaredMonthlyEmi || 0)}
+                            value={currentCalcSettings.manualObligationInput}
+                            onChange={(e) =>
+                              updateCurrentCalcSettings((prev) => ({ ...prev, manualObligationInput: e.target.value }))
+                            }
+                            aria-label="Manual Existing Monthly Obligation"
+                          />
+                        </div>
+                      ) : (
+                        <div className="bo-cv-calc-setting-value bo-cv-amount-val">
+                          {formatCurrency(totalDeclaredMonthlyEmi)}
+                        </div>
+                      )}
+
+                      <span className="bo-cv-calc-setting-hint">
+                        {currentCalcSettings.isEditingObligation && currentCalcSettings.manualObligationInput !== ''
+                          ? `Override: ${formatCurrency(currentCalcSettings.manualObligationInput)} • Applied Obligation: ${formatCurrency(currentCalcSettings.manualObligationInput)} (Calculated EMI: ${formatCurrency(totalDeclaredMonthlyEmi)})`
+                          : `Applied Obligation: ${formatCurrency(totalDeclaredMonthlyEmi)} (Derived from active loan facilities)`}
+                      </span>
                     </div>
 
-                    <div className="bo-cv-obligation-card">
-                      <span className="bo-cv-obligation-label">Policy FOIR Limit</span>
-                      <div className="bo-cv-obligation-val-row">
-                        <strong className="bo-cv-obligation-val bo-cv-foir-val">
-                          {resolvedPolicyFoir}
-                        </strong>
+                    {/* 2. Policy FOIR Limit Card with Override */}
+                    <div className="bo-cv-calc-setting-card">
+                      <div className="bo-cv-calc-setting-header">
+                        <span className="bo-cv-calc-setting-label">Policy FOIR Limit</span>
+                        {selectedMethodCode === 'INCOME' && (
+                          <button
+                            type="button"
+                            className="bo-cv-setting-action-btn"
+                            onClick={() =>
+                              updateCurrentCalcSettings((prev) => ({
+                                ...prev,
+                                isEditingFoir: !prev.isEditingFoir,
+                                manualFoirInput:
+                                  !prev.isEditingFoir && prev.manualFoirInput === ''
+                                    ? basePolicyFoir != null
+                                      ? String(basePolicyFoir)
+                                      : '65'
+                                    : prev.manualFoirInput,
+                              }))
+                            }
+                          >
+                            {currentCalcSettings.isEditingFoir ? 'Use Policy FOIR' : 'Override FOIR'}
+                          </button>
+                        )}
                       </div>
-                      <p className="bo-cv-obligation-desc">
+
+                      {selectedMethodCode === 'INCOME' && currentCalcSettings.isEditingFoir ? (
+                        <div className="bo-cv-setting-override-row">
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0.1"
+                            max="100"
+                            className="bo-cv-setting-input"
+                            placeholder={basePolicyFoir != null ? String(basePolicyFoir) : '65'}
+                            value={currentCalcSettings.manualFoirInput}
+                            onChange={(e) =>
+                              updateCurrentCalcSettings((prev) => ({ ...prev, manualFoirInput: e.target.value }))
+                            }
+                            aria-label="Manual Policy FOIR"
+                          />
+                          <span className="bo-cv-setting-unit">%</span>
+                        </div>
+                      ) : (
+                        <div className="bo-cv-calc-setting-value bo-cv-foir-val">
+                          {selectedMethodCode === 'INCOME'
+                            ? basePolicyFoir != null
+                              ? `${basePolicyFoir}%`
+                              : '65%'
+                            : 'Not Applicable (ABB Method)'}
+                        </div>
+                      )}
+
+                      <span className="bo-cv-calc-setting-hint">
                         {selectedMethodCode === 'INCOME'
-                          ? `Policy FOIR limit applied by engine from FOIR Master for ${selectedEmploymentTypeName || 'applicant'}.`
+                          ? currentCalcSettings.isEditingFoir && currentCalcSettings.manualFoirInput !== ''
+                            ? `Override: ${currentCalcSettings.manualFoirInput}% • Applied FOIR: ${currentCalcSettings.manualFoirInput}% (Base Policy FOIR: ${basePolicyFoir != null ? `${basePolicyFoir}%` : '65%'})`
+                            : `Applied FOIR: ${basePolicyFoir != null ? `${basePolicyFoir}%` : '65%'} (Using Policy Benchmark from FOIR Master for ${selectedEmploymentTypeName || 'applicant'})`
                           : 'Policy FOIR is not applicable for Average Bank Balance assessment.'}
-                      </p>
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -10053,14 +10562,24 @@ export default function CustomerVerification() {
                       <span className="bo-cv-calc-pre-dot">•</span>
                       <div className="bo-cv-calc-pre-item">
                         <span className="bo-cv-calc-pre-item-label">Existing EMI:</span>
-                        <strong>{formatCurrency(totalDeclaredMonthlyEmi)}</strong>
+                        <strong>
+                          {currentCalcSettings.isEditingObligation && currentCalcSettings.manualObligationInput !== ''
+                            ? `${formatCurrency(currentCalcSettings.manualObligationInput)} (Override)`
+                            : formatCurrency(totalDeclaredMonthlyEmi)}
+                        </strong>
                       </div>
                       {selectedMethodCode === 'INCOME' && (
                         <>
                           <span className="bo-cv-calc-pre-dot">•</span>
                           <div className="bo-cv-calc-pre-item">
                             <span className="bo-cv-calc-pre-item-label">Policy FOIR:</span>
-                            <strong>{resolvedPolicyFoir}</strong>
+                            <strong>
+                              {currentCalcSettings.isEditingFoir && currentCalcSettings.manualFoirInput !== ''
+                                ? `${currentCalcSettings.manualFoirInput}% (Override)`
+                                : basePolicyFoir != null
+                                ? `${basePolicyFoir}%`
+                                : '65%'}
+                            </strong>
                           </div>
                         </>
                       )}

@@ -253,7 +253,7 @@ export const backOfficeService = {
 
   /**
    * Create a single monthly salary income record.
-   * @param {object} payload - { applicationProductDetailsId, agentCustomerId, applicationEmploymentIncomeDetailsId, applicantSequence, salaryMonth, basicAmount, hraAmount, ccaAmount, taAmount, incentiveAmount, incentivePercentApplied, salarySlipPath, createdBy }
+   * @param {object} payload - { applicationProductDetailsId, agentCustomerId, applicationEmploymentIncomeDetailsId, applicantSequence, salaryMonth, basicAmount, hraAmount, ccaAmount, taAmount, incentiveAmount, deductionAmount, incentivePercentApplied, salarySlipPath, createdBy }
    */
   createSalaryIncome: async (payload) => {
     const response = await axiosInstance.post(
@@ -266,11 +266,48 @@ export const backOfficeService = {
   /**
    * Update an existing monthly salary income record.
    * @param {string|number} salaryIncomeDetailsId
-   * @param {object} payload - { salaryIncomeDetailsId, applicationProductDetailsId, agentCustomerId, applicationEmploymentIncomeDetailsId, applicantSequence, salaryMonth, basicAmount, hraAmount, ccaAmount, taAmount, incentiveAmount, incentivePercentApplied, salarySlipPath, modifiedBy }
+   * @param {object} payload - { salaryIncomeDetailsId, applicationProductDetailsId, agentCustomerId, applicationEmploymentIncomeDetailsId, applicantSequence, salaryMonth, basicAmount, hraAmount, ccaAmount, taAmount, incentiveAmount, deductionAmount, incentivePercentApplied, salarySlipPath, modifiedBy }
    */
   updateSalaryIncome: async (salaryIncomeDetailsId, payload) => {
     const response = await axiosInstance.put(
       BACK_OFFICE_ENDPOINTS.CALCULATION_SALARY_INCOME_BY_ID(salaryIncomeDetailsId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve existing other income records for a specific application product and applicant sequence.
+   * @param {string|number} applicationProductDetailsId
+   * @param {string|number} applicantSequence
+   */
+  getOtherIncomeBySeq: async (applicationProductDetailsId, applicantSequence) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_OTHER_INCOME_BY_SEQ(applicationProductDetailsId, applicantSequence)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Create a single other income record.
+   * @param {object} payload - { applicationProductDetailsId, agentCustomerId, applicantSequence, incomeName, incomeAmount, createdBy }
+   */
+  createOtherIncome: async (payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_OTHER_INCOME,
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Update an existing other income record.
+   * @param {string|number} applicationOtherIncomeDetailsId
+   * @param {object} payload - { applicationOtherIncomeDetailsId, applicationProductDetailsId, agentCustomerId, applicantSequence, incomeName, incomeAmount, modifiedBy }
+   */
+  updateOtherIncome: async (applicationOtherIncomeDetailsId, payload) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_OTHER_INCOME_BY_ID(applicationOtherIncomeDetailsId),
       payload
     );
     return unwrapResponse(response);
@@ -398,7 +435,7 @@ export const backOfficeService = {
 
   /**
    * Run authoritative Eligibility Calculation engine (Income or ABB method).
-   * @param {object} payload - { applicationProductDetailsId, agentCustomerId, applicationEmploymentIncomeDetailsId, applicantSequence, assessmentMethodId, manualROI, manualTenureMonths, recommendedLoanAmount, pdDocumentPath, calculatedByUserId, calculatedByBackOfficeId, calculatedByRole }
+   * @param {object} payload - { applicationProductDetailsId, agentCustomerId, applicationEmploymentIncomeDetailsId, applicantSequence, assessmentMethodId, manualROI, manualTenureMonths, manualFOIR, manualExistingObligation, recommendedLoanAmount, pdDocumentPath, calculatedByUserId, calculatedByBackOfficeId, calculatedByRole }
    */
   calculateEligibility: async (payload) => {
     const response = await axiosInstance.post(
