@@ -8299,3 +8299,70 @@
   gap: 16px;
 }
 
+/* ── Normal Income Method Assessment Styles ──────────────────────────────── */
+.bo-cv-normal-income-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bo-cv-normal-block {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.bo-cv-latest-year-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.bo-cv-latest-year-btn:hover:not(:disabled) {
+  border-color: #0f7a4c;
+  color: #0f7a4c;
+  background: #eaf5ee;
+}
+
+.bo-cv-latest-year-btn.is-active {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #15803d;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(22, 163, 74, 0.12);
+}
+
+.bo-cv-latest-year-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.bo-cv-normal-salary-ref-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+
+.bo-cv-normal-salary-ref-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #edf2f7;
+}
+

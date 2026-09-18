@@ -96,6 +96,16 @@ export const BACK_OFFICE_ENDPOINTS = {
   CALCULATION_RTR_ASSESSMENTS_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
     `/calculation/rtr/assessments/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
 
+  // Normal Income Calculation APIs
+  CALCULATION_NORMAL_INCOME_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
+    `/calculation/normal-income/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
+  CALCULATION_NORMAL_INCOME_INCOME: '/calculation/normal-income/income',
+  CALCULATION_NORMAL_INCOME_INCOME_BY_ID: (id) =>
+    `/calculation/normal-income/income/${encodeURIComponent(id)}`,
+  CALCULATION_NORMAL_INCOME_OTHER_INCOME: '/calculation/normal-income/other-income',
+  CALCULATION_NORMAL_INCOME_OTHER_INCOME_BY_ID: (id) =>
+    `/calculation/normal-income/other-income/${encodeURIComponent(id)}`,
+
   // Document Rejection & Returned Application Workflow
   DOCUMENT_REJECTIONS: '/BackOfficeDocumentRejection',
   DOCUMENT_REJECTION_BY_ID: (id) =>

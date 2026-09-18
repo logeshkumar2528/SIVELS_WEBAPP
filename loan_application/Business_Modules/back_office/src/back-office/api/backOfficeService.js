@@ -522,6 +522,72 @@ export const backOfficeService = {
   },
 
   /* ==========================================
+     8d. NORMAL INCOME CALCULATION APIs
+  ========================================== */
+
+  /**
+   * Retrieve Normal Income (Primary Income + Other Income) records for an application product and applicant sequence.
+   * @param {string|number} applicationProductDetailsId
+   * @param {string|number} applicantSequence
+   */
+  getNormalIncomeBySeq: async (applicationProductDetailsId, applicantSequence) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_NORMAL_INCOME_BY_SEQ(applicationProductDetailsId, applicantSequence)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Create a new Primary Business Income financial year record.
+   * @param {object} payload - { applicationProductDetailsId, agentCustomerId, applicantSequence, financialYear, pat, depreciation, salaryToPartners, interestToRelatedParties, isLatestFinancialYear, isActive, createdBy }
+   */
+  createNormalIncome: async (payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_NORMAL_INCOME_INCOME,
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Update an existing Primary Business Income financial year record.
+   * @param {string|number} id - applicationNormalIncomeDetailsId
+   * @param {object} payload - { applicationNormalIncomeDetailsId, applicationProductDetailsId, agentCustomerId, applicantSequence, financialYear, pat, depreciation, salaryToPartners, interestToRelatedParties, isLatestFinancialYear, isActive, modifiedBy }
+   */
+  updateNormalIncome: async (id, payload) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_NORMAL_INCOME_INCOME_BY_ID(id),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Create a new Normal Other Income record.
+   * @param {object} payload - { applicationProductDetailsId, agentCustomerId, applicantSequence, incomeType, annualIncomeAmount, considerationPercentage, isActive, createdBy }
+   */
+  createNormalOtherIncome: async (payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_NORMAL_INCOME_OTHER_INCOME,
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Update an existing Normal Other Income record.
+   * @param {string|number} id - applicationNormalOtherIncomeDetailsId
+   * @param {object} payload - { applicationNormalOtherIncomeDetailsId, applicationProductDetailsId, agentCustomerId, applicantSequence, incomeType, annualIncomeAmount, considerationPercentage, isActive, modifiedBy }
+   */
+  updateNormalOtherIncome: async (id, payload) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_NORMAL_INCOME_OTHER_INCOME_BY_ID(id),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /* ==========================================
      9. DOCUMENT REJECTION & RETURNED WORKFLOW
   ========================================== */
 

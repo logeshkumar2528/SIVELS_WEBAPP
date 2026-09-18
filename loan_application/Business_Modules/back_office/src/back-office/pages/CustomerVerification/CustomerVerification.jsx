@@ -64,6 +64,8 @@ const CameraIcon = iconMap['Camera'];
 const FileCheckIcon = iconMap['FileCheck'];
 const RotateCcwIcon = iconMap['RotateCcw'];
 const CreditCardIcon = iconMap['CreditCard'];
+const TrendingUpIcon = iconMap['TrendingUp'] || iconMap['BadgeIndianRupee'] || iconMap['FileText'];
+const BarChartIcon = iconMap['BarChart3'] || iconMap['BarChart2'] || iconMap['BadgeIndianRupee'];
 
 function formatCurrency(amount) {
   if (amount === null || amount === undefined || isNaN(amount) || amount === 0) return '₹0';
@@ -1950,6 +1952,34 @@ export default function CustomerVerification() {
     return { success: true, count: operationCount };
   };
 
+  // Salary Multi-Month Average (N >= 3) based on Considered Income
+  const liveSalaryAverage = useMemo(() => {
+    const validRows = salaryRows.filter(
+      (r) => r.salaryMonth && r.basicAmount !== '' && !isNaN(Number(r.basicAmount))
+    );
+    if (validRows.length === 0) return 0;
+    const total = validRows.reduce((sum, r) => {
+      const val = r.previewConsideredIncome != null && r.previewConsideredIncome !== ''
+        ? Number(r.previewConsideredIncome)
+        : (Number(r.totalConsideredIncome) || 0);
+      return sum + val;
+    }, 0);
+    return Math.round(total / validRows.length);
+  }, [salaryRows]);
+
+  // Total Other Income
+  const liveTotalOtherIncome = useMemo(() => {
+    return otherIncomeRows.reduce((sum, r) => {
+      const amt = Number(r.incomeAmount) || 0;
+      return sum + amt;
+    }, 0);
+  }, [otherIncomeRows]);
+
+  // Final Combined Considered Income (Salary Avg Net + Total Other Income)
+  const liveFinalConsideredIncome = useMemo(() => {
+    return liveSalaryAverage + liveTotalOtherIncome;
+  }, [liveSalaryAverage, liveTotalOtherIncome]);
+
   // Trigger salary and other income hydration when Step 16 is active and method is INCOME
   useEffect(() => {
     if (activeStep === 16 && selectedMethodCode === 'INCOME' && calculationAppProdId > 0) {
@@ -3009,13 +3039,517 @@ export default function CustomerVerification() {
     }
   };
 
+  // Phase 3: Normal Income Method State & Handlers for Step 14 (AssessmentMethodId = 4, MethodCode = 'NORMAL_INCOME')
+  const [normalIncomeRows, setNormalIncomeRows] = useState([]);
+  const [normalOtherIncomeRows, setNormalOtherIncomeRows] = useState([]);
+  const [normalIncomeLoading, setNormalIncomeLoading] = useState(false);
+  const [normalIncomeError, setNormalIncomeError] = useState(null);
+  const [normalIncomeSaving, setNormalIncomeSaving] = useState(false);
+  const [normalIncomeBanner, setNormalIncomeBanner] = useState(null);
+
+  // Hydrate Normal Income records via GET /api/calculation/normal-income/{appProdId}/{applicantSequence}
+  const fetchNormalIncomeRecords = useCallback(async (appProdId, seq) => {
+    if (!appProdId || isNaN(appProdId) || appProdId <= 0) return;
+    setNormalIncomeLoading(true);
+    setNormalIncomeError(null);
+    try {
+      const res = await backOfficeService.getNormalIncomeBySeq(appProdId, seq);
+      const data = res?.value ?? res?.data ?? res ?? {};
+      const rawIncome = Array.isArray(data?.income) ? data.income : [];
+      const rawOther = Array.isArray(data?.otherIncome) ? data.otherIncome : [];
+
+      const activeIncome = rawIncome.filter((r) => r.isActive !== false);
+      const activeOther = rawOther.filter((r) => r.isActive !== false);
+
+      let mappedIncome = activeIncome.map((r, i) => ({
+        id: `normal-inc-row-${r.applicationNormalIncomeDetailsId || i}`,
+        applicationNormalIncomeDetailsId: r.applicationNormalIncomeDetailsId || null,
+        applicationProductDetailsId: r.applicationProductDetailsId || appProdId,
+        agentCustomerId: r.agentCustomerId || calculationAgentCustId,
+        applicantSequence: r.applicantSequence != null ? r.applicantSequence : seq,
+        financialYear: r.financialYear || '',
+        pat: r.pat === 0 ? '0' : (r.pat ?? ''),
+        depreciation: r.depreciation === 0 ? '0' : (r.depreciation ?? ''),
+        salaryToPartners: r.salaryToPartners === 0 ? '0' : (r.salaryToPartners ?? ''),
+        interestToRelatedParties: r.interestToRelatedParties === 0 ? '0' : (r.interestToRelatedParties ?? ''),
+        primaryIncome: r.primaryIncome ?? null,
+        isLatestFinancialYear: Boolean(r.isLatestFinancialYear),
+        isActive: r.isActive !== false,
+        isPersisted: Boolean(r.applicationNormalIncomeDetailsId),
+        isModified: false,
+        errorMsg: null,
+      }));
+
+      // If empty, initialize 1 default draft financial year
+      if (mappedIncome.length === 0) {
+        mappedIncome = [
+          {
+            id: `normal-inc-draft-0`,
+            applicationNormalIncomeDetailsId: null,
+            applicationProductDetailsId: appProdId,
+            agentCustomerId: calculationAgentCustId,
+            applicantSequence: seq,
+            financialYear: '',
+            pat: '',
+            depreciation: '',
+            salaryToPartners: '',
+            interestToRelatedParties: '',
+            primaryIncome: null,
+            isLatestFinancialYear: false,
+            isActive: true,
+            isPersisted: false,
+            isModified: false,
+            errorMsg: null,
+          },
+        ];
+      } else if (mappedIncome.filter((r) => r.isLatestFinancialYear).length > 1) {
+        // If server data has multiple rows flagged latest, preserve only the first marked one
+        let foundFirst = false;
+        mappedIncome = mappedIncome.map((r) => {
+          if (r.isLatestFinancialYear) {
+            if (!foundFirst) {
+              foundFirst = true;
+              return r;
+            }
+            return { ...r, isLatestFinancialYear: false };
+          }
+          return r;
+        });
+      }
+
+      const mappedOther = activeOther.map((r, i) => ({
+        id: `normal-other-row-${r.applicationNormalOtherIncomeDetailsId || i}`,
+        applicationNormalOtherIncomeDetailsId: r.applicationNormalOtherIncomeDetailsId || null,
+        applicationProductDetailsId: r.applicationProductDetailsId || appProdId,
+        agentCustomerId: r.agentCustomerId || calculationAgentCustId,
+        applicantSequence: r.applicantSequence != null ? r.applicantSequence : seq,
+        incomeType: r.incomeType || 'HOUSE_PROPERTY',
+        annualIncomeAmount: r.annualIncomeAmount === 0 ? '0' : (r.annualIncomeAmount ?? ''),
+        considerationPercentage: r.considerationPercentage === 0 ? '0' : (r.considerationPercentage ?? (r.incomeType === 'HOUSE_PROPERTY' ? 100 : 50)),
+        consideredIncomeAmount: r.consideredIncomeAmount ?? null,
+        isActive: r.isActive !== false,
+        isPersisted: Boolean(r.applicationNormalOtherIncomeDetailsId),
+        isModified: false,
+        errorMsg: null,
+      }));
+
+      setNormalIncomeRows(mappedIncome);
+      setNormalOtherIncomeRows(mappedOther);
+    } catch (err) {
+      console.warn('Failed to fetch normal income records:', err);
+      setNormalIncomeError(err?.response?.data?.message || err?.message || 'Unable to load Normal Income records from server.');
+      setNormalIncomeRows([]);
+      setNormalOtherIncomeRows([]);
+    } finally {
+      setNormalIncomeLoading(false);
+    }
+  }, [calculationAgentCustId]);
+
+  // Trigger Normal Income hydration when Step 16 is active and method is NORMAL_INCOME
+  useEffect(() => {
+    if (activeStep === 16 && selectedMethodCode === 'NORMAL_INCOME' && calculationAppProdId > 0) {
+      fetchNormalIncomeRecords(calculationAppProdId, selectedApplicantSequence);
+      fetchSalaryRecords(calculationAppProdId, selectedApplicantSequence);
+    }
+  }, [activeStep, selectedMethodCode, calculationAppProdId, selectedApplicantSequence, fetchNormalIncomeRecords, fetchSalaryRecords]);
+
+  // Handle Primary Income field edit
+  const handleNormalIncomeRowChange = (index, field, value) => {
+    setNormalIncomeRows((prev) => {
+      const next = [...prev];
+      const row = { ...next[index] };
+
+      if (field === 'financialYear') {
+        row.financialYear = value;
+      } else if (field === 'isLatestFinancialYear') {
+        row.isLatestFinancialYear = Boolean(value);
+      } else {
+        if (value === '') {
+          row[field] = '';
+        } else {
+          const num = Number(value);
+          row[field] = isNaN(num) ? value : num;
+        }
+      }
+
+      if (row.isPersisted) {
+        row.isModified = true;
+      }
+      row.errorMsg = null;
+      next[index] = row;
+      return next;
+    });
+  };
+
+  // Handle setting Latest Financial Year (enforces single selection on frontend)
+  const handleSetLatestFinancialYear = (targetIdx) => {
+    setNormalIncomeRows((prev) =>
+      prev.map((row, idx) => {
+        const isLatest = idx === targetIdx;
+        const changed = row.isLatestFinancialYear !== isLatest;
+        return {
+          ...row,
+          isLatestFinancialYear: isLatest,
+          isModified: row.isPersisted && changed ? true : row.isModified,
+        };
+      })
+    );
+  };
+
+  // Handle Add Financial Year draft row
+  const handleAddNormalIncomeRow = () => {
+    setNormalIncomeRows((prev) => [
+      ...prev,
+      {
+        id: `normal-inc-draft-${Date.now()}-${prev.length}`,
+        applicationNormalIncomeDetailsId: null,
+        applicationProductDetailsId: Number(calculationAppProdId) || 0,
+        agentCustomerId: Number(calculationAgentCustId) || 0,
+        applicantSequence: Number(selectedApplicantSequence) || 0,
+        financialYear: '',
+        pat: '',
+        depreciation: '',
+        salaryToPartners: '',
+        interestToRelatedParties: '',
+        primaryIncome: null,
+        isLatestFinancialYear: false,
+        isActive: true,
+        isPersisted: false,
+        isModified: false,
+        errorMsg: null,
+      },
+    ]);
+  };
+
+  // Handle Remove Draft Financial Year row (frontend-only, never deletes saved rows)
+  const handleRemoveNormalIncomeDraftRow = (indexToRemove) => {
+    setNormalIncomeRows((prev) => {
+      const targetRow = prev[indexToRemove];
+      if (targetRow && (Number(targetRow.applicationNormalIncomeDetailsId) > 0 || targetRow.isPersisted)) {
+        return prev;
+      }
+      return prev.filter((_, idx) => idx !== indexToRemove);
+    });
+  };
+
+  // Handle Other Income field edit
+  const handleNormalOtherIncomeRowChange = (index, field, value) => {
+    setNormalOtherIncomeRows((prev) => {
+      const next = [...prev];
+      const row = { ...next[index] };
+
+      if (field === 'incomeType') {
+        row.incomeType = value;
+        if (row.considerationPercentage === '' || row.considerationPercentage == null) {
+          row.considerationPercentage = value === 'HOUSE_PROPERTY' ? 100 : 50;
+        }
+      } else if (field === 'annualIncomeAmount') {
+        if (value === '') {
+          row.annualIncomeAmount = '';
+        } else {
+          row.annualIncomeAmount = Math.max(0, Number(value) || 0);
+        }
+      } else if (field === 'considerationPercentage') {
+        if (value === '') {
+          row.considerationPercentage = '';
+        } else {
+          row.considerationPercentage = Math.min(100, Math.max(0, Number(value) || 0));
+        }
+      }
+
+      if (row.isPersisted) {
+        row.isModified = true;
+      }
+      row.errorMsg = null;
+      next[index] = row;
+      return next;
+    });
+  };
+
+  // Handle Add Other Income draft row
+  const handleAddNormalOtherIncomeRow = () => {
+    setNormalOtherIncomeRows((prev) => [
+      ...prev,
+      {
+        id: `normal-other-draft-${Date.now()}-${prev.length}`,
+        applicationNormalOtherIncomeDetailsId: null,
+        applicationProductDetailsId: Number(calculationAppProdId) || 0,
+        agentCustomerId: Number(calculationAgentCustId) || 0,
+        applicantSequence: Number(selectedApplicantSequence) || 0,
+        incomeType: 'HOUSE_PROPERTY',
+        annualIncomeAmount: '',
+        considerationPercentage: 100,
+        consideredIncomeAmount: null,
+        isActive: true,
+        isPersisted: false,
+        isModified: false,
+        errorMsg: null,
+      },
+    ]);
+  };
+
+  // Handle Remove Draft Other Income row (frontend-only)
+  const handleRemoveNormalOtherIncomeDraftRow = (indexToRemove) => {
+    setNormalOtherIncomeRows((prev) => {
+      const targetRow = prev[indexToRemove];
+      if (targetRow && (Number(targetRow.applicationNormalOtherIncomeDetailsId) > 0 || targetRow.isPersisted)) {
+        return prev;
+      }
+      return prev.filter((_, idx) => idx !== indexToRemove);
+    });
+  };
+
+  // Pre-calculation synchronization pipeline for Normal Income records (POST new, PUT modified using Promise.allSettled)
+  const synchronizeNormalIncomeRecords = async () => {
+    setNormalIncomeBanner(null);
+    const currentUserId = resolveAuthenticatedUserId();
+    if (!currentUserId) {
+      return {
+        success: false,
+        message: 'Unable to resolve authenticated Back Office user ID for operation. Please log out and re-login.',
+      };
+    }
+
+    if (!calculationAppProdId || calculationAppProdId <= 0) {
+      return {
+        success: false,
+        message: 'Application Product Details ID is missing. Please refresh the application.',
+      };
+    }
+
+    // 1. Validate Primary Income rows
+    const validIncomeRows = normalIncomeRows.filter((r) => r.financialYear && String(r.financialYear).trim() !== '');
+    if (validIncomeRows.length === 0) {
+      return {
+        success: false,
+        message: 'At least one Financial Year record with Financial Year name is required before calculating Normal Income eligibility.',
+      };
+    }
+
+    for (let i = 0; i < normalIncomeRows.length; i++) {
+      const r = normalIncomeRows[i];
+      if (!r.financialYear || !r.financialYear.trim()) {
+        return {
+          success: false,
+          message: `Financial Year is required for row ${i + 1}.`,
+        };
+      }
+      if (r.pat === '' || isNaN(Number(r.pat))) {
+        return {
+          success: false,
+          message: `Valid numeric PAT is required for Financial Year ${r.financialYear}.`,
+        };
+      }
+      if (r.depreciation === '' || isNaN(Number(r.depreciation)) || Number(r.depreciation) < 0) {
+        return {
+          success: false,
+          message: `Valid non-negative Depreciation is required for Financial Year ${r.financialYear}.`,
+        };
+      }
+      if (r.salaryToPartners === '' || isNaN(Number(r.salaryToPartners)) || Number(r.salaryToPartners) < 0) {
+        return {
+          success: false,
+          message: `Valid non-negative Salary to Partners is required for Financial Year ${r.financialYear}.`,
+        };
+      }
+      if (r.interestToRelatedParties === '' || isNaN(Number(r.interestToRelatedParties)) || Number(r.interestToRelatedParties) < 0) {
+        return {
+          success: false,
+          message: `Valid non-negative Interest to Related Parties is required for Financial Year ${r.financialYear}.`,
+        };
+      }
+    }
+
+    // 2. Validate Other Income rows
+    for (let i = 0; i < normalOtherIncomeRows.length; i++) {
+      const r = normalOtherIncomeRows[i];
+      if (r.annualIncomeAmount === '' || isNaN(Number(r.annualIncomeAmount)) || Number(r.annualIncomeAmount) < 0) {
+        return {
+          success: false,
+          message: `Valid non-negative Annual Income Amount is required for Other Income row ${i + 1}.`,
+        };
+      }
+      if (
+        r.considerationPercentage === '' ||
+        isNaN(Number(r.considerationPercentage)) ||
+        Number(r.considerationPercentage) < 0 ||
+        Number(r.considerationPercentage) > 100
+      ) {
+        return {
+          success: false,
+          message: `Valid Consideration % between 0 and 100 is required for Other Income row ${i + 1}.`,
+        };
+      }
+    }
+
+    // 3. Validate that a latest financial year is designated
+    const hasLatestYear = normalIncomeRows.some((r) => r.isLatestFinancialYear && r.financialYear && String(r.financialYear).trim() !== '');
+    if (!hasLatestYear) {
+      return {
+        success: false,
+        message: 'Please designate a Latest Considered Financial Year using "Set Latest" before calculating Normal Income eligibility.',
+      };
+    }
+
+    // 3. Build save promises
+    const savePromises = [];
+
+    // Primary Income POSTs
+    normalIncomeRows
+      .filter((r) => !r.isPersisted || !r.applicationNormalIncomeDetailsId)
+      .forEach((row) => {
+        const payload = {
+          applicationProductDetailsId: Number(calculationAppProdId),
+          agentCustomerId: Number(calculationAgentCustId),
+          applicantSequence: Number(selectedApplicantSequence),
+          financialYear: row.financialYear.trim(),
+          pat: Number(row.pat) || 0,
+          depreciation: Number(row.depreciation) || 0,
+          salaryToPartners: Number(row.salaryToPartners) || 0,
+          interestToRelatedParties: Number(row.interestToRelatedParties) || 0,
+          isLatestFinancialYear: Boolean(row.isLatestFinancialYear),
+          isActive: Boolean(row.isActive !== false),
+          createdBy: Number(currentUserId),
+        };
+        savePromises.push(
+          backOfficeService
+            .createNormalIncome(payload)
+            .then((res) => ({ success: true, item: `Primary Income (${row.financialYear})`, res }))
+            .catch((err) => ({
+              success: false,
+              item: `Primary Income (${row.financialYear})`,
+              error: err?.response?.data?.message || err?.message || 'Create failed',
+            }))
+        );
+      });
+
+    // Primary Income PUTs
+    normalIncomeRows
+      .filter((r) => r.isPersisted && r.applicationNormalIncomeDetailsId && r.isModified)
+      .forEach((row) => {
+        const payload = {
+          applicationNormalIncomeDetailsId: Number(row.applicationNormalIncomeDetailsId),
+          applicationProductDetailsId: Number(calculationAppProdId),
+          agentCustomerId: Number(calculationAgentCustId),
+          applicantSequence: Number(selectedApplicantSequence),
+          financialYear: row.financialYear.trim(),
+          pat: Number(row.pat) || 0,
+          depreciation: Number(row.depreciation) || 0,
+          salaryToPartners: Number(row.salaryToPartners) || 0,
+          interestToRelatedParties: Number(row.interestToRelatedParties) || 0,
+          isLatestFinancialYear: Boolean(row.isLatestFinancialYear),
+          isActive: Boolean(row.isActive !== false),
+          modifiedBy: Number(currentUserId),
+        };
+        savePromises.push(
+          backOfficeService
+            .updateNormalIncome(row.applicationNormalIncomeDetailsId, payload)
+            .then((res) => ({ success: true, item: `Primary Income (${row.financialYear})`, res }))
+            .catch((err) => ({
+              success: false,
+              item: `Primary Income (${row.financialYear})`,
+              error: err?.response?.data?.message || err?.message || 'Update failed',
+            }))
+        );
+      });
+
+    // Other Income POSTs
+    normalOtherIncomeRows
+      .filter((r) => !r.isPersisted || !r.applicationNormalOtherIncomeDetailsId)
+      .forEach((row) => {
+        const payload = {
+          applicationProductDetailsId: Number(calculationAppProdId),
+          agentCustomerId: Number(calculationAgentCustId),
+          applicantSequence: Number(selectedApplicantSequence),
+          incomeType: row.incomeType || 'HOUSE_PROPERTY',
+          annualIncomeAmount: Number(row.annualIncomeAmount) || 0,
+          considerationPercentage: Number(row.considerationPercentage) || 0,
+          isActive: Boolean(row.isActive !== false),
+          createdBy: Number(currentUserId),
+        };
+        savePromises.push(
+          backOfficeService
+            .createNormalOtherIncome(payload)
+            .then((res) => ({ success: true, item: `Other Income (${row.incomeType})`, res }))
+            .catch((err) => ({
+              success: false,
+              item: `Other Income (${row.incomeType})`,
+              error: err?.response?.data?.message || err?.message || 'Create failed',
+            }))
+        );
+      });
+
+    // Other Income PUTs
+    normalOtherIncomeRows
+      .filter((r) => r.isPersisted && r.applicationNormalOtherIncomeDetailsId && r.isModified)
+      .forEach((row) => {
+        const payload = {
+          applicationNormalOtherIncomeDetailsId: Number(row.applicationNormalOtherIncomeDetailsId),
+          applicationProductDetailsId: Number(calculationAppProdId),
+          agentCustomerId: Number(calculationAgentCustId),
+          applicantSequence: Number(selectedApplicantSequence),
+          incomeType: row.incomeType || 'HOUSE_PROPERTY',
+          annualIncomeAmount: Number(row.annualIncomeAmount) || 0,
+          considerationPercentage: Number(row.considerationPercentage) || 0,
+          isActive: Boolean(row.isActive !== false),
+          modifiedBy: Number(currentUserId),
+        };
+        savePromises.push(
+          backOfficeService
+            .updateNormalOtherIncome(row.applicationNormalOtherIncomeDetailsId, payload)
+            .then((res) => ({ success: true, item: `Other Income (${row.incomeType})`, res }))
+            .catch((err) => ({
+              success: false,
+              item: `Other Income (${row.incomeType})`,
+              error: err?.response?.data?.message || err?.message || 'Update failed',
+            }))
+        );
+      });
+
+    if (savePromises.length > 0) {
+      setNormalIncomeSaving(true);
+      try {
+        const settled = await Promise.allSettled(savePromises);
+        const failures = [];
+        settled.forEach((res) => {
+          if (res.status === 'rejected') {
+            failures.push(res.reason?.message || 'Save request rejected');
+          } else if (res.value && !res.value.success) {
+            failures.push(`${res.value.item}: ${res.value.error}`);
+          }
+        });
+
+        if (failures.length > 0) {
+          setNormalIncomeSaving(false);
+          return {
+            success: false,
+            message: `Failed to save Normal Income records: ${failures.join('; ')}`,
+          };
+        }
+
+        // Rehydrate server state after successful saves
+        await fetchNormalIncomeRecords(calculationAppProdId, selectedApplicantSequence);
+      } catch (err) {
+        setNormalIncomeSaving(false);
+        return {
+          success: false,
+          message: err?.response?.data?.message || err?.message || 'An unexpected error occurred during save.',
+        };
+      } finally {
+        setNormalIncomeSaving(false);
+      }
+    }
+
+    return { success: true, count: savePromises.length };
+  };
+
   // Phase 2D: Final Eligibility Calculation & Assessment Result State for Step 14
   const [assessmentsList, setAssessmentsList] = useState([]);
   const [assessmentsLoading, setAssessmentsLoading] = useState(false);
   const [assessmentsError, setAssessmentsError] = useState(null);
 
   // Per-applicant & per-method calculation settings map
-  // Key: `${applicantSequence}_${methodCode}` (e.g. "0_INCOME", "0_ABB", "1_INCOME")
+  // Key: `${applicantSequence}_${methodCode}` (e.g. "0_INCOME", "0_ABB", "0_NORMAL_INCOME", "1_INCOME")
   const [calcSettingsMap, setCalcSettingsMap] = useState({});
   const [calculating, setCalculating] = useState(false);
   const [calcBanner, setCalcBanner] = useState(null);
@@ -3145,7 +3679,15 @@ export default function CustomerVerification() {
   // Current active assessment based on applicant sequence and method
   const currentAssessment = useMemo(() => {
     if (!Array.isArray(assessmentsList) || assessmentsList.length === 0) return null;
-    const currentMethodId = selectedMethodCode === 'ABB' ? 2 : 1;
+    let currentMethodId = 1;
+    if (selectedMethodCode === 'ABB') currentMethodId = 2;
+    else if (selectedMethodCode === 'RTR') currentMethodId = 3;
+    else if (selectedMethodCode === 'NORMAL_INCOME') {
+      const normalMethod = assessmentMethods.find(
+        (m) => (m.methodCode || '').toUpperCase() === 'NORMAL_INCOME'
+      );
+      currentMethodId = normalMethod?.assessmentMethodId ? Number(normalMethod.assessmentMethodId) : 4;
+    }
     const matches = assessmentsList.filter(
       (a) =>
         Number(a.applicantSequence) === Number(selectedApplicantSequence) &&
@@ -3158,14 +3700,16 @@ export default function CustomerVerification() {
       (a, b) => new Date(b.calculatedAt || b.createdAt || 0) - new Date(a.calculatedAt || a.createdAt || 0)
     );
     return sorted[0];
-  }, [assessmentsList, selectedApplicantSequence, selectedMethodCode]);
+  }, [assessmentsList, selectedApplicantSequence, selectedMethodCode, assessmentMethods]);
 
   const basePolicyFoir = useMemo(() => {
-    if (selectedMethodCode !== 'INCOME') {
+    if (selectedMethodCode !== 'INCOME' && selectedMethodCode !== 'NORMAL_INCOME') {
       return null;
     }
 
-    // Dynamic lookup from FOIRMaster using applicant's employmentTypeId and Income Method (assessmentMethodId = 1)
+    const targetMethodId = selectedMethodCode === 'NORMAL_INCOME' ? 4 : 1;
+
+    // Dynamic lookup from FOIRMaster using applicant's employmentTypeId and assessment method
     if (Array.isArray(foirMasterList) && foirMasterList.length > 0 && selectedEmploymentTypeId != null) {
       const now = new Date();
       const matchingFoir = foirMasterList.find((f) => {
@@ -3173,7 +3717,7 @@ export default function CustomerVerification() {
         const empMatch = Number(f.employmentTypeId) === Number(selectedEmploymentTypeId);
         const methodMatch =
           f.assessmentMethodId == null ||
-          Number(f.assessmentMethodId) === 1; // 1 = Income Method
+          Number(f.assessmentMethodId) === targetMethodId;
         if (!empMatch || !methodMatch) return false;
 
         // Effective date validity
@@ -3188,14 +3732,14 @@ export default function CustomerVerification() {
       }
     }
 
-    return 65;
+    return null;
   }, [selectedMethodCode, foirMasterList, selectedEmploymentTypeId]);
 
   const resolvedPolicyFoir = useMemo(() => {
     if (selectedMethodCode === 'RTR') {
       return 'Not Applicable (RTR Method)';
     }
-    if (selectedMethodCode !== 'INCOME') {
+    if (selectedMethodCode === 'ABB') {
       return 'Not Applicable (ABB Method)';
     }
 
@@ -3209,44 +3753,22 @@ export default function CustomerVerification() {
       return `${currentAssessment.foirPercentApplied}%`;
     }
 
-    // 3. Fallback to base policy from FOIR Master
-    return basePolicyFoir != null ? `${basePolicyFoir}%` : '65%';
+    // 3. Fallback to base policy from FOIR Master (if available)
+    if (basePolicyFoir != null) {
+      return `${basePolicyFoir}%`;
+    }
+
+    return 'Policy FOIR from Master (Auto)';
   }, [selectedMethodCode, currentCalcSettings.isEditingFoir, currentCalcSettings.manualFoirInput, currentAssessment, basePolicyFoir]);
 
   // Salary & Other Income Dirty Check
   const isSalaryDirty = useMemo(() => {
     const salaryUnsaved = (Array.isArray(salaryRows) ? salaryRows : []).some((r) => !r.isPersisted || r.isModified);
     const otherUnsaved = (Array.isArray(otherIncomeRows) ? otherIncomeRows : []).some((r) => !r.isPersisted || r.isModified);
-    return salaryUnsaved || otherUnsaved;
-  }, [salaryRows, otherIncomeRows]);
-
-  // Salary Multi-Month Average (N >= 3) based on Considered Income
-  const liveSalaryAverage = useMemo(() => {
-    const validRows = salaryRows.filter(
-      (r) => r.salaryMonth && r.basicAmount !== '' && !isNaN(Number(r.basicAmount))
-    );
-    if (validRows.length === 0) return 0;
-    const total = validRows.reduce((sum, r) => {
-      const val = r.previewConsideredIncome != null && r.previewConsideredIncome !== ''
-        ? Number(r.previewConsideredIncome)
-        : (Number(r.totalConsideredIncome) || 0);
-      return sum + val;
-    }, 0);
-    return Math.round(total / validRows.length);
-  }, [salaryRows]);
-
-  // Total Other Income
-  const liveTotalOtherIncome = useMemo(() => {
-    return otherIncomeRows.reduce((sum, r) => {
-      const amt = Number(r.incomeAmount) || 0;
-      return sum + amt;
-    }, 0);
-  }, [otherIncomeRows]);
-
-  // Final Combined Considered Income (Salary Avg Net + Total Other Income)
-  const liveFinalConsideredIncome = useMemo(() => {
-    return liveSalaryAverage + liveTotalOtherIncome;
-  }, [liveSalaryAverage, liveTotalOtherIncome]);
+    const normalUnsaved = (Array.isArray(normalIncomeRows) ? normalIncomeRows : []).some((r) => !r.isPersisted || r.isModified);
+    const normalOtherUnsaved = (Array.isArray(normalOtherIncomeRows) ? normalOtherIncomeRows : []).some((r) => !r.isPersisted || r.isModified);
+    return salaryUnsaved || otherUnsaved || normalUnsaved || normalOtherUnsaved;
+  }, [salaryRows, otherIncomeRows, normalIncomeRows, normalOtherIncomeRows]);
 
   // Calculate Eligibility handler
   const handleCalculateEligibility = async () => {
@@ -3418,6 +3940,26 @@ export default function CustomerVerification() {
         });
         return;
       }
+    } else if (selectedMethodCode === 'NORMAL_INCOME') {
+      // Step 4a: Synchronize Normal Income records (Primary Income POST/PUT, Other Income POST/PUT)
+      const syncRes = await synchronizeNormalIncomeRecords();
+      if (!syncRes.success) {
+        setCalcBanner({
+          type: 'error',
+          message: syncRes.message || 'Normal Income details could not be prepared for eligibility calculation. Please review the highlighted fields and try again.',
+        });
+        return;
+      }
+
+      // Step 4b: Verify at least one active primary income record exists in state/server
+      const activeIncomeCount = normalIncomeRows.filter((r) => r.financialYear && r.isActive !== false).length;
+      if (activeIncomeCount === 0) {
+        setCalcBanner({
+          type: 'error',
+          message: 'At least one active Financial Year record is required before calculating Normal Income eligibility.',
+        });
+        return;
+      }
     } else if (selectedMethodCode === 'ABB') {
       const includedAccounts = abbAccounts.filter((a) => a.isIncluded !== false);
       if (includedAccounts.length === 0) {
@@ -3475,12 +4017,12 @@ export default function CustomerVerification() {
     }
 
     let finalManualFoir = null;
-    if (selectedMethodCode === 'INCOME' && currentCalcSettings.isEditingFoir && currentCalcSettings.manualFoirInput !== '') {
+    if ((selectedMethodCode === 'INCOME' || selectedMethodCode === 'NORMAL_INCOME') && currentCalcSettings.isEditingFoir && currentCalcSettings.manualFoirInput !== '') {
       const foirNum = Number(currentCalcSettings.manualFoirInput);
       if (isNaN(foirNum) || foirNum <= 0 || foirNum > 100) {
         setCalcBanner({
           type: 'error',
-          message: 'Manual FOIR override must be a valid percentage between 0.1 and 100 (e.g. 60).',
+          message: 'Manual FOIR override must be a valid percentage between 0.1 and 100 (e.g. 70).',
         });
         return;
       }
@@ -3500,6 +4042,17 @@ export default function CustomerVerification() {
       finalManualObligation = oblNum;
     }
 
+    // Resolve AssessmentMethodId dynamically
+    let calculatedMethodId = 1;
+    if (selectedMethodCode === 'ABB') {
+      calculatedMethodId = 2;
+    } else if (selectedMethodCode === 'NORMAL_INCOME') {
+      const normalMethod = assessmentMethods.find(
+        (m) => (m.methodCode || '').toUpperCase() === 'NORMAL_INCOME'
+      );
+      calculatedMethodId = normalMethod?.assessmentMethodId ? Number(normalMethod.assessmentMethodId) : 4;
+    }
+
     setCalculating(true);
     try {
       const payload = {
@@ -3507,7 +4060,7 @@ export default function CustomerVerification() {
         agentCustomerId: Number(calculationAgentCustId),
         applicationEmploymentIncomeDetailsId: Number(selectedEmploymentIncomeDetailsId),
         applicantSequence: Number(selectedApplicantSequence),
-        assessmentMethodId: selectedMethodCode === 'ABB' ? 2 : 1,
+        assessmentMethodId: calculatedMethodId,
         manualROI: finalManualRoi,
         manualTenureMonths: finalManualTenure,
         manualFOIR: finalManualFoir,
@@ -3662,6 +4215,23 @@ export default function CustomerVerification() {
             methodCode: 'RTR',
             methodName: 'RTR Method',
             description: 'Repayment Track Record (RTR) eligibility assessment based on live loan performance and norm multipliers.',
+            isActive: true,
+          },
+        ];
+      }
+
+      // Ensure Normal Income Method is present if not already returned by server
+      const hasNormalIncome = activeMethods.some(
+        (m) => (m.methodCode && m.methodCode.toUpperCase() === 'NORMAL_INCOME') || Number(m.assessmentMethodId) === 4
+      );
+      if (!hasNormalIncome) {
+        activeMethods = [
+          ...activeMethods,
+          {
+            assessmentMethodId: 4,
+            methodCode: 'NORMAL_INCOME',
+            methodName: 'Normal Income',
+            description: 'Normal Income assessment method based on multi-year PAT, depreciation, partner salary, related-party interest, and other income.',
             isActive: true,
           },
         ];
@@ -7565,6 +8135,71 @@ export default function CustomerVerification() {
     return currentAssessment?.existingEMI != null ? currentAssessment.existingEMI : 0;
   }, [selectedApplicantActiveLoans, currentAssessment]);
 
+  // Normal Income Live Previews (Estimated Preview - Non-Authoritative)
+  const normalIncomeMetrics = useMemo(() => {
+    // 1. Primary Income calculations per row
+    const yearCalcs = (Array.isArray(normalIncomeRows) ? normalIncomeRows : []).map((r) => {
+      const pat = Number(r.pat) || 0;
+      const depr = Number(r.depreciation) || 0;
+      const salary = Number(r.salaryToPartners) || 0;
+      const interest = Number(r.interestToRelatedParties) || 0;
+      const computed = pat + depr + salary + interest;
+      return {
+        ...r,
+        computedPrimaryIncome: computed,
+      };
+    });
+
+    const latestRow = yearCalcs.find((r) => r.isLatestFinancialYear) || null;
+    const latestPrimaryBusinessIncome = latestRow ? latestRow.computedPrimaryIncome : 0;
+
+    // 2. Other Income calculations per row
+    const otherCalcs = (Array.isArray(normalOtherIncomeRows) ? normalOtherIncomeRows : []).map((r) => {
+      const amt = Number(r.annualIncomeAmount) || 0;
+      const pct =
+        r.considerationPercentage !== '' && !isNaN(Number(r.considerationPercentage))
+          ? Number(r.considerationPercentage)
+          : 100;
+      const considered = Math.round((amt * pct) / 100);
+      return {
+        ...r,
+        computedConsideredAmount: considered,
+      };
+    });
+
+    const totalConsideredOtherIncome = otherCalcs.reduce((sum, r) => sum + r.computedConsideredAmount, 0);
+
+    // 3. Salary Income reference calculation (from existing salaryRows or employment details)
+    let annualSalary = 0;
+    if (liveSalaryAverage > 0) {
+      annualSalary = liveSalaryAverage * 12;
+    } else if (selectedEmploymentRecord?.grossAnnualIncome > 0) {
+      annualSalary = Number(selectedEmploymentRecord.grossAnnualIncome);
+    }
+    const consideredSalaryComponent = Math.round(annualSalary * 0.60);
+
+    // 4. Combined Estimated Monthly Eligible Income
+    // Formula: (((Primary Business Income + Considered Other Income) * 70%) + (Salary Income * 60%)) / 12
+    const estimatedEligibleMonthlyIncome = Math.round(
+      (((latestPrimaryBusinessIncome + totalConsideredOtherIncome) * 0.70) + consideredSalaryComponent) / 12
+    );
+
+    // Eligible EMI = Eligible Monthly Income - Existing Monthly Obligations (FOIR already applied inside Eligible Monthly Income)
+    const estimatedEligibleEMI = Math.max(0, estimatedEligibleMonthlyIncome - (Number(totalDeclaredMonthlyEmi) || 0));
+
+    return {
+      yearCalcs,
+      latestRow,
+      latestPrimaryBusinessIncome,
+      otherCalcs,
+      totalConsideredOtherIncome,
+      annualSalary,
+      consideredSalaryComponent,
+      estimatedEligibleMonthlyIncome,
+      estimatedEligibleEMI,
+    };
+  }, [normalIncomeRows, normalOtherIncomeRows, liveSalaryAverage, selectedEmploymentRecord?.grossAnnualIncome, totalDeclaredMonthlyEmi]);
+
   // Handlers
   const handleFetchCreditReport = () => {
     setBureauState('loading');
@@ -9413,6 +10048,7 @@ export default function CustomerVerification() {
                         const isSelected = code === selectedMethodCode.toUpperCase();
                         const isIncome = code === 'INCOME';
                         const isRtr = code === 'RTR';
+                        const isNormalIncome = code === 'NORMAL_INCOME';
                         return (
                           <button
                             key={method.assessmentMethodId || method.methodCode}
@@ -9426,6 +10062,8 @@ export default function CustomerVerification() {
                                   BadgeIndianRupeeIcon && <BadgeIndianRupeeIcon size={22} />
                                 ) : isRtr ? (
                                   CreditCardIcon && <CreditCardIcon size={22} />
+                                ) : isNormalIncome ? (
+                                  TrendingUpIcon && <TrendingUpIcon size={22} />
                                 ) : (
                                   BuildingIcon && <BuildingIcon size={22} />
                                 )}
@@ -9436,13 +10074,22 @@ export default function CustomerVerification() {
                             </div>
                             <div className="bo-cv-method-card-content">
                               <h4 className="bo-cv-method-title">
-                                {method.methodName || (isIncome ? 'Income Method' : isRtr ? 'RTR Method' : 'ABB Method')}
+                                {method.methodName ||
+                                  (isIncome
+                                    ? 'Income Method'
+                                    : isRtr
+                                    ? 'RTR Method'
+                                    : isNormalIncome
+                                    ? 'Normal Income'
+                                    : 'ABB Method')}
                               </h4>
                               <p className="bo-cv-method-desc">
                                 {isIncome
                                   ? 'Evaluates eligibility from 3-month salary breakdown (Basic, HRA, CCA, TA, Incentives) and policy FOIR.'
                                   : isRtr
                                   ? 'Evaluates eligibility from live loan repayment track records (MOB, ODs, Bounces) and RTR Norm multiplier rules.'
+                                  : isNormalIncome
+                                  ? 'Evaluates eligibility from multi-year business financials (PAT, Depreciation, Partner Salary, Interest) and other income streams.'
                                   : 'Evaluates eligibility from multi-account banking conduct and 3-point monthly average balances (5th, 15th, 25th).'}
                               </p>
                             </div>
@@ -9595,7 +10242,13 @@ export default function CustomerVerification() {
                     <div className="bo-cv-assess-info-cell">
                       <span className="bo-cv-assess-info-label">Assessment Method</span>
                       <strong className="bo-cv-assess-info-val bo-cv-method-val">
-                        {selectedMethodCode === 'INCOME' ? 'Income Method' : selectedMethodCode === 'RTR' ? 'RTR Method' : 'ABB Method'}
+                        {selectedMethodCode === 'INCOME'
+                          ? 'Income Method'
+                          : selectedMethodCode === 'RTR'
+                          ? 'RTR Method'
+                          : selectedMethodCode === 'NORMAL_INCOME'
+                          ? 'Normal Income'
+                          : 'ABB Method'}
                       </strong>
                     </div>
 
@@ -9662,6 +10315,8 @@ export default function CustomerVerification() {
                             ? 'Manual Income Assessment Workspace'
                             : selectedMethodCode === 'RTR'
                             ? 'Repayment Track Record (RTR) Loan Facilities'
+                            : selectedMethodCode === 'NORMAL_INCOME'
+                            ? 'Normal Income Assessment Workspace'
                             : 'Average Bank Balance (ABB) Method Workspace'}
                         </h3>
                         <p className="bo-cv-assess-section-sub">
@@ -9669,12 +10324,20 @@ export default function CustomerVerification() {
                             ? `Enter & review 3-month salary breakdown and allowances for ${selectedApplicant?.name || 'Applicant'}.`
                             : selectedMethodCode === 'RTR'
                             ? `Configure and review active loan repayment track records and performance history for ${selectedApplicant?.name || 'Applicant'}.`
+                            : selectedMethodCode === 'NORMAL_INCOME'
+                            ? `Configure multi-year business financials (PAT, Depreciation, Partner Salary, Interest) and other income streams for ${selectedApplicant?.name || 'Applicant'}.`
                             : `Multi-account banking analysis and monthly 3-point average balance verification for ${selectedApplicant?.name || 'Applicant'}.`}
                         </p>
                       </div>
                     </div>
                     <span className="bo-cv-phase-tag is-method">
-                      {selectedMethodCode === 'INCOME' ? 'Income Method' : selectedMethodCode === 'RTR' ? 'RTR Method' : 'ABB Method'}
+                      {selectedMethodCode === 'INCOME'
+                        ? 'Income Method'
+                        : selectedMethodCode === 'RTR'
+                        ? 'RTR Method'
+                        : selectedMethodCode === 'NORMAL_INCOME'
+                        ? 'Normal Income'
+                        : 'ABB Method'}
                     </span>
                   </div>
 
@@ -10431,6 +11094,448 @@ export default function CustomerVerification() {
                             </strong>
                             <span className="bo-cv-salary-summary-sub">
                               Evaluated against Min MOB / Max MOB norms
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : selectedMethodCode === 'NORMAL_INCOME' ? (
+                    /* Normal Income Method Workspace */
+                    <div className="bo-cv-normal-income-wrap">
+                      {/* Loading State */}
+                      {normalIncomeLoading ? (
+                        <div className="bo-cv-assess-loading-box">
+                          <div className="bo-cv-loading-spinner" />
+                          <span>Loading Normal Income records...</span>
+                        </div>
+                      ) : normalIncomeError ? (
+                        <div className="bo-cv-assess-error-box">
+                          <div className="bo-cv-assess-error-msg">
+                            {AlertTriangleIcon && <AlertTriangleIcon size={16} />}
+                            <span>{normalIncomeError}</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="bo-btn bo-btn--outline bo-btn--sm"
+                            onClick={() => fetchNormalIncomeRecords(calculationAppProdId, selectedApplicantSequence)}
+                          >
+                            {RefreshCwIcon && <RefreshCwIcon size={12} />}
+                            <span>Retry</span>
+                          </button>
+                        </div>
+                      ) : null}
+
+                      {/* Notification Banner */}
+                      {normalIncomeBanner && (
+                        <div className={`bo-cv-salary-banner is-${normalIncomeBanner.type}`}>
+                          <div className="bo-cv-salary-banner-icon">
+                            {normalIncomeBanner.type === 'success' && (CheckCircleIcon ? <CheckCircleIcon size={16} /> : '✓')}
+                            {normalIncomeBanner.type === 'error' && (AlertTriangleIcon ? <AlertTriangleIcon size={16} /> : '⚠️')}
+                            {normalIncomeBanner.type === 'warning' && (AlertCircleIcon ? <AlertCircleIcon size={16} /> : 'ℹ️')}
+                            {normalIncomeBanner.type === 'info' && (InfoIcon ? <InfoIcon size={16} /> : 'ℹ️')}
+                          </div>
+                          <div className="bo-cv-salary-banner-msg">{normalIncomeBanner.message}</div>
+                        </div>
+                      )}
+
+                      {/* ── Sub-Section 1: Primary Business Income ── */}
+                      <div className="bo-cv-normal-block">
+                        <div className="bo-cv-salary-top-bar">
+                          <div className="bo-cv-salary-top-left">
+                            <h4 className="bo-cv-salary-top-title">Primary Business Income</h4>
+                            <span className="bo-cv-salary-count-badge">
+                              {normalIncomeRows.length} {normalIncomeRows.length === 1 ? 'Year' : 'Years'} Configured
+                            </span>
+                            {normalIncomeMetrics.latestRow ? (
+                              <span className="bo-cv-salary-count-badge" style={{ background: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0' }}>
+                                Latest Year: {normalIncomeMetrics.latestRow.financialYear || 'Selected'} ({formatCurrency(normalIncomeMetrics.latestPrimaryBusinessIncome)})
+                              </span>
+                            ) : (
+                              <span className="bo-cv-salary-count-badge" style={{ background: '#fffbeb', color: '#b45309', borderColor: '#fde68a' }}>
+                                No Latest Year Designated
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="bo-btn bo-btn--outline bo-btn--sm bo-cv-salary-add-btn"
+                            onClick={handleAddNormalIncomeRow}
+                            disabled={normalIncomeSaving}
+                          >
+                            {PlusIcon ? <PlusIcon size={13} /> : '+'}
+                            <span>Add Financial Year</span>
+                          </button>
+                        </div>
+
+                        <div className="bo-cv-salary-table-wrapper">
+                          <table className="bo-cv-salary-table" aria-label="Primary Business Income Table">
+                            <thead>
+                              <tr>
+                                <th style={{ minWidth: '130px' }}>Financial Year</th>
+                                <th style={{ minWidth: '120px', textAlign: 'center' }}>Considered Year</th>
+                                <th className="th-num" style={{ minWidth: '130px' }}>PAT (₹)</th>
+                                <th className="th-num" style={{ minWidth: '130px' }}>Depreciation (₹)</th>
+                                <th className="th-num" style={{ minWidth: '140px' }}>Salary to Partners (₹)</th>
+                                <th className="th-num" style={{ minWidth: '140px' }}>Related Party Interest (₹)</th>
+                                <th className="th-num" style={{ minWidth: '150px' }}>Primary Business Income (₹)</th>
+                                <th className="th-action" style={{ minWidth: '60px', textAlign: 'center' }}>Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {normalIncomeRows.length === 0 ? (
+                                <tr>
+                                  <td colSpan={8} style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>
+                                    No financial years configured. Click &quot;Add Financial Year&quot; above to enter year-wise business figures.
+                                  </td>
+                                </tr>
+                              ) : (
+                                normalIncomeRows.map((row, idx) => {
+                                  const isDraft = !row.isPersisted || !row.applicationNormalIncomeDetailsId;
+                                  const isLatest = Boolean(row.isLatestFinancialYear);
+                                  const computedIncome =
+                                    (Number(row.pat) || 0) +
+                                    (Number(row.depreciation) || 0) +
+                                    (Number(row.salaryToPartners) || 0) +
+                                    (Number(row.interestToRelatedParties) || 0);
+
+                                  return (
+                                    <tr
+                                      key={row.id || `normal-inc-row-${idx}`}
+                                      className={isLatest ? 'is-rtr-selected-row' : ''}
+                                    >
+                                      <td>
+                                        <input
+                                          type="text"
+                                          placeholder="e.g. 2025-26"
+                                          className="bo-cv-salary-input"
+                                          value={row.financialYear || ''}
+                                          onChange={(e) => handleNormalIncomeRowChange(idx, 'financialYear', e.target.value)}
+                                          disabled={normalIncomeSaving}
+                                          style={{ textAlign: 'left', fontWeight: 600 }}
+                                          aria-label={`Financial Year for Row ${idx + 1}`}
+                                        />
+                                      </td>
+                                      <td style={{ textAlign: 'center' }}>
+                                        <button
+                                          type="button"
+                                          className={`bo-cv-latest-year-btn ${isLatest ? 'is-active' : ''}`}
+                                          onClick={() => handleSetLatestFinancialYear(idx)}
+                                          disabled={normalIncomeSaving}
+                                          title={isLatest ? 'Currently designated latest considered financial year' : 'Click to set as latest financial year'}
+                                        >
+                                          {isLatest ? 'Latest Year ✓' : 'Set Latest'}
+                                        </button>
+                                      </td>
+                                      <td className="td-num">
+                                        <input
+                                          type="number"
+                                          step="1000"
+                                          placeholder="0"
+                                          className="bo-cv-salary-input"
+                                          value={row.pat === 0 ? '0' : row.pat || ''}
+                                          onChange={(e) => handleNormalIncomeRowChange(idx, 'pat', e.target.value)}
+                                          disabled={normalIncomeSaving}
+                                          aria-label={`Profit After Tax for Row ${idx + 1}`}
+                                        />
+                                      </td>
+                                      <td className="td-num">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="1000"
+                                          placeholder="0"
+                                          className="bo-cv-salary-input"
+                                          value={row.depreciation === 0 ? '0' : row.depreciation || ''}
+                                          onChange={(e) => handleNormalIncomeRowChange(idx, 'depreciation', e.target.value)}
+                                          disabled={normalIncomeSaving}
+                                          aria-label={`Depreciation for Row ${idx + 1}`}
+                                        />
+                                      </td>
+                                      <td className="td-num">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="1000"
+                                          placeholder="0"
+                                          className="bo-cv-salary-input"
+                                          value={row.salaryToPartners === 0 ? '0' : row.salaryToPartners || ''}
+                                          onChange={(e) => handleNormalIncomeRowChange(idx, 'salaryToPartners', e.target.value)}
+                                          disabled={normalIncomeSaving}
+                                          aria-label={`Salary to Partners for Row ${idx + 1}`}
+                                        />
+                                      </td>
+                                      <td className="td-num">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="1000"
+                                          placeholder="0"
+                                          className="bo-cv-salary-input"
+                                          value={row.interestToRelatedParties === 0 ? '0' : row.interestToRelatedParties || ''}
+                                          onChange={(e) => handleNormalIncomeRowChange(idx, 'interestToRelatedParties', e.target.value)}
+                                          disabled={normalIncomeSaving}
+                                          aria-label={`Interest to Related Parties for Row ${idx + 1}`}
+                                        />
+                                      </td>
+                                      <td className="td-num">
+                                        <div className="bo-cv-salary-readonly-val" style={{ fontWeight: 700, color: isLatest ? '#047857' : '#334155' }}>
+                                          {formatCurrency(row.primaryIncome != null && !row.isModified ? row.primaryIncome : computedIncome)}
+                                        </div>
+                                      </td>
+                                      <td className="td-action" style={{ textAlign: 'center' }}>
+                                        {isDraft ? (
+                                          <button
+                                            type="button"
+                                            className="bo-cv-loan-row-remove-btn"
+                                            title="Remove unsaved draft financial year"
+                                            aria-label={`Remove draft financial year ${idx + 1}`}
+                                            onClick={() => handleRemoveNormalIncomeDraftRow(idx)}
+                                            disabled={normalIncomeSaving}
+                                          >
+                                            {XIcon ? <XIcon size={13} /> : '✕'}
+                                          </button>
+                                        ) : (
+                                          <span className="bo-cv-salary-readonly-val" style={{ color: '#94a3b8' }}>
+                                            —
+                                          </span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="bo-cv-salary-action-bar">
+                          <div className="bo-cv-salary-action-hint">
+                            <span className="bo-cv-salary-hint-dot" />
+                            <span>
+                              <strong>Formula:</strong> Primary Business Income = PAT + Depreciation + Salary to Partners + Interest to Related Parties. Automatically validated and persisted on calculation.
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ── Sub-Section 2: Other Income Streams ── */}
+                      <div className="bo-cv-normal-block" style={{ marginTop: '16px' }}>
+                        <div className="bo-cv-salary-top-bar">
+                          <div className="bo-cv-salary-top-left">
+                            <h4 className="bo-cv-salary-top-title">Other Income Streams</h4>
+                            <span className="bo-cv-salary-count-badge">
+                              {normalOtherIncomeRows.length} {normalOtherIncomeRows.length === 1 ? 'Stream' : 'Streams'} Configured
+                            </span>
+                            {normalIncomeMetrics.totalConsideredOtherIncome > 0 && (
+                              <span className="bo-cv-salary-count-badge" style={{ background: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0' }}>
+                                Considered Other Income: {formatCurrency(normalIncomeMetrics.totalConsideredOtherIncome)}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="bo-btn bo-btn--outline bo-btn--sm bo-cv-salary-add-btn"
+                            onClick={handleAddNormalOtherIncomeRow}
+                            disabled={normalIncomeSaving}
+                          >
+                            {PlusIcon ? <PlusIcon size={13} /> : '+'}
+                            <span>Add Other Income</span>
+                          </button>
+                        </div>
+
+                        <div className="bo-cv-salary-table-wrapper">
+                          <table className="bo-cv-salary-table" aria-label="Other Income Streams Table">
+                            <thead>
+                              <tr>
+                                <th style={{ minWidth: '220px' }}>Income Stream Type</th>
+                                <th className="th-num" style={{ minWidth: '160px' }}>Annual Income Amount (₹)</th>
+                                <th className="th-num" style={{ minWidth: '130px' }}>Consideration %</th>
+                                <th className="th-num" style={{ minWidth: '160px' }}>Considered Income (₹)</th>
+                                <th className="th-action" style={{ minWidth: '60px', textAlign: 'center' }}>Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {normalOtherIncomeRows.length === 0 ? (
+                                <tr>
+                                  <td colSpan={5} style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>
+                                    No other income streams added. Click &quot;Add Other Income&quot; to include House Property, Agriculture, or Other Sources.
+                                  </td>
+                                </tr>
+                              ) : (
+                                normalOtherIncomeRows.map((row, idx) => {
+                                  const isDraft = !row.isPersisted || !row.applicationNormalOtherIncomeDetailsId;
+                                  const amt = Number(row.annualIncomeAmount) || 0;
+                                  const pct =
+                                    row.considerationPercentage !== '' && !isNaN(Number(row.considerationPercentage))
+                                      ? Number(row.considerationPercentage)
+                                      : 100;
+                                  const computedConsidered = Math.round((amt * pct) / 100);
+
+                                  return (
+                                    <tr key={row.id || `normal-other-row-${idx}`}>
+                                      <td>
+                                        <select
+                                          className="bo-cv-salary-input"
+                                          value={row.incomeType || 'HOUSE_PROPERTY'}
+                                          onChange={(e) => handleNormalOtherIncomeRowChange(idx, 'incomeType', e.target.value)}
+                                          disabled={normalIncomeSaving}
+                                          style={{ textAlign: 'left' }}
+                                          aria-label={`Income Type for Row ${idx + 1}`}
+                                        >
+                                          <option value="HOUSE_PROPERTY">House Property</option>
+                                          <option value="AGRICULTURE">Agriculture Income</option>
+                                          <option value="OTHER_SOURCES">Income from Other Sources</option>
+                                        </select>
+                                      </td>
+                                      <td className="td-num">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="1000"
+                                          placeholder="0"
+                                          className="bo-cv-salary-input"
+                                          value={row.annualIncomeAmount === 0 ? '0' : row.annualIncomeAmount || ''}
+                                          onChange={(e) => handleNormalOtherIncomeRowChange(idx, 'annualIncomeAmount', e.target.value)}
+                                          disabled={normalIncomeSaving}
+                                          aria-label={`Annual Income Amount for Row ${idx + 1}`}
+                                        />
+                                      </td>
+                                      <td className="td-num">
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            step="1"
+                                            placeholder="100"
+                                            className="bo-cv-salary-input"
+                                            style={{ width: '60px', textAlign: 'right' }}
+                                            value={row.considerationPercentage === 0 ? '0' : row.considerationPercentage || ''}
+                                            onChange={(e) => handleNormalOtherIncomeRowChange(idx, 'considerationPercentage', e.target.value)}
+                                            disabled={normalIncomeSaving}
+                                            aria-label={`Consideration Percentage for Row ${idx + 1}`}
+                                          />
+                                          <span style={{ fontSize: '12px', color: '#64748b' }}>%</span>
+                                        </div>
+                                      </td>
+                                      <td className="td-num">
+                                        <div className="bo-cv-salary-readonly-val" style={{ fontWeight: 700, color: '#047857' }}>
+                                          {formatCurrency(
+                                            row.consideredIncomeAmount != null && !row.isModified
+                                              ? row.consideredIncomeAmount
+                                              : computedConsidered
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="td-action" style={{ textAlign: 'center' }}>
+                                        {isDraft ? (
+                                          <button
+                                            type="button"
+                                            className="bo-cv-loan-row-remove-btn"
+                                            title="Remove unsaved draft other income row"
+                                            aria-label={`Remove draft other income row ${idx + 1}`}
+                                            onClick={() => handleRemoveNormalOtherIncomeDraftRow(idx)}
+                                            disabled={normalIncomeSaving}
+                                          >
+                                            {XIcon ? <XIcon size={13} /> : '✕'}
+                                          </button>
+                                        ) : (
+                                          <span className="bo-cv-salary-readonly-val" style={{ color: '#94a3b8' }}>
+                                            —
+                                          </span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* ── Sub-Section 3: Salary Income Reference Display (Read-Only) ── */}
+                      <div className="bo-cv-normal-salary-ref-card" style={{ marginTop: '16px' }}>
+                        <div className="bo-cv-normal-salary-ref-header">
+                          <div className="bo-cv-rm-income-ref-title-group">
+                            <span className="bo-cv-rm-income-ref-title">Salary Income Reference (ApplicationSalaryIncomeDetails)</span>
+                            <span className="bo-cv-rm-income-ref-badge">Reference Only &bull; 60% Rule</span>
+                          </div>
+                          <span className="bo-cv-rm-income-ref-sub">
+                            Captured from verified salary records and existing salary-income engine. Read-only in Normal Income assessment.
+                          </span>
+                        </div>
+
+                        <div className="bo-cv-rm-income-ref-grid">
+                          <div className="bo-cv-rm-income-ref-cell">
+                            <span className="bo-cv-rm-income-ref-label">Annual Salary Income</span>
+                            <strong className="bo-cv-rm-income-ref-val">
+                              {formatCurrency(normalIncomeMetrics.annualSalary)}
+                            </strong>
+                          </div>
+
+                          <div className="bo-cv-rm-income-ref-cell">
+                            <span className="bo-cv-rm-income-ref-label">Salary Consideration Policy</span>
+                            <strong className="bo-cv-rm-income-ref-val" style={{ color: '#047857' }}>
+                              60% (Fixed Rule)
+                            </strong>
+                          </div>
+
+                          <div className="bo-cv-rm-income-ref-cell is-net">
+                            <span className="bo-cv-rm-income-ref-label">Considered Salary Component (60%)</span>
+                            <strong className="bo-cv-rm-income-ref-val is-net-val">
+                              {formatCurrency(normalIncomeMetrics.consideredSalaryComponent)}
+                            </strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ── Sub-Section 4: Normal Income Summary Strip (Estimated Preview) ── */}
+                      <div className="bo-cv-salary-summary-card" style={{ marginTop: '16px' }}>
+                        <div className="bo-cv-salary-summary-header">
+                          <h4 className="bo-cv-salary-summary-title">Normal Income Evaluation Summary</h4>
+                          <span className="bo-cv-salary-summary-count" style={{ background: '#f8fafc', color: '#475569', borderColor: '#cbd5e1' }}>
+                            Estimated Preview (Non-Authoritative)
+                          </span>
+                        </div>
+                        <div className="bo-cv-salary-summary-grid">
+                          <div className="bo-cv-salary-summary-item">
+                            <span className="bo-cv-salary-summary-label">Latest Primary Business Income</span>
+                            <strong className="bo-cv-salary-summary-val">
+                              {formatCurrency(normalIncomeMetrics.latestPrimaryBusinessIncome)}
+                            </strong>
+                            <span className="bo-cv-salary-summary-sub">
+                              {normalIncomeMetrics.latestRow?.financialYear ? `FY ${normalIncomeMetrics.latestRow.financialYear}` : 'No latest year designated'}
+                            </span>
+                          </div>
+
+                          <div className="bo-cv-salary-summary-item">
+                            <span className="bo-cv-salary-summary-label">Considered Other Income</span>
+                            <strong className="bo-cv-salary-summary-val">
+                              {formatCurrency(normalIncomeMetrics.totalConsideredOtherIncome)}
+                            </strong>
+                            <span className="bo-cv-salary-summary-sub">
+                              Across {normalOtherIncomeRows.length} {normalOtherIncomeRows.length === 1 ? 'stream' : 'streams'}
+                            </span>
+                          </div>
+
+                          <div className="bo-cv-salary-summary-item">
+                            <span className="bo-cv-salary-summary-label">Considered Salary Component</span>
+                            <strong className="bo-cv-salary-summary-val">
+                              {formatCurrency(normalIncomeMetrics.consideredSalaryComponent)}
+                            </strong>
+                            <span className="bo-cv-salary-summary-sub">
+                              Salary @ 60% policy rule
+                            </span>
+                          </div>
+
+                          <div className="bo-cv-salary-summary-item is-average" style={{ background: '#ecfdf5', borderColor: '#a7f3d0' }}>
+                            <span className="bo-cv-salary-summary-label" style={{ color: '#065f46' }}>Estimated Eligible Monthly Income</span>
+                            <strong className="bo-cv-salary-summary-val is-engine" style={{ color: '#047857' }}>
+                              {formatCurrency(normalIncomeMetrics.estimatedEligibleMonthlyIncome)}
+                            </strong>
+                            <span className="bo-cv-salary-summary-sub" style={{ color: '#065f46' }}>
+                              Est. EMI: {formatCurrency(normalIncomeMetrics.estimatedEligibleEMI)} (Eligible Income − Obligation)
                             </span>
                           </div>
                         </div>
@@ -11499,7 +12604,7 @@ export default function CustomerVerification() {
                     <div className="bo-cv-calc-setting-card">
                       <div className="bo-cv-calc-setting-header">
                         <span className="bo-cv-calc-setting-label">Policy FOIR Limit</span>
-                        {selectedMethodCode === 'INCOME' && (
+                        {(selectedMethodCode === 'INCOME' || selectedMethodCode === 'NORMAL_INCOME') && (
                           <button
                             type="button"
                             className="bo-cv-setting-action-btn"
@@ -11511,7 +12616,7 @@ export default function CustomerVerification() {
                                   !prev.isEditingFoir && prev.manualFoirInput === ''
                                     ? basePolicyFoir != null
                                       ? String(basePolicyFoir)
-                                      : '65'
+                                      : ''
                                     : prev.manualFoirInput,
                               }))
                             }
@@ -11521,7 +12626,7 @@ export default function CustomerVerification() {
                         )}
                       </div>
 
-                      {selectedMethodCode === 'INCOME' && currentCalcSettings.isEditingFoir ? (
+                      {(selectedMethodCode === 'INCOME' || selectedMethodCode === 'NORMAL_INCOME') && currentCalcSettings.isEditingFoir ? (
                         <div className="bo-cv-setting-override-row">
                           <input
                             type="number"
@@ -11529,7 +12634,7 @@ export default function CustomerVerification() {
                             min="0.1"
                             max="100"
                             className="bo-cv-setting-input"
-                            placeholder={basePolicyFoir != null ? String(basePolicyFoir) : '65'}
+                            placeholder={basePolicyFoir != null ? String(basePolicyFoir) : 'e.g. 70'}
                             value={currentCalcSettings.manualFoirInput}
                             onChange={(e) =>
                               updateCurrentCalcSettings((prev) => ({ ...prev, manualFoirInput: e.target.value }))
@@ -11540,10 +12645,10 @@ export default function CustomerVerification() {
                         </div>
                       ) : (
                         <div className="bo-cv-calc-setting-value bo-cv-foir-val">
-                          {selectedMethodCode === 'INCOME'
+                          {selectedMethodCode === 'INCOME' || selectedMethodCode === 'NORMAL_INCOME'
                             ? basePolicyFoir != null
                               ? `${basePolicyFoir}%`
-                              : '65%'
+                              : 'Policy FOIR from Master (Auto)'
                             : selectedMethodCode === 'RTR'
                             ? 'Not Applicable (RTR Method)'
                             : 'Not Applicable (ABB Method)'}
@@ -11551,10 +12656,10 @@ export default function CustomerVerification() {
                       )}
 
                       <span className="bo-cv-calc-setting-hint">
-                        {selectedMethodCode === 'INCOME'
+                        {selectedMethodCode === 'INCOME' || selectedMethodCode === 'NORMAL_INCOME'
                           ? currentCalcSettings.isEditingFoir && currentCalcSettings.manualFoirInput !== ''
-                            ? `Override: ${currentCalcSettings.manualFoirInput}% • Applied FOIR: ${currentCalcSettings.manualFoirInput}% (Base Policy FOIR: ${basePolicyFoir != null ? `${basePolicyFoir}%` : '65%'})`
-                            : `Applied FOIR: ${basePolicyFoir != null ? `${basePolicyFoir}%` : '65%'} (Using Policy Benchmark from FOIR Master for ${selectedEmploymentTypeName || 'applicant'})`
+                            ? `Override: ${currentCalcSettings.manualFoirInput}% • Applied FOIR: ${currentCalcSettings.manualFoirInput}% (Base Policy FOIR: ${basePolicyFoir != null ? `${basePolicyFoir}%` : 'Policy FOIR from Master'})`
+                            : `Applied FOIR: ${basePolicyFoir != null ? `${basePolicyFoir}%` : 'Policy FOIR from Master'} (Using Policy Benchmark from FOIR Master for ${selectedEmploymentTypeName || 'applicant'})`
                           : 'Policy FOIR is not applicable for Average Bank Balance assessment.'}
                       </span>
                     </div>
@@ -11577,6 +12682,8 @@ export default function CustomerVerification() {
                             ? 'RTR Method'
                             : selectedMethodCode === 'INCOME'
                             ? 'Income Method'
+                            : selectedMethodCode === 'NORMAL_INCOME'
+                            ? 'Normal Income'
                             : 'ABB Method'}
                         </strong>
                       </div>
@@ -11636,7 +12743,7 @@ export default function CustomerVerification() {
                                 : formatCurrency(totalDeclaredMonthlyEmi)}
                             </strong>
                           </div>
-                          {selectedMethodCode === 'INCOME' && (
+                          {(selectedMethodCode === 'INCOME' || selectedMethodCode === 'NORMAL_INCOME') && (
                             <>
                               <span className="bo-cv-calc-pre-dot">•</span>
                               <div className="bo-cv-calc-pre-item">
@@ -11646,7 +12753,7 @@ export default function CustomerVerification() {
                                     ? `${currentCalcSettings.manualFoirInput}% (Override)`
                                     : basePolicyFoir != null
                                     ? `${basePolicyFoir}%`
-                                    : '65%'}
+                                    : 'Policy FOIR from Master'}
                                 </strong>
                               </div>
                             </>
@@ -11670,7 +12777,13 @@ export default function CustomerVerification() {
                             } to evaluate maximum top-up, EMI multiplier, and final loan eligibility.`
                           : `Submits verified income/banking inputs and settings to the SIVELS eligibility calculation engine for ${
                               selectedApplicant?.name || 'Applicant'
-                            } (${selectedMethodCode === 'INCOME' ? 'Income Method' : 'ABB Method'}).`}
+                            } (${
+                              selectedMethodCode === 'INCOME'
+                                ? 'Income Method'
+                                : selectedMethodCode === 'NORMAL_INCOME'
+                                ? 'Normal Income'
+                                : 'ABB Method'
+                            }).`}
                       </p>
                     </div>
 
@@ -11892,13 +13005,21 @@ export default function CustomerVerification() {
                             <h3 className="bo-cv-assess-section-title">Eligibility Assessment Result</h3>
                             <p className="bo-cv-assess-section-sub">
                               Authoritative decision engine output for {selectedApplicant?.name || 'Applicant'} &bull;{' '}
-                              {currentAssessment.assessmentMethodId === 1 ? 'Income Method' : 'ABB Method'}.
+                              {currentAssessment.assessmentMethodId === 1
+                                ? 'Income Method'
+                                : currentAssessment.assessmentMethodId === 4
+                                ? 'Normal Income'
+                                : 'ABB Method'}.
                             </p>
                           </div>
                         </div>
                         <div className="bo-cv-result-header-badges">
                           <span className="bo-cv-result-method-badge">
-                            {currentAssessment.assessmentMethodId === 1 ? 'Income Method' : 'ABB Method'}
+                            {currentAssessment.assessmentMethodId === 1
+                              ? 'Income Method'
+                              : currentAssessment.assessmentMethodId === 4
+                              ? 'Normal Income'
+                              : 'ABB Method'}
                           </span>
                           <span
                             className={`bo-cv-result-status-badge ${
@@ -11959,10 +13080,14 @@ export default function CustomerVerification() {
                         {/* Considered Income / ABB */}
                         <div className="bo-cv-result-metric-card">
                           <span className="bo-cv-result-metric-label">
-                            {currentAssessment.assessmentMethodId === 1 ? 'Total Considered Income' : 'Average Monthly ABB'}
+                            {currentAssessment.assessmentMethodId === 1
+                              ? 'Total Considered Income'
+                              : currentAssessment.assessmentMethodId === 4
+                              ? 'Eligible Monthly Income'
+                              : 'Average Monthly ABB'}
                           </span>
                           <strong className="bo-cv-result-metric-val">
-                            {currentAssessment.assessmentMethodId === 1
+                            {currentAssessment.assessmentMethodId === 1 || currentAssessment.assessmentMethodId === 4
                               ? currentAssessment.totalConsideredIncome != null
                                 ? formatCurrency(currentAssessment.totalConsideredIncome)
                                 : 'Not Applicable'
@@ -11973,6 +13098,8 @@ export default function CustomerVerification() {
                           <span className="bo-cv-result-metric-sub">
                             {currentAssessment.assessmentMethodId === 1
                               ? '3-Month considered salary income'
+                              : currentAssessment.assessmentMethodId === 4
+                              ? 'Evaluated monthly income from business & other sources'
                               : 'Multi-account monthly average balance'}
                           </span>
                         </div>
