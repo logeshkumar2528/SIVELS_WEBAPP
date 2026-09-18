@@ -681,6 +681,20 @@ export default function PdfView() {
   const resolveCategory = (val) => masterMaps.castes[val] || val || '';
   const resolveReligion = (val) => masterMaps.religions[val] || val || '';
   const resolveMaritalStatus = (val) => masterMaps.maritalStatuses[val] || val || '';
+  const resolveRelationship = (val) => {
+    if (val === null || val === undefined || val === '') return '';
+    if (masterMaps.relationships && (masterMaps.relationships[val] !== undefined || masterMaps.relationships[String(val)] !== undefined)) {
+      return masterMaps.relationships[val] || masterMaps.relationships[String(val)] || '';
+    }
+    return String(val);
+  };
+  const resolveVerification = (val) => {
+    if (val === null || val === undefined || val === '') return 'Verified';
+    if (masterMaps.verifications && (masterMaps.verifications[val] !== undefined || masterMaps.verifications[String(val)] !== undefined)) {
+      return masterMaps.verifications[val] || masterMaps.verifications[String(val)] || 'Verified';
+    }
+    return String(val);
+  };
   const resolveDocType = (val) => {
     if (val === undefined || val === null || val === '') return '';
     if (masterMaps.documentTypes && (masterMaps.documentTypes[val] || masterMaps.documentTypes[String(val)])) {

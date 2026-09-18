@@ -26,7 +26,7 @@ import { APPLICATION_WIZARD_STEPS, getWizardActiveStepByPath } from '../../confi
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import { formatDateTimeSeconds as formatDateTime } from '../../utils/dateHelper';
 import { buildValidationPopup, parseApiErrorBody } from '../../utils/formatUserFacingError';
-import { resolveApplicantName } from '../applicationWizard/flowUtils';
+import { buildApplicationDisplayId, resolveApplicantName } from '../applicationWizard/flowUtils';
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 import './ApplicationDetails.css';
 
@@ -44,7 +44,7 @@ function formatRupeeValue(value) {
     return String(value);
   }
 
-  return `₹${Number(digits).toLocaleString('en-IN')}`;
+  return formatIndianAmount(digits);
 }
 
 function getCustomerInitials(name = '') {
@@ -55,16 +55,6 @@ function getCustomerInitials(name = '') {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() || '')
     .join('');
-}
-
-function buildApplicationDisplayId(record = {}, fallbackId = '') {
-  const applicant = record.registration?.personalInformation?.applicant || record.sections?.personalInformation?.applicant || {};
-  const firstName = String(applicant.firstName || record.firstName || record.fullName || record.customerName || '').trim().split(/\s+/)[0] || '';
-  const initials = firstName.slice(0, 2).toUpperCase().padEnd(2, 'X');
-  const dob = String(applicant.dateOfBirth || applicant.dob || record.dateOfBirth || record.dob || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  const formattedDob = dob ? `${dob[3]}${dob[2]}${dob[1]}` : '00000000';
-  const mobile = String(applicant.mobileNo || record.mobileNumber || record.mobile || '').replace(/\D/g, '');
-  return `${initials}-${formattedDob}-${mobile.slice(-3).padStart(3, '0')}`;
 }
 
 function isFieldAgentChannel(option) {
@@ -711,7 +701,7 @@ export default function ApplicationDetails() {
   });
   const branchName = agentBranch || appData.branch || displayRecord?.branch || 'Chennai Main Branch';
   const submittedTime = formatDateTime(appData.createdDate || displayRecord?.createdAt || displayRecord?.createdDate || '');
-  const applicationDisplayId = appData.applicationNumber || buildApplicationDisplayId(displayRecord || appData, appId) || appId;
+  const applicationDisplayId = buildApplicationDisplayId(displayRecord || appData, appId) || appId;
   const statusText = appData.status || displayRecord?.status || 'New';
   const isRmSourced = Boolean(
     sourcingInfo.isRmSourced ||

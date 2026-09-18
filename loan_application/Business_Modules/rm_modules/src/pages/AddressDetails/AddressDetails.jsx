@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { MapPin, Map, Building2, Hash, HelpCircle } from 'lucide-react';
 import iconMap from '../../config/iconMap';
@@ -16,6 +16,8 @@ import {
   createArray,
   getApplicantCount,
   getSectionState,
+  loadApplicantAadhaarUrl,
+  loadCoApplicantAadhaarUrl,
 } from '../applicationWizard/flowUtils';
 
 
@@ -245,8 +247,61 @@ export default function AddressDetails() {
 
   const [showDocsModal, setShowDocsModal] = useState(false);
   const [fullViewImage, setFullViewImage] = useState(null);
-  const aadhaarFrontUrl = appData.sections?.kycDocuments?.applicant?.aadhaarFront?.preview || 'https://via.placeholder.com/400x250?text=Aadhaar+Front+Not+Uploaded';
-  const aadhaarBackUrl = appData.sections?.kycDocuments?.applicant?.aadhaarBack?.preview || 'https://via.placeholder.com/400x250?text=Aadhaar+Back+Not+Uploaded';
+  const [aadhaarPreviews, setAadhaarPreviews] = useState({});
+  const blobUrlsRef = useRef([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const token = localStorage.getItem('authToken');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+    const kycDocs = appData.sections?.kycDocuments || appData.kycDocuments || {};
+
+    // 1. Load Applicant Aadhaar (Original Agent-uploaded Aadhaar only)
+    loadApplicantAadhaarUrl({ appData, appId, baseUrl, headers }).then((url) => {
+      if (isMounted && url) {
+        blobUrlsRef.current.push(url);
+        setAadhaarPreviews((prev) => ({ ...prev, applicant: url }));
+      }
+    });
+
+    // 2. Load Co-Applicants Aadhaar (RM-uploaded Co-Applicant Aadhaar only)
+    form.coApplicants.forEach((coPerson, idx) => {
+      const coKyc = kycDocs.coApplicants?.[idx] || {};
+      loadCoApplicantAadhaarUrl({
+        coKyc,
+        coPersonalInfo: coPerson,
+        coIndex: idx,
+        appId,
+        baseUrl,
+        headers,
+      }).then((url) => {
+        if (isMounted && url) {
+          blobUrlsRef.current.push(url);
+          setAadhaarPreviews((prev) => ({ ...prev, [`co_${idx}`]: url }));
+        }
+      });
+    });
+
+    return () => {
+      isMounted = false;
+      blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      blobUrlsRef.current = [];
+    };
+  }, [appData, appId, form.coApplicants]);
+
+  const aadhaarDocumentPeople = [
+    {
+      label: 'Applicant',
+      previewUrl: aadhaarPreviews['applicant'] || null,
+    },
+    ...form.coApplicants.map((_, index) => ({
+      label: `Co-Applicant ${index + 1}`,
+      previewUrl: aadhaarPreviews[`co_${index}`] || null,
+    })),
+  ];
 
   useEffect(() => {
     setForm(buildAddressState(getApplication(appId)));
@@ -486,30 +541,58 @@ export default function AddressDetails() {
       <Modal 
         show={showDocsModal} 
         onHide={() => setShowDocsModal(false)} 
-        title="Applicant Aadhaar Document View"
+        title="Aadhaar Document View"
         size="lg"
       >
-        <div style={{ display: 'flex', flexDirection: 'row', gap: '16px', padding: '0 8px' }}>
-          <div style={{ flex: 1 }}>
-            <h4 style={{ marginBottom: '8px', fontSize: '14px', color: '#1e293b' }}>Aadhaar Front</h4>
-            <div 
-              style={{ width: '100%', height: '250px', backgroundColor: '#f1f5f9', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', cursor: 'pointer' }}
-              onClick={() => setFullViewImage(aadhaarFrontUrl)}
-              title="Click to view full size"
-            >
-              <img src={aadhaarFrontUrl} alt="Aadhaar Front" style={{ width: '100%', height: '100%', objectFit: 'contain', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'} onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '0 8px' }}>
+          {aadhaarDocumentPeople.map((person) => (
+            <div key={person.label} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 16px' }}>
+              <h4 style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>{person.label}</h4>
+              {person.previewUrl ? (
+                <div 
+                  style={{
+                    width: '100%',
+                    height: '240px',
+                    backgroundColor: '#ffffff',
+                    borderRadius: '6px',
+                    overflow: 'hidden',
+                    border: '1px solid #e2e8f0',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  onClick={() => setFullViewImage(person.previewUrl)}
+                  title="Click to view full size"
+                >
+                  <img
+                    src={person.previewUrl}
+                    alt={`${person.label} Aadhaar`}
+                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', transition: 'transform 0.2s' }}
+                    onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'}
+                    onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                  />
+                </div>
+              ) : (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100px',
+                    backgroundColor: '#ffffff',
+                    borderRadius: '6px',
+                    border: '1px dashed #cbd5e1',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#64748b',
+                    fontSize: '13px'
+                  }}
+                >
+                  Aadhaar document not available
+                </div>
+              )}
             </div>
-          </div>
-          <div style={{ flex: 1 }}>
-            <h4 style={{ marginBottom: '8px', fontSize: '14px', color: '#1e293b' }}>Aadhaar Back</h4>
-            <div 
-              style={{ width: '100%', height: '250px', backgroundColor: '#f1f5f9', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', cursor: 'pointer' }}
-              onClick={() => setFullViewImage(aadhaarBackUrl)}
-              title="Click to view full size"
-            >
-              <img src={aadhaarBackUrl} alt="Aadhaar Back" style={{ width: '100%', height: '100%', objectFit: 'contain', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'} onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'} />
-            </div>
-          </div>
+          ))}
         </div>
       </Modal>
 
