@@ -681,9 +681,19 @@ export default function PdfView() {
   const resolveCategory = (val) => masterMaps.castes[val] || val || '';
   const resolveReligion = (val) => masterMaps.religions[val] || val || '';
   const resolveMaritalStatus = (val) => masterMaps.maritalStatuses[val] || val || '';
-  const resolveRelationship = (val) => masterMaps.relationships[val] || val || '';
-  const resolveDocType = (val) => masterMaps.documentTypes[val] || val || '';
-  const resolveVerification = (val) => masterMaps.verifications[val] || val || 'Verified';
+  const resolveDocType = (val) => {
+    if (val === undefined || val === null || val === '') return '';
+    if (masterMaps.documentTypes && (masterMaps.documentTypes[val] || masterMaps.documentTypes[String(val)])) {
+      return masterMaps.documentTypes[val] || masterMaps.documentTypes[String(val)];
+    }
+    const num = Number(val);
+    if (num === 1) return 'Aadhaar';
+    if (num === 2) return 'PAN Card';
+    if (num === 3) return 'Bank Statement';
+    if (num === 4) return 'Salary Slip';
+    if (num === 6) return 'Photo';
+    return String(val);
+  };
   const resolveBank = (val) => {
     if (val === null || val === undefined || val === '') return '';
     if (masterMaps.banks && masterMaps.banks[val] !== undefined) {
@@ -1049,7 +1059,21 @@ export default function PdfView() {
     const names = [];
 
     const normalizeBadgeName = (raw) => {
-      const s = String(raw || '').trim();
+      if (!raw || typeof raw !== 'string') return '';
+      const s = raw.trim();
+      if (!s) return '';
+
+      // Strictly reject raw filenames, paths, UUIDs, or numeric IDs
+      if (
+        s.includes('/') ||
+        s.includes('\\') ||
+        /\.(png|jpg|jpeg|pdf|webp|doc|docx|zip|rar|7z)$/i.test(s) ||
+        /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/i.test(s) ||
+        /^\d+$/.test(s)
+      ) {
+        return '';
+      }
+
       const lower = s.toLowerCase();
       if (
         lower === 'aadhaar' ||
@@ -1057,7 +1081,9 @@ export default function PdfView() {
         lower === 'aadhaar proof' ||
         lower === 'aadhar' ||
         lower === 'aadhar card' ||
-        lower === 'aadhar proof'
+        lower === 'aadhar proof' ||
+        lower.includes('aadhaar') ||
+        lower.includes('aadhar')
       ) {
         return 'Aadhaar';
       }
@@ -1066,7 +1092,9 @@ export default function PdfView() {
         lower === 'pan card' ||
         lower === 'pancard' ||
         lower === 'pan card proof' ||
-        lower === 'pan proof'
+        lower === 'pan proof' ||
+        lower.includes('pan card') ||
+        lower.includes('pancard')
       ) {
         return 'PAN Card';
       }
@@ -1094,11 +1122,34 @@ export default function PdfView() {
         lower === 'profile photo' ||
         lower === 'profile image' ||
         lower === 'applicant photo' ||
-        lower === 'client photo'
+        lower === 'client photo' ||
+        lower.includes('profile image') ||
+        lower.includes('profile photo')
       ) {
         return 'Photo';
       }
       return s;
+    };
+
+    const resolveLogicalDocumentName = (docTypeId, rawDocTypeName = '') => {
+      const idNum = Number(docTypeId);
+      if (idNum === 1) return 'Aadhaar';
+      if (idNum === 2) return 'PAN Card';
+      if (idNum === 3) return 'Bank Statement';
+      if (idNum === 4) return 'Salary Slip';
+      if (idNum === 6) return 'Photo';
+
+      const masterName =
+        (docTypeId !== undefined &&
+          docTypeId !== null &&
+          masterMaps.documentTypes &&
+          (masterMaps.documentTypes[docTypeId] || masterMaps.documentTypes[String(docTypeId)])) ||
+        '';
+
+      const candidate = masterName || rawDocTypeName;
+      if (!candidate || typeof candidate !== 'string') return '';
+
+      return normalizeBadgeName(candidate);
     };
 
     const addName = (name) => {
@@ -1108,7 +1159,7 @@ export default function PdfView() {
       }
     };
 
-    // 1. Aadhaar & PAN from identity fields or file paths
+    // 1. Aadhaar & PAN from identity fields or file paths (as existence indicators)
     if (person.aadhaarLast4 || person.aadhaarNo || person.aadharDocumentPath || person.AadharDocumentPath) {
       addName('Aadhaar');
     }
@@ -1117,13 +1168,9 @@ export default function PdfView() {
     }
 
     // 2. Specific identity document type
-    const identityDocumentType = resolveDocType(person.identityDocumentType);
-    if (identityDocumentType) addName(identityDocumentType);
-
-    if (!identityDocumentType && Array.isArray(person.identityDocumentFiles)) {
-      person.identityDocumentFiles.forEach((file) => {
-        addName(typeof file === 'string' ? file : file?.name || file?.fileName);
-      });
+    if (person.identityDocumentType) {
+      const identityDocName = resolveLogicalDocumentName(person.identityDocumentType);
+      if (identityDocName) addName(identityDocName);
     }
 
     // 3. Profile Photo verification
@@ -1146,8 +1193,10 @@ export default function PdfView() {
 
     // 4. Downloaded / Uploaded documents from AgentCustomerDocument
     documents.forEach((document) => {
-      const docTypeResolved = resolveDocType(document.documentTypeId);
-      addName(docTypeResolved || document.documentTypeName || document.fileName);
+      const logicalName = resolveLogicalDocumentName(document.documentTypeId, document.documentTypeName);
+      if (logicalName) {
+        addName(logicalName);
+      }
     });
 
     // 5. Backend ApplicationKYCDocuments matching this person
@@ -1173,18 +1222,15 @@ export default function PdfView() {
 
       if (matches) {
         if (k.documentTypeId) {
-          const typeName = resolveDocType(k.documentTypeId);
+          const typeName = resolveLogicalDocumentName(k.documentTypeId, k.documentTypeName);
+          if (typeName) addName(typeName);
+        } else if (k.documentTypeName) {
+          const typeName = normalizeBadgeName(k.documentTypeName);
           if (typeName) addName(typeName);
         }
         if (k.aadharDocumentPath || k.AadharDocumentPath) addName('Aadhaar');
         if (k.panCardPath || k.PanCardPath) addName('PAN Card');
         if (k.profileImagePath || k.ProfileImagePath) addName('Photo');
-        if (k.documentTypeName) addName(k.documentTypeName);
-        if (k.documentPath || k.DocumentPath) {
-          const path = k.documentPath || k.DocumentPath;
-          const fileName = String(path).split('/').pop().split('\\').pop();
-          addName(fileName);
-        }
       }
     });
 
