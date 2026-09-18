@@ -6,23 +6,19 @@
  * Route: /backoffice/customers/:customerId/verify
  *
  * Architecture:
- * - 15-Step Underwriting Verification Workflow (Sidebar: 01–15).
+ * - 11-Step Underwriting Verification Workflow (Sidebar: 01–11).
  * - Step 01: View Form (Direct embedded PdfView with ApplicationDraftProvider).
- * - Step 02: Profile Image (Applicant photograph with uncropped preview, remarks, Reject/Send to RM).
- * - Step 03: Aadhaar Card (Applicant KYC Aadhaar with image/PDF preview, remarks, Reject/Send to RM).
- * - Step 04: PAN Card (Applicant KYC PAN with image/PDF preview, remarks, Reject/Send to RM).
- * - Step 05: ZIP File (Customer document ZIP archive package or graceful empty state).
- * - Step 06: Property FI (Field Investigation placeholder).
- * - Step 07: Office FI (Office Investigation placeholder).
- * - Step 08: Residence FI (Residence Investigation placeholder).
- * - Step 09: Legal Opinion (File upload dropzone with <= 150 MB validation, View, Download, Remove).
- * - Step 10: Technical Value (File upload dropzone with <= 150 MB validation, View, Download, Remove).
- * - Step 11: CIBIL Check (Preserved Credit Bureau verification simulation + Manual CIBIL PAN Upload).
- * - Step 12: PD Verification (Personal Discussion mode selector from dynamic PDVerificationTypeMaster).
- * - Step 13: Eligibility Calculation (Preserved live FOIR calculation, recalculate, Approve/Not Approve modal).
- * - Step 14: Eligibility Fit (Underwriting Fit selector: Fit / Conditional Fit / Not Fit).
- * - Step 15: Recommendation Sheet (Credit underwriter recommendation placeholder).
- * - Legacy 8-step sidebar code and VerificationStepModal are preserved in code for easy restoration.
+ * - Step 02: Document Verification (Applicant & Co-Applicant KYC documents).
+ * - Step 03: Property FI (Field Investigation placeholder).
+ * - Step 04: Office FI (Office Investigation placeholder).
+ * - Step 05: Residence FI (Residence Investigation placeholder).
+ * - Step 06: Legal Opinion (File upload dropzone with <= 150 MB validation, View, Download, Remove).
+ * - Step 07: Technical Value (File upload dropzone with <= 150 MB validation, View, Download, Remove).
+ * - Step 08: CIBIL Check (Preserved Credit Bureau verification simulation + Manual CIBIL PAN Upload).
+ * - Step 09: PD Verification (Personal Discussion mode selector from dynamic PDVerificationTypeMaster).
+ * - Step 10: Eligibility Assessment (Methodology & multi-applicant credit assessment engine).
+ * - Step 11: Recommendation Sheet (Credit underwriter recommendation placeholder).
+ * - Single-fetch shared data and VerificationStepModal are preserved in code for easy inspection.
  */
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
@@ -114,13 +110,6 @@ const STAGES = [
   { id: 4, label: 'Credit Bureau Report Successfully Retrieved' },
 ];
 
-const FOIR_LOADING_STAGES = [
-  'Reading applicant income details',
-  'Checking existing monthly obligations',
-  'Applying the FOIR policy threshold',
-  'Preparing the eligibility summary',
-];
-
 /**
  * Supported Step Verification Codes for BackOfficeStepVerification API
  */
@@ -166,17 +155,21 @@ function stepNumToStepCode(num) {
   }
 }
 
-const INITIAL_STEP_VERIFICATIONS = {
+const createEmptyStepVerifications = () => ({
   PROFILE_IMAGE: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
   AADHAAR: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
   PAN: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
   SALARY_SLIP: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
   BANK_STATEMENT: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
   ZIP_ARCHIVE: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
+});
+
+const INITIAL_STEP_VERIFICATIONS = {
+  0: createEmptyStepVerifications(),
 };
 
 /**
- * 17-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
+ * 11-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
  */
 const VERIFICATION_WORKFLOW_STEPS = [
   { id: 1, number: 1, visibleNum: '01', title: 'View Form', subtitle: 'Application form', group: 'FORM REVIEW' },
@@ -188,9 +181,8 @@ const VERIFICATION_WORKFLOW_STEPS = [
   { id: 12, number: 12, visibleNum: '07', title: 'Technical Value', subtitle: 'Valuation report upload', group: 'CREDIT & ASSESSMENT' },
   { id: 13, number: 13, visibleNum: '08', title: 'CIBIL Check', subtitle: 'Credit Bureau & PAN', group: 'CREDIT & ASSESSMENT' },
   { id: 14, number: 14, visibleNum: '09', title: 'PD Verification', subtitle: 'Personal discussion', group: 'CREDIT & ASSESSMENT' },
-  { id: 15, number: 15, visibleNum: '10', title: 'Eligibility Calculation', subtitle: 'FOIR ratio calculation', group: 'CREDIT & ASSESSMENT' },
-  { id: 16, number: 16, visibleNum: '11', title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
-  { id: 17, number: 17, visibleNum: '12', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
+  { id: 16, number: 16, visibleNum: '10', title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
+  { id: 17, number: 17, visibleNum: '11', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
 ];
 
 /**
@@ -857,7 +849,7 @@ export default function CustomerVerification() {
   const [stepVerifications, setStepVerifications] = useState(INITIAL_STEP_VERIFICATIONS);
   const reconciledStepsRef = useRef(new Set());
   const [isFetchingStepVerifications, setIsFetchingStepVerifications] = useState(false);
-  const [isSavingStepVerification, setIsSavingStepVerification] = useState(false);
+  const [savingVerificationKey, setSavingVerificationKey] = useState(null);
   const [stepVerificationError, setStepVerificationError] = useState(null);
 
   // 6. Upload States for Steps 9 & 10 (Legal Opinion & Technical Value, Max 150MB)
@@ -2956,19 +2948,6 @@ export default function CustomerVerification() {
   const [bureauState, setBureauState] = useState('idle');
   const [loadingStage, setLoadingStage] = useState(0);
 
-  // 11. FOIR Calculation State: 'idle' | 'loading' | 'success' | 'empty' | 'error'
-  const [foirState, setFoirState] = useState('idle');
-  const [foirData, setFoirData] = useState(null);
-  const [foirError, setFoirError] = useState(null);
-  const [foirLoadingStage, setFoirLoadingStage] = useState(0);
-
-  // 12. FOIR Decision Remarks Modal State (Approve / Not Approve)
-  const [decisionModalOpen, setDecisionModalOpen] = useState(false);
-  const [decisionType, setDecisionType] = useState(null); // 'approve' | 'notApprove'
-  const [decisionRemarks, setDecisionRemarks] = useState('');
-  const [decisionError, setDecisionError] = useState('');
-  const [, setConfirmedDecision] = useState(null);
-
   // 12b. Reject Confirmation Modal State
   const [rejectConfirmModal, setRejectConfirmModal] = useState({
     open: false,
@@ -3109,36 +3088,6 @@ export default function CustomerVerification() {
   // Top View Form Button handler: activates Step 1
   const handleViewForm = () => {
     setActiveStep(1);
-  };
-
-  const handleOpenDecisionModal = (type) => {
-    setDecisionType(type);
-    setDecisionRemarks('');
-    setDecisionError('');
-    setDecisionModalOpen(true);
-  };
-
-  const handleCloseDecisionModal = () => {
-    setDecisionModalOpen(false);
-    setDecisionType(null);
-    setDecisionRemarks('');
-    setDecisionError('');
-  };
-
-  const handleConfirmDecision = () => {
-    const trimmed = decisionRemarks.trim();
-    if (!trimmed) {
-      setDecisionError('Remarks are required.');
-      return;
-    }
-    setConfirmedDecision({
-      type: decisionType,
-      remarks: trimmed,
-      date: new Date().toISOString(),
-    });
-    setDecisionModalOpen(false);
-    setDecisionType(null);
-    setDecisionRemarks('');
   };
   // ----------------------------------------------------
   // Document Resolution & Preview Loader (Old vs New & Dynamic Master)
@@ -3402,12 +3351,7 @@ export default function CustomerVerification() {
       const list = Array.isArray(res) ? res : (res?.value || res?.data || []);
 
       const nextState = {
-        PROFILE_IMAGE: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
-        AADHAAR: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
-        PAN: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
-        SALARY_SLIP: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
-        BANK_STATEMENT: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
-        ZIP_ARCHIVE: { isVerified: false, remarks: '', verifiedAt: null, verifiedByBackOfficeId: null },
+        0: createEmptyStepVerifications(),
       };
 
       const remarksToHydrate = {};
@@ -3415,24 +3359,34 @@ export default function CustomerVerification() {
       list.forEach((item) => {
         if (!item || item.isActive === false) return;
         const code = item.stepCode;
-        if (nextState[code]) {
-          nextState[code] = {
-            backOfficeStepVerificationId: item.backOfficeStepVerificationId || null,
-            isVerified: Boolean(item.isVerified),
-            remarks: item.remarks || '',
-            verifiedAt: item.verifiedAt || null,
-            verifiedByBackOfficeId: item.verifiedByBackOfficeId || null,
-          };
+        if (!SUPPORTED_STEP_CODES.includes(code)) return;
 
-          // Hydrate remarks into 17-step stepRemarks (2: Profile, 3: Aadhaar, 4: PAN, 5: Salary, 6: Bank, 7: ZIP)
-          if (item.remarks && typeof item.remarks === 'string' && item.remarks.trim()) {
-            if (code === 'PROFILE_IMAGE') remarksToHydrate[2] = item.remarks;
-            else if (code === 'AADHAAR') remarksToHydrate[3] = item.remarks;
-            else if (code === 'PAN') remarksToHydrate[4] = item.remarks;
-            else if (code === 'SALARY_SLIP') remarksToHydrate[5] = item.remarks;
-            else if (code === 'BANK_STATEMENT') remarksToHydrate[6] = item.remarks;
-            else if (code === 'ZIP_ARCHIVE') remarksToHydrate[7] = item.remarks;
-          }
+        const seq =
+          item.applicantSequence !== undefined && item.applicantSequence !== null && !isNaN(Number(item.applicantSequence))
+            ? Number(item.applicantSequence)
+            : 0;
+
+        if (!nextState[seq]) {
+          nextState[seq] = createEmptyStepVerifications();
+        }
+
+        nextState[seq][code] = {
+          backOfficeStepVerificationId: item.backOfficeStepVerificationId || null,
+          isVerified: Boolean(item.isVerified),
+          remarks: item.remarks || '',
+          verifiedAt: item.verifiedAt || null,
+          verifiedByBackOfficeId: item.verifiedByBackOfficeId || null,
+          applicantSequence: seq,
+        };
+
+        // Hydrate remarks for Primary Applicant (seq 0) into 17-step stepRemarks (2: Profile, 3: Aadhaar, 4: PAN, 5: Salary, 6: Bank, 7: ZIP)
+        if (seq === 0 && item.remarks && typeof item.remarks === 'string' && item.remarks.trim()) {
+          if (code === 'PROFILE_IMAGE') remarksToHydrate[2] = item.remarks;
+          else if (code === 'AADHAAR') remarksToHydrate[3] = item.remarks;
+          else if (code === 'PAN') remarksToHydrate[4] = item.remarks;
+          else if (code === 'SALARY_SLIP') remarksToHydrate[5] = item.remarks;
+          else if (code === 'BANK_STATEMENT') remarksToHydrate[6] = item.remarks;
+          else if (code === 'ZIP_ARCHIVE') remarksToHydrate[7] = item.remarks;
         }
       });
 
@@ -3524,7 +3478,7 @@ export default function CustomerVerification() {
   );
 
   const getUnresolvedRejectionsForStep = useCallback(
-    (stepIdentifier) => {
+    (stepIdentifier, targetSequence = null) => {
       if (!Array.isArray(applicationRejections) || applicationRejections.length === 0) return [];
 
       const getRejectionEntityKey = (r) => {
@@ -3544,7 +3498,12 @@ export default function CustomerVerification() {
 
       const matchingRejections = applicationRejections.filter((r) => {
         if (r.isActive === false) return false;
-        return isRejectionMatchingStep(r, stepIdentifier);
+        if (!isRejectionMatchingStep(r, stepIdentifier)) return false;
+        if (targetSequence !== null && targetSequence !== undefined) {
+          const seq = getRejectionEntityKey(r);
+          return seq === Number(targetSequence);
+        }
+        return true;
       });
 
       if (matchingRejections.length === 0) return [];
@@ -3584,31 +3543,39 @@ export default function CustomerVerification() {
   );
 
   const hasUnresolvedRejectionForStep = useCallback(
-    (stepIdentifier) => {
-      return getUnresolvedRejectionsForStep(stepIdentifier).length > 0;
+    (stepIdentifier, targetSequence = null) => {
+      return getUnresolvedRejectionsForStep(stepIdentifier, targetSequence).length > 0;
     },
     [getUnresolvedRejectionsForStep]
   );
 
   // Reusable PUT handler to create / update step verification
   const handleSaveStepVerification = useCallback(async ({
+    applicantSequence = 0,
     stepCode,
     isVerified,
     remarks = '',
+    stepNum = null,
   }) => {
-    if (isSavingStepVerification) {
-      return { success: false, error: 'A verification save is already in progress.' };
+    const seq =
+      applicantSequence !== undefined && applicantSequence !== null && !isNaN(Number(applicantSequence))
+        ? Number(applicantSequence)
+        : 0;
+
+    const rowKey = `${seq}_${stepCode}`;
+    if (savingVerificationKey === rowKey) {
+      return { success: false, error: 'A verification save is already in progress for this document.' };
     }
 
-    // Defensive Guard (Rule 4): Block marking a step as Verified if unresolved rejections exist
-    if (Boolean(isVerified) && hasUnresolvedRejectionForStep(stepCode)) {
+    // Defensive Guard (Rule 4): Block marking a step as Verified if unresolved rejections exist for this person
+    if (Boolean(isVerified) && hasUnresolvedRejectionForStep(stepCode, seq)) {
       const err = 'Resolve all returned/resubmitted documents before marking this step as Verified.';
       setStepVerificationError(err);
-      const stepNum = stepCodeToStepNum(stepCode);
-      if (stepNum) {
+      const effectiveStepNum = stepNum || stepCodeToStepNum(stepCode);
+      if (effectiveStepNum) {
         setStepFeedback((prev) => ({
           ...prev,
-          [stepNum]: { type: 'error', message: err },
+          [effectiveStepNum]: { type: 'error', message: err },
         }));
       }
       return { success: false, error: err };
@@ -3618,7 +3585,7 @@ export default function CustomerVerification() {
       throw new Error(`Unsupported verification step code: ${stepCode}`);
     }
 
-    const stepNum = stepCodeToStepNum(stepCode);
+    const effectiveStepNum = stepNum || stepCodeToStepNum(stepCode);
 
     const targetAppProdId = Number(
       resolvedAppProdId ||
@@ -3632,10 +3599,10 @@ export default function CustomerVerification() {
     if (!targetAppProdId || targetAppProdId <= 0) {
       const err = 'Application details ID not found. Unable to persist step verification.';
       setStepVerificationError(err);
-      if (stepNum) {
+      if (effectiveStepNum) {
         setStepFeedback((prev) => ({
           ...prev,
-          [stepNum]: { type: 'error', message: err },
+          [effectiveStepNum]: { type: 'error', message: err },
         }));
       }
       return { success: false, error: err };
@@ -3645,23 +3612,29 @@ export default function CustomerVerification() {
     if (!backOfficeId) {
       const err = 'Unable to identify the logged-in Back Office operator. Please login again.';
       setStepVerificationError(err);
-      if (stepNum) {
+      if (effectiveStepNum) {
         setStepFeedback((prev) => ({
           ...prev,
-          [stepNum]: { type: 'error', message: err },
+          [effectiveStepNum]: { type: 'error', message: err },
         }));
       }
       return { success: false, error: err };
     }
 
-    setIsSavingStepVerification(true);
+    setSavingVerificationKey(rowKey);
     setStepVerificationError(null);
 
-    const previousRecord = stepVerifications[stepCode];
+    const previousRecord = stepVerifications[seq]?.[stepCode] || {
+      isVerified: false,
+      remarks: '',
+      verifiedAt: null,
+      verifiedByBackOfficeId: null,
+    };
 
     try {
       const payload = {
         applicationProductDetailsId: targetAppProdId,
+        applicantSequence: Number(seq),
         stepCode,
         isVerified: Boolean(isVerified),
         remarks: (remarks || '').trim(),
@@ -3676,51 +3649,82 @@ export default function CustomerVerification() {
         remarks: result?.remarks !== undefined ? result.remarks : remarks,
         verifiedAt: result?.verifiedAt || new Date().toISOString(),
         verifiedByBackOfficeId: result?.verifiedByBackOfficeId || backOfficeId,
+        applicantSequence: seq,
       };
 
-      setStepVerifications((prev) => ({
-        ...prev,
-        [stepCode]: updatedRecord,
-      }));
+      setStepVerifications((prev) => {
+        const currentSeqObj = prev[seq] ? { ...prev[seq] } : createEmptyStepVerifications();
+        return {
+          ...prev,
+          [seq]: {
+            ...currentSeqObj,
+            [stepCode]: updatedRecord,
+          },
+        };
+      });
 
-      if (stepNum) {
-        const stepLabel = VERIFICATION_WORKFLOW_STEPS.find((s) => s.number === stepNum)?.title || stepCode;
+      if (effectiveStepNum) {
+        const stepLabel = VERIFICATION_WORKFLOW_STEPS.find((s) => s.number === effectiveStepNum)?.title || stepCode;
+        const personPrefix = seq === 0 ? 'Applicant' : `Co-Applicant ${seq}`;
         setStepFeedback((prev) => ({
           ...prev,
-          [stepNum]: {
+          [effectiveStepNum]: {
             type: 'success',
-            message: `${stepLabel} successfully ${isVerified ? 'marked as Verified' : 'unmarked as Verified'}.`,
+            message: `${personPrefix} ${stepLabel} successfully ${isVerified ? 'marked as Verified' : 'unmarked as Verified'}.`,
           },
         }));
       }
 
       return { success: true, data: result || updatedRecord };
     } catch (err) {
-      console.error(`[CustomerVerification] Failed to save step verification for ${stepCode}:`, err);
+      console.error(`[CustomerVerification] Failed to save step verification for ${stepCode} (seq ${seq}):`, err);
       const errMsg = err?.response?.data?.message || err?.message || `Failed to save ${stepCode} verification.`;
       setStepVerificationError(errMsg);
-      if (stepNum) {
+      if (effectiveStepNum) {
         setStepFeedback((prev) => ({
           ...prev,
-          [stepNum]: { type: 'error', message: errMsg },
+          [effectiveStepNum]: { type: 'error', message: errMsg },
         }));
       }
       // Revert to previous state on failure
-      setStepVerifications((prev) => ({
-        ...prev,
-        [stepCode]: previousRecord,
-      }));
+      setStepVerifications((prev) => {
+        const currentSeqObj = prev[seq] ? { ...prev[seq] } : createEmptyStepVerifications();
+        return {
+          ...prev,
+          [seq]: {
+            ...currentSeqObj,
+            [stepCode]: previousRecord,
+          },
+        };
+      });
       return { success: false, error: errMsg };
     } finally {
-      setIsSavingStepVerification(false);
+      setSavingVerificationKey((prev) => (prev === rowKey ? null : prev));
     }
-  }, [isSavingStepVerification, resolvedAppProdId, verificationData, getAuthenticatedBackOfficeId, stepVerifications, hasUnresolvedRejectionForStep]);
+  }, [savingVerificationKey, resolvedAppProdId, verificationData, getAuthenticatedBackOfficeId, stepVerifications, hasUnresolvedRejectionForStep]);
 
   const verifiedDocumentCount = useMemo(() => {
-    return DOCUMENT_STEP_CODES.filter(
-      (code) => stepVerifications[code]?.isVerified === true && !hasUnresolvedRejectionForStep(code)
-    ).length;
-  }, [stepVerifications, hasUnresolvedRejectionForStep]);
+    const applicableSequences = [
+      0,
+      ...(Array.isArray(coApplicants)
+        ? coApplicants.map((co) =>
+            co.sequence !== undefined
+              ? Number(co.sequence)
+              : co.number !== undefined
+              ? Number(co.number)
+              : Number(co.index || 0) + 1
+          )
+        : []),
+    ];
+
+    return DOCUMENT_STEP_CODES.filter((code) => {
+      return applicableSequences.every(
+        (seq) =>
+          Boolean(stepVerifications[seq]?.[code]?.isVerified) === true &&
+          !hasUnresolvedRejectionForStep(code, seq)
+      );
+    }).length;
+  }, [stepVerifications, hasUnresolvedRejectionForStep, coApplicants]);
 
   // Reconcile legacy contradictory state: persist isVerified: false for steps with unresolved rejections (Rule 9)
   useEffect(() => {
@@ -3728,25 +3732,31 @@ export default function CustomerVerification() {
       return;
     }
 
-    DOCUMENT_STEP_CODES.forEach(async (code) => {
-      const recKey = `${resolvedAppProdId}_${code}`;
-      if (reconciledStepsRef.current.has(recKey)) return;
+    Object.keys(stepVerifications).forEach((seqKey) => {
+      const seq = Number(seqKey);
+      if (isNaN(seq)) return;
 
-      const isPersistedTrue = stepVerifications[code]?.isVerified === true;
-      const hasUnresolved = hasUnresolvedRejectionForStep(code);
+      DOCUMENT_STEP_CODES.forEach(async (code) => {
+        const recKey = `${resolvedAppProdId}_${seq}_${code}`;
+        if (reconciledStepsRef.current.has(recKey)) return;
 
-      if (isPersistedTrue && hasUnresolved) {
-        reconciledStepsRef.current.add(recKey);
-        try {
-          await handleSaveStepVerification({
-            stepCode: code,
-            isVerified: false,
-            remarks: stepVerifications[code]?.remarks || '',
-          });
-        } catch (recErr) {
-          console.warn(`[CustomerVerification] Auto-reconciliation failed for ${code}:`, recErr);
+        const isPersistedTrue = stepVerifications[seq]?.[code]?.isVerified === true;
+        const hasUnresolved = hasUnresolvedRejectionForStep(code, seq);
+
+        if (isPersistedTrue && hasUnresolved) {
+          reconciledStepsRef.current.add(recKey);
+          try {
+            await handleSaveStepVerification({
+              applicantSequence: seq,
+              stepCode: code,
+              isVerified: false,
+              remarks: stepVerifications[seq]?.[code]?.remarks || '',
+            });
+          } catch (recErr) {
+            console.warn(`[CustomerVerification] Auto-reconciliation failed for seq ${seq} ${code}:`, recErr);
+          }
         }
-      }
+      });
     });
   }, [
     resolvedAppProdId,
@@ -4996,17 +5006,24 @@ export default function CustomerVerification() {
       }));
       setStepRemarks((prev) => ({ ...prev, [stepNum]: '' }));
 
-      // Rule 2: If rejected step was previously verified, invalidate and persist isVerified: false
+      // Rule 2: If rejected step was previously verified, invalidate and persist isVerified: false for this person only
       const rejectedStepCode = stepNumToStepCode(stepNum);
-      if (rejectedStepCode && stepVerifications[rejectedStepCode]?.isVerified === true) {
+      const targetSeq =
+        customAppSeq !== null && customAppSeq !== undefined
+          ? Number(customAppSeq)
+          : (isCoApplicant ? 1 : 0);
+
+      if (rejectedStepCode && stepVerifications[targetSeq]?.[rejectedStepCode]?.isVerified === true) {
         try {
           await handleSaveStepVerification({
+            applicantSequence: targetSeq,
             stepCode: rejectedStepCode,
             isVerified: false,
-            remarks: stepVerifications[rejectedStepCode]?.remarks || '',
+            remarks: stepVerifications[targetSeq]?.[rejectedStepCode]?.remarks || '',
+            stepNum,
           });
         } catch (unverifyErr) {
-          console.warn(`[CustomerVerification] Auto-unverify failed for ${rejectedStepCode}:`, unverifyErr);
+          console.warn(`[CustomerVerification] Auto-unverify failed for seq ${targetSeq} ${rejectedStepCode}:`, unverifyErr);
         }
       }
 
@@ -5132,7 +5149,7 @@ export default function CustomerVerification() {
   };
 
   // Back Office Verify Resubmitted Rejection Handler
-  const handleVerifyRejection = async (rejectionId, stepLabel, stepNum) => {
+  const handleVerifyRejection = async (rejectionId, stepLabel, stepNum, applicantSequence = null) => {
     if (!rejectionId) return;
     const boAuth = getBackOfficeAuth();
     const backOfficeId = Number(boAuth?.id || boAuth?.backOfficeId || localStorage.getItem('backOfficeId') || 4);
@@ -5151,11 +5168,27 @@ export default function CustomerVerification() {
       // 1. Refetch rejection records to confirm status = Verified
       await fetchApplicationRejections();
 
-      // 2. Automatically persist step verification to true for this step
+      // Determine target applicant sequence for this rejection
+      let targetSeq = applicantSequence;
+      if (targetSeq === null || targetSeq === undefined) {
+        const rej = applicationRejections.find(
+          (r) =>
+            Number(r.backOfficeDocumentRejectionId) === Number(rejectionId) ||
+            Number(r.id) === Number(rejectionId)
+        );
+        if (rej?.applicantSequence !== undefined && rej?.applicantSequence !== null && !isNaN(Number(rej.applicantSequence))) {
+          targetSeq = Number(rej.applicantSequence);
+        } else {
+          targetSeq = 0;
+        }
+      }
+
+      // 2. Automatically persist step verification to true for this step and applicant sequence
       const stepCode = stepNumToStepCode(stepNum);
       if (stepCode) {
         try {
           await handleSaveStepVerification({
+            applicantSequence: Number(targetSeq || 0),
             stepCode,
             isVerified: true,
             remarks: (stepRemarks[stepNum] || '').trim(),
@@ -5890,7 +5923,7 @@ export default function CustomerVerification() {
     // 1. Profile Image (Step 02 / PROFILE_IMAGE)
     const profileRej = getActiveRejectionForApplicant(2, profileDocTypeId);
     const hasProfileFile = Boolean(docPreviews.profile?.url || docPreviews.profile?.doc || profileRej?.currentDocumentPath);
-    const profileVerified = Boolean(stepVerifications.PROFILE_IMAGE?.isVerified) && !hasUnresolvedRejectionForStep('PROFILE_IMAGE');
+    const profileVerified = Boolean(stepVerifications[0]?.PROFILE_IMAGE?.isVerified) && !hasUnresolvedRejectionForStep('PROFILE_IMAGE', 0);
     const profileStatus = resolveRowStatus({ rejection: profileRej, hasFile: hasProfileFile, isVerified: profileVerified });
 
     rows.push({
@@ -5922,7 +5955,7 @@ export default function CustomerVerification() {
     // 2. Aadhaar Card (Step 03 / AADHAAR)
     const aadhaarRej = getActiveRejectionForApplicant(3, aadhaarDocTypeId);
     const hasAadhaarFile = Boolean(docPreviews.aadhaar?.url || docPreviews.aadhaar?.doc || aadhaarRej?.currentDocumentPath);
-    const aadhaarVerified = Boolean(stepVerifications.AADHAAR?.isVerified) && !hasUnresolvedRejectionForStep('AADHAAR');
+    const aadhaarVerified = Boolean(stepVerifications[0]?.AADHAAR?.isVerified) && !hasUnresolvedRejectionForStep('AADHAAR', 0);
     const aadhaarStatus = resolveRowStatus({ rejection: aadhaarRej, hasFile: hasAadhaarFile, isVerified: aadhaarVerified });
 
     rows.push({
@@ -5954,7 +5987,7 @@ export default function CustomerVerification() {
     // 3. PAN Card (Step 04 / PAN)
     const panRej = getActiveRejectionForApplicant(4, panDocTypeId);
     const hasPanFile = Boolean(docPreviews.pan?.url || docPreviews.pan?.doc || panRej?.currentDocumentPath);
-    const panVerified = Boolean(stepVerifications.PAN?.isVerified) && !hasUnresolvedRejectionForStep('PAN');
+    const panVerified = Boolean(stepVerifications[0]?.PAN?.isVerified) && !hasUnresolvedRejectionForStep('PAN', 0);
     const panStatus = resolveRowStatus({ rejection: panRej, hasFile: hasPanFile, isVerified: panVerified });
 
     rows.push({
@@ -5988,7 +6021,7 @@ export default function CustomerVerification() {
     const salaryPreview = applicantFinancialDocs.salarySlip?.preview;
     const salaryData = applicantFinancialDocs.salarySlip?.data;
     const hasSalaryFile = Boolean(salaryPreview?.url || salaryData || salaryRej?.currentDocumentPath);
-    const salaryVerified = Boolean(stepVerifications.SALARY_SLIP?.isVerified) && !hasUnresolvedRejectionForStep('SALARY_SLIP');
+    const salaryVerified = Boolean(stepVerifications[0]?.SALARY_SLIP?.isVerified) && !hasUnresolvedRejectionForStep('SALARY_SLIP', 0);
     const salaryStatus = resolveRowStatus({ rejection: salaryRej, hasFile: hasSalaryFile, isVerified: salaryVerified });
 
     rows.push({
@@ -6022,7 +6055,7 @@ export default function CustomerVerification() {
     const bankPreview = applicantFinancialDocs.bankStatement?.preview;
     const bankData = applicantFinancialDocs.bankStatement?.data;
     const hasBankFile = Boolean(bankPreview?.url || bankData || bankRej?.currentDocumentPath);
-    const bankVerified = Boolean(stepVerifications.BANK_STATEMENT?.isVerified) && !hasUnresolvedRejectionForStep('BANK_STATEMENT');
+    const bankVerified = Boolean(stepVerifications[0]?.BANK_STATEMENT?.isVerified) && !hasUnresolvedRejectionForStep('BANK_STATEMENT', 0);
     const bankStatus = resolveRowStatus({ rejection: bankRej, hasFile: hasBankFile, isVerified: bankVerified });
 
     rows.push({
@@ -6054,7 +6087,7 @@ export default function CustomerVerification() {
     // 6. ZIP / Archive Package (Step 07 / ZIP_ARCHIVE)
     const zipRej = getActiveRejectionForApplicant(7);
     const hasZipFile = Boolean(docPreviews.zip?.doc || docPreviews.zip?.url || applicantManualDocs?.length > 0 || zipRej?.currentDocumentPath);
-    const zipVerified = Boolean(stepVerifications.ZIP_ARCHIVE?.isVerified) && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE');
+    const zipVerified = Boolean(stepVerifications[0]?.ZIP_ARCHIVE?.isVerified) && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE', 0);
     const zipStatus = resolveRowStatus({ rejection: zipRej, hasFile: hasZipFile, isVerified: zipVerified });
 
     rows.push({
@@ -6130,7 +6163,7 @@ export default function CustomerVerification() {
     // 1. Profile Image
     const profileRej = getActiveRejectionForCoApplicant(coKycId, 2, coSeq);
     const hasProfile = Boolean(coPrev.profile?.url || profileRej?.currentDocumentPath);
-    const profileVerified = Boolean(stepVerifications.PROFILE_IMAGE?.isVerified) && !hasUnresolvedRejectionForStep('PROFILE_IMAGE');
+    const profileVerified = Boolean(stepVerifications[coSeq]?.PROFILE_IMAGE?.isVerified) && !hasUnresolvedRejectionForStep('PROFILE_IMAGE', coSeq);
     const profileStatus = resolveRowStatus({ rejection: profileRej, hasFile: hasProfile, isVerified: profileVerified });
 
     rows.push({
@@ -6163,7 +6196,7 @@ export default function CustomerVerification() {
     // 2. Aadhaar Card
     const aadhaarRej = getActiveRejectionForCoApplicant(coKycId, 3, coSeq);
     const hasAadhaar = Boolean(coPrev.aadhaar?.url || aadhaarRej?.currentDocumentPath);
-    const aadhaarVerified = Boolean(stepVerifications.AADHAAR?.isVerified) && !hasUnresolvedRejectionForStep('AADHAAR');
+    const aadhaarVerified = Boolean(stepVerifications[coSeq]?.AADHAAR?.isVerified) && !hasUnresolvedRejectionForStep('AADHAAR', coSeq);
     const aadhaarStatus = resolveRowStatus({ rejection: aadhaarRej, hasFile: hasAadhaar, isVerified: aadhaarVerified });
 
     rows.push({
@@ -6196,7 +6229,7 @@ export default function CustomerVerification() {
     // 3. PAN Card
     const panRej = getActiveRejectionForCoApplicant(coKycId, 4, coSeq);
     const hasPan = Boolean(coPrev.pan?.url || panRej?.currentDocumentPath);
-    const panVerified = Boolean(stepVerifications.PAN?.isVerified) && !hasUnresolvedRejectionForStep('PAN');
+    const panVerified = Boolean(stepVerifications[coSeq]?.PAN?.isVerified) && !hasUnresolvedRejectionForStep('PAN', coSeq);
     const panStatus = resolveRowStatus({ rejection: panRej, hasFile: hasPan, isVerified: panVerified });
 
     rows.push({
@@ -6231,7 +6264,7 @@ export default function CustomerVerification() {
     const salPrev = coFin.salarySlip?.preview;
     const salData = coFin.salarySlip?.data;
     const hasSal = Boolean(salPrev?.url || salData || salRej?.currentDocumentPath);
-    const salVerified = Boolean(stepVerifications.SALARY_SLIP?.isVerified) && !hasUnresolvedRejectionForStep('SALARY_SLIP');
+    const salVerified = Boolean(stepVerifications[coSeq]?.SALARY_SLIP?.isVerified) && !hasUnresolvedRejectionForStep('SALARY_SLIP', coSeq);
     const salStatus = resolveRowStatus({ rejection: salRej, hasFile: hasSal, isVerified: salVerified });
 
     rows.push({
@@ -6266,7 +6299,7 @@ export default function CustomerVerification() {
     const bankPrev = coFin.bankStatement?.preview;
     const bankData = coFin.bankStatement?.data;
     const hasBank = Boolean(bankPrev?.url || bankData || bankRej?.currentDocumentPath);
-    const bankVerified = Boolean(stepVerifications.BANK_STATEMENT?.isVerified) && !hasUnresolvedRejectionForStep('BANK_STATEMENT');
+    const bankVerified = Boolean(stepVerifications[coSeq]?.BANK_STATEMENT?.isVerified) && !hasUnresolvedRejectionForStep('BANK_STATEMENT', coSeq);
     const bankStatus = resolveRowStatus({ rejection: bankRej, hasFile: hasBank, isVerified: bankVerified });
 
     rows.push({
@@ -6299,7 +6332,7 @@ export default function CustomerVerification() {
     // 6. ZIP / Archive Package
     const zipRej = getActiveRejectionForCoApplicant(coKycId, 7, coSeq);
     const hasZip = Boolean(coPrev.zip?.url || coManual.length > 0 || zipRej?.currentDocumentPath);
-    const zipVerified = Boolean(stepVerifications.ZIP_ARCHIVE?.isVerified) && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE');
+    const zipVerified = Boolean(stepVerifications[coSeq]?.ZIP_ARCHIVE?.isVerified) && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE', coSeq);
     const zipStatus = resolveRowStatus({ rejection: zipRej, hasFile: hasZip, isVerified: zipVerified });
 
     rows.push({
@@ -6410,177 +6443,27 @@ export default function CustomerVerification() {
   const handleToggleRowVerification = useCallback(async (row) => {
     if (!row || !row.hasFile) return;
     if (row.status === 'Returned to RM' || row.status === 'Returned' || row.status === 'Resubmitted') return;
-    if (hasUnresolvedRejectionForStep(row.stepCode)) return;
-    if (isSavingStepVerification) return;
+    const seq =
+      row.applicantSequence !== undefined && row.applicantSequence !== null && !isNaN(Number(row.applicantSequence))
+        ? Number(row.applicantSequence)
+        : (row.isCoApplicant ? 1 : 0);
+    if (hasUnresolvedRejectionForStep(row.stepCode, seq)) return;
+    const rowKey = `${seq}_${row.stepCode}`;
+    if (savingVerificationKey === rowKey) return;
 
     const currentVerified = Boolean(row.isVerified);
     const nextVerified = !currentVerified;
     const currentRemarks = (stepRemarks[row.stepNum] || '').trim();
 
     await handleSaveStepVerification({
+      applicantSequence: seq,
       stepCode: row.stepCode,
       isVerified: nextVerified,
       remarks: currentRemarks,
       stepNum: row.stepNum,
     });
-  }, [hasUnresolvedRejectionForStep, isSavingStepVerification, stepRemarks, handleSaveStepVerification]);
+  }, [hasUnresolvedRejectionForStep, savingVerificationKey, stepRemarks, handleSaveStepVerification]);
 
-
-  // 5a. Initial Load: Fetch latest FOIR calculation snapshot via GET /by-customer/{agentCustomerId}
-  useEffect(() => {
-    const rawCustomer = verificationData?.raw?.customer || verificationData?.customer || {};
-    const rawCust = Array.isArray(rawCustomer) ? rawCustomer[0] : rawCustomer;
-    const targetCustomerId =
-      verificationData?.customerId ||
-      rawCust?.agentCustomerId ||
-      rawCust?.AgentCustomerId ||
-      customerId;
-
-    if (!targetCustomerId) return;
-
-    let isMounted = true;
-
-    const fetchLatestFoir = async () => {
-      try {
-        const res = await backOfficeService.getFoirCalculationsByCustomer(targetCustomerId);
-        if (!isMounted) return;
-
-        const records = Array.isArray(res) ? res : (res?.value ?? res?.data ?? res?.result ?? []);
-        // Backend returns records newest-first (latest calculation snapshot at index 0)
-        const latestResult = records.length > 0 ? records[0] : null;
-
-        if (latestResult) {
-          setFoirData(latestResult);
-          setFoirState('success');
-        } else {
-          setFoirData(null);
-          setFoirState('idle');
-        }
-      } catch (err) {
-        if (!isMounted) return;
-        // If 404 or no calculation records exist yet, keep idle state for user to trigger first calculation
-        console.warn('No existing FOIR records found for customer:', err?.message);
-        setFoirData(null);
-        setFoirState('idle');
-      }
-    };
-
-    fetchLatestFoir();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [verificationData?.customerId, customerId]);
-
-  const handleCalculateFoir = async () => {
-    if (foirState === 'loading') return;
-
-    const startedAt = Date.now();
-    setFoirState('loading');
-    setFoirLoadingStage(0);
-    setFoirError(null);
-
-    try {
-      // Resolve application IDs from current verification data
-      const rawCustomer = verificationData?.raw?.customer || verificationData?.customer || {};
-      const rawCust = Array.isArray(rawCustomer) ? rawCustomer[0] : rawCustomer;
-      const rawEmp = verificationData?.raw?.employmentIncome || verificationData?.employmentIncome?.raw || verificationData?.raw?.EmploymentIncome || {};
-      const rawEmpItem = Array.isArray(rawEmp) ? rawEmp[0] : rawEmp;
-      const rawProd = verificationData?.raw?.productDetails || verificationData?.applicationDetails?.raw || verificationData?.raw?.ProductDetails || verificationData?.raw?.applicationProductDetails || {};
-      const rawProdItem = Array.isArray(rawProd) ? rawProd[0] : rawProd;
-
-      const agentCustId =
-        verificationData?.customerId ||
-        rawCust?.agentCustomerId ||
-        rawCust?.AgentCustomerId ||
-        verificationData?.raw?.agentCustomerId ||
-        verificationData?.raw?.AgentCustomerId ||
-        customerId;
-
-      const empIncomeId =
-        rawEmpItem?.applicationEmploymentIncomeDetailsId ||
-        rawEmpItem?.ApplicationEmploymentIncomeDetailsId ||
-        rawEmpItem?.employmentIncomeDetailsId ||
-        rawEmpItem?.EmploymentIncomeDetailsId ||
-        rawEmpItem?.id ||
-        rawEmpItem?.Id ||
-        verificationData?.employmentIncome?.raw?.applicationEmploymentIncomeDetailsId ||
-        verificationData?.employmentIncome?.raw?.ApplicationEmploymentIncomeDetailsId;
-
-      const prodDetailsId =
-        rawProdItem?.applicationProductDetailsId ||
-        rawProdItem?.ApplicationProductDetailsId ||
-        rawProdItem?.productDetailsId ||
-        rawProdItem?.ProductDetailsId ||
-        rawProdItem?.id ||
-        rawProdItem?.Id ||
-        verificationData?.applicationDetails?.raw?.applicationProductDetailsId ||
-        verificationData?.applicationDetails?.raw?.ApplicationProductDetailsId;
-
-      const auth = getBackOfficeAuth();
-      const loggedInUserId =
-        auth?.id ||
-        localStorage.getItem('backOfficeId') ||
-        (() => {
-          try {
-            const bo = JSON.parse(localStorage.getItem('backOfficeData') || 'null');
-            if (bo?.backOfficeId || bo?.id || bo?.userId) return bo.backOfficeId || bo.id || bo.userId;
-            const cu = JSON.parse(localStorage.getItem('sivels_currentUser') || 'null');
-            if (cu?.backOfficeId || cu?.userId || cu?.id) return cu.backOfficeId || cu.userId || cu.id;
-          } catch {}
-          return null;
-        })() ||
-        1;
-
-      if (!agentCustId || !empIncomeId || !prodDetailsId) {
-        const missing = [];
-        if (!agentCustId) missing.push('Customer ID');
-        if (!empIncomeId) missing.push('Employment Income ID');
-        if (!prodDetailsId) missing.push('Product Details ID');
-        throw new Error(`Unable to calculate FOIR: Required identifier(s) [${missing.join(', ')}] not found in application data.`);
-      }
-
-      const payload = {
-        agentCustomerId: Number(agentCustId),
-        applicationEmploymentIncomeDetailsId: Number(empIncomeId),
-        applicationProductDetailsId: Number(prodDetailsId),
-        createdBy: Number(loggedInUserId) || 1,
-      };
-
-      const res = await backOfficeService.calculateFoir(payload);
-
-      // Smooth visual transition for progress stages
-      const elapsed = Date.now() - startedAt;
-      if (elapsed < 800) {
-        await new Promise((resolve) => setTimeout(resolve, 800 - elapsed));
-      }
-
-      const freshResult = (res && typeof res === 'object' && !Array.isArray(res))
-        ? res
-        : (Array.isArray(res) ? res[0] : (res?.data ?? res?.value ?? res?.result ?? res));
-
-      if (freshResult) {
-        setFoirData(freshResult);
-        setFoirState('success');
-      } else {
-        throw new Error('Calculation service did not return a result record.');
-      }
-    } catch (err) {
-      console.error('Error calculating FOIR:', err);
-      setFoirError(err?.response?.data?.message || err?.message || 'Unable to connect to FOIR calculation service.');
-      setFoirState('error');
-    }
-  };
-
-  useEffect(() => {
-    if (foirState !== 'loading') return undefined;
-
-    const timers = FOIR_LOADING_STAGES.slice(1).map((_, index) => (
-      setTimeout(() => setFoirLoadingStage(index + 1), (index + 1) * 360)
-    ));
-
-    return () => timers.forEach(clearTimeout);
-  }, [foirState]);
 
   // Staged loading effect for CIBIL simulation (approx 2.3s)
   useEffect(() => {
@@ -6964,13 +6847,13 @@ export default function CustomerVerification() {
           </aside>
         )}
 
-        {/* ── 12-STEP VERIFICATION WORKFLOW SIDEBAR (SIVELS FINANCE) ── */}
-        <aside className="bo-cv-left-sidebar" aria-label="12-Step Underwriting Verification Workflow">
+        {/* ── 11-STEP VERIFICATION WORKFLOW SIDEBAR (SIVELS FINANCE) ── */}
+        <aside className="bo-cv-left-sidebar" aria-label="11-Step Underwriting Verification Workflow">
           <div className="bo-cv-sidebar-header">
             <div className="bo-cv-sidebar-heading-row">
               <div>
                 <h2 className="bo-cv-sidebar-title">Verification Steps</h2>
-                <span className="bo-cv-sidebar-subtitle">12-Step Underwriting</span>
+                <span className="bo-cv-sidebar-subtitle">11-Step Underwriting</span>
               </div>
               <span className="bo-cv-step-count">{VERIFICATION_WORKFLOW_STEPS.length}</span>
             </div>
@@ -7043,7 +6926,7 @@ export default function CustomerVerification() {
           </nav>
         </aside>
 
-        {/* ── RIGHT MAIN WORKSPACE: 15-STEP UNDERWRITING CONTENT ─────────── */}
+        {/* ── RIGHT MAIN WORKSPACE: 11-STEP UNDERWRITING CONTENT ─────────── */}
         <main className="bo-cv-main-content" id="main-verification-content">
 
           {/* ══════════════════════════════════════════════════════════════════
@@ -7061,7 +6944,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 01 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 01 of 11</span>
               </div>
 
               <div className="bo-cv-view-form-embed-wrapper">
@@ -7103,7 +6986,7 @@ export default function CustomerVerification() {
                   </div>
                 </div>
                 <div className="bo-cv-doc-header-right">
-                  <span className="bo-cv-step-tag-pill">Step 02 of 12</span>
+                  <span className="bo-cv-step-tag-pill">Step 02 of 11</span>
                 </div>
               </div>
 
@@ -7146,13 +7029,14 @@ export default function CustomerVerification() {
                       <tbody>
                         {applicantDocRows.map((row, idx) => {
                           const IconComp = row.icon;
+                          const isThisRowSaving = savingVerificationKey === `${row.applicantSequence || 0}_${row.stepCode}`;
                           const isCheckboxDisabled =
                             !row.hasFile ||
                             row.status === 'Returned to RM' ||
                             row.status === 'Returned' ||
                             row.status === 'Resubmitted' ||
-                            hasUnresolvedRejectionForStep(row.stepCode) ||
-                            isSavingStepVerification;
+                            hasUnresolvedRejectionForStep(row.stepCode, 0) ||
+                            isThisRowSaving;
 
                           return (
                             <tr key={row.id} className="bo-cv-doc-tr">
@@ -7216,8 +7100,8 @@ export default function CustomerVerification() {
                                       ? 'Cannot verify: Document is returned to RM'
                                       : row.status === 'Resubmitted'
                                       ? 'Cannot verify: Resubmitted document must be verified via comparison review'
-                                      : hasUnresolvedRejectionForStep(row.stepCode)
-                                      ? 'Cannot verify: Unresolved rejection pending for this step'
+                                      : hasUnresolvedRejectionForStep(row.stepCode, 0)
+                                      ? 'Cannot verify: Unresolved rejection pending for this document'
                                       : row.isVerified
                                       ? 'Click to unverify document'
                                       : 'Click to mark document as verified'
@@ -7360,12 +7244,13 @@ export default function CustomerVerification() {
                         <tbody>
                           {coApplicantDocRows.map((row, idx) => {
                             const IconComp = row.icon;
+                            const isThisRowSaving = savingVerificationKey === `${row.applicantSequence}_${row.stepCode}`;
                             const isCheckboxDisabled =
                               !row.hasFile ||
                               row.status === 'Returned' ||
                               row.status === 'Resubmitted' ||
-                              hasUnresolvedRejectionForStep(row.stepCode) ||
-                              isSavingStepVerification;
+                              hasUnresolvedRejectionForStep(row.stepCode, row.applicantSequence) ||
+                              isThisRowSaving;
 
                             return (
                               <tr key={row.id} className="bo-cv-doc-tr">
@@ -7429,8 +7314,8 @@ export default function CustomerVerification() {
                                         ? 'Cannot verify: Document is returned to RM'
                                         : row.status === 'Resubmitted'
                                         ? 'Cannot verify: Resubmitted document must be verified via comparison review'
-                                        : hasUnresolvedRejectionForStep(row.stepCode)
-                                        ? 'Cannot verify: Unresolved rejection pending for this step'
+                                        : hasUnresolvedRejectionForStep(row.stepCode, row.applicantSequence)
+                                        ? 'Cannot verify: Unresolved rejection pending for this document'
                                         : row.isVerified
                                         ? 'Click to unverify document'
                                         : 'Click to mark document as verified'
@@ -7511,7 +7396,7 @@ export default function CustomerVerification() {
                     <p className="bo-cv-step-panel-desc">Property Field Investigation details and collateral valuation.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 03 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 03 of 11</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -7538,7 +7423,7 @@ export default function CustomerVerification() {
                     <p className="bo-cv-step-panel-desc">Workplace and business establishment field investigation.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 04 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 04 of 11</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -7565,7 +7450,7 @@ export default function CustomerVerification() {
                     <p className="bo-cv-step-panel-desc">Physical residence field verification and neighbor check.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 05 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 05 of 11</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -7594,7 +7479,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 06 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 06 of 11</span>
               </div>
 
               <div className="bo-cv-upload-container">
@@ -7736,7 +7621,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 07 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 07 of 11</span>
               </div>
 
               <div className="bo-cv-upload-container">
@@ -7870,7 +7755,7 @@ export default function CustomerVerification() {
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">13</div>
+                  <div className="bo-cv-step-badge-num">08</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Credit Bureau &amp; CIBIL Verification</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -7878,7 +7763,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 08 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 08 of 11</span>
               </div>
 
               {/* Manual CIBIL PAN Card Upload Reference Section */}
@@ -8426,7 +8311,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 09 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 09 of 11</span>
               </div>
 
               <div className="bo-cv-pd-container">
@@ -8499,249 +8384,13 @@ export default function CustomerVerification() {
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
-              STEP 13: ELIGIBILITY CALCULATION (FOIR)
-          ══════════════════════════════════════════════════════════════════ */}
-          {activeStep === 15 && (
-            <div className="bo-cv-step-panel">
-              <div className="bo-cv-step-panel-header">
-                <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">10</div>
-                  <div>
-                    <h2 className="bo-cv-step-panel-title">Eligibility Calculation (FOIR)</h2>
-                    <p className="bo-cv-step-panel-desc">
-                      Calculate Fixed Obligation to Income Ratio, determine loan eligibility, and sign off underwriting decision.
-                    </p>
-                  </div>
-                </div>
-                <span className="bo-cv-step-tag-pill">Step 10 of 12</span>
-              </div>
-
-              {/* ── 9. FOIR ELIGIBILITY CALCULATION SECTION ─────────────────── */}
-              <div className="bo-cv-foir-section" id="foir-calculation-section">
-                {foirState === 'idle' && (
-                  <div className="bo-cv-foir-idle-card">
-                    <div className="bo-cv-foir-idle-content">
-                      <div className="bo-cv-foir-idle-icon">
-                        {BadgeIndianRupeeIcon ? <BadgeIndianRupeeIcon size={22} /> : <FileCheckIcon size={22} />}
-                      </div>
-                      <div>
-                        <h3 className="bo-cv-foir-title">FOIR Eligibility Calculation</h3>
-                        <p className="bo-cv-foir-subtitle">
-                          Calculate Fixed Obligation to Income Ratio and evaluate applicant loan eligibility.
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="bo-btn bo-btn--primary bo-cv-calc-foir-btn"
-                      onClick={handleCalculateFoir}
-                      disabled={foirState === 'loading'}
-                    >
-                      {RefreshCwIcon && <RefreshCwIcon size={14} className={foirState === 'loading' ? 'bo-cv-spin' : ''} />}
-                      <span>{foirState === 'loading' ? 'Calculating FOIR...' : 'Calculate FOIR'}</span>
-                    </button>
-                  </div>
-                )}
-
-                {foirState === 'loading' && (
-                  <div className="bo-cv-foir-card bo-cv-foir-loading-card">
-                    <div className="bo-cv-foir-processing-head">
-                      <div className="bo-cv-foir-processing-orb"><span /></div>
-                      <div>
-                        <span className="bo-cv-foir-processing-kicker">LIVE ELIGIBILITY CHECK</span>
-                        <h4 className="bo-cv-foir-title">Calculating FOIR<span className="bo-cv-running-dots" aria-hidden="true">...</span></h4>
-                        <p className="bo-cv-foir-subtitle">Applicant #{verificationData?.customerId} · secure calculation in progress</p>
-                      </div>
-                    </div>
-                    <div className="bo-cv-foir-processing-body">
-                      <div className="bo-cv-foir-progress-track"><i style={{ width: `${((foirLoadingStage + 1) / FOIR_LOADING_STAGES.length) * 100}%` }} /></div>
-                      <div className="bo-cv-foir-processing-meta"><strong>{FOIR_LOADING_STAGES[foirLoadingStage]}</strong><span>{Math.round(((foirLoadingStage + 1) / FOIR_LOADING_STAGES.length) * 100)}%</span></div>
-                      <div className="bo-cv-foir-process-steps">
-                        {FOIR_LOADING_STAGES.map((stage, index) => (
-                          <span key={stage} className={index <= foirLoadingStage ? 'is-complete' : ''}><i>{index < foirLoadingStage ? '✓' : index === foirLoadingStage ? '•' : ''}</i>{stage}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {foirState === 'error' && (
-                  <div className="bo-cv-foir-card bo-cv-foir-error-card">
-                    <div className="bo-cv-foir-header">
-                      <div className="bo-cv-foir-title-group">
-                        <h3 className="bo-cv-foir-title text-danger">FOIR Calculation Failed</h3>
-                        <p className="bo-cv-foir-subtitle">{foirError}</p>
-                      </div>
-                      <button
-                        type="button"
-                        className="bo-btn bo-btn--outline bo-cv-foir-recalc-btn"
-                        onClick={handleCalculateFoir}
-                        disabled={foirState === 'loading'}
-                      >
-                        {RefreshCwIcon && <RefreshCwIcon size={13} className={foirState === 'loading' ? 'bo-cv-spin' : ''} />}
-                        <span>{foirState === 'loading' ? 'Calculating FOIR...' : 'Retry Calculation'}</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {foirState === 'empty' && (
-                  <div className="bo-cv-foir-card bo-cv-foir-empty-card">
-                    <div className="bo-cv-foir-header">
-                      <div className="bo-cv-foir-title-group">
-                        <h3 className="bo-cv-foir-title">FOIR Calculation Result</h3>
-                        <p className="bo-cv-foir-subtitle">
-                          No matching FOIR calculation record was found for this applicant (Customer #{verificationData?.customerId}).
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        className="bo-btn bo-btn--primary bo-cv-calc-foir-btn"
-                        onClick={handleCalculateFoir}
-                        disabled={foirState === 'loading'}
-                      >
-                        {RefreshCwIcon && <RefreshCwIcon size={13} className={foirState === 'loading' ? 'bo-cv-spin' : ''} />}
-                        <span>{foirState === 'loading' ? 'Calculating FOIR...' : 'Calculate Again'}</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {foirState === 'success' && foirData && (() => {
-                  const monthlyIncome = foirData.monthlyIncome ?? foirData.MonthlyIncome;
-                  const existingEMI = foirData.existingEMI ?? foirData.ExistingEMI ?? foirData.existingEmi ?? foirData.ExistingEmi ?? 0;
-                  const eligibleIncome = foirData.eligibleIncome ?? foirData.EligibleIncome;
-                  const netServiceableIncome = foirData.netServiceableIncome ?? foirData.NetServiceableIncome;
-                  const foirPercentApplied = foirData.foirPercentApplied ?? foirData.FoirPercentApplied ?? foirData.proposedFOIR ?? foirData.ProposedFOIR;
-                  const requestedLoanAmount = foirData.requestedLoanAmount ?? foirData.RequestedLoanAmount;
-                  const proposedTenureMonths = foirData.proposedTenureMonths ?? foirData.ProposedTenureMonths ?? foirData.tenureMonths;
-                  const status = foirData.status ?? foirData.Status ?? 'Under Review';
-                  const isEligible = String(status).trim().toLowerCase() === 'eligible';
-
-                  return (
-                    <div className="bo-cv-foir-card bo-cv-foir-success-card">
-                      <div className="bo-cv-foir-header">
-                        <div className="bo-cv-foir-title-group">
-                          <div className="bo-cv-foir-title-row">
-                            <div className="bo-cv-foir-badge-icon">
-                              {BadgeIndianRupeeIcon ? <BadgeIndianRupeeIcon size={18} /> : <FileCheckIcon size={18} />}
-                            </div>
-                            <h3 className="bo-cv-foir-title">FOIR Calculation Result</h3>
-                            <span className={`bo-cv-foir-status-badge ${isEligible ? 'is-eligible' : 'is-not-eligible'}`}>
-                              {status}
-                            </span>
-                          </div>
-                          <p className="bo-cv-foir-subtitle">
-                            Fixed Obligation to Income Ratio analysis based on applicant income and existing debt obligations.
-                          </p>
-                        </div>
-
-                        <button
-                          type="button"
-                          className="bo-btn bo-btn--outline bo-cv-foir-recalc-btn"
-                          onClick={handleCalculateFoir}
-                          disabled={foirState === 'loading'}
-                          title="Re-run FOIR calculation"
-                        >
-                          {RefreshCwIcon && <RefreshCwIcon size={13} className={foirState === 'loading' ? 'bo-cv-spin' : ''} />}
-                          <span>{foirState === 'loading' ? 'Calculating FOIR...' : 'Re-calculate FOIR'}</span>
-                        </button>
-                      </div>
-
-                      <div className="bo-cv-foir-result-strip">
-                        <div className="bo-cv-foir-result-status">
-                          <span className="bo-cv-foir-result-label">Decision snapshot</span>
-                          <strong>{isEligible ? 'Applicant appears eligible' : 'Additional review recommended'}</strong>
-                          <small>Based on the returned income and obligation values</small>
-                        </div>
-                        <div className="bo-cv-foir-result-actions">
-                          <button
-                            type="button"
-                            className="bo-cv-foir-btn-approve"
-                            onClick={() => handleOpenDecisionModal('approve')}
-                          >
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            className="bo-cv-foir-btn-not-approve"
-                            onClick={() => handleOpenDecisionModal('notApprove')}
-                          >
-                            Not Approve
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="bo-cv-foir-grid">
-                        {/* 1. Monthly Income */}
-                        <div className="bo-cv-foir-cell">
-                          <span className="bo-cv-foir-cell-lbl">Monthly Income</span>
-                          <strong className="bo-cv-foir-cell-val text-primary">{formatFoirCurrency(monthlyIncome)}</strong>
-                        </div>
-
-                        {/* 2. Existing EMI */}
-                        <div className="bo-cv-foir-cell">
-                          <span className="bo-cv-foir-cell-lbl">Existing EMI</span>
-                          <strong className="bo-cv-foir-cell-val">{formatFoirCurrency(existingEMI)}</strong>
-                        </div>
-
-                        {/* 3. Eligible Income */}
-                        <div className="bo-cv-foir-cell">
-                          <span className="bo-cv-foir-cell-lbl">Eligible Income</span>
-                          <strong className="bo-cv-foir-cell-val text-success">{formatFoirCurrency(eligibleIncome)}</strong>
-                        </div>
-
-                        {/* 4. Net Serviceable Income */}
-                        <div className="bo-cv-foir-cell">
-                          <span className="bo-cv-foir-cell-lbl">Net Serviceable Income</span>
-                          <strong className="bo-cv-foir-cell-val text-success">{formatFoirCurrency(netServiceableIncome)}</strong>
-                        </div>
-
-                        {/* 5. FOIR % */}
-                        <div className="bo-cv-foir-cell">
-                          <span className="bo-cv-foir-cell-lbl">FOIR %</span>
-                          <strong className="bo-cv-foir-cell-val">
-                            {foirPercentApplied !== undefined && foirPercentApplied !== null && foirPercentApplied !== '' ? `${foirPercentApplied}%` : '—'}
-                          </strong>
-                        </div>
-
-                        {/* 6. Requested Loan Amount */}
-                        <div className="bo-cv-foir-cell">
-                          <span className="bo-cv-foir-cell-lbl">Requested Loan Amount</span>
-                          <strong className="bo-cv-foir-cell-val">{formatFoirCurrency(requestedLoanAmount)}</strong>
-                        </div>
-
-                        {/* 7. Proposed Tenure (Months) */}
-                        <div className="bo-cv-foir-cell">
-                          <span className="bo-cv-foir-cell-lbl">Proposed Tenure (Months)</span>
-                          <strong className="bo-cv-foir-cell-val">
-                            {proposedTenureMonths !== undefined && proposedTenureMonths !== null && proposedTenureMonths !== '' ? `${proposedTenureMonths} Months` : '—'}
-                          </strong>
-                        </div>
-
-                        {/* 8. Status */}
-                        <div className="bo-cv-foir-cell">
-                          <span className="bo-cv-foir-cell-lbl">Status</span>
-                          <span className={`bo-cv-foir-status-pill ${isEligible ? 'is-eligible' : 'is-not-eligible'}`}>
-                            {status}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════════════
               STEP 14: ELIGIBILITY ASSESSMENT (PHASE 2A)
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 16 && (
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">11</div>
+                  <div className="bo-cv-step-badge-num">10</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Eligibility Assessment</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -8749,7 +8398,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 11 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 10 of 11</span>
               </div>
 
               <div className="bo-cv-assess-container">
@@ -10754,7 +10403,7 @@ export default function CustomerVerification() {
               <div className="bo-cv-step-panel">
                 <div className="bo-cv-step-panel-header">
                   <div className="bo-cv-step-header-left">
-                    <div className="bo-cv-step-badge-num">17</div>
+                    <div className="bo-cv-step-badge-num">11</div>
                     <div>
                       <h2 className="bo-cv-step-panel-title">Recommendation Sheet</h2>
                       <p className="bo-cv-step-panel-desc">
@@ -10762,7 +10411,7 @@ export default function CustomerVerification() {
                       </p>
                     </div>
                   </div>
-                  <span className="bo-cv-step-tag-pill">Step 12 of 12</span>
+                  <span className="bo-cv-step-tag-pill">Step 11 of 11</span>
                 </div>
 
                 <div className="bo-cv-placeholder-panel">
@@ -10835,7 +10484,7 @@ export default function CustomerVerification() {
         </main>
       </div>
 
-      {/* ── View-Only 12-Step Inspection Modal (Single-Fetch Shared Data) ── */}
+      {/* ── View-Only 11-Step Inspection Modal (Single-Fetch Shared Data) ── */}
       {selectedStepNumber && selectedStepDef && (
         <VerificationStepModal
           stepNumber={selectedStepNumber}
@@ -10843,90 +10492,6 @@ export default function CustomerVerification() {
           customerData={verificationData}
           onClose={handleCloseModal}
         />
-      )}
-
-      {/* ── FOIR Decision Remarks Modal (Approve / Not Approve) ── */}
-      {decisionModalOpen && (
-        <div
-          className="bo-cv-decision-modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="bo-cv-decision-modal-title"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              handleCloseDecisionModal();
-            }
-          }}
-        >
-          <div className="bo-cv-decision-modal-card">
-            <div className="bo-cv-decision-modal-header">
-              <div className="bo-cv-decision-modal-title-group">
-                <h3 id="bo-cv-decision-modal-title" className="bo-cv-decision-modal-title">
-                  {decisionType === 'approve' ? 'Approve FOIR' : 'Not Approve FOIR'}
-                </h3>
-                <p className="bo-cv-decision-modal-subtitle">
-                  Add remarks before confirming this decision.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="bo-cv-decision-modal-close"
-                onClick={handleCloseDecisionModal}
-                aria-label="Close modal"
-              >
-                {XIcon ? <XIcon size={16} /> : <span>×</span>}
-              </button>
-            </div>
-
-            <div className="bo-cv-decision-modal-body">
-              <label htmlFor="bo-cv-decision-remarks" className="bo-cv-decision-label">
-                REMARKS
-              </label>
-              <textarea
-                id="bo-cv-decision-remarks"
-                className={`bo-cv-decision-textarea ${decisionError ? 'has-error' : ''}`}
-                rows={4}
-                value={decisionRemarks}
-                onChange={(e) => {
-                  setDecisionRemarks(e.target.value);
-                  if (decisionError && e.target.value.trim()) {
-                    setDecisionError('');
-                  }
-                }}
-                placeholder={
-                  decisionType === 'approve'
-                    ? 'Enter approval remarks...'
-                    : 'Enter reason / remarks...'
-                }
-                autoFocus
-              />
-              {decisionError && (
-                <span className="bo-cv-decision-error-msg">{decisionError}</span>
-              )}
-            </div>
-
-            <div className="bo-cv-decision-modal-footer">
-              <button
-                type="button"
-                className="bo-cv-decision-btn-cancel"
-                onClick={handleCloseDecisionModal}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className={
-                  decisionType === 'approve'
-                    ? 'bo-cv-decision-btn-confirm-approve'
-                    : 'bo-cv-decision-btn-confirm-reject'
-                }
-                onClick={handleConfirmDecision}
-              >
-                {decisionType === 'approve' ? 'Confirm Approve' : 'Confirm Not Approve'}
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* ── Document Rejection Confirmation Modal ── */}
@@ -11224,7 +10789,8 @@ export default function CustomerVerification() {
                           await handleVerifyRejection(
                             previewModal.rejectionId,
                             previewModal.stepLabel,
-                            previewModal.stepNum
+                            previewModal.stepNum,
+                            previewModal.applicantSequence
                           );
                           handleClosePreviewModal();
                         }}

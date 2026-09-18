@@ -147,13 +147,16 @@ export default function VerificationReportPdf({
         fetch(`${API_BASE}/ApplicationPersonalInformation`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : [])),
       ]);
 
-      // Map step verifications
+      // Map step verifications (Primary Applicant: applicantSequence === 0)
       if (stepVerifRes.status === 'fulfilled' && stepVerifRes.value) {
         const list = Array.isArray(stepVerifRes.value) ? stepVerifRes.value : (stepVerifRes.value?.value || stepVerifRes.value?.data || []);
         const map = {};
         list.forEach((item) => {
           if (item && item.stepCode && item.isActive !== false) {
-            map[item.stepCode] = item;
+            const seq = item.applicantSequence !== undefined && item.applicantSequence !== null ? Number(item.applicantSequence) : 0;
+            if (seq === 0) {
+              map[item.stepCode] = item;
+            }
           }
         });
         setStepVerifications(map);

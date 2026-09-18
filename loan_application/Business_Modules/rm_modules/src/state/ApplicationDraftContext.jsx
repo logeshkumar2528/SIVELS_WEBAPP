@@ -539,24 +539,60 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   const rawStatus = customer.status !== undefined ? customer.status : customer.Status;
   const status = rawStatus === 2 ? 'Logged to HO' : (rawStatus === 1 ? 'Pending' : (rawStatus === 0 ? 'New' : (existingDraft.status || 'Draft')));
   const createdDate = customer.createdAt || customer.CreatedAt || customer.createdDate || customer.CreatedDate || existingDraft.createdDate || '';
-  const rmId = productDetails.rmId ?? productDetails.RmId ?? customer.rmId ?? customer.RmId ?? customer.createdBy ?? existingDraft.rmId ?? null;
-  const rmCustomerId = productDetails.rmCustomerId ?? productDetails.RmCustomerId ?? customer.rmCustomerId ?? existingDraft.rmCustomerId ?? null;
+  // Backend-resolved Ownership Fields (Single Source of Truth)
+  const customerSource =
+    backendData.customerSource ??
+    backendData.CustomerSource ??
+    customer.customerSource ??
+    customer.CustomerSource ??
+    null;
 
-  const hasCustomerAgentId = (customer && 'agentId' in customer) || (customer && 'AgentId' in customer);
-  const hasProductAgentId = (productDetails && 'agentId' in productDetails) || (productDetails && 'AgentId' in productDetails);
+  const rawRmId =
+    backendData.rmId ??
+    backendData.RmId ??
+    customer.rmId ??
+    customer.RmId ??
+    productDetails.rmId ??
+    productDetails.RmId ??
+    customer.createdBy ??
+    null;
+  const rmId = (rawRmId !== null && rawRmId !== undefined && rawRmId !== '') ? Number(rawRmId) : null;
 
-  let rawAgentId;
-  if (hasCustomerAgentId) {
-    rawAgentId = customer.agentId !== undefined ? customer.agentId : customer.AgentId;
-  } else if (hasProductAgentId) {
-    rawAgentId = productDetails.agentId !== undefined ? productDetails.agentId : productDetails.AgentId;
-  } else {
-    rawAgentId = existingDraft.agentId ?? null;
-  }
+  const rmName =
+    backendData.rmName ??
+    backendData.RmName ??
+    customer.rmName ??
+    customer.RmName ??
+    null;
+
+  const rmCode =
+    backendData.rmCode ??
+    backendData.RmCode ??
+    customer.rmCode ??
+    customer.RmCode ??
+    null;
+
+  const rawAgentId =
+    backendData.agentId !== undefined ? backendData.agentId :
+    (backendData.AgentId !== undefined ? backendData.AgentId :
+    (customer.agentId !== undefined ? customer.agentId :
+    (customer.AgentId !== undefined ? customer.AgentId :
+    (productDetails.agentId !== undefined ? productDetails.agentId :
+    (productDetails.AgentId !== undefined ? productDetails.AgentId : null)))));
   const agentId = (rawAgentId !== null && rawAgentId !== undefined && rawAgentId !== '') ? rawAgentId : null;
-  const isRmSourced = (agentId === null || agentId === undefined) && Boolean(rmId);
-  const isAgentSourced = Boolean(agentId);
-  const agentName = isRmSourced ? (existingDraft.agentName || '') : (customer.agentName || customer.AgentName || existingDraft.agentName || '');
+
+  const rawAgentName =
+    backendData.agentName ??
+    backendData.AgentName ??
+    customer.agentName ??
+    customer.AgentName ??
+    null;
+
+  const resolvedCustomerSource = customerSource || (agentId ? 'Agent' : (rmId ? 'RM' : ''));
+  const isAgentSourced = resolvedCustomerSource === 'Agent' || Boolean(agentId);
+  const isRmSourced = resolvedCustomerSource === 'RM' || (!agentId && Boolean(rmId));
+  const agentName = isAgentSourced ? (rawAgentName || '') : '';
+  const rmCustomerId = productDetails.rmCustomerId ?? productDetails.RmCustomerId ?? customer.rmCustomerId ?? existingDraft.rmCustomerId ?? null;
 
   const applicationProductDetailsId = productDetails.applicationProductDetailsId || productDetails.ApplicationProductDetailsId || existingDraft.applicationProductDetailsId || null;
   const sourcingChannel = productDetails.sourcingChannelId ?? productDetails.SourcingChannelId ?? existingDraft.sourcingChannel ?? '';
@@ -824,11 +860,17 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     },
   };
 
-  // 9. Sourcing Details
+  // 9. Sourcing Details (Pure backend-derived ownership)
   const sourcing = {
     sourcingChannel,
-    sourcedBy: customer.agentName || existingDraft.sourcing?.sourcedBy || '',
-    employeeId: customer.agentId ? String(customer.agentId) : (existingDraft.sourcing?.employeeId || ''),
+    customerSource: resolvedCustomerSource,
+    agentId: isAgentSourced ? agentId : null,
+    agentName: isAgentSourced ? agentName : '',
+    rmId,
+    rmName: rmName || '',
+    rmCode: rmCode || '',
+    sourcedBy: rmName || '',
+    employeeId: rmCode || '',
   };
 
   // 10. Declaration & Other Sections
@@ -839,7 +881,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     coApplicantDate: '',
     ackApplicantName: customerName,
     ackProduct: '',
-    ackReceivedBy: customer.agentName || '',
+    ackReceivedBy: rmName || '',
     ackDate: createdDate ? toIstDateInput(createdDate) : toIstDateInput(),
   };
 
@@ -860,9 +902,12 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     id: appIdStr,
     applicationNumber: appIdStr,
     agentCustomerId,
-    agentId,
-    agentName,
+    customerSource: resolvedCustomerSource,
+    agentId: isAgentSourced ? agentId : null,
+    agentName: isAgentSourced ? agentName : '',
     rmId,
+    rmName: rmName || '',
+    rmCode: rmCode || '',
     rmCustomerId,
     isRmSourced,
     isAgentSourced,
