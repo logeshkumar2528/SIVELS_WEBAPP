@@ -279,10 +279,81 @@ export default function ApplicationDetails() {
             }
           }
 
-          const isDirectRm = (agentId === null || agentId === undefined || agentId === '') && Boolean(rmId);
-
-          if (isDirectRm && rmId) {
-            // 1. Direct RM-sourced application
+          if (ownership.isAgentCreated && agentId) {
+            // 1. Agent-sourced application
+            try {
+              const agentResponse = await fetch(`${baseUrl}/AgentMaster/${agentId}`);
+              if (agentResponse.ok) {
+                const agentData = await agentResponse.json();
+                const agentRecord = Array.isArray(agentData)
+                  ? agentData[0]
+                  : (agentData?.value ? agentData.value[0] : agentData);
+                const branch = agentRecord?.branch || agentRecord?.Branch || '';
+                const name = agentRecord?.fullName || agentRecord?.FullName || agentRecord?.agentName || agentRecord?.AgentName || agentRecord?.name || agentRecord?.Name || record.agentName || record.AgentName || '';
+                const code = agentRecord?.agentCode || agentRecord?.AgentCode || agentRecord?.agentId || agentRecord?.AgentId || record.agentCode || record.AgentCode || agentId;
+                if (active) {
+                  setAgentBranch(branch);
+                  setAgentInfo({ name, code: String(code || '') });
+                  setSourcingInfo({
+                    isRmSourced: false,
+                    channel: 'Agent',
+                    name,
+                    code: String(code || ''),
+                    agentId,
+                    rmId: null,
+                    rmCustomerId: null,
+                  });
+                  saveApplication(appId, {
+                    branch,
+                    agentName: name,
+                    agentCode: String(code || ''),
+                    sourcingChannelDisplay: 'Agent',
+                    isAgentSourced: true,
+                    isRmSourced: false,
+                    agentId,
+                  });
+                }
+              } else if (active) {
+                const name = record.agentName || record.AgentName || ownership.agentName || '';
+                const code = record.agentCode || record.AgentCode || agentId;
+                setAgentInfo({ name, code: String(code || '') });
+                setSourcingInfo({
+                  isRmSourced: false,
+                  channel: 'Agent',
+                  name,
+                  code: String(code || ''),
+                  agentId,
+                  rmId: null,
+                  rmCustomerId: null,
+                });
+                saveApplication(appId, {
+                  agentName: name,
+                  agentCode: String(code || ''),
+                  sourcingChannelDisplay: 'Agent',
+                  isAgentSourced: true,
+                  isRmSourced: false,
+                  agentId,
+                });
+              }
+            } catch (agentError) {
+              console.error('Failed to load agent details from AgentMaster:', agentError);
+              if (active) {
+                const name = record.agentName || record.AgentName || ownership.agentName || '';
+                const code = record.agentCode || record.AgentCode || agentId;
+                setAgentInfo({ name, code: String(code || '') });
+                setSourcingInfo({
+                  isRmSourced: false,
+                  channel: 'Agent',
+                  name,
+                  code: String(code || ''),
+                  agentId,
+                  rmId: null,
+                  rmCustomerId: null,
+                });
+              }
+            }
+          } else if (ownership.isDirectRm && rmId) {
+            // 2. Direct RM-sourced application
             try {
               const rmResponse = await fetch(`${baseUrl}/RMMaster/${rmId}`);
               if (rmResponse.ok) {
@@ -321,36 +392,6 @@ export default function ApplicationDetails() {
             } catch (rmError) {
               console.error('Failed to load RM details from RMMaster:', rmError);
             }
-          } else if (agentId) {
-            // 2. Agent-sourced application
-            try {
-              const agentResponse = await fetch(`${baseUrl}/AgentMaster/${agentId}`);
-              if (agentResponse.ok) {
-                const agentData = await agentResponse.json();
-                const agentRecord = Array.isArray(agentData)
-                  ? agentData[0]
-                  : (agentData?.value ? agentData.value[0] : agentData);
-                const branch = agentRecord?.branch || agentRecord?.Branch || '';
-                const name = agentRecord?.fullName || agentRecord?.FullName || agentRecord?.agentName || agentRecord?.AgentName || agentRecord?.name || agentRecord?.Name || record.agentName || record.AgentName || '';
-                const code = agentRecord?.agentCode || agentRecord?.AgentCode || agentRecord?.agentId || agentRecord?.AgentId || record.agentCode || record.AgentCode || agentId;
-                if (active) {
-                  setAgentBranch(branch);
-                  setAgentInfo({ name, code: String(code || '') });
-                  setSourcingInfo({
-                    isRmSourced: false,
-                    channel: 'Field Agent',
-                    name,
-                    code: String(code || ''),
-                    agentId,
-                    rmId: null,
-                    rmCustomerId: null,
-                  });
-                  saveApplication(appId, { branch, agentName: name, agentCode: String(code || ''), isAgentSourced: true });
-                }
-              }
-            } catch (agentError) {
-              console.error('Failed to load branch from AgentMaster:', agentError);
-            }
           }
         }
       } catch (error) {
@@ -382,14 +423,8 @@ export default function ApplicationDetails() {
       return;
     }
 
-    const isRmDirect = Boolean(
-      sourcingInfo.isRmSourced ||
-      displayRecord?.isRmSourced ||
-      ((displayRecord?.agentId === null || displayRecord?.agentId === undefined) && (displayRecord?.rmId || displayRecord?.createdBy)) ||
-      ((appData.agentId === null || appData.agentId === undefined) && (appData.rmId || appData.createdBy))
-    );
-
-    if (isRmDirect) {
+    const ownership = resolveApplicationOwnership(displayRecord || appData);
+    if (ownership.isDirectRm) {
       return;
     }
 
@@ -584,16 +619,12 @@ export default function ApplicationDetails() {
         ? `${baseUrl}/ApplicationProductDetails/${appData.applicationProductDetailsId}` 
         : `${baseUrl}/ApplicationProductDetails`;
       
-      const isRmDirect = Boolean(
-        sourcingInfo.isRmSourced ||
-        displayRecord?.isRmSourced ||
-        (displayRecord?.agentId === null && displayRecord?.rmId) ||
-        (appData.agentId === null && appData.rmId)
-      );
+      const ownership = resolveApplicationOwnership(displayRecord || appData);
+      const isRmDirect = Boolean(ownership.isDirectRm);
 
       let payload;
       if (isRmDirect) {
-        const rmId = Number(sourcingInfo.rmId || displayRecord?.rmId || appData.rmId || displayRecord?.createdBy || 0);
+        const rmId = Number(sourcingInfo.rmId || ownership.rmId || displayRecord?.rmId || appData.rmId || displayRecord?.createdBy || 0);
         const rmCustomerId = Number(sourcingInfo.rmCustomerId || displayRecord?.rmCustomerId || appData.rmCustomerId || appId);
 
         payload = {
@@ -618,7 +649,7 @@ export default function ApplicationDetails() {
           payload.ApplicationProductDetailsId = appData.applicationProductDetailsId;
         }
       } else {
-        let agentId = appData.agentId;
+        let agentId = ownership.agentId || appData.agentId || displayRecord?.agentId;
         if (!agentId) {
           try {
             const agentRes = await fetch(`${baseUrl}/AgentMaster`);
@@ -723,18 +754,14 @@ export default function ApplicationDetails() {
   const submittedTime = formatDateTime(appData.createdDate || displayRecord?.createdAt || displayRecord?.createdDate || '');
   const applicationDisplayId = buildApplicationDisplayId(displayRecord || appData, appId) || appId;
   const statusText = appData.status || displayRecord?.status || 'New';
-  const isRmSourced = Boolean(
-    sourcingInfo.isRmSourced ||
-    displayRecord?.isRmSourced ||
-    ((displayRecord?.agentId === null || displayRecord?.agentId === undefined) && (displayRecord?.rmId || displayRecord?.createdBy)) ||
-    ((appData.agentId === null || appData.agentId === undefined) && (appData.rmId || appData.createdBy))
-  );
+  const ownership = resolveApplicationOwnership(displayRecord || appData);
+  const isRmSourced = Boolean(ownership.isDirectRm);
   const sourcingDisplayName = isRmSourced
-    ? (sourcingInfo.name || appData.agentName || displayRecord?.rmName || displayRecord?.RMName || '')
-    : (agentInfo.name || appData.agentName || displayRecord?.agentName || displayRecord?.AgentName || '');
+    ? (sourcingInfo.name || appData.agentName || displayRecord?.rmName || displayRecord?.RMName || ownership.rmName || '')
+    : (sourcingInfo.name || agentInfo.name || appData.agentName || displayRecord?.agentName || displayRecord?.AgentName || ownership.agentName || '');
   const sourcingDisplayCode = isRmSourced
-    ? (sourcingInfo.code || appData.agentCode || displayRecord?.rmCode || displayRecord?.RMCode || (displayRecord?.rmId ? String(displayRecord.rmId) : '') || (appData.rmId ? String(appData.rmId) : ''))
-    : (agentInfo.code || appData.agentCode || displayRecord?.agentCode || displayRecord?.AgentCode || (displayRecord?.agentId ? String(displayRecord.agentId) : '') || (appData.agentId ? String(appData.agentId) : ''));
+    ? (sourcingInfo.code || appData.agentCode || displayRecord?.rmCode || displayRecord?.RMCode || (ownership.rmId ? String(ownership.rmId) : '') || (appData.rmId ? String(appData.rmId) : ''))
+    : (sourcingInfo.code || agentInfo.code || appData.agentCode || displayRecord?.agentCode || displayRecord?.AgentCode || (ownership.agentId ? String(ownership.agentId) : '') || (appData.agentId ? String(appData.agentId) : ''));
 
   return (
     <div className="page-container ad-page-root compact-mode">
@@ -834,7 +861,7 @@ export default function ApplicationDetails() {
                         placeholder={isLoadingMasters ? "Loading..." : "Select sourcing channel"}
                         options={sourcingChannelOptions}
                         icon={<UserCheck size={16} />}
-                        disabled={isLoadingMasters || Boolean(displayRecord?.agentId || displayRecord?.AgentId || appData.isAgentSourced)}
+                        disabled={isLoadingMasters || Boolean(ownership.isAgentCreated || displayRecord?.agentId || displayRecord?.AgentId || appData.isAgentSourced)}
                       />
                     )}
                   </div>

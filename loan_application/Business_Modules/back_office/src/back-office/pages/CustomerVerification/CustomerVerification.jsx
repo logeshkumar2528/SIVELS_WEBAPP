@@ -22,7 +22,7 @@
  */
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import iconMap from '../../config/iconMap';
 import { ROUTES } from '../../config/routeConfig';
 import { VERIFICATION_STEP_DEFINITIONS } from '../../config/verificationSteps';
@@ -217,6 +217,58 @@ const VERIFICATION_WORKFLOW_STEPS = [
   { id: 16, number: 16, visibleNum: '10', title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
   { id: 17, number: 17, visibleNum: '11', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
 ];
+
+/**
+ * Visible Step (1–11) to Internal Step ID Mapping
+ */
+const VISIBLE_TO_INTERNAL_STEP = {
+  1: 1,
+  2: 2,
+  3: 8,
+  4: 9,
+  5: 10,
+  6: 11,
+  7: 12,
+  8: 13,
+  9: 14,
+  10: 16,
+  11: 17,
+};
+
+/**
+ * Internal Step ID to Visible Step (1–11) Mapping
+ */
+const INTERNAL_TO_VISIBLE_STEP = {
+  1: 1,
+  2: 2,
+  3: 2,
+  4: 2,
+  5: 2,
+  6: 2,
+  7: 2,
+  8: 3,
+  9: 4,
+  10: 5,
+  11: 6,
+  12: 7,
+  13: 8,
+  14: 9,
+  16: 10,
+  17: 11,
+};
+
+function resolveInternalStepFromQuery(stepParam) {
+  if (stepParam == null || stepParam === '') return 1;
+  const parsed = Number(stepParam);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 11) {
+    return 1;
+  }
+  return VISIBLE_TO_INTERNAL_STEP[parsed] ?? 1;
+}
+
+function resolveVisibleStepFromInternal(internalStep) {
+  return INTERNAL_TO_VISIBLE_STEP[internalStep] ?? 1;
+}
 
 /**
  * Builds simulated Credit Bureau report dynamically from customer verification data.
@@ -415,13 +467,43 @@ function getStatusInfo(status) {
 export default function CustomerVerification() {
   const { customerId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // 1. Fetch Real Application from Backend via Phase 1/3 Hook
   const { verificationData, loading, error, refetch } = useVerificationWorkspace(customerId);
 
-  // 2. Active 15-Step Workflow State (Default: Step 1 — View Form)
-  const [activeStep, setActiveStep] = useState(1);
+  // 2. Active 15-Step Workflow State (Initialized from URL ?step= query parameter)
+  const [activeStep, setActiveStep] = useState(() => resolveInternalStepFromQuery(searchParams.get('step')));
   const [viewFormRefreshKey, setViewFormRefreshKey] = useState(0);
+
+  // Sync activeStep when searchParams changes (e.g. browser Back/Forward or direct URL change)
+  useEffect(() => {
+    const stepParam = searchParams.get('step');
+    const targetInternal = resolveInternalStepFromQuery(stepParam);
+    const targetVisible = resolveVisibleStepFromInternal(targetInternal);
+
+    setActiveStep((currentInternal) => {
+      const currentVisible = resolveVisibleStepFromInternal(currentInternal);
+      if (currentVisible !== targetVisible) {
+        return targetInternal;
+      }
+      return currentInternal;
+    });
+  }, [searchParams]);
+
+  // Navigate to internal step and push to browser history (?step={visibleStep})
+  const navigateToStep = useCallback((internalStepNum) => {
+    const visibleStep = resolveVisibleStepFromInternal(internalStepNum);
+    setActiveStep(internalStepNum);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (next.get('step') === String(visibleStep)) {
+        return prev;
+      }
+      next.set('step', String(visibleStep));
+      return next;
+    }, { replace: false });
+  }, [setSearchParams]);
 
   // 3. Preserved Legacy 8-Step Modal State (View-only inspection)
   const [selectedStepNumber, setSelectedStepNumber] = useState(null);
@@ -4866,7 +4948,7 @@ export default function CustomerVerification() {
 
   // Top View Form Button handler: activates Step 1
   const handleViewForm = () => {
-    setActiveStep(1);
+    navigateToStep(1);
   };
   // ----------------------------------------------------
   // Document Resolution & Preview Loader (Old vs New & Dynamic Master)
@@ -8761,10 +8843,10 @@ export default function CustomerVerification() {
                       onClick={() => {
                         if (isDocStep) {
                           if (activeStep < 2 || activeStep > 7) {
-                            setActiveStep(2);
+                            navigateToStep(2);
                           }
                         } else {
-                          setActiveStep(stepNum);
+                          navigateToStep(stepNum);
                         }
                       }}
                       aria-label={`Step ${formattedNum}: ${step.title}. ${isDocStep ? `${verifiedDocumentCount} of 6 verified.` : ''} Click to view.`}

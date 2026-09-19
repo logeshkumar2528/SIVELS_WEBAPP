@@ -12,6 +12,7 @@ import {
   resolveApplicantName,
 } from '../pages/applicationWizard/flowUtils';
 import { toIstDateInput } from '../utils/dateHelper';
+import { resolveApplicationOwnership } from '../utils/ownershipHelper';
 
 const STORAGE_KEY = 'sivels-rm-onboarding-drafts-v9';
 
@@ -312,14 +313,15 @@ function normalizeApplicationRecord(record = {}) {
     ? resolvedApplicant
     : (record.customerName || record.fullName || record.applicantName || '');
 
+  const ownership = resolveApplicationOwnership(record);
   const isRmSourced = record.isRmSourced !== undefined
     ? Boolean(record.isRmSourced)
-    : ((record.agentId === null || record.agentId === undefined || record.agentId === '') && Boolean(record.rmId || record.RMId || record.createdBy));
-  const rawAgentId = record.agentId !== undefined ? record.agentId : (record.AgentId !== undefined ? record.AgentId : null);
-  const resolvedAgentId = (rawAgentId !== null && rawAgentId !== undefined && rawAgentId !== '')
-    ? rawAgentId
-    : null;
-  const rmId = record.rmId ?? record.RMId ?? (isRmSourced ? (record.createdBy ?? null) : null);
+    : ownership.isDirectRm;
+  const isAgentSourced = record.isAgentSourced !== undefined
+    ? Boolean(record.isAgentSourced)
+    : ownership.isAgentCreated;
+  const resolvedAgentId = ownership.agentId ?? (isAgentSourced ? (record.agentId ?? record.AgentId ?? null) : null);
+  const rmId = record.rmId ?? record.RMId ?? ownership.rmId ?? (isRmSourced ? (record.createdBy ?? record.CreatedBy ?? null) : null);
   const rmCustomerId = record.rmCustomerId ?? record.RmCustomerId ?? null;
 
   return {
@@ -327,14 +329,24 @@ function normalizeApplicationRecord(record = {}) {
     customerName,
     id: record.id || applicationNumber,
     applicationNumber,
-    agentCustomerId: record.agentCustomerId || record.id || applicationNumber,
+    agentCustomerId: record.agentCustomerId || record.AgentCustomerId || record.id || applicationNumber,
+    AgentCustomerId: record.AgentCustomerId || record.agentCustomerId || record.id || applicationNumber,
     agentId: resolvedAgentId,
-    agentName: record.agentName || '',
-    agentCode: record.agentCode || '',
+    AgentId: resolvedAgentId,
+    agentName: record.agentName || record.AgentName || ownership.agentName || '',
+    agentCode: record.agentCode || record.AgentCode || '',
     rmId,
+    RMId: rmId,
     rmCustomerId,
+    RmCustomerId: rmCustomerId,
+    createdByRole: record.createdByRole || record.CreatedByRole || '',
+    CreatedByRole: record.CreatedByRole || record.createdByRole || '',
+    createdByUserId: record.createdByUserId ?? record.CreatedByUserId ?? null,
+    CreatedByUserId: record.CreatedByUserId ?? record.createdByUserId ?? null,
+    createdBy: record.createdBy ?? record.CreatedBy ?? null,
+    CreatedBy: record.CreatedBy ?? record.createdBy ?? null,
     isRmSourced,
-    isAgentSourced: Boolean(resolvedAgentId),
+    isAgentSourced,
     branch: record.branch || inferBranch(record.address),
     location: record.location || inferLocation(record.address),
     sourcingChannel: record.sourcingChannel || '',
@@ -540,6 +552,38 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   const status = rawStatus === 2 ? 'Logged to HO' : (rawStatus === 1 ? 'Pending' : (rawStatus === 0 ? 'New' : (existingDraft.status || 'Draft')));
   const createdDate = customer.createdAt || customer.CreatedAt || customer.createdDate || customer.CreatedDate || existingDraft.createdDate || '';
   // Backend-resolved Ownership Fields (Single Source of Truth)
+  const createdByRole =
+    customer.createdByRole ??
+    customer.CreatedByRole ??
+    customer.created_by_role ??
+    backendData.createdByRole ??
+    backendData.CreatedByRole ??
+    existingDraft.createdByRole ??
+    existingDraft.CreatedByRole ??
+    '';
+
+  const createdByUserId =
+    customer.createdByUserId ??
+    customer.CreatedByUserId ??
+    customer.created_by_user_id ??
+    backendData.createdByUserId ??
+    backendData.CreatedByUserId ??
+    existingDraft.createdByUserId ??
+    existingDraft.CreatedByUserId ??
+    null;
+
+  const createdBy =
+    customer.createdBy ??
+    customer.CreatedBy ??
+    customer.created_by ??
+    backendData.createdBy ??
+    backendData.CreatedBy ??
+    productDetails.createdBy ??
+    productDetails.CreatedBy ??
+    existingDraft.createdBy ??
+    existingDraft.CreatedBy ??
+    null;
+
   const customerSource =
     backendData.customerSource ??
     backendData.CustomerSource ??
@@ -550,26 +594,36 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   const rawRmId =
     backendData.rmId ??
     backendData.RmId ??
+    backendData.RMId ??
     customer.rmId ??
     customer.RmId ??
+    customer.RMId ??
     productDetails.rmId ??
     productDetails.RmId ??
-    customer.createdBy ??
+    productDetails.RMId ??
+    existingDraft.rmId ??
+    existingDraft.RMId ??
     null;
   const rmId = (rawRmId !== null && rawRmId !== undefined && rawRmId !== '') ? Number(rawRmId) : null;
 
   const rmName =
     backendData.rmName ??
     backendData.RmName ??
+    backendData.RMName ??
     customer.rmName ??
     customer.RmName ??
+    customer.RMName ??
+    existingDraft.rmName ??
     null;
 
   const rmCode =
     backendData.rmCode ??
     backendData.RmCode ??
+    backendData.RMCode ??
     customer.rmCode ??
     customer.RmCode ??
+    customer.RMCode ??
+    existingDraft.rmCode ??
     null;
 
   const rawAgentId =
@@ -578,20 +632,51 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     (customer.agentId !== undefined ? customer.agentId :
     (customer.AgentId !== undefined ? customer.AgentId :
     (productDetails.agentId !== undefined ? productDetails.agentId :
-    (productDetails.AgentId !== undefined ? productDetails.AgentId : null)))));
-  const agentId = (rawAgentId !== null && rawAgentId !== undefined && rawAgentId !== '') ? rawAgentId : null;
+    (productDetails.AgentId !== undefined ? productDetails.AgentId :
+    (existingDraft.agentId !== undefined ? existingDraft.agentId :
+    (existingDraft.AgentId !== undefined ? existingDraft.AgentId : null)))))));
+  const agentId = (rawAgentId !== null && rawAgentId !== undefined && rawAgentId !== '') ? Number(rawAgentId) : null;
 
   const rawAgentName =
     backendData.agentName ??
     backendData.AgentName ??
     customer.agentName ??
     customer.AgentName ??
+    existingDraft.agentName ??
     null;
 
-  const resolvedCustomerSource = customerSource || (agentId ? 'Agent' : (rmId ? 'RM' : ''));
-  const isAgentSourced = resolvedCustomerSource === 'Agent' || Boolean(agentId);
-  const isRmSourced = resolvedCustomerSource === 'RM' || (!agentId && Boolean(rmId));
-  const agentName = isAgentSourced ? (rawAgentName || '') : '';
+  const rawAgentCode =
+    backendData.agentCode ??
+    backendData.AgentCode ??
+    customer.agentCode ??
+    customer.AgentCode ??
+    existingDraft.agentCode ??
+    null;
+
+  // Resolve ownership using the shared helper as the single source of truth
+  const ownership = resolveApplicationOwnership({
+    ...existingDraft,
+    ...customer,
+    ...backendData,
+    createdByRole,
+    CreatedByRole: createdByRole,
+    createdByUserId,
+    CreatedByUserId: createdByUserId,
+    createdBy,
+    CreatedBy: createdBy,
+    agentId,
+    AgentId: agentId,
+    rmId,
+    RMId: rmId,
+  });
+
+  const isAgentSourced = ownership.isAgentCreated;
+  const isRmSourced = ownership.isDirectRm;
+  const resolvedAgentId = ownership.agentId;
+  const resolvedRmId = ownership.rmId ?? rmId;
+  const agentName = isAgentSourced ? (rawAgentName || ownership.agentName || '') : '';
+  const agentCode = isAgentSourced ? (rawAgentCode || '') : '';
+  const resolvedCustomerSource = customerSource || (isAgentSourced ? 'Agent' : (isRmSourced ? 'RM' : ''));
   const rmCustomerId = productDetails.rmCustomerId ?? productDetails.RmCustomerId ?? customer.rmCustomerId ?? existingDraft.rmCustomerId ?? null;
 
   const applicationProductDetailsId = productDetails.applicationProductDetailsId || productDetails.ApplicationProductDetailsId || existingDraft.applicationProductDetailsId || null;
@@ -928,13 +1013,20 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   const sourcing = {
     sourcingChannel,
     customerSource: resolvedCustomerSource,
-    agentId: isAgentSourced ? agentId : null,
+    agentId: isAgentSourced ? resolvedAgentId : null,
     agentName: isAgentSourced ? agentName : '',
-    rmId,
-    rmName: rmName || '',
+    agentCode: isAgentSourced ? agentCode : '',
+    rmId: resolvedRmId,
+    rmName: rmName || ownership.rmName || '',
     rmCode: rmCode || '',
-    sourcedBy: rmName || '',
-    employeeId: rmCode || '',
+    sourcedBy: isRmSourced ? (rmName || ownership.rmName || '') : (agentName || ownership.agentName || ''),
+    employeeId: isRmSourced ? (rmCode || '') : (agentCode || ''),
+    createdByRole,
+    CreatedByRole: createdByRole,
+    createdByUserId,
+    CreatedByUserId: createdByUserId,
+    createdBy,
+    CreatedBy: createdBy,
   };
 
   // 10. Declaration & Other Sections
@@ -966,13 +1058,47 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     id: appIdStr,
     applicationNumber: appIdStr,
     agentCustomerId,
+    AgentCustomerId: agentCustomerId,
     customerSource: resolvedCustomerSource,
-    agentId: isAgentSourced ? agentId : null,
-    agentName: isAgentSourced ? agentName : '',
-    rmId,
-    rmName: rmName || '',
+    CustomerSource: resolvedCustomerSource,
+    agentId: resolvedAgentId,
+    AgentId: resolvedAgentId,
+    agentName: isAgentSourced ? agentName : (ownership.agentName || ''),
+    AgentName: isAgentSourced ? agentName : (ownership.agentName || ''),
+    agentCode: isAgentSourced ? agentCode : '',
+    AgentCode: isAgentSourced ? agentCode : '',
+    rmId: resolvedRmId,
+    RMId: resolvedRmId,
+    rmName: rmName || ownership.rmName || '',
+    RmName: rmName || ownership.rmName || '',
+    RMName: rmName || ownership.rmName || '',
     rmCode: rmCode || '',
+    RmCode: rmCode || '',
+    RMCode: rmCode || '',
     rmCustomerId,
+    RmCustomerId: rmCustomerId,
+    createdByRole,
+    CreatedByRole: createdByRole,
+    createdByUserId,
+    CreatedByUserId: createdByUserId,
+    createdBy,
+    CreatedBy: createdBy,
+    customer,
+    raw: {
+      ...(existingDraft.raw || {}),
+      customer,
+      backendData,
+      createdByRole,
+      CreatedByRole: createdByRole,
+      createdByUserId,
+      CreatedByUserId: createdByUserId,
+      createdBy,
+      CreatedBy: createdBy,
+      agentId: resolvedAgentId,
+      AgentId: resolvedAgentId,
+      rmId: resolvedRmId,
+      RMId: resolvedRmId,
+    },
     isRmSourced,
     isAgentSourced,
     customerName,
