@@ -164,6 +164,19 @@ const DOCUMENT_STEP_CODES = [
   'ZIP_ARCHIVE',
 ];
 
+const OTHER_HEALTH_CHECKS = [
+  'Google',
+  'Reference',
+  'FI',
+  'Crimecheck',
+  'Hunter',
+  'RCU',
+  'Dedupe',
+  'PAN Check',
+  'Aadhar Check',
+  'CERSAI Check',
+];
+
 function stepCodeToStepNum(code) {
   switch (code) {
     case 'PROFILE_IMAGE': return 2;
@@ -422,6 +435,12 @@ export default function CustomerVerification() {
   // 2. Active 15-Step Workflow State (Default: Step 1 — View Form)
   const [activeStep, setActiveStep] = useState(1);
   const [viewFormRefreshKey, setViewFormRefreshKey] = useState(0);
+  const [healthChecks, setHealthChecks] = useState(() => (
+    Object.fromEntries(OTHER_HEALTH_CHECKS.map((check) => [
+      check,
+      { result: 'Pending', date: '', findings: '' },
+    ]))
+  ));
 
   // 3. Preserved Legacy 8-Step Modal State (View-only inspection)
   const [selectedStepNumber, setSelectedStepNumber] = useState(null);
@@ -8280,6 +8299,21 @@ export default function CustomerVerification() {
     navigate(ROUTES.CUSTOMERS);
   };
 
+  const updateHealthCheck = (check, field, value) => {
+    setHealthChecks((current) => ({
+      ...current,
+      [check]: {
+        ...current[check],
+        [field]: value,
+      },
+    }));
+  };
+
+  const completedHealthChecks = OTHER_HEALTH_CHECKS.filter((check) => {
+    const entry = healthChecks[check];
+    return entry.result !== 'Pending' && entry.date && entry.findings.trim();
+  }).length;
+
   // ----------------------------------------------------
   // 1. Loading State View
   // ----------------------------------------------------
@@ -13643,6 +13677,74 @@ export default function CustomerVerification() {
             </>
           )}
 
+          <section className="bo-cv-health-checks" aria-labelledby="bo-cv-health-checks-title">
+            <div className="bo-cv-health-checks-header">
+              <div className="bo-cv-health-checks-heading">
+                <div className="bo-cv-health-checks-icon" aria-hidden="true">
+                  {ShieldCheckIcon ? <ShieldCheckIcon size={19} /> : <span>✓</span>}
+                </div>
+                <div>
+                  <h2 className="bo-cv-health-checks-title" id="bo-cv-health-checks-title">
+                    Other health checks
+                  </h2>
+                  <p className="bo-cv-health-checks-subtitle">
+                    Complete the remaining checks before submitting this application for final review.
+                  </p>
+                </div>
+              </div>
+              <div className="bo-cv-health-checks-summary">
+                <strong>{completedHealthChecks}/{OTHER_HEALTH_CHECKS.length}</strong>
+                <span>completed</span>
+              </div>
+            </div>
+            <div className="bo-cv-health-checks-progress" aria-hidden="true">
+              <span style={{ width: `${(completedHealthChecks / OTHER_HEALTH_CHECKS.length) * 100}%` }} />
+            </div>
+            <div className="bo-cv-health-check-list" role="list">
+              {OTHER_HEALTH_CHECKS.map((check, index) => (
+                <div className="bo-cv-health-check-item" key={check} role="listitem">
+                  <div className="bo-cv-health-check-marker" aria-hidden="true">
+                    {index + 1}
+                  </div>
+                  <div className="bo-cv-health-check-name">
+                    <strong>{check}</strong>
+                    <span>Enter the check result and supporting details</span>
+                  </div>
+                  <select
+                    className="bo-cv-health-check-status-select"
+                    value={healthChecks[check].result}
+                    onChange={(event) => updateHealthCheck(check, 'result', event.target.value)}
+                    aria-label={`${check} result`}
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                  </select>
+                  <div className="bo-cv-health-check-meta">
+                    <span className="bo-cv-health-check-meta-label">Date of check</span>
+                    <input
+                      className="bo-cv-health-check-input"
+                      type="date"
+                      value={healthChecks[check].date}
+                      onChange={(event) => updateHealthCheck(check, 'date', event.target.value)}
+                      aria-label={`${check} date of check`}
+                    />
+                  </div>
+                  <div className="bo-cv-health-check-meta bo-cv-health-check-findings">
+                    <span className="bo-cv-health-check-meta-label">Findings / status</span>
+                    <input
+                      className="bo-cv-health-check-input"
+                      type="text"
+                      value={healthChecks[check].findings}
+                      onChange={(event) => updateHealthCheck(check, 'findings', event.target.value)}
+                      placeholder="Enter findings or status"
+                      aria-label={`${check} findings or status`}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
         </main>
       </div>
 
