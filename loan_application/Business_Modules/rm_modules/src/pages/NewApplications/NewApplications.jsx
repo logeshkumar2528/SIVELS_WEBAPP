@@ -17,6 +17,7 @@ import {
   normalizeApplicationStatus,
   resolveApiArray,
 } from '../../utils/rmContext';
+import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import './NewApplications.css';
 import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
 import { resolveDocumentTypeId, validateApplicantDocumentFile } from '../../../../../Core/src/utils/documentTypeHelper';
@@ -67,10 +68,9 @@ export const getRejectedDocumentLabel = (rejection) => {
   return `${prefix} ${rejection.rejectedDocumentType || 'Document'}`;
 };
 
-const mapBackendApplication = (item, index, agentsById = {}, rejections = []) => {
+const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejections = []) => {
   const applicationId = item.applicationId || item.applicationNumber || item.agentCustomerId || item.customerId || `${index + 1}`;
-  const agentId = item.agentId || item.AgentId || null;
-  const agent = agentsById[String(agentId)] || {};
+  const ownership = resolveApplicationOwnership(item, agentsById, rmsById);
   let normalizedStatus = normalizeApplicationStatus(item.status, item.statusName || item.StatusName);
 
   if (rejections && rejections.length > 0) {
@@ -87,12 +87,12 @@ const mapBackendApplication = (item, index, agentsById = {}, rejections = []) =>
     mobile: normalizeMobile(item.mobileNumber || item.mobile || ''),
     loanType: item.loanPurposeName || item.loanType || '',
     amount: formatCurrency(item.expectedLoanAmount ?? item.amount),
-    agentName: item.agentName || agent.fullName || agent.FullName || (agentId ? '' : 'Direct (RM)'),
+    agentName: ownership.agentName,
     createdDate: formatDate(item.createdAt || item.createdDate),
     status: normalizedStatus,
     rawStatus: normalizedStatus,
     agentCustomerId: item.agentCustomerId || item.customerId || null,
-    agentId,
+    agentId: ownership.agentId,
     rejections: rejections || [],
   };
 };
@@ -144,9 +144,10 @@ export default function NewApplications({ initialFilter = 'All' }) {
       const authHeaders = {};
       if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
-      const [agentRes, customerRes, rejectionsRes, appProdRes] = await Promise.all([
+      const [agentRes, customerRes, rmRes, rejectionsRes, appProdRes] = await Promise.all([
         fetch(`${API_BASE}/AgentMaster`, { headers: authHeaders }),
         fetch(`${API_BASE}/AgentAddCustomer`, { headers: authHeaders }),
+        fetch(`${API_BASE}/RMMaster`, { headers: authHeaders }).catch(() => null),
         fetch(`${API_BASE}/BackOfficeDocumentRejection/rm/${rmContext.rmId}/returned`, { headers: authHeaders }).catch(() => null),
         fetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).catch(() => null),
       ]);
@@ -162,6 +163,21 @@ export default function NewApplications({ initialFilter = 'All' }) {
         agentRes.json(),
         customerRes.json(),
       ]);
+
+      let rmsData = [];
+      if (rmRes && rmRes.ok) {
+        try {
+          const rData = await rmRes.json();
+          rmsData = resolveApiArray(rData);
+        } catch {
+          rmsData = [];
+        }
+      }
+      const rmsById = rmsData.reduce((result, rm) => {
+        const id = rm.rmId || rm.RMId || rm.id;
+        if (id !== undefined && id !== null) result[String(id)] = rm;
+        return result;
+      }, {});
 
       let returnedRejections = [];
       if (rejectionsRes && rejectionsRes.ok) {
@@ -209,27 +225,36 @@ export default function NewApplications({ initialFilter = 'All' }) {
         }
       });
 
-      const matchedAgents = filterAgentsForRm(resolveApiArray(agentsData), rmContext.rmId);
-      const agentsById = matchedAgents.reduce((result, agent) => {
+      const allAgents = resolveApiArray(agentsData);
+      const agentsById = allAgents.reduce((result, agent) => {
         const id = agent.agentId || agent.AgentId;
         if (id !== undefined && id !== null) result[String(id)] = agent;
         return result;
       }, {});
+
+      const matchedAgents = filterAgentsForRm(allAgents, rmContext.rmId);
       const agentIds = buildAllowedAgentIdSet(matchedAgents);
 
       const allCustomers = resolveApiArray(customersData);
       const filtered = allCustomers.filter((item) => {
-        const rowAgentId = Number(item.agentId || item.AgentId);
+        const ownership = resolveApplicationOwnership(item, agentsById, rmsById);
         const rowCustId = String(item.agentCustomerId || item.customerId || '');
         
         // 1. Normal agent-sourced customer: belongs to an agent assigned to this RM
-        const isAgentMapped = Boolean(rowAgentId && agentIds.has(rowAgentId));
+        const isAgentMapped = Boolean(
+          ownership.isAgentCreated &&
+          ownership.agentId &&
+          agentIds.has(Number(ownership.agentId))
+        );
 
-        // 2. Promoted RM-sourced customer (agentId is null): belongs directly to this RM
-        const isRmDirectOwned = (item.agentId === null || item.agentId === undefined) && (
-          rmOwnedCustomerIds.has(rowCustId) ||
-          Number(item.rmId || item.RMId) === Number(rmContext.rmId) ||
-          (Number(item.createdBy || item.CreatedBy) === Number(rmContext.rmId) && !item.agentId)
+        // 2. Promoted RM-sourced customer: belongs directly to this RM
+        const isRmDirectOwned = Boolean(
+          ownership.isDirectRm && (
+            rmOwnedCustomerIds.has(rowCustId) ||
+            Number(ownership.rmId) === Number(rmContext.rmId) ||
+            Number(item.rmId || item.RMId) === Number(rmContext.rmId) ||
+            Number(item.createdBy || item.CreatedBy) === Number(rmContext.rmId)
+          )
         );
 
         // 3. Active rejection for this RM
@@ -241,7 +266,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
       const mapped = filtered.map((item, index) => {
         const custId = String(item.agentCustomerId || item.customerId || '');
         const itemRejections = activeRejectionsByCustId[custId] || [];
-        return mapBackendApplication(item, index, agentsById, itemRejections);
+        return mapBackendApplication(item, index, agentsById, rmsById, itemRejections);
       });
 
       setApplications(mapped);

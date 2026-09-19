@@ -1257,12 +1257,21 @@ export default function CustomerVerification() {
   // Dynamic IDs resolution for calculation engine
   const calculationAppProdId = useMemo(() => {
     return Number(
-      verificationData?.application?.applicationProductDetailsId ||
-      verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
-      verificationData?.raw?.productDetails?.applicationProductDetailsId ||
-      verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId ||
       verificationData?.applicationProductDetailsId ||
-      verificationData?.applicationProductDetails?.applicationProductDetailsId ||
+      verificationData?.application?.applicationProductDetailsId ||
+      verificationData?.application?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.[0]?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.[0]?.ApplicationProductDetailsId ||
+      verificationData?.raw?.ProductDetails?.[0]?.applicationProductDetailsId ||
+      verificationData?.raw?.ProductDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.applicationProductDetails?.ApplicationProductDetailsId ||
+      verificationData?.raw?.ApplicationProductDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.ApplicationProductDetails?.ApplicationProductDetailsId ||
       0
     );
   }, [verificationData]);
@@ -4557,7 +4566,7 @@ export default function CustomerVerification() {
   const [healthCheckTypes, setHealthCheckTypes] = useState([]);
   const [healthCheckTypesLoading, setHealthCheckTypesLoading] = useState(false);
   const [healthCheckTypesError, setHealthCheckTypesError] = useState(null);
-  const [healthCheckComments, setHealthCheckComments] = useState({});
+  const [healthChecks, setHealthChecks] = useState({});
   const [findingsModal, setFindingsModal] = useState({
     open: false,
     typeId: null,
@@ -4590,8 +4599,8 @@ export default function CustomerVerification() {
     return (healthCheckTypes || []).filter((item) => item.isActive === true);
   }, [healthCheckTypes]);
 
-  const updateHealthCheckComment = (typeId, field, value) => {
-    setHealthCheckComments((prev) => ({
+  const updateHealthCheck = (typeId, field, value) => {
+    setHealthChecks((prev) => ({
       ...prev,
       [typeId]: {
         status: 'Pending',
@@ -4618,7 +4627,7 @@ export default function CustomerVerification() {
 
   const saveFindingsModal = () => {
     if (findingsModal.typeId == null) return;
-    updateHealthCheckComment(findingsModal.typeId, 'findings', (findingsModal.draft || '').trim());
+    updateHealthCheck(findingsModal.typeId, 'findings', (findingsModal.draft || '').trim());
     closeFindingsModal();
   };
 
@@ -4680,7 +4689,7 @@ export default function CustomerVerification() {
               {!healthCheckTypesLoading && !healthCheckTypesError && activeHealthCheckTypes.map((type) => {
                 const typeId = type.healthCheckTypeId;
                 const label = type.checkName || '—';
-                const row = healthCheckComments[typeId] || {
+                const row = healthChecks[typeId] || {
                   status: 'Pending',
                   dateOfCheck: '',
                   findings: '',
@@ -4696,7 +4705,7 @@ export default function CustomerVerification() {
                         <select
                           className="bo-cv-health-checks-select"
                           value={row.status}
-                          onChange={(e) => updateHealthCheckComment(typeId, 'status', e.target.value)}
+                          onChange={(e) => updateHealthCheck(typeId, 'status', e.target.value)}
                           aria-label={`${label} Yes/No status`}
                         >
                           <option value="Pending">Pending</option>
@@ -4710,7 +4719,7 @@ export default function CustomerVerification() {
                         type="date"
                         className="bo-cv-health-checks-input"
                         value={row.dateOfCheck}
-                        onChange={(e) => updateHealthCheckComment(typeId, 'dateOfCheck', e.target.value)}
+                        onChange={(e) => updateHealthCheck(typeId, 'dateOfCheck', e.target.value)}
                         aria-label={`${label} date of check`}
                       />
                     </td>
@@ -5081,9 +5090,12 @@ export default function CustomerVerification() {
 
   const fetchApplicationRejections = useCallback(async () => {
     const appProdId =
+      verificationData?.applicationProductDetailsId ||
       verificationData?.application?.applicationProductDetailsId ||
+      verificationData?.application?.ApplicationProductDetailsId ||
       verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.productDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId;
 
     if (!appProdId) return;
@@ -5107,9 +5119,12 @@ export default function CustomerVerification() {
   // Step-Level Verification Persistence (BackOfficeStepVerification)
   // ----------------------------------------------------
   const resolvedAppProdId = Number(
+    verificationData?.applicationProductDetailsId ||
     verificationData?.application?.applicationProductDetailsId ||
+    verificationData?.application?.ApplicationProductDetailsId ||
     verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
     verificationData?.raw?.productDetails?.applicationProductDetailsId ||
+    verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
     verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId ||
     0
   );
@@ -5592,9 +5607,13 @@ export default function CustomerVerification() {
   // Hydrate Back Office application documents (Steps 09, 10, 11)
   const fetchBackOfficeDocuments = useCallback(async () => {
     const appProdId =
+      resolvedAppProdId ||
+      verificationData?.applicationProductDetailsId ||
       verificationData?.application?.applicationProductDetailsId ||
+      verificationData?.application?.ApplicationProductDetailsId ||
       verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.productDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId;
 
     if (!appProdId) return;
@@ -5812,9 +5831,13 @@ export default function CustomerVerification() {
     }
 
     const appProdId =
+      resolvedAppProdId ||
+      verificationData?.applicationProductDetailsId ||
       verificationData?.application?.applicationProductDetailsId ||
+      verificationData?.application?.ApplicationProductDetailsId ||
       verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.productDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId;
 
     const sTypeId = salarySlipDocTypeId;
@@ -6774,10 +6797,16 @@ export default function CustomerVerification() {
       20
     );
     const appProdId = Number(
+      resolvedAppProdId ||
+      calculationAppProdId ||
+      verificationData?.applicationProductDetailsId ||
       verificationData?.application?.applicationProductDetailsId ||
+      verificationData?.application?.ApplicationProductDetailsId ||
       verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.productDetails?.applicationProductDetailsId ||
-      verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId
+      verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
+      verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId ||
+      0
     );
     const agentCustId = Number(verificationData?.agentCustomerId || customerId || null);
     const baseType = STEP_DOC_TYPE_MAP[stepNum] || stepLabel.toUpperCase().replace(/\s+/g, '_');
@@ -9125,6 +9154,7 @@ export default function CustomerVerification() {
                             const isThisRowSaving = savingVerificationKey === `${row.applicantSequence}_${row.stepCode}`;
                             const isCheckboxDisabled =
                               !row.hasFile ||
+                              row.status === 'Returned to RM' ||
                               row.status === 'Returned' ||
                               row.status === 'Resubmitted' ||
                               hasUnresolvedRejectionForStep(row.stepCode, row.applicantSequence) ||
@@ -9194,7 +9224,7 @@ export default function CustomerVerification() {
                                     title={
                                       !row.hasFile
                                         ? 'Cannot verify: Document not uploaded'
-                                        : row.status === 'Returned'
+                                        : row.status === 'Returned to RM' || row.status === 'Returned'
                                         ? 'Cannot verify: Document is returned to RM'
                                         : row.status === 'Resubmitted'
                                         ? 'Cannot verify: Resubmitted document must be verified via comparison review'
@@ -9220,11 +9250,7 @@ export default function CustomerVerification() {
                                 <td className="bo-cv-doc-td-status" style={{ textAlign: 'center' }}>
                                   <span className={`bo-cv-status-badge bo-cv-status-badge--${row.status.toLowerCase().replace(/\s+/g, '-')}`}>
                                     <span className="bo-cv-badge-dot" />
-                                    {row.status === 'Resubmitted' && 'Resubmitted'}
-                                    {row.status === 'Returned' && 'Returned'}
-                                    {row.status === 'Verified' && 'Verified'}
-                                    {row.status === 'Available' && 'Available'}
-                                    {row.status === 'Not Uploaded' && 'Not Uploaded'}
+                                    {row.status}
                                   </span>
                                 </td>
                                 <td className="bo-cv-doc-td-actions" style={{ textAlign: 'center' }}>

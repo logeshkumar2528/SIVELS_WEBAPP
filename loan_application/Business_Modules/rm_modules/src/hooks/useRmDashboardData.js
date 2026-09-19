@@ -7,6 +7,7 @@ import {
   normalizeApplicationStatus,
   resolveApiArray,
 } from '../utils/rmContext';
+import { resolveApplicationOwnership } from '../utils/ownershipHelper';
 import { buildApplicationDisplayId } from '../pages/applicationWizard/flowUtils';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -34,7 +35,7 @@ const formatCurrency = (value) => {
   return `₹${numericValue.toLocaleString('en-IN')}`;
 };
 
-const mapApplication = (item, index) => {
+const mapApplication = (item, index, agentsById = {}, rmsById = {}) => {
   const applicationId =
     item.applicationId ||
     item.applicationNumber ||
@@ -44,6 +45,7 @@ const mapApplication = (item, index) => {
     item.rMCustomerId ||
     `${index + 1}`;
   const normalizedStatus = normalizeApplicationStatus(item.status, item.statusName || item.StatusName);
+  const ownership = resolveApplicationOwnership(item, agentsById, rmsById);
 
   return {
     id: String(applicationId),
@@ -52,15 +54,16 @@ const mapApplication = (item, index) => {
     mobile: String(item.mobileNumber || item.mobile || ''),
     loanType: item.loanPurposeName || item.loanType || '',
     amount: formatCurrency(item.expectedLoanAmount ?? item.amount),
-    agentName: item.agentName || (item.createdByRole === 'RM' || item.rmId ? 'Direct RM' : ''),
+    agentName: ownership.agentName,
     createdDate: formatDate(item.createdAt || item.createdDate),
     rawCreatedAt: item.createdAt || item.createdDate || '',
     status: normalizedStatus,
     rawStatus: normalizedStatus,
     agentCustomerId: item.agentCustomerId || item.customerId || item.rmCustomerId || item.rMCustomerId || null,
-    agentId: item.agentId || item.AgentId || null,
-    rmId: item.rmId || item.RMId || item.createdBy || item.CreatedBy || null,
-    createdByRole: item.createdByRole || item.CreatedByRole || null,
+    agentId: ownership.agentId,
+    rmId: ownership.rmId,
+    isDirectRm: ownership.isDirectRm,
+    isAgentCreated: ownership.isAgentCreated,
   };
 };
 
@@ -158,8 +161,22 @@ export function useRmDashboardData() {
           rmRes.ok ? rmRes.json() : Promise.resolve([]),
         ]);
 
+        const allRms = resolveApiArray(rmsData);
+        const rmsById = allRms.reduce((result, rm) => {
+          const id = rm.rmId || rm.RMId || rm.id;
+          if (id !== undefined && id !== null) result[String(id)] = rm;
+          return result;
+        }, {});
+
+        const allAgents = resolveApiArray(agentsData);
+        const agentsById = allAgents.reduce((result, agent) => {
+          const id = agent.agentId || agent.AgentId;
+          if (id !== undefined && id !== null) result[String(id)] = agent;
+          return result;
+        }, {});
+
         const matchedRm =
-          resolveApiArray(rmsData).find(
+          allRms.find(
             (rm) => Number(rm.rmId || rm.RMId || rm.id) === Number(rmContext.rmId)
           ) || null;
 
@@ -178,16 +195,20 @@ export function useRmDashboardData() {
             'Branch Details & Targets',
         };
 
-        const agents = filterAgentsForRm(resolveApiArray(agentsData), rmContext.rmId);
+        const agents = filterAgentsForRm(allAgents, rmContext.rmId);
         const allowedAgentIds = buildAllowedAgentIdSet(agents);
         const applications = resolveApiArray(customersData)
-          .map(mapApplication)
+          .map((item, index) => mapApplication(item, index, agentsById, rmsById))
           .filter((application) => {
-            const rowAgentId = Number(application.agentId || 0);
-            const isAgentOwned = Boolean(rowAgentId > 0 && allowedAgentIds.has(rowAgentId));
-            const isDirectRmOwned =
-              (!application.agentId || application.agentId === '' || application.agentId === 0) &&
-              Number(application.rmId) === Number(rmContext.rmId);
+            const isAgentOwned = Boolean(
+              application.isAgentCreated &&
+              application.agentId &&
+              allowedAgentIds.has(Number(application.agentId))
+            );
+            const isDirectRmOwned = Boolean(
+              application.isDirectRm &&
+              Number(application.rmId) === Number(rmContext.rmId)
+            );
             return isAgentOwned || isDirectRmOwned;
           });
 

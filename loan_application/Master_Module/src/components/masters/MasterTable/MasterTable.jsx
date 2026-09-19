@@ -7,7 +7,9 @@ export function MasterTable({
   isLoading, 
   isError, 
   onEdit, 
-  onDelete 
+  onDelete,
+  canDelete,
+  isDeleteDisabled
 }) {
   if (isError) {
     return (
@@ -75,14 +77,24 @@ export function MasterTable({
                       </button>
                     )}
                     {onDelete && (
-                      <button
-                        type="button"
-                        className="master-action-btn delete-btn"
-                        onClick={() => onDelete(row)}
-                        aria-label="Delete record"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      (() => {
+                        const disabled =
+                          (typeof isDeleteDisabled === 'function' && isDeleteDisabled(row)) ||
+                          (typeof canDelete === 'function' && !canDelete(row));
+
+                        if (disabled) return null;
+
+                        return (
+                          <button
+                            type="button"
+                            className="master-action-btn delete-btn"
+                            onClick={() => onDelete(row)}
+                            aria-label="Delete record"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        );
+                      })()
                     )}
                   </div>
                 </td>

@@ -40,6 +40,9 @@ export const BACK_OFFICE_ENDPOINTS = {
   // Full RM 12-Step Underwriting Application
   APPLICATION_FULL_DETAILS: (agentCustomerId) =>
     `/ApplicationFullDetails/${encodeURIComponent(agentCustomerId)}`,
+  PRODUCT_DETAILS: '/ApplicationProductDetails',
+  PRODUCT_DETAILS_BY_CUSTOMER: (agentCustomerId) =>
+    `/ApplicationProductDetails/bycustomer/${encodeURIComponent(agentCustomerId)}`,
 
   // Customer Uploaded Documents
   CUSTOMER_DOCUMENTS: (agentCustomerId) =>

@@ -1,28 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FileSpreadsheet, RefreshCw } from 'lucide-react';
+import { Activity, RefreshCw, Calendar } from 'lucide-react';
 import { MasterTable } from '../../../components/masters/MasterTable/MasterTable';
 import { MasterSearch } from '../../../components/masters/MasterSearch/MasterSearch';
 import { MasterFilter } from '../../../components/masters/MasterFilter/MasterFilter';
 import { MasterPagination } from '../../../components/masters/MasterPagination/MasterPagination';
 import { MasterStatusBadge } from '../../../components/masters/MasterStatusBadge/MasterStatusBadge';
-import { getRTRNormMasters } from '../../../api/masters/rtrNormMasterApi';
-import { RTRNormMasterForm } from './RTRNormMasterForm';
-import { RTRNormMasterDeleteConfirm } from './RTRNormMasterDeleteConfirm';
-import './RTRNormMaster.css';
+import { getHealthCheckTypes } from '../../../api/masters/healthCheckTypeApi';
+import { HealthCheckTypeForm } from './HealthCheckTypeForm';
+import { HealthCheckTypeDeleteConfirm } from './HealthCheckTypeDeleteConfirm';
+import { formatDateTime } from '../../../utils/dateHelper';
+import './HealthCheckType.css';
 
 const getId = (row) =>
-  row?.rtrNormMasterId ??
-  row?.RTRNormMasterId ??
-  row?.RtrNormMasterId ??
+  row?.healthCheckTypeId ??
+  row?.HealthCheckTypeId ??
   row?.id ??
   row?.Id;
 
-const getMinMOB = (row) => row?.minMOB ?? row?.MinMOB ?? row?.minMob ?? row?.MinMob;
-const getMaxMOB = (row) => row?.maxMOB ?? row?.MaxMOB ?? row?.maxMob ?? row?.MaxMob;
-const getMaxODCount = (row) => row?.maxODCount ?? row?.MaxODCount ?? row?.maxOdCount ?? row?.MaxOdCount;
-const getMaxBounceCount = (row) => row?.maxBounceCount ?? row?.MaxBounceCount;
-const getEMIMultiplier = (row) => row?.emiMultiplier ?? row?.EMIMultiplier ?? row?.EmiMultiplier;
-const getMaxTopUpPercentage = (row) => row?.maxTopUpPercentage ?? row?.MaxTopUpPercentage;
+const getCheckName = (row) =>
+  row?.checkName ??
+  row?.CheckName ??
+  '';
+
 const getActive = (row) => {
   const v = row?.isActive ?? row?.IsActive ?? row?.active ?? row?.Active;
   return v === true || v === 1 || v === '1';
@@ -36,7 +35,7 @@ const unwrap = (response) =>
 const isActiveValue = (value) =>
   value === true || value === 1 || value === '1';
 
-export function RTRNormMaster() {
+export function HealthCheckType() {
   const [data, setData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
@@ -53,10 +52,10 @@ export function RTRNormMaster() {
     setIsLoading(true);
     setIsError(false);
     try {
-      const response = await getRTRNormMasters();
+      const response = await getHealthCheckTypes();
       setData(unwrap(response));
     } catch (error) {
-      console.error('Failed to fetch RTR Norm Master records:', error);
+      console.error('Failed to fetch Health Check Types:', error);
       setIsError(true);
     } finally {
       setIsLoading(false);
@@ -70,17 +69,8 @@ export function RTRNormMaster() {
   const filteredData = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     return data.filter((row) => {
-      const matchesSearch =
-        !query ||
-        [
-          getMinMOB(row),
-          getMaxMOB(row),
-          getMaxODCount(row),
-          getMaxBounceCount(row),
-          getEMIMultiplier(row),
-          getMaxTopUpPercentage(row),
-          getId(row),
-        ].some((val) => String(val ?? '').toLowerCase().includes(query));
+      const name = getCheckName(row).toLowerCase();
+      const matchesSearch = !query || name.includes(query) || String(getId(row) ?? '').toLowerCase().includes(query);
 
       const matchesStatus =
         filterStatus === 'All' ||
@@ -102,49 +92,44 @@ export function RTRNormMaster() {
 
   const columns = [
     {
-      key: 'minMOB',
-      label: 'Min MOB',
-      render: (row) =>
-        getMinMOB(row) != null ? String(getMinMOB(row)) : '—',
-    },
-    {
-      key: 'maxMOB',
-      label: 'Max MOB',
-      render: (row) =>
-        getMaxMOB(row) != null ? String(getMaxMOB(row)) : '—',
-    },
-    {
-      key: 'maxODCount',
-      label: 'Max OD Count',
-      render: (row) =>
-        getMaxODCount(row) != null ? String(getMaxODCount(row)) : '0',
-    },
-    {
-      key: 'maxBounceCount',
-      label: 'Max Bounce Count',
-      render: (row) =>
-        getMaxBounceCount(row) != null ? String(getMaxBounceCount(row)) : '0',
-    },
-    {
-      key: 'emiMultiplier',
-      label: 'EMI Multiplier',
-      render: (row) =>
-        getEMIMultiplier(row) != null
-          ? `${Number(getEMIMultiplier(row)).toFixed(2)}x`
-          : '—',
-    },
-    {
-      key: 'maxTopUpPercentage',
-      label: 'Max Top-Up %',
-      render: (row) =>
-        getMaxTopUpPercentage(row) != null
-          ? `${Number(getMaxTopUpPercentage(row))}%`
-          : '—',
+      key: 'checkName',
+      label: 'Health Check Type',
+      render: (row) => (
+        <span className="health-check-type-name-cell">
+          {getCheckName(row) || '—'}
+        </span>
+      ),
     },
     {
       key: 'isActive',
       label: 'Status',
       render: (row) => <MasterStatusBadge status={getActive(row)} />,
+    },
+    {
+      key: 'createdAt',
+      label: 'Created At',
+      render: (row) => {
+        const date = row?.createdAt || row?.CreatedAt || row?.createdDate;
+        return (
+          <div className="table-date-cell">
+            {date ? <Calendar size={14} className="table-date-icon" /> : null}
+            <span>{formatDateTime(date) || '—'}</span>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'modifiedAt',
+      label: 'Modified At',
+      render: (row) => {
+        const date = row?.modifiedAt || row?.ModifiedAt || row?.modifiedDate;
+        return (
+          <div className="table-date-cell">
+            {date ? <Calendar size={14} className="table-date-icon" /> : null}
+            <span>{formatDateTime(date) || '—'}</span>
+          </div>
+        );
+      },
     },
   ];
 
@@ -152,12 +137,12 @@ export function RTRNormMaster() {
     <div className="masters-page">
       <header className="masters-page-header">
         <div className="masters-page-header-icon">
-          <FileSpreadsheet size={24} />
+          <Activity size={24} />
         </div>
         <div>
-          <h1 className="masters-page-title">RTR Norm Master</h1>
+          <h1 className="masters-page-title">Health Check Type Master</h1>
           <p className="masters-page-description">
-            Manage Repayment Track Record underwriting norms, multipliers, and eligibility benchmarks.
+            Manage health check types used across verification workflows.
           </p>
         </div>
       </header>
@@ -167,7 +152,7 @@ export function RTRNormMaster() {
           <MasterSearch
             value={searchTerm}
             onChange={setSearchTerm}
-            placeholder="Search MOB, multiplier, bounce count..."
+            placeholder="Search health check types..."
           />
           <div className="masters-page-toolbar-actions">
             <MasterFilter value={filterStatus} onChange={setFilterStatus} />
@@ -188,7 +173,7 @@ export function RTRNormMaster() {
                 setIsFormOpen(true);
               }}
             >
-              <FileSpreadsheet size={18} /> <span>Add RTR Norm</span>
+              <Activity size={18} /> <span>Add Health Check Type</span>
             </button>
           </div>
         </div>
@@ -225,7 +210,7 @@ export function RTRNormMaster() {
         )}
       </div>
 
-      <RTRNormMasterForm
+      <HealthCheckTypeForm
         isOpen={isFormOpen}
         onClose={() => {
           setIsFormOpen(false);
@@ -235,7 +220,7 @@ export function RTRNormMaster() {
         editingRecord={editingRecord}
       />
 
-      <RTRNormMasterDeleteConfirm
+      <HealthCheckTypeDeleteConfirm
         isOpen={isDeleteOpen}
         onClose={() => {
           setIsDeleteOpen(false);
@@ -248,4 +233,4 @@ export function RTRNormMaster() {
   );
 }
 
-export default RTRNormMaster;
+export default HealthCheckType;

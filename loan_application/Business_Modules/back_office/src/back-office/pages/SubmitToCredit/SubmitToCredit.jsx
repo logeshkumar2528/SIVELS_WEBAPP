@@ -37,11 +37,12 @@ function getStatusInfo(status) {
   }
   if (typeof status === 'number') {
     switch (status) {
-      case 4:
-        return { label: 'Approved', className: 'stc-pill--verified' };
       case 2:
+        return { label: 'Logged to HO', className: 'stc-pill--progress' };
       case 3:
         return { label: 'Under Review', className: 'stc-pill--progress' };
+      case 4:
+        return { label: 'Approved', className: 'stc-pill--verified' };
       case 5:
       case 6:
         return { label: 'Returned', className: 'stc-pill--pending' };
@@ -52,8 +53,9 @@ function getStatusInfo(status) {
     }
   }
   const s = String(status).toLowerCase().trim();
-  if (s.includes('approved')) return { label: 'Approved', className: 'stc-pill--verified' };
-  if (s.includes('review') || s.includes('verification') || s.includes('logged to ho')) return { label: 'Under Review', className: 'stc-pill--progress' };
+  if (s === '2' || s.includes('logged to ho') || s.includes('received')) return { label: 'Logged to HO', className: 'stc-pill--progress' };
+  if (s === '3' || s.includes('review') || s.includes('verification')) return { label: 'Under Review', className: 'stc-pill--progress' };
+  if (s === '4' || s.includes('approved')) return { label: 'Approved', className: 'stc-pill--verified' };
   return { label: String(status), className: 'stc-pill--pending' };
 }
 
@@ -79,33 +81,38 @@ export default function SubmitToCredit() {
   const RefreshCwIcon = iconMap['RefreshCw'];
   const AlertTriangleIcon = iconMap['AlertTriangle'];
 
-  // Dynamic filter options derived from live data
-  const districtOptions = useMemo(() => {
-    return [...new Set(customers.map((c) => c.districtName).filter(Boolean))].sort();
+  // Gated Queue: Show ONLY applications that have completed the required Back Office verification workflow
+  const readyCustomers = useMemo(() => {
+    return customers.filter((c) => Boolean(c.isCreditReady || c.isUnderwritingReady));
   }, [customers]);
+
+  // Dynamic filter options derived from live verified applications
+  const districtOptions = useMemo(() => {
+    return [...new Set(readyCustomers.map((c) => c.districtName).filter(Boolean))].sort();
+  }, [readyCustomers]);
 
   const rmOptions = useMemo(() => {
-    return [...new Set(customers.map((c) => c.rmName).filter(Boolean))].sort();
-  }, [customers]);
+    return [...new Set(readyCustomers.map((c) => c.rmName).filter(Boolean))].sort();
+  }, [readyCustomers]);
 
   const agentOptions = useMemo(() => {
-    return [...new Set(customers.map((c) => c.agentName).filter(Boolean))].sort();
-  }, [customers]);
+    return [...new Set(readyCustomers.map((c) => c.agentName).filter(Boolean))].sort();
+  }, [readyCustomers]);
 
   const statusOptions = useMemo(() => {
-    return [...new Set(customers.map((c) => getStatusInfo(c.status).label).filter(Boolean))].sort();
-  }, [customers]);
+    return [...new Set(readyCustomers.map((c) => getStatusInfo(c.status).label).filter(Boolean))].sort();
+  }, [readyCustomers]);
 
   // Reset page on filter change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, districtFilter, rmFilter, agentFilter, statusFilter]);
 
-  // Filtering
+  // Filtering on verified applications queue
   const filteredCustomers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
 
-    return customers.filter((c) => {
+    return readyCustomers.filter((c) => {
       const matchDistrict = districtFilter === 'All' || (c.districtName && c.districtName.toLowerCase() === districtFilter.toLowerCase());
       const matchRM = rmFilter === 'All' || (c.rmName && c.rmName.toLowerCase() === rmFilter.toLowerCase());
       const matchAgent = agentFilter === 'All' || (c.agentName && c.agentName.toLowerCase() === agentFilter.toLowerCase());
@@ -122,7 +129,7 @@ export default function SubmitToCredit() {
 
       return matchDistrict && matchRM && matchAgent && matchStatus && matchSearch;
     });
-  }, [customers, districtFilter, rmFilter, agentFilter, statusFilter, searchTerm]);
+  }, [readyCustomers, districtFilter, rmFilter, agentFilter, statusFilter, searchTerm]);
 
   // Pagination Slice
   const paginatedCustomers = useMemo(() => {
@@ -206,7 +213,7 @@ export default function SubmitToCredit() {
           </div>
 
           <div className="stc-count-badge">
-            Showing <strong>{filteredCustomers.length}</strong> of {customers.length} Applications
+            Showing <strong>{filteredCustomers.length}</strong> of {readyCustomers.length} Verified Applications
           </div>
         </div>
       </div>
