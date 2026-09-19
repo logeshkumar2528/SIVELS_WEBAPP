@@ -22,6 +22,7 @@ export const BACK_OFFICE_ENDPOINTS = {
   AGENT_BY_ID: (id) => `/AgentMaster/${encodeURIComponent(id)}`,
 
   PD_VERIFICATION_TYPES: '/PDVerificationTypeMaster',
+  HEALTH_CHECK_TYPES: '/health-check-types',
 
   BANKS_ACTIVE: '/masters/bank/active',
   BANK_BRANCHES: '/BankBranch',

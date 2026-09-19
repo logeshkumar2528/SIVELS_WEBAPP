@@ -104,6 +104,14 @@ export const backOfficeService = {
     return unwrapResponse(response);
   },
 
+  /**
+   * Retrieve all Health Check Types from master data (GET /api/health-check-types).
+   */
+  getHealthCheckTypes: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.HEALTH_CHECK_TYPES);
+    return unwrapResponse(response);
+  },
+
   /* ==========================================
      4. CUSTOMER / APPLICATION QUEUE APIs
   ========================================== */

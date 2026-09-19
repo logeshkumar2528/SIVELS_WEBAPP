@@ -4562,6 +4562,192 @@ export default function CustomerVerification() {
     }));
   };
 
+  // Shared "Comments on other health checks" — particulars from GET /api/health-check-types
+  const [healthCheckTypes, setHealthCheckTypes] = useState([]);
+  const [healthCheckTypesLoading, setHealthCheckTypesLoading] = useState(false);
+  const [healthCheckTypesError, setHealthCheckTypesError] = useState(null);
+  const [healthChecks, setHealthChecks] = useState({});
+  const [findingsModal, setFindingsModal] = useState({
+    open: false,
+    typeId: null,
+    label: '',
+    draft: '',
+  });
+
+  const fetchHealthCheckTypes = useCallback(async () => {
+    setHealthCheckTypesLoading(true);
+    setHealthCheckTypesError(null);
+    try {
+      const res = await backOfficeService.getHealthCheckTypes();
+      const list = Array.isArray(res) ? res : (res?.data || res?.value || []);
+      setHealthCheckTypes(list);
+    } catch (err) {
+      console.error('Failed to load health check types:', err);
+      setHealthCheckTypesError('Failed to load health check types. Please try again.');
+    } finally {
+      setHealthCheckTypesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeStep === 8 || activeStep === 9 || activeStep === 10) {
+      fetchHealthCheckTypes();
+    }
+  }, [activeStep, fetchHealthCheckTypes]);
+
+  const activeHealthCheckTypes = useMemo(() => {
+    return (healthCheckTypes || []).filter((item) => item.isActive === true);
+  }, [healthCheckTypes]);
+
+  const updateHealthCheck = (typeId, field, value) => {
+    setHealthChecks((prev) => ({
+      ...prev,
+      [typeId]: {
+        status: 'Pending',
+        dateOfCheck: '',
+        findings: '',
+        ...(prev[typeId] || {}),
+        [field]: value,
+      },
+    }));
+  };
+
+  const openFindingsModal = (typeId, label, currentFindings = '') => {
+    setFindingsModal({
+      open: true,
+      typeId,
+      label: label || 'Health check',
+      draft: currentFindings || '',
+    });
+  };
+
+  const closeFindingsModal = () => {
+    setFindingsModal({ open: false, typeId: null, label: '', draft: '' });
+  };
+
+  const saveFindingsModal = () => {
+    if (findingsModal.typeId == null) return;
+    updateHealthCheck(findingsModal.typeId, 'findings', (findingsModal.draft || '').trim());
+    closeFindingsModal();
+  };
+
+  const healthCheckStatusClass = (status) => {
+    const normalized = String(status || 'Pending').toLowerCase();
+    if (normalized === 'yes') return 'is-yes';
+    if (normalized === 'no') return 'is-no';
+    return 'is-pending';
+  };
+
+  const renderHealthChecksChecklist = () => (
+    <section className="bo-cv-health-checks" aria-label="Comments on other health checks">
+      <div className="bo-cv-health-checks-card">
+        <div className="bo-cv-health-checks-head">
+          <div className="bo-cv-health-checks-head-icon" aria-hidden="true">
+            {ShieldCheckIcon ? <ShieldCheckIcon size={18} /> : <span>✓</span>}
+          </div>
+          <div className="bo-cv-health-checks-head-copy">
+            <h3 className="bo-cv-health-checks-title">Comments on other health checks</h3>
+            <p className="bo-cv-health-checks-subtitle">
+              Capture Yes/No, date, and findings for each active master health check type.
+            </p>
+          </div>
+          <span className="bo-cv-health-checks-count">
+            {activeHealthCheckTypes.length} check{activeHealthCheckTypes.length === 1 ? '' : 's'}
+          </span>
+        </div>
+
+        <div className="bo-cv-health-checks-table-wrap">
+          <table className="bo-cv-health-checks-table">
+            <thead>
+              <tr>
+                <th scope="col">Particulars</th>
+                <th scope="col">Yes / No</th>
+                <th scope="col">Date of check</th>
+                <th scope="col">Findings / Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {healthCheckTypesLoading && (
+                <tr>
+                  <td colSpan={4} className="bo-cv-health-checks-empty">Loading health check types…</td>
+                </tr>
+              )}
+              {!healthCheckTypesLoading && healthCheckTypesError && (
+                <tr>
+                  <td colSpan={4} className="bo-cv-health-checks-empty bo-cv-health-checks-error">
+                    {healthCheckTypesError}
+                  </td>
+                </tr>
+              )}
+              {!healthCheckTypesLoading && !healthCheckTypesError && activeHealthCheckTypes.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="bo-cv-health-checks-empty">
+                    No active health check types found in master.
+                  </td>
+                </tr>
+              )}
+              {!healthCheckTypesLoading && !healthCheckTypesError && activeHealthCheckTypes.map((type) => {
+                const typeId = type.healthCheckTypeId;
+                const label = type.checkName || '—';
+                const row = healthChecks[typeId] || {
+                  status: 'Pending',
+                  dateOfCheck: '',
+                  findings: '',
+                };
+                const hasFindings = Boolean(String(row.findings || '').trim());
+                return (
+                  <tr key={typeId}>
+                    <td className="bo-cv-health-checks-particular">
+                      <span className="bo-cv-health-checks-particular-name">{label}</span>
+                    </td>
+                    <td>
+                      <div className={`bo-cv-health-status-wrap ${healthCheckStatusClass(row.status)}`}>
+                        <select
+                          className="bo-cv-health-checks-select"
+                          value={row.status}
+                          onChange={(e) => updateHealthCheck(typeId, 'status', e.target.value)}
+                          aria-label={`${label} Yes/No status`}
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                        </select>
+                      </div>
+                    </td>
+                    <td>
+                      <input
+                        type="date"
+                        className="bo-cv-health-checks-input"
+                        value={row.dateOfCheck}
+                        onChange={(e) => updateHealthCheck(typeId, 'dateOfCheck', e.target.value)}
+                        aria-label={`${label} date of check`}
+                      />
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className={`bo-cv-health-findings-trigger ${hasFindings ? 'has-value' : ''}`}
+                        onClick={() => openFindingsModal(typeId, label, row.findings)}
+                        aria-label={`${label} findings or status`}
+                      >
+                        <span className="bo-cv-health-findings-trigger-text">
+                          {hasFindings ? row.findings : 'Click to add findings…'}
+                        </span>
+                        <span className="bo-cv-health-findings-trigger-action">
+                          {hasFindings ? 'Edit' : 'Add'}
+                        </span>
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  );
+
   // 13. Icons
   const ArrowLeftIcon = iconMap['ArrowLeft'];
   const ArrowRightIcon = iconMap['ArrowRight'];
@@ -9131,6 +9317,8 @@ export default function CustomerVerification() {
                 <h3>Property FI — implementation pending</h3>
                 <p>Property field investigation module integration is scheduled for future underwriting release.</p>
               </div>
+
+              {renderHealthChecksChecklist()}
             </div>
           )}
 
@@ -9158,6 +9346,8 @@ export default function CustomerVerification() {
                 <h3>Office FI — implementation pending</h3>
                 <p>Office field investigation module integration is scheduled for future underwriting release.</p>
               </div>
+
+              {renderHealthChecksChecklist()}
             </div>
           )}
 
@@ -9185,6 +9375,8 @@ export default function CustomerVerification() {
                 <h3>Residence FI — implementation pending</h3>
                 <p>Residence field investigation module integration is scheduled for future underwriting release.</p>
               </div>
+
+              {renderHealthChecksChecklist()}
             </div>
           )}
 
@@ -13782,6 +13974,82 @@ export default function CustomerVerification() {
           customerData={verificationData}
           onClose={handleCloseModal}
         />
+      )}
+
+      {/* ── Health Check Findings Modal ── */}
+      {findingsModal.open && (
+        <div
+          className="bo-cv-confirm-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bo-cv-health-findings-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              closeFindingsModal();
+            }
+          }}
+        >
+          <div className="bo-cv-confirm-modal-card bo-cv-health-findings-modal">
+            <div className="bo-cv-confirm-modal-header">
+              <div className="bo-cv-confirm-modal-icon-badge" style={{ background: '#eaf5ee', color: '#0f7a4c', borderColor: '#c6e6d4' }}>
+                {FileTextIcon ? <FileTextIcon size={18} /> : <span>✎</span>}
+              </div>
+              <div className="bo-cv-confirm-modal-title-group">
+                <h3 id="bo-cv-health-findings-modal-title" className="bo-cv-confirm-modal-title">
+                  Findings / Status
+                </h3>
+                <p className="bo-cv-confirm-modal-subtitle">
+                  {findingsModal.label}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="bo-cv-confirm-modal-close"
+                onClick={closeFindingsModal}
+                aria-label="Close findings modal"
+              >
+                {XIcon ? <XIcon size={16} /> : <span>×</span>}
+              </button>
+            </div>
+
+            <div className="bo-cv-confirm-modal-body">
+              <div className="bo-cv-confirm-remarks-block">
+                <label className="bo-cv-confirm-remarks-label" htmlFor="health-check-findings-draft">
+                  Enter findings / status
+                </label>
+                <textarea
+                  id="health-check-findings-draft"
+                  className="bo-cv-confirm-remarks-textarea"
+                  value={findingsModal.draft}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFindingsModal((prev) => ({ ...prev, draft: val }));
+                  }}
+                  placeholder="Describe the check outcome, remarks, or status notes…"
+                  rows={5}
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="bo-cv-confirm-modal-footer">
+              <button
+                type="button"
+                className="bo-cv-confirm-btn-cancel"
+                onClick={closeFindingsModal}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="bo-cv-btn-save-remarks"
+                onClick={saveFindingsModal}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Document Rejection Confirmation Modal ── */}
