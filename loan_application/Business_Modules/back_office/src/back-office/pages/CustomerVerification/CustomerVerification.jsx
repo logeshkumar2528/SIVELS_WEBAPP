@@ -37,6 +37,36 @@ import './CustomerVerification.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
+const ArrowLeftIcon = iconMap['ArrowLeft'];
+const ArrowRightIcon = iconMap['ArrowRight'];
+const CheckCircleIcon = iconMap['CheckCircle'] || iconMap['CheckCircle2'];
+const ShieldCheckIcon = iconMap['ShieldCheck'];
+const AlertTriangleIcon = iconMap['AlertTriangle'];
+const AlertCircleIcon = iconMap['AlertCircle'];
+const InfoIcon = iconMap['Info'];
+const BuildingIcon = iconMap['Building2'] || iconMap['Landmark'];
+const LandmarkIcon = iconMap['Landmark'];
+const UserIcon = iconMap['User'];
+const UsersIcon = iconMap['Users'];
+const PlusIcon = iconMap['Plus'] || iconMap['FilePlus'];
+const XIcon = iconMap['X'];
+const RefreshCwIcon = iconMap['RefreshCw'];
+const SaveIcon = iconMap['Save'];
+const BadgeIndianRupeeIcon = iconMap['BadgeIndianRupee'];
+const EyeIcon = iconMap['Eye'];
+const DownloadIcon = iconMap['Download'];
+const FileTextIcon = iconMap['FileText'];
+const ChevronLeftIcon = iconMap['ChevronLeft'];
+const ChevronRightIcon = iconMap['ChevronRight'];
+const SendIcon = iconMap['Send'];
+const PhoneIcon = iconMap['Phone'];
+const CameraIcon = iconMap['Camera'];
+const FileCheckIcon = iconMap['FileCheck'];
+const RotateCcwIcon = iconMap['RotateCcw'];
+const CreditCardIcon = iconMap['CreditCard'];
+const TrendingUpIcon = iconMap['TrendingUp'] || iconMap['BadgeIndianRupee'] || iconMap['FileText'];
+const BarChartIcon = iconMap['BarChart3'] || iconMap['BarChart2'] || iconMap['BadgeIndianRupee'];
+
 function formatCurrency(amount) {
   if (amount === null || amount === undefined || isNaN(amount) || amount === 0) return '₹0';
   return `₹${Number(amount).toLocaleString('en-IN')}`;
@@ -397,6 +427,7 @@ export default function CustomerVerification() {
   const [docPreviews, setDocPreviews] = useState({});
   const [coDocPreviews, setCoDocPreviews] = useState({});
   const blobUrlsRef = useRef([]);
+  const previewCacheRef = useRef(new Map());
 
   // Supplementary server tables if not fully populated in ApplicationFullDetails
   const [kycRecordsList, setKycRecordsList] = useState([]);
@@ -404,6 +435,10 @@ export default function CustomerVerification() {
   const [docTypesList, setDocTypesList] = useState([]);
   const [docTypeMasterMap, setDocTypeMasterMap] = useState({});
   const [allCustomerDocs, setAllCustomerDocs] = useState([]);
+  const [isCustomerDocsLoading, setIsCustomerDocsLoading] = useState(true);
+  const [isSupplementaryKycLoading, setIsSupplementaryKycLoading] = useState(true);
+  const previewFetchGenRef = useRef(0);
+  const financialFetchGenRef = useRef(0);
 
   // Dynamically resolved DocumentTypeMaster IDs for KYC and Financial documents
   const profileDocTypeId = useMemo(() => resolveDocumentTypeId(docTypesList, 'Profile') || resolveDocumentTypeId(docTypesList, 'Photo') || resolveDocumentTypeId(docTypesList, 'Profile Photo'), [docTypesList]);
@@ -414,8 +449,8 @@ export default function CustomerVerification() {
 
   // Persisted applicant and co-applicants financial documents (Salary Slip, Bank Statement)
   const [applicantFinancialDocs, setApplicantFinancialDocs] = useState({
-    salarySlip: { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null },
-    bankStatement: { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null },
+    salarySlip: { loading: true, data: null, preview: null, comparison: null, rejection: null, error: null },
+    bankStatement: { loading: true, data: null, preview: null, comparison: null, rejection: null, error: null },
   });
   const [coApplicantsFinancialDocs, setCoApplicantsFinancialDocs] = useState({});
 
@@ -462,7 +497,11 @@ export default function CustomerVerification() {
       rawCust?.AgentCustomerId ||
       customerId;
 
-    if (!targetCustomerId) return;
+    if (!targetCustomerId) {
+      setIsCustomerDocsLoading(false);
+      return;
+    }
+    setIsCustomerDocsLoading(true);
     try {
       const token = localStorage.getItem('authToken');
       const headers = {};
@@ -475,6 +514,8 @@ export default function CustomerVerification() {
       }
     } catch (e) {
       console.warn('Could not fetch all customer documents:', e);
+    } finally {
+      setIsCustomerDocsLoading(false);
     }
   }, [customerId, verificationData?.customerId]);
 
@@ -492,9 +533,13 @@ export default function CustomerVerification() {
       rawCust?.AgentCustomerId ||
       customerId;
 
-    if (!targetCustomerId) return;
+    if (!targetCustomerId) {
+      setIsSupplementaryKycLoading(false);
+      return;
+    }
 
     let isMounted = true;
+    setIsSupplementaryKycLoading(true);
     async function fetchSupplementaryData() {
       const token = localStorage.getItem('authToken');
       const headers = {};
@@ -533,7 +578,9 @@ export default function CustomerVerification() {
       }
     }
 
-    fetchSupplementaryData();
+    fetchSupplementaryData().finally(() => {
+      if (isMounted) setIsSupplementaryKycLoading(false);
+    });
     return () => {
       isMounted = false;
     };
@@ -614,6 +661,10 @@ export default function CustomerVerification() {
   // Generic KYC binary file loader helper
   const fetchKycDocBlob = useCallback(async (kycId, route, defaultName) => {
     if (!kycId) return { loading: false, url: null, error: null };
+    const cacheKey = `kycBlob_${kycId}_${route}`;
+    if (previewCacheRef.current.has(cacheKey)) {
+      return previewCacheRef.current.get(cacheKey);
+    }
     try {
       const token = localStorage.getItem('authToken');
       const headers = {};
@@ -645,7 +696,7 @@ export default function CustomerVerification() {
       const objectUrl = window.URL.createObjectURL(blob);
       blobUrlsRef.current.push(objectUrl);
 
-      return {
+      const result = {
         loading: false,
         error: null,
         url: objectUrl,
@@ -654,6 +705,8 @@ export default function CustomerVerification() {
         fileName,
         size: blob.size,
       };
+      previewCacheRef.current.set(cacheKey, result);
+      return result;
     } catch (err) {
       console.warn(`Could not load KYC doc for kycId ${kycId} route ${route}:`, err);
       return { loading: false, url: null, error: null };
@@ -665,15 +718,18 @@ export default function CustomerVerification() {
     if (!rawPath || typeof rawPath !== 'string' || !rawPath.trim()) {
       return { loading: false, url: null, error: null, fileName: defaultName || '' };
     }
+    const normalizeDocPath = (val) =>
+      String(val || '')
+        .trim()
+        .replace(/\\/g, '/')
+        .replace(/^\/+/, '');
+
+    const normalizedPath = normalizeDocPath(rawPath);
+    const cacheKey = `kycPath_${normalizedPath.toLowerCase()}`;
+    if (previewCacheRef.current.has(cacheKey)) {
+      return previewCacheRef.current.get(cacheKey);
+    }
     try {
-      const normalizeDocPath = (val) =>
-        String(val || '')
-          .trim()
-          .replace(/\\/g, '/')
-          .replace(/^\/+/, '');
-
-      const normalizedPath = normalizeDocPath(rawPath);
-
       // ── CASE A: AGENT CUSTOMER DOCUMENT ──────────────────────────
       // If path belongs to AgentCustomers (UploadedFiles/AgentCustomers/...),
       // match against allCustomerDocs and download via backOfficeService.downloadCustomerDocument(docId)
@@ -689,6 +745,12 @@ export default function CustomerVerification() {
         if (matchedDoc) {
           const docId = matchedDoc.agentCustomerDocumentId || matchedDoc.id;
           if (docId) {
+            const agentCacheKey = `agentDoc_${docId}`;
+            if (previewCacheRef.current.has(agentCacheKey)) {
+              const cached = previewCacheRef.current.get(agentCacheKey);
+              previewCacheRef.current.set(cacheKey, cached);
+              return cached;
+            }
             try {
               const blobData = await backOfficeService.downloadCustomerDocument(docId);
               const fileName = matchedDoc.fileName || matchedDoc.name || defaultName || 'document';
@@ -704,7 +766,7 @@ export default function CustomerVerification() {
               const objectUrl = window.URL.createObjectURL(typedBlob);
               blobUrlsRef.current.push(objectUrl);
 
-              return {
+              const result = {
                 loading: false,
                 error: null,
                 url: objectUrl,
@@ -723,6 +785,9 @@ export default function CustomerVerification() {
                     })
                   : matchedDoc.uploadedOn || '',
               };
+              previewCacheRef.current.set(agentCacheKey, result);
+              previewCacheRef.current.set(cacheKey, result);
+              return result;
             } catch (dlErr) {
               console.warn(`[CustomerVerification] Failed to download AgentCustomerDocument ID ${docId}:`, dlErr);
               return {
@@ -800,7 +865,7 @@ export default function CustomerVerification() {
       const objectUrl = window.URL.createObjectURL(typedBlob);
       blobUrlsRef.current.push(objectUrl);
 
-      return {
+      const result = {
         loading: false,
         error: null,
         url: objectUrl,
@@ -810,6 +875,8 @@ export default function CustomerVerification() {
         size: typedBlob.size,
         path: rawPath,
       };
+      previewCacheRef.current.set(cacheKey, result);
+      return result;
     } catch (err) {
       console.warn(`[CustomerVerification] Could not load document from path ${rawPath}:`, err);
       return {
@@ -832,6 +899,7 @@ export default function CustomerVerification() {
         }
       });
       blobUrlsRef.current = [];
+      previewCacheRef.current.clear();
     };
   }, []);
 
@@ -1260,6 +1328,13 @@ export default function CustomerVerification() {
   const [salarySaving, setSalarySaving] = useState(false);
   const [salarySaveBanner, setSalarySaveBanner] = useState(null);
 
+  // Other Income Assessment State for Step 14
+  const [otherIncomeRows, setOtherIncomeRows] = useState([]);
+  const [otherIncomeLoading, setOtherIncomeLoading] = useState(false);
+  const [otherIncomeError, setOtherIncomeError] = useState(null);
+  const [otherIncomeSaving, setOtherIncomeSaving] = useState(false);
+  const [otherIncomeSaveBanner, setOtherIncomeSaveBanner] = useState(null);
+
   // Authenticated user ID resolver for createdBy
   const resolveAuthenticatedUserId = useCallback(() => {
     const boAuth = getBackOfficeAuth();
@@ -1335,6 +1410,17 @@ export default function CustomerVerification() {
         if (existing) {
           const rawMonth = String(existing.salaryMonth || '').split('T')[0];
           const monthFormatted = rawMonth.length >= 7 ? `${rawMonth.substring(0, 7)}-01` : rawMonth;
+          const b = Number(existing.basicAmount) || 0;
+          const h = Number(existing.hraAmount) || 0;
+          const c = Number(existing.ccaAmount) || 0;
+          const t = Number(existing.taAmount) || 0;
+          const inc = Number(existing.incentiveAmount) || 0;
+          const pct = existing.incentivePercentApplied != null ? Number(existing.incentivePercentApplied) : 0;
+          const ded = Number(existing.deductionAmount) || 0;
+          const consInc = existing.consideredIncentiveAmount != null ? Number(existing.consideredIncentiveAmount) : (inc * pct) / 100;
+          // Required business calculation: Basic + HRA + CCA + TA + Considered Incentive + Deductions (ADDED)
+          const consIncome = b + h + c + t + consInc + ded;
+
           rows.push({
             id: `salary-row-${existing.salaryIncomeDetailsId || i}`,
             salaryIncomeDetailsId: existing.salaryIncomeDetailsId || null,
@@ -1345,11 +1431,12 @@ export default function CustomerVerification() {
             ccaAmount: existing.ccaAmount ?? 0,
             taAmount: existing.taAmount ?? 0,
             incentiveAmount: existing.incentiveAmount ?? 0,
+            deductionAmount: existing.deductionAmount ?? 0,
             incentivePercentApplied: existing.incentivePercentApplied ?? 0,
-            consideredIncentiveAmount: existing.consideredIncentiveAmount ?? null,
-            totalConsideredIncome: existing.totalConsideredIncome ?? null,
-            previewConsideredIncentive: existing.consideredIncentiveAmount ?? 0,
-            previewConsideredIncome: existing.totalConsideredIncome ?? 0,
+            consideredIncentiveAmount: consInc,
+            totalConsideredIncome: consIncome,
+            previewConsideredIncentive: consInc,
+            previewConsideredIncome: consIncome,
             isPersisted: true,
             isModified: false,
             errorMsg: null,
@@ -1366,6 +1453,7 @@ export default function CustomerVerification() {
             ccaAmount: '',
             taAmount: '',
             incentiveAmount: '',
+            deductionAmount: '',
             incentivePercentApplied: 50,
             consideredIncentiveAmount: null,
             totalConsideredIncome: null,
@@ -1393,6 +1481,7 @@ export default function CustomerVerification() {
           ccaAmount: '',
           taAmount: '',
           incentiveAmount: '',
+          deductionAmount: '',
           incentivePercentApplied: 50,
           consideredIncentiveAmount: null,
           totalConsideredIncome: null,
@@ -1440,6 +1529,7 @@ export default function CustomerVerification() {
         ccaAmount: '',
         taAmount: '',
         incentiveAmount: '',
+        deductionAmount: '',
         incentivePercentApplied: 50,
         consideredIncentiveAmount: null,
         totalConsideredIncome: null,
@@ -1461,13 +1551,6 @@ export default function CustomerVerification() {
       return prev.filter((_, idx) => idx !== indexToRemove);
     });
   };
-
-  // Trigger salary hydration when Step 14 is active and method is INCOME
-  useEffect(() => {
-    if (activeStep === 16 && selectedMethodCode === 'INCOME' && calculationAppProdId > 0) {
-      fetchSalaryRecords(calculationAppProdId, selectedApplicantSequence);
-    }
-  }, [activeStep, selectedMethodCode, calculationAppProdId, selectedApplicantSequence, fetchSalaryRecords]);
 
   // Handle row field edits (supported for both new draft entries and existing persisted rows)
   const handleSalaryRowChange = (index, field, value) => {
@@ -1505,10 +1588,14 @@ export default function CustomerVerification() {
       const c = Number(row.ccaAmount) || 0;
       const t = Number(row.taAmount) || 0;
       const inc = Number(row.incentiveAmount) || 0;
+      const ded = Number(row.deductionAmount) || 0;
       const pct = row.incentivePercentApplied === '' ? 0 : Number(row.incentivePercentApplied) || 0;
       const prevInc = (inc * pct) / 100;
+      // Deductions must be ADDED: basic + hra + cca + ta + consideredIncentive + deductionAmount
+      const prevIncome = b + h + c + t + prevInc + ded;
+
       row.previewConsideredIncentive = prevInc;
-      row.previewConsideredIncome = b + h + c + t + prevInc;
+      row.previewConsideredIncome = prevIncome;
 
       row.errorMsg = null;
       next[index] = row;
@@ -1618,6 +1705,7 @@ export default function CustomerVerification() {
         ccaAmount: Number(row.ccaAmount) || 0,
         taAmount: Number(row.taAmount) || 0,
         incentiveAmount: Number(row.incentiveAmount) || 0,
+        deductionAmount: Number(row.deductionAmount) || 0,
         incentivePercentApplied: Number(row.incentivePercentApplied) || 0,
         salarySlipPath: resolvedSalarySlipPath || null,
         modifiedBy: Number(currentUserId),
@@ -1651,6 +1739,7 @@ export default function CustomerVerification() {
         ccaAmount: Number(row.ccaAmount) || 0,
         taAmount: Number(row.taAmount) || 0,
         incentiveAmount: Number(row.incentiveAmount) || 0,
+        deductionAmount: Number(row.deductionAmount) || 0,
         incentivePercentApplied: Number(row.incentivePercentApplied) || 0,
         salarySlipPath: resolvedSalarySlipPath || null,
         createdBy: Number(currentUserId),
@@ -1673,6 +1762,231 @@ export default function CustomerVerification() {
     setSalarySaving(false);
     return { success: true, count: operationCount };
   };
+
+  // Hydrate other income records via GET /api/calculation/other-income/{appProdId}/{applicantSequence}
+  const fetchOtherIncomeRecords = useCallback(async (appProdId, seq) => {
+    if (!appProdId || isNaN(appProdId) || appProdId <= 0) return;
+    setOtherIncomeLoading(true);
+    setOtherIncomeError(null);
+    setOtherIncomeSaveBanner(null);
+    try {
+      const res = await backOfficeService.getOtherIncomeBySeq(appProdId, seq);
+      const records = Array.isArray(res) ? res : (res?.value ?? res?.data ?? []);
+      const activeRecords = records.filter((r) => r.isActive !== false);
+
+      const rows = activeRecords.map((r, i) => ({
+        id: `other-inc-row-${r.applicationOtherIncomeDetailsId || i}`,
+        applicationOtherIncomeDetailsId: r.applicationOtherIncomeDetailsId || null,
+        incomeName: r.incomeName || '',
+        incomeAmount: r.incomeAmount ?? '',
+        isPersisted: true,
+        isModified: false,
+        errorMsg: null,
+      }));
+      setOtherIncomeRows(rows);
+    } catch (err) {
+      console.warn('Failed to fetch other income records:', err);
+      setOtherIncomeRows([]);
+    } finally {
+      setOtherIncomeLoading(false);
+    }
+  }, []);
+
+  // Handle adding an additional other income row
+  const handleAddOtherIncomeRow = () => {
+    setOtherIncomeRows((prev) => [
+      ...prev,
+      {
+        id: `other-inc-new-${Date.now()}-${prev.length}`,
+        applicationOtherIncomeDetailsId: null,
+        incomeName: '',
+        incomeAmount: '',
+        isPersisted: false,
+        isModified: false,
+        errorMsg: null,
+      },
+    ]);
+  };
+
+  // Handle removing an other income row
+  const handleRemoveOtherIncomeRow = (indexToRemove) => {
+    setOtherIncomeRows((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  // Handle other income field edits
+  const handleOtherIncomeRowChange = (index, field, value) => {
+    setOtherIncomeRows((prev) => {
+      const next = [...prev];
+      const row = { ...next[index] };
+
+      if (field === 'incomeAmount') {
+        if (value === '') {
+          row.incomeAmount = '';
+        } else {
+          const num = Math.max(0, Number(value) || 0);
+          row.incomeAmount = num;
+        }
+      } else {
+        row[field] = value;
+      }
+
+      if (row.isPersisted) {
+        row.isModified = true;
+      }
+      row.errorMsg = null;
+      next[index] = row;
+      return next;
+    });
+  };
+
+  // Pre-calculation synchronization helper for other income rows (POST for new, PUT for modified)
+  const synchronizeOtherIncomeRows = async () => {
+    if (otherIncomeRows.length === 0) {
+      return { success: true, count: 0 };
+    }
+
+    const currentUserId = resolveAuthenticatedUserId();
+    if (!currentUserId) {
+      return {
+        success: false,
+        message: 'Unable to resolve authenticated Back Office user ID for operation. Please log out and re-login.',
+      };
+    }
+
+    if (!calculationAppProdId || calculationAppProdId <= 0) {
+      return {
+        success: false,
+        message: 'Application Product Details ID is missing or invalid. Please refresh the application.',
+      };
+    }
+
+    // Validate rows
+    for (let i = 0; i < otherIncomeRows.length; i++) {
+      const row = otherIncomeRows[i];
+      if (!row.incomeName || !String(row.incomeName).trim()) {
+        return {
+          success: false,
+          message: `Income Name is required for Other Income row ${i + 1}.`,
+        };
+      }
+      if (row.incomeAmount === '' || row.incomeAmount === null || isNaN(Number(row.incomeAmount)) || Number(row.incomeAmount) < 0) {
+        return {
+          success: false,
+          message: `Valid Income Amount (>= 0) is required for Other Income row ${i + 1} (${row.incomeName}).`,
+        };
+      }
+    }
+
+    const rowsToPost = [];
+    const rowsToPut = [];
+
+    otherIncomeRows.forEach((row, idx) => {
+      if (!row.isPersisted || !row.applicationOtherIncomeDetailsId) {
+        rowsToPost.push({ row, idx });
+      } else if (row.isModified) {
+        rowsToPut.push({ row, idx });
+      }
+    });
+
+    if (rowsToPost.length === 0 && rowsToPut.length === 0) {
+      return { success: true, count: 0 };
+    }
+
+    setOtherIncomeSaving(true);
+    let operationCount = 0;
+
+    // 1. Execute PUT requests for modified persisted rows
+    for (const item of rowsToPut) {
+      const row = item.row;
+      const payload = {
+        applicationOtherIncomeDetailsId: Number(row.applicationOtherIncomeDetailsId),
+        applicationProductDetailsId: Number(calculationAppProdId),
+        agentCustomerId: Number(calculationAgentCustId),
+        applicantSequence: Number(selectedApplicantSequence),
+        incomeName: String(row.incomeName).trim(),
+        incomeAmount: Number(row.incomeAmount) || 0,
+        modifiedBy: Number(currentUserId),
+      };
+
+      try {
+        await backOfficeService.updateOtherIncome(row.applicationOtherIncomeDetailsId, payload);
+        operationCount++;
+      } catch (err) {
+        console.error(`Failed to update other income row ${item.idx + 1}:`, err);
+        const errMsg = err?.response?.data?.message || err?.message || 'Failed to update other income record.';
+        setOtherIncomeSaving(false);
+        return {
+          success: false,
+          message: `Failed to update other income for ${row.incomeName || `Row ${item.idx + 1}`}: ${errMsg}`,
+        };
+      }
+    }
+
+    // 2. Execute POST requests for new draft rows
+    for (const item of rowsToPost) {
+      const row = item.row;
+      const payload = {
+        applicationProductDetailsId: Number(calculationAppProdId),
+        agentCustomerId: Number(calculationAgentCustId),
+        applicantSequence: Number(selectedApplicantSequence),
+        incomeName: String(row.incomeName).trim(),
+        incomeAmount: Number(row.incomeAmount) || 0,
+        createdBy: Number(currentUserId),
+      };
+
+      try {
+        await backOfficeService.createOtherIncome(payload);
+        operationCount++;
+      } catch (err) {
+        console.error(`Failed to save new other income row ${item.idx + 1}:`, err);
+        const errMsg = err?.response?.data?.message || err?.message || 'Failed to save other income record.';
+        setOtherIncomeSaving(false);
+        return {
+          success: false,
+          message: `Failed to save new other income record for ${row.incomeName || `Row ${item.idx + 1}`}: ${errMsg}`,
+        };
+      }
+    }
+
+    setOtherIncomeSaving(false);
+    return { success: true, count: operationCount };
+  };
+
+  // Salary Multi-Month Average (N >= 3) based on Considered Income
+  const liveSalaryAverage = useMemo(() => {
+    const validRows = salaryRows.filter(
+      (r) => r.salaryMonth && r.basicAmount !== '' && !isNaN(Number(r.basicAmount))
+    );
+    if (validRows.length === 0) return 0;
+    const total = validRows.reduce((sum, r) => {
+      const val = r.previewConsideredIncome != null && r.previewConsideredIncome !== ''
+        ? Number(r.previewConsideredIncome)
+        : (Number(r.totalConsideredIncome) || 0);
+      return sum + val;
+    }, 0);
+    return Math.round(total / validRows.length);
+  }, [salaryRows]);
+
+  // Total Other Income
+  const liveTotalOtherIncome = useMemo(() => {
+    return otherIncomeRows.reduce((sum, r) => {
+      const amt = Number(r.incomeAmount) || 0;
+      return sum + amt;
+    }, 0);
+  }, [otherIncomeRows]);
+
+  // Final Combined Considered Income (Salary Avg Net + Total Other Income)
+  const liveFinalConsideredIncome = useMemo(() => {
+    return liveSalaryAverage + liveTotalOtherIncome;
+  }, [liveSalaryAverage, liveTotalOtherIncome]);
+
+  // Trigger salary and other income hydration when Step 16 is active and method is INCOME
+  useEffect(() => {
+    if (activeStep === 16 && selectedMethodCode === 'INCOME' && calculationAppProdId > 0) {
+      fetchSalaryRecords(calculationAppProdId, selectedApplicantSequence);
+      fetchOtherIncomeRecords(calculationAppProdId, selectedApplicantSequence);
+    }
+  }, [activeStep, selectedMethodCode, calculationAppProdId, selectedApplicantSequence, fetchSalaryRecords, fetchOtherIncomeRecords]);
 
   // Phase 2C: Average Bank Balance (ABB) Method State for Step 14
   const [masterBanks, setMasterBanks] = useState([]);
@@ -2277,13 +2591,965 @@ export default function CustomerVerification() {
     };
   }, [abbAccounts, accountBalances]);
 
+  // Phase 2G: RTR (Repayment Track Record) Method State for Step 14
+  const [rtrLoans, setRtrLoans] = useState([]);
+  const [rtrDraftLoans, setRtrDraftLoans] = useState([]);
+  const [rtrLoansLoading, setRtrLoansLoading] = useState(false);
+  const [rtrLoansError, setRtrLoansError] = useState(null);
+  const [rtrLoansSaving, setRtrLoansSaving] = useState(false);
+  const [rtrLoansBanner, setRtrLoansBanner] = useState(null);
+
+  const [rtrAssessmentsList, setRtrAssessmentsList] = useState([]);
+  const [rtrAssessmentsLoading, setRtrAssessmentsLoading] = useState(false);
+  const [rtrAssessmentsError, setRtrAssessmentsError] = useState(null);
+
+  // Helper to generate default 3 empty RTR loan draft rows
+  const getDefaultRtrDraftLoans = useCallback((appProdId, seq) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    return [
+      {
+        id: `rtr-draft-${seq}-0`,
+        applicationRTRLoanDetailsId: 0,
+        applicationProductDetailsId: Number(appProdId) || 0,
+        applicantSequence: Number(seq) || 0,
+        lenderName: '',
+        sanctionAmount: '',
+        currentPOS: '',
+        emiStartDate: todayStr,
+        emiAmount: '',
+        mob: '',
+        odCount: 0,
+        bounceCount: 0,
+        isSelectedForRTR: false,
+        isActive: true,
+        isPersisted: false,
+        isModified: false,
+        saveStatus: 'idle',
+        errorMsg: null,
+      },
+      {
+        id: `rtr-draft-${seq}-1`,
+        applicationRTRLoanDetailsId: 0,
+        applicationProductDetailsId: Number(appProdId) || 0,
+        applicantSequence: Number(seq) || 0,
+        lenderName: '',
+        sanctionAmount: '',
+        currentPOS: '',
+        emiStartDate: todayStr,
+        emiAmount: '',
+        mob: '',
+        odCount: 0,
+        bounceCount: 0,
+        isSelectedForRTR: false,
+        isActive: true,
+        isPersisted: false,
+        isModified: false,
+        saveStatus: 'idle',
+        errorMsg: null,
+      },
+      {
+        id: `rtr-draft-${seq}-2`,
+        applicationRTRLoanDetailsId: 0,
+        applicationProductDetailsId: Number(appProdId) || 0,
+        applicantSequence: Number(seq) || 0,
+        lenderName: '',
+        sanctionAmount: '',
+        currentPOS: '',
+        emiStartDate: todayStr,
+        emiAmount: '',
+        mob: '',
+        odCount: 0,
+        bounceCount: 0,
+        isSelectedForRTR: false,
+        isActive: true,
+        isPersisted: false,
+        isModified: false,
+        saveStatus: 'idle',
+        errorMsg: null,
+      },
+    ];
+  }, []);
+
+  // Hydrate RTR loans via GET /api/calculation/rtr/loans/{applicationProductDetailsId}/{applicantSequence}
+  const fetchRTRLoans = useCallback(
+    async (appProdId, seq) => {
+      if (!appProdId || isNaN(appProdId) || appProdId <= 0) return;
+      setRtrLoansLoading(true);
+      setRtrLoansError(null);
+      try {
+        const res = await backOfficeService.getRTRLoansBySeq(appProdId, seq);
+        const records = Array.isArray(res) ? res : (res?.value ?? res?.data ?? []);
+        const activeRecords = records.filter((r) => r.isActive !== false);
+        setRtrLoans(activeRecords);
+
+        if (activeRecords.length > 0) {
+          const rows = activeRecords.map((r, i) => ({
+            id: `rtr-loan-${r.applicationRTRLoanDetailsId || i}`,
+            applicationRTRLoanDetailsId: r.applicationRTRLoanDetailsId || 0,
+            applicationProductDetailsId: Number(appProdId),
+            applicantSequence: Number(seq),
+            lenderName: r.lenderName || '',
+            sanctionAmount: r.sanctionAmount ?? '',
+            currentPOS: r.currentPOS ?? '',
+            emiStartDate: r.emiStartDate ? String(r.emiStartDate).split('T')[0] : '',
+            emiAmount: r.emiAmount ?? '',
+            mob: r.mob ?? '',
+            odCount: r.odCount ?? 0,
+            bounceCount: r.bounceCount ?? 0,
+            isSelectedForRTR: Boolean(r.isSelectedForRTR),
+            isActive: r.isActive !== false,
+            isPersisted: true,
+            isModified: false,
+            saveStatus: 'saved',
+            errorMsg: null,
+          }));
+          setRtrDraftLoans(rows);
+        } else {
+          setRtrDraftLoans(getDefaultRtrDraftLoans(appProdId, seq));
+        }
+      } catch (err) {
+        console.warn('Failed to fetch RTR loans:', err);
+        setRtrLoansError(err?.response?.data?.message || err?.message || 'Unable to load RTR loans from server.');
+        setRtrLoans([]);
+        setRtrDraftLoans(getDefaultRtrDraftLoans(appProdId, seq));
+      } finally {
+        setRtrLoansLoading(false);
+      }
+    },
+    [getDefaultRtrDraftLoans]
+  );
+
+  // Hydrate RTR assessments via GET /api/calculation/rtr/assessments/{applicationProductDetailsId}/{applicantSequence}
+  const fetchRTRAssessments = useCallback(async (appProdId, seq) => {
+    if (!appProdId || isNaN(appProdId) || appProdId <= 0) return;
+    setRtrAssessmentsLoading(true);
+    setRtrAssessmentsError(null);
+    try {
+      const res = await backOfficeService.getRTRAssessmentsBySeq(appProdId, seq);
+      const records = Array.isArray(res) ? res : (res?.value ?? res?.data ?? []);
+      setRtrAssessmentsList(records);
+    } catch (err) {
+      console.warn('Failed to fetch RTR assessments:', err);
+      setRtrAssessmentsError(err?.response?.data?.message || err?.message || 'Unable to load RTR assessments.');
+      setRtrAssessmentsList([]);
+    } finally {
+      setRtrAssessmentsLoading(false);
+    }
+  }, []);
+
+  // Current active RTR assessment based on applicant sequence
+  const currentRtrAssessment = useMemo(() => {
+    if (!Array.isArray(rtrAssessmentsList) || rtrAssessmentsList.length === 0) return null;
+    const currentOne = rtrAssessmentsList.find((m) => m.isCurrent === true);
+    if (currentOne) return currentOne;
+    const sorted = [...rtrAssessmentsList].sort(
+      (a, b) => new Date(b.createdAt || b.calculatedAt || 0) - new Date(a.createdAt || a.calculatedAt || 0)
+    );
+    return sorted[0];
+  }, [rtrAssessmentsList]);
+
+  // Resolve selected RTR loan facility object strictly by database primary key matching currentRtrAssessment.selectedRTRLoanDetailsId
+  const selectedRtrLoan = useMemo(() => {
+    if (!currentRtrAssessment?.selectedRTRLoanDetailsId) return null;
+    const targetId = Number(currentRtrAssessment.selectedRTRLoanDetailsId);
+    if (!targetId || isNaN(targetId)) return null;
+
+    const foundInDraft = (Array.isArray(rtrDraftLoans) ? rtrDraftLoans : []).find(
+      (l) => Number(l.applicationRTRLoanDetailsId) === targetId && Number(l.applicationRTRLoanDetailsId) > 0
+    );
+    if (foundInDraft) return foundInDraft;
+
+    const foundInSaved = (Array.isArray(rtrLoans) ? rtrLoans : []).find(
+      (l) => Number(l.applicationRTRLoanDetailsId) === targetId && Number(l.applicationRTRLoanDetailsId) > 0
+    );
+    return foundInSaved || null;
+  }, [currentRtrAssessment, rtrDraftLoans, rtrLoans]);
+
+  // RTR Summary metrics for the active loans table header/summary
+  const rtrSummaryMetrics = useMemo(() => {
+    const totalLoans = rtrDraftLoans.length;
+    const validLoans = rtrDraftLoans.filter(
+      (r) => r.lenderName && r.sanctionAmount !== '' && !isNaN(Number(r.sanctionAmount)) && Number(r.sanctionAmount) > 0
+    );
+    const validCount = validLoans.length;
+
+    let totalSanction = 0;
+    let totalPOS = 0;
+    let totalEmi = 0;
+    let maxMob = 0;
+    let selectedCount = 0;
+
+    const targetSelectedId =
+      currentRtrAssessment?.selectedRTRLoanDetailsId != null
+        ? Number(currentRtrAssessment.selectedRTRLoanDetailsId)
+        : null;
+
+    validLoans.forEach((l) => {
+      totalSanction += Number(l.sanctionAmount) || 0;
+      totalPOS += Number(l.currentPOS) || 0;
+      totalEmi += Number(l.emiAmount) || 0;
+      if (Number(l.mob) > maxMob) maxMob = Number(l.mob);
+
+      const loanPk = Number(l.applicationRTRLoanDetailsId);
+      const isSelected =
+        targetSelectedId != null && loanPk > 0
+          ? loanPk === targetSelectedId
+          : Boolean(l.isSelectedForRTR);
+      if (isSelected) selectedCount++;
+    });
+
+    return {
+      totalLoans,
+      validCount,
+      totalSanction,
+      totalPOS,
+      totalEmi,
+      maxMob,
+      selectedCount,
+    };
+  }, [rtrDraftLoans, currentRtrAssessment]);
+
+  // Trigger RTR hydration when Step 16 (Step 10 Underwriting) is active and method is RTR
+  useEffect(() => {
+    if (activeStep === 16 && selectedMethodCode === 'RTR' && calculationAppProdId > 0) {
+      fetchRTRLoans(calculationAppProdId, selectedApplicantSequence);
+      fetchRTRAssessments(calculationAppProdId, selectedApplicantSequence);
+    }
+  }, [activeStep, selectedMethodCode, calculationAppProdId, selectedApplicantSequence, fetchRTRLoans, fetchRTRAssessments]);
+
+  // Handle RTR Draft Loan field change
+  const handleRtrLoanRowChange = (index, field, value) => {
+    setRtrDraftLoans((prev) => {
+      const next = [...prev];
+      const row = { ...next[index] };
+
+      if (field === 'lenderName') {
+        row.lenderName = value;
+      } else if (field === 'emiStartDate') {
+        row.emiStartDate = value;
+      } else if (field === 'isActive') {
+        row.isActive = Boolean(value);
+      } else {
+        if (value === '') {
+          row[field] = '';
+        } else {
+          const num = Math.max(0, Number(value) || 0);
+          row[field] = num;
+        }
+      }
+
+      if (row.isPersisted) {
+        row.isModified = true;
+      }
+      row.errorMsg = null;
+      next[index] = row;
+      return next;
+    });
+  };
+
+  // Handle Add RTR Loan row
+  const handleAddRtrLoanRow = () => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    setRtrDraftLoans((prev) => [
+      ...prev,
+      {
+        id: `rtr-loan-new-${Date.now()}-${prev.length}`,
+        applicationRTRLoanDetailsId: 0,
+        applicationProductDetailsId: Number(calculationAppProdId) || 0,
+        applicantSequence: Number(selectedApplicantSequence) || 0,
+        lenderName: '',
+        sanctionAmount: '',
+        currentPOS: '',
+        emiStartDate: todayStr,
+        emiAmount: '',
+        mob: '',
+        odCount: 0,
+        bounceCount: 0,
+        isSelectedForRTR: false,
+        isActive: true,
+        isPersisted: false,
+        isModified: false,
+        saveStatus: 'idle',
+        errorMsg: null,
+      },
+    ]);
+  };
+
+  // Handle Remove RTR Draft Loan row (frontend state only, strictly for unsaved draft rows)
+  const handleRemoveRtrDraftRow = (indexToRemove) => {
+    setRtrDraftLoans((prev) => {
+      const targetRow = prev[indexToRemove];
+      // Guard: do not delete saved rows via frontend remove
+      if (targetRow && (Number(targetRow.applicationRTRLoanDetailsId) > 0 || targetRow.isPersisted)) {
+        return prev;
+      }
+      return prev.filter((_, idx) => idx !== indexToRemove);
+    });
+  };
+
+  // Handle Save / Synchronize RTR Loans (strictly no delete)
+  const handleSaveRtrLoans = async () => {
+    setRtrLoansBanner(null);
+    const currentUserId = resolveAuthenticatedUserId();
+    if (!currentUserId) {
+      setRtrLoansBanner({
+        type: 'error',
+        message: 'Unable to resolve authenticated Back Office user ID. Please log out and log in again.',
+      });
+      return { success: false, message: 'Authentication missing.' };
+    }
+
+    if (!calculationAppProdId || calculationAppProdId <= 0) {
+      setRtrLoansBanner({
+        type: 'error',
+        message: 'Application Product Details ID is missing. Please refresh the application.',
+      });
+      return { success: false, message: 'Application Product Details ID is missing.' };
+    }
+
+    const filledRows = rtrDraftLoans.filter((r) => {
+      const hasLender = r.lenderName && String(r.lenderName).trim() !== '';
+      const hasSanction = r.sanctionAmount !== '' && !isNaN(Number(r.sanctionAmount)) && Number(r.sanctionAmount) > 0;
+      return hasLender || hasSanction || r.isPersisted;
+    });
+
+    if (filledRows.length === 0) {
+      setRtrLoansBanner({
+        type: 'error',
+        message: 'Please enter details for at least one RTR loan facility.',
+      });
+      return { success: false, message: 'No loan facilities entered.' };
+    }
+
+    // Validation
+    for (let i = 0; i < filledRows.length; i++) {
+      const r = filledRows[i];
+      if (!r.lenderName || !String(r.lenderName).trim()) {
+        setRtrLoansBanner({
+          type: 'error',
+          message: `Lender Name is required for Loan #${i + 1}.`,
+        });
+        return { success: false, message: `Lender Name is required for Loan #${i + 1}.` };
+      }
+      if (r.sanctionAmount === '' || isNaN(Number(r.sanctionAmount)) || Number(r.sanctionAmount) <= 0) {
+        setRtrLoansBanner({
+          type: 'error',
+          message: `Valid positive Sanction Amount is required for Loan #${i + 1} (${r.lenderName}).`,
+        });
+        return { success: false, message: `Valid positive Sanction Amount is required for Loan #${i + 1}.` };
+      }
+      if (r.currentPOS === '' || isNaN(Number(r.currentPOS)) || Number(r.currentPOS) < 0) {
+        setRtrLoansBanner({
+          type: 'error',
+          message: `Valid Current POS (>= 0) is required for Loan #${i + 1} (${r.lenderName}).`,
+        });
+        return { success: false, message: `Valid Current POS is required for Loan #${i + 1}.` };
+      }
+      if (Number(r.currentPOS) > Number(r.sanctionAmount)) {
+        setRtrLoansBanner({
+          type: 'error',
+          message: `Current POS cannot exceed Sanction Amount for Loan #${i + 1} (${r.lenderName}).`,
+        });
+        return { success: false, message: `Current POS cannot exceed Sanction Amount for Loan #${i + 1}.` };
+      }
+      if (!r.emiStartDate) {
+        setRtrLoansBanner({
+          type: 'error',
+          message: `EMI Start Date is required for Loan #${i + 1} (${r.lenderName}).`,
+        });
+        return { success: false, message: `EMI Start Date is required for Loan #${i + 1}.` };
+      }
+      if (r.emiAmount === '' || isNaN(Number(r.emiAmount)) || Number(r.emiAmount) <= 0) {
+        setRtrLoansBanner({
+          type: 'error',
+          message: `Valid EMI Amount (> 0) is required for Loan #${i + 1} (${r.lenderName}).`,
+        });
+        return { success: false, message: `Valid EMI Amount is required for Loan #${i + 1}.` };
+      }
+      if (r.mob === '' || isNaN(Number(r.mob)) || Number(r.mob) < 0) {
+        setRtrLoansBanner({
+          type: 'error',
+          message: `Valid MOB (Months On Book >= 0) is required for Loan #${i + 1} (${r.lenderName}).`,
+        });
+        return { success: false, message: `Valid MOB is required for Loan #${i + 1}.` };
+      }
+    }
+
+    setRtrLoansSaving(true);
+    let saveCount = 0;
+    const failedLoans = [];
+
+    for (let i = 0; i < filledRows.length; i++) {
+      const row = filledRows[i];
+      const isNew = !row.isPersisted || !row.applicationRTRLoanDetailsId;
+      if (!isNew && !row.isModified) {
+        continue;
+      }
+
+      const payload = {
+        applicationRTRLoanDetailsId: isNew ? 0 : Number(row.applicationRTRLoanDetailsId),
+        applicationProductDetailsId: Number(calculationAppProdId),
+        applicantSequence: Number(selectedApplicantSequence),
+        lenderName: String(row.lenderName).trim(),
+        sanctionAmount: Number(row.sanctionAmount),
+        currentPOS: Number(row.currentPOS),
+        emiStartDate: String(row.emiStartDate).split('T')[0],
+        emiAmount: Number(row.emiAmount),
+        mob: Number(row.mob),
+        odCount: Number(row.odCount) || 0,
+        bounceCount: Number(row.bounceCount) || 0,
+        isSelectedForRTR: Boolean(row.isSelectedForRTR),
+        isActive: row.isActive !== false,
+        createdBy: Number(currentUserId),
+        modifiedBy: isNew ? null : Number(currentUserId),
+      };
+
+      try {
+        if (isNew) {
+          await backOfficeService.createRTRLoan(payload);
+        } else {
+          await backOfficeService.updateRTRLoan(row.applicationRTRLoanDetailsId, payload);
+        }
+        saveCount++;
+      } catch (err) {
+        console.error(`Failed to save RTR loan #${i + 1}:`, err);
+        const errMsg = err?.response?.data?.message || err?.message || 'Save failed.';
+        failedLoans.push({ lender: row.lenderName, error: errMsg });
+      }
+    }
+
+    setRtrLoansSaving(false);
+
+    if (failedLoans.length === 0) {
+      setRtrLoansBanner({
+        type: 'success',
+        message: saveCount > 0
+          ? `Successfully saved ${saveCount} RTR loan ${saveCount === 1 ? 'record' : 'records'}.`
+          : 'All RTR loan records are up to date.',
+      });
+      await fetchRTRLoans(calculationAppProdId, selectedApplicantSequence);
+      return { success: true, count: saveCount };
+    } else {
+      setRtrLoansBanner({
+        type: 'error',
+        message: `Failed to save ${failedLoans.length} loan records: ${failedLoans.map((f) => `${f.lender} (${f.error})`).join(', ')}`,
+      });
+      await fetchRTRLoans(calculationAppProdId, selectedApplicantSequence);
+      return { success: false, message: 'Some loan records failed to save.' };
+    }
+  };
+
+  // Phase 3: Normal Income Method State & Handlers for Step 14 (AssessmentMethodId = 4, MethodCode = 'NORMAL_INCOME')
+  const [normalIncomeRows, setNormalIncomeRows] = useState([]);
+  const [normalOtherIncomeRows, setNormalOtherIncomeRows] = useState([]);
+  const [normalIncomeLoading, setNormalIncomeLoading] = useState(false);
+  const [normalIncomeError, setNormalIncomeError] = useState(null);
+  const [normalIncomeSaving, setNormalIncomeSaving] = useState(false);
+  const [normalIncomeBanner, setNormalIncomeBanner] = useState(null);
+
+  // Hydrate Normal Income records via GET /api/calculation/normal-income/{appProdId}/{applicantSequence}
+  const fetchNormalIncomeRecords = useCallback(async (appProdId, seq) => {
+    if (!appProdId || isNaN(appProdId) || appProdId <= 0) return;
+    setNormalIncomeLoading(true);
+    setNormalIncomeError(null);
+    try {
+      const res = await backOfficeService.getNormalIncomeBySeq(appProdId, seq);
+      const data = res?.value ?? res?.data ?? res ?? {};
+      const rawIncome = Array.isArray(data?.income) ? data.income : [];
+      const rawOther = Array.isArray(data?.otherIncome) ? data.otherIncome : [];
+
+      const activeIncome = rawIncome.filter((r) => r.isActive !== false);
+      const activeOther = rawOther.filter((r) => r.isActive !== false);
+
+      let mappedIncome = activeIncome.map((r, i) => ({
+        id: `normal-inc-row-${r.applicationNormalIncomeDetailsId || i}`,
+        applicationNormalIncomeDetailsId: r.applicationNormalIncomeDetailsId || null,
+        applicationProductDetailsId: r.applicationProductDetailsId || appProdId,
+        agentCustomerId: r.agentCustomerId || calculationAgentCustId,
+        applicantSequence: r.applicantSequence != null ? r.applicantSequence : seq,
+        financialYear: r.financialYear || '',
+        pat: r.pat === 0 ? '0' : (r.pat ?? ''),
+        depreciation: r.depreciation === 0 ? '0' : (r.depreciation ?? ''),
+        salaryToPartners: r.salaryToPartners === 0 ? '0' : (r.salaryToPartners ?? ''),
+        interestToRelatedParties: r.interestToRelatedParties === 0 ? '0' : (r.interestToRelatedParties ?? ''),
+        primaryIncome: r.primaryIncome ?? null,
+        isLatestFinancialYear: Boolean(r.isLatestFinancialYear),
+        isActive: r.isActive !== false,
+        isPersisted: Boolean(r.applicationNormalIncomeDetailsId),
+        isModified: false,
+        errorMsg: null,
+      }));
+
+      // If empty, initialize 1 default draft financial year
+      if (mappedIncome.length === 0) {
+        mappedIncome = [
+          {
+            id: `normal-inc-draft-0`,
+            applicationNormalIncomeDetailsId: null,
+            applicationProductDetailsId: appProdId,
+            agentCustomerId: calculationAgentCustId,
+            applicantSequence: seq,
+            financialYear: '',
+            pat: '',
+            depreciation: '',
+            salaryToPartners: '',
+            interestToRelatedParties: '',
+            primaryIncome: null,
+            isLatestFinancialYear: false,
+            isActive: true,
+            isPersisted: false,
+            isModified: false,
+            errorMsg: null,
+          },
+        ];
+      } else if (mappedIncome.filter((r) => r.isLatestFinancialYear).length > 1) {
+        // If server data has multiple rows flagged latest, preserve only the first marked one
+        let foundFirst = false;
+        mappedIncome = mappedIncome.map((r) => {
+          if (r.isLatestFinancialYear) {
+            if (!foundFirst) {
+              foundFirst = true;
+              return r;
+            }
+            return { ...r, isLatestFinancialYear: false };
+          }
+          return r;
+        });
+      }
+
+      const mappedOther = activeOther.map((r, i) => ({
+        id: `normal-other-row-${r.applicationNormalOtherIncomeDetailsId || i}`,
+        applicationNormalOtherIncomeDetailsId: r.applicationNormalOtherIncomeDetailsId || null,
+        applicationProductDetailsId: r.applicationProductDetailsId || appProdId,
+        agentCustomerId: r.agentCustomerId || calculationAgentCustId,
+        applicantSequence: r.applicantSequence != null ? r.applicantSequence : seq,
+        incomeType: r.incomeType || 'HOUSE_PROPERTY',
+        annualIncomeAmount: r.annualIncomeAmount === 0 ? '0' : (r.annualIncomeAmount ?? ''),
+        considerationPercentage: r.considerationPercentage === 0 ? '0' : (r.considerationPercentage ?? (r.incomeType === 'HOUSE_PROPERTY' ? 100 : 50)),
+        consideredIncomeAmount: r.consideredIncomeAmount ?? null,
+        isActive: r.isActive !== false,
+        isPersisted: Boolean(r.applicationNormalOtherIncomeDetailsId),
+        isModified: false,
+        errorMsg: null,
+      }));
+
+      setNormalIncomeRows(mappedIncome);
+      setNormalOtherIncomeRows(mappedOther);
+    } catch (err) {
+      console.warn('Failed to fetch normal income records:', err);
+      setNormalIncomeError(err?.response?.data?.message || err?.message || 'Unable to load Normal Income records from server.');
+      setNormalIncomeRows([]);
+      setNormalOtherIncomeRows([]);
+    } finally {
+      setNormalIncomeLoading(false);
+    }
+  }, [calculationAgentCustId]);
+
+  // Trigger Normal Income hydration when Step 16 is active and method is NORMAL_INCOME
+  useEffect(() => {
+    if (activeStep === 16 && selectedMethodCode === 'NORMAL_INCOME' && calculationAppProdId > 0) {
+      fetchNormalIncomeRecords(calculationAppProdId, selectedApplicantSequence);
+      fetchSalaryRecords(calculationAppProdId, selectedApplicantSequence);
+    }
+  }, [activeStep, selectedMethodCode, calculationAppProdId, selectedApplicantSequence, fetchNormalIncomeRecords, fetchSalaryRecords]);
+
+  // Handle Primary Income field edit
+  const handleNormalIncomeRowChange = (index, field, value) => {
+    setNormalIncomeRows((prev) => {
+      const next = [...prev];
+      const row = { ...next[index] };
+
+      if (field === 'financialYear') {
+        row.financialYear = value;
+      } else if (field === 'isLatestFinancialYear') {
+        row.isLatestFinancialYear = Boolean(value);
+      } else {
+        if (value === '') {
+          row[field] = '';
+        } else {
+          const num = Number(value);
+          row[field] = isNaN(num) ? value : num;
+        }
+      }
+
+      if (row.isPersisted) {
+        row.isModified = true;
+      }
+      row.errorMsg = null;
+      next[index] = row;
+      return next;
+    });
+  };
+
+  // Handle setting Latest Financial Year (enforces single selection on frontend)
+  const handleSetLatestFinancialYear = (targetIdx) => {
+    setNormalIncomeRows((prev) =>
+      prev.map((row, idx) => {
+        const isLatest = idx === targetIdx;
+        const changed = row.isLatestFinancialYear !== isLatest;
+        return {
+          ...row,
+          isLatestFinancialYear: isLatest,
+          isModified: row.isPersisted && changed ? true : row.isModified,
+        };
+      })
+    );
+  };
+
+  // Handle Add Financial Year draft row
+  const handleAddNormalIncomeRow = () => {
+    setNormalIncomeRows((prev) => [
+      ...prev,
+      {
+        id: `normal-inc-draft-${Date.now()}-${prev.length}`,
+        applicationNormalIncomeDetailsId: null,
+        applicationProductDetailsId: Number(calculationAppProdId) || 0,
+        agentCustomerId: Number(calculationAgentCustId) || 0,
+        applicantSequence: Number(selectedApplicantSequence) || 0,
+        financialYear: '',
+        pat: '',
+        depreciation: '',
+        salaryToPartners: '',
+        interestToRelatedParties: '',
+        primaryIncome: null,
+        isLatestFinancialYear: false,
+        isActive: true,
+        isPersisted: false,
+        isModified: false,
+        errorMsg: null,
+      },
+    ]);
+  };
+
+  // Handle Remove Draft Financial Year row (frontend-only, never deletes saved rows)
+  const handleRemoveNormalIncomeDraftRow = (indexToRemove) => {
+    setNormalIncomeRows((prev) => {
+      const targetRow = prev[indexToRemove];
+      if (targetRow && (Number(targetRow.applicationNormalIncomeDetailsId) > 0 || targetRow.isPersisted)) {
+        return prev;
+      }
+      return prev.filter((_, idx) => idx !== indexToRemove);
+    });
+  };
+
+  // Handle Other Income field edit
+  const handleNormalOtherIncomeRowChange = (index, field, value) => {
+    setNormalOtherIncomeRows((prev) => {
+      const next = [...prev];
+      const row = { ...next[index] };
+
+      if (field === 'incomeType') {
+        row.incomeType = value;
+        if (row.considerationPercentage === '' || row.considerationPercentage == null) {
+          row.considerationPercentage = value === 'HOUSE_PROPERTY' ? 100 : 50;
+        }
+      } else if (field === 'annualIncomeAmount') {
+        if (value === '') {
+          row.annualIncomeAmount = '';
+        } else {
+          row.annualIncomeAmount = Math.max(0, Number(value) || 0);
+        }
+      } else if (field === 'considerationPercentage') {
+        if (value === '') {
+          row.considerationPercentage = '';
+        } else {
+          row.considerationPercentage = Math.min(100, Math.max(0, Number(value) || 0));
+        }
+      }
+
+      if (row.isPersisted) {
+        row.isModified = true;
+      }
+      row.errorMsg = null;
+      next[index] = row;
+      return next;
+    });
+  };
+
+  // Handle Add Other Income draft row
+  const handleAddNormalOtherIncomeRow = () => {
+    setNormalOtherIncomeRows((prev) => [
+      ...prev,
+      {
+        id: `normal-other-draft-${Date.now()}-${prev.length}`,
+        applicationNormalOtherIncomeDetailsId: null,
+        applicationProductDetailsId: Number(calculationAppProdId) || 0,
+        agentCustomerId: Number(calculationAgentCustId) || 0,
+        applicantSequence: Number(selectedApplicantSequence) || 0,
+        incomeType: 'HOUSE_PROPERTY',
+        annualIncomeAmount: '',
+        considerationPercentage: 100,
+        consideredIncomeAmount: null,
+        isActive: true,
+        isPersisted: false,
+        isModified: false,
+        errorMsg: null,
+      },
+    ]);
+  };
+
+  // Handle Remove Draft Other Income row (frontend-only)
+  const handleRemoveNormalOtherIncomeDraftRow = (indexToRemove) => {
+    setNormalOtherIncomeRows((prev) => {
+      const targetRow = prev[indexToRemove];
+      if (targetRow && (Number(targetRow.applicationNormalOtherIncomeDetailsId) > 0 || targetRow.isPersisted)) {
+        return prev;
+      }
+      return prev.filter((_, idx) => idx !== indexToRemove);
+    });
+  };
+
+  // Pre-calculation synchronization pipeline for Normal Income records (POST new, PUT modified using Promise.allSettled)
+  const synchronizeNormalIncomeRecords = async () => {
+    setNormalIncomeBanner(null);
+    const currentUserId = resolveAuthenticatedUserId();
+    if (!currentUserId) {
+      return {
+        success: false,
+        message: 'Unable to resolve authenticated Back Office user ID for operation. Please log out and re-login.',
+      };
+    }
+
+    if (!calculationAppProdId || calculationAppProdId <= 0) {
+      return {
+        success: false,
+        message: 'Application Product Details ID is missing. Please refresh the application.',
+      };
+    }
+
+    // 1. Validate Primary Income rows
+    const validIncomeRows = normalIncomeRows.filter((r) => r.financialYear && String(r.financialYear).trim() !== '');
+    if (validIncomeRows.length === 0) {
+      return {
+        success: false,
+        message: 'At least one Financial Year record with Financial Year name is required before calculating Normal Income eligibility.',
+      };
+    }
+
+    for (let i = 0; i < normalIncomeRows.length; i++) {
+      const r = normalIncomeRows[i];
+      if (!r.financialYear || !r.financialYear.trim()) {
+        return {
+          success: false,
+          message: `Financial Year is required for row ${i + 1}.`,
+        };
+      }
+      if (r.pat === '' || isNaN(Number(r.pat))) {
+        return {
+          success: false,
+          message: `Valid numeric PAT is required for Financial Year ${r.financialYear}.`,
+        };
+      }
+      if (r.depreciation === '' || isNaN(Number(r.depreciation)) || Number(r.depreciation) < 0) {
+        return {
+          success: false,
+          message: `Valid non-negative Depreciation is required for Financial Year ${r.financialYear}.`,
+        };
+      }
+      if (r.salaryToPartners === '' || isNaN(Number(r.salaryToPartners)) || Number(r.salaryToPartners) < 0) {
+        return {
+          success: false,
+          message: `Valid non-negative Salary to Partners is required for Financial Year ${r.financialYear}.`,
+        };
+      }
+      if (r.interestToRelatedParties === '' || isNaN(Number(r.interestToRelatedParties)) || Number(r.interestToRelatedParties) < 0) {
+        return {
+          success: false,
+          message: `Valid non-negative Interest to Related Parties is required for Financial Year ${r.financialYear}.`,
+        };
+      }
+    }
+
+    // 2. Validate Other Income rows
+    for (let i = 0; i < normalOtherIncomeRows.length; i++) {
+      const r = normalOtherIncomeRows[i];
+      if (r.annualIncomeAmount === '' || isNaN(Number(r.annualIncomeAmount)) || Number(r.annualIncomeAmount) < 0) {
+        return {
+          success: false,
+          message: `Valid non-negative Annual Income Amount is required for Other Income row ${i + 1}.`,
+        };
+      }
+      if (
+        r.considerationPercentage === '' ||
+        isNaN(Number(r.considerationPercentage)) ||
+        Number(r.considerationPercentage) < 0 ||
+        Number(r.considerationPercentage) > 100
+      ) {
+        return {
+          success: false,
+          message: `Valid Consideration % between 0 and 100 is required for Other Income row ${i + 1}.`,
+        };
+      }
+    }
+
+    // 3. Validate that a latest financial year is designated
+    const hasLatestYear = normalIncomeRows.some((r) => r.isLatestFinancialYear && r.financialYear && String(r.financialYear).trim() !== '');
+    if (!hasLatestYear) {
+      return {
+        success: false,
+        message: 'Please designate a Latest Considered Financial Year using "Set Latest" before calculating Normal Income eligibility.',
+      };
+    }
+
+    // 3. Build save promises
+    const savePromises = [];
+
+    // Primary Income POSTs
+    normalIncomeRows
+      .filter((r) => !r.isPersisted || !r.applicationNormalIncomeDetailsId)
+      .forEach((row) => {
+        const payload = {
+          applicationProductDetailsId: Number(calculationAppProdId),
+          agentCustomerId: Number(calculationAgentCustId),
+          applicantSequence: Number(selectedApplicantSequence),
+          financialYear: row.financialYear.trim(),
+          pat: Number(row.pat) || 0,
+          depreciation: Number(row.depreciation) || 0,
+          salaryToPartners: Number(row.salaryToPartners) || 0,
+          interestToRelatedParties: Number(row.interestToRelatedParties) || 0,
+          isLatestFinancialYear: Boolean(row.isLatestFinancialYear),
+          isActive: Boolean(row.isActive !== false),
+          createdBy: Number(currentUserId),
+        };
+        savePromises.push(
+          backOfficeService
+            .createNormalIncome(payload)
+            .then((res) => ({ success: true, item: `Primary Income (${row.financialYear})`, res }))
+            .catch((err) => ({
+              success: false,
+              item: `Primary Income (${row.financialYear})`,
+              error: err?.response?.data?.message || err?.message || 'Create failed',
+            }))
+        );
+      });
+
+    // Primary Income PUTs
+    normalIncomeRows
+      .filter((r) => r.isPersisted && r.applicationNormalIncomeDetailsId && r.isModified)
+      .forEach((row) => {
+        const payload = {
+          applicationNormalIncomeDetailsId: Number(row.applicationNormalIncomeDetailsId),
+          applicationProductDetailsId: Number(calculationAppProdId),
+          agentCustomerId: Number(calculationAgentCustId),
+          applicantSequence: Number(selectedApplicantSequence),
+          financialYear: row.financialYear.trim(),
+          pat: Number(row.pat) || 0,
+          depreciation: Number(row.depreciation) || 0,
+          salaryToPartners: Number(row.salaryToPartners) || 0,
+          interestToRelatedParties: Number(row.interestToRelatedParties) || 0,
+          isLatestFinancialYear: Boolean(row.isLatestFinancialYear),
+          isActive: Boolean(row.isActive !== false),
+          modifiedBy: Number(currentUserId),
+        };
+        savePromises.push(
+          backOfficeService
+            .updateNormalIncome(row.applicationNormalIncomeDetailsId, payload)
+            .then((res) => ({ success: true, item: `Primary Income (${row.financialYear})`, res }))
+            .catch((err) => ({
+              success: false,
+              item: `Primary Income (${row.financialYear})`,
+              error: err?.response?.data?.message || err?.message || 'Update failed',
+            }))
+        );
+      });
+
+    // Other Income POSTs
+    normalOtherIncomeRows
+      .filter((r) => !r.isPersisted || !r.applicationNormalOtherIncomeDetailsId)
+      .forEach((row) => {
+        const payload = {
+          applicationProductDetailsId: Number(calculationAppProdId),
+          agentCustomerId: Number(calculationAgentCustId),
+          applicantSequence: Number(selectedApplicantSequence),
+          incomeType: row.incomeType || 'HOUSE_PROPERTY',
+          annualIncomeAmount: Number(row.annualIncomeAmount) || 0,
+          considerationPercentage: Number(row.considerationPercentage) || 0,
+          isActive: Boolean(row.isActive !== false),
+          createdBy: Number(currentUserId),
+        };
+        savePromises.push(
+          backOfficeService
+            .createNormalOtherIncome(payload)
+            .then((res) => ({ success: true, item: `Other Income (${row.incomeType})`, res }))
+            .catch((err) => ({
+              success: false,
+              item: `Other Income (${row.incomeType})`,
+              error: err?.response?.data?.message || err?.message || 'Create failed',
+            }))
+        );
+      });
+
+    // Other Income PUTs
+    normalOtherIncomeRows
+      .filter((r) => r.isPersisted && r.applicationNormalOtherIncomeDetailsId && r.isModified)
+      .forEach((row) => {
+        const payload = {
+          applicationNormalOtherIncomeDetailsId: Number(row.applicationNormalOtherIncomeDetailsId),
+          applicationProductDetailsId: Number(calculationAppProdId),
+          agentCustomerId: Number(calculationAgentCustId),
+          applicantSequence: Number(selectedApplicantSequence),
+          incomeType: row.incomeType || 'HOUSE_PROPERTY',
+          annualIncomeAmount: Number(row.annualIncomeAmount) || 0,
+          considerationPercentage: Number(row.considerationPercentage) || 0,
+          isActive: Boolean(row.isActive !== false),
+          modifiedBy: Number(currentUserId),
+        };
+        savePromises.push(
+          backOfficeService
+            .updateNormalOtherIncome(row.applicationNormalOtherIncomeDetailsId, payload)
+            .then((res) => ({ success: true, item: `Other Income (${row.incomeType})`, res }))
+            .catch((err) => ({
+              success: false,
+              item: `Other Income (${row.incomeType})`,
+              error: err?.response?.data?.message || err?.message || 'Update failed',
+            }))
+        );
+      });
+
+    if (savePromises.length > 0) {
+      setNormalIncomeSaving(true);
+      try {
+        const settled = await Promise.allSettled(savePromises);
+        const failures = [];
+        settled.forEach((res) => {
+          if (res.status === 'rejected') {
+            failures.push(res.reason?.message || 'Save request rejected');
+          } else if (res.value && !res.value.success) {
+            failures.push(`${res.value.item}: ${res.value.error}`);
+          }
+        });
+
+        if (failures.length > 0) {
+          setNormalIncomeSaving(false);
+          return {
+            success: false,
+            message: `Failed to save Normal Income records: ${failures.join('; ')}`,
+          };
+        }
+
+        // Rehydrate server state after successful saves
+        await fetchNormalIncomeRecords(calculationAppProdId, selectedApplicantSequence);
+      } catch (err) {
+        setNormalIncomeSaving(false);
+        return {
+          success: false,
+          message: err?.response?.data?.message || err?.message || 'An unexpected error occurred during save.',
+        };
+      } finally {
+        setNormalIncomeSaving(false);
+      }
+    }
+
+    return { success: true, count: savePromises.length };
+  };
+
   // Phase 2D: Final Eligibility Calculation & Assessment Result State for Step 14
   const [assessmentsList, setAssessmentsList] = useState([]);
   const [assessmentsLoading, setAssessmentsLoading] = useState(false);
   const [assessmentsError, setAssessmentsError] = useState(null);
 
   // Per-applicant & per-method calculation settings map
-  // Key: `${applicantSequence}_${methodCode}` (e.g. "0_INCOME", "0_ABB", "1_INCOME")
+  // Key: `${applicantSequence}_${methodCode}` (e.g. "0_INCOME", "0_ABB", "0_NORMAL_INCOME", "1_INCOME")
   const [calcSettingsMap, setCalcSettingsMap] = useState({});
   const [calculating, setCalculating] = useState(false);
   const [calcBanner, setCalcBanner] = useState(null);
@@ -2298,6 +3564,11 @@ export default function CustomerVerification() {
         manualRoiInput: '',
         isEditingTenure: false,
         manualTenureInput: '',
+        isEditingObligation: false,
+        manualObligationInput: '',
+        isEditingFoir: false,
+        manualFoirInput: '',
+        emiAmountFactor: '',
       }
     );
   }, [calcSettingsMap, currentSettingsKey]);
@@ -2311,6 +3582,11 @@ export default function CustomerVerification() {
           manualRoiInput: '',
           isEditingTenure: false,
           manualTenureInput: '',
+          isEditingObligation: false,
+          manualObligationInput: '',
+          isEditingFoir: false,
+          manualFoirInput: '',
+          emiAmountFactor: '',
         };
         const nextSettings = typeof updater === 'function' ? updater(existing) : { ...existing, ...updater };
         return {
@@ -2403,7 +3679,15 @@ export default function CustomerVerification() {
   // Current active assessment based on applicant sequence and method
   const currentAssessment = useMemo(() => {
     if (!Array.isArray(assessmentsList) || assessmentsList.length === 0) return null;
-    const currentMethodId = selectedMethodCode === 'ABB' ? 2 : 1;
+    let currentMethodId = 1;
+    if (selectedMethodCode === 'ABB') currentMethodId = 2;
+    else if (selectedMethodCode === 'RTR') currentMethodId = 3;
+    else if (selectedMethodCode === 'NORMAL_INCOME') {
+      const normalMethod = assessmentMethods.find(
+        (m) => (m.methodCode || '').toUpperCase() === 'NORMAL_INCOME'
+      );
+      currentMethodId = normalMethod?.assessmentMethodId ? Number(normalMethod.assessmentMethodId) : 4;
+    }
     const matches = assessmentsList.filter(
       (a) =>
         Number(a.applicantSequence) === Number(selectedApplicantSequence) &&
@@ -2416,14 +3700,16 @@ export default function CustomerVerification() {
       (a, b) => new Date(b.calculatedAt || b.createdAt || 0) - new Date(a.calculatedAt || a.createdAt || 0)
     );
     return sorted[0];
-  }, [assessmentsList, selectedApplicantSequence, selectedMethodCode]);
+  }, [assessmentsList, selectedApplicantSequence, selectedMethodCode, assessmentMethods]);
 
-  const resolvedPolicyFoir = useMemo(() => {
-    if (selectedMethodCode !== 'INCOME') {
-      return 'Not Applicable (ABB Method)';
+  const basePolicyFoir = useMemo(() => {
+    if (selectedMethodCode !== 'INCOME' && selectedMethodCode !== 'NORMAL_INCOME') {
+      return null;
     }
 
-    // 1. Dynamic lookup from FOIRMaster using applicant's employmentTypeId and Income Method (assessmentMethodId = 1)
+    const targetMethodId = selectedMethodCode === 'NORMAL_INCOME' ? 4 : 1;
+
+    // Dynamic lookup from FOIRMaster using applicant's employmentTypeId and assessment method
     if (Array.isArray(foirMasterList) && foirMasterList.length > 0 && selectedEmploymentTypeId != null) {
       const now = new Date();
       const matchingFoir = foirMasterList.find((f) => {
@@ -2431,7 +3717,7 @@ export default function CustomerVerification() {
         const empMatch = Number(f.employmentTypeId) === Number(selectedEmploymentTypeId);
         const methodMatch =
           f.assessmentMethodId == null ||
-          Number(f.assessmentMethodId) === 1; // 1 = Income Method
+          Number(f.assessmentMethodId) === targetMethodId;
         if (!empMatch || !methodMatch) return false;
 
         // Effective date validity
@@ -2442,8 +3728,24 @@ export default function CustomerVerification() {
       });
 
       if (matchingFoir?.foirPercent != null) {
-        return `${matchingFoir.foirPercent}%`;
+        return Number(matchingFoir.foirPercent);
       }
+    }
+
+    return null;
+  }, [selectedMethodCode, foirMasterList, selectedEmploymentTypeId]);
+
+  const resolvedPolicyFoir = useMemo(() => {
+    if (selectedMethodCode === 'RTR') {
+      return 'Not Applicable (RTR Method)';
+    }
+    if (selectedMethodCode === 'ABB') {
+      return 'Not Applicable (ABB Method)';
+    }
+
+    // 1. Manual FOIR override if active
+    if (currentCalcSettings.isEditingFoir && currentCalcSettings.manualFoirInput !== '') {
+      return `${currentCalcSettings.manualFoirInput}% (Override)`;
     }
 
     // 2. If calculated assessment exists for this applicant and method, use authoritative backend foir
@@ -2451,8 +3753,22 @@ export default function CustomerVerification() {
       return `${currentAssessment.foirPercentApplied}%`;
     }
 
-    return '65%';
-  }, [selectedMethodCode, foirMasterList, selectedEmploymentTypeId, currentAssessment]);
+    // 3. Fallback to base policy from FOIR Master (if available)
+    if (basePolicyFoir != null) {
+      return `${basePolicyFoir}%`;
+    }
+
+    return 'Policy FOIR from Master (Auto)';
+  }, [selectedMethodCode, currentCalcSettings.isEditingFoir, currentCalcSettings.manualFoirInput, currentAssessment, basePolicyFoir]);
+
+  // Salary & Other Income Dirty Check
+  const isSalaryDirty = useMemo(() => {
+    const salaryUnsaved = (Array.isArray(salaryRows) ? salaryRows : []).some((r) => !r.isPersisted || r.isModified);
+    const otherUnsaved = (Array.isArray(otherIncomeRows) ? otherIncomeRows : []).some((r) => !r.isPersisted || r.isModified);
+    const normalUnsaved = (Array.isArray(normalIncomeRows) ? normalIncomeRows : []).some((r) => !r.isPersisted || r.isModified);
+    const normalOtherUnsaved = (Array.isArray(normalOtherIncomeRows) ? normalOtherIncomeRows : []).some((r) => !r.isPersisted || r.isModified);
+    return salaryUnsaved || otherUnsaved || normalUnsaved || normalOtherUnsaved;
+  }, [salaryRows, otherIncomeRows, normalIncomeRows, normalOtherIncomeRows]);
 
   // Calculate Eligibility handler
   const handleCalculateEligibility = async () => {
@@ -2476,6 +3792,95 @@ export default function CustomerVerification() {
       });
       return;
     }
+
+    // 3. RTR Assessment Method Execution
+    if (selectedMethodCode === 'RTR') {
+      // Step 3a: Save / synchronize any draft RTR loans
+      const syncRes = await handleSaveRtrLoans();
+      if (!syncRes.success) {
+        setCalcBanner({
+          type: 'error',
+          message: syncRes.message || 'RTR loan facilities could not be saved. Please review loan details and try again.',
+        });
+        return;
+      }
+
+      // Step 3b: Verify at least one active saved RTR loan exists
+      const loanRes = await backOfficeService.getRTRLoansBySeq(calculationAppProdId, selectedApplicantSequence);
+      const loans = Array.isArray(loanRes) ? loanRes : (loanRes?.value ?? loanRes?.data ?? []);
+      const activeSavedLoans = loans.filter((l) => l.isActive !== false);
+
+      if (activeSavedLoans.length === 0) {
+        setCalcBanner({
+          type: 'error',
+          message: 'At least one active RTR loan facility is required in the database before calculating RTR eligibility.',
+        });
+        return;
+      }
+
+      // Step 3c: Validate emiAmountFactor (required, numeric, > 0)
+      const factorStr =
+        currentCalcSettings.emiAmountFactor != null ? String(currentCalcSettings.emiAmountFactor).trim() : '';
+      if (!factorStr) {
+        setCalcBanner({
+          type: 'error',
+          message: 'EMI Amount Factor is required before calculating RTR eligibility. Please enter a valid factor.',
+        });
+        return;
+      }
+      const factorNum = Number(factorStr);
+      if (isNaN(factorNum) || factorNum <= 0) {
+        setCalcBanner({
+          type: 'error',
+          message: 'Valid positive numeric EMI Amount Factor is required (e.g. 36).',
+        });
+        return;
+      }
+
+      setCalculating(true);
+      try {
+        const rtrPayload = {
+          applicationProductDetailsId: Number(calculationAppProdId),
+          applicantSequence: Number(selectedApplicantSequence),
+          emiAmountFactor: factorNum,
+          createdBy: Number(auth.userId),
+        };
+
+        const res = await backOfficeService.calculateRTR(rtrPayload);
+        const rtrRecord = Array.isArray(res) ? res[0] : (res?.value ?? res?.data ?? res);
+
+        if (rtrRecord && (rtrRecord.applicationRTRAssessmentId || rtrRecord.finalLoanEligibility != null)) {
+          setCalcBanner({
+            type: 'success',
+            message: `RTR Eligibility calculated successfully! Final Loan Eligibility: ${formatCurrency(
+              rtrRecord.finalLoanEligibility
+            )}${rtrRecord.applicableEMIMultiplier ? ` (Multiplier: ${rtrRecord.applicableEMIMultiplier}x)` : ''}.`,
+          });
+
+          // Re-fetch RTR assessments and RTR loans so evaluated flags (isSelectedForRTR) update in the UI
+          await fetchRTRAssessments(calculationAppProdId, selectedApplicantSequence);
+          await fetchRTRLoans(calculationAppProdId, selectedApplicantSequence);
+        } else {
+          throw new Error('RTR Calculation engine returned an unexpected response structure.');
+        }
+      } catch (err) {
+        console.error('Failed to calculate RTR eligibility:', err);
+        const errMsg =
+          err?.response?.data?.message ||
+          err?.response?.data?.title ||
+          err?.message ||
+          'RTR Eligibility calculation failed. Please ensure an active RTR Norm matches the loan criteria.';
+        setCalcBanner({
+          type: 'error',
+          message: errMsg,
+        });
+      } finally {
+        setCalculating(false);
+      }
+      return;
+    }
+
+    // 4. INCOME / ABB Validations & Pre-calculation Persistence
     if (!calculationAgentCustId || calculationAgentCustId <= 0) {
       setCalcBanner({
         type: 'error',
@@ -2484,7 +3889,6 @@ export default function CustomerVerification() {
       return;
     }
 
-    // 3. Employment Details ID
     if (!selectedEmploymentIncomeDetailsId) {
       setCalcBanner({
         type: 'error',
@@ -2493,7 +3897,6 @@ export default function CustomerVerification() {
       return;
     }
 
-    // 4. Method Specific Validations & Pre-calculation Persistence
     if (selectedMethodCode === 'INCOME') {
       // Step 4a: Synchronize salary rows (POST new rows, PUT modified persisted rows)
       const syncRes = await synchronizeSalaryRows();
@@ -2510,15 +3913,50 @@ export default function CustomerVerification() {
         await fetchSalaryRecords(calculationAppProdId, selectedApplicantSequence);
       }
 
-      // Step 4c: Verify that exactly 3 active salary records exist in the database
+      // Step 4c: Synchronize other income rows (POST new rows, PUT modified persisted rows)
+      const otherSyncRes = await synchronizeOtherIncomeRows();
+      if (!otherSyncRes.success) {
+        setCalcBanner({
+          type: 'error',
+          message: otherSyncRes.message || 'Other income details could not be prepared for eligibility calculation. Please review the highlighted row and try again.',
+        });
+        return;
+      }
+
+      // Step 4d: Rehydrate authoritative other income state from server if changes were made
+      if (otherSyncRes.count > 0) {
+        await fetchOtherIncomeRecords(calculationAppProdId, selectedApplicantSequence);
+      }
+
+      // Step 4e: Verify that at least 3 active salary records exist in the database (N >= 3)
       const res = await backOfficeService.getSalaryIncomeBySeq(calculationAppProdId, selectedApplicantSequence);
       const records = Array.isArray(res) ? res : (res?.value ?? res?.data ?? []);
       const activeRecords = records.filter((r) => r.isActive !== false);
 
-      if (activeRecords.length !== 3) {
+      if (activeRecords.length < 3) {
         setCalcBanner({
           type: 'error',
-          message: `Exactly 3 active salary records are required in the database before calculating income eligibility (Found: ${activeRecords.length}/3).`,
+          message: `A minimum of 3 active salary records are required in the database before calculating income eligibility (Found: ${activeRecords.length}/3).`,
+        });
+        return;
+      }
+    } else if (selectedMethodCode === 'NORMAL_INCOME') {
+      // Step 4a: Synchronize Normal Income records (Primary Income POST/PUT, Other Income POST/PUT)
+      const syncRes = await synchronizeNormalIncomeRecords();
+      if (!syncRes.success) {
+        setCalcBanner({
+          type: 'error',
+          message: syncRes.message || 'Normal Income details could not be prepared for eligibility calculation. Please review the highlighted fields and try again.',
+        });
+        return;
+      }
+
+      // Step 4b: Verify at least one active primary income record exists in state/server
+      const activeIncomeCount = normalIncomeRows.filter((r) => r.financialYear && r.isActive !== false).length;
+      if (activeIncomeCount === 0) {
+        setCalcBanner({
+          type: 'error',
+          message: 'At least one active Financial Year record is required before calculating Normal Income eligibility.',
         });
         return;
       }
@@ -2578,6 +4016,43 @@ export default function CustomerVerification() {
       finalManualTenure = tenureNum;
     }
 
+    let finalManualFoir = null;
+    if ((selectedMethodCode === 'INCOME' || selectedMethodCode === 'NORMAL_INCOME') && currentCalcSettings.isEditingFoir && currentCalcSettings.manualFoirInput !== '') {
+      const foirNum = Number(currentCalcSettings.manualFoirInput);
+      if (isNaN(foirNum) || foirNum <= 0 || foirNum > 100) {
+        setCalcBanner({
+          type: 'error',
+          message: 'Manual FOIR override must be a valid percentage between 0.1 and 100 (e.g. 70).',
+        });
+        return;
+      }
+      finalManualFoir = foirNum;
+    }
+
+    let finalManualObligation = null;
+    if (currentCalcSettings.isEditingObligation && currentCalcSettings.manualObligationInput !== '') {
+      const oblNum = Number(currentCalcSettings.manualObligationInput);
+      if (isNaN(oblNum) || oblNum < 0) {
+        setCalcBanner({
+          type: 'error',
+          message: 'Manual Existing Obligation must be a valid positive amount or 0 (e.g. 8000).',
+        });
+        return;
+      }
+      finalManualObligation = oblNum;
+    }
+
+    // Resolve AssessmentMethodId dynamically
+    let calculatedMethodId = 1;
+    if (selectedMethodCode === 'ABB') {
+      calculatedMethodId = 2;
+    } else if (selectedMethodCode === 'NORMAL_INCOME') {
+      const normalMethod = assessmentMethods.find(
+        (m) => (m.methodCode || '').toUpperCase() === 'NORMAL_INCOME'
+      );
+      calculatedMethodId = normalMethod?.assessmentMethodId ? Number(normalMethod.assessmentMethodId) : 4;
+    }
+
     setCalculating(true);
     try {
       const payload = {
@@ -2585,9 +4060,11 @@ export default function CustomerVerification() {
         agentCustomerId: Number(calculationAgentCustId),
         applicationEmploymentIncomeDetailsId: Number(selectedEmploymentIncomeDetailsId),
         applicantSequence: Number(selectedApplicantSequence),
-        assessmentMethodId: selectedMethodCode === 'ABB' ? 2 : 1,
+        assessmentMethodId: calculatedMethodId,
         manualROI: finalManualRoi,
         manualTenureMonths: finalManualTenure,
+        manualFOIR: finalManualFoir,
+        manualExistingObligation: finalManualObligation,
         recommendedLoanAmount: finalRecommendedAmount,
         pdDocumentPath: resolvedPdDocumentPath || null,
         calculatedByUserId: Number(auth.userId),
@@ -2724,11 +4201,46 @@ export default function CustomerVerification() {
     try {
       const res = await backOfficeService.getCalculationMethods();
       const records = Array.isArray(res) ? res : (res?.value ?? res?.data ?? []);
-      const activeMethods = records.filter((m) => m.isActive !== false);
+      let activeMethods = records.filter((m) => m.isActive !== false);
+
+      // Ensure RTR Method is present if not already returned by server
+      const hasRtr = activeMethods.some(
+        (m) => (m.methodCode && m.methodCode.toUpperCase() === 'RTR') || Number(m.assessmentMethodId) === 3
+      );
+      if (!hasRtr) {
+        activeMethods = [
+          ...activeMethods,
+          {
+            assessmentMethodId: 3,
+            methodCode: 'RTR',
+            methodName: 'RTR Method',
+            description: 'Repayment Track Record (RTR) eligibility assessment based on live loan performance and norm multipliers.',
+            isActive: true,
+          },
+        ];
+      }
+
+      // Ensure Normal Income Method is present if not already returned by server
+      const hasNormalIncome = activeMethods.some(
+        (m) => (m.methodCode && m.methodCode.toUpperCase() === 'NORMAL_INCOME') || Number(m.assessmentMethodId) === 4
+      );
+      if (!hasNormalIncome) {
+        activeMethods = [
+          ...activeMethods,
+          {
+            assessmentMethodId: 4,
+            methodCode: 'NORMAL_INCOME',
+            methodName: 'Normal Income',
+            description: 'Normal Income assessment method based on multi-year PAT, depreciation, partner salary, related-party interest, and other income.',
+            isActive: true,
+          },
+        ];
+      }
+
       setAssessmentMethods(activeMethods);
 
       if (activeMethods.length > 0) {
-        const exists = activeMethods.some((m) => m.methodCode === selectedMethodCode);
+        const exists = activeMethods.some((m) => (m.methodCode || '').toUpperCase() === selectedMethodCode.toUpperCase());
         if (!exists) {
           setSelectedMethodCode(activeMethods[0].methodCode || 'INCOME');
         }
@@ -3163,6 +4675,10 @@ export default function CustomerVerification() {
   const downloadAndPrepareDoc = useCallback(async (doc) => {
     const docId = doc?.agentCustomerDocumentId || doc?.id;
     if (!docId) return null;
+    const cacheKey = `agentDoc_${docId}`;
+    if (previewCacheRef.current.has(cacheKey)) {
+      return previewCacheRef.current.get(cacheKey);
+    }
     try {
       const blobData = await backOfficeService.downloadCustomerDocument(docId);
       const fileName = doc?.fileName || doc?.name || '';
@@ -3178,7 +4694,7 @@ export default function CustomerVerification() {
       const objectUrl = window.URL.createObjectURL(typedBlob);
       blobUrlsRef.current.push(objectUrl);
 
-      return {
+      const result = {
         doc,
         url: objectUrl,
         fileName,
@@ -3195,21 +4711,63 @@ export default function CustomerVerification() {
             })
           : doc.uploadedOn || '',
       };
+      previewCacheRef.current.set(cacheKey, result);
+      return result;
     } catch (err) {
       console.warn(`[CustomerVerification] Could not download document ${docId}:`, err?.message);
       return null;
     }
   }, []);
 
+  // Deterministically selects the latest active applicant document from an array of documents
+  const selectLatestApplicantDoc = useCallback((docs, stepNum, masterMap) => {
+    if (!Array.isArray(docs) || docs.length === 0) return null;
+    const matching = docs.filter((doc) => {
+      if (!doc || doc.isActive === false) return false;
+      const seq = doc.applicantSequence !== undefined && doc.applicantSequence !== null
+        ? Number(doc.applicantSequence)
+        : (doc.ApplicantSequence !== undefined && doc.ApplicantSequence !== null ? Number(doc.ApplicantSequence) : null);
+      if (seq !== null && seq > 0) return false;
+      return isMatchingApplicantDoc(doc, stepNum, masterMap);
+    });
+
+    if (matching.length === 0) return null;
+
+    matching.sort((a, b) => {
+      const modTimeA = new Date(a.modifiedAt || a.updatedAt || a.ModifiedAt || a.UpdatedAt || 0).getTime();
+      const modTimeB = new Date(b.modifiedAt || b.updatedAt || b.ModifiedAt || b.UpdatedAt || 0).getTime();
+      if (modTimeA > 0 && modTimeB > 0 && modTimeA !== modTimeB) {
+        return modTimeB - modTimeA;
+      }
+      const createTimeA = new Date(a.createdAt || a.uploadedOn || a.CreatedAt || a.UploadedOn || 0).getTime();
+      const createTimeB = new Date(b.createdAt || b.uploadedOn || b.CreatedAt || b.UploadedOn || 0).getTime();
+      if (createTimeA !== createTimeB) {
+        return createTimeB - createTimeA;
+      }
+      const idA = Number(a.agentCustomerDocumentId || a.applicationKYCDocumentId || a.id || 0);
+      const idB = Number(b.agentCustomerDocumentId || b.applicationKYCDocumentId || b.id || 0);
+      return idB - idA;
+    });
+
+    return matching[0];
+  }, [isMatchingApplicantDoc]);
+
   // Safely resolves Old and New document versions for Applicant
   const resolveOldAndNewDocs = useCallback(
     (docs, rejection, stepNum, masterMap) => {
-      const matching = (docs || []).filter((d) => isMatchingApplicantDoc(d, stepNum, masterMap));
+      const matching = (docs || []).filter((d) => {
+        if (!d || d.isActive === false) return false;
+        const seq = d.applicantSequence !== undefined && d.applicantSequence !== null
+          ? Number(d.applicantSequence)
+          : (d.ApplicantSequence !== undefined && d.ApplicantSequence !== null ? Number(d.ApplicantSequence) : null);
+        if (seq !== null && seq > 0) return false;
+        return isMatchingApplicantDoc(d, stepNum, masterMap);
+      });
       matching.sort((a, b) => {
-        const timeA = new Date(a.createdAt || 0).getTime();
-        const timeB = new Date(b.createdAt || 0).getTime();
+        const timeA = new Date(a.createdAt || a.uploadedOn || 0).getTime();
+        const timeB = new Date(b.createdAt || b.uploadedOn || 0).getTime();
         if (timeA !== timeB) return timeA - timeB;
-        return (a.agentCustomerDocumentId || 0) - (b.agentCustomerDocumentId || 0);
+        return (Number(a.agentCustomerDocumentId || a.id) || 0) - (Number(b.agentCustomerDocumentId || b.id) || 0);
       });
 
       if (matching.length === 0) return { oldDoc: null, newDoc: null };
@@ -3221,12 +4779,12 @@ export default function CustomerVerification() {
       }
 
       const beforeRej = matching.filter((d) => {
-        const t = new Date(d.createdAt || 0).getTime();
+        const t = new Date(d.createdAt || d.uploadedOn || 0).getTime();
         return rejTime === 0 || t <= rejTime + 5000;
       });
 
       const afterRej = matching.filter((d) => {
-        const t = new Date(d.createdAt || 0).getTime();
+        const t = new Date(d.createdAt || d.uploadedOn || 0).getTime();
         return rejTime > 0 && t > rejTime + 5000;
       });
 
@@ -3983,8 +5541,12 @@ export default function CustomerVerification() {
     [applicationRejections]
   );
 
-  // Fetch applicant & co-applicants Salary Slip and Bank Statement documents
+  // Fetch applicant & co-applicants Salary Slip and Bank Statement documents concurrently
   const fetchFinancialDocuments = useCallback(async () => {
+    if (isCustomerDocsLoading || isSupplementaryKycLoading) {
+      return;
+    }
+
     const appProdId =
       verificationData?.application?.applicationProductDetailsId ||
       verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
@@ -3993,261 +5555,300 @@ export default function CustomerVerification() {
 
     const sTypeId = salarySlipDocTypeId;
     const bTypeId = bankStatementDocTypeId;
+    const currentGen = ++financialFetchGenRef.current;
 
-    // 1. Applicant Salary Slip (sourced from allCustomerDocs / AgentCustomerDocument)
+    // 1. Applicant Salary Slip (Parallel Task)
     setApplicantFinancialDocs((prev) => ({
       ...prev,
       salarySlip: { ...(prev.salarySlip || {}), loading: true, error: null },
     }));
-    try {
-      const rej = getActiveRejectionForApplicantDoc(sTypeId, 'SALARY_SLIP');
-      let preview = null;
-      let comparison = null;
-      let docData = null;
+    const fetchSalaryPromise = (async () => {
+      try {
+        const rej = getActiveRejectionForApplicantDoc(sTypeId, 'SALARY_SLIP');
+        let preview = null;
+        let comparison = null;
+        let docData = null;
 
-      if (rej && rej.status === 'Resubmitted') {
-        const { oldDoc, newDoc } = resolveOldAndNewDocs(allCustomerDocs, rej, 'SALARY_SLIP', docTypeMasterMap);
-        const oldPromise = rej.originalDocumentPath
-          ? fetchKycDocByPath(rej.originalDocumentPath, 'Applicant_Salary_Slip_Old')
-          : (oldDoc ? downloadAndPrepareDoc(oldDoc) : Promise.resolve(null));
-        const newPromise = rej.currentDocumentPath
-          ? fetchKycDocByPath(rej.currentDocumentPath, 'Applicant_Salary_Slip')
-          : (newDoc ? downloadAndPrepareDoc(newDoc) : Promise.resolve(null));
-        const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
-        comparison = {
-          oldDoc: oldRes,
-          newDoc: newRes,
-          hasOldVersion: Boolean(oldRes?.url),
-          hasNewVersion: Boolean(newRes?.url),
-          note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
-          rejection: rej,
-        };
-        preview = newRes || oldRes;
-        docData = newDoc || oldDoc;
-      } else {
-        const normalizeDocPath = (val) =>
-          String(val || '')
-            .trim()
-            .replace(/\\/g, '/')
-            .replace(/^\/+/, '');
-
-        let slipDoc = null;
-
-        // PRIORITY 1: Match against Verified rejection currentDocumentPath if available
-        if (rej && rej.status === 'Verified' && rej.currentDocumentPath) {
-          const targetNorm = normalizeDocPath(rej.currentDocumentPath).toLowerCase();
-          slipDoc = (allCustomerDocs || []).find((doc) => {
-            const candidate = normalizeDocPath(
-              doc.filePath || doc.documentPath || doc.path
-            ).toLowerCase();
-            return candidate === targetNorm;
-          });
-        }
-
-        // PRIORITY 2: Filter active Salary Slip documents and sort CreatedAt DESC, AgentCustomerDocumentId DESC
-        if (!slipDoc) {
-          const matchingSalaryDocs = (allCustomerDocs || [])
-            .filter((doc) => doc.isActive !== false && isMatchingApplicantDoc(doc, 'SALARY_SLIP', docTypeMasterMap))
-            .sort((a, b) => {
-              const timeA = new Date(a.createdAt || 0).getTime();
-              const timeB = new Date(b.createdAt || 0).getTime();
-              if (timeA !== timeB) return timeB - timeA;
-              return (b.agentCustomerDocumentId || 0) - (a.agentCustomerDocumentId || 0);
-            });
-          slipDoc = matchingSalaryDocs[0] || null;
-        }
-
-        if (slipDoc) {
-          docData = slipDoc;
-          preview = await downloadAndPrepareDoc(slipDoc);
-        } else if (rej && rej.status === 'Verified' && rej.currentDocumentPath) {
-          preview = await fetchKycDocByPath(rej.currentDocumentPath, 'Applicant_Salary_Slip');
-          docData = {
-            filePath: rej.currentDocumentPath,
-            fileName: preview?.fileName || 'Applicant_Salary_Slip',
+        if (rej && rej.status === 'Resubmitted') {
+          const { oldDoc, newDoc } = resolveOldAndNewDocs(allCustomerDocs, rej, 'SALARY_SLIP', docTypeMasterMap);
+          const oldPromise = rej.originalDocumentPath
+            ? fetchKycDocByPath(rej.originalDocumentPath, 'Applicant_Salary_Slip_Old')
+            : (oldDoc ? downloadAndPrepareDoc(oldDoc) : Promise.resolve(null));
+          const newPromise = rej.currentDocumentPath
+            ? fetchKycDocByPath(rej.currentDocumentPath, 'Applicant_Salary_Slip')
+            : (newDoc ? downloadAndPrepareDoc(newDoc) : Promise.resolve(null));
+          const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+          comparison = {
+            oldDoc: oldRes,
+            newDoc: newRes,
+            hasOldVersion: Boolean(oldRes?.url),
+            hasNewVersion: Boolean(newRes?.url),
+            note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
+            rejection: rej,
           };
+          preview = newRes || oldRes;
+          docData = newDoc || oldDoc;
+        } else {
+          const normalizeDocPath = (val) =>
+            String(val || '')
+              .trim()
+              .replace(/\\/g, '/')
+              .replace(/^\/+/, '');
+
+          let slipDoc = null;
+
+          if (rej && rej.status === 'Verified' && rej.currentDocumentPath) {
+            const targetNorm = normalizeDocPath(rej.currentDocumentPath).toLowerCase();
+            slipDoc = (allCustomerDocs || []).find((doc) => {
+              const candidate = normalizeDocPath(
+                doc.filePath || doc.documentPath || doc.path
+              ).toLowerCase();
+              return candidate === targetNorm;
+            });
+          }
+
+          if (!slipDoc) {
+            slipDoc = selectLatestApplicantDoc(allCustomerDocs, 'SALARY_SLIP', docTypeMasterMap);
+          }
+
+          if (slipDoc) {
+            docData = slipDoc;
+            preview = await downloadAndPrepareDoc(slipDoc);
+          } else if (rej && rej.status === 'Verified' && rej.currentDocumentPath) {
+            preview = await fetchKycDocByPath(rej.currentDocumentPath, 'Applicant_Salary_Slip');
+            docData = {
+              filePath: rej.currentDocumentPath,
+              fileName: preview?.fileName || 'Applicant_Salary_Slip',
+            };
+          }
+        }
+
+        if (currentGen === financialFetchGenRef.current) {
+          setApplicantFinancialDocs((prev) => ({
+            ...prev,
+            salarySlip: {
+              loading: false,
+              data: docData,
+              preview,
+              comparison,
+              rejection: rej,
+              error: null,
+            },
+          }));
+        }
+      } catch (err) {
+        console.warn('Could not load applicant salary slip:', err);
+        if (currentGen === financialFetchGenRef.current) {
+          setApplicantFinancialDocs((prev) => ({
+            ...prev,
+            salarySlip: { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null },
+          }));
         }
       }
+    })();
 
-      setApplicantFinancialDocs((prev) => ({
-        ...prev,
-        salarySlip: {
-          loading: false,
-          data: docData,
-          preview,
-          comparison,
-          rejection: rej,
-          error: null,
-        },
-      }));
-    } catch (err) {
-      console.warn('Could not load applicant salary slip from customer documents:', err);
-      setApplicantFinancialDocs((prev) => ({
-        ...prev,
-        salarySlip: { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null },
-      }));
-    }
-
-    // 2. Applicant Bank Statement (sourced from allCustomerDocs / AgentCustomerDocument)
+    // 2. Applicant Bank Statement (Parallel Task)
     setApplicantFinancialDocs((prev) => ({
       ...prev,
       bankStatement: { ...(prev.bankStatement || {}), loading: true, error: null },
     }));
-    try {
-      const rej = getActiveRejectionForApplicantDoc(bTypeId, 'BANK_STATEMENT');
-      let preview = null;
-      let comparison = null;
-      let docData = null;
+    const fetchBankPromise = (async () => {
+      try {
+        const rej = getActiveRejectionForApplicantDoc(bTypeId, 'BANK_STATEMENT');
+        let preview = null;
+        let comparison = null;
+        let docData = null;
 
-      if (rej && rej.status === 'Resubmitted') {
-        const { oldDoc, newDoc } = resolveOldAndNewDocs(allCustomerDocs, rej, 'BANK_STATEMENT', docTypeMasterMap);
-        const oldPromise = rej.originalDocumentPath
-          ? fetchKycDocByPath(rej.originalDocumentPath, 'Applicant_Bank_Statement_Old')
-          : (oldDoc ? downloadAndPrepareDoc(oldDoc) : Promise.resolve(null));
-        const newPromise = rej.currentDocumentPath
-          ? fetchKycDocByPath(rej.currentDocumentPath, 'Applicant_Bank_Statement')
-          : (newDoc ? downloadAndPrepareDoc(newDoc) : Promise.resolve(null));
-        const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
-        comparison = {
-          oldDoc: oldRes,
-          newDoc: newRes,
-          hasOldVersion: Boolean(oldRes?.url),
-          hasNewVersion: Boolean(newRes?.url),
-          note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
-          rejection: rej,
-        };
-        preview = newRes || oldRes;
-        docData = newDoc || oldDoc;
-      } else {
-        const bankDoc = (allCustomerDocs || []).find((doc) =>
-          isMatchingApplicantDoc(doc, 'BANK_STATEMENT', docTypeMasterMap)
-        );
-        if (bankDoc) {
-          docData = bankDoc;
-          preview = await downloadAndPrepareDoc(bankDoc);
-        }
-      }
+        if (rej && rej.status === 'Resubmitted') {
+          const { oldDoc, newDoc } = resolveOldAndNewDocs(allCustomerDocs, rej, 'BANK_STATEMENT', docTypeMasterMap);
+          const oldPromise = rej.originalDocumentPath
+            ? fetchKycDocByPath(rej.originalDocumentPath, 'Applicant_Bank_Statement_Old')
+            : (oldDoc ? downloadAndPrepareDoc(oldDoc) : Promise.resolve(null));
+          const newPromise = rej.currentDocumentPath
+            ? fetchKycDocByPath(rej.currentDocumentPath, 'Applicant_Bank_Statement')
+            : (newDoc ? downloadAndPrepareDoc(newDoc) : Promise.resolve(null));
+          const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+          comparison = {
+            oldDoc: oldRes,
+            newDoc: newRes,
+            hasOldVersion: Boolean(oldRes?.url),
+            hasNewVersion: Boolean(newRes?.url),
+            note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
+            rejection: rej,
+          };
+          preview = newRes || oldRes;
+          docData = newDoc || oldDoc;
+        } else {
+          const normalizeDocPath = (val) =>
+            String(val || '')
+              .trim()
+              .replace(/\\/g, '/')
+              .replace(/^\/+/, '');
 
-      setApplicantFinancialDocs((prev) => ({
-        ...prev,
-        bankStatement: {
-          loading: false,
-          data: docData,
-          preview,
-          comparison,
-          rejection: rej,
-          error: null,
-        },
-      }));
-    } catch (err) {
-      console.warn('Could not load applicant bank statement from customer documents:', err);
-      setApplicantFinancialDocs((prev) => ({
-        ...prev,
-        bankStatement: { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null },
-      }));
-    }
+          let bankDoc = null;
 
-    // 3. Co-Applicants Salary Slips & Bank Statements (sequence 1, 2, 3... sourced from ApplicationKYCDocuments)
-    if (appProdId && coApplicants && coApplicants.length > 0) {
-      const coMap = {};
-      for (const co of coApplicants) {
-        const seq = co.sequence !== undefined ? co.sequence : (co.index !== undefined ? co.index + 1 : co.number);
-        const idxKey = co.index !== undefined ? co.index : (seq - 1);
+          if (rej && rej.status === 'Verified' && rej.currentDocumentPath) {
+            const targetNorm = normalizeDocPath(rej.currentDocumentPath).toLowerCase();
+            bankDoc = (allCustomerDocs || []).find((doc) => {
+              const candidate = normalizeDocPath(
+                doc.filePath || doc.documentPath || doc.path
+              ).toLowerCase();
+              return candidate === targetNorm;
+            });
+          }
 
-        let coSalarySlip = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
-        let coBankStatement = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
+          if (!bankDoc) {
+            bankDoc = selectLatestApplicantDoc(allCustomerDocs, 'BANK_STATEMENT', docTypeMasterMap);
+          }
 
-        if (sTypeId) {
-          try {
-            const docRes = await backOfficeService.getApplicantDocument(appProdId, seq, sTypeId);
-            const docData = docRes?.data || docRes?.value || docRes;
-            const docPath = docData?.documentPath || docData?.DocumentPath || docData?.filePath || docData?.FilePath;
-            const rej = getActiveRejectionForCoApplicantDoc(seq, sTypeId, 'SALARY_SLIP');
-            let preview = null;
-            let comparison = null;
-
-            if (rej && rej.status === 'Resubmitted') {
-              const oldPromise = rej.originalDocumentPath
-                ? fetchKycDocByPath(rej.originalDocumentPath, `CoApplicant_${co.number}_Salary_Slip_Old`)
-                : Promise.resolve(null);
-              const newPromise = rej.currentDocumentPath
-                ? fetchKycDocByPath(rej.currentDocumentPath, `CoApplicant_${co.number}_Salary_Slip`)
-                : (docPath ? fetchKycDocByPath(docPath, `CoApplicant_${co.number}_Salary_Slip`) : Promise.resolve(null));
-              const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
-              comparison = {
-                oldDoc: oldRes,
-                newDoc: newRes,
-                hasOldVersion: Boolean(oldRes?.url),
-                hasNewVersion: Boolean(newRes?.url),
-                note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
-                rejection: rej,
-              };
-              preview = newRes || oldRes;
-            } else if (docPath) {
-              preview = await fetchKycDocByPath(docPath, `CoApplicant_${co.number}_Salary_Slip`);
-            }
-
-            coSalarySlip = { loading: false, data: docData, preview, comparison, rejection: rej, error: null };
-          } catch (err) {
-            coSalarySlip = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
+          if (bankDoc) {
+            docData = bankDoc;
+            preview = await downloadAndPrepareDoc(bankDoc);
+          } else if (rej && rej.status === 'Verified' && rej.currentDocumentPath) {
+            preview = await fetchKycDocByPath(rej.currentDocumentPath, 'Applicant_Bank_Statement');
+            docData = {
+              filePath: rej.currentDocumentPath,
+              fileName: preview?.fileName || 'Applicant_Bank_Statement',
+            };
           }
         }
 
-        if (bTypeId) {
-          try {
-            const docRes = await backOfficeService.getApplicantDocument(appProdId, seq, bTypeId);
-            const docData = docRes?.data || docRes?.value || docRes;
-            const docPath = docData?.documentPath || docData?.DocumentPath || docData?.filePath || docData?.FilePath;
-            const rej = getActiveRejectionForCoApplicantDoc(seq, bTypeId, 'BANK_STATEMENT');
-            let preview = null;
-            let comparison = null;
-
-            if (rej && rej.status === 'Resubmitted') {
-              const oldPromise = rej.originalDocumentPath
-                ? fetchKycDocByPath(rej.originalDocumentPath, `CoApplicant_${co.number}_Bank_Statement_Old`)
-                : Promise.resolve(null);
-              const newPromise = rej.currentDocumentPath
-                ? fetchKycDocByPath(rej.currentDocumentPath, `CoApplicant_${co.number}_Bank_Statement`)
-                : (docPath ? fetchKycDocByPath(docPath, `CoApplicant_${co.number}_Bank_Statement`) : Promise.resolve(null));
-              const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
-              comparison = {
-                oldDoc: oldRes,
-                newDoc: newRes,
-                hasOldVersion: Boolean(oldRes?.url),
-                hasNewVersion: Boolean(newRes?.url),
-                note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
-                rejection: rej,
-              };
-              preview = newRes || oldRes;
-            } else if (docPath) {
-              preview = await fetchKycDocByPath(docPath, `CoApplicant_${co.number}_Bank_Statement`);
-            }
-
-            coBankStatement = { loading: false, data: docData, preview, comparison, rejection: rej, error: null };
-          } catch (err) {
-            coBankStatement = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
-          }
+        if (currentGen === financialFetchGenRef.current) {
+          setApplicantFinancialDocs((prev) => ({
+            ...prev,
+            bankStatement: {
+              loading: false,
+              data: docData,
+              preview,
+              comparison,
+              rejection: rej,
+              error: null,
+            },
+          }));
         }
-
-        coMap[idxKey] = {
-          salarySlip: coSalarySlip,
-          bankStatement: coBankStatement,
-        };
+      } catch (err) {
+        console.warn('Could not load applicant bank statement:', err);
+        if (currentGen === financialFetchGenRef.current) {
+          setApplicantFinancialDocs((prev) => ({
+            ...prev,
+            bankStatement: { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null },
+          }));
+        }
       }
-      setCoApplicantsFinancialDocs(coMap);
-    }
+    })();
+
+    // 3. Co-Applicants Salary Slips & Bank Statements (All Co-Applicants Concurrently)
+    const coPromises = (appProdId && coApplicants && coApplicants.length > 0)
+      ? coApplicants.map(async (co) => {
+          const seq = co.sequence !== undefined ? co.sequence : (co.index !== undefined ? co.index + 1 : co.number);
+          const idxKey = co.index !== undefined ? co.index : (seq - 1);
+
+          let coSalarySlip = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
+          let coBankStatement = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
+
+          const salaryCoPromise = (async () => {
+            if (!sTypeId) return;
+            try {
+              const docRes = await backOfficeService.getApplicantDocument(appProdId, seq, sTypeId);
+              const docData = docRes?.data || docRes?.value || docRes;
+              const docPath = docData?.documentPath || docData?.DocumentPath || docData?.filePath || docData?.FilePath;
+              const rej = getActiveRejectionForCoApplicantDoc(seq, sTypeId, 'SALARY_SLIP');
+              let preview = null;
+              let comparison = null;
+
+              if (rej && rej.status === 'Resubmitted') {
+                const oldPromise = rej.originalDocumentPath
+                  ? fetchKycDocByPath(rej.originalDocumentPath, `CoApplicant_${co.number}_Salary_Slip_Old`)
+                  : Promise.resolve(null);
+                const newPromise = rej.currentDocumentPath
+                  ? fetchKycDocByPath(rej.currentDocumentPath, `CoApplicant_${co.number}_Salary_Slip`)
+                  : (docPath ? fetchKycDocByPath(docPath, `CoApplicant_${co.number}_Salary_Slip`) : Promise.resolve(null));
+                const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+                comparison = {
+                  oldDoc: oldRes,
+                  newDoc: newRes,
+                  hasOldVersion: Boolean(oldRes?.url),
+                  hasNewVersion: Boolean(newRes?.url),
+                  note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
+                  rejection: rej,
+                };
+                preview = newRes || oldRes;
+              } else if (docPath) {
+                preview = await fetchKycDocByPath(docPath, `CoApplicant_${co.number}_Salary_Slip`);
+              }
+
+              coSalarySlip = { loading: false, data: docData, preview, comparison, rejection: rej, error: null };
+            } catch (err) {
+              coSalarySlip = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
+            }
+          })();
+
+          const bankCoPromise = (async () => {
+            if (!bTypeId) return;
+            try {
+              const docRes = await backOfficeService.getApplicantDocument(appProdId, seq, bTypeId);
+              const docData = docRes?.data || docRes?.value || docRes;
+              const docPath = docData?.documentPath || docData?.DocumentPath || docData?.filePath || docData?.FilePath;
+              const rej = getActiveRejectionForCoApplicantDoc(seq, bTypeId, 'BANK_STATEMENT');
+              let preview = null;
+              let comparison = null;
+
+              if (rej && rej.status === 'Resubmitted') {
+                const oldPromise = rej.originalDocumentPath
+                  ? fetchKycDocByPath(rej.originalDocumentPath, `CoApplicant_${co.number}_Bank_Statement_Old`)
+                  : Promise.resolve(null);
+                const newPromise = rej.currentDocumentPath
+                  ? fetchKycDocByPath(rej.currentDocumentPath, `CoApplicant_${co.number}_Bank_Statement`)
+                  : (docPath ? fetchKycDocByPath(docPath, `CoApplicant_${co.number}_Bank_Statement`) : Promise.resolve(null));
+                const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+                comparison = {
+                  oldDoc: oldRes,
+                  newDoc: newRes,
+                  hasOldVersion: Boolean(oldRes?.url),
+                  hasNewVersion: Boolean(newRes?.url),
+                  note: !oldRes?.url ? 'Previous version is not available from the current document API.' : null,
+                  rejection: rej,
+                };
+                preview = newRes || oldRes;
+              } else if (docPath) {
+                preview = await fetchKycDocByPath(docPath, `CoApplicant_${co.number}_Bank_Statement`);
+              }
+
+              coBankStatement = { loading: false, data: docData, preview, comparison, rejection: rej, error: null };
+            } catch (err) {
+              coBankStatement = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
+            }
+          })();
+
+          await Promise.allSettled([salaryCoPromise, bankCoPromise]);
+
+          if (currentGen === financialFetchGenRef.current) {
+            setCoApplicantsFinancialDocs((prev) => ({
+              ...prev,
+              [idxKey]: {
+                salarySlip: coSalarySlip,
+                bankStatement: coBankStatement,
+              },
+            }));
+          }
+        })
+      : [];
+
+    await Promise.allSettled([fetchSalaryPromise, fetchBankPromise, ...coPromises]);
   }, [
     verificationData,
     salarySlipDocTypeId,
     bankStatementDocTypeId,
     coApplicants,
     allCustomerDocs,
+    isCustomerDocsLoading,
+    isSupplementaryKycLoading,
     docTypeMasterMap,
     getActiveRejectionForApplicantDoc,
     getActiveRejectionForCoApplicantDoc,
     downloadAndPrepareDoc,
     fetchKycDocByPath,
-    isMatchingApplicantDoc,
+    selectLatestApplicantDoc,
     resolveOldAndNewDocs,
   ]);
 
@@ -4258,6 +5859,7 @@ export default function CustomerVerification() {
   }, [activeStep, verificationData, fetchFinancialDocuments]);
 
   const handleRefreshDocumentPreview = useCallback((stepNum) => {
+    previewCacheRef.current.clear();
     if (stepNum === 2) {
       setDocPreviews((prev) => {
         if (prev?.profile?.comparison?.oldDoc?.url) {
@@ -4361,10 +5963,13 @@ export default function CustomerVerification() {
     }
   }, [fetchFinancialDocuments]);
 
-  // Fetch document previews whenever active document verification workspace is open (Applicant + Co-Applicants)
+  // Fetch document previews concurrently whenever active document verification workspace is open (Applicant + Co-Applicants)
   useEffect(() => {
     if (!verificationData) return;
     if (activeStep < 2 || activeStep > 7) return;
+    if (isCustomerDocsLoading || isSupplementaryKycLoading) return;
+
+    const currentGen = ++previewFetchGenRef.current;
 
     const combinedDocs = [...(allCustomerDocs || [])];
     const initialDocs = verificationData?.kycDocuments?.documents || [];
@@ -4374,21 +5979,12 @@ export default function CustomerVerification() {
       }
     });
 
-    // ── STEP 2: PROFILE IMAGE ──────────────────────────────────────
-    const appProfileRej = getActiveRejectionForApplicant(2, profileDocTypeId);
-    const prevProfileRejId = docPreviews.profile?.comparison?.rejection?.backOfficeDocumentRejectionId || docPreviews.profile?.rejection?.backOfficeDocumentRejectionId;
-    const currentProfileRejId = appProfileRej?.backOfficeDocumentRejectionId;
-    const profileNeedsRefresh =
-      !docPreviews.profile ||
-      (currentProfileRejId && prevProfileRejId !== currentProfileRejId) ||
-      (appProfileRej?.status === 'Resubmitted' && !docPreviews.profile?.isComparison);
-
-    if (profileNeedsRefresh) {
+    // ── STEP 2: PROFILE IMAGE (CONCURRENT TASK) ──────────────────────
+    (async () => {
+      const appProfileRej = getActiveRejectionForApplicant(2, profileDocTypeId);
       const appRej = appProfileRej;
-      setDocPreviews((prev) => ({ ...prev, profile: { loading: true, error: null, url: null } }));
 
       if (appRej && appRej.status === 'Resubmitted') {
-        // Resolve Old vs New documents
         const { oldDoc, newDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 2, docTypeMasterMap);
         const oldPromise = appRej.originalDocumentPath
           ? fetchKycDocByPath(appRej.originalDocumentPath, 'Applicant_Profile_Old.jpg')
@@ -4397,100 +5993,93 @@ export default function CustomerVerification() {
           ? fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Profile.jpg')
           : (newDoc ? downloadAndPrepareDoc(newDoc) : (applicantKycId ? fetchKycDocBlob(applicantKycId, 'profile-image', 'Applicant_Profile') : Promise.resolve(null)));
 
-        Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
+        const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+        if (currentGen !== previewFetchGenRef.current) return;
+        setDocPreviews((prev) => ({
+          ...prev,
+          profile: {
+            loading: false,
+            error: null,
+            isComparison: true,
+            comparison: {
+              oldDoc: oldRes,
+              newDoc: newRes,
+              hasOldVersion: Boolean(oldRes?.url),
+              hasNewVersion: Boolean(newRes?.url),
+              note: !oldRes?.url
+                ? (!appRej.originalDocumentPath
+                    ? 'Prior version path was not recorded for this rejection.'
+                    : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                : null,
+              rejection: appRej,
+            },
+            url: newRes?.url || oldRes?.url || null,
+            doc: newRes?.doc || oldRes?.doc || null,
+            fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_Profile.jpg',
+            size: newRes?.size || oldRes?.size || null,
+            isImage: true,
+            isPdf: false,
+            rejection: appRej,
+          },
+        }));
+      } else {
+        const latestDoc = selectLatestApplicantDoc(combinedDocs, 'PROFILE_IMAGE', docTypeMasterMap, 0);
+        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 2, docTypeMasterMap);
+        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc || latestDoc);
+
+        if (targetDoc) {
+          const res = await downloadAndPrepareDoc(targetDoc);
+          if (currentGen !== previewFetchGenRef.current) return;
           setDocPreviews((prev) => ({
             ...prev,
             profile: {
               loading: false,
-              error: null,
-              isComparison: true,
-              comparison: {
-                oldDoc: oldRes,
-                newDoc: newRes,
-                hasOldVersion: Boolean(oldRes?.url),
-                hasNewVersion: Boolean(newRes?.url),
-                note: !oldRes?.url
-                  ? (!appRej.originalDocumentPath
-                      ? 'Prior version path was not recorded for this rejection.'
-                      : (oldRes?.error || 'Previous version could not be retrieved from server.'))
-                  : null,
-                rejection: appRej,
-              },
-              url: newRes?.url || oldRes?.url || null,
-              doc: newRes?.doc || oldRes?.doc || null,
-              fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_Profile.jpg',
-              size: newRes?.size || oldRes?.size || null,
+              error: res ? null : 'Failed to download document.',
+              isComparison: false,
+              comparison: null,
+              url: res?.url || null,
+              doc: targetDoc,
+              fileName: res?.fileName || targetDoc.fileName || 'Applicant_Profile.jpg',
+              size: res?.size || null,
               isImage: true,
               isPdf: false,
               rejection: appRej,
             },
           }));
-        });
-      } else {
-        // Standard / Verified / ReturnedToRM single preview
-        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 2, docTypeMasterMap);
-        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc);
-
-        if (targetDoc) {
-          downloadAndPrepareDoc(targetDoc).then((res) => {
-            setDocPreviews((prev) => ({
-              ...prev,
-              profile: {
-                loading: false,
-                error: res ? null : 'Failed to download document.',
-                isComparison: false,
-                comparison: null,
-                url: res?.url || null,
-                doc: targetDoc,
-                fileName: res?.fileName || targetDoc.fileName || 'Applicant_Profile.jpg',
-                size: res?.size || null,
-                isImage: true,
-                isPdf: false,
-                rejection: appRej,
-              },
-            }));
-          });
         } else if (appRej?.currentDocumentPath) {
-          fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Profile.jpg').then((res) => {
-            setDocPreviews((prev) => ({
-              ...prev,
-              profile: {
-                ...res,
-                isComparison: false,
-                comparison: null,
-                rejection: appRej,
-              },
-            }));
-          });
+          const res = await fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Profile.jpg');
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            profile: {
+              ...res,
+              isComparison: false,
+              comparison: null,
+              rejection: appRej,
+            },
+          }));
         } else if (applicantKycId) {
-          fetchKycDocBlob(applicantKycId, 'profile-image', 'Applicant_Profile').then((res) => {
-            setDocPreviews((prev) => ({ ...prev, profile: { ...res, isComparison: false, comparison: null, rejection: appRej } }));
-          });
+          const res = await fetchKycDocBlob(applicantKycId, 'profile-image', 'Applicant_Profile');
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            profile: { ...res, isComparison: false, comparison: null, rejection: appRej },
+          }));
         } else {
-          setDocPreviews((prev) => ({ ...prev, profile: { loading: false, error: null, doc: null, url: null, rejection: appRej } }));
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            profile: { loading: false, error: null, doc: null, url: null, rejection: appRej },
+          }));
         }
       }
-    }
+    })();
 
-    // Co-Applicants Profile Images
-    coApplicants.forEach((co) => {
-      const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 2, co.sequence || co.number || (co.index + 1));
-      const prevCoRejId = coDocPreviews[co.index]?.profile?.comparison?.rejection?.backOfficeDocumentRejectionId || coDocPreviews[co.index]?.profile?.rejection?.backOfficeDocumentRejectionId;
-      const currentCoRejId = coRej?.backOfficeDocumentRejectionId;
-      const coNeedsRefresh =
-        !coDocPreviews[co.index]?.profile ||
-        (currentCoRejId && prevCoRejId !== currentCoRejId) ||
-        (coRej?.status === 'Resubmitted' && !coDocPreviews[co.index]?.profile?.isComparison);
-
-      if (coNeedsRefresh && co.kycDocumentId) {
-        setCoDocPreviews((prev) => ({
-          ...prev,
-          [co.index]: {
-            ...(prev[co.index] || {}),
-            profile: { loading: true, error: null, url: null },
-          },
-        }));
-
+    // ── STEP 2: CO-APPLICANTS PROFILE IMAGES (CONCURRENT TASKS) ──────
+    (coApplicants || []).forEach((co) => {
+      if (!co.kycDocumentId) return;
+      (async () => {
+        const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 2, co.sequence || co.number || (co.index + 1));
         if (coRej && coRej.status === 'Resubmitted') {
           const oldPromise = coRej.originalDocumentPath
             ? fetchKycDocByPath(coRej.originalDocumentPath, `CoApplicant_${co.number}_Profile_Old.jpg`)
@@ -4499,63 +6088,55 @@ export default function CustomerVerification() {
             ? fetchKycDocByPath(coRej.currentDocumentPath, `CoApplicant_${co.number}_Profile.jpg`)
             : fetchKycDocBlob(co.kycDocumentId, 'profile-image', `CoApplicant_${co.number}_Profile`);
 
-          Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
-            setCoDocPreviews((prev) => ({
-              ...prev,
-              [co.index]: {
-                ...(prev[co.index] || {}),
-                profile: {
-                  loading: false,
-                  error: null,
-                  isComparison: true,
-                  comparison: {
-                    oldDoc: oldRes,
-                    newDoc: newRes,
-                    hasOldVersion: Boolean(oldRes?.url),
-                    hasNewVersion: Boolean(newRes?.url),
-                    note: !oldRes?.url
-                      ? (!coRej.originalDocumentPath
-                          ? 'Prior version path was not recorded for this rejection.'
-                          : (oldRes?.error || 'Previous version could not be retrieved from server.'))
-                      : null,
-                    rejection: coRej,
-                  },
-                  url: newRes?.url || oldRes?.url || null,
-                  fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_Profile.jpg`,
-                  size: newRes?.size || oldRes?.size || null,
-                  isImage: true,
-                  isPdf: false,
+          const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+          if (currentGen !== previewFetchGenRef.current) return;
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              profile: {
+                loading: false,
+                error: null,
+                isComparison: true,
+                comparison: {
+                  oldDoc: oldRes,
+                  newDoc: newRes,
+                  hasOldVersion: Boolean(oldRes?.url),
+                  hasNewVersion: Boolean(newRes?.url),
+                  note: !oldRes?.url
+                    ? (!coRej.originalDocumentPath
+                        ? 'Prior version path was not recorded for this rejection.'
+                        : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                    : null,
                   rejection: coRej,
                 },
+                url: newRes?.url || oldRes?.url || null,
+                fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_Profile.jpg`,
+                size: newRes?.size || oldRes?.size || null,
+                isImage: true,
+                isPdf: false,
+                rejection: coRej,
               },
-            }));
-          });
+            },
+          }));
         } else {
-          fetchKycDocBlob(co.kycDocumentId, 'profile-image', `CoApplicant_${co.number}_Profile`).then((res) => {
-            setCoDocPreviews((prev) => ({
-              ...prev,
-              [co.index]: {
-                ...(prev[co.index] || {}),
-                profile: { ...res, isComparison: false, comparison: null, rejection: coRej },
-              },
-            }));
-          });
+          const res = await fetchKycDocBlob(co.kycDocumentId, 'profile-image', `CoApplicant_${co.number}_Profile`);
+          if (currentGen !== previewFetchGenRef.current) return;
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              profile: { ...res, isComparison: false, comparison: null, rejection: coRej },
+            },
+          }));
         }
-      }
+      })();
     });
 
-    // ── STEP 3: AADHAAR CARD ───────────────────────────────────────
-    const appAadhaarRej = getActiveRejectionForApplicant(3, aadhaarDocTypeId);
-    const prevAadhaarRejId = docPreviews.aadhaar?.comparison?.rejection?.backOfficeDocumentRejectionId || docPreviews.aadhaar?.rejection?.backOfficeDocumentRejectionId;
-    const currentAadhaarRejId = appAadhaarRej?.backOfficeDocumentRejectionId;
-    const aadhaarNeedsRefresh =
-      !docPreviews.aadhaar ||
-      (currentAadhaarRejId && prevAadhaarRejId !== currentAadhaarRejId) ||
-      (appAadhaarRej?.status === 'Resubmitted' && !docPreviews.aadhaar?.isComparison);
-
-    if (aadhaarNeedsRefresh) {
+    // ── STEP 3: AADHAAR CARD (CONCURRENT TASK) ───────────────────────
+    (async () => {
+      const appAadhaarRej = getActiveRejectionForApplicant(3, aadhaarDocTypeId);
       const appRej = appAadhaarRej;
-      setDocPreviews((prev) => ({ ...prev, aadhaar: { loading: true, error: null, url: null } }));
 
       if (appRej && appRej.status === 'Resubmitted') {
         const { oldDoc, newDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 3, docTypeMasterMap);
@@ -4566,99 +6147,93 @@ export default function CustomerVerification() {
           ? fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Aadhaar')
           : (newDoc ? downloadAndPrepareDoc(newDoc) : (applicantKycId ? fetchKycDocBlob(applicantKycId, 'aadhar', 'Applicant_Aadhaar') : Promise.resolve(null)));
 
-        Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
+        const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+        if (currentGen !== previewFetchGenRef.current) return;
+        setDocPreviews((prev) => ({
+          ...prev,
+          aadhaar: {
+            loading: false,
+            error: null,
+            isComparison: true,
+            comparison: {
+              oldDoc: oldRes,
+              newDoc: newRes,
+              hasOldVersion: Boolean(oldRes?.url),
+              hasNewVersion: Boolean(newRes?.url),
+              note: !oldRes?.url
+                ? (!appRej.originalDocumentPath
+                    ? 'Prior version path was not recorded for this rejection.'
+                    : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                : null,
+              rejection: appRej,
+            },
+            url: newRes?.url || oldRes?.url || null,
+            doc: newRes?.doc || oldRes?.doc || null,
+            fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_Aadhaar.pdf',
+            size: newRes?.size || oldRes?.size || null,
+            isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
+            isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+            rejection: appRej,
+          },
+        }));
+      } else {
+        const latestDoc = selectLatestApplicantDoc(combinedDocs, 'AADHAAR', docTypeMasterMap, 0);
+        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 3, docTypeMasterMap);
+        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc || latestDoc);
+
+        if (targetDoc) {
+          const res = await downloadAndPrepareDoc(targetDoc);
+          if (currentGen !== previewFetchGenRef.current) return;
           setDocPreviews((prev) => ({
             ...prev,
             aadhaar: {
               loading: false,
-              error: null,
-              isComparison: true,
-              comparison: {
-                oldDoc: oldRes,
-                newDoc: newRes,
-                hasOldVersion: Boolean(oldRes?.url),
-                hasNewVersion: Boolean(newRes?.url),
-                note: !oldRes?.url
-                  ? (!appRej.originalDocumentPath
-                      ? 'Prior version path was not recorded for this rejection.'
-                      : (oldRes?.error || 'Previous version could not be retrieved from server.'))
-                  : null,
-                rejection: appRej,
-              },
-              url: newRes?.url || oldRes?.url || null,
-              doc: newRes?.doc || oldRes?.doc || null,
-              fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_Aadhaar.pdf',
-              size: newRes?.size || oldRes?.size || null,
-              isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
-              isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+              error: res ? null : 'Failed to download Aadhaar document.',
+              isComparison: false,
+              comparison: null,
+              url: res?.url || null,
+              doc: targetDoc,
+              fileName: res?.fileName || targetDoc.fileName || 'Applicant_Aadhaar.pdf',
+              size: res?.size || null,
+              isPdf: Boolean(res?.isPdf),
+              isImage: Boolean(res?.isImage),
               rejection: appRej,
             },
           }));
-        });
-      } else {
-        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 3, docTypeMasterMap);
-        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc);
-
-        if (targetDoc) {
-          downloadAndPrepareDoc(targetDoc).then((res) => {
-            setDocPreviews((prev) => ({
-              ...prev,
-              aadhaar: {
-                loading: false,
-                error: res ? null : 'Failed to download Aadhaar document.',
-                isComparison: false,
-                comparison: null,
-                url: res?.url || null,
-                doc: targetDoc,
-                fileName: res?.fileName || targetDoc.fileName || 'Applicant_Aadhaar.pdf',
-                size: res?.size || null,
-                isPdf: Boolean(res?.isPdf),
-                isImage: Boolean(res?.isImage),
-                rejection: appRej,
-              },
-            }));
-          });
         } else if (appRej?.currentDocumentPath) {
-          fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Aadhaar').then((res) => {
-            setDocPreviews((prev) => ({
-              ...prev,
-              aadhaar: {
-                ...res,
-                isComparison: false,
-                comparison: null,
-                rejection: appRej,
-              },
-            }));
-          });
+          const res = await fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Aadhaar');
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            aadhaar: {
+              ...res,
+              isComparison: false,
+              comparison: null,
+              rejection: appRej,
+            },
+          }));
         } else if (applicantKycId) {
-          fetchKycDocBlob(applicantKycId, 'aadhar', 'Applicant_Aadhaar').then((res) => {
-            setDocPreviews((prev) => ({ ...prev, aadhaar: { ...res, isComparison: false, comparison: null, rejection: appRej } }));
-          });
+          const res = await fetchKycDocBlob(applicantKycId, 'aadhar', 'Applicant_Aadhaar');
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            aadhaar: { ...res, isComparison: false, comparison: null, rejection: appRej },
+          }));
         } else {
-          setDocPreviews((prev) => ({ ...prev, aadhaar: { loading: false, error: null, doc: null, url: null, rejection: appRej } }));
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            aadhaar: { loading: false, error: null, doc: null, url: null, rejection: appRej },
+          }));
         }
       }
-    }
+    })();
 
-    // Co-Applicants Aadhaar
-    coApplicants.forEach((co) => {
-      const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 3, co.sequence || co.number || (co.index + 1));
-      const prevCoAadhaarRejId = coDocPreviews[co.index]?.aadhaar?.comparison?.rejection?.backOfficeDocumentRejectionId || coDocPreviews[co.index]?.aadhaar?.rejection?.backOfficeDocumentRejectionId;
-      const currentCoAadhaarRejId = coRej?.backOfficeDocumentRejectionId;
-      const coAadhaarNeedsRefresh =
-        !coDocPreviews[co.index]?.aadhaar ||
-        (currentCoAadhaarRejId && prevCoAadhaarRejId !== currentCoAadhaarRejId) ||
-        (coRej?.status === 'Resubmitted' && !coDocPreviews[co.index]?.aadhaar?.isComparison);
-
-      if (coAadhaarNeedsRefresh && co.kycDocumentId) {
-        setCoDocPreviews((prev) => ({
-          ...prev,
-          [co.index]: {
-            ...(prev[co.index] || {}),
-            aadhaar: { loading: true, error: null, url: null },
-          },
-        }));
-
+    // ── STEP 3: CO-APPLICANTS AADHAAR (CONCURRENT TASKS) ─────────────
+    (coApplicants || []).forEach((co) => {
+      if (!co.kycDocumentId) return;
+      (async () => {
+        const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 3, co.sequence || co.number || (co.index + 1));
         if (coRej && coRej.status === 'Resubmitted') {
           const oldPromise = coRej.originalDocumentPath
             ? fetchKycDocByPath(coRej.originalDocumentPath, `CoApplicant_${co.number}_Aadhaar_Old`)
@@ -4667,63 +6242,55 @@ export default function CustomerVerification() {
             ? fetchKycDocByPath(coRej.currentDocumentPath, `CoApplicant_${co.number}_Aadhaar`)
             : fetchKycDocBlob(co.kycDocumentId, 'aadhar', `CoApplicant_${co.number}_Aadhaar`);
 
-          Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
-            setCoDocPreviews((prev) => ({
-              ...prev,
-              [co.index]: {
-                ...(prev[co.index] || {}),
-                aadhaar: {
-                  loading: false,
-                  error: null,
-                  isComparison: true,
-                  comparison: {
-                    oldDoc: oldRes,
-                    newDoc: newRes,
-                    hasOldVersion: Boolean(oldRes?.url),
-                    hasNewVersion: Boolean(newRes?.url),
-                    note: !oldRes?.url
-                      ? (!coRej.originalDocumentPath
-                          ? 'Prior version path was not recorded for this rejection.'
-                          : (oldRes?.error || 'Previous version could not be retrieved from server.'))
-                      : null,
-                    rejection: coRej,
-                  },
-                  url: newRes?.url || oldRes?.url || null,
-                  fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_Aadhaar`,
-                  size: newRes?.size || oldRes?.size || null,
-                  isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
-                  isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+          const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+          if (currentGen !== previewFetchGenRef.current) return;
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              aadhaar: {
+                loading: false,
+                error: null,
+                isComparison: true,
+                comparison: {
+                  oldDoc: oldRes,
+                  newDoc: newRes,
+                  hasOldVersion: Boolean(oldRes?.url),
+                  hasNewVersion: Boolean(newRes?.url),
+                  note: !oldRes?.url
+                    ? (!coRej.originalDocumentPath
+                        ? 'Prior version path was not recorded for this rejection.'
+                        : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                    : null,
                   rejection: coRej,
                 },
+                url: newRes?.url || oldRes?.url || null,
+                fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_Aadhaar`,
+                size: newRes?.size || oldRes?.size || null,
+                isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
+                isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+                rejection: coRej,
               },
-            }));
-          });
+            },
+          }));
         } else {
-          fetchKycDocBlob(co.kycDocumentId, 'aadhar', `CoApplicant_${co.number}_Aadhaar`).then((res) => {
-            setCoDocPreviews((prev) => ({
-              ...prev,
-              [co.index]: {
-                ...(prev[co.index] || {}),
-                aadhaar: { ...res, isComparison: false, comparison: null, rejection: coRej },
-              },
-            }));
-          });
+          const res = await fetchKycDocBlob(co.kycDocumentId, 'aadhar', `CoApplicant_${co.number}_Aadhaar`);
+          if (currentGen !== previewFetchGenRef.current) return;
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              aadhaar: { ...res, isComparison: false, comparison: null, rejection: coRej },
+            },
+          }));
         }
-      }
+      })();
     });
 
-    // ── STEP 4: PAN CARD ───────────────────────────────────────────
-    const appPanRej = getActiveRejectionForApplicant(4, panDocTypeId);
-    const prevPanRejId = docPreviews.pan?.comparison?.rejection?.backOfficeDocumentRejectionId || docPreviews.pan?.rejection?.backOfficeDocumentRejectionId;
-    const currentPanRejId = appPanRej?.backOfficeDocumentRejectionId;
-    const panNeedsRefresh =
-      !docPreviews.pan ||
-      (currentPanRejId && prevPanRejId !== currentPanRejId) ||
-      (appPanRej?.status === 'Resubmitted' && !docPreviews.pan?.isComparison);
-
-    if (panNeedsRefresh) {
+    // ── STEP 4: PAN CARD (CONCURRENT TASK) ───────────────────────────
+    (async () => {
+      const appPanRej = getActiveRejectionForApplicant(4, panDocTypeId);
       const appRej = appPanRej;
-      setDocPreviews((prev) => ({ ...prev, pan: { loading: true, error: null, url: null } }));
 
       if (appRej && appRej.status === 'Resubmitted') {
         const { oldDoc, newDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 4, docTypeMasterMap);
@@ -4734,99 +6301,93 @@ export default function CustomerVerification() {
           ? fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_PAN')
           : (newDoc ? downloadAndPrepareDoc(newDoc) : (applicantKycId ? fetchKycDocBlob(applicantKycId, 'pan', 'Applicant_PAN') : Promise.resolve(null)));
 
-        Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
+        const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+        if (currentGen !== previewFetchGenRef.current) return;
+        setDocPreviews((prev) => ({
+          ...prev,
+          pan: {
+            loading: false,
+            error: null,
+            isComparison: true,
+            comparison: {
+              oldDoc: oldRes,
+              newDoc: newRes,
+              hasOldVersion: Boolean(oldRes?.url),
+              hasNewVersion: Boolean(newRes?.url),
+              note: !oldRes?.url
+                ? (!appRej.originalDocumentPath
+                    ? 'Prior version path was not recorded for this rejection.'
+                    : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                : null,
+              rejection: appRej,
+            },
+            url: newRes?.url || oldRes?.url || null,
+            doc: newRes?.doc || oldRes?.doc || null,
+            fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_PAN.pdf',
+            size: newRes?.size || oldRes?.size || null,
+            isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
+            isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+            rejection: appRej,
+          },
+        }));
+      } else {
+        const latestDoc = selectLatestApplicantDoc(combinedDocs, 'PAN', docTypeMasterMap, 0);
+        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 4, docTypeMasterMap);
+        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc || latestDoc);
+
+        if (targetDoc) {
+          const res = await downloadAndPrepareDoc(targetDoc);
+          if (currentGen !== previewFetchGenRef.current) return;
           setDocPreviews((prev) => ({
             ...prev,
             pan: {
               loading: false,
-              error: null,
-              isComparison: true,
-              comparison: {
-                oldDoc: oldRes,
-                newDoc: newRes,
-                hasOldVersion: Boolean(oldRes?.url),
-                hasNewVersion: Boolean(newRes?.url),
-                note: !oldRes?.url
-                  ? (!appRej.originalDocumentPath
-                      ? 'Prior version path was not recorded for this rejection.'
-                      : (oldRes?.error || 'Previous version could not be retrieved from server.'))
-                  : null,
-                rejection: appRej,
-              },
-              url: newRes?.url || oldRes?.url || null,
-              doc: newRes?.doc || oldRes?.doc || null,
-              fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_PAN.pdf',
-              size: newRes?.size || oldRes?.size || null,
-              isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
-              isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+              error: res ? null : 'Failed to download PAN document.',
+              isComparison: false,
+              comparison: null,
+              url: res?.url || null,
+              doc: targetDoc,
+              fileName: res?.fileName || targetDoc.fileName || 'Applicant_PAN.pdf',
+              size: res?.size || null,
+              isPdf: Boolean(res?.isPdf),
+              isImage: Boolean(res?.isImage),
               rejection: appRej,
             },
           }));
-        });
-      } else {
-        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 4, docTypeMasterMap);
-        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc);
-
-        if (targetDoc) {
-          downloadAndPrepareDoc(targetDoc).then((res) => {
-            setDocPreviews((prev) => ({
-              ...prev,
-              pan: {
-                loading: false,
-                error: res ? null : 'Failed to download PAN document.',
-                isComparison: false,
-                comparison: null,
-                url: res?.url || null,
-                doc: targetDoc,
-                fileName: res?.fileName || targetDoc.fileName || 'Applicant_PAN.pdf',
-                size: res?.size || null,
-                isPdf: Boolean(res?.isPdf),
-                isImage: Boolean(res?.isImage),
-                rejection: appRej,
-              },
-            }));
-          });
         } else if (appRej?.currentDocumentPath) {
-          fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_PAN').then((res) => {
-            setDocPreviews((prev) => ({
-              ...prev,
-              pan: {
-                ...res,
-                isComparison: false,
-                comparison: null,
-                rejection: appRej,
-              },
-            }));
-          });
+          const res = await fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_PAN');
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            pan: {
+              ...res,
+              isComparison: false,
+              comparison: null,
+              rejection: appRej,
+            },
+          }));
         } else if (applicantKycId) {
-          fetchKycDocBlob(applicantKycId, 'pan', 'Applicant_PAN').then((res) => {
-            setDocPreviews((prev) => ({ ...prev, pan: { ...res, isComparison: false, comparison: null, rejection: appRej } }));
-          });
+          const res = await fetchKycDocBlob(applicantKycId, 'pan', 'Applicant_PAN');
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            pan: { ...res, isComparison: false, comparison: null, rejection: appRej },
+          }));
         } else {
-          setDocPreviews((prev) => ({ ...prev, pan: { loading: false, error: null, doc: null, url: null, rejection: appRej } }));
+          if (currentGen !== previewFetchGenRef.current) return;
+          setDocPreviews((prev) => ({
+            ...prev,
+            pan: { loading: false, error: null, doc: null, url: null, rejection: appRej },
+          }));
         }
       }
-    }
+    })();
 
-    // Co-Applicants PAN
-    coApplicants.forEach((co) => {
-      const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 4, co.sequence || co.number || (co.index + 1));
-      const prevCoPanRejId = coDocPreviews[co.index]?.pan?.comparison?.rejection?.backOfficeDocumentRejectionId || coDocPreviews[co.index]?.pan?.rejection?.backOfficeDocumentRejectionId;
-      const currentCoPanRejId = coRej?.backOfficeDocumentRejectionId;
-      const coPanNeedsRefresh =
-        !coDocPreviews[co.index]?.pan ||
-        (currentCoPanRejId && prevCoPanRejId !== currentCoPanRejId) ||
-        (coRej?.status === 'Resubmitted' && !coDocPreviews[co.index]?.pan?.isComparison);
-
-      if (coPanNeedsRefresh && co.kycDocumentId) {
-        setCoDocPreviews((prev) => ({
-          ...prev,
-          [co.index]: {
-            ...(prev[co.index] || {}),
-            pan: { loading: true, error: null, url: null },
-          },
-        }));
-
+    // ── STEP 4: CO-APPLICANTS PAN (CONCURRENT TASKS) ─────────────────
+    (coApplicants || []).forEach((co) => {
+      if (!co.kycDocumentId) return;
+      (async () => {
+        const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 4, co.sequence || co.number || (co.index + 1));
         if (coRej && coRej.status === 'Resubmitted') {
           const oldPromise = coRej.originalDocumentPath
             ? fetchKycDocByPath(coRej.originalDocumentPath, `CoApplicant_${co.number}_PAN_Old`)
@@ -4835,75 +6396,73 @@ export default function CustomerVerification() {
             ? fetchKycDocByPath(coRej.currentDocumentPath, `CoApplicant_${co.number}_PAN`)
             : fetchKycDocBlob(co.kycDocumentId, 'pan', `CoApplicant_${co.number}_PAN`);
 
-          Promise.all([oldPromise, newPromise]).then(([oldRes, newRes]) => {
-            setCoDocPreviews((prev) => ({
-              ...prev,
-              [co.index]: {
-                ...(prev[co.index] || {}),
-                pan: {
-                  loading: false,
-                  error: null,
-                  isComparison: true,
-                  comparison: {
-                    oldDoc: oldRes,
-                    newDoc: newRes,
-                    hasOldVersion: Boolean(oldRes?.url),
-                    hasNewVersion: Boolean(newRes?.url),
-                    note: !oldRes?.url
-                      ? (!coRej.originalDocumentPath
-                          ? 'Prior version path was not recorded for this rejection.'
-                          : (oldRes?.error || 'Previous version could not be retrieved from server.'))
-                      : null,
-                    rejection: coRej,
-                  },
-                  url: newRes?.url || oldRes?.url || null,
-                  fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_PAN`,
-                  size: newRes?.size || oldRes?.size || null,
-                  isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
-                  isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+          const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+          if (currentGen !== previewFetchGenRef.current) return;
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              pan: {
+                loading: false,
+                error: null,
+                isComparison: true,
+                comparison: {
+                  oldDoc: oldRes,
+                  newDoc: newRes,
+                  hasOldVersion: Boolean(oldRes?.url),
+                  hasNewVersion: Boolean(newRes?.url),
+                  note: !oldRes?.url
+                    ? (!coRej.originalDocumentPath
+                        ? 'Prior version path was not recorded for this rejection.'
+                        : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                    : null,
                   rejection: coRej,
                 },
+                url: newRes?.url || oldRes?.url || null,
+                fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_PAN`,
+                size: newRes?.size || oldRes?.size || null,
+                isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
+                isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+                rejection: coRej,
               },
-            }));
-          });
+            },
+          }));
         } else {
-          fetchKycDocBlob(co.kycDocumentId, 'pan', `CoApplicant_${co.number}_PAN`).then((res) => {
-            setCoDocPreviews((prev) => ({
-              ...prev,
-              [co.index]: {
-                ...(prev[co.index] || {}),
-                pan: { ...res, isComparison: false, comparison: null, rejection: coRej },
-              },
-            }));
-          });
+          const res = await fetchKycDocBlob(co.kycDocumentId, 'pan', `CoApplicant_${co.number}_PAN`);
+          if (currentGen !== previewFetchGenRef.current) return;
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              pan: { ...res, isComparison: false, comparison: null, rejection: coRej },
+            },
+          }));
         }
-      }
+      })();
     });
 
-    // ── STEP 7: ZIP ARCHIVE ────────────────────────────────────────
-    if (!docPreviews.zip) {
-      const zipDoc = combinedDocs.find(
-        (d) =>
-          /\.zip$/i.test(d.fileName || '') ||
-          /(zip|archive)/i.test(d.documentTypeName || d.name || d.fileName || '')
-      );
-      if (zipDoc) {
-        setDocPreviews((prev) => ({
-          ...prev,
-          zip: { loading: false, error: null, doc: zipDoc, url: null },
-        }));
-      } else {
-        setDocPreviews((prev) => ({ ...prev, zip: { loading: false, error: null, doc: null, url: null } }));
-      }
+    // ── STEP 7: ZIP ARCHIVE ──────────────────────────────────────────
+    const zipDoc = combinedDocs.find(
+      (d) =>
+        /\.zip$/i.test(d.fileName || '') ||
+        /(zip|archive)/i.test(d.documentTypeName || d.name || d.fileName || '')
+    );
+    if (zipDoc) {
+      setDocPreviews((prev) => ({
+        ...prev,
+        zip: { loading: false, error: null, doc: zipDoc, url: null },
+      }));
+    } else {
+      setDocPreviews((prev) => ({ ...prev, zip: { loading: false, error: null, doc: null, url: null } }));
     }
   }, [
     activeStep,
     verificationData,
+    isCustomerDocsLoading,
+    isSupplementaryKycLoading,
     allCustomerDocs,
     docTypeMasterMap,
     applicationRejections,
-    docPreviews,
-    coDocPreviews,
     downloadAndPrepareDoc,
     fetchKycDocBlob,
     fetchKycDocByPath,
@@ -4912,6 +6471,7 @@ export default function CustomerVerification() {
     getActiveRejectionForApplicant,
     getActiveRejectionForCoApplicant,
     resolveOldAndNewDocs,
+    selectLatestApplicantDoc,
     profileDocTypeId,
     aadhaarDocTypeId,
     panDocTypeId,
@@ -5888,7 +7448,7 @@ export default function CustomerVerification() {
         const blobData = await backOfficeService.downloadCustomerDocument(doc.agentCustomerDocumentId);
         const blobUrl = URL.createObjectURL(new Blob([blobData]));
         handleDownloadFile(blobUrl, fileName);
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
         return;
       } catch (e) {
         console.error('Failed to download customer document:', e);
@@ -5906,7 +7466,7 @@ export default function CustomerVerification() {
           const blob = await res.blob();
           const blobUrl = URL.createObjectURL(blob);
           handleDownloadFile(blobUrl, fileName);
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
           return;
         }
       } catch (err) {
@@ -6565,47 +8125,80 @@ export default function CustomerVerification() {
 
   const totalDeclaredMonthlyEmi = useMemo(() => {
     if (selectedApplicantActiveLoans.length > 0) {
-      return selectedApplicantActiveLoans.reduce((sum, l) => sum + (Number(l.emiAmount) || 0), 0);
+      const activeOnly = selectedApplicantActiveLoans.filter((l) => {
+        if (l.isActive === false) return false;
+        if (l.status && String(l.status).toLowerCase() === 'closed') return false;
+        return true;
+      });
+      return activeOnly.reduce((sum, l) => sum + (Number(l.emiAmount) || 0), 0);
     }
     return currentAssessment?.existingEMI != null ? currentAssessment.existingEMI : 0;
   }, [selectedApplicantActiveLoans, currentAssessment]);
 
-  // Phase 2 Step 14: Track if manual salary entries are dirty / in live preview mode
-  const isSalaryDirty = useMemo(() => {
-    if (!Array.isArray(salaryRows) || salaryRows.length === 0) return false;
-    return salaryRows.some((r) => r.isModified === true || !r.isPersisted);
-  }, [salaryRows]);
-
-  // Phase 2 Step 14: Dynamic 3-month average salary calculation from current salary rows state
-  const liveThreeMonthAverage = useMemo(() => {
-    if (!Array.isArray(salaryRows) || salaryRows.length === 0) return null;
-    const values = salaryRows.map((r) => {
-      if (r.isModified || !r.isPersisted) {
-        if (r.previewConsideredIncome != null && !isNaN(r.previewConsideredIncome)) {
-          return Number(r.previewConsideredIncome) || 0;
-        }
-        const b = Number(r.basicAmount) || 0;
-        const h = Number(r.hraAmount) || 0;
-        const c = Number(r.ccaAmount) || 0;
-        const t = Number(r.taAmount) || 0;
-        const inc = Number(r.incentiveAmount) || 0;
-        const pct = r.incentivePercentApplied === '' ? 0 : Number(r.incentivePercentApplied) || 0;
-        return b + h + c + t + (inc * pct) / 100;
-      }
-      if (r.totalConsideredIncome != null && !isNaN(r.totalConsideredIncome)) {
-        return Number(r.totalConsideredIncome) || 0;
-      }
-      return Number(r.previewConsideredIncome) || 0;
+  // Normal Income Live Previews (Estimated Preview - Non-Authoritative)
+  const normalIncomeMetrics = useMemo(() => {
+    // 1. Primary Income calculations per row
+    const yearCalcs = (Array.isArray(normalIncomeRows) ? normalIncomeRows : []).map((r) => {
+      const pat = Number(r.pat) || 0;
+      const depr = Number(r.depreciation) || 0;
+      const salary = Number(r.salaryToPartners) || 0;
+      const interest = Number(r.interestToRelatedParties) || 0;
+      const computed = pat + depr + salary + interest;
+      return {
+        ...r,
+        computedPrimaryIncome: computed,
+      };
     });
 
-    const hasAny = values.some((v) => v > 0);
-    if (!hasAny) return null;
-    const sum = values.reduce((acc, v) => acc + v, 0);
-    const count = values.length || 3;
-    return sum / count;
-  }, [salaryRows]);
+    const latestRow = yearCalcs.find((r) => r.isLatestFinancialYear) || null;
+    const latestPrimaryBusinessIncome = latestRow ? latestRow.computedPrimaryIncome : 0;
 
-  const computedPreviewAverage = liveThreeMonthAverage;
+    // 2. Other Income calculations per row
+    const otherCalcs = (Array.isArray(normalOtherIncomeRows) ? normalOtherIncomeRows : []).map((r) => {
+      const amt = Number(r.annualIncomeAmount) || 0;
+      const pct =
+        r.considerationPercentage !== '' && !isNaN(Number(r.considerationPercentage))
+          ? Number(r.considerationPercentage)
+          : 100;
+      const considered = Math.round((amt * pct) / 100);
+      return {
+        ...r,
+        computedConsideredAmount: considered,
+      };
+    });
+
+    const totalConsideredOtherIncome = otherCalcs.reduce((sum, r) => sum + r.computedConsideredAmount, 0);
+
+    // 3. Salary Income reference calculation (from existing salaryRows or employment details)
+    let annualSalary = 0;
+    if (liveSalaryAverage > 0) {
+      annualSalary = liveSalaryAverage * 12;
+    } else if (selectedEmploymentRecord?.grossAnnualIncome > 0) {
+      annualSalary = Number(selectedEmploymentRecord.grossAnnualIncome);
+    }
+    const consideredSalaryComponent = Math.round(annualSalary * 0.60);
+
+    // 4. Combined Estimated Monthly Eligible Income
+    // Formula: (((Primary Business Income + Considered Other Income) * 70%) + (Salary Income * 60%)) / 12
+    const estimatedEligibleMonthlyIncome = Math.round(
+      (((latestPrimaryBusinessIncome + totalConsideredOtherIncome) * 0.70) + consideredSalaryComponent) / 12
+    );
+
+    // Eligible EMI = Eligible Monthly Income - Existing Monthly Obligations (FOIR already applied inside Eligible Monthly Income)
+    const estimatedEligibleEMI = Math.max(0, estimatedEligibleMonthlyIncome - (Number(totalDeclaredMonthlyEmi) || 0));
+
+    return {
+      yearCalcs,
+      latestRow,
+      latestPrimaryBusinessIncome,
+      otherCalcs,
+      totalConsideredOtherIncome,
+      annualSalary,
+      consideredSalaryComponent,
+      estimatedEligibleMonthlyIncome,
+      estimatedEligibleEMI,
+    };
+  }, [normalIncomeRows, normalOtherIncomeRows, liveSalaryAverage, selectedEmploymentRecord?.grossAnnualIncome, totalDeclaredMonthlyEmi]);
 
   // Handlers
   const handleFetchCreditReport = () => {
@@ -7078,14 +8671,20 @@ export default function CustomerVerification() {
                               <td className="bo-cv-doc-td-details">
                                 <div className="bo-cv-doc-file-info">
                                   <span className="bo-cv-doc-filename" title={row.fileName}>
-                                    {row.fileName}
+                                    {row.loading ? 'Loading document...' : row.fileName}
                                   </span>
                                   <div className="bo-cv-doc-file-meta">
-                                    {row.fileSize && <span>{formatFileSize(row.fileSize)}</span>}
-                                    {row.fileSize && row.uploadDate && <span>•</span>}
-                                    {row.uploadDate && <span>{formatUploadDate(row.uploadDate)}</span>}
-                                    {!row.fileSize && !row.uploadDate && (
-                                      <span className="bo-cv-doc-meta-empty">{row.hasFile ? 'Uploaded' : 'Not available'}</span>
+                                    {row.loading ? (
+                                      <span className="bo-cv-doc-meta-loading">Fetching preview...</span>
+                                    ) : (
+                                      <>
+                                        {row.fileSize && <span>{formatFileSize(row.fileSize)}</span>}
+                                        {row.fileSize && row.uploadDate && <span>•</span>}
+                                        {row.uploadDate && <span>{formatUploadDate(row.uploadDate)}</span>}
+                                        {!row.fileSize && !row.uploadDate && (
+                                          <span className="bo-cv-doc-meta-empty">{row.hasFile ? 'Uploaded' : 'Not available'}</span>
+                                        )}
+                                      </>
                                     )}
                                   </div>
                                 </div>
@@ -7292,14 +8891,20 @@ export default function CustomerVerification() {
                                 <td className="bo-cv-doc-td-details">
                                   <div className="bo-cv-doc-file-info">
                                     <span className="bo-cv-doc-filename" title={row.fileName}>
-                                      {row.fileName}
+                                      {row.loading ? 'Loading document...' : row.fileName}
                                     </span>
                                     <div className="bo-cv-doc-file-meta">
-                                      {row.fileSize && <span>{formatFileSize(row.fileSize)}</span>}
-                                      {row.fileSize && row.uploadDate && <span>•</span>}
-                                      {row.uploadDate && <span>{formatUploadDate(row.uploadDate)}</span>}
-                                      {!row.fileSize && !row.uploadDate && (
-                                        <span className="bo-cv-doc-meta-empty">{row.hasFile ? 'Uploaded' : 'Not available'}</span>
+                                      {row.loading ? (
+                                        <span className="bo-cv-doc-meta-loading">Fetching preview...</span>
+                                      ) : (
+                                        <>
+                                          {row.fileSize && <span>{formatFileSize(row.fileSize)}</span>}
+                                          {row.fileSize && row.uploadDate && <span>•</span>}
+                                          {row.uploadDate && <span>{formatUploadDate(row.uploadDate)}</span>}
+                                          {!row.fileSize && !row.uploadDate && (
+                                            <span className="bo-cv-doc-meta-empty">{row.hasFile ? 'Uploaded' : 'Not available'}</span>
+                                          )}
+                                        </>
                                       )}
                                     </div>
                                   </div>
@@ -8439,19 +10044,26 @@ export default function CustomerVerification() {
                   ) : (
                     <div className="bo-cv-method-cards-grid">
                       {assessmentMethods.map((method) => {
-                        const isSelected = (method.methodCode || '').toUpperCase() === selectedMethodCode.toUpperCase();
-                        const isIncome = (method.methodCode || '').toUpperCase() === 'INCOME';
+                        const code = (method.methodCode || '').toUpperCase();
+                        const isSelected = code === selectedMethodCode.toUpperCase();
+                        const isIncome = code === 'INCOME';
+                        const isRtr = code === 'RTR';
+                        const isNormalIncome = code === 'NORMAL_INCOME';
                         return (
                           <button
                             key={method.assessmentMethodId || method.methodCode}
                             type="button"
                             className={`bo-cv-method-card ${isSelected ? 'is-selected' : ''}`}
-                            onClick={() => setSelectedMethodCode((method.methodCode || 'INCOME').toUpperCase())}
+                            onClick={() => setSelectedMethodCode(code || 'INCOME')}
                           >
                             <div className="bo-cv-method-card-header">
                               <div className="bo-cv-method-card-icon-wrap">
                                 {isIncome ? (
                                   BadgeIndianRupeeIcon && <BadgeIndianRupeeIcon size={22} />
+                                ) : isRtr ? (
+                                  CreditCardIcon && <CreditCardIcon size={22} />
+                                ) : isNormalIncome ? (
+                                  TrendingUpIcon && <TrendingUpIcon size={22} />
                                 ) : (
                                   BuildingIcon && <BuildingIcon size={22} />
                                 )}
@@ -8462,11 +10074,22 @@ export default function CustomerVerification() {
                             </div>
                             <div className="bo-cv-method-card-content">
                               <h4 className="bo-cv-method-title">
-                                {method.methodName || (isIncome ? 'Income Method' : 'ABB Method')}
+                                {method.methodName ||
+                                  (isIncome
+                                    ? 'Income Method'
+                                    : isRtr
+                                    ? 'RTR Method'
+                                    : isNormalIncome
+                                    ? 'Normal Income'
+                                    : 'ABB Method')}
                               </h4>
                               <p className="bo-cv-method-desc">
                                 {isIncome
                                   ? 'Evaluates eligibility from 3-month salary breakdown (Basic, HRA, CCA, TA, Incentives) and policy FOIR.'
+                                  : isRtr
+                                  ? 'Evaluates eligibility from live loan repayment track records (MOB, ODs, Bounces) and RTR Norm multiplier rules.'
+                                  : isNormalIncome
+                                  ? 'Evaluates eligibility from multi-year business financials (PAT, Depreciation, Partner Salary, Interest) and other income streams.'
                                   : 'Evaluates eligibility from multi-account banking conduct and 3-point monthly average balances (5th, 15th, 25th).'}
                               </p>
                             </div>
@@ -8539,8 +10162,8 @@ export default function CustomerVerification() {
                     </div>
                   </div>
 
-                  {/* Missing Employment Warning Strip */}
-                  {!selectedEmploymentIncomeDetailsId && (
+                  {/* Missing Employment Warning Strip (Income/ABB methods only) */}
+                  {!selectedEmploymentIncomeDetailsId && selectedMethodCode !== 'RTR' && (
                     <div className="bo-cv-assess-warning-strip">
                       <div className="bo-cv-assess-warning-icon">
                         {AlertCircleIcon && <AlertCircleIcon size={18} />}
@@ -8619,7 +10242,13 @@ export default function CustomerVerification() {
                     <div className="bo-cv-assess-info-cell">
                       <span className="bo-cv-assess-info-label">Assessment Method</span>
                       <strong className="bo-cv-assess-info-val bo-cv-method-val">
-                        {selectedMethodCode === 'INCOME' ? 'Income Method' : 'ABB Method'}
+                        {selectedMethodCode === 'INCOME'
+                          ? 'Income Method'
+                          : selectedMethodCode === 'RTR'
+                          ? 'RTR Method'
+                          : selectedMethodCode === 'NORMAL_INCOME'
+                          ? 'Normal Income'
+                          : 'ABB Method'}
                       </strong>
                     </div>
 
@@ -8684,17 +10313,31 @@ export default function CustomerVerification() {
                         <h3 className="bo-cv-assess-section-title">
                           {selectedMethodCode === 'INCOME'
                             ? 'Manual Income Assessment Workspace'
+                            : selectedMethodCode === 'RTR'
+                            ? 'Repayment Track Record (RTR) Loan Facilities'
+                            : selectedMethodCode === 'NORMAL_INCOME'
+                            ? 'Normal Income Assessment Workspace'
                             : 'Average Bank Balance (ABB) Method Workspace'}
                         </h3>
                         <p className="bo-cv-assess-section-sub">
                           {selectedMethodCode === 'INCOME'
                             ? `Enter & review 3-month salary breakdown and allowances for ${selectedApplicant?.name || 'Applicant'}.`
+                            : selectedMethodCode === 'RTR'
+                            ? `Configure and review active loan repayment track records and performance history for ${selectedApplicant?.name || 'Applicant'}.`
+                            : selectedMethodCode === 'NORMAL_INCOME'
+                            ? `Configure multi-year business financials (PAT, Depreciation, Partner Salary, Interest) and other income streams for ${selectedApplicant?.name || 'Applicant'}.`
                             : `Multi-account banking analysis and monthly 3-point average balance verification for ${selectedApplicant?.name || 'Applicant'}.`}
                         </p>
                       </div>
                     </div>
                     <span className="bo-cv-phase-tag is-method">
-                      {selectedMethodCode === 'INCOME' ? 'Income Method' : 'ABB Method'}
+                      {selectedMethodCode === 'INCOME'
+                        ? 'Income Method'
+                        : selectedMethodCode === 'RTR'
+                        ? 'RTR Method'
+                        : selectedMethodCode === 'NORMAL_INCOME'
+                        ? 'Normal Income'
+                        : 'ABB Method'}
                     </span>
                   </div>
 
@@ -8779,6 +10422,7 @@ export default function CustomerVerification() {
                               <th className="th-num">TA (₹)</th>
                               <th className="th-num">Incentive (₹)</th>
                               <th className="th-num">Incentive Applied (%)</th>
+                              <th className="th-num">Deductions (₹)</th>
                               <th className="th-num th-readonly">Considered Incentive (₹)</th>
                               <th className="th-num th-readonly">Considered Income (₹)</th>
                               {salaryRows.length > 3 && <th className="th-action">Action</th>}
@@ -8883,6 +10527,19 @@ export default function CustomerVerification() {
                                       aria-label={`Incentive Percent Applied for Row ${idx + 1}`}
                                     />
                                   </td>
+                                  <td className="td-num">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="100"
+                                      placeholder="0"
+                                      className="bo-cv-salary-input"
+                                      value={row.deductionAmount === 0 ? '0' : row.deductionAmount || ''}
+                                      onChange={(e) => handleSalaryRowChange(idx, 'deductionAmount', e.target.value)}
+                                      disabled={salarySaving}
+                                      aria-label={`Deductions for Row ${idx + 1}`}
+                                    />
+                                  </td>
                                   <td className="td-num td-readonly">
                                     <span className="bo-cv-salary-calc-val">
                                       {row.previewConsideredIncentive != null
@@ -8925,13 +10582,111 @@ export default function CustomerVerification() {
                         </table>
                       </div>
 
+                      {/* Other Income Assessment Top Bar & Table */}
+                      <div className="bo-cv-salary-top-bar" style={{ marginTop: '20px' }}>
+                        <div className="bo-cv-salary-top-left">
+                          <h4 className="bo-cv-salary-top-title">Other Income Assessment</h4>
+                          <span className="bo-cv-salary-count-badge">
+                            {otherIncomeRows.length} {otherIncomeRows.length === 1 ? 'Source' : 'Sources'} Configured
+                          </span>
+                          {liveTotalOtherIncome > 0 && (
+                            <span className="bo-cv-salary-count-badge" style={{ background: '#e0f2fe', color: '#0369a1', borderColor: '#bae6fd' }}>
+                              Total Other Income: {formatCurrency(liveTotalOtherIncome)}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="bo-btn bo-btn--outline bo-btn--sm bo-cv-salary-add-btn"
+                          onClick={handleAddOtherIncomeRow}
+                          disabled={otherIncomeSaving}
+                        >
+                          {PlusIcon ? <PlusIcon size={13} /> : '+'}
+                          <span>Add Other Income</span>
+                        </button>
+                      </div>
+
+                      {otherIncomeLoading ? (
+                        <div className="bo-cv-assess-loading-box">
+                          <div className="bo-cv-loading-spinner" />
+                          <span>Loading applicant other income records...</span>
+                        </div>
+                      ) : otherIncomeError ? (
+                        <div className="bo-cv-assess-error-box">
+                          <div className="bo-cv-assess-error-msg">
+                            {AlertTriangleIcon && <AlertTriangleIcon size={16} />}
+                            <span>{otherIncomeError}</span>
+                          </div>
+                        </div>
+                      ) : otherIncomeRows.length === 0 ? (
+                        <div style={{ padding: '16px', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '8px', textAlign: 'center', marginBottom: '14px' }}>
+                          <p style={{ margin: 0, color: '#64748b', fontSize: '13px' }}>
+                            No additional income sources configured for {selectedApplicant?.name || 'this applicant'}. If the applicant has rental, agricultural, business profit, or other income streams, click <strong>"Add Other Income"</strong>.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="bo-cv-salary-table-wrapper" style={{ marginBottom: '14px' }}>
+                          <table className="bo-cv-salary-table" aria-label="Other Income Breakdown">
+                            <thead>
+                              <tr>
+                                <th style={{ minWidth: '220px' }}>Income Name</th>
+                                <th className="th-num" style={{ minWidth: '160px' }}>Income Amount (₹)</th>
+                                <th className="th-action" style={{ width: '60px' }}>Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {otherIncomeRows.map((row, idx) => (
+                                <tr key={row.id || `other-inc-${idx}`} className={row.isPersisted ? 'is-persisted-row' : 'is-draft-row'}>
+                                  <td>
+                                    <input
+                                      type="text"
+                                      placeholder="e.g. Rent, Business, Agriculture"
+                                      className="bo-cv-salary-input"
+                                      value={row.incomeName || ''}
+                                      onChange={(e) => handleOtherIncomeRowChange(idx, 'incomeName', e.target.value)}
+                                      disabled={otherIncomeSaving}
+                                      style={{ textAlign: 'left' }}
+                                      aria-label={`Income Name for Row ${idx + 1}`}
+                                    />
+                                  </td>
+                                  <td className="td-num">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="500"
+                                      placeholder="0"
+                                      className="bo-cv-salary-input"
+                                      value={row.incomeAmount === 0 ? '0' : row.incomeAmount || ''}
+                                      onChange={(e) => handleOtherIncomeRowChange(idx, 'incomeAmount', e.target.value)}
+                                      disabled={otherIncomeSaving}
+                                      aria-label={`Income Amount for Row ${idx + 1}`}
+                                    />
+                                  </td>
+                                  <td className="td-action">
+                                    <button
+                                      type="button"
+                                      className="bo-cv-salary-remove-btn"
+                                      onClick={() => handleRemoveOtherIncomeRow(idx)}
+                                      title="Remove this other income stream"
+                                      aria-label={`Remove Other Income Row ${idx + 1}`}
+                                    >
+                                      {XIcon ? <XIcon size={14} /> : '✕'}
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
                       {/* Underwriting Guidance Note */}
                       <div className="bo-cv-salary-info-strip">
                         <div className="bo-cv-salary-info-icon">
                           {InfoIcon && <InfoIcon size={16} />}
                         </div>
                         <div className="bo-cv-salary-info-text">
-                          <strong>Manual Salary Entry Workspace:</strong> Enter/edit salary breakdown values. Live previews update instantly on keystroke with zero network requests. Values will be automatically synchronized with the server upon running eligibility calculation.
+                          <strong>Manual Income Assessment Workspace:</strong> Enter/edit monthly salary breakdown and additional income sources. Live previews calculate dynamically with zero network requests. All values will be synchronized with the server upon running eligibility calculation.
                         </div>
                       </div>
 
@@ -8939,19 +10694,22 @@ export default function CustomerVerification() {
                       <div className="bo-cv-salary-summary-strip">
                         <div className="bo-cv-salary-summary-strip-header">
                           <div className="bo-cv-salary-summary-strip-title-wrap">
-                            <span className="bo-cv-salary-summary-strip-title">{salaryRows.length}-Month Income Summary</span>
+                            <span className="bo-cv-salary-summary-strip-title">
+                              Income Assessment Summary ({salaryRows.length} Months)
+                            </span>
                             <span className="bo-cv-salary-summary-strip-sub">
-                              {selectedApplicant?.name || 'Applicant'} &bull; Salaried Evaluation
+                              {selectedApplicant?.name || 'Applicant'} &bull; Salaried &amp; Other Income Evaluation
                             </span>
                           </div>
                           <span className="bo-cv-salary-summary-strip-meta">
                             Salary Months: {salaryRows.filter((r) => r.salaryMonth && r.basicAmount !== '' && !isNaN(Number(r.basicAmount))).length} / {salaryRows.length}
+                            {otherIncomeRows.length > 0 && ` • Other Sources: ${otherIncomeRows.length}`}
                           </span>
                         </div>
                         <div className="bo-cv-salary-summary-strip-grid">
                           {salaryRows.map((r, idx) => {
                             const isPersisted = r.isPersisted && !r.isModified;
-                            const val = r.previewConsideredIncome != null && r.previewConsideredIncome !== 0
+                            const val = r.previewConsideredIncome != null && r.previewConsideredIncome !== ''
                               ? r.previewConsideredIncome
                               : r.totalConsideredIncome;
                             const monthLabel = formatSalaryMonthDisplay(r.monthDisplay) || `Month ${idx + 1}`;
@@ -8970,31 +10728,816 @@ export default function CustomerVerification() {
                               </div>
                             );
                           })}
-                          {(() => {
-                            const isBackendConfirmed = !isSalaryDirty && currentAssessment?.totalConsideredIncome != null;
-                            const displayAverage = isBackendConfirmed
-                              ? currentAssessment.totalConsideredIncome
-                              : liveThreeMonthAverage;
 
-                            return (
-                              <div className="bo-cv-summary-strip-cell is-average">
-                                <div className="bo-cv-summary-strip-top">
-                                  <span className="bo-cv-summary-strip-label">{salaryRows.length}-Month Average</span>
-                                  <span className={`bo-cv-summary-strip-pill ${isBackendConfirmed ? 'is-backend' : 'is-preview'}`}>
-                                    {isBackendConfirmed ? 'Backend Confirmed' : 'Live Preview'}
-                                  </span>
-                                </div>
-                                <strong className="bo-cv-summary-strip-val is-avg">
-                                  {displayAverage != null ? formatFoirCurrency(displayAverage) : '—'}
-                                </strong>
-                                <span className="bo-cv-summary-strip-sub">
-                                  {isBackendConfirmed
-                                    ? 'Authoritative server average'
-                                    : 'Calculated from current salary entries'}
+                          {/* Multi-Month Average Salary */}
+                          <div className="bo-cv-summary-strip-cell is-average">
+                            <div className="bo-cv-summary-strip-top">
+                              <span className="bo-cv-summary-strip-label">Average Salary Income</span>
+                              <span className={`bo-cv-summary-strip-pill ${!isSalaryDirty ? 'is-backend' : 'is-preview'}`}>
+                                {!isSalaryDirty ? 'Confirmed' : 'Live Preview'}
+                              </span>
+                            </div>
+                            <strong className="bo-cv-summary-strip-val is-avg">
+                              {liveSalaryAverage != null ? formatFoirCurrency(liveSalaryAverage) : '—'}
+                            </strong>
+                            <span className="bo-cv-summary-strip-sub">
+                              Average across {salaryRows.length} configured months
+                            </span>
+                          </div>
+
+                          {/* Total Other Income Cell (if present) */}
+                          {liveTotalOtherIncome > 0 && (
+                            <div className="bo-cv-summary-strip-cell">
+                              <div className="bo-cv-summary-strip-top">
+                                <span className="bo-cv-summary-strip-label">Total Other Income</span>
+                                <span className="bo-cv-summary-strip-pill is-preview">
+                                  {otherIncomeRows.length} {otherIncomeRows.length === 1 ? 'Source' : 'Sources'}
                                 </span>
                               </div>
-                            );
-                          })()}
+                              <strong className="bo-cv-summary-strip-val" style={{ color: '#0369a1' }}>
+                                {formatFoirCurrency(liveTotalOtherIncome)}
+                              </strong>
+                              <span className="bo-cv-summary-strip-sub">
+                                Total additional income
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Final Combined Considered Income Cell */}
+                          <div className="bo-cv-summary-strip-cell is-average" style={{ background: '#ecfdf5', borderColor: '#a7f3d0' }}>
+                            <div className="bo-cv-summary-strip-top">
+                              <span className="bo-cv-summary-strip-label" style={{ color: '#065f46', fontWeight: 600 }}>Final Considered Income</span>
+                              <span className="bo-cv-summary-strip-pill" style={{ background: '#d1fae5', color: '#047857' }}>
+                                Total Considered
+                              </span>
+                            </div>
+                            <strong className="bo-cv-summary-strip-val is-avg" style={{ color: '#047857' }}>
+                              {liveFinalConsideredIncome != null ? formatFoirCurrency(liveFinalConsideredIncome) : '—'}
+                            </strong>
+                            <span className="bo-cv-summary-strip-sub" style={{ color: '#065f46' }}>
+                              {liveTotalOtherIncome > 0
+                                ? `${formatCurrency(liveSalaryAverage)} (Salary) + ${formatCurrency(liveTotalOtherIncome)} (Other)`
+                                : 'Salary income baseline for FOIR capacity'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : selectedMethodCode === 'RTR' ? (
+                    /* Repayment Track Record (RTR) Method Workspace */
+                    <div className="bo-cv-rtr-assessment-wrap">
+                      {/* Loading State */}
+                      {rtrLoansLoading ? (
+                        <div className="bo-cv-assess-loading-box">
+                          <div className="bo-cv-loading-spinner" />
+                          <span>Loading RTR loan facilities...</span>
+                        </div>
+                      ) : rtrLoansError ? (
+                        <div className="bo-cv-assess-error-box">
+                          <div className="bo-cv-assess-error-msg">
+                            {AlertTriangleIcon && <AlertTriangleIcon size={16} />}
+                            <span>{rtrLoansError}</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="bo-btn bo-btn--outline bo-btn--sm"
+                            onClick={() => fetchRTRLoans(calculationAppProdId, selectedApplicantSequence)}
+                          >
+                            {RefreshCwIcon && <RefreshCwIcon size={12} />}
+                            <span>Retry</span>
+                          </button>
+                        </div>
+                      ) : null}
+
+                      {/* RTR Loans Notification Banner */}
+                      {rtrLoansBanner && (
+                        <div className={`bo-cv-salary-banner is-${rtrLoansBanner.type}`}>
+                          <div className="bo-cv-salary-banner-icon">
+                            {rtrLoansBanner.type === 'success' && (CheckCircleIcon ? <CheckCircleIcon size={16} /> : '✓')}
+                            {rtrLoansBanner.type === 'error' && (AlertTriangleIcon ? <AlertTriangleIcon size={16} /> : '⚠️')}
+                            {rtrLoansBanner.type === 'warning' && (AlertCircleIcon ? <AlertCircleIcon size={16} /> : 'ℹ️')}
+                            {rtrLoansBanner.type === 'info' && (InfoIcon ? <InfoIcon size={16} /> : 'ℹ️')}
+                          </div>
+                          <div className="bo-cv-salary-banner-msg">{rtrLoansBanner.message}</div>
+                        </div>
+                      )}
+
+                      {/* Top Bar with Add Loan Action */}
+                      <div className="bo-cv-salary-top-bar">
+                        <div className="bo-cv-salary-top-left">
+                          <h4 className="bo-cv-salary-top-title">Active Loan Facilities</h4>
+                          <span className="bo-cv-salary-count-badge">
+                            {rtrDraftLoans.length} {rtrDraftLoans.length === 1 ? 'Loan' : 'Loans'} Configured
+                          </span>
+                          {rtrSummaryMetrics.validCount > 0 && (
+                            <span className="bo-cv-salary-count-badge" style={{ background: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0' }}>
+                              Total Sanction: {formatCurrency(rtrSummaryMetrics.totalSanction)}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="bo-btn bo-btn--outline bo-btn--sm bo-cv-salary-add-btn"
+                          onClick={handleAddRtrLoanRow}
+                          disabled={rtrLoansSaving}
+                        >
+                          {PlusIcon ? <PlusIcon size={13} /> : '+'}
+                          <span>Add Loan Facility</span>
+                        </button>
+                      </div>
+
+                      {/* RTR Loans Table */}
+                      <div className="bo-cv-salary-table-wrapper">
+                        <table className="bo-cv-salary-table" aria-label="RTR Loan Facilities Table">
+                          <thead>
+                            <tr>
+                              <th style={{ minWidth: '160px' }}>Lender / Bank</th>
+                              <th className="th-num" style={{ minWidth: '130px' }}>Sanction Amount (₹)</th>
+                              <th className="th-num" style={{ minWidth: '130px' }}>Current POS (₹)</th>
+                              <th className="th-month" style={{ minWidth: '130px' }}>EMI Start Date</th>
+                              <th className="th-num" style={{ minWidth: '120px' }}>Monthly EMI (₹)</th>
+                              <th className="th-num" style={{ minWidth: '80px' }}>MOB</th>
+                              <th className="th-num" style={{ minWidth: '85px' }}>OD Count</th>
+                              <th className="th-num" style={{ minWidth: '95px' }}>Bounce Count</th>
+                              <th className="th-status" style={{ minWidth: '110px' }}>RTR Evaluated</th>
+                              <th className="th-action" style={{ minWidth: '60px', textAlign: 'center' }}>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rtrDraftLoans.length === 0 ? (
+                              <tr>
+                                <td colSpan={10} style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>
+                                  No RTR loan facilities configured. Click &quot;Add Loan Facility&quot; below to add a facility.
+                                </td>
+                              </tr>
+                            ) : (
+                              rtrDraftLoans.map((row, idx) => {
+                                const loanPk = Number(row.applicationRTRLoanDetailsId);
+                                const isDraft =
+                                  !row.isPersisted ||
+                                  !row.applicationRTRLoanDetailsId ||
+                                  Number(row.applicationRTRLoanDetailsId) === 0;
+                                const targetSelectedId =
+                                  currentRtrAssessment?.selectedRTRLoanDetailsId != null
+                                    ? Number(currentRtrAssessment.selectedRTRLoanDetailsId)
+                                    : null;
+                                const isSelected =
+                                  targetSelectedId != null && loanPk > 0
+                                    ? loanPk === targetSelectedId
+                                    : Boolean(row.isSelectedForRTR);
+                                return (
+                                  <tr
+                                    key={row.id || `rtr-loan-row-${idx}`}
+                                    className={isSelected ? 'is-rtr-selected-row' : ''}
+                                  >
+                                    <td>
+                                      <input
+                                        type="text"
+                                        placeholder="e.g. HDFC Bank, SBI"
+                                        className="bo-cv-salary-input"
+                                        value={row.lenderName || ''}
+                                        onChange={(e) => handleRtrLoanRowChange(idx, 'lenderName', e.target.value)}
+                                        disabled={rtrLoansSaving}
+                                        style={{ textAlign: 'left' }}
+                                        aria-label={`Lender Name for Loan ${idx + 1}`}
+                                      />
+                                    </td>
+                                    <td className="td-num">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="1000"
+                                        placeholder="0"
+                                        className="bo-cv-salary-input"
+                                        value={row.sanctionAmount === 0 ? '0' : row.sanctionAmount || ''}
+                                        onChange={(e) => handleRtrLoanRowChange(idx, 'sanctionAmount', e.target.value)}
+                                        disabled={rtrLoansSaving}
+                                        aria-label={`Sanction Amount for Loan ${idx + 1}`}
+                                      />
+                                    </td>
+                                    <td className="td-num">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="1000"
+                                        placeholder="0"
+                                        className="bo-cv-salary-input"
+                                        value={row.currentPOS === 0 ? '0' : row.currentPOS || ''}
+                                        onChange={(e) => handleRtrLoanRowChange(idx, 'currentPOS', e.target.value)}
+                                        disabled={rtrLoansSaving}
+                                        aria-label={`Current POS for Loan ${idx + 1}`}
+                                      />
+                                    </td>
+                                    <td className="td-month">
+                                      <input
+                                        type="date"
+                                        className="bo-cv-salary-input is-month"
+                                        value={row.emiStartDate || ''}
+                                        onChange={(e) => handleRtrLoanRowChange(idx, 'emiStartDate', e.target.value)}
+                                        disabled={rtrLoansSaving}
+                                        aria-label={`EMI Start Date for Loan ${idx + 1}`}
+                                      />
+                                    </td>
+                                    <td className="td-num">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="500"
+                                        placeholder="0"
+                                        className="bo-cv-salary-input"
+                                        value={row.emiAmount === 0 ? '0' : row.emiAmount || ''}
+                                        onChange={(e) => handleRtrLoanRowChange(idx, 'emiAmount', e.target.value)}
+                                        disabled={rtrLoansSaving}
+                                        aria-label={`Monthly EMI for Loan ${idx + 1}`}
+                                      />
+                                    </td>
+                                    <td className="td-num">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        placeholder="0"
+                                        className="bo-cv-salary-input"
+                                        value={row.mob === 0 ? '0' : row.mob || ''}
+                                        onChange={(e) => handleRtrLoanRowChange(idx, 'mob', e.target.value)}
+                                        disabled={rtrLoansSaving}
+                                        aria-label={`Months on Book for Loan ${idx + 1}`}
+                                      />
+                                    </td>
+                                    <td className="td-num">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        placeholder="0"
+                                        className="bo-cv-salary-input"
+                                        value={row.odCount === 0 ? '0' : row.odCount ?? 0}
+                                        onChange={(e) => handleRtrLoanRowChange(idx, 'odCount', e.target.value)}
+                                        disabled={rtrLoansSaving}
+                                        aria-label={`OD Count for Loan ${idx + 1}`}
+                                      />
+                                    </td>
+                                    <td className="td-num">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        placeholder="0"
+                                        className="bo-cv-salary-input"
+                                        value={row.bounceCount === 0 ? '0' : row.bounceCount ?? 0}
+                                        onChange={(e) => handleRtrLoanRowChange(idx, 'bounceCount', e.target.value)}
+                                        disabled={rtrLoansSaving}
+                                        aria-label={`Bounce Count for Loan ${idx + 1}`}
+                                      />
+                                    </td>
+                                    <td className="td-status">
+                                      {isSelected ? (
+                                        <span className="bo-cv-salary-status-badge is-saved" title="Selected for RTR assessment by calculation engine">
+                                          Selected ✓
+                                        </span>
+                                      ) : (
+                                        <span className="bo-cv-salary-readonly-val" style={{ color: '#94a3b8' }}>
+                                          —
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="td-action" style={{ textAlign: 'center' }}>
+                                      {isDraft ? (
+                                        <button
+                                          type="button"
+                                          className="bo-cv-loan-row-remove-btn"
+                                          title="Remove unsaved draft facility"
+                                          aria-label={`Remove draft loan facility ${idx + 1}`}
+                                          onClick={() => handleRemoveRtrDraftRow(idx)}
+                                          disabled={rtrLoansSaving}
+                                        >
+                                          {XIcon ? <XIcon size={13} /> : '✕'}
+                                        </button>
+                                      ) : (
+                                        <span className="bo-cv-salary-readonly-val" style={{ color: '#94a3b8' }}>
+                                          —
+                                        </span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* RTR Action Bar (Add Loan Facility) */}
+                      <div className="bo-cv-salary-action-bar">
+                        <div className="bo-cv-salary-action-hint">
+                          <span className="bo-cv-salary-hint-dot" />
+                          <span>
+                            <strong>Note:</strong> RTR loan facilities are automatically verified and saved when running the eligibility calculation.
+                          </span>
+                        </div>
+                        <div className="bo-cv-salary-action-buttons">
+                          <button
+                            type="button"
+                            className="bo-btn bo-btn--outline bo-btn--sm"
+                            onClick={handleAddRtrLoanRow}
+                            disabled={rtrLoansSaving}
+                          >
+                            {PlusIcon ? <PlusIcon size={13} /> : '+'}
+                            <span>Add Loan Facility</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* RTR Summary Card */}
+                      <div className="bo-cv-salary-summary-card">
+                        <div className="bo-cv-salary-summary-header">
+                          <h4 className="bo-cv-salary-summary-title">Repayment Track Record (RTR) Summary</h4>
+                          <span className="bo-cv-salary-summary-count">
+                            Configured Loans: {rtrSummaryMetrics.validCount} / {rtrSummaryMetrics.totalLoans}
+                          </span>
+                        </div>
+                        <div className="bo-cv-salary-summary-grid">
+                          <div className="bo-cv-salary-summary-item">
+                            <span className="bo-cv-salary-summary-label">Total Sanction Amount</span>
+                            <strong className="bo-cv-salary-summary-val">
+                              {formatCurrency(rtrSummaryMetrics.totalSanction)}
+                            </strong>
+                            <span className="bo-cv-salary-summary-sub">
+                              Across {rtrSummaryMetrics.validCount} active {rtrSummaryMetrics.validCount === 1 ? 'facility' : 'facilities'}
+                            </span>
+                          </div>
+
+                          <div className="bo-cv-salary-summary-item">
+                            <span className="bo-cv-salary-summary-label">Total Current POS</span>
+                            <strong className="bo-cv-salary-summary-val">
+                              {formatCurrency(rtrSummaryMetrics.totalPOS)}
+                            </strong>
+                            <span className="bo-cv-salary-summary-sub">
+                              Outstanding principal balance
+                            </span>
+                          </div>
+
+                          <div className="bo-cv-salary-summary-item">
+                            <span className="bo-cv-salary-summary-label">Total Monthly EMI</span>
+                            <strong className="bo-cv-salary-summary-val">
+                              {formatCurrency(rtrSummaryMetrics.totalEmi)}
+                            </strong>
+                            <span className="bo-cv-salary-summary-sub">
+                              Cumulative monthly outflow
+                            </span>
+                          </div>
+
+                          <div className="bo-cv-salary-summary-item is-average">
+                            <span className="bo-cv-salary-summary-label">Highest Months On Book (MOB)</span>
+                            <strong className="bo-cv-salary-summary-val is-engine">
+                              {rtrSummaryMetrics.maxMob > 0 ? `${rtrSummaryMetrics.maxMob} Months` : '—'}
+                            </strong>
+                            <span className="bo-cv-salary-summary-sub">
+                              Evaluated against Min MOB / Max MOB norms
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : selectedMethodCode === 'NORMAL_INCOME' ? (
+                    /* Normal Income Method Workspace */
+                    <div className="bo-cv-normal-income-wrap">
+                      {/* Loading State */}
+                      {normalIncomeLoading ? (
+                        <div className="bo-cv-assess-loading-box">
+                          <div className="bo-cv-loading-spinner" />
+                          <span>Loading Normal Income records...</span>
+                        </div>
+                      ) : normalIncomeError ? (
+                        <div className="bo-cv-assess-error-box">
+                          <div className="bo-cv-assess-error-msg">
+                            {AlertTriangleIcon && <AlertTriangleIcon size={16} />}
+                            <span>{normalIncomeError}</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="bo-btn bo-btn--outline bo-btn--sm"
+                            onClick={() => fetchNormalIncomeRecords(calculationAppProdId, selectedApplicantSequence)}
+                          >
+                            {RefreshCwIcon && <RefreshCwIcon size={12} />}
+                            <span>Retry</span>
+                          </button>
+                        </div>
+                      ) : null}
+
+                      {/* Notification Banner */}
+                      {normalIncomeBanner && (
+                        <div className={`bo-cv-salary-banner is-${normalIncomeBanner.type}`}>
+                          <div className="bo-cv-salary-banner-icon">
+                            {normalIncomeBanner.type === 'success' && (CheckCircleIcon ? <CheckCircleIcon size={16} /> : '✓')}
+                            {normalIncomeBanner.type === 'error' && (AlertTriangleIcon ? <AlertTriangleIcon size={16} /> : '⚠️')}
+                            {normalIncomeBanner.type === 'warning' && (AlertCircleIcon ? <AlertCircleIcon size={16} /> : 'ℹ️')}
+                            {normalIncomeBanner.type === 'info' && (InfoIcon ? <InfoIcon size={16} /> : 'ℹ️')}
+                          </div>
+                          <div className="bo-cv-salary-banner-msg">{normalIncomeBanner.message}</div>
+                        </div>
+                      )}
+
+                      {/* ── Sub-Section 1: Primary Business Income ── */}
+                      <div className="bo-cv-normal-block">
+                        <div className="bo-cv-salary-top-bar">
+                          <div className="bo-cv-salary-top-left">
+                            <h4 className="bo-cv-salary-top-title">Primary Business Income</h4>
+                            <span className="bo-cv-salary-count-badge">
+                              {normalIncomeRows.length} {normalIncomeRows.length === 1 ? 'Year' : 'Years'} Configured
+                            </span>
+                            {normalIncomeMetrics.latestRow ? (
+                              <span className="bo-cv-salary-count-badge" style={{ background: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0' }}>
+                                Latest Year: {normalIncomeMetrics.latestRow.financialYear || 'Selected'} ({formatCurrency(normalIncomeMetrics.latestPrimaryBusinessIncome)})
+                              </span>
+                            ) : (
+                              <span className="bo-cv-salary-count-badge" style={{ background: '#fffbeb', color: '#b45309', borderColor: '#fde68a' }}>
+                                No Latest Year Designated
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="bo-btn bo-btn--outline bo-btn--sm bo-cv-salary-add-btn"
+                            onClick={handleAddNormalIncomeRow}
+                            disabled={normalIncomeSaving}
+                          >
+                            {PlusIcon ? <PlusIcon size={13} /> : '+'}
+                            <span>Add Financial Year</span>
+                          </button>
+                        </div>
+
+                        <div className="bo-cv-salary-table-wrapper">
+                          <table className="bo-cv-salary-table" aria-label="Primary Business Income Table">
+                            <thead>
+                              <tr>
+                                <th style={{ minWidth: '130px' }}>Financial Year</th>
+                                <th style={{ minWidth: '120px', textAlign: 'center' }}>Considered Year</th>
+                                <th className="th-num" style={{ minWidth: '130px' }}>PAT (₹)</th>
+                                <th className="th-num" style={{ minWidth: '130px' }}>Depreciation (₹)</th>
+                                <th className="th-num" style={{ minWidth: '140px' }}>Salary to Partners (₹)</th>
+                                <th className="th-num" style={{ minWidth: '140px' }}>Related Party Interest (₹)</th>
+                                <th className="th-num" style={{ minWidth: '150px' }}>Primary Business Income (₹)</th>
+                                <th className="th-action" style={{ minWidth: '60px', textAlign: 'center' }}>Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {normalIncomeRows.length === 0 ? (
+                                <tr>
+                                  <td colSpan={8} style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>
+                                    No financial years configured. Click &quot;Add Financial Year&quot; above to enter year-wise business figures.
+                                  </td>
+                                </tr>
+                              ) : (
+                                normalIncomeRows.map((row, idx) => {
+                                  const isDraft = !row.isPersisted || !row.applicationNormalIncomeDetailsId;
+                                  const isLatest = Boolean(row.isLatestFinancialYear);
+                                  const computedIncome =
+                                    (Number(row.pat) || 0) +
+                                    (Number(row.depreciation) || 0) +
+                                    (Number(row.salaryToPartners) || 0) +
+                                    (Number(row.interestToRelatedParties) || 0);
+
+                                  return (
+                                    <tr
+                                      key={row.id || `normal-inc-row-${idx}`}
+                                      className={isLatest ? 'is-rtr-selected-row' : ''}
+                                    >
+                                      <td>
+                                        <input
+                                          type="text"
+                                          placeholder="e.g. 2025-26"
+                                          className="bo-cv-salary-input"
+                                          value={row.financialYear || ''}
+                                          onChange={(e) => handleNormalIncomeRowChange(idx, 'financialYear', e.target.value)}
+                                          disabled={normalIncomeSaving}
+                                          style={{ textAlign: 'left', fontWeight: 600 }}
+                                          aria-label={`Financial Year for Row ${idx + 1}`}
+                                        />
+                                      </td>
+                                      <td style={{ textAlign: 'center' }}>
+                                        <button
+                                          type="button"
+                                          className={`bo-cv-latest-year-btn ${isLatest ? 'is-active' : ''}`}
+                                          onClick={() => handleSetLatestFinancialYear(idx)}
+                                          disabled={normalIncomeSaving}
+                                          title={isLatest ? 'Currently designated latest considered financial year' : 'Click to set as latest financial year'}
+                                        >
+                                          {isLatest ? 'Latest Year ✓' : 'Set Latest'}
+                                        </button>
+                                      </td>
+                                      <td className="td-num">
+                                        <input
+                                          type="number"
+                                          step="1000"
+                                          placeholder="0"
+                                          className="bo-cv-salary-input"
+                                          value={row.pat === 0 ? '0' : row.pat || ''}
+                                          onChange={(e) => handleNormalIncomeRowChange(idx, 'pat', e.target.value)}
+                                          disabled={normalIncomeSaving}
+                                          aria-label={`Profit After Tax for Row ${idx + 1}`}
+                                        />
+                                      </td>
+                                      <td className="td-num">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="1000"
+                                          placeholder="0"
+                                          className="bo-cv-salary-input"
+                                          value={row.depreciation === 0 ? '0' : row.depreciation || ''}
+                                          onChange={(e) => handleNormalIncomeRowChange(idx, 'depreciation', e.target.value)}
+                                          disabled={normalIncomeSaving}
+                                          aria-label={`Depreciation for Row ${idx + 1}`}
+                                        />
+                                      </td>
+                                      <td className="td-num">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="1000"
+                                          placeholder="0"
+                                          className="bo-cv-salary-input"
+                                          value={row.salaryToPartners === 0 ? '0' : row.salaryToPartners || ''}
+                                          onChange={(e) => handleNormalIncomeRowChange(idx, 'salaryToPartners', e.target.value)}
+                                          disabled={normalIncomeSaving}
+                                          aria-label={`Salary to Partners for Row ${idx + 1}`}
+                                        />
+                                      </td>
+                                      <td className="td-num">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="1000"
+                                          placeholder="0"
+                                          className="bo-cv-salary-input"
+                                          value={row.interestToRelatedParties === 0 ? '0' : row.interestToRelatedParties || ''}
+                                          onChange={(e) => handleNormalIncomeRowChange(idx, 'interestToRelatedParties', e.target.value)}
+                                          disabled={normalIncomeSaving}
+                                          aria-label={`Interest to Related Parties for Row ${idx + 1}`}
+                                        />
+                                      </td>
+                                      <td className="td-num">
+                                        <div className="bo-cv-salary-readonly-val" style={{ fontWeight: 700, color: isLatest ? '#047857' : '#334155' }}>
+                                          {formatCurrency(row.primaryIncome != null && !row.isModified ? row.primaryIncome : computedIncome)}
+                                        </div>
+                                      </td>
+                                      <td className="td-action" style={{ textAlign: 'center' }}>
+                                        {isDraft ? (
+                                          <button
+                                            type="button"
+                                            className="bo-cv-loan-row-remove-btn"
+                                            title="Remove unsaved draft financial year"
+                                            aria-label={`Remove draft financial year ${idx + 1}`}
+                                            onClick={() => handleRemoveNormalIncomeDraftRow(idx)}
+                                            disabled={normalIncomeSaving}
+                                          >
+                                            {XIcon ? <XIcon size={13} /> : '✕'}
+                                          </button>
+                                        ) : (
+                                          <span className="bo-cv-salary-readonly-val" style={{ color: '#94a3b8' }}>
+                                            —
+                                          </span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="bo-cv-salary-action-bar">
+                          <div className="bo-cv-salary-action-hint">
+                            <span className="bo-cv-salary-hint-dot" />
+                            <span>
+                              <strong>Formula:</strong> Primary Business Income = PAT + Depreciation + Salary to Partners + Interest to Related Parties. Automatically validated and persisted on calculation.
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ── Sub-Section 2: Other Income Streams ── */}
+                      <div className="bo-cv-normal-block" style={{ marginTop: '16px' }}>
+                        <div className="bo-cv-salary-top-bar">
+                          <div className="bo-cv-salary-top-left">
+                            <h4 className="bo-cv-salary-top-title">Other Income Streams</h4>
+                            <span className="bo-cv-salary-count-badge">
+                              {normalOtherIncomeRows.length} {normalOtherIncomeRows.length === 1 ? 'Stream' : 'Streams'} Configured
+                            </span>
+                            {normalIncomeMetrics.totalConsideredOtherIncome > 0 && (
+                              <span className="bo-cv-salary-count-badge" style={{ background: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0' }}>
+                                Considered Other Income: {formatCurrency(normalIncomeMetrics.totalConsideredOtherIncome)}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="bo-btn bo-btn--outline bo-btn--sm bo-cv-salary-add-btn"
+                            onClick={handleAddNormalOtherIncomeRow}
+                            disabled={normalIncomeSaving}
+                          >
+                            {PlusIcon ? <PlusIcon size={13} /> : '+'}
+                            <span>Add Other Income</span>
+                          </button>
+                        </div>
+
+                        <div className="bo-cv-salary-table-wrapper">
+                          <table className="bo-cv-salary-table" aria-label="Other Income Streams Table">
+                            <thead>
+                              <tr>
+                                <th style={{ minWidth: '220px' }}>Income Stream Type</th>
+                                <th className="th-num" style={{ minWidth: '160px' }}>Annual Income Amount (₹)</th>
+                                <th className="th-num" style={{ minWidth: '130px' }}>Consideration %</th>
+                                <th className="th-num" style={{ minWidth: '160px' }}>Considered Income (₹)</th>
+                                <th className="th-action" style={{ minWidth: '60px', textAlign: 'center' }}>Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {normalOtherIncomeRows.length === 0 ? (
+                                <tr>
+                                  <td colSpan={5} style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>
+                                    No other income streams added. Click &quot;Add Other Income&quot; to include House Property, Agriculture, or Other Sources.
+                                  </td>
+                                </tr>
+                              ) : (
+                                normalOtherIncomeRows.map((row, idx) => {
+                                  const isDraft = !row.isPersisted || !row.applicationNormalOtherIncomeDetailsId;
+                                  const amt = Number(row.annualIncomeAmount) || 0;
+                                  const pct =
+                                    row.considerationPercentage !== '' && !isNaN(Number(row.considerationPercentage))
+                                      ? Number(row.considerationPercentage)
+                                      : 100;
+                                  const computedConsidered = Math.round((amt * pct) / 100);
+
+                                  return (
+                                    <tr key={row.id || `normal-other-row-${idx}`}>
+                                      <td>
+                                        <select
+                                          className="bo-cv-salary-input"
+                                          value={row.incomeType || 'HOUSE_PROPERTY'}
+                                          onChange={(e) => handleNormalOtherIncomeRowChange(idx, 'incomeType', e.target.value)}
+                                          disabled={normalIncomeSaving}
+                                          style={{ textAlign: 'left' }}
+                                          aria-label={`Income Type for Row ${idx + 1}`}
+                                        >
+                                          <option value="HOUSE_PROPERTY">House Property</option>
+                                          <option value="AGRICULTURE">Agriculture Income</option>
+                                          <option value="OTHER_SOURCES">Income from Other Sources</option>
+                                        </select>
+                                      </td>
+                                      <td className="td-num">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="1000"
+                                          placeholder="0"
+                                          className="bo-cv-salary-input"
+                                          value={row.annualIncomeAmount === 0 ? '0' : row.annualIncomeAmount || ''}
+                                          onChange={(e) => handleNormalOtherIncomeRowChange(idx, 'annualIncomeAmount', e.target.value)}
+                                          disabled={normalIncomeSaving}
+                                          aria-label={`Annual Income Amount for Row ${idx + 1}`}
+                                        />
+                                      </td>
+                                      <td className="td-num">
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            step="1"
+                                            placeholder="100"
+                                            className="bo-cv-salary-input"
+                                            style={{ width: '60px', textAlign: 'right' }}
+                                            value={row.considerationPercentage === 0 ? '0' : row.considerationPercentage || ''}
+                                            onChange={(e) => handleNormalOtherIncomeRowChange(idx, 'considerationPercentage', e.target.value)}
+                                            disabled={normalIncomeSaving}
+                                            aria-label={`Consideration Percentage for Row ${idx + 1}`}
+                                          />
+                                          <span style={{ fontSize: '12px', color: '#64748b' }}>%</span>
+                                        </div>
+                                      </td>
+                                      <td className="td-num">
+                                        <div className="bo-cv-salary-readonly-val" style={{ fontWeight: 700, color: '#047857' }}>
+                                          {formatCurrency(
+                                            row.consideredIncomeAmount != null && !row.isModified
+                                              ? row.consideredIncomeAmount
+                                              : computedConsidered
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="td-action" style={{ textAlign: 'center' }}>
+                                        {isDraft ? (
+                                          <button
+                                            type="button"
+                                            className="bo-cv-loan-row-remove-btn"
+                                            title="Remove unsaved draft other income row"
+                                            aria-label={`Remove draft other income row ${idx + 1}`}
+                                            onClick={() => handleRemoveNormalOtherIncomeDraftRow(idx)}
+                                            disabled={normalIncomeSaving}
+                                          >
+                                            {XIcon ? <XIcon size={13} /> : '✕'}
+                                          </button>
+                                        ) : (
+                                          <span className="bo-cv-salary-readonly-val" style={{ color: '#94a3b8' }}>
+                                            —
+                                          </span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* ── Sub-Section 3: Salary Income Reference Display (Read-Only) ── */}
+                      <div className="bo-cv-normal-salary-ref-card" style={{ marginTop: '16px' }}>
+                        <div className="bo-cv-normal-salary-ref-header">
+                          <div className="bo-cv-rm-income-ref-title-group">
+                            <span className="bo-cv-rm-income-ref-title">Salary Income Reference (ApplicationSalaryIncomeDetails)</span>
+                            <span className="bo-cv-rm-income-ref-badge">Reference Only &bull; 60% Rule</span>
+                          </div>
+                          <span className="bo-cv-rm-income-ref-sub">
+                            Captured from verified salary records and existing salary-income engine. Read-only in Normal Income assessment.
+                          </span>
+                        </div>
+
+                        <div className="bo-cv-rm-income-ref-grid">
+                          <div className="bo-cv-rm-income-ref-cell">
+                            <span className="bo-cv-rm-income-ref-label">Annual Salary Income</span>
+                            <strong className="bo-cv-rm-income-ref-val">
+                              {formatCurrency(normalIncomeMetrics.annualSalary)}
+                            </strong>
+                          </div>
+
+                          <div className="bo-cv-rm-income-ref-cell">
+                            <span className="bo-cv-rm-income-ref-label">Salary Consideration Policy</span>
+                            <strong className="bo-cv-rm-income-ref-val" style={{ color: '#047857' }}>
+                              60% (Fixed Rule)
+                            </strong>
+                          </div>
+
+                          <div className="bo-cv-rm-income-ref-cell is-net">
+                            <span className="bo-cv-rm-income-ref-label">Considered Salary Component (60%)</span>
+                            <strong className="bo-cv-rm-income-ref-val is-net-val">
+                              {formatCurrency(normalIncomeMetrics.consideredSalaryComponent)}
+                            </strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ── Sub-Section 4: Normal Income Summary Strip (Estimated Preview) ── */}
+                      <div className="bo-cv-salary-summary-card" style={{ marginTop: '16px' }}>
+                        <div className="bo-cv-salary-summary-header">
+                          <h4 className="bo-cv-salary-summary-title">Normal Income Evaluation Summary</h4>
+                          <span className="bo-cv-salary-summary-count" style={{ background: '#f8fafc', color: '#475569', borderColor: '#cbd5e1' }}>
+                            Estimated Preview (Non-Authoritative)
+                          </span>
+                        </div>
+                        <div className="bo-cv-salary-summary-grid">
+                          <div className="bo-cv-salary-summary-item">
+                            <span className="bo-cv-salary-summary-label">Latest Primary Business Income</span>
+                            <strong className="bo-cv-salary-summary-val">
+                              {formatCurrency(normalIncomeMetrics.latestPrimaryBusinessIncome)}
+                            </strong>
+                            <span className="bo-cv-salary-summary-sub">
+                              {normalIncomeMetrics.latestRow?.financialYear ? `FY ${normalIncomeMetrics.latestRow.financialYear}` : 'No latest year designated'}
+                            </span>
+                          </div>
+
+                          <div className="bo-cv-salary-summary-item">
+                            <span className="bo-cv-salary-summary-label">Considered Other Income</span>
+                            <strong className="bo-cv-salary-summary-val">
+                              {formatCurrency(normalIncomeMetrics.totalConsideredOtherIncome)}
+                            </strong>
+                            <span className="bo-cv-salary-summary-sub">
+                              Across {normalOtherIncomeRows.length} {normalOtherIncomeRows.length === 1 ? 'stream' : 'streams'}
+                            </span>
+                          </div>
+
+                          <div className="bo-cv-salary-summary-item">
+                            <span className="bo-cv-salary-summary-label">Considered Salary Component</span>
+                            <strong className="bo-cv-salary-summary-val">
+                              {formatCurrency(normalIncomeMetrics.consideredSalaryComponent)}
+                            </strong>
+                            <span className="bo-cv-salary-summary-sub">
+                              Salary @ 60% policy rule
+                            </span>
+                          </div>
+
+                          <div className="bo-cv-salary-summary-item is-average" style={{ background: '#ecfdf5', borderColor: '#a7f3d0' }}>
+                            <span className="bo-cv-salary-summary-label" style={{ color: '#065f46' }}>Estimated Eligible Monthly Income</span>
+                            <strong className="bo-cv-salary-summary-val is-engine" style={{ color: '#047857' }}>
+                              {formatCurrency(normalIncomeMetrics.estimatedEligibleMonthlyIncome)}
+                            </strong>
+                            <span className="bo-cv-salary-summary-sub" style={{ color: '#065f46' }}>
+                              Est. EMI: {formatCurrency(normalIncomeMetrics.estimatedEligibleEMI)} (Eligible Income − Obligation)
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -9591,85 +12134,13 @@ export default function CustomerVerification() {
                       </span>
                     </div>
 
-                    {/* 2. ROI (% p.a.) with Edit / Override */}
-                    <div className="bo-cv-calc-setting-card">
-                      <div className="bo-cv-calc-setting-header">
-                        <span className="bo-cv-calc-setting-label">Interest Rate (ROI % p.a.)</span>
-                        <button
-                          type="button"
-                          className="bo-cv-setting-action-btn"
-                          onClick={() =>
-                            updateCurrentCalcSettings((prev) => ({
-                              ...prev,
-                              isEditingRoi: !prev.isEditingRoi,
-                              manualRoiInput:
-                                !prev.isEditingRoi && prev.manualRoiInput === ''
-                                  ? resolvedAppRoi != null
-                                    ? String(resolvedAppRoi)
-                                    : ''
-                                  : prev.manualRoiInput,
-                            }))
-                          }
-                        >
-                          {currentCalcSettings.isEditingRoi ? 'Use Application ROI' : 'Override ROI'}
-                        </button>
-                      </div>
-
-                      {currentCalcSettings.isEditingRoi ? (
-                        <div className="bo-cv-setting-override-row">
-                          <input
-                            type="number"
-                            step="0.1"
-                            min="1"
-                            max="100"
-                            className="bo-cv-setting-input"
-                            placeholder={resolvedAppRoi != null ? String(resolvedAppRoi) : 'e.g. 10.5'}
-                            value={currentCalcSettings.manualRoiInput}
-                            onChange={(e) =>
-                              updateCurrentCalcSettings((prev) => ({ ...prev, manualRoiInput: e.target.value }))
-                            }
-                            aria-label="Manual ROI Override"
-                          />
-                          <span className="bo-cv-setting-unit">% p.a.</span>
+                    {selectedMethodCode === 'RTR' ? (
+                      /* 2. EMI Amount Factor for RTR Assessment */
+                      <div className="bo-cv-calc-setting-card">
+                        <div className="bo-cv-calc-setting-header">
+                          <span className="bo-cv-calc-setting-label">EMI Amount Factor <span className="req">*</span></span>
+                          <span className="bo-cv-readonly-tag" style={{ background: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0' }}>Manual Input</span>
                         </div>
-                      ) : (
-                        <div className="bo-cv-calc-setting-value">
-                          {resolvedAppRoi != null ? `${resolvedAppRoi}% p.a.` : 'Not Specified'}
-                        </div>
-                      )}
-
-                      <span className="bo-cv-calc-setting-hint">
-                        {currentCalcSettings.isEditingRoi && currentCalcSettings.manualRoiInput !== ''
-                          ? `Calculation override: ${currentCalcSettings.manualRoiInput}% (App ROI: ${resolvedAppRoi ?? '—'}%)`
-                          : 'Using Application ROI (No override applied)'}
-                      </span>
-                    </div>
-
-                    {/* 3. Tenure (Months) with Edit / Override */}
-                    <div className="bo-cv-calc-setting-card">
-                      <div className="bo-cv-calc-setting-header">
-                        <span className="bo-cv-calc-setting-label">Loan Tenure (Months)</span>
-                        <button
-                          type="button"
-                          className="bo-cv-setting-action-btn"
-                          onClick={() =>
-                            updateCurrentCalcSettings((prev) => ({
-                              ...prev,
-                              isEditingTenure: !prev.isEditingTenure,
-                              manualTenureInput:
-                                !prev.isEditingTenure && prev.manualTenureInput === ''
-                                  ? resolvedAppTenure != null
-                                    ? String(resolvedAppTenure)
-                                    : ''
-                                  : prev.manualTenureInput,
-                            }))
-                          }
-                        >
-                          {currentCalcSettings.isEditingTenure ? 'Use Application Tenure' : 'Override Tenure'}
-                        </button>
-                      </div>
-
-                      {currentCalcSettings.isEditingTenure ? (
                         <div className="bo-cv-setting-override-row">
                           <input
                             type="number"
@@ -9677,32 +12148,138 @@ export default function CustomerVerification() {
                             min="1"
                             max="360"
                             className="bo-cv-setting-input"
-                            placeholder={resolvedAppTenure != null ? String(resolvedAppTenure) : 'e.g. 24'}
-                            value={currentCalcSettings.manualTenureInput}
+                            placeholder="Enter EMI amount factor"
+                            value={currentCalcSettings.emiAmountFactor ?? ''}
                             onChange={(e) =>
-                              updateCurrentCalcSettings((prev) => ({ ...prev, manualTenureInput: e.target.value }))
+                              updateCurrentCalcSettings((prev) => ({ ...prev, emiAmountFactor: e.target.value }))
                             }
-                            aria-label="Manual Tenure Override"
+                            aria-label="EMI Amount Factor"
                           />
-                          <span className="bo-cv-setting-unit">Months</span>
+                          <span className="bo-cv-setting-unit">Factor</span>
                         </div>
-                      ) : (
-                        <div className="bo-cv-calc-setting-value">
-                          {resolvedAppTenure != null ? `${resolvedAppTenure} Months` : 'Not Specified'}
-                        </div>
-                      )}
+                        <span className="bo-cv-calc-setting-hint">
+                          {currentCalcSettings.emiAmountFactor
+                            ? `Applied Factor: ${currentCalcSettings.emiAmountFactor} (Manual input)`
+                            : 'Enter factor multiplier for RTR assessed income calculation (Required)'}
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        {/* 2. ROI (% p.a.) with Edit / Override */}
+                        <div className="bo-cv-calc-setting-card">
+                          <div className="bo-cv-calc-setting-header">
+                            <span className="bo-cv-calc-setting-label">Interest Rate (ROI % p.a.)</span>
+                            <button
+                              type="button"
+                              className="bo-cv-setting-action-btn"
+                              onClick={() =>
+                                updateCurrentCalcSettings((prev) => ({
+                                  ...prev,
+                                  isEditingRoi: !prev.isEditingRoi,
+                                  manualRoiInput:
+                                    !prev.isEditingRoi && prev.manualRoiInput === ''
+                                      ? resolvedAppRoi != null
+                                        ? String(resolvedAppRoi)
+                                        : ''
+                                      : prev.manualRoiInput,
+                                }))
+                              }
+                            >
+                              {currentCalcSettings.isEditingRoi ? 'Use Application ROI' : 'Override ROI'}
+                            </button>
+                          </div>
 
-                      <span className="bo-cv-calc-setting-hint">
-                        {currentCalcSettings.isEditingTenure && currentCalcSettings.manualTenureInput !== ''
-                          ? `Calculation override: ${currentCalcSettings.manualTenureInput} Months (App Tenure: ${resolvedAppTenure ?? '—'} M)`
-                          : 'Using Application Loan Tenure (No override applied)'}
-                      </span>
-                    </div>
+                          {currentCalcSettings.isEditingRoi ? (
+                            <div className="bo-cv-setting-override-row">
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="1"
+                                max="100"
+                                className="bo-cv-setting-input"
+                                placeholder={resolvedAppRoi != null ? String(resolvedAppRoi) : 'e.g. 10.5'}
+                                value={currentCalcSettings.manualRoiInput}
+                                onChange={(e) =>
+                                  updateCurrentCalcSettings((prev) => ({ ...prev, manualRoiInput: e.target.value }))
+                                }
+                                aria-label="Manual ROI Override"
+                              />
+                              <span className="bo-cv-setting-unit">% p.a.</span>
+                            </div>
+                          ) : (
+                            <div className="bo-cv-calc-setting-value">
+                              {resolvedAppRoi != null ? `${resolvedAppRoi}% p.a.` : 'Not Specified'}
+                            </div>
+                          )}
+
+                          <span className="bo-cv-calc-setting-hint">
+                            {currentCalcSettings.isEditingRoi && currentCalcSettings.manualRoiInput !== ''
+                              ? `Calculation override: ${currentCalcSettings.manualRoiInput}% (App ROI: ${resolvedAppRoi ?? '—'}%)`
+                              : 'Using Application ROI (No override applied)'}
+                          </span>
+                        </div>
+
+                        {/* 3. Tenure (Months) with Edit / Override */}
+                        <div className="bo-cv-calc-setting-card">
+                          <div className="bo-cv-calc-setting-header">
+                            <span className="bo-cv-calc-setting-label">Loan Tenure (Months)</span>
+                            <button
+                              type="button"
+                              className="bo-cv-setting-action-btn"
+                              onClick={() =>
+                                updateCurrentCalcSettings((prev) => ({
+                                  ...prev,
+                                  isEditingTenure: !prev.isEditingTenure,
+                                  manualTenureInput:
+                                    !prev.isEditingTenure && prev.manualTenureInput === ''
+                                      ? resolvedAppTenure != null
+                                        ? String(resolvedAppTenure)
+                                        : ''
+                                      : prev.manualTenureInput,
+                                }))
+                              }
+                            >
+                              {currentCalcSettings.isEditingTenure ? 'Use Application Tenure' : 'Override Tenure'}
+                            </button>
+                          </div>
+
+                          {currentCalcSettings.isEditingTenure ? (
+                            <div className="bo-cv-setting-override-row">
+                              <input
+                                type="number"
+                                step="1"
+                                min="1"
+                                max="360"
+                                className="bo-cv-setting-input"
+                                placeholder={resolvedAppTenure != null ? String(resolvedAppTenure) : 'e.g. 24'}
+                                value={currentCalcSettings.manualTenureInput}
+                                onChange={(e) =>
+                                  updateCurrentCalcSettings((prev) => ({ ...prev, manualTenureInput: e.target.value }))
+                                }
+                                aria-label="Manual Tenure Override"
+                              />
+                              <span className="bo-cv-setting-unit">Months</span>
+                            </div>
+                          ) : (
+                            <div className="bo-cv-calc-setting-value">
+                              {resolvedAppTenure != null ? `${resolvedAppTenure} Months` : 'Not Specified'}
+                            </div>
+                          )}
+
+                          <span className="bo-cv-calc-setting-hint">
+                            {currentCalcSettings.isEditingTenure && currentCalcSettings.manualTenureInput !== ''
+                              ? `Calculation override: ${currentCalcSettings.manualTenureInput} Months (App Tenure: ${resolvedAppTenure ?? '—'} M)`
+                              : 'Using Application Loan Tenure (No override applied)'}
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
                 {/* ── Section 6: Existing Active Obligations & Policy FOIR ─────── */}
-                <div className="bo-cv-assess-section">
+                {selectedMethodCode !== 'RTR' && (
+                  <div className="bo-cv-assess-section">
                   <div className="bo-cv-assess-section-header">
                     <div className="bo-cv-assess-section-title-wrap">
                       <span className="bo-cv-assess-section-num">6</span>
@@ -9963,48 +12540,132 @@ export default function CustomerVerification() {
                       </div>
                       <div className="bo-cv-obligation-summary-total">
                         <span>Total Existing Monthly EMI:</span>
-                        <strong>
-                          {currentAssessment?.existingEMI != null
-                            ? formatCurrency(currentAssessment.existingEMI)
-                            : formatCurrency(totalDeclaredMonthlyEmi)}
-                        </strong>
+                        <strong>{formatCurrency(totalDeclaredMonthlyEmi)}</strong>
                       </div>
                     </div>
                   </div>
 
                   {/* Benchmark Cards Grid */}
-                  <div className="bo-cv-obligation-grid" style={{ marginTop: '16px' }}>
-                    <div className="bo-cv-obligation-card">
-                      <span className="bo-cv-obligation-label">Existing Monthly Obligation (Engine Evaluated)</span>
-                      <div className="bo-cv-obligation-val-row">
-                        <strong className="bo-cv-obligation-val">
-                          {currentAssessment?.existingEMI != null
-                            ? formatCurrency(currentAssessment.existingEMI)
-                            : formatCurrency(totalDeclaredMonthlyEmi)}
-                        </strong>
+                  <div className="bo-cv-calc-settings-grid" style={{ marginTop: '16px' }}>
+                    {/* 1. Existing Monthly Obligation Card with Override */}
+                    <div className="bo-cv-calc-setting-card">
+                      <div className="bo-cv-calc-setting-header">
+                        <span className="bo-cv-calc-setting-label">Existing Monthly Obligation</span>
+                        <button
+                          type="button"
+                          className="bo-cv-setting-action-btn"
+                          onClick={() =>
+                            updateCurrentCalcSettings((prev) => ({
+                              ...prev,
+                              isEditingObligation: !prev.isEditingObligation,
+                              manualObligationInput:
+                                !prev.isEditingObligation && prev.manualObligationInput === ''
+                                  ? totalDeclaredMonthlyEmi > 0
+                                    ? String(totalDeclaredMonthlyEmi)
+                                    : ''
+                                  : prev.manualObligationInput,
+                            }))
+                          }
+                        >
+                          {currentCalcSettings.isEditingObligation ? 'Use Calculated EMI' : 'Override Obligation'}
+                        </button>
                       </div>
-                      <p className="bo-cv-obligation-desc">
-                        {currentAssessment?.existingEMI != null
-                          ? 'Authoritative existing EMI deducted by calculation engine.'
-                          : 'Will be confirmed and deducted by the calculation engine.'}
-                      </p>
+
+                      {currentCalcSettings.isEditingObligation ? (
+                        <div className="bo-cv-setting-override-row">
+                          <span className="bo-cv-setting-currency-symbol">₹</span>
+                          <input
+                            type="number"
+                            step="100"
+                            min="0"
+                            className="bo-cv-setting-input is-amount"
+                            placeholder={String(totalDeclaredMonthlyEmi || 0)}
+                            value={currentCalcSettings.manualObligationInput}
+                            onChange={(e) =>
+                              updateCurrentCalcSettings((prev) => ({ ...prev, manualObligationInput: e.target.value }))
+                            }
+                            aria-label="Manual Existing Monthly Obligation"
+                          />
+                        </div>
+                      ) : (
+                        <div className="bo-cv-calc-setting-value bo-cv-amount-val">
+                          {formatCurrency(totalDeclaredMonthlyEmi)}
+                        </div>
+                      )}
+
+                      <span className="bo-cv-calc-setting-hint">
+                        {currentCalcSettings.isEditingObligation && currentCalcSettings.manualObligationInput !== ''
+                          ? `Override: ${formatCurrency(currentCalcSettings.manualObligationInput)} • Applied Obligation: ${formatCurrency(currentCalcSettings.manualObligationInput)} (Calculated EMI: ${formatCurrency(totalDeclaredMonthlyEmi)})`
+                          : `Applied Obligation: ${formatCurrency(totalDeclaredMonthlyEmi)} (Derived from active loan facilities)`}
+                      </span>
                     </div>
 
-                    <div className="bo-cv-obligation-card">
-                      <span className="bo-cv-obligation-label">Policy FOIR Limit</span>
-                      <div className="bo-cv-obligation-val-row">
-                        <strong className="bo-cv-obligation-val bo-cv-foir-val">
-                          {resolvedPolicyFoir}
-                        </strong>
+                    {/* 2. Policy FOIR Limit Card with Override */}
+                    <div className="bo-cv-calc-setting-card">
+                      <div className="bo-cv-calc-setting-header">
+                        <span className="bo-cv-calc-setting-label">Policy FOIR Limit</span>
+                        {(selectedMethodCode === 'INCOME' || selectedMethodCode === 'NORMAL_INCOME') && (
+                          <button
+                            type="button"
+                            className="bo-cv-setting-action-btn"
+                            onClick={() =>
+                              updateCurrentCalcSettings((prev) => ({
+                                ...prev,
+                                isEditingFoir: !prev.isEditingFoir,
+                                manualFoirInput:
+                                  !prev.isEditingFoir && prev.manualFoirInput === ''
+                                    ? basePolicyFoir != null
+                                      ? String(basePolicyFoir)
+                                      : ''
+                                    : prev.manualFoirInput,
+                              }))
+                            }
+                          >
+                            {currentCalcSettings.isEditingFoir ? 'Use Policy FOIR' : 'Override FOIR'}
+                          </button>
+                        )}
                       </div>
-                      <p className="bo-cv-obligation-desc">
-                        {selectedMethodCode === 'INCOME'
-                          ? `Policy FOIR limit applied by engine from FOIR Master for ${selectedEmploymentTypeName || 'applicant'}.`
+
+                      {(selectedMethodCode === 'INCOME' || selectedMethodCode === 'NORMAL_INCOME') && currentCalcSettings.isEditingFoir ? (
+                        <div className="bo-cv-setting-override-row">
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0.1"
+                            max="100"
+                            className="bo-cv-setting-input"
+                            placeholder={basePolicyFoir != null ? String(basePolicyFoir) : 'e.g. 70'}
+                            value={currentCalcSettings.manualFoirInput}
+                            onChange={(e) =>
+                              updateCurrentCalcSettings((prev) => ({ ...prev, manualFoirInput: e.target.value }))
+                            }
+                            aria-label="Manual Policy FOIR"
+                          />
+                          <span className="bo-cv-setting-unit">%</span>
+                        </div>
+                      ) : (
+                        <div className="bo-cv-calc-setting-value bo-cv-foir-val">
+                          {selectedMethodCode === 'INCOME' || selectedMethodCode === 'NORMAL_INCOME'
+                            ? basePolicyFoir != null
+                              ? `${basePolicyFoir}%`
+                              : 'Policy FOIR from Master (Auto)'
+                            : selectedMethodCode === 'RTR'
+                            ? 'Not Applicable (RTR Method)'
+                            : 'Not Applicable (ABB Method)'}
+                        </div>
+                      )}
+
+                      <span className="bo-cv-calc-setting-hint">
+                        {selectedMethodCode === 'INCOME' || selectedMethodCode === 'NORMAL_INCOME'
+                          ? currentCalcSettings.isEditingFoir && currentCalcSettings.manualFoirInput !== ''
+                            ? `Override: ${currentCalcSettings.manualFoirInput}% • Applied FOIR: ${currentCalcSettings.manualFoirInput}% (Base Policy FOIR: ${basePolicyFoir != null ? `${basePolicyFoir}%` : 'Policy FOIR from Master'})`
+                            : `Applied FOIR: ${basePolicyFoir != null ? `${basePolicyFoir}%` : 'Policy FOIR from Master'} (Using Policy Benchmark from FOIR Master for ${selectedEmploymentTypeName || 'applicant'})`
                           : 'Policy FOIR is not applicable for Average Bank Balance assessment.'}
-                      </p>
+                      </span>
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* ── Section 7: Calculate Eligibility Action ─────────────────── */}
                 <div className="bo-cv-assess-section bo-cv-calc-action-section">
@@ -10016,7 +12677,15 @@ export default function CustomerVerification() {
                     <div className="bo-cv-calc-pre-items">
                       <div className="bo-cv-calc-pre-item">
                         <span className="bo-cv-calc-pre-item-label">Method:</span>
-                        <strong>{selectedMethodCode === 'INCOME' ? 'Income Method' : 'ABB Method'}</strong>
+                        <strong>
+                          {selectedMethodCode === 'RTR'
+                            ? 'RTR Method'
+                            : selectedMethodCode === 'INCOME'
+                            ? 'Income Method'
+                            : selectedMethodCode === 'NORMAL_INCOME'
+                            ? 'Normal Income'
+                            : 'ABB Method'}
+                        </strong>
                       </div>
                       <span className="bo-cv-calc-pre-dot">•</span>
                       <div className="bo-cv-calc-pre-item">
@@ -10028,40 +12697,67 @@ export default function CustomerVerification() {
                         <span className="bo-cv-calc-pre-item-label">Requested:</span>
                         <strong>{formatCurrency(appDetails.loanAmount)}</strong>
                       </div>
-                      <span className="bo-cv-calc-pre-dot">•</span>
-                      <div className="bo-cv-calc-pre-item">
-                        <span className="bo-cv-calc-pre-item-label">ROI:</span>
-                        <strong>
-                          {currentCalcSettings.isEditingRoi && currentCalcSettings.manualRoiInput !== ''
-                            ? `${currentCalcSettings.manualRoiInput}% (Override)`
-                            : resolvedAppRoi != null
-                            ? `${resolvedAppRoi}% p.a.`
-                            : '—'}
-                        </strong>
-                      </div>
-                      <span className="bo-cv-calc-pre-dot">•</span>
-                      <div className="bo-cv-calc-pre-item">
-                        <span className="bo-cv-calc-pre-item-label">Tenure:</span>
-                        <strong>
-                          {currentCalcSettings.isEditingTenure && currentCalcSettings.manualTenureInput !== ''
-                            ? `${currentCalcSettings.manualTenureInput} M (Override)`
-                            : resolvedAppTenure != null
-                            ? `${resolvedAppTenure} Months`
-                            : '—'}
-                        </strong>
-                      </div>
-                      <span className="bo-cv-calc-pre-dot">•</span>
-                      <div className="bo-cv-calc-pre-item">
-                        <span className="bo-cv-calc-pre-item-label">Existing EMI:</span>
-                        <strong>{formatCurrency(totalDeclaredMonthlyEmi)}</strong>
-                      </div>
-                      {selectedMethodCode === 'INCOME' && (
+                      {selectedMethodCode === 'RTR' ? (
                         <>
                           <span className="bo-cv-calc-pre-dot">•</span>
                           <div className="bo-cv-calc-pre-item">
-                            <span className="bo-cv-calc-pre-item-label">Policy FOIR:</span>
-                            <strong>{resolvedPolicyFoir}</strong>
+                            <span className="bo-cv-calc-pre-item-label">EMI Factor:</span>
+                            <strong>{currentCalcSettings.emiAmountFactor ? currentCalcSettings.emiAmountFactor : '— (Required)'}</strong>
                           </div>
+                          <span className="bo-cv-calc-pre-dot">•</span>
+                          <div className="bo-cv-calc-pre-item">
+                            <span className="bo-cv-calc-pre-item-label">RTR Facilities:</span>
+                            <strong>{rtrSummaryMetrics.validCount} Active</strong>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <span className="bo-cv-calc-pre-dot">•</span>
+                          <div className="bo-cv-calc-pre-item">
+                            <span className="bo-cv-calc-pre-item-label">ROI:</span>
+                            <strong>
+                              {currentCalcSettings.isEditingRoi && currentCalcSettings.manualRoiInput !== ''
+                                ? `${currentCalcSettings.manualRoiInput}% (Override)`
+                                : resolvedAppRoi != null
+                                ? `${resolvedAppRoi}% p.a.`
+                                : '—'}
+                            </strong>
+                          </div>
+                          <span className="bo-cv-calc-pre-dot">•</span>
+                          <div className="bo-cv-calc-pre-item">
+                            <span className="bo-cv-calc-pre-item-label">Tenure:</span>
+                            <strong>
+                              {currentCalcSettings.isEditingTenure && currentCalcSettings.manualTenureInput !== ''
+                                ? `${currentCalcSettings.manualTenureInput} M (Override)`
+                                : resolvedAppTenure != null
+                                ? `${resolvedAppTenure} Months`
+                                : '—'}
+                            </strong>
+                          </div>
+                          <span className="bo-cv-calc-pre-dot">•</span>
+                          <div className="bo-cv-calc-pre-item">
+                            <span className="bo-cv-calc-pre-item-label">Existing EMI:</span>
+                            <strong>
+                              {currentCalcSettings.isEditingObligation && currentCalcSettings.manualObligationInput !== ''
+                                ? `${formatCurrency(currentCalcSettings.manualObligationInput)} (Override)`
+                                : formatCurrency(totalDeclaredMonthlyEmi)}
+                            </strong>
+                          </div>
+                          {(selectedMethodCode === 'INCOME' || selectedMethodCode === 'NORMAL_INCOME') && (
+                            <>
+                              <span className="bo-cv-calc-pre-dot">•</span>
+                              <div className="bo-cv-calc-pre-item">
+                                <span className="bo-cv-calc-pre-item-label">Policy FOIR:</span>
+                                <strong>
+                                  {currentCalcSettings.isEditingFoir && currentCalcSettings.manualFoirInput !== ''
+                                    ? `${currentCalcSettings.manualFoirInput}% (Override)`
+                                    : basePolicyFoir != null
+                                    ? `${basePolicyFoir}%`
+                                    : 'Policy FOIR from Master'}
+                                </strong>
+                              </div>
+                            </>
+                          )}
                         </>
                       )}
                     </div>
@@ -10069,10 +12765,25 @@ export default function CustomerVerification() {
 
                   <div className="bo-cv-calc-trigger-wrap">
                     <div className="bo-cv-calc-trigger-info">
-                      <h4 className="bo-cv-calc-trigger-title">Run Eligibility Calculation Engine</h4>
+                      <h4 className="bo-cv-calc-trigger-title">
+                        {selectedMethodCode === 'RTR'
+                          ? 'Run RTR Eligibility Calculation Engine'
+                          : 'Run Eligibility Calculation Engine'}
+                      </h4>
                       <p className="bo-cv-calc-trigger-sub">
-                        Submits verified income/banking inputs and settings to the SIVELS eligibility calculation engine for{' '}
-                        <strong>{selectedApplicant?.name || 'Applicant'}</strong> ({selectedMethodCode === 'INCOME' ? 'Income Method' : 'ABB Method'}).
+                        {selectedMethodCode === 'RTR'
+                          ? `Submits verified loan repayment track records to the SIVELS RTR calculation engine for ${
+                              selectedApplicant?.name || 'Applicant'
+                            } to evaluate maximum top-up, EMI multiplier, and final loan eligibility.`
+                          : `Submits verified income/banking inputs and settings to the SIVELS eligibility calculation engine for ${
+                              selectedApplicant?.name || 'Applicant'
+                            } (${
+                              selectedMethodCode === 'INCOME'
+                                ? 'Income Method'
+                                : selectedMethodCode === 'NORMAL_INCOME'
+                                ? 'Normal Income'
+                                : 'ABB Method'
+                            }).`}
                       </p>
                     </div>
 
@@ -10080,17 +12791,22 @@ export default function CustomerVerification() {
                       type="button"
                       className="bo-btn bo-btn--primary bo-cv-calculate-btn"
                       onClick={handleCalculateEligibility}
-                      disabled={calculating || !calculationAppProdId || !selectedEmploymentIncomeDetailsId}
+                      disabled={
+                        calculating ||
+                        !calculationAppProdId ||
+                        (selectedMethodCode !== 'RTR' && !selectedEmploymentIncomeDetailsId) ||
+                        (selectedMethodCode === 'RTR' && rtrSummaryMetrics.validCount === 0)
+                      }
                     >
                       {calculating ? (
                         <>
                           <span className="bo-cv-btn-spinner" />
-                          <span>Calculating Eligibility...</span>
+                          <span>{selectedMethodCode === 'RTR' ? 'Calculating RTR Eligibility...' : 'Calculating Eligibility...'}</span>
                         </>
                       ) : (
                         <>
                           {ShieldCheckIcon && <ShieldCheckIcon size={16} />}
-                          <span>Calculate Eligibility</span>
+                          <span>{selectedMethodCode === 'RTR' ? 'Calculate RTR Eligibility' : 'Calculate Eligibility'}</span>
                         </>
                       )}
                     </button>
@@ -10110,199 +12826,384 @@ export default function CustomerVerification() {
                 </div>
 
                 {/* ── Section 8: Eligibility Assessment Result ─────────────────── */}
-                {currentAssessment && (
-                  <div className="bo-cv-assess-section bo-cv-result-section">
-                    <div className="bo-cv-assess-section-header">
-                      <div className="bo-cv-assess-section-title-wrap">
-                        <span className="bo-cv-assess-section-num is-result">✓</span>
-                        <div>
-                          <h3 className="bo-cv-assess-section-title">Eligibility Assessment Result</h3>
-                          <p className="bo-cv-assess-section-sub">
-                            Authoritative decision engine output for {selectedApplicant?.name || 'Applicant'} &bull;{' '}
-                            {currentAssessment.assessmentMethodId === 1 ? 'Income Method' : 'ABB Method'}.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="bo-cv-result-header-badges">
-                        <span className="bo-cv-result-method-badge">
-                          {currentAssessment.assessmentMethodId === 1 ? 'Income Method' : 'ABB Method'}
-                        </span>
-                        <span
-                          className={`bo-cv-result-status-badge ${
-                            String(currentAssessment.status || '').toLowerCase().includes('eligible')
-                              ? 'is-eligible'
-                              : 'is-shortfall'
-                          }`}
-                        >
-                          {currentAssessment.status || 'Calculated'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Hero Card: Maximum Eligible Loan Amount */}
-                    <div className="bo-cv-result-hero-card">
-                      <div className="bo-cv-result-hero-main">
-                        <span className="bo-cv-result-hero-label">Maximum Eligible Loan Amount</span>
-                        <div className="bo-cv-result-hero-amount">
-                          {formatCurrency(currentAssessment.maximumEligibleLoanAmount)}
-                        </div>
-                        <div className="bo-cv-result-hero-sub-row">
-                          <div className="bo-cv-result-hero-sub-item">
-                            <span>Requested: </span>
-                            <strong>{formatCurrency(currentAssessment.requestedLoanAmount)}</strong>
+                {selectedMethodCode === 'RTR' ? (
+                  currentRtrAssessment && (
+                    <div className="bo-cv-assess-section bo-cv-result-section">
+                      <div className="bo-cv-assess-section-header">
+                        <div className="bo-cv-assess-section-title-wrap">
+                          <span className="bo-cv-assess-section-num is-result">✓</span>
+                          <div>
+                            <h3 className="bo-cv-assess-section-title">RTR Eligibility Assessment Result</h3>
+                            <p className="bo-cv-assess-section-sub">
+                              Authoritative decision engine output for {selectedApplicant?.name || 'Applicant'} &bull; RTR Method (Repayment Track Record).
+                            </p>
                           </div>
-                          {currentCalcSettings.recommendedLoanAmount || currentAssessment.recommendedLoanAmount ? (
-                            <>
-                              <div className="bo-cv-result-hero-sub-divider">•</div>
-                              <div className="bo-cv-result-hero-sub-item">
-                                <span>Recommended: </span>
-                                <strong>
-                                  {formatCurrency(
-                                    currentCalcSettings.recommendedLoanAmount || currentAssessment.recommendedLoanAmount
-                                  )}
-                                </strong>
-                              </div>
-                            </>
-                          ) : null}
+                        </div>
+                        <div className="bo-cv-result-header-badges">
+                          <span className="bo-cv-result-method-badge">RTR Method</span>
+                          <span className="bo-cv-result-status-badge is-eligible">
+                            {Number(currentRtrAssessment.finalLoanEligibility) > 0 ? 'Eligible' : 'Calculated'}
+                          </span>
                         </div>
                       </div>
 
-                      <div className="bo-cv-result-hero-status-box">
-                        <span className="bo-cv-result-hero-status-label">Assessment Status</span>
-                        <strong
-                          className={`bo-cv-result-hero-status-val ${
-                            String(currentAssessment.status || '').toLowerCase().includes('eligible')
-                              ? 'is-eligible'
-                              : 'is-shortfall'
-                          }`}
-                        >
-                          {currentAssessment.status || 'Calculated'}
-                        </strong>
+                      {/* Hero Card: Final Loan Eligibility */}
+                      <div className="bo-cv-result-hero-card">
+                        <div className="bo-cv-result-hero-main">
+                          <span className="bo-cv-result-hero-label">Final Loan Eligibility</span>
+                          <div className="bo-cv-result-hero-amount">
+                            {formatCurrency(currentRtrAssessment.finalLoanEligibility)}
+                          </div>
+                          <div className="bo-cv-result-hero-sub-row">
+                            <div className="bo-cv-result-hero-sub-item">
+                              <span>Requested: </span>
+                              <strong>{formatCurrency(appDetails.loanAmount)}</strong>
+                            </div>
+                            <div className="bo-cv-result-hero-sub-divider">•</div>
+                            <div className="bo-cv-result-hero-sub-item">
+                              <span>EMI Factor: </span>
+                              <strong>{currentRtrAssessment.emiAmountFactor != null ? currentRtrAssessment.emiAmountFactor : '—'}</strong>
+                            </div>
+                            {(selectedRtrLoan?.lenderName || currentRtrAssessment.selectedRTRLoanDetailsId) && (
+                              <>
+                                <div className="bo-cv-result-hero-sub-divider">•</div>
+                                <div className="bo-cv-result-hero-sub-item">
+                                  <span>Selected Facility: </span>
+                                  <strong>
+                                    {selectedRtrLoan?.lenderName ||
+                                      `RTR Loan ID: ${currentRtrAssessment.selectedRTRLoanDetailsId}`}
+                                  </strong>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="bo-cv-result-hero-status-box">
+                          <span className="bo-cv-result-hero-status-label">Assessment Status</span>
+                          <strong className="bo-cv-result-hero-status-val is-eligible">
+                            {Number(currentRtrAssessment.finalLoanEligibility) > 0 ? 'Eligible' : 'Calculated'}
+                          </strong>
+                        </div>
+                      </div>
+
+                      {/* Result Metrics Grid */}
+                      <div className="bo-cv-result-metrics-grid">
+                        {/* Assessed Income */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Assessed Income</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentRtrAssessment.assessedIncome != null ? formatCurrency(currentRtrAssessment.assessedIncome) : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">EMI × Multiplier evaluated capacity</span>
+                        </div>
+
+                        {/* Final Loan Eligibility */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Final Loan Eligibility</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentRtrAssessment.finalLoanEligibility != null ? formatCurrency(currentRtrAssessment.finalLoanEligibility) : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Net computed loan ceiling</span>
+                        </div>
+
+                        {/* Selected RTR Facility */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Selected Facility</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {selectedRtrLoan?.lenderName ||
+                              (currentRtrAssessment.selectedRTRLoanDetailsId
+                                ? `RTR Loan ID: ${currentRtrAssessment.selectedRTRLoanDetailsId}`
+                                : '—')}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">
+                            {currentRtrAssessment.selectedRTRLoanDetailsId
+                              ? `RTR Loan ID: ${currentRtrAssessment.selectedRTRLoanDetailsId}`
+                              : 'Norm matched facility'}
+                          </span>
+                        </div>
+
+                        {/* Paid Amount */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Paid Amount (Sanction - POS)</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentRtrAssessment.paidAmount != null ? formatCurrency(currentRtrAssessment.paidAmount) : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Total principal repaid</span>
+                        </div>
+
+                        {/* Applicable EMI Multiplier */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Applicable EMI Multiplier</span>
+                          <strong className="bo-cv-result-metric-val bo-cv-foir-val">
+                            {currentRtrAssessment.applicableEMIMultiplier != null ? `${currentRtrAssessment.applicableEMIMultiplier}x` : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Norm multiplier applied</span>
+                        </div>
+
+                        {/* Max Top Up Amount */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Max Top-Up Amount</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentRtrAssessment.maxTopUpAmount != null ? formatCurrency(currentRtrAssessment.maxTopUpAmount) : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Based on norm top-up %</span>
+                        </div>
+
+                        {/* Selected Facility Monthly EMI */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Benchmark Monthly EMI</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentRtrAssessment.emiAmount != null ? formatCurrency(currentRtrAssessment.emiAmount) : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Selected facility EMI</span>
+                        </div>
+
+                        {/* EMI Amount Factor */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">EMI Amount Factor</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentRtrAssessment.emiAmountFactor != null ? String(currentRtrAssessment.emiAmountFactor) : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Underwriting tenure factor</span>
+                        </div>
+                      </div>
+
+                      {/* Metadata Footer */}
+                      <div className="bo-cv-result-footer">
+                        <div className="bo-cv-result-footer-left">
+                          <span className="bo-cv-result-version-pill">
+                            Assessment #{currentRtrAssessment.applicationRTRAssessmentId}
+                          </span>
+                          <span className="bo-cv-result-time">
+                            Calculated:{' '}
+                            {currentRtrAssessment.createdAt
+                              ? new Date(currentRtrAssessment.createdAt).toLocaleString('en-IN')
+                              : '—'}
+                          </span>
+                          {currentRtrAssessment.createdBy && (
+                            <span className="bo-cv-result-user">
+                              User #{currentRtrAssessment.createdBy}
+                            </span>
+                          )}
+                        </div>
+                        <div className="bo-cv-result-footer-right">
+                          {currentRtrAssessment.isCurrent && (
+                            <span className="bo-cv-current-active-tag">Current Active RTR Assessment ✓</span>
+                          )}
+                        </div>
                       </div>
                     </div>
-
-                    {/* Result Metrics Grid */}
-                    <div className="bo-cv-result-metrics-grid">
-                      {/* Considered Income / ABB */}
-                      <div className="bo-cv-result-metric-card">
-                        <span className="bo-cv-result-metric-label">
-                          {currentAssessment.assessmentMethodId === 1 ? 'Total Considered Income' : 'Average Monthly ABB'}
-                        </span>
-                        <strong className="bo-cv-result-metric-val">
-                          {currentAssessment.assessmentMethodId === 1
-                            ? currentAssessment.totalConsideredIncome != null
-                              ? formatCurrency(currentAssessment.totalConsideredIncome)
-                              : 'Not Applicable'
-                            : currentAssessment.averageABB != null
-                            ? formatCurrency(currentAssessment.averageABB)
-                            : 'Not Applicable'}
-                        </strong>
-                        <span className="bo-cv-result-metric-sub">
-                          {currentAssessment.assessmentMethodId === 1
-                            ? '3-Month considered salary income'
-                            : 'Multi-account monthly average balance'}
-                        </span>
+                  )
+                ) : (
+                  currentAssessment && (
+                    <div className="bo-cv-assess-section bo-cv-result-section">
+                      <div className="bo-cv-assess-section-header">
+                        <div className="bo-cv-assess-section-title-wrap">
+                          <span className="bo-cv-assess-section-num is-result">✓</span>
+                          <div>
+                            <h3 className="bo-cv-assess-section-title">Eligibility Assessment Result</h3>
+                            <p className="bo-cv-assess-section-sub">
+                              Authoritative decision engine output for {selectedApplicant?.name || 'Applicant'} &bull;{' '}
+                              {currentAssessment.assessmentMethodId === 1
+                                ? 'Income Method'
+                                : currentAssessment.assessmentMethodId === 4
+                                ? 'Normal Income'
+                                : 'ABB Method'}.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="bo-cv-result-header-badges">
+                          <span className="bo-cv-result-method-badge">
+                            {currentAssessment.assessmentMethodId === 1
+                              ? 'Income Method'
+                              : currentAssessment.assessmentMethodId === 4
+                              ? 'Normal Income'
+                              : 'ABB Method'}
+                          </span>
+                          <span
+                            className={`bo-cv-result-status-badge ${
+                              String(currentAssessment.status || '').toLowerCase().includes('eligible')
+                                ? 'is-eligible'
+                                : 'is-shortfall'
+                            }`}
+                          >
+                            {currentAssessment.status || 'Calculated'}
+                          </span>
+                        </div>
                       </div>
 
-                      {/* Existing EMI */}
-                      <div className="bo-cv-result-metric-card">
-                        <span className="bo-cv-result-metric-label">Existing Monthly EMI</span>
-                        <strong className="bo-cv-result-metric-val">
-                          {currentAssessment.existingEMI != null ? formatCurrency(currentAssessment.existingEMI) : '₹0'}
-                        </strong>
-                        <span className="bo-cv-result-metric-sub">Active debt obligations</span>
+                      {/* Hero Card: Maximum Eligible Loan Amount */}
+                      <div className="bo-cv-result-hero-card">
+                        <div className="bo-cv-result-hero-main">
+                          <span className="bo-cv-result-hero-label">Maximum Eligible Loan Amount</span>
+                          <div className="bo-cv-result-hero-amount">
+                            {formatCurrency(currentAssessment.maximumEligibleLoanAmount)}
+                          </div>
+                          <div className="bo-cv-result-hero-sub-row">
+                            <div className="bo-cv-result-hero-sub-item">
+                              <span>Requested: </span>
+                              <strong>{formatCurrency(currentAssessment.requestedLoanAmount)}</strong>
+                            </div>
+                            {currentCalcSettings.recommendedLoanAmount || currentAssessment.recommendedLoanAmount ? (
+                              <>
+                                <div className="bo-cv-result-hero-sub-divider">•</div>
+                                <div className="bo-cv-result-hero-sub-item">
+                                  <span>Recommended: </span>
+                                  <strong>
+                                    {formatCurrency(
+                                      currentCalcSettings.recommendedLoanAmount || currentAssessment.recommendedLoanAmount
+                                    )}
+                                  </strong>
+                                </div>
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="bo-cv-result-hero-status-box">
+                          <span className="bo-cv-result-hero-status-label">Assessment Status</span>
+                          <strong
+                            className={`bo-cv-result-hero-status-val ${
+                              String(currentAssessment.status || '').toLowerCase().includes('eligible')
+                                ? 'is-eligible'
+                                : 'is-shortfall'
+                            }`}
+                          >
+                            {currentAssessment.status || 'Calculated'}
+                          </strong>
+                        </div>
                       </div>
 
-                      {/* Policy FOIR Limit */}
-                      <div className="bo-cv-result-metric-card">
-                        <span className="bo-cv-result-metric-label">Policy FOIR Applied</span>
-                        <strong className="bo-cv-result-metric-val bo-cv-foir-val">
-                          {currentAssessment.foirPercentApplied != null ? `${currentAssessment.foirPercentApplied}%` : '—'}
-                        </strong>
-                        <span className="bo-cv-result-metric-sub">Underwriting policy cap</span>
+                      {/* Result Metrics Grid */}
+                      <div className="bo-cv-result-metrics-grid">
+                        {/* Considered Income / ABB */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">
+                            {currentAssessment.assessmentMethodId === 1
+                              ? 'Total Considered Income'
+                              : currentAssessment.assessmentMethodId === 4
+                              ? 'Eligible Monthly Income'
+                              : 'Average Monthly ABB'}
+                          </span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentAssessment.assessmentMethodId === 1 || currentAssessment.assessmentMethodId === 4
+                              ? currentAssessment.totalConsideredIncome != null
+                                ? formatCurrency(currentAssessment.totalConsideredIncome)
+                                : 'Not Applicable'
+                              : currentAssessment.averageABB != null
+                              ? formatCurrency(currentAssessment.averageABB)
+                              : 'Not Applicable'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">
+                            {currentAssessment.assessmentMethodId === 1
+                              ? '3-Month considered salary income'
+                              : currentAssessment.assessmentMethodId === 4
+                              ? 'Evaluated monthly income from business & other sources'
+                              : 'Multi-account monthly average balance'}
+                          </span>
+                        </div>
+
+                        {/* Existing EMI */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Existing Monthly EMI</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentAssessment.existingEMI != null ? formatCurrency(currentAssessment.existingEMI) : '₹0'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Active debt obligations</span>
+                        </div>
+
+                        {/* Policy FOIR Limit */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Policy FOIR Applied</span>
+                          <strong className="bo-cv-result-metric-val bo-cv-foir-val">
+                            {currentAssessment.foirPercentApplied != null ? `${currentAssessment.foirPercentApplied}%` : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Underwriting policy cap</span>
+                        </div>
+
+                        {/* Eligible EMI */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Eligible Monthly EMI</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentAssessment.eligibleEMI != null ? formatCurrency(currentAssessment.eligibleEMI) : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Net repayment capacity</span>
+                        </div>
+
+                        {/* Proposed ROI */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Proposed ROI</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentAssessment.proposedROI != null ? `${currentAssessment.proposedROI}% p.a.` : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Annual interest rate applied</span>
+                        </div>
+
+                        {/* Proposed Tenure */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Proposed Tenure</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentAssessment.proposedTenureMonths != null ? `${currentAssessment.proposedTenureMonths} Months` : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Amortization duration</span>
+                        </div>
+
+                        {/* EMI Factor */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">EMI Factor</span>
+                          <strong className="bo-cv-result-metric-val">
+                            {currentAssessment.emiFactor != null
+                              ? Number(currentAssessment.emiFactor).toLocaleString('en-IN', { maximumFractionDigits: 2 })
+                              : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">Per lakh factor coefficient</span>
+                        </div>
+
+                        {/* Actual FOIR */}
+                        <div className="bo-cv-result-metric-card">
+                          <span className="bo-cv-result-metric-label">Actual Calculated FOIR</span>
+                          <strong
+                            className={`bo-cv-result-metric-val ${
+                              currentAssessment.foirPercentApplied != null &&
+                              currentAssessment.actualFOIR != null &&
+                              Number(currentAssessment.actualFOIR) > Number(currentAssessment.foirPercentApplied)
+                                ? 'is-over-foir'
+                                : ''
+                            }`}
+                          >
+                            {currentAssessment.actualFOIR != null ? `${Number(currentAssessment.actualFOIR).toFixed(2)}%` : '—'}
+                          </strong>
+                          <span className="bo-cv-result-metric-sub">
+                            Benchmark: {currentAssessment.foirPercentApplied ? `${currentAssessment.foirPercentApplied}%` : '—'}
+                          </span>
+                        </div>
                       </div>
 
-                      {/* Eligible EMI */}
-                      <div className="bo-cv-result-metric-card">
-                        <span className="bo-cv-result-metric-label">Eligible Monthly EMI</span>
-                        <strong className="bo-cv-result-metric-val">
-                          {currentAssessment.eligibleEMI != null ? formatCurrency(currentAssessment.eligibleEMI) : '—'}
-                        </strong>
-                        <span className="bo-cv-result-metric-sub">Net repayment capacity</span>
-                      </div>
-
-                      {/* Proposed ROI */}
-                      <div className="bo-cv-result-metric-card">
-                        <span className="bo-cv-result-metric-label">Proposed ROI</span>
-                        <strong className="bo-cv-result-metric-val">
-                          {currentAssessment.proposedROI != null ? `${currentAssessment.proposedROI}% p.a.` : '—'}
-                        </strong>
-                        <span className="bo-cv-result-metric-sub">Annual interest rate applied</span>
-                      </div>
-
-                      {/* Proposed Tenure */}
-                      <div className="bo-cv-result-metric-card">
-                        <span className="bo-cv-result-metric-label">Proposed Tenure</span>
-                        <strong className="bo-cv-result-metric-val">
-                          {currentAssessment.proposedTenureMonths != null ? `${currentAssessment.proposedTenureMonths} Months` : '—'}
-                        </strong>
-                        <span className="bo-cv-result-metric-sub">Amortization duration</span>
-                      </div>
-
-                      {/* EMI Factor */}
-                      <div className="bo-cv-result-metric-card">
-                        <span className="bo-cv-result-metric-label">EMI Factor</span>
-                        <strong className="bo-cv-result-metric-val">
-                          {currentAssessment.emiFactor != null
-                            ? Number(currentAssessment.emiFactor).toLocaleString('en-IN', { maximumFractionDigits: 2 })
-                            : '—'}
-                        </strong>
-                        <span className="bo-cv-result-metric-sub">Per lakh factor coefficient</span>
-                      </div>
-
-                      {/* Actual FOIR */}
-                      <div className="bo-cv-result-metric-card">
-                        <span className="bo-cv-result-metric-label">Actual Calculated FOIR</span>
-                        <strong
-                          className={`bo-cv-result-metric-val ${
-                            currentAssessment.foirPercentApplied != null &&
-                            currentAssessment.actualFOIR != null &&
-                            Number(currentAssessment.actualFOIR) > Number(currentAssessment.foirPercentApplied)
-                              ? 'is-over-foir'
-                              : ''
-                          }`}
-                        >
-                          {currentAssessment.actualFOIR != null ? `${Number(currentAssessment.actualFOIR).toFixed(2)}%` : '—'}
-                        </strong>
-                        <span className="bo-cv-result-metric-sub">
-                          Benchmark: {currentAssessment.foirPercentApplied ? `${currentAssessment.foirPercentApplied}%` : '—'}
-                        </span>
+                      {/* Metadata Footer */}
+                      <div className="bo-cv-result-footer">
+                        <div className="bo-cv-result-footer-left">
+                          <span className="bo-cv-result-version-pill">
+                            Version {currentAssessment.calculationVersion || 1}
+                          </span>
+                          <span className="bo-cv-result-time">
+                            Calculated:{' '}
+                            {currentAssessment.calculatedAt
+                              ? new Date(currentAssessment.calculatedAt).toLocaleString('en-IN')
+                              : '—'}
+                          </span>
+                          <span className="bo-cv-result-user">
+                            By: {currentAssessment.calculatedByRole || 'BackOffice'} (User #{currentAssessment.calculatedByUserId})
+                          </span>
+                        </div>
+                        <div className="bo-cv-result-footer-right">
+                          {currentAssessment.isCurrent && (
+                            <span className="bo-cv-current-active-tag">Current Active Assessment ✓</span>
+                          )}
+                        </div>
                       </div>
                     </div>
-
-                    {/* Metadata Footer */}
-                    <div className="bo-cv-result-footer">
-                      <div className="bo-cv-result-footer-left">
-                        <span className="bo-cv-result-version-pill">
-                          Version {currentAssessment.calculationVersion || 1}
-                        </span>
-                        <span className="bo-cv-result-time">
-                          Calculated:{' '}
-                          {currentAssessment.calculatedAt
-                            ? new Date(currentAssessment.calculatedAt).toLocaleString('en-IN')
-                            : '—'}
-                        </span>
-                        <span className="bo-cv-result-user">
-                          By: {currentAssessment.calculatedByRole || 'BackOffice'} (User #{currentAssessment.calculatedByUserId})
-                        </span>
-                      </div>
-                      <div className="bo-cv-result-footer-right">
-                        {currentAssessment.isCurrent && (
-                          <span className="bo-cv-current-active-tag">Current Active Assessment ✓</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  )
                 )}
 
                 {/* ── Section 9: Company Recommendation ────────────────────────── */}

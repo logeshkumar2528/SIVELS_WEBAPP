@@ -70,6 +70,11 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/calculation/salary-income/${encodeURIComponent(salaryIncomeDetailsId)}`,
   CALCULATION_SALARY_INCOME_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
     `/calculation/salary-income/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
+  CALCULATION_OTHER_INCOME: '/calculation/other-income',
+  CALCULATION_OTHER_INCOME_BY_ID: (applicationOtherIncomeDetailsId) =>
+    `/calculation/other-income/${encodeURIComponent(applicationOtherIncomeDetailsId)}`,
+  CALCULATION_OTHER_INCOME_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
+    `/calculation/other-income/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
   CALCULATION_ABB_ACCOUNTS: '/calculation/abb-accounts',
   CALCULATION_ABB_ACCOUNTS_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
     `/calculation/abb-accounts/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
@@ -80,6 +85,26 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/calculation/assessments/by-application/${encodeURIComponent(applicationProductDetailsId)}`,
   CALCULATION_ASSESSMENT_RECOMMENDATION: (loanEligibilityAssessmentId) =>
     `/calculation/assessments/${encodeURIComponent(loanEligibilityAssessmentId)}/recommendation`,
+
+  // RTR (Repayment Track Record) Calculation APIs
+  CALCULATION_RTR_LOANS: '/calculation/rtr/loans',
+  CALCULATION_RTR_LOAN_BY_ID: (id) =>
+    `/calculation/rtr/loans/${encodeURIComponent(id)}`,
+  CALCULATION_RTR_LOANS_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
+    `/calculation/rtr/loans/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
+  CALCULATION_RTR_CALCULATE: '/calculation/rtr/calculate',
+  CALCULATION_RTR_ASSESSMENTS_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
+    `/calculation/rtr/assessments/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
+
+  // Normal Income Calculation APIs
+  CALCULATION_NORMAL_INCOME_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
+    `/calculation/normal-income/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
+  CALCULATION_NORMAL_INCOME_INCOME: '/calculation/normal-income/income',
+  CALCULATION_NORMAL_INCOME_INCOME_BY_ID: (id) =>
+    `/calculation/normal-income/income/${encodeURIComponent(id)}`,
+  CALCULATION_NORMAL_INCOME_OTHER_INCOME: '/calculation/normal-income/other-income',
+  CALCULATION_NORMAL_INCOME_OTHER_INCOME_BY_ID: (id) =>
+    `/calculation/normal-income/other-income/${encodeURIComponent(id)}`,
 
   // Document Rejection & Returned Application Workflow
   DOCUMENT_REJECTIONS: '/BackOfficeDocumentRejection',

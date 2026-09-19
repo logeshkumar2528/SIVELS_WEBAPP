@@ -55,6 +55,9 @@ export default function PdfView() {
   const [liveAllKycRecords, setLiveAllKycRecords] = useState([]);
   const [coApplicantPhotos, setCoApplicantPhotos] = useState({});
   const [downloadedDocs, setDownloadedDocs] = useState([]);
+  const [isMetadataLoading, setIsMetadataLoading] = useState(true);
+  const [isDocsDownloading, setIsDocsDownloading] = useState(true);
+  const [isCoPhotosLoading, setIsCoPhotosLoading] = useState(false);
   const [masterMaps, setMasterMaps] = useState({
     sourcingChannels: {},
     loanProducts: {},
@@ -96,6 +99,8 @@ export default function PdfView() {
     let active = true;
 
     async function loadAllData() {
+      setIsMetadataLoading(true);
+      setIsDocsDownloading(true);
       try {
         // Hydrate full application data into draft context first (forceRefresh: true)
         try {
@@ -452,6 +457,7 @@ export default function PdfView() {
             cities: cityMap.status === 'fulfilled' ? cityMap.value : {},
             states: stateMap.status === 'fulfilled' ? stateMap.value : {},
           });
+          setIsMetadataLoading(false);
         }
 
         // Fetch and download actual uploaded customer documents
@@ -573,9 +579,18 @@ export default function PdfView() {
           }
         } catch (docErr) {
           console.error('Failed to load customer documents for PDF View:', docErr);
+        } finally {
+          if (active) {
+            setIsDocsDownloading(false);
+          }
         }
       } catch (err) {
         console.error('Error fetching PDF preview data:', err);
+      } finally {
+        if (active) {
+          setIsMetadataLoading(false);
+          setIsDocsDownloading(false);
+        }
       }
     }
 
@@ -589,23 +604,33 @@ export default function PdfView() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [errorPopup, setErrorPopup] = useState(null);
 
+  const isPdfMediaReady = !isMetadataLoading && !isDocsDownloading && !isCoPhotosLoading;
+
   // Generate continuous single long page PDF
   const handleDownloadPdf = async () => {
-    if (!pdfRef.current || isGeneratingPdf) return;
+    if (!pdfRef.current || isGeneratingPdf || !isPdfMediaReady) return;
     setIsGeneratingPdf(true);
 
     try {
       const element = pdfRef.current;
 
-      // Ensure images are fully loaded before rendering canvas
-      const imgElements = element.querySelectorAll('img');
+      // Ensure images are fully loaded and decoded before rendering canvas
+      const imgElements = Array.from(element.querySelectorAll('img'));
       await Promise.all(
-        Array.from(imgElements).map((img) => {
-          if (img.complete) return Promise.resolve();
-          return new Promise((resolve) => {
-            img.onload = resolve;
-            img.onerror = resolve;
-          });
+        imgElements.map(async (img) => {
+          if (!img.complete) {
+            await new Promise((resolve) => {
+              img.onload = resolve;
+              img.onerror = resolve;
+            });
+          }
+          if (img.decode) {
+            try {
+              await img.decode();
+            } catch {
+              // Ignore decode errors if unsupported or already rendered
+            }
+          }
         })
       );
 
@@ -820,9 +845,20 @@ export default function PdfView() {
 
   // Fetch Co-Applicant Profile Images using dynamic kycDocumentId
   useEffect(() => {
-    if (!hasCoApplicants) return;
+    if (!hasCoApplicants) {
+      setIsCoPhotosLoading(false);
+      return;
+    }
 
+    const validKycIds = coApplicantKycIds.filter(Boolean);
+    if (validKycIds.length === 0) {
+      setIsCoPhotosLoading(false);
+      return;
+    }
+
+    setIsCoPhotosLoading(true);
     let isMounted = true;
+    let remaining = validKycIds.length;
     const token = localStorage.getItem('authToken');
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -853,6 +889,12 @@ export default function PdfView() {
         })
         .catch((err) => {
           console.warn(`Could not load profile image for co-applicant KYC ${kycId}:`, err);
+        })
+        .finally(() => {
+          remaining--;
+          if (remaining <= 0 && isMounted) {
+            setIsCoPhotosLoading(false);
+          }
         });
     });
 
@@ -1310,8 +1352,12 @@ export default function PdfView() {
         >
           Back to Application
         </Button>
-        <Button onClick={handleDownloadPdf} disabled={isGeneratingPdf}>
-          {isGeneratingPdf ? 'Generating PDF...' : 'Download PDF'}
+        <Button onClick={handleDownloadPdf} disabled={isGeneratingPdf || !isPdfMediaReady}>
+          {isGeneratingPdf
+            ? 'Generating PDF...'
+            : !isPdfMediaReady
+            ? 'Preparing documents...'
+            : 'Download PDF'}
         </Button>
       </div>
 
