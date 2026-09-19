@@ -4122,6 +4122,256 @@
   .bo-cv-rec-condition-label-row { align-items: flex-start; flex-direction: column; }
 }
 
+/* ── Comments on other health checks (FI checklist) ──────────────── */
+.bo-cv-health-checks {
+  margin-top: 16px;
+}
+
+.bo-cv-health-checks-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+
+.bo-cv-health-checks-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, #f3faf6 0%, #ffffff 100%);
+  border-bottom: 1px solid #e8f0ec;
+}
+
+.bo-cv-health-checks-head-icon {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eaf5ee;
+  color: #0f7a4c;
+  border: 1px solid #c6e6d4;
+}
+
+.bo-cv-health-checks-head-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.bo-cv-health-checks-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: 0.01em;
+}
+
+.bo-cv-health-checks-subtitle {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.bo-cv-health-checks-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f7a4c;
+  background: #eaf5ee;
+  border: 1px solid #c6e6d4;
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.bo-cv-health-checks-table-wrap {
+  overflow-x: auto;
+}
+
+.bo-cv-health-checks-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.bo-cv-health-checks-table thead tr {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.bo-cv-health-checks-table th {
+  padding: 10px 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  text-align: left;
+}
+
+.bo-cv-health-checks-table td {
+  padding: 10px 12px;
+  vertical-align: middle;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.bo-cv-health-checks-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.bo-cv-health-checks-particular {
+  width: 24%;
+}
+
+.bo-cv-health-checks-particular-name {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.bo-cv-health-checks-table th:nth-child(2),
+.bo-cv-health-checks-table td:nth-child(2) {
+  width: 16%;
+}
+
+.bo-cv-health-checks-table th:nth-child(3),
+.bo-cv-health-checks-table td:nth-child(3) {
+  width: 22%;
+}
+
+.bo-cv-health-status-wrap {
+  position: relative;
+}
+
+.bo-cv-health-checks-select,
+.bo-cv-health-checks-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12.5px;
+  color: #0f172a;
+  background: #ffffff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bo-cv-health-status-wrap.is-pending .bo-cv-health-checks-select {
+  background: #fffbeb;
+  border-color: #f6e05e;
+  color: #92400e;
+  font-weight: 600;
+}
+
+.bo-cv-health-status-wrap.is-yes .bo-cv-health-checks-select {
+  background: #eaf5ee;
+  border-color: #86efac;
+  color: #166534;
+  font-weight: 600;
+}
+
+.bo-cv-health-status-wrap.is-no .bo-cv-health-checks-select {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.bo-cv-health-checks-select:focus,
+.bo-cv-health-checks-input:focus {
+  outline: none;
+  border-color: #0f7a4c;
+  box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.14);
+}
+
+.bo-cv-health-findings-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition: all 0.15s ease;
+}
+
+.bo-cv-health-findings-trigger:hover {
+  border-color: #0f7a4c;
+  background: #f3faf6;
+  color: #0f172a;
+}
+
+.bo-cv-health-findings-trigger.has-value {
+  border-style: solid;
+  border-color: #c6e6d4;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.bo-cv-health-findings-trigger-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.bo-cv-health-findings-trigger:not(.has-value) .bo-cv-health-findings-trigger-text {
+  font-style: italic;
+}
+
+.bo-cv-health-findings-trigger-action {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f7a4c;
+  background: #eaf5ee;
+  border: 1px solid #c6e6d4;
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+
+.bo-cv-health-checks-empty {
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+  padding: 22px 12px !important;
+}
+
+.bo-cv-health-checks-error {
+  color: #b91c1c;
+}
+
+.bo-cv-health-findings-modal {
+  max-width: 520px;
+}
+
+@media (max-width: 720px) {
+  .bo-cv-health-checks-head {
+    flex-wrap: wrap;
+  }
+
+  .bo-cv-health-checks-table {
+    table-layout: auto;
+    min-width: 680px;
+  }
+}
+
 .bo-cv-btn-send-credit-officer {
   display: inline-flex;
   align-items: center;
