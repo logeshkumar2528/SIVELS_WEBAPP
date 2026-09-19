@@ -52,7 +52,13 @@ export function mapApplicationFullDetails(response, extraDocs = []) {
   const rawCustomer = response.customer || response.Customer || response;
   const customer = firstItem(rawCustomer);
 
-  const rawProduct = response.productDetails || response.ProductDetails || response.applicationProductDetails;
+  const rawProduct =
+    response.productDetails ||
+    response.ProductDetails ||
+    response.productDetailsList ||
+    response.ProductDetailsList ||
+    response.applicationProductDetails ||
+    response.ApplicationProductDetails;
   const productDetails = firstItem(rawProduct);
 
   const rawPersonal = response.personalInformation || response.PersonalInformation;
@@ -502,10 +508,21 @@ export function mapApplicationFullDetails(response, extraDocs = []) {
     finalDecision: 'Ready for Back Office Verification Sign-off',
   };
 
+  const appProdId =
+    getValue(productDetails, 'applicationProductDetailsId', 'ApplicationProductDetailsId', 'id', 'Id') ||
+    getValue(response, 'applicationProductDetailsId', 'ApplicationProductDetailsId') ||
+    (Array.isArray(response.productDetailsList) && getValue(response.productDetailsList[0], 'applicationProductDetailsId', 'ApplicationProductDetailsId')) ||
+    (Array.isArray(response.productDetails) && getValue(response.productDetails[0], 'applicationProductDetailsId', 'ApplicationProductDetailsId')) ||
+    (Array.isArray(response.ProductDetailsList) && getValue(response.ProductDetailsList[0], 'applicationProductDetailsId', 'ApplicationProductDetailsId')) ||
+    (Array.isArray(response.ProductDetails) && getValue(response.ProductDetails[0], 'applicationProductDetailsId', 'ApplicationProductDetailsId')) ||
+    getValue(customer, 'applicationProductDetailsId', 'ApplicationProductDetailsId') ||
+    null;
+
   return {
     customerId: String(agentCustomerId),
     agentCustomerId: agentCustomerId ? Number(agentCustomerId) : null,
     applicationId: `APP-${agentCustomerId}`,
+    applicationProductDetailsId: appProdId ? Number(appProdId) : null,
     customerName,
     mobile: mobile ? String(mobile).replace(/\D/g, '').slice(-10) : 'Not Available',
     email: email || 'Not Available',

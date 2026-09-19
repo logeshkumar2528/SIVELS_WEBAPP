@@ -1257,12 +1257,21 @@ export default function CustomerVerification() {
   // Dynamic IDs resolution for calculation engine
   const calculationAppProdId = useMemo(() => {
     return Number(
-      verificationData?.application?.applicationProductDetailsId ||
-      verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
-      verificationData?.raw?.productDetails?.applicationProductDetailsId ||
-      verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId ||
       verificationData?.applicationProductDetailsId ||
-      verificationData?.applicationProductDetails?.applicationProductDetailsId ||
+      verificationData?.application?.applicationProductDetailsId ||
+      verificationData?.application?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.[0]?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.[0]?.ApplicationProductDetailsId ||
+      verificationData?.raw?.ProductDetails?.[0]?.applicationProductDetailsId ||
+      verificationData?.raw?.ProductDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.applicationProductDetails?.ApplicationProductDetailsId ||
+      verificationData?.raw?.ApplicationProductDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.ApplicationProductDetails?.ApplicationProductDetailsId ||
       0
     );
   }, [verificationData]);
@@ -4895,9 +4904,12 @@ export default function CustomerVerification() {
 
   const fetchApplicationRejections = useCallback(async () => {
     const appProdId =
+      verificationData?.applicationProductDetailsId ||
       verificationData?.application?.applicationProductDetailsId ||
+      verificationData?.application?.ApplicationProductDetailsId ||
       verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.productDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId;
 
     if (!appProdId) return;
@@ -4921,9 +4933,12 @@ export default function CustomerVerification() {
   // Step-Level Verification Persistence (BackOfficeStepVerification)
   // ----------------------------------------------------
   const resolvedAppProdId = Number(
+    verificationData?.applicationProductDetailsId ||
     verificationData?.application?.applicationProductDetailsId ||
+    verificationData?.application?.ApplicationProductDetailsId ||
     verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
     verificationData?.raw?.productDetails?.applicationProductDetailsId ||
+    verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
     verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId ||
     0
   );
@@ -5406,9 +5421,13 @@ export default function CustomerVerification() {
   // Hydrate Back Office application documents (Steps 09, 10, 11)
   const fetchBackOfficeDocuments = useCallback(async () => {
     const appProdId =
+      resolvedAppProdId ||
+      verificationData?.applicationProductDetailsId ||
       verificationData?.application?.applicationProductDetailsId ||
+      verificationData?.application?.ApplicationProductDetailsId ||
       verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.productDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId;
 
     if (!appProdId) return;
@@ -5626,9 +5645,13 @@ export default function CustomerVerification() {
     }
 
     const appProdId =
+      resolvedAppProdId ||
+      verificationData?.applicationProductDetailsId ||
       verificationData?.application?.applicationProductDetailsId ||
+      verificationData?.application?.ApplicationProductDetailsId ||
       verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.productDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId;
 
     const sTypeId = salarySlipDocTypeId;
@@ -6588,10 +6611,16 @@ export default function CustomerVerification() {
       20
     );
     const appProdId = Number(
+      resolvedAppProdId ||
+      calculationAppProdId ||
+      verificationData?.applicationProductDetailsId ||
       verificationData?.application?.applicationProductDetailsId ||
+      verificationData?.application?.ApplicationProductDetailsId ||
       verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.productDetails?.applicationProductDetailsId ||
-      verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId
+      verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
+      verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId ||
+      0
     );
     const agentCustId = Number(verificationData?.agentCustomerId || customerId || null);
     const baseType = STEP_DOC_TYPE_MAP[stepNum] || stepLabel.toUpperCase().replace(/\s+/g, '_');
@@ -8939,6 +8968,7 @@ export default function CustomerVerification() {
                             const isThisRowSaving = savingVerificationKey === `${row.applicantSequence}_${row.stepCode}`;
                             const isCheckboxDisabled =
                               !row.hasFile ||
+                              row.status === 'Returned to RM' ||
                               row.status === 'Returned' ||
                               row.status === 'Resubmitted' ||
                               hasUnresolvedRejectionForStep(row.stepCode, row.applicantSequence) ||
@@ -9008,7 +9038,7 @@ export default function CustomerVerification() {
                                     title={
                                       !row.hasFile
                                         ? 'Cannot verify: Document not uploaded'
-                                        : row.status === 'Returned'
+                                        : row.status === 'Returned to RM' || row.status === 'Returned'
                                         ? 'Cannot verify: Document is returned to RM'
                                         : row.status === 'Resubmitted'
                                         ? 'Cannot verify: Resubmitted document must be verified via comparison review'
@@ -9034,11 +9064,7 @@ export default function CustomerVerification() {
                                 <td className="bo-cv-doc-td-status" style={{ textAlign: 'center' }}>
                                   <span className={`bo-cv-status-badge bo-cv-status-badge--${row.status.toLowerCase().replace(/\s+/g, '-')}`}>
                                     <span className="bo-cv-badge-dot" />
-                                    {row.status === 'Resubmitted' && 'Resubmitted'}
-                                    {row.status === 'Returned' && 'Returned'}
-                                    {row.status === 'Verified' && 'Verified'}
-                                    {row.status === 'Available' && 'Available'}
-                                    {row.status === 'Not Uploaded' && 'Not Uploaded'}
+                                    {row.status}
                                   </span>
                                 </td>
                                 <td className="bo-cv-doc-td-actions" style={{ textAlign: 'center' }}>

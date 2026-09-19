@@ -140,6 +140,25 @@ export const backOfficeService = {
     return unwrapResponse(response);
   },
 
+  /**
+   * Retrieve all application product details records.
+   */
+  getApplicationProductDetails: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.PRODUCT_DETAILS);
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve application product details for a specific customer ID.
+   * @param {string|number} agentCustomerId
+   */
+  getApplicationProductDetailsByCustomer: async (agentCustomerId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.PRODUCT_DETAILS_BY_CUSTOMER(agentCustomerId)
+    );
+    return unwrapResponse(response);
+  },
+
   /* ==========================================
      6. CUSTOMER DOCUMENT APIs
   ========================================== */

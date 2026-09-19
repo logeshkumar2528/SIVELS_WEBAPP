@@ -46,11 +46,12 @@ function getStatusInfo(status) {
   // Handle Numeric Status Codes
   if (typeof status === 'number') {
     switch (status) {
-      case 4:
-        return { label: 'Approved', className: 'is-approved' };
       case 2:
+        return { label: 'Logged to HO', className: 'is-review' };
       case 3:
         return { label: 'Under Review', className: 'is-review' };
+      case 4:
+        return { label: 'Approved', className: 'is-approved' };
       case 5:
         return { label: 'Rejected', className: 'is-rejected' };
       case 6:
@@ -64,19 +65,22 @@ function getStatusInfo(status) {
 
   // Handle String Status Values
   const s = String(status).toLowerCase().trim();
-  if (s.includes('approved')) {
-    return { label: 'Approved', className: 'is-approved' };
+  if (s === '2' || s.includes('logged to ho') || s.includes('submitted to ho') || s.includes('received')) {
+    return { label: 'Logged to HO', className: 'is-review' };
   }
-  if (s.includes('reject')) {
-    return { label: 'Rejected', className: 'is-rejected' };
-  }
-  if (s.includes('return')) {
-    return { label: 'Returned', className: 'is-rejected' };
-  }
-  if (s.includes('review') || s.includes('verification') || s.includes('logged to ho') || s.includes('submitted to ho')) {
+  if (s === '3' || s.includes('review') || s.includes('verification')) {
     return { label: 'Under Review', className: 'is-review' };
   }
-  if (s.includes('pending') || s.includes('draft') || s.includes('new') || s.includes('sourced')) {
+  if (s === '4' || s.includes('approved')) {
+    return { label: 'Approved', className: 'is-approved' };
+  }
+  if (s === '5' || s.includes('reject')) {
+    return { label: 'Rejected', className: 'is-rejected' };
+  }
+  if (s === '6' || s.includes('return')) {
+    return { label: 'Returned', className: 'is-rejected' };
+  }
+  if (s === '0' || s === '1' || s.includes('pending') || s.includes('draft') || s.includes('new') || s.includes('sourced')) {
     return { label: 'Pending', className: 'is-pending' };
   }
 

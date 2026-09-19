@@ -35,3 +35,17 @@ export const updateRTRNormMaster = async (id, payload) => {
   const response = await axiosInstance.put(`/rtr-norm-master/${id}`, payload);
   return response.data;
 };
+
+/**
+ * Soft delete an existing RTR Norm Master policy record.
+ * @param {string|number} id
+ * @param {string|number} modifiedBy
+ */
+export const deleteRTRNormMaster = async (id, modifiedBy) => {
+  const url = modifiedBy
+    ? `/rtr-norm-master/${id}?modifiedBy=${encodeURIComponent(modifiedBy)}`
+    : `/rtr-norm-master/${id}`;
+  const response = await axiosInstance.delete(url);
+  return response.data;
+};
+

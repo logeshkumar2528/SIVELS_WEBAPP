@@ -27,6 +27,7 @@ import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import { formatDateTimeSeconds as formatDateTime } from '../../utils/dateHelper';
 import { buildValidationPopup, parseApiErrorBody } from '../../utils/formatUserFacingError';
 import { buildApplicationDisplayId, resolveApplicantName } from '../applicationWizard/flowUtils';
+import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 import './ApplicationDetails.css';
 
@@ -105,17 +106,19 @@ async function updateCustomerStatusToInProgress(baseUrl, customerId, record = {}
       status: 1,
     };
 
-    const response = await fetch(`${baseUrl}/AgentAddCustomer/${customerId}`, {
+    const putRes = await fetch(`${baseUrl}/AgentAddCustomer/${customerId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(payload),
     });
 
-    if (!response.ok) {
-      console.error(`Failed to update customer status to in-progress (${response.status})`);
+    if (!putRes.ok && putRes.status !== 204) {
+      console.warn(`[ApplicationDetails] Auto status progression to Pending returned ${putRes.status}`);
     }
   } catch (err) {
-    console.error('Failed to update customer status to in-progress:', err);
+    console.warn('[ApplicationDetails] Failed to auto-update status to Pending:', err);
   }
 }
 
@@ -171,16 +174,28 @@ function validateApplication(record = {}, requiresVariation = false, isRmSourced
 }
 
 export default function ApplicationDetails() {
-  const navigate = useNavigate();
+  const { applicationId: routeAppId } = useParams();
   const location = useLocation();
-  const { applicationId } = useParams();
-  const appId = applicationId;
+  const navigate = useNavigate();
+  const appId = routeAppId || location.state?.applicationId || '';
 
-  const { getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
+  const {
+    draft,
+    getApplication,
+    ensureApplication,
+    saveApplication,
+    loadApplicationFromBackend,
+    hydratedFromBackend,
+  } = useApplicationDraftStore();
+
   const [errors, setErrors] = useState({});
   const [isLoadingApplication, setIsLoadingApplication] = useState(false);
   const [errorPopup, setErrorPopup] = useState(null);
   const [displayRecord, setDisplayRecord] = useState(null);
+  const [sourcingChannels, setSourcingChannels] = useState([]);
+  const [sourcingChannel, setSourcingChannel] = useState('');
+  const [selectedAgentId, setSelectedAgentId] = useState('');
+  const [agentOptions, setAgentOptions] = useState([]);
   const [agentBranch, setAgentBranch] = useState('');
   const [agentInfo, setAgentInfo] = useState({ name: '', code: '' });
   const [sourcingInfo, setSourcingInfo] = useState({
@@ -192,6 +207,11 @@ export default function ApplicationDetails() {
     rmId: null,
     rmCustomerId: null,
   });
+
+  const [loanProducts, setLoanProducts] = useState([]);
+  const [loanVariations, setLoanVariations] = useState([]);
+  const [rateOfInterests, setRateOfInterests] = useState([]);
+  const [loanTenures, setLoanTenures] = useState([]);
 
   const [sourcingChannelOptions, setSourcingChannelOptions] = useState([]);
   const [loanProductOptions, setLoanProductOptions] = useState([]);
@@ -235,13 +255,12 @@ export default function ApplicationDetails() {
             }
           }
 
-          const rawAgentId = record.agentId ?? record.AgentId ?? record.customer?.agentId ?? record.productDetails?.agentId ?? null;
-          const rawRmId = record.rmId ?? record.RMId ?? record.productDetails?.rmId ?? record.customer?.rmId ?? record.customer?.createdBy ?? null;
+          const ownership = resolveApplicationOwnership(record);
+          let agentId = ownership.agentId;
+          let rmId = ownership.rmId;
           let rmCustomerId = record.rmCustomerId ?? record.productDetails?.rmCustomerId ?? null;
 
           // If neither agentId nor rmId found on record, fetch ApplicationProductDetails to be certain
-          let agentId = (rawAgentId !== null && rawAgentId !== undefined && rawAgentId !== '') ? rawAgentId : null;
-          let rmId = rawRmId;
           if (agentId === null && !rmId) {
             try {
               const prodRes = await fetch(`${baseUrl}/ApplicationProductDetails/bycustomer/${encodeURIComponent(appId)}`);
@@ -249,8 +268,9 @@ export default function ApplicationDetails() {
                 const prodData = await prodRes.json();
                 const prod = Array.isArray(prodData) ? prodData[0] : (prodData?.value ? prodData.value[0] : prodData);
                 if (prod) {
-                  if (prod.agentId) agentId = prod.agentId;
-                  if (prod.rmId) rmId = prod.rmId;
+                  const prodOwnership = resolveApplicationOwnership(prod);
+                  if (prodOwnership.agentId) agentId = prodOwnership.agentId;
+                  if (prodOwnership.rmId) rmId = prodOwnership.rmId;
                   if (prod.rmCustomerId) rmCustomerId = prod.rmCustomerId;
                 }
               }

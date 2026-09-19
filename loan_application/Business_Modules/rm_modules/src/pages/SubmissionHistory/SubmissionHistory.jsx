@@ -15,6 +15,7 @@ import {
   normalizeApplicationStatus,
   resolveApiArray,
 } from '../../utils/rmContext';
+import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
 import './SubmissionHistory.css';
 
@@ -27,13 +28,11 @@ function getInitials(name = '') {
   return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 }
 
-function mapSubmission(record, agentsById) {
+function mapSubmission(record, agentsById = {}, rmsById = {}) {
   const id = record.applicationId || record.applicationNumber || record.agentCustomerId || record.customerId;
-  const rawAgentId = record.agentId ?? record.AgentId ?? null;
-  const agentId = (rawAgentId !== null && rawAgentId !== undefined && rawAgentId !== '') ? rawAgentId : null;
-  const agent = agentId ? (agentsById[String(agentId)] || {}) : {};
   const submittedRaw = record.submittedAt || record.SubmittedAt || record.createdAt || record.CreatedAt || record.createdDate || '';
-  const agentName = record.agentName || record.AgentName || agent.fullName || agent.FullName || (agentId ? 'N/A' : 'Direct (RM)');
+  const ownership = resolveApplicationOwnership(record, agentsById, rmsById);
+  const agent = ownership.agentId ? (agentsById[String(ownership.agentId)] || {}) : {};
   const branch = agent.branch || agent.Branch || record.branch || record.Branch || 'N/A';
 
   return {
@@ -43,7 +42,7 @@ function mapSubmission(record, agentsById) {
     mobile: record.mobileNumber || record.MobileNumber || record.mobile || 'N/A',
     loanType: record.loanPurposeName || record.LoanPurposeName || record.loanType || 'N/A',
     amount: record.expectedLoanAmount == null ? (record.amount || 'N/A') : `Rs. ${Number(record.expectedLoanAmount).toLocaleString('en-IN')}`,
-    agentName,
+    agentName: ownership.agentName,
     branch,
     submittedDate: formatDate(submittedRaw),
     submittedTime: formatTime(submittedRaw),
@@ -84,14 +83,30 @@ export default function SubmissionHistory() {
         const authHeaders = {};
         if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
-        const [customersResponse, agentsResponse, appProdResponse] = await Promise.all([
+        const [customersResponse, agentsResponse, rmsResponse, appProdResponse] = await Promise.all([
           fetch(`${API_BASE}/AgentAddCustomer`, { headers: authHeaders }),
           fetch(`${API_BASE}/AgentMaster`, { headers: authHeaders }),
+          fetch(`${API_BASE}/RMMaster`, { headers: authHeaders }).catch(() => null),
           fetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).catch(() => null),
         ]);
         if (!customersResponse.ok) throw new Error(`Failed to load submissions (${customersResponse.status})`);
         if (!agentsResponse.ok) throw new Error(`Failed to load agents (${agentsResponse.status})`);
         const [customersData, agentsData] = await Promise.all([customersResponse.json(), agentsResponse.json()]);
+
+        let rmsData = [];
+        if (rmsResponse && rmsResponse.ok) {
+          try {
+            const rData = await rmsResponse.json();
+            rmsData = resolveApiArray(rData);
+          } catch {
+            rmsData = [];
+          }
+        }
+        const rmsById = rmsData.reduce((result, rm) => {
+          const id = rm.rmId || rm.RMId || rm.id;
+          if (id !== undefined && id !== null) result[String(id)] = rm;
+          return result;
+        }, {});
 
         let appProdList = [];
         if (appProdResponse && appProdResponse.ok) {
@@ -110,32 +125,41 @@ export default function SubmissionHistory() {
           }
         });
 
-        const matchedAgents = filterAgentsForRm(resolveApiArray(agentsData), rmContext.rmId);
-        const agentsById = matchedAgents.reduce((result, agent) => {
+        const allAgents = resolveApiArray(agentsData);
+        const agentsById = allAgents.reduce((result, agent) => {
           const id = agent.agentId || agent.AgentId;
           if (id !== undefined && id !== null) result[String(id)] = agent;
           return result;
         }, {});
+
+        const matchedAgents = filterAgentsForRm(allAgents, rmContext.rmId);
         const assignedAgentIds = buildAllowedAgentIdSet(matchedAgents);
 
         const liveRows = resolveApiArray(customersData)
           .filter((item) => {
-            const rowAgentId = Number(item.agentId || item.AgentId || 0);
+            const ownership = resolveApplicationOwnership(item, agentsById, rmsById);
             const rowCustId = String(item.agentCustomerId || item.customerId || '');
 
             // 1. Normal agent-sourced customer: belongs to an agent assigned to this RM
-            const isAgentMapped = Boolean(rowAgentId > 0 && assignedAgentIds.has(rowAgentId));
+            const isAgentMapped = Boolean(
+              ownership.isAgentCreated &&
+              ownership.agentId &&
+              assignedAgentIds.has(Number(ownership.agentId))
+            );
 
-            // 2. Promoted RM-sourced customer (agentId is null): belongs directly to this RM
-            const isRmDirectOwned = (item.agentId === null || item.agentId === undefined || item.agentId === '') && (
-              rmOwnedCustomerIds.has(rowCustId) ||
-              Number(item.rmId || item.RMId) === Number(rmContext.rmId) ||
-              Number(item.createdBy || item.CreatedBy) === Number(rmContext.rmId)
+            // 2. Promoted RM-sourced customer: belongs directly to this RM
+            const isRmDirectOwned = Boolean(
+              ownership.isDirectRm && (
+                rmOwnedCustomerIds.has(rowCustId) ||
+                Number(ownership.rmId) === Number(rmContext.rmId) ||
+                Number(item.rmId || item.RMId) === Number(rmContext.rmId) ||
+                Number(item.createdBy || item.CreatedBy) === Number(rmContext.rmId)
+              )
             );
 
             return isAgentMapped || isRmDirectOwned;
           })
-          .map((record) => mapSubmission(record, agentsById))
+          .map((record) => mapSubmission(record, agentsById, rmsById))
           .filter((record) => record.id && record.id !== 'undefined');
 
         if (active) setSubmissions(liveRows);

@@ -6,7 +6,7 @@ import {
   CreditCard, Package, Target, Repeat, User, Heart, Building, 
   Map, Building2, Briefcase, Landmark, Globe, MapPin, Link, 
   Layers, ShieldCheck, Home, Key, GraduationCap, Star, Contact, Shield, TrendingUp, LogOut, ArrowLeft,
-  Factory, Clock, Calculator, UserCheck, FileSpreadsheet
+  Factory, Clock, Calculator, UserCheck, FileSpreadsheet, Activity
 } from 'lucide-react';
 import { MasterModal } from '../masters/MasterModal/MasterModal';
 import './Navbar.css';
@@ -46,6 +46,7 @@ const MASTERS_MENU = [
   { label: 'Assessment Method', path: '/masters/assessment-method', icon: Calculator },
   { label: 'PD Verification Type', path: '/masters/pd-verification-type', icon: UserCheck },
   { label: 'RTR Norm Master', path: '/masters/rtr-norm-master', icon: FileSpreadsheet },
+  { label: 'Health Check Type', path: '/masters/health-check-type', icon: Activity },
   { label: 'Company Configuration', path: '/company', icon: Building2 }
 ];
 
@@ -142,6 +143,14 @@ export function Navbar() {
               onClick={closeMenus}
             >
               Dashboard
+            </NavLink>
+
+            <NavLink
+              to="/application-360"
+              className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+              onClick={closeMenus}
+            >
+              Application 360
             </NavLink>
 
             <div className="nav-dropdown-container" ref={dropdownRef}>

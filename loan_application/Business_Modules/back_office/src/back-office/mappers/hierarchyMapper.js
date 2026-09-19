@@ -252,6 +252,9 @@ export function mapCustomer(customer) {
   const districtId = getValue(customer, 'districtId', 'DistrictId');
   const districtName = getValue(customer, 'districtName', 'DistrictName', 'district', 'District') || '';
   const kycStatus = getValue(customer, 'kycStatus', 'KycStatus') || 'Verified';
+  const createdByRole = getValue(customer, 'createdByRole', 'CreatedByRole', 'created_by_role');
+  const createdByUserId = getValue(customer, 'createdByUserId', 'CreatedByUserId', 'created_by_user_id');
+  const createdBy = getValue(customer, 'createdBy', 'CreatedBy', 'created_by');
   const createdAt = getValue(
     customer,
     'createdAt',
@@ -288,6 +291,9 @@ export function mapCustomer(customer) {
     rmName,
     districtId: districtId != null ? String(districtId) : null,
     districtName,
+    createdByRole,
+    createdByUserId,
+    createdBy,
     createdAt,
     appliedDate: createdAt ? String(createdAt).slice(0, 10) : '',
     raw: customer,

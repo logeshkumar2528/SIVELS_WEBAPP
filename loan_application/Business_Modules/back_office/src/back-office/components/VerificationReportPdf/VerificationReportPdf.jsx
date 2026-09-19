@@ -126,9 +126,12 @@ export default function VerificationReportPdf({
       setVerificationData(mapped);
 
       const appProdId = Number(
+        mapped?.applicationProductDetailsId ||
         mapped?.application?.applicationProductDetailsId ||
+        mapped?.application?.ApplicationProductDetailsId ||
         mapped?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
         mapped?.raw?.productDetails?.applicationProductDetailsId ||
+        mapped?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
         mapped?.raw?.applicationProductDetails?.applicationProductDetailsId ||
         0
       );

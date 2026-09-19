@@ -40,6 +40,7 @@ import { LoanProductTenure } from './pages/masters/LoanProductTenure/LoanProduct
 import { AssessmentMethod } from './pages/masters/AssessmentMethod/AssessmentMethod';
 import { PDVerificationType } from './pages/masters/PDVerificationType/PDVerificationType';
 import { RTRNormMaster } from './pages/masters/RTRNormMaster/RTRNormMaster';
+import { HealthCheckType } from './pages/masters/HealthCheckType/HealthCheckType';
 import { CompanyConfiguration } from './features/company/CompanyConfiguration';
 import AgentCreate from './pages/Agent/AgentCreate';
 import RelationshipManagerCreate from './pages/RelationshipManager/RelationshipManagerCreate';
@@ -47,6 +48,7 @@ import AMSCreate from './pages/AMS/AMSCreate';
 import BackOfficeCreate from './pages/BackOffice/BackOfficeCreate';
 import CreateUser from './pages/CreateUser/CreateUser';
 import AMSDashboard from './pages/AMSDashboard/AMSDashboard';
+import { Application360 } from './pages/Application360/Application360';
 
 const routerBasename = (() => {
   const configuredBase = import.meta.env.BASE_URL?.replace(/\/$/, '') || '/';
@@ -74,6 +76,7 @@ function App() {
         <Route path="/" element={<AppLayout />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="application-360" element={<Application360 />} />
           <Route path="ams-dashboard" element={<AMSDashboard />} />
           <Route path="create-user" element={<CreateUser />} />
           <Route path="add-agent" element={<AgentCreate onSuccessRedirect="/dashboard" />} />
@@ -122,6 +125,7 @@ function App() {
             <Route path="assessment-method" element={<AssessmentMethod />} />
             <Route path="pd-verification-type" element={<PDVerificationType />} />
             <Route path="rtr-norm-master" element={<RTRNormMaster />} />
+            <Route path="health-check-type" element={<HealthCheckType />} />
           </Route>
         </Route>
       </Routes>
