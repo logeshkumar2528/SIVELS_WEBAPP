@@ -164,19 +164,6 @@ const DOCUMENT_STEP_CODES = [
   'ZIP_ARCHIVE',
 ];
 
-const OTHER_HEALTH_CHECKS = [
-  'Google',
-  'Reference',
-  'FI',
-  'Crimecheck',
-  'Hunter',
-  'RCU',
-  'Dedupe',
-  'PAN Check',
-  'Aadhar Check',
-  'CERSAI Check',
-];
-
 function stepCodeToStepNum(code) {
   switch (code) {
     case 'PROFILE_IMAGE': return 2;
@@ -435,12 +422,6 @@ export default function CustomerVerification() {
   // 2. Active 15-Step Workflow State (Default: Step 1 — View Form)
   const [activeStep, setActiveStep] = useState(1);
   const [viewFormRefreshKey, setViewFormRefreshKey] = useState(0);
-  const [healthChecks, setHealthChecks] = useState(() => (
-    Object.fromEntries(OTHER_HEALTH_CHECKS.map((check) => [
-      check,
-      { result: 'Pending', date: '', findings: '' },
-    ]))
-  ));
 
   // 3. Preserved Legacy 8-Step Modal State (View-only inspection)
   const [selectedStepNumber, setSelectedStepNumber] = useState(null);
@@ -4566,9 +4547,14 @@ export default function CustomerVerification() {
   const [healthCheckTypes, setHealthCheckTypes] = useState([]);
   const [healthCheckTypesLoading, setHealthCheckTypesLoading] = useState(false);
   const [healthCheckTypesError, setHealthCheckTypesError] = useState(null);
-  const [healthChecks, setHealthChecks] = useState({});
+  const [healthChecksByStep, setHealthChecksByStep] = useState({
+    8: {},
+    9: {},
+    10: {},
+  });
   const [findingsModal, setFindingsModal] = useState({
     open: false,
+    step: null,
     typeId: null,
     label: '',
     draft: '',
@@ -4599,22 +4585,26 @@ export default function CustomerVerification() {
     return (healthCheckTypes || []).filter((item) => item.isActive === true);
   }, [healthCheckTypes]);
 
-  const updateHealthCheck = (typeId, field, value) => {
-    setHealthChecks((prev) => ({
+  const updateHealthCheck = (typeId, field, value, step = activeStep) => {
+    setHealthChecksByStep((prev) => ({
       ...prev,
-      [typeId]: {
-        status: 'Pending',
-        dateOfCheck: '',
-        findings: '',
-        ...(prev[typeId] || {}),
-        [field]: value,
+      [step]: {
+        ...(prev[step] || {}),
+        [typeId]: {
+          status: 'Pending',
+          dateOfCheck: '',
+          findings: '',
+          ...(prev[step]?.[typeId] || {}),
+          [field]: value,
+        },
       },
     }));
   };
 
-  const openFindingsModal = (typeId, label, currentFindings = '') => {
+  const openFindingsModal = (typeId, label, currentFindings = '', step = activeStep) => {
     setFindingsModal({
       open: true,
+      step,
       typeId,
       label: label || 'Health check',
       draft: currentFindings || '',
@@ -4622,12 +4612,13 @@ export default function CustomerVerification() {
   };
 
   const closeFindingsModal = () => {
-    setFindingsModal({ open: false, typeId: null, label: '', draft: '' });
+    setFindingsModal({ open: false, step: null, typeId: null, label: '', draft: '' });
   };
 
   const saveFindingsModal = () => {
     if (findingsModal.typeId == null) return;
-    updateHealthCheck(findingsModal.typeId, 'findings', (findingsModal.draft || '').trim());
+    const targetStep = findingsModal.step ?? activeStep;
+    updateHealthCheck(findingsModal.typeId, 'findings', (findingsModal.draft || '').trim(), targetStep);
     closeFindingsModal();
   };
 
@@ -4638,115 +4629,118 @@ export default function CustomerVerification() {
     return 'is-pending';
   };
 
-  const renderHealthChecksChecklist = () => (
-    <section className="bo-cv-health-checks" aria-label="Comments on other health checks">
-      <div className="bo-cv-health-checks-card">
-        <div className="bo-cv-health-checks-head">
-          <div className="bo-cv-health-checks-head-icon" aria-hidden="true">
-            {ShieldCheckIcon ? <ShieldCheckIcon size={18} /> : <span>✓</span>}
+  const renderHealthChecksChecklist = (step = activeStep) => {
+    const stepChecks = healthChecksByStep[step] || {};
+    return (
+      <section className="bo-cv-health-checks" aria-label="Comments on other health checks">
+        <div className="bo-cv-health-checks-card">
+          <div className="bo-cv-health-checks-head">
+            <div className="bo-cv-health-checks-head-icon" aria-hidden="true">
+              {ShieldCheckIcon ? <ShieldCheckIcon size={18} /> : <span>✓</span>}
+            </div>
+            <div className="bo-cv-health-checks-head-copy">
+              <h3 className="bo-cv-health-checks-title">Comments on other health checks</h3>
+              <p className="bo-cv-health-checks-subtitle">
+                Capture Yes/No, date, and findings for each active master health check type.
+              </p>
+            </div>
+            <span className="bo-cv-health-checks-count">
+              {activeHealthCheckTypes.length} check{activeHealthCheckTypes.length === 1 ? '' : 's'}
+            </span>
           </div>
-          <div className="bo-cv-health-checks-head-copy">
-            <h3 className="bo-cv-health-checks-title">Comments on other health checks</h3>
-            <p className="bo-cv-health-checks-subtitle">
-              Capture Yes/No, date, and findings for each active master health check type.
-            </p>
-          </div>
-          <span className="bo-cv-health-checks-count">
-            {activeHealthCheckTypes.length} check{activeHealthCheckTypes.length === 1 ? '' : 's'}
-          </span>
-        </div>
 
-        <div className="bo-cv-health-checks-table-wrap">
-          <table className="bo-cv-health-checks-table">
-            <thead>
-              <tr>
-                <th scope="col">Particulars</th>
-                <th scope="col">Yes / No</th>
-                <th scope="col">Date of check</th>
-                <th scope="col">Findings / Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {healthCheckTypesLoading && (
+          <div className="bo-cv-health-checks-table-wrap">
+            <table className="bo-cv-health-checks-table">
+              <thead>
                 <tr>
-                  <td colSpan={4} className="bo-cv-health-checks-empty">Loading health check types…</td>
+                  <th scope="col">Particulars</th>
+                  <th scope="col">Yes / No</th>
+                  <th scope="col">Date of check</th>
+                  <th scope="col">Findings / Status</th>
                 </tr>
-              )}
-              {!healthCheckTypesLoading && healthCheckTypesError && (
-                <tr>
-                  <td colSpan={4} className="bo-cv-health-checks-empty bo-cv-health-checks-error">
-                    {healthCheckTypesError}
-                  </td>
-                </tr>
-              )}
-              {!healthCheckTypesLoading && !healthCheckTypesError && activeHealthCheckTypes.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="bo-cv-health-checks-empty">
-                    No active health check types found in master.
-                  </td>
-                </tr>
-              )}
-              {!healthCheckTypesLoading && !healthCheckTypesError && activeHealthCheckTypes.map((type) => {
-                const typeId = type.healthCheckTypeId;
-                const label = type.checkName || '—';
-                const row = healthChecks[typeId] || {
-                  status: 'Pending',
-                  dateOfCheck: '',
-                  findings: '',
-                };
-                const hasFindings = Boolean(String(row.findings || '').trim());
-                return (
-                  <tr key={typeId}>
-                    <td className="bo-cv-health-checks-particular">
-                      <span className="bo-cv-health-checks-particular-name">{label}</span>
-                    </td>
-                    <td>
-                      <div className={`bo-cv-health-status-wrap ${healthCheckStatusClass(row.status)}`}>
-                        <select
-                          className="bo-cv-health-checks-select"
-                          value={row.status}
-                          onChange={(e) => updateHealthCheck(typeId, 'status', e.target.value)}
-                          aria-label={`${label} Yes/No status`}
-                        >
-                          <option value="Pending">Pending</option>
-                          <option value="Yes">Yes</option>
-                          <option value="No">No</option>
-                        </select>
-                      </div>
-                    </td>
-                    <td>
-                      <input
-                        type="date"
-                        className="bo-cv-health-checks-input"
-                        value={row.dateOfCheck}
-                        onChange={(e) => updateHealthCheck(typeId, 'dateOfCheck', e.target.value)}
-                        aria-label={`${label} date of check`}
-                      />
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className={`bo-cv-health-findings-trigger ${hasFindings ? 'has-value' : ''}`}
-                        onClick={() => openFindingsModal(typeId, label, row.findings)}
-                        aria-label={`${label} findings or status`}
-                      >
-                        <span className="bo-cv-health-findings-trigger-text">
-                          {hasFindings ? row.findings : 'Click to add findings…'}
-                        </span>
-                        <span className="bo-cv-health-findings-trigger-action">
-                          {hasFindings ? 'Edit' : 'Add'}
-                        </span>
-                      </button>
+              </thead>
+              <tbody>
+                {healthCheckTypesLoading && (
+                  <tr>
+                    <td colSpan={4} className="bo-cv-health-checks-empty">Loading health check types…</td>
+                  </tr>
+                )}
+                {!healthCheckTypesLoading && healthCheckTypesError && (
+                  <tr>
+                    <td colSpan={4} className="bo-cv-health-checks-empty bo-cv-health-checks-error">
+                      {healthCheckTypesError}
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                )}
+                {!healthCheckTypesLoading && !healthCheckTypesError && activeHealthCheckTypes.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="bo-cv-health-checks-empty">
+                      No active health check types found in master.
+                    </td>
+                  </tr>
+                )}
+                {!healthCheckTypesLoading && !healthCheckTypesError && activeHealthCheckTypes.map((type) => {
+                  const typeId = type.healthCheckTypeId;
+                  const label = type.checkName || '—';
+                  const row = stepChecks[typeId] || {
+                    status: 'Pending',
+                    dateOfCheck: '',
+                    findings: '',
+                  };
+                  const hasFindings = Boolean(String(row.findings || '').trim());
+                  return (
+                    <tr key={typeId}>
+                      <td className="bo-cv-health-checks-particular">
+                        <span className="bo-cv-health-checks-particular-name">{label}</span>
+                      </td>
+                      <td>
+                        <div className={`bo-cv-health-status-wrap ${healthCheckStatusClass(row.status)}`}>
+                          <select
+                            className="bo-cv-health-checks-select"
+                            value={row.status}
+                            onChange={(e) => updateHealthCheck(typeId, 'status', e.target.value, step)}
+                            aria-label={`${label} Yes/No status`}
+                          >
+                            <option value="Pending">Pending</option>
+                            <option value="Yes">Yes</option>
+                            <option value="No">No</option>
+                          </select>
+                        </div>
+                      </td>
+                      <td>
+                        <input
+                          type="date"
+                          className="bo-cv-health-checks-input"
+                          value={row.dateOfCheck}
+                          onChange={(e) => updateHealthCheck(typeId, 'dateOfCheck', e.target.value, step)}
+                          aria-label={`${label} date of check`}
+                        />
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className={`bo-cv-health-findings-trigger ${hasFindings ? 'has-value' : ''}`}
+                          onClick={() => openFindingsModal(typeId, label, row.findings, step)}
+                          aria-label={`${label} findings or status`}
+                        >
+                          <span className="bo-cv-health-findings-trigger-text">
+                            {hasFindings ? row.findings : 'Click to add findings…'}
+                          </span>
+                          <span className="bo-cv-health-findings-trigger-action">
+                            {hasFindings ? 'Edit' : 'Add'}
+                          </span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
-    </section>
-  );
+      </section>
+    );
+  };
 
   // 13. Icons
   const ArrowLeftIcon = iconMap['ArrowLeft'];
@@ -8514,21 +8508,6 @@ export default function CustomerVerification() {
     navigate(ROUTES.CUSTOMERS);
   };
 
-  const updateHealthCheck = (check, field, value) => {
-    setHealthChecks((current) => ({
-      ...current,
-      [check]: {
-        ...current[check],
-        [field]: value,
-      },
-    }));
-  };
-
-  const completedHealthChecks = OTHER_HEALTH_CHECKS.filter((check) => {
-    const entry = healthChecks[check];
-    return entry.result !== 'Pending' && entry.date && entry.findings.trim();
-  }).length;
-
   // ----------------------------------------------------
   // 1. Loading State View
   // ----------------------------------------------------
@@ -9318,7 +9297,7 @@ export default function CustomerVerification() {
                 <p>Property field investigation module integration is scheduled for future underwriting release.</p>
               </div>
 
-              {renderHealthChecksChecklist()}
+              {renderHealthChecksChecklist(8)}
             </div>
           )}
 
@@ -9347,7 +9326,7 @@ export default function CustomerVerification() {
                 <p>Office field investigation module integration is scheduled for future underwriting release.</p>
               </div>
 
-              {renderHealthChecksChecklist()}
+              {renderHealthChecksChecklist(9)}
             </div>
           )}
 
@@ -9376,7 +9355,7 @@ export default function CustomerVerification() {
                 <p>Residence field investigation module integration is scheduled for future underwriting release.</p>
               </div>
 
-              {renderHealthChecksChecklist()}
+              {renderHealthChecksChecklist(10)}
             </div>
           )}
 
@@ -13894,75 +13873,6 @@ export default function CustomerVerification() {
               </section>
             </>
           )}
-
-          <section className="bo-cv-health-checks" aria-labelledby="bo-cv-health-checks-title">
-            <div className="bo-cv-health-checks-header">
-              <div className="bo-cv-health-checks-heading">
-                <div className="bo-cv-health-checks-icon" aria-hidden="true">
-                  {ShieldCheckIcon ? <ShieldCheckIcon size={19} /> : <span>✓</span>}
-                </div>
-                <div>
-                  <h2 className="bo-cv-health-checks-title" id="bo-cv-health-checks-title">
-                    Other health checks
-                  </h2>
-                  <p className="bo-cv-health-checks-subtitle">
-                    Complete the remaining checks before submitting this application for final review.
-                  </p>
-                </div>
-              </div>
-              <div className="bo-cv-health-checks-summary">
-                <strong>{completedHealthChecks}/{OTHER_HEALTH_CHECKS.length}</strong>
-                <span>completed</span>
-              </div>
-            </div>
-            <div className="bo-cv-health-checks-progress" aria-hidden="true">
-              <span style={{ width: `${(completedHealthChecks / OTHER_HEALTH_CHECKS.length) * 100}%` }} />
-            </div>
-            <div className="bo-cv-health-check-list" role="list">
-              {OTHER_HEALTH_CHECKS.map((check, index) => (
-                <div className="bo-cv-health-check-item" key={check} role="listitem">
-                  <div className="bo-cv-health-check-marker" aria-hidden="true">
-                    {index + 1}
-                  </div>
-                  <div className="bo-cv-health-check-name">
-                    <strong>{check}</strong>
-                    <span>Enter the check result and supporting details</span>
-                  </div>
-                  <select
-                    className="bo-cv-health-check-status-select"
-                    value={healthChecks[check].result}
-                    onChange={(event) => updateHealthCheck(check, 'result', event.target.value)}
-                    aria-label={`${check} result`}
-                  >
-                    <option value="Pending">Pending</option>
-                    <option value="Yes">Yes</option>
-                    <option value="No">No</option>
-                  </select>
-                  <div className="bo-cv-health-check-meta">
-                    <span className="bo-cv-health-check-meta-label">Date of check</span>
-                    <input
-                      className="bo-cv-health-check-input"
-                      type="date"
-                      value={healthChecks[check].date}
-                      onChange={(event) => updateHealthCheck(check, 'date', event.target.value)}
-                      aria-label={`${check} date of check`}
-                    />
-                  </div>
-                  <div className="bo-cv-health-check-meta bo-cv-health-check-findings">
-                    <span className="bo-cv-health-check-meta-label">Findings / status</span>
-                    <input
-                      className="bo-cv-health-check-input"
-                      type="text"
-                      value={healthChecks[check].findings}
-                      onChange={(event) => updateHealthCheck(check, 'findings', event.target.value)}
-                      placeholder="Enter findings or status"
-                      aria-label={`${check} findings or status`}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
         </main>
       </div>
 
