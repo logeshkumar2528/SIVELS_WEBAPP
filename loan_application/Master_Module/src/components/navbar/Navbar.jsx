@@ -145,6 +145,14 @@ export function Navbar() {
               Dashboard
             </NavLink>
 
+            <NavLink
+              to="/application-360"
+              className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+              onClick={closeMenus}
+            >
+              Application 360
+            </NavLink>
+
             <div className="nav-dropdown-container" ref={dropdownRef}>
               <button 
                 className={`nav-link dropdown-toggle master-dropdown-trigger ${isMastersActive || isMastersOpen ? 'active' : ''}`}
