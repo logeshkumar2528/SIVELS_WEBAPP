@@ -4480,6 +4480,60 @@ export default function CustomerVerification() {
   const [finalRemarksBanner, setFinalRemarksBanner] = useState(null);
   const [isSendingToCreditOfficer, setIsSendingToCreditOfficer] = useState(false);
 
+  // PD assessment values for the current application.
+  const createRecommendationSheet = () => ({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    pdVisitDate: '',
+    endUseCategory: '',
+    pdAddress: '',
+    personalDiscussionSiteVisit: '',
+    endUse: '',
+    disbursementTransaction: '',
+    applicantProfile: '',
+    coApplicantProfile: '',
+    bureauReport: '',
+    proposedCollateral: '',
+    legalAndTechnical: '',
+    strengths: '',
+    concerns: '',
+    recommendation: '',
+    otherSanctionConditions: [''],
+  });
+  const [recommendationSheets, setRecommendationSheets] = useState(() => [createRecommendationSheet()]);
+
+  const updateRecommendationSheet = (sheetId, field, value) => {
+    setRecommendationSheets((sheets) => sheets.map((sheet) => (
+      sheet.id === sheetId ? { ...sheet, [field]: value } : sheet
+    )));
+  };
+
+  const updateSanctionCondition = (sheetId, conditionIndex, value) => {
+    setRecommendationSheets((sheets) => sheets.map((sheet) => {
+      if (sheet.id !== sheetId) return sheet;
+      const conditions = [...sheet.otherSanctionConditions];
+      conditions[conditionIndex] = value;
+      return { ...sheet, otherSanctionConditions: conditions };
+    }));
+  };
+
+  const addSanctionCondition = (sheetId) => {
+    setRecommendationSheets((sheets) => sheets.map((sheet) => (
+      sheet.id === sheetId
+        ? { ...sheet, otherSanctionConditions: [...sheet.otherSanctionConditions, ''] }
+        : sheet
+    )));
+  };
+
+  const removeSanctionCondition = (sheetId, conditionIndex) => {
+    setRecommendationSheets((sheets) => sheets.map((sheet) => {
+      if (sheet.id !== sheetId || sheet.otherSanctionConditions.length === 1) return sheet;
+      return {
+        ...sheet,
+        otherSanctionConditions: sheet.otherSanctionConditions.filter((_, index) => index !== conditionIndex),
+      };
+    }));
+  };
+
   // 13. Icons
   const ArrowLeftIcon = iconMap['ArrowLeft'];
   const ArrowRightIcon = iconMap['ArrowRight'];
@@ -4503,6 +4557,7 @@ export default function CustomerVerification() {
   const LandmarkIcon = iconMap['Landmark'] || iconMap['Building2'];
   const ExternalLinkIcon = iconMap['ExternalLink'];
   const PlusIcon = iconMap['Plus'] || iconMap['FilePlus'];
+  const MinusIcon = iconMap['Minus'] || iconMap['CircleMinus'] || XIcon;
   const SaveIcon = iconMap['Save'];
   const Trash2Icon = iconMap['Trash2'] || iconMap['X'];
   const RotateCcwIcon = iconMap['RotateCcw'] || iconMap['RefreshCw'];
@@ -13401,33 +13456,134 @@ export default function CustomerVerification() {
             </div>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
-              STEP 15: RECOMMENDATION SHEET & SEND TO CREDIT OFFICER
-          ══════════════════════════════════════════════════════════════════ */}
-          {activeStep === 17 && (
+          {/* PD field assessment is shown directly below the selected PD mode. */}
+          {activeStep === 14 && (
             <>
-              <div className="bo-cv-step-panel">
+              <div className="bo-cv-step-panel bo-cv-pd-assessment-panel">
                 <div className="bo-cv-step-panel-header">
                   <div className="bo-cv-step-header-left">
-                    <div className="bo-cv-step-badge-num">11</div>
+                    <div className="bo-cv-step-badge-num">09</div>
                     <div>
-                      <h2 className="bo-cv-step-panel-title">Recommendation Sheet</h2>
+                      <h2 className="bo-cv-step-panel-title">PD Field Assessment</h2>
                       <p className="bo-cv-step-panel-desc">
-                        Final underwriting credit appraisal and sanction committee recommendation summary.
+                        Record the personal discussion findings and underwriting observations for this application.
                       </p>
                     </div>
                   </div>
-                  <span className="bo-cv-step-tag-pill">Step 11 of 11</span>
+                  <span className="bo-cv-step-tag-pill">Step 09 of 11</span>
                 </div>
 
-                <div className="bo-cv-placeholder-panel">
-                  <div className="bo-cv-placeholder-icon">
-                    {FileTextIcon && <FileTextIcon size={40} />}
-                  </div>
-                  <span className="bo-cv-placeholder-badge">PENDING IMPLEMENTATION</span>
-                  <h3>Recommendation Sheet — implementation pending</h3>
-                  <p>Final credit recommendation and sanction summary export will be integrated here.</p>
-                </div>
+                <section className="bo-cv-recommendation-sheet" aria-label="Credit recommendation assessment">
+                  {recommendationSheets.map((sheet) => (
+                    <article className="bo-cv-pd-form" key={sheet.id}>
+                      <div className="bo-cv-pd-form-section-head">
+                        <div className="bo-cv-pd-form-section-number">1</div>
+                        <div><h3>Visit details</h3><p>Capture the personal discussion and end-use information.</p></div>
+                      </div>
+
+                      <div className="bo-cv-rec-fields-grid">
+                        <label className="bo-cv-rec-field">
+                          <span>Date of PD visit</span>
+                          <input type="date" value={sheet.pdVisitDate} onChange={(e) => updateRecommendationSheet(sheet.id, 'pdVisitDate', e.target.value)} />
+                        </label>
+                        <label className="bo-cv-rec-field">
+                          <span>End-use categorization</span>
+                          <input type="text" placeholder="e.g. Business expansion" value={sheet.endUseCategory} onChange={(e) => updateRecommendationSheet(sheet.id, 'endUseCategory', e.target.value)} />
+                        </label>
+                        <label className="bo-cv-rec-field bo-cv-rec-field--wide">
+                          <span>Address where PD was conducted</span>
+                          <input type="text" placeholder="Enter discussion / visit address" value={sheet.pdAddress} onChange={(e) => updateRecommendationSheet(sheet.id, 'pdAddress', e.target.value)} />
+                        </label>
+                        <label className="bo-cv-rec-field">
+                          <span>Personal discussion / site visit</span>
+                          <input type="text" placeholder="Enter visit details" value={sheet.personalDiscussionSiteVisit} onChange={(e) => updateRecommendationSheet(sheet.id, 'personalDiscussionSiteVisit', e.target.value)} />
+                        </label>
+                        <label className="bo-cv-rec-field">
+                          <span>End use</span>
+                          <input type="text" placeholder="Describe intended use" value={sheet.endUse} onChange={(e) => updateRecommendationSheet(sheet.id, 'endUse', e.target.value)} />
+                        </label>
+                        <label className="bo-cv-rec-field">
+                          <span>Disbursement transaction</span>
+                          <input type="text" placeholder="Enter transaction details" value={sheet.disbursementTransaction} onChange={(e) => updateRecommendationSheet(sheet.id, 'disbursementTransaction', e.target.value)} />
+                        </label>
+                      </div>
+
+                      <div className="bo-cv-pd-form-section-head">
+                        <div className="bo-cv-pd-form-section-number">2</div>
+                        <div><h3>Applicant profiles</h3><p>Write a brief profile for the applicant and co-applicant.</p></div>
+                      </div>
+                      <div className="bo-cv-rec-narratives-grid">
+                        {[
+                          ['applicantProfile', 'Applicant profile', 'Summarize applicant background, income and repayment capacity.'],
+                          ['coApplicantProfile', 'Co-applicant profile', 'Summarize co-applicant background and financial position.'],
+                        ].map(([field, label, placeholder]) => (
+                          <label className="bo-cv-rec-field bo-cv-rec-field--narrative" key={field}>
+                            <span>{label} <em>Maximum 1,000 characters</em></span>
+                            <textarea rows={5} maxLength={1000} placeholder={placeholder} value={sheet[field]} onChange={(e) => updateRecommendationSheet(sheet.id, field, e.target.value)} />
+                            <small>{sheet[field].length}/1000</small>
+                          </label>
+                        ))}
+                      </div>
+
+                      <div className="bo-cv-pd-form-section-head">
+                        <div className="bo-cv-pd-form-section-number">3</div>
+                        <div><h3>Credit review and recommendation</h3><p>Record the key findings and any conditions for sanction.</p></div>
+                      </div>
+                      <div className="bo-cv-rec-findings-grid">
+                        {[
+                          ['bureauReport', 'Bureau report — applicant & co-applicant'],
+                          ['proposedCollateral', 'Proposed collateral'],
+                          ['legalAndTechnical', 'Legal and technical review'],
+                          ['strengths', 'Strengths'],
+                          ['concerns', 'Concerns, if any'],
+                          ['recommendation', 'Recommendation'],
+                        ].map(([field, label]) => (
+                          <label className="bo-cv-rec-field bo-cv-rec-field--narrative" key={field}>
+                            <span>{label}</span>
+                            <textarea rows={3} placeholder={`Enter ${label.toLowerCase()}`} value={sheet[field]} onChange={(e) => updateRecommendationSheet(sheet.id, field, e.target.value)} />
+                          </label>
+                        ))}
+                        <div className="bo-cv-rec-field bo-cv-rec-field--narrative bo-cv-rec-condition-field">
+                          <div className="bo-cv-rec-condition-label-row">
+                            <span>Other specified sanction conditions</span>
+                            <button
+                              type="button"
+                              className="bo-cv-rec-condition-add"
+                              onClick={() => addSanctionCondition(sheet.id)}
+                              aria-label="Add sanction condition point"
+                            >
+                              {PlusIcon && <PlusIcon size={14} />} <span>Add point</span>
+                            </button>
+                          </div>
+                          <div className="bo-cv-rec-condition-list">
+                            {sheet.otherSanctionConditions.map((condition, conditionIndex) => (
+                              <div className="bo-cv-rec-condition-row" key={`${sheet.id}-condition-${conditionIndex}`}>
+                                <span className="bo-cv-rec-condition-number">{conditionIndex + 1}</span>
+                                <textarea
+                                  rows={3}
+                                  placeholder="Enter sanction condition"
+                                  value={condition}
+                                  onChange={(e) => updateSanctionCondition(sheet.id, conditionIndex, e.target.value)}
+                                  aria-label={`Sanction condition ${conditionIndex + 1}`}
+                                />
+                                <button
+                                  type="button"
+                                  className="bo-cv-rec-condition-remove"
+                                  onClick={() => removeSanctionCondition(sheet.id, conditionIndex)}
+                                  disabled={sheet.otherSanctionConditions.length === 1}
+                                  aria-label={`Remove sanction condition ${conditionIndex + 1}`}
+                                  title={sheet.otherSanctionConditions.length === 1 ? 'At least one condition point is required' : 'Remove this point'}
+                                >
+                                  {MinusIcon && <MinusIcon size={15} />}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </section>
               </div>
 
               {/* Final Remarks & Forwarding Panel strictly inside Step 15 */}

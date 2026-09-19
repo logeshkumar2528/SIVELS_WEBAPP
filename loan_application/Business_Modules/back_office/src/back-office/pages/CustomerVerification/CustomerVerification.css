@@ -3827,6 +3827,301 @@
   padding-top: 4px;
 }
 
+/* ── RECOMMENDATION SHEET ─────────────────────────────────────────── */
+.bo-cv-recommendation-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.bo-cv-pd-assessment-panel {
+  border-color: #cfe5d7;
+  border-top: 4px solid #0f7a4c;
+  padding: 0;
+  overflow: hidden;
+  gap: 0;
+}
+
+.bo-cv-pd-assessment-panel > .bo-cv-step-panel-header {
+  padding: 20px 24px 16px;
+  background: linear-gradient(115deg, #f2faf5 0%, #ffffff 62%);
+}
+
+.bo-cv-pd-assessment-panel > .bo-cv-recommendation-sheet {
+  padding: 20px 24px 24px;
+  background: #fbfdfc;
+}
+
+.bo-cv-rec-sheet-intro,
+.bo-cv-rec-assessment-card {
+  background: #ffffff;
+  border: 1px solid #dbe7df;
+  border-radius: 12px;
+  box-shadow: 0 2px 7px rgba(15, 122, 76, 0.05);
+}
+
+.bo-cv-rec-sheet-intro {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 17px 18px;
+  border-left: 4px solid #0f7a4c;
+  background: linear-gradient(100deg, #f4fbf6, #ffffff 58%);
+}
+
+.bo-cv-rec-sheet-intro-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  color: #0f7a4c;
+  background: #eaf5ee;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.bo-cv-rec-sheet-intro h3,
+.bo-cv-rec-assessment-head p { margin: 0; }
+.bo-cv-rec-sheet-intro h3 { color: #173c2b; font-size: 15px; font-weight: 750; }
+.bo-cv-rec-sheet-intro p { margin: 3px 0 0; color: #64748b; font-size: 12px; }
+
+.bo-cv-rec-add-btn,
+.bo-cv-rec-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 7px;
+  padding: 8px 11px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+
+.bo-cv-rec-add-btn { margin-left: auto; background: #0f7a4c; border: 1px solid #0f7a4c; color: #fff; }
+.bo-cv-rec-add-btn:hover { background: #0b633d; border-color: #0b633d; }
+.bo-cv-rec-remove-btn { border: 1px solid #fecaca; background: #fff; color: #b91c1c; }
+.bo-cv-rec-remove-btn:hover:not(:disabled) { background: #fef2f2; }
+.bo-cv-rec-remove-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.bo-cv-rec-assessment-card { overflow: hidden; }
+.bo-cv-rec-assessment-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  background: #f7fbf8;
+  border-bottom: 1px solid #e4eee7;
+}
+.bo-cv-rec-assessment-index { color: #0f7a4c; font-size: 12px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.bo-cv-rec-assessment-head p { margin-top: 3px; color: #64748b; font-size: 12px; }
+
+.bo-cv-rec-fields-grid,
+.bo-cv-rec-narratives-grid,
+.bo-cv-rec-findings-grid {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+.bo-cv-rec-fields-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid #edf2ef; background: #ffffff; }
+.bo-cv-rec-narratives-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid #edf2ef; }
+.bo-cv-rec-findings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bo-cv-rec-findings-grid { background: #fcfefd; }
+.bo-cv-rec-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.bo-cv-rec-field--wide { grid-column: span 2; }
+.bo-cv-rec-field > span { color: #334155; font-size: 12px; font-weight: 700; }
+.bo-cv-rec-field > span em { color: #94a3b8; font-size: 11px; font-style: normal; font-weight: 500; }
+.bo-cv-rec-field input,
+.bo-cv-rec-field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  padding: 10px 11px;
+  color: #0f172a;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.bo-cv-rec-field textarea { min-height: 84px; resize: vertical; }
+.bo-cv-rec-field input:focus,
+.bo-cv-rec-field textarea:focus { outline: 0; border-color: #0f7a4c; box-shadow: 0 0 0 3px rgba(15, 122, 76, .12); }
+.bo-cv-rec-field input::placeholder,
+.bo-cv-rec-field textarea::placeholder { color: #94a3b8; }
+.bo-cv-rec-field small { align-self: flex-end; color: #94a3b8; font-size: 11px; margin-top: -2px; }
+
+.bo-cv-rec-condition-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bo-cv-rec-condition-add,
+.bo-cv-rec-condition-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bo-cv-rec-condition-add {
+  padding: 5px 8px;
+  border: 1px solid #9bd3b2;
+  color: #0f7a4c;
+  background: #f1faf4;
+}
+.bo-cv-rec-condition-add:hover { background: #e1f4e7; }
+
+.bo-cv-rec-condition-list { display: flex; flex-direction: column; gap: 8px; }
+.bo-cv-rec-condition-row { display: flex; align-items: flex-start; gap: 8px; }
+.bo-cv-rec-condition-row textarea { min-height: 64px; }
+.bo-cv-rec-condition-number {
+  flex: 0 0 24px;
+  height: 24px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: #eaf5ee;
+  color: #0f7a4c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+}
+.bo-cv-rec-condition-remove {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  margin-top: 3px;
+  border: 1px solid #fecaca;
+  background: #fff;
+  color: #dc2626;
+}
+.bo-cv-rec-condition-remove:hover:not(:disabled) { background: #fef2f2; }
+.bo-cv-rec-condition-remove:disabled { opacity: .4; cursor: not-allowed; }
+.bo-cv-rec-condition-field { grid-column: 1 / -1; padding-top: 4px; }
+
+@media (max-width: 900px) {
+  .bo-cv-rec-fields-grid,
+  .bo-cv-rec-narratives-grid,
+  .bo-cv-rec-findings-grid { grid-template-columns: 1fr; }
+  .bo-cv-rec-field--wide { grid-column: auto; }
+  .bo-cv-rec-condition-field { grid-column: auto; }
+}
+
+@media (max-width: 560px) {
+  .bo-cv-rec-sheet-intro { align-items: flex-start; flex-wrap: wrap; }
+  .bo-cv-rec-add-btn { margin-left: 48px; }
+  .bo-cv-rec-assessment-head { align-items: flex-start; }
+  .bo-cv-rec-fields-grid,
+  .bo-cv-rec-narratives-grid,
+  .bo-cv-rec-findings-grid { padding: 14px; }
+}
+
+/* ── Simplified PD assessment form ───────────────────────────────── */
+.bo-cv-pd-assessment-panel > .bo-cv-recommendation-sheet {
+  padding: 0;
+  background: #ffffff;
+}
+
+.bo-cv-pd-form {
+  background: #ffffff;
+  border: 0;
+}
+
+.bo-cv-pd-form-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 20px 24px 0;
+}
+
+.bo-cv-pd-form-section-head:not(:first-child) {
+  border-top: 1px solid #e8eeea;
+  padding-top: 20px;
+}
+
+.bo-cv-pd-form-section-number {
+  flex: 0 0 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #eaf5ee;
+  color: #0f7a4c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.bo-cv-pd-form-section-head h3 {
+  margin: 1px 0 3px;
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.bo-cv-pd-form-section-head p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.bo-cv-pd-form .bo-cv-rec-fields-grid,
+.bo-cv-pd-form .bo-cv-rec-narratives-grid,
+.bo-cv-pd-form .bo-cv-rec-findings-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+  padding: 16px 24px 22px 58px;
+  border-bottom: 0;
+  background: #ffffff;
+}
+
+.bo-cv-pd-form .bo-cv-rec-field--wide { grid-column: auto; }
+.bo-cv-pd-form .bo-cv-rec-condition-field { grid-column: 1 / -1; }
+.bo-cv-pd-form .bo-cv-rec-field > span { font-size: 12px; color: #334155; }
+.bo-cv-pd-form .bo-cv-rec-field input,
+.bo-cv-pd-form .bo-cv-rec-field textarea { background: #ffffff; border-color: #d6e0da; }
+.bo-cv-pd-form .bo-cv-rec-field input:hover,
+.bo-cv-pd-form .bo-cv-rec-field textarea:hover { border-color: #aebfb5; }
+.bo-cv-pd-form .bo-cv-rec-field textarea { min-height: 92px; }
+.bo-cv-pd-form .bo-cv-rec-narratives-grid textarea { min-height: 120px; }
+
+.bo-cv-pd-form .bo-cv-rec-condition-field {
+  padding: 14px;
+  border: 1px solid #dce8e0;
+  border-radius: 9px;
+  background: #f8fbf9;
+}
+
+@media (max-width: 900px) {
+  .bo-cv-pd-form .bo-cv-rec-fields-grid,
+  .bo-cv-pd-form .bo-cv-rec-narratives-grid,
+  .bo-cv-pd-form .bo-cv-rec-findings-grid { grid-template-columns: 1fr; padding-left: 24px; }
+  .bo-cv-pd-form .bo-cv-rec-condition-field { grid-column: auto; }
+}
+
+@media (max-width: 560px) {
+  .bo-cv-pd-assessment-panel > .bo-cv-step-panel-header,
+  .bo-cv-pd-form-section-head { padding-left: 16px; padding-right: 16px; }
+  .bo-cv-pd-form .bo-cv-rec-fields-grid,
+  .bo-cv-pd-form .bo-cv-rec-narratives-grid,
+  .bo-cv-pd-form .bo-cv-rec-findings-grid { padding: 14px 16px 20px; }
+  .bo-cv-rec-condition-label-row { align-items: flex-start; flex-direction: column; }
+}
+
 .bo-cv-btn-send-credit-officer {
   display: inline-flex;
   align-items: center;
