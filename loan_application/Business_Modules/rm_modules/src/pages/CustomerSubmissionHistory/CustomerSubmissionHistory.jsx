@@ -22,6 +22,7 @@ import { rmCustomerService } from '../../services/rmCustomerService';
 import { masterService } from '../../../../../Core/src/services/masterService';
 import axiosInstance from '../../../../../Core/src/api/axiosInstance';
 import { getCurrentRMContext, normalizeApplicationStatus } from '../../utils/rmContext';
+import { resolveVerificationIdByCodeOrName } from '../../../../../Core/src/utils/verificationHelper';
 import { ROUTES } from '../../config/routeConfig';
 import './CustomerSubmissionHistory.css';
 
@@ -50,6 +51,7 @@ export default function CustomerSubmissionHistory() {
     transactionTypes: [],
     interestTypes: [],
     rateOfInterests: [],
+    verifications: [],
   });
 
   // API Data State
@@ -102,6 +104,7 @@ export default function CustomerSubmissionHistory() {
         txTypesRes,
         intTypesRes,
         roiRes,
+        verificationsRes,
       ] = await Promise.all([
         rmCustomerService.getAllCustomers().catch(() => []),
         masterService.getLoanPurposes().catch(() => []),
@@ -111,6 +114,7 @@ export default function CustomerSubmissionHistory() {
         axiosInstance.get('/LoanTransactionTypeMaster').then((r) => r.data).catch(() => []),
         axiosInstance.get('/InterestTypeMaster').then((r) => r.data).catch(() => []),
         axiosInstance.get('/RateOfInterestMaster').then((r) => r.data).catch(() => []),
+        axiosInstance.get('/VerificationMaster').then((r) => r.data).catch(() => []),
       ]);
 
       const allCustomers = extractArray(customersRes);
@@ -121,6 +125,7 @@ export default function CustomerSubmissionHistory() {
       const transactionTypes = extractArray(txTypesRes);
       const interestTypes = extractArray(intTypesRes);
       const rateOfInterests = extractArray(roiRes);
+      const verifications = extractArray(verificationsRes);
 
       setMasterData({
         loanPurposes,
@@ -130,6 +135,7 @@ export default function CustomerSubmissionHistory() {
         transactionTypes,
         interestTypes,
         rateOfInterests,
+        verifications,
       });
 
       // Filter by current RM identity
@@ -235,6 +241,20 @@ export default function CustomerSubmissionHistory() {
         ? Number(matchedRoi.interestRate)
         : 10;
 
+    // Resolve VerificationId dynamically from active VerificationMaster records.
+    // Promotion workflow semantics are unchanged: this step records the customer as 'Verified'.
+    // No numeric fallback - if the master cannot resolve it, the promotion is blocked.
+    const promotionVerificationId = resolveVerificationIdByCodeOrName(masterData.verifications, 'Verified');
+
+    if (!promotionVerificationId) {
+      setPromotionFeedback({
+        type: 'error',
+        message:
+          'Unable to resolve the "Verified" status from Verification Master. Promotion blocked until master data is available.',
+      });
+      return;
+    }
+
     const payload = {
       sourcingChannelId: Number(sourcingChannelId),
       loanProductId: Number(loanProductId),
@@ -245,7 +265,7 @@ export default function CustomerSubmissionHistory() {
       roi: Number(roi),
       distanceFromBranch: 5,
       noOfCoApplicants: 0,
-      verificationId: 1,
+      verificationId: Number(promotionVerificationId),
       createdBy: Number(currentRmId),
     };
 

@@ -245,13 +245,8 @@ export function mapApplicationFullDetails(response, extraDocs = []) {
     const docName =
       doc.documentTypeName ||
       doc.documentType ||
-      (doc.documentTypeId === 1 ? 'Aadhaar Card' :
-       doc.documentTypeId === 2 ? 'PAN Card' :
-       doc.documentTypeId === 3 ? 'Bank Statement' :
-       doc.documentTypeId === 4 ? 'Salary Slip' :
-       doc.documentTypeId === 5 ? 'ITR / Form 16' :
-       doc.documentTypeId === 6 ? 'Photo' :
-       doc.fileName || `Document ${idx + 1}`);
+      doc.fileName ||
+      `Document ${idx + 1}`;
 
     combinedDocs.push({
       id: docId || `DOC_${idx + 1}`,
@@ -283,40 +278,12 @@ export function mapApplicationFullDetails(response, extraDocs = []) {
         type: 'Identity & Address Proof',
         documentNumber: docNumber,
         uploadStatus: 'Uploaded',
-        verificationStatus: getValue(doc, 'verificationId', 'VerificationId') === 1 ? 'Verified' : 'Pending',
+        verificationStatus: getValue(doc, 'verificationStatus', 'VerificationStatus') || (getValue(doc, 'isVerified', 'IsVerified') ? 'Verified' : 'Pending'),
         fileSize: 'Uploaded',
         uploadedOn: appliedDate ? String(appliedDate).slice(0, 10) : 'Not Available',
         raw: doc,
       });
     });
-  }
-
-  // Fallback: If still no documents exist, but PAN/Aadhaar strings are present
-  if (combinedDocs.length === 0) {
-    if (panNumber) {
-      combinedDocs.push({
-        id: 'DOC_PAN',
-        name: 'PAN Card Proof',
-        type: 'Tax & Identity Proof',
-        documentNumber: panNumber,
-        uploadStatus: 'Uploaded',
-        verificationStatus: 'Pending Verification',
-        fileSize: '1.2 MB',
-        uploadedOn: appliedDate ? String(appliedDate).slice(0, 10) : 'Not Available',
-      });
-    }
-    if (aadhaarLast4) {
-      combinedDocs.push({
-        id: 'DOC_AADHAAR',
-        name: 'Aadhaar Card Proof',
-        type: 'Biometric e-KYC Identity Proof',
-        documentNumber: `XXXX-XXXX-${aadhaarLast4}`,
-        uploadStatus: 'Uploaded',
-        verificationStatus: 'Pending Verification',
-        fileSize: '1.4 MB',
-        uploadedOn: appliedDate ? String(appliedDate).slice(0, 10) : 'Not Available',
-      });
-    }
   }
 
   const kycDocuments = {

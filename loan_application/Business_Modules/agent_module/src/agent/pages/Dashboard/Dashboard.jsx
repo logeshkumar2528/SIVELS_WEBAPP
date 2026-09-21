@@ -5,14 +5,16 @@ import StatCards from '../../components/StatCards/StatCards'
 import PendingLoans from '../../components/PendingLoans/PendingLoans'
 import SubmittedCustomers from '../../components/SubmittedCustomers/SubmittedCustomers'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
+import { useAuth } from '../../../../../../Core/src/context/AuthContext'
 import './Dashboard.css'
 
 function Dashboard() {
   const navigate = useNavigate()
+  const { currentUser } = useAuth()
   const { agentData, loadingAgent } = useAgentIdentity()
   const [showSubmittedCustomers, setShowSubmittedCustomers] = useState(false)
 
-  if (loadingAgent) {
+  if (loadingAgent && !agentData && !currentUser) {
     return (
       <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
         Loading dashboard...
@@ -21,8 +23,8 @@ function Dashboard() {
   }
 
   const agentInfo = [
-    { icon: UserCheck, label: 'Agent ID', value: agentData?.agentCode || 'N/A' },
-    { icon: MapPin, label: 'Branch', value: agentData?.branch || 'N/A' },
+    { icon: UserCheck, label: 'Agent ID', value: agentData?.agentCode || currentUser?.agentCode || 'N/A' },
+    { icon: MapPin, label: 'Branch', value: agentData?.branch || currentUser?.branch || 'N/A' },
     { icon: Calendar, label: "Today's Date", value: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) },
     { icon: Clock, label: 'Last Login', value: 'Today, ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
   ]

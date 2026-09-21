@@ -28,6 +28,7 @@ import { formatDateTimeSeconds as formatDateTime } from '../../utils/dateHelper'
 import { buildValidationPopup, parseApiErrorBody } from '../../utils/formatUserFacingError';
 import { buildApplicationDisplayId, resolveApplicantName } from '../applicationWizard/flowUtils';
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
+import { getCurrentRMContext } from '../../utils/rmContext';
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 import './ApplicationDetails.css';
 
@@ -255,29 +256,33 @@ export default function ApplicationDetails() {
             }
           }
 
-          const ownership = resolveApplicationOwnership(record);
-          let agentId = ownership.agentId;
-          let rmId = ownership.rmId;
-          let rmCustomerId = record.rmCustomerId ?? record.productDetails?.rmCustomerId ?? null;
+          const customer = record.raw?.customer || record.customer || record;
+          const createdByRole = String(
+            customer.createdByRole ??
+            customer.CreatedByRole ??
+            record.createdByRole ??
+            record.CreatedByRole ??
+            ''
+          ).trim().toUpperCase();
 
-          // If neither agentId nor rmId found on record, fetch ApplicationProductDetails to be certain
-          if (agentId === null && !rmId) {
-            try {
-              const prodRes = await fetch(`${baseUrl}/ApplicationProductDetails/bycustomer/${encodeURIComponent(appId)}`);
-              if (prodRes.ok) {
-                const prodData = await prodRes.json();
-                const prod = Array.isArray(prodData) ? prodData[0] : (prodData?.value ? prodData.value[0] : prodData);
-                if (prod) {
-                  const prodOwnership = resolveApplicationOwnership(prod);
-                  if (prodOwnership.agentId) agentId = prodOwnership.agentId;
-                  if (prodOwnership.rmId) rmId = prodOwnership.rmId;
-                  if (prod.rmCustomerId) rmCustomerId = prod.rmCustomerId;
-                }
-              }
-            } catch (e) {
-              console.warn('Could not fetch ApplicationProductDetails for sourcing resolution:', e);
-            }
-          }
+          const isAgentOwned = createdByRole === 'AGENT';
+          const isRmOwned = createdByRole === 'RM';
+
+          const ownership = resolveApplicationOwnership(record);
+          let agentId = isAgentOwned
+            ? (customer.agentId ?? customer.AgentId ?? record.agentId ?? record.AgentId ?? customer.createdByUserId ?? null)
+            : (isRmOwned ? null : ownership.agentId);
+          if (agentId) agentId = Number(agentId);
+
+          let rmId = isRmOwned
+            ? (customer.rmId ?? customer.RmId ?? customer.RMId ?? record.rmId ?? record.RMId ?? null)
+            : (isAgentOwned ? null : ownership.rmId);
+          if (rmId) rmId = Number(rmId);
+
+          let rmCustomerId = isRmOwned
+            ? (customer.rmCustomerId ?? customer.RmCustomerId ?? customer.RMCustomerId ?? record.rmCustomerId ?? record.RmCustomerId ?? record.RMCustomerId ?? null)
+            : null;
+          if (rmCustomerId) rmCustomerId = Number(rmCustomerId);
 
           if (ownership.isAgentCreated && agentId) {
             // 1. Agent-sourced application
@@ -601,6 +606,7 @@ export default function ApplicationDetails() {
   };
 
   const handleProceed = async () => {
+    const isRmSourced = Boolean(sourcingInfo.isRmSourced || displayRecord?.isRmSourced || appData.isRmSourced);
     const validationErrors = validateApplication(appData, requiresVariation, isRmSourced);
     setErrors(validationErrors);
 
@@ -619,72 +625,269 @@ export default function ApplicationDetails() {
         ? `${baseUrl}/ApplicationProductDetails/${appData.applicationProductDetailsId}` 
         : `${baseUrl}/ApplicationProductDetails`;
       
+      const customerRecord = displayRecord?.raw?.customer || displayRecord?.customer || displayRecord || {};
+      const createdByRole = String(
+        customerRecord.createdByRole ??
+        customerRecord.CreatedByRole ??
+        displayRecord?.createdByRole ??
+        displayRecord?.CreatedByRole ??
+        ''
+      ).trim().toUpperCase();
+
+      const isAgentOwned = createdByRole === 'AGENT';
+      const isRmOwned = createdByRole === 'RM';
       const ownership = resolveApplicationOwnership(displayRecord || appData);
-      const isRmDirect = Boolean(ownership.isDirectRm);
+
+      // 1. Validate required master selections
+      const loanProductId = Number(appData.loanProduct);
+      if (!loanProductId || loanProductId <= 0) {
+        setErrors((current) => ({ ...current, loanProduct: 'Loan product is required' }));
+        setErrorPopup({
+          title: 'Validation Error',
+          message: 'Please select a valid Loan Product.',
+          variant: 'warning',
+        });
+        return;
+      }
+
+      const loanProductVariationId = appData.loanVariation ? Number(appData.loanVariation) : null;
+      if (requiresVariation && (!loanProductVariationId || loanProductVariationId <= 0)) {
+        setErrors((current) => ({ ...current, loanVariation: 'HL / LAP variation is required' }));
+        setErrorPopup({
+          title: 'Validation Error',
+          message: 'Please select a valid Loan Product Variation.',
+          variant: 'warning',
+        });
+        return;
+      }
+
+      const loanTransactionTypeId = Number(appData.loanTransactionType);
+      if (!loanTransactionTypeId || loanTransactionTypeId <= 0) {
+        setErrors((current) => ({ ...current, loanTransactionType: 'Loan transaction type is required' }));
+        setErrorPopup({
+          title: 'Validation Error',
+          message: 'Please select a valid Loan Transaction Type.',
+          variant: 'warning',
+        });
+        return;
+      }
+
+      const loanPurposeId = Number(appData.purposeOfLoan);
+      if (!loanPurposeId || loanPurposeId <= 0) {
+        setErrors((current) => ({ ...current, purposeOfLoan: 'Purpose of loan is required' }));
+        setErrorPopup({
+          title: 'Validation Error',
+          message: 'Please select a valid Purpose of Loan.',
+          variant: 'warning',
+        });
+        return;
+      }
+
+      const interestTypeId = Number(appData.interestType);
+      if (!interestTypeId || interestTypeId <= 0) {
+        setErrors((current) => ({ ...current, interestType: 'Rate of interest is required' }));
+        setErrorPopup({
+          title: 'Validation Error',
+          message: 'Please select a valid Interest Type.',
+          variant: 'warning',
+        });
+        return;
+      }
+
+      // 2. Resolve SourcingChannelId dynamically from selection / master options
+      let candidateChannelId = null;
+      if (appData.sourcingChannel !== '' && appData.sourcingChannel !== null && appData.sourcingChannel !== undefined && Number(appData.sourcingChannel) > 0) {
+        candidateChannelId = Number(appData.sourcingChannel);
+      } else if (displayRecord?.sourcingChannelId || displayRecord?.SourcingChannelId) {
+        candidateChannelId = Number(displayRecord.sourcingChannelId || displayRecord.SourcingChannelId);
+      } else if (sourcingInfo.sourcingChannelId) {
+        candidateChannelId = Number(sourcingInfo.sourcingChannelId);
+      }
+
+      let resolvedSourcingChannelId = null;
+      if (candidateChannelId && (sourcingChannelOptions.length === 0 || sourcingChannelOptions.some(opt => Number(opt.value) === candidateChannelId))) {
+        resolvedSourcingChannelId = candidateChannelId;
+      } else if (!candidateChannelId && sourcingChannelOptions.length > 0) {
+        if (isRmOwned || (!isAgentOwned && ownership.isDirectRm)) {
+          const directOpt = sourcingChannelOptions.find(opt => /rm|direct/i.test(opt.label || opt.raw?.sourcingChannelCode || opt.raw?.sourcingChannelName));
+          if (directOpt) {
+            resolvedSourcingChannelId = Number(directOpt.value);
+          } else if (sourcingChannelOptions[0]?.value) {
+            resolvedSourcingChannelId = Number(sourcingChannelOptions[0].value);
+          }
+        } else {
+          const agentOpt = sourcingChannelOptions.find(isFieldAgentChannel);
+          if (agentOpt) {
+            resolvedSourcingChannelId = Number(agentOpt.value);
+          }
+        }
+      }
+
+      if (!resolvedSourcingChannelId || resolvedSourcingChannelId <= 0) {
+        setErrors((current) => ({ ...current, sourcingChannel: 'Sourcing channel is required' }));
+        setErrorPopup({
+          title: 'Validation Error',
+          message: 'Unable to resolve Sourcing Channel from master data. Please select a valid sourcing channel.',
+          variant: 'warning',
+        });
+        return;
+      }
 
       let payload;
-      if (isRmDirect) {
-        const rmId = Number(sourcingInfo.rmId || ownership.rmId || displayRecord?.rmId || appData.rmId || displayRecord?.createdBy || 0);
-        const rmCustomerId = Number(sourcingInfo.rmCustomerId || displayRecord?.rmCustomerId || appData.rmCustomerId || appId);
+      if (isRmOwned || (!isAgentOwned && ownership.isDirectRm)) {
+        // RM-OWNED APPLICATION CONTRACT (Common Customer Model):
+        // - AgentCustomerId: <real AgentAddCustomer.agentCustomerId>
+        // - AgentId: null
+        // - RmId: <real RMId from customer ownership>
+        // - RmCustomerId: null
+        const rawRmId =
+          customerRecord.rmId ??
+          customerRecord.RmId ??
+          customerRecord.RMId ??
+          displayRecord?.rmId ??
+          displayRecord?.RmId ??
+          displayRecord?.RMId ??
+          null;
+        const rmId = (rawRmId !== null && rawRmId !== undefined && rawRmId !== '') ? Number(rawRmId) : null;
+
+        if (!rmId || rmId <= 0) {
+          setErrorPopup({
+            title: 'RM Identity Error',
+            message: 'Unable to resolve authoritative RMId from customer record for this RM-owned application.',
+            variant: 'error',
+          });
+          return;
+        }
+
+        // Resolve realCustomerAgentCustomerId ONLY from the actual loaded AgentAddCustomer record
+        const rawAgentCustomerId =
+          customerRecord.agentCustomerId ??
+          customerRecord.AgentCustomerId ??
+          displayRecord?.agentCustomerId ??
+          displayRecord?.AgentCustomerId ??
+          null;
+        const agentCustomerId = (rawAgentCustomerId !== null && rawAgentCustomerId !== undefined && rawAgentCustomerId !== '')
+          ? Number(rawAgentCustomerId)
+          : (Number(appId) > 0 ? Number(appId) : null);
+
+        if (!agentCustomerId || agentCustomerId <= 0) {
+          setErrorPopup({
+            title: 'Missing AgentCustomerId',
+            message: 'Authoritative customer record does not contain "agentCustomerId" required for RM-owned applications.',
+            variant: 'error',
+          });
+          return;
+        }
+
+        const createdByUserId =
+          customerRecord.createdByUserId ??
+          customerRecord.CreatedByUserId ??
+          customerRecord.createdBy ??
+          customerRecord.CreatedBy ??
+          displayRecord?.createdByUserId ??
+          displayRecord?.createdBy ??
+          rmId;
 
         payload = {
-          RmId: rmId,
-          RmCustomerId: rmCustomerId,
+          AgentCustomerId: agentCustomerId,
           AgentId: null,
-          SourcingChannelId: Number(appData.sourcingChannel) || 1,
-          LoanProductId: Number(appData.loanProduct) || 0,
-          LoanProductVariationId: appData.loanVariation ? Number(appData.loanVariation) : null,
-          LoanTransactionTypeId: Number(appData.loanTransactionType) || 0,
-          LoanPurposeId: Number(appData.purposeOfLoan) || 0,
+          RmId: rmId,
+          RmCustomerId: null,
+          SourcingChannelId: resolvedSourcingChannelId,
+          LoanProductId: loanProductId,
+          LoanProductVariationId: loanProductVariationId,
+          LoanTransactionTypeId: loanTransactionTypeId,
+          LoanPurposeId: loanPurposeId,
           LoanAmount: parseAmountToNumber(appData.loanAmount),
-          LoanTenure: Number(appData.loanTenureMonths) || 0,
-          InterestTypeId: Number(appData.interestType) || 0,
+          LoanTenure: Number(appData.loanTenureMonths),
+          InterestTypeId: interestTypeId,
           ROI: appData.roi !== null && appData.roi !== '' ? Number(appData.roi) : null,
           DistanceFromBranch: appData.distanceFromBranchKm !== null && appData.distanceFromBranchKm !== '' ? Number(appData.distanceFromBranchKm) : null,
-          NoOfCoApplicants: appData.coApplicantsCount !== null && appData.coApplicantsCount !== '' ? Number(appData.coApplicantsCount) : null,
-          CreatedBy: rmId || 1
+          NoOfCoApplicants: appData.coApplicantsCount !== null && appData.coApplicantsCount !== '' ? Number(appData.coApplicantsCount) : 0,
+          CreatedBy: Number(createdByUserId || rmId)
+        };
+
+        if (isUpdate) {
+          payload.ApplicationProductDetailsId = appData.applicationProductDetailsId;
+        }
+      } else if (isAgentOwned || (!isRmOwned && ownership.isAgentCreated)) {
+        // AGENT-OWNED APPLICATION CONTRACT:
+        // - resolve agentCustomerId only from customer.agentCustomerId / AgentCustomerId / authoritative customer PK field confirmed by API
+        // - resolve agentId only from customer.agentId / AgentId / createdByUserId if backend record explicitly represents Agent ownership
+        // - rmId = null
+        // - rmCustomerId = null
+        const rawAgentCustomerId =
+          customerRecord.agentCustomerId ??
+          customerRecord.AgentCustomerId ??
+          displayRecord?.agentCustomerId ??
+          displayRecord?.AgentCustomerId ??
+          null;
+        const agentCustomerId = (rawAgentCustomerId !== null && rawAgentCustomerId !== undefined && rawAgentCustomerId !== '') ? Number(rawAgentCustomerId) : null;
+
+        if (!agentCustomerId || agentCustomerId <= 0) {
+          setErrorPopup({
+            title: 'Missing AgentCustomerId',
+            message: 'Authoritative customer record does not contain "agentCustomerId" required for Agent-owned applications.',
+            variant: 'error',
+          });
+          return;
+        }
+
+        const rawAgentId =
+          customerRecord.agentId ??
+          customerRecord.AgentId ??
+          displayRecord?.agentId ??
+          displayRecord?.AgentId ??
+          (isAgentOwned ? (customerRecord.createdByUserId ?? customerRecord.CreatedByUserId ?? displayRecord?.createdByUserId ?? displayRecord?.CreatedByUserId) : ownership.agentId);
+        const agentId = (rawAgentId !== null && rawAgentId !== undefined && rawAgentId !== '') ? Number(rawAgentId) : null;
+
+        if (!agentId || agentId <= 0) {
+          setErrorPopup({
+            title: 'Missing AgentId',
+            message: 'Authoritative customer record does not contain "agentId" required for Agent-owned applications.',
+            variant: 'error',
+          });
+          return;
+        }
+
+        const createdByUserId =
+          customerRecord.createdByUserId ??
+          customerRecord.CreatedByUserId ??
+          customerRecord.createdBy ??
+          customerRecord.CreatedBy ??
+          displayRecord?.createdByUserId ??
+          displayRecord?.createdBy ??
+          agentId;
+
+        payload = {
+          AgentCustomerId: agentCustomerId,
+          AgentId: agentId,
+          RmId: null,
+          RmCustomerId: null,
+          SourcingChannelId: resolvedSourcingChannelId,
+          LoanProductId: loanProductId,
+          LoanProductVariationId: loanProductVariationId,
+          LoanTransactionTypeId: loanTransactionTypeId,
+          LoanPurposeId: loanPurposeId,
+          LoanAmount: parseAmountToNumber(appData.loanAmount),
+          LoanTenure: Number(appData.loanTenureMonths),
+          InterestTypeId: interestTypeId,
+          ROI: appData.roi !== null && appData.roi !== '' ? Number(appData.roi) : null,
+          DistanceFromBranch: appData.distanceFromBranchKm !== null && appData.distanceFromBranchKm !== '' ? Number(appData.distanceFromBranchKm) : null,
+          NoOfCoApplicants: appData.coApplicantsCount !== null && appData.coApplicantsCount !== '' ? Number(appData.coApplicantsCount) : 0,
+          CreatedBy: Number(createdByUserId || agentId)
         };
 
         if (isUpdate) {
           payload.ApplicationProductDetailsId = appData.applicationProductDetailsId;
         }
       } else {
-        let agentId = ownership.agentId || appData.agentId || displayRecord?.agentId;
-        if (!agentId) {
-          try {
-            const agentRes = await fetch(`${baseUrl}/AgentMaster`);
-            if (agentRes.ok) {
-              const agents = await agentRes.json();
-              if (agents && agents.length > 0) {
-                agentId = agents[0].agentId || agents[0].AgentId;
-              }
-            }
-          } catch (e) {
-            console.error("Failed to fetch default agent:", e);
-          }
-        }
-        agentId = agentId || 1;
-
-        payload = {
-          AgentCustomerId: Number(appId),
-          AgentId: agentId,
-          SourcingChannelId: Number(appData.sourcingChannel) || 0,
-          LoanProductId: Number(appData.loanProduct) || 0,
-          LoanProductVariationId: appData.loanVariation ? Number(appData.loanVariation) : null,
-          LoanTransactionTypeId: Number(appData.loanTransactionType) || 0,
-          LoanPurposeId: Number(appData.purposeOfLoan) || 0,
-          LoanAmount: parseAmountToNumber(appData.loanAmount),
-          LoanTenure: Number(appData.loanTenureMonths) || 0,
-          InterestTypeId: Number(appData.interestType) || 0,
-          ROI: appData.roi !== null && appData.roi !== '' ? Number(appData.roi) : null,
-          DistanceFromBranch: appData.distanceFromBranchKm !== null && appData.distanceFromBranchKm !== '' ? Number(appData.distanceFromBranchKm) : null,
-          NoOfCoApplicants: appData.coApplicantsCount !== null && appData.coApplicantsCount !== '' ? Number(appData.coApplicantsCount) : null,
-          CreatedBy: 1
-        };
-
-        if (isUpdate) {
-          payload.ApplicationProductDetailsId = appData.applicationProductDetailsId;
-        }
+        setErrorPopup({
+          title: 'Application Ownership Resolution Error',
+          message: 'Unable to resolve application ownership role from customer record. Neither Agent nor RM ownership could be verified.',
+          variant: 'error',
+        });
+        return;
       }
 
       console.log('Sending payload to backend:', payload);

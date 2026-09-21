@@ -139,7 +139,20 @@ export function mergeSectionData(targetSection = {}, sourceSection = {}) {
     result.propertyOne = mergeEntityObject(targetSection.propertyOne, sourceSection.propertyOne);
   }
   if (targetSection.propertyTwo || sourceSection.propertyTwo) {
-    result.propertyTwo = mergeEntityObject(targetSection.propertyTwo, sourceSection.propertyTwo);
+    const sP2 = sourceSection.propertyTwo;
+    const isP2ExplicitlyCleared =
+      sP2 &&
+      sP2.applicationCollateralDetailsId === null &&
+      (!sP2.typeOfProperty || String(sP2.typeOfProperty).trim() === '') &&
+      (!sP2.usage || String(sP2.usage).trim() === '') &&
+      (!sP2.locationAddress || String(sP2.locationAddress).trim() === '') &&
+      (!sP2.estimatedValue || sP2.estimatedValue === '0' || Number(sP2.estimatedValue) === 0);
+
+    if (isP2ExplicitlyCleared) {
+      result.propertyTwo = { ...sP2 };
+    } else {
+      result.propertyTwo = mergeEntityObject(targetSection.propertyTwo, sourceSection.propertyTwo);
+    }
   }
 
   if (targetSection.reference1 || sourceSection.reference1) {
@@ -366,9 +379,9 @@ export function buildApplicationDisplayId(record = {}, fallbackId = '') {
  */
 export function isAadhaarDoc(doc) {
   if (!doc) return false;
-  const typeId = Number(doc.documentTypeId || doc.DocumentTypeId);
-  if (typeId === 1) return true;
-  if ([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].includes(typeId)) return false;
+  const typeCode = String(doc.documentTypeCode || doc.DocumentTypeCode || doc.code || '').toUpperCase().trim();
+  if (typeCode === 'AADHAAR' || typeCode === 'AADHAR') return true;
+
   const typeName = String(doc.documentTypeName || doc.documentType || doc.DocumentTypeName || '').toLowerCase();
   if (
     typeName.includes('bank') ||
@@ -383,92 +396,76 @@ export function isAadhaarDoc(doc) {
   return typeName.includes('aadhaar') || typeName.includes('aadhar');
 }
 
+// In-memory session caches to prevent duplicate requests and infinite lookup loops
+// (Not persisted to localStorage/sessionStorage)
+const tupleLookupCache = new Map(); // key = `${prodDetailsId}:${seq}:${docTypeId}`
+const blobUrlCache = new Map(); // key = url
+const agentCustDocsCache = new Map(); // key = custId
+
 /**
  * Downloads a document as a Blob from a given URL and converts it into a browser Object URL.
+ * Treats 404 silently as an expected empty state without console logging.
  */
-async function fetchDocumentBlobAsUrl(url, headers = {}, fallbackFileName = '') {
+export async function fetchDocumentBlobAsUrl(url, headers = {}, fallbackFileName = '') {
   if (!url) return null;
-  try {
-    const res = await fetch(url, { headers });
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    if (!blob || blob.size === 0) return null;
-
-    const ext = String(fallbackFileName || url).split('?')[0].split('.').pop()?.toLowerCase();
-    let mimeType = blob.type || 'image/jpeg';
-    if (mimeType === 'application/octet-stream' || !mimeType) {
-      if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
-      else if (ext === 'png') mimeType = 'image/png';
-      else if (ext === 'webp') mimeType = 'image/webp';
-      else if (ext === 'pdf') mimeType = 'application/pdf';
-    }
-    const typedBlob = new Blob([blob], { type: mimeType });
-    return URL.createObjectURL(typedBlob);
-  } catch (e) {
-    console.warn(`Failed to fetch document blob from ${url}:`, e);
-    return null;
+  if (blobUrlCache.has(url)) {
+    return blobUrlCache.get(url);
   }
+
+  const fetchPromise = (async () => {
+    try {
+      const res = await fetch(url, { headers });
+      if (res.status === 404) {
+        return null;
+      }
+      if (!res.ok) {
+        if (res.status !== 404) {
+          console.warn(`Unexpected status ${res.status} fetching document from ${url}`);
+        }
+        return null;
+      }
+      const blob = await res.blob();
+      if (!blob || blob.size === 0) return null;
+
+      const ext = String(fallbackFileName || url).split('?')[0].split('.').pop()?.toLowerCase();
+      let mimeType = blob.type || 'image/jpeg';
+      if (mimeType === 'application/octet-stream' || !mimeType) {
+        if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+        else if (ext === 'png') mimeType = 'image/png';
+        else if (ext === 'webp') mimeType = 'image/webp';
+        else if (ext === 'pdf') mimeType = 'application/pdf';
+      }
+      const typedBlob = new Blob([blob], { type: mimeType });
+      return URL.createObjectURL(typedBlob);
+    } catch {
+      return null;
+    }
+  })();
+
+  blobUrlCache.set(url, fetchPromise);
+  return fetchPromise;
 }
 
 /**
- * Resolves the latest Aadhaar document for Primary Applicant (applicantSequence 0).
- * Rule:
- * 1. Priority: Latest updated Aadhaar (from ApplicationKYCDocuments or latest AgentCustomerDocument).
- * 2. Fallback: Original Agent-uploaded Aadhaar.
+ * Composite tuple lookup helper for applicant/co-applicant documents.
+ * Treats 404 silently as an expected empty state and caches in-memory.
  */
-export async function resolveLatestApplicantAadhaar({ appData = {}, appId = '', baseUrl = '', headers = {} }) {
-  const finalBaseUrl = baseUrl || import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-
-  // 1. Resolve Customer ID Candidates
-  const candidateCustomerIds = [
-    appData.agentCustomerId,
-    appData.AgentCustomerId,
-    appData.customerId,
-    appData.CustomerId,
-    appData.Applicant?.agentCustomerId,
-    appData.applicant?.agentCustomerId,
-    appData.Applicant?.customerId,
-    appData.applicant?.customerId,
-  ].filter(Boolean);
-
-  // If customer ID is still not known from appData, resolve from AgentAddCustomer or ApplicationProductDetails
-  if (appId && candidateCustomerIds.length === 0) {
-    try {
-      const custRes = await fetch(`${finalBaseUrl}/AgentAddCustomer/${appId}`, { headers });
-      if (custRes.ok) {
-        const custData = await custRes.json();
-        const record = Array.isArray(custData) ? custData[0] : (custData?.value ? custData.value[0] : custData);
-        const resolvedId = record?.agentCustomerId || record?.AgentCustomerId || record?.customerId || record?.CustomerId;
-        if (resolvedId) candidateCustomerIds.push(resolvedId);
-      }
-    } catch {}
-
-    if (candidateCustomerIds.length === 0) {
-      try {
-        const prodRes = await fetch(`${finalBaseUrl}/ApplicationProductDetails/${appId}`, { headers });
-        if (prodRes.ok) {
-          const prodData = await prodRes.json();
-          const prodRecord = Array.isArray(prodData) ? prodData[0] : (prodData?.value ? prodData.value[0] : prodData);
-          const resolvedId = prodRecord?.agentCustomerId || prodRecord?.AgentCustomerId || prodRecord?.customerId || prodRecord?.CustomerId;
-          if (resolvedId) candidateCustomerIds.push(resolvedId);
-        }
-      } catch {}
-    }
+export async function fetchApplicantDocumentTuple(finalBaseUrl, prodDetailsId, seq, docTypeId, headers = {}) {
+  const cacheKey = `${prodDetailsId}:${seq}:${docTypeId}`;
+  if (tupleLookupCache.has(cacheKey)) {
+    return tupleLookupCache.get(cacheKey);
   }
 
-  // Always include appId as candidate fallback
-  if (appId && !candidateCustomerIds.includes(appId)) {
-    candidateCustomerIds.push(appId);
-  }
-
-  // 2. Step A: Check for Updated Aadhaar in ApplicationKYCDocuments (applicantSequence 0 / applicant KYC record)
-  // Check 2a: Composite tuple lookup for Applicant (sequence 0, documentTypeId 1)
-  if (appId) {
+  const lookupPromise = (async () => {
     try {
       const tupleRes = await fetch(
-        `${finalBaseUrl}/ApplicationKYCDocuments/applicant-document?applicationProductDetailsId=${encodeURIComponent(appId)}&applicantSequence=0&documentTypeId=1`,
+        `${finalBaseUrl}/ApplicationKYCDocuments/applicant-document?applicationProductDetailsId=${encodeURIComponent(prodDetailsId)}&applicantSequence=${encodeURIComponent(seq)}&documentTypeId=${encodeURIComponent(docTypeId)}`,
         { headers }
       );
+      if (tupleRes.status === 404) {
+        // Expected empty state when document is not uploaded
+        return null;
+      }
       if (tupleRes.ok) {
         const contentType = tupleRes.headers.get('content-type') || '';
         if (contentType.includes('application/json')) {
@@ -487,81 +484,101 @@ export async function resolveLatestApplicantAadhaar({ appData = {}, appId = '', 
           }
         }
       }
-    } catch {}
-  }
+    } catch {
+      // Ignore network errors
+    }
+    return null;
+  })();
 
-  // Check 2b: ApplicationKYCDocuments aadharDocumentPath for applicant
+  tupleLookupCache.set(cacheKey, lookupPromise);
+  return lookupPromise;
+}
+
+/**
+ * Resolves the latest Aadhaar document for Primary Applicant (applicantSequence 0).
+ *
+ * Contract:
+ * 1. Resolve KYC row for applicantSequence = 0.
+ * 2. Check canonical AadharDocumentPath (or aadharDocumentPath).
+ * 3. If path is null/empty:
+ *    - Return null immediately (no Aadhaar uploaded).
+ *    - Do NOT call /{id}/aadhar.
+ *    - Do NOT call generic applicant-document tuple endpoint.
+ *    - Do NOT fallback to AgentCustomerDocument.
+ * 4. If path exists:
+ *    - Call dedicated endpoint /ApplicationKYCDocuments/{kycDocumentId}/aadhar.
+ *    - If blob returned, return object URL.
+ *    - Fallback: download via canonical path if dedicated endpoint is not available.
+ */
+export async function resolveLatestApplicantAadhaar({
+  appData = {},
+  appId = '',
+  applicationProductDetailsId = null,
+  baseUrl = '',
+  headers = {},
+}) {
+  const finalBaseUrl = baseUrl || import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+
+  // 1. Resolve Applicant KYC record (applicantSequence 0)
   const kycDocs = appData.sections?.kycDocuments || appData.kycDocuments || {};
-  const applicantKyc = kycDocs.applicant || {};
-  const aadharPath = applicantKyc.aadharDocumentPath || applicantKyc.AadharDocumentPath;
-  if (aadharPath) {
-    const cleanPath = String(aadharPath).replace(/^[\\/]+/, '').replace(/\\/g, '/');
-    const url = await fetchDocumentBlobAsUrl(`${finalBaseUrl}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`, headers, aadharPath);
+  const applicantKyc = kycDocs.applicant || appData.applicantKyc || {};
+
+  const aadharPath = (
+    applicantKyc.aadharDocumentPath ||
+    applicantKyc.AadharDocumentPath ||
+    appData.aadharDocumentPath ||
+    appData.AadharDocumentPath
+  );
+
+  // If path is null/empty, strictly return null (no preview, no /{id}/aadhar, no generic tuple, no AgentCustomerDocument fallback)
+  if (!aadharPath || typeof aadharPath !== 'string' || !aadharPath.trim() || aadharPath.trim().toLowerCase() === 'null' || aadharPath.trim().toLowerCase() === 'undefined') {
+    return null;
+  }
+
+  // 2. Path exists -> Fetch via dedicated endpoint /ApplicationKYCDocuments/{kycDocumentId}/aadhar
+  const applicantKycId = (
+    applicantKyc.kycDocumentId ||
+    applicantKyc.applicationKYCDocumentId ||
+    applicantKyc.ApplicationKYCDocumentId ||
+    appData.kycDocumentId ||
+    appData.applicationKYCDocumentId
+  );
+
+  if (applicantKycId && Number(applicantKycId) > 0) {
+    const url = await fetchDocumentBlobAsUrl(
+      `${finalBaseUrl}/ApplicationKYCDocuments/${encodeURIComponent(applicantKycId)}/aadhar`,
+      headers,
+      'aadhar.jpg'
+    );
     if (url) return url;
   }
 
-  // Check 2c: Direct route ApplicationKYCDocuments/{kycId}/aadhar
-  const applicantKycId = applicantKyc.kycDocumentId || applicantKyc.applicationKYCDocumentId;
-  if (applicantKycId) {
-    const url = await fetchDocumentBlobAsUrl(`${finalBaseUrl}/ApplicationKYCDocuments/${applicantKycId}/aadhar`, headers, 'aadhar.jpg');
-    if (url) return url;
-  }
-
-  // 3. Step B: Check AgentCustomerDocument for Updated vs Original Aadhaar
-  for (const custId of candidateCustomerIds) {
-    try {
-      const res = await fetch(`${finalBaseUrl}/AgentCustomerDocument/bycustomer/${custId}`, { headers });
-      if (res.ok) {
-        const data = await res.json();
-        const docList = Array.isArray(data) ? data : (data?.data || data?.value || data?.items || []);
-        const activeApplicantDocs = docList.filter(
-          (d) =>
-            d &&
-            d.isActive !== false &&
-            (d.applicantSequence === 0 || d.applicantSequence === '0' || d.applicantSequence === null || d.applicantSequence === undefined) &&
-            isAadhaarDoc(d)
-        );
-
-        if (activeApplicantDocs.length > 0) {
-          // Sort by latest modified / created / ID DESC (Latest Updated First)
-          const latestSortedDocs = [...activeApplicantDocs].sort((a, b) => {
-            const timeA = new Date(a.modifiedAt || a.updatedAt || a.createdAt || a.createdDate || 0).getTime();
-            const timeB = new Date(b.modifiedAt || b.updatedAt || b.createdAt || b.createdDate || 0).getTime();
-            if (timeB !== timeA) return timeB - timeA;
-            return (Number(b.agentCustomerDocumentId || b.id) || 0) - (Number(a.agentCustomerDocumentId || a.id) || 0);
-          });
-
-          // Sort by original / earliest ASC (Original Fallback First)
-          const originalSortedDocs = [...activeApplicantDocs].sort((a, b) => {
-            if (a.isOriginal && !b.isOriginal) return -1;
-            if (!a.isOriginal && b.isOriginal) return 1;
-            const timeA = new Date(a.createdAt || a.createdDate || 0).getTime();
-            const timeB = new Date(b.createdAt || b.createdDate || 0).getTime();
-            if (timeA && timeB && timeA !== timeB) return timeA - timeB;
-            return (Number(a.agentCustomerDocumentId || a.id) || 0) - (Number(b.agentCustomerDocumentId || b.id) || 0);
-          });
-
-          // Priority 1: Pick latest updated active document
-          const targetDoc = latestSortedDocs[0] || originalSortedDocs[0];
-          const docId = targetDoc.agentCustomerDocumentId || targetDoc.id;
-          if (docId) {
-            const url = await fetchDocumentBlobAsUrl(`${finalBaseUrl}/AgentCustomerDocument/download/${docId}`, headers, targetDoc.fileName);
-            if (url) return url;
-          }
-        }
-      }
-    } catch {}
-  }
-
-  return null;
+  // Fallback if dedicated endpoint blob fetch fails: download by canonical path
+  const cleanPath = String(aadharPath).replace(/^[\\/]+/, '').replace(/\\/g, '/');
+  const url = await fetchDocumentBlobAsUrl(
+    `${finalBaseUrl}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`,
+    headers,
+    aadharPath
+  );
+  return url || null;
 }
 
 /**
  * Resolves the latest Aadhaar document for a specific Co-Applicant.
- * Rule:
- * 1. Priority: Latest updated Aadhaar for this exact co-applicant sequence.
- * 2. Fallback: Original RM-uploaded Aadhaar for this exact co-applicant sequence.
- * Strict sequence isolation: Co-App 1 = seq 1, Co-App 2 = seq 2, etc.
+ *
+ * Contract:
+ * 1. Strict sequence isolation: Co-App 1 = sequence 1, Co-App 2 = sequence 2, etc.
+ * 2. Resolve KYC row by real applicantSequence (seq = coIndex + 1).
+ * 3. Check canonical AadharDocumentPath (or aadharDocumentPath).
+ * 4. If missing/null/empty:
+ *    - Return null immediately (no preview).
+ *    - Do NOT call generic tuple lookup.
+ *    - Do NOT call /{id}/aadhar.
+ *    - Do NOT fallback to AgentCustomerDocument.
+ * 5. If present:
+ *    - Call dedicated endpoint /ApplicationKYCDocuments/{kycDocumentId}/aadhar.
+ *    - If blob returned, return object URL.
+ *    - Fallback: download via canonical path if dedicated endpoint is not available.
  */
 export async function resolveLatestCoApplicantAadhaar({
   coKyc = {},
@@ -569,13 +586,14 @@ export async function resolveLatestCoApplicantAadhaar({
   coIndex = 0,
   appData = {},
   appId = '',
+  applicationProductDetailsId = null,
   baseUrl = '',
   headers = {},
 }) {
   const finalBaseUrl = baseUrl || import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-  const seq = coIndex + 1;
+  const seq = coIndex + 1; // Co-App 1 = sequence 1, Co-App 2 = sequence 2
 
-  // Resolve Co-Applicant KYC Data from all possible contexts
+  // 1. Resolve Co-Applicant KYC Data from all possible contexts
   const resolvedCoKyc =
     (coKyc && Object.keys(coKyc).length > 0)
       ? coKyc
@@ -586,98 +604,45 @@ export async function resolveLatestCoApplicantAadhaar({
       ? coPersonalInfo
       : (appData?.sections?.personalInformation?.coApplicants?.[coIndex] || appData?.personalInformation?.coApplicants?.[coIndex] || {});
 
-  const kycId =
+  const aadharPath = (
+    resolvedCoKyc.aadharDocumentPath ||
+    resolvedCoKyc.AadharDocumentPath ||
+    resolvedCoPersonalInfo.aadharDocumentPath ||
+    resolvedCoPersonalInfo.AadharDocumentPath
+  );
+
+  // If path is missing/null/empty, strictly return null (no preview, no generic tuple, no /{id}/aadhar, no AgentCustomerDocument fallback)
+  if (!aadharPath || typeof aadharPath !== 'string' || !aadharPath.trim() || aadharPath.trim().toLowerCase() === 'null' || aadharPath.trim().toLowerCase() === 'undefined') {
+    return null;
+  }
+
+  // 2. Path exists -> Fetch via dedicated endpoint /ApplicationKYCDocuments/{kycDocumentId}/aadhar
+  const kycId = (
     resolvedCoKyc.kycDocumentId ||
     resolvedCoKyc.applicationKYCDocumentId ||
+    resolvedCoKyc.ApplicationKYCDocumentId ||
     resolvedCoPersonalInfo.kycDocumentId ||
-    resolvedCoPersonalInfo.applicationKYCDocumentId;
+    resolvedCoPersonalInfo.applicationKYCDocumentId ||
+    resolvedCoPersonalInfo.ApplicationKYCDocumentId
+  );
 
-  // 1. Check composite tuple lookup for this exact co-applicant sequence: sequence = seq, documentTypeId = 1 (Aadhaar)
-  if (appId) {
-    try {
-      const tupleRes = await fetch(
-        `${finalBaseUrl}/ApplicationKYCDocuments/applicant-document?applicationProductDetailsId=${encodeURIComponent(appId)}&applicantSequence=${encodeURIComponent(seq)}&documentTypeId=1`,
-        { headers }
-      );
-      if (tupleRes.ok) {
-        const contentType = tupleRes.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          const tupleDoc = await tupleRes.json();
-          const docPath = tupleDoc?.documentPath || tupleDoc?.DocumentPath || tupleDoc?.filePath || tupleDoc?.FilePath;
-          if (docPath) {
-            const cleanPath = String(docPath).replace(/^[\\/]+/, '').replace(/\\/g, '/');
-            const url = await fetchDocumentBlobAsUrl(`${finalBaseUrl}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`, headers, docPath);
-            if (url) return url;
-          }
-        } else {
-          const blob = await tupleRes.blob();
-          if (blob && blob.size > 0) {
-            const typedBlob = new Blob([blob], { type: blob.type || 'image/jpeg' });
-            return URL.createObjectURL(typedBlob);
-          }
-        }
-      }
-    } catch {}
-  }
-
-  // 2. Check ApplicationKYCDocuments aadharDocumentPath
-  const aadharPath = resolvedCoKyc.aadharDocumentPath || resolvedCoKyc.AadharDocumentPath;
-  if (aadharPath) {
-    const cleanPath = String(aadharPath).replace(/^[\\/]+/, '').replace(/\\/g, '/');
-    const url = await fetchDocumentBlobAsUrl(`${finalBaseUrl}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`, headers, aadharPath);
+  if (kycId && Number(kycId) > 0) {
+    const url = await fetchDocumentBlobAsUrl(
+      `${finalBaseUrl}/ApplicationKYCDocuments/${encodeURIComponent(kycId)}/aadhar`,
+      headers,
+      `co_applicant_${seq}_aadhar.jpg`
+    );
     if (url) return url;
   }
 
-  // 3. Check Direct route: ApplicationKYCDocuments/{kycId}/aadhar
-  if (kycId) {
-    const url = await fetchDocumentBlobAsUrl(`${finalBaseUrl}/ApplicationKYCDocuments/${kycId}/aadhar`, headers, 'aadhar.jpg');
-    if (url) return url;
-  }
-
-  // 4. Check AgentCustomerDocument for this exact co-applicant sequence
-  const candidateCustomerIds = [
-    appData?.agentCustomerId,
-    appData?.AgentCustomerId,
-    appData?.customerId,
-    appData?.CustomerId,
-    appId,
-  ].filter(Boolean);
-
-  for (const custId of candidateCustomerIds) {
-    try {
-      const res = await fetch(`${finalBaseUrl}/AgentCustomerDocument/bycustomer/${custId}`, { headers });
-      if (res.ok) {
-        const data = await res.json();
-        const docList = Array.isArray(data) ? data : (data?.data || data?.value || data?.items || []);
-        const activeCoDocs = docList.filter(
-          (d) =>
-            d &&
-            d.isActive !== false &&
-            (d.applicantSequence === seq || d.applicantSequence === String(seq)) &&
-            isAadhaarDoc(d)
-        );
-
-        if (activeCoDocs.length > 0) {
-          // Sort by latest modified / created / ID DESC (Latest Updated First)
-          activeCoDocs.sort((a, b) => {
-            const timeA = new Date(a.modifiedAt || a.updatedAt || a.createdAt || a.createdDate || 0).getTime();
-            const timeB = new Date(b.modifiedAt || b.updatedAt || b.createdAt || b.createdDate || 0).getTime();
-            if (timeB !== timeA) return timeB - timeA;
-            return (Number(b.agentCustomerDocumentId || b.id) || 0) - (Number(a.agentCustomerDocumentId || a.id) || 0);
-          });
-
-          const targetDoc = activeCoDocs[0];
-          const docId = targetDoc.agentCustomerDocumentId || targetDoc.id;
-          if (docId) {
-            const url = await fetchDocumentBlobAsUrl(`${finalBaseUrl}/AgentCustomerDocument/download/${docId}`, headers, targetDoc.fileName);
-            if (url) return url;
-          }
-        }
-      }
-    } catch {}
-  }
-
-  return null;
+  // Fallback if dedicated endpoint blob fetch fails: download by canonical path
+  const cleanPath = String(aadharPath).replace(/^[\\/]+/, '').replace(/\\/g, '/');
+  const url = await fetchDocumentBlobAsUrl(
+    `${finalBaseUrl}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`,
+    headers,
+    aadharPath
+  );
+  return url || null;
 }
 
 // Backward-compatible aliases

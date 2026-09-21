@@ -24,32 +24,38 @@ function buildBankState(appData) {
   const count = getApplicantCount(appData);
   const savedCoApplicants = Array.isArray(saved.coApplicants) ? saved.coApplicants : [];
 
-  const createBank = (source = {}) => ({
-    applicationBankExistingLoanDetailsId: source.applicationBankExistingLoanDetailsId || source.ApplicationBankExistingLoanDetailsId || source.applicationBankDetailsId || source.ApplicationBankDetailsId || null,
+  const createBank = (source = {}, isPrimary = false) => ({
+    applicationBankExistingLoanDetailsId:
+      source.applicationBankExistingLoanDetailsId ||
+      source.ApplicationBankExistingLoanDetailsId ||
+      source.applicationBankDetailsId ||
+      source.ApplicationBankDetailsId ||
+      null,
     bankName: source.bankName || '',
     branch: source.branch || '',
     ifscCode: source.ifscCode || '',
     accountType: source.accountType || '',
     accountNumber: source.accountNumber || '',
-    noOfActiveLoans: source.noOfActiveLoans || '',
-    noOfActiveCreditCards: source.noOfActiveCreditCards || '',
+    noOfActiveLoans: source.noOfActiveLoans !== undefined && source.noOfActiveLoans !== null ? String(source.noOfActiveLoans) : '',
+    noOfActiveCreditCards: source.noOfActiveCreditCards !== undefined && source.noOfActiveCreditCards !== null ? String(source.noOfActiveCreditCards) : '',
     activeLoansDetails: Array.isArray(source.activeLoansDetails) ? source.activeLoansDetails : [],
     activeCreditCardsDetails: Array.isArray(source.activeCreditCardsDetails) ? source.activeCreditCardsDetails : [],
+    isPrimaryBank: isPrimary,
   });
 
   return {
     applicant: {
-      primaryBank: createBank(saved.applicant?.primaryBank || saved.primaryBank),
-      otherBank: createBank(saved.applicant?.otherBank || saved.otherBank),
+      primaryBank: createBank(saved.applicant?.primaryBank || saved.primaryBank || {}, true),
+      otherBank: createBank(saved.applicant?.otherBank || {}, false),
     },
     coApplicants: Array.from({ length: Math.max(0, count) }, (_, index) => ({
-      primaryBank: createBank(savedCoApplicants[index]?.primaryBank),
-      otherBank: createBank(savedCoApplicants[index]?.otherBank),
+      primaryBank: createBank(savedCoApplicants[index]?.primaryBank || {}, true),
+      otherBank: createBank(savedCoApplicants[index]?.otherBank || {}, false),
     })),
   };
 }
 
-function isBankPartiallyFilled(bank) {
+function hasMeaningfulOtherBankData(bank) {
   if (!bank) return false;
   const hasBankName = Boolean(bank.bankName && String(bank.bankName).trim() !== '');
   const hasBranch = Boolean(bank.branch && String(bank.branch).trim() !== '');
@@ -57,6 +63,10 @@ function isBankPartiallyFilled(bank) {
   const hasLoans = Boolean(bank.noOfActiveLoans !== '' && bank.noOfActiveLoans !== null && Number(bank.noOfActiveLoans) > 0);
   const hasCards = Boolean(bank.noOfActiveCreditCards !== '' && bank.noOfActiveCreditCards !== null && Number(bank.noOfActiveCreditCards) > 0);
   return hasBankName || hasBranch || hasAccount || hasLoans || hasCards;
+}
+
+function isBankPartiallyFilled(bank) {
+  return hasMeaningfulOtherBankData(bank);
 }
 
 function validateBank(bank = {}, isPrimary = false) {
@@ -1127,13 +1137,15 @@ export default function BankExistingLoans() {
     ];
 
     try {
+      const claimedBankRecordIds = new Set();
+
       for (const person of allPersons) {
         const empId = person.isPrimary
           ? appData.sections?.employmentIncome?.applicant?.employmentIncomeDetailsId || appData.employmentIncome?.applicant?.employmentIncomeDetailsId
           : appData.sections?.employmentIncome?.coApplicants?.[person.index]?.employmentIncomeDetailsId || appData.employmentIncome?.coApplicants?.[person.index]?.employmentIncomeDetailsId;
 
         if (!empId) {
-          console.warn('No Employment Income Details ID found, skipping Bank API save for this applicant');
+          console.warn(`No Employment Income Details ID found for ${person.isPrimary ? 'Applicant' : `Co-Applicant ${person.index + 1}`}, skipping Bank API save`);
           continue;
         }
 
@@ -1143,11 +1155,47 @@ export default function BankExistingLoans() {
         ];
 
         for (const bank of banksToSave) {
-          if (!bank.data.bankName) continue; // Skip if no bank is selected
+          const isOther = bank.type === 'other';
+          const hasData = isOther ? hasMeaningfulOtherBankData(bank.data) : Boolean(bank.data.bankName);
 
-          const isUpdate = !!bank.data.applicationBankExistingLoanDetailsId;
+          if (isOther && !hasData) {
+            const existingOtherId = bank.data.applicationBankExistingLoanDetailsId;
+            if (existingOtherId) {
+              try {
+                const delRes = await fetch(`${baseUrl}/ApplicationBankExistingLoanDetails/${existingOtherId}`, {
+                  method: 'DELETE',
+                });
+                if (delRes.ok || delRes.status === 404) {
+                  bank.data.applicationBankExistingLoanDetailsId = null;
+                  bank.data.activeLoansDetails = [];
+                  bank.data.activeCreditCardsDetails = [];
+                }
+              } catch (delErr) {
+                console.warn(`Failed to delete cleared Other Bank row ${existingOtherId}:`, delErr);
+              }
+            }
+            continue;
+          }
+
+          if (!hasData) continue;
+
+          let currentBankId = bank.data.applicationBankExistingLoanDetailsId ? Number(bank.data.applicationBankExistingLoanDetailsId) : null;
+
+          // Prevent shared bank record ID across persons: if already claimed, clear it to force POST
+          if (currentBankId && claimedBankRecordIds.has(currentBankId)) {
+            currentBankId = null;
+            bank.data.applicationBankExistingLoanDetailsId = null;
+          }
+
+          // Before PUT verify: if existing bank has a known employment ID that does not match current empId, do not reuse
+          if (currentBankId && bank.data.applicationEmploymentIncomeDetailsId && Number(bank.data.applicationEmploymentIncomeDetailsId) !== Number(empId)) {
+            currentBankId = null;
+            bank.data.applicationBankExistingLoanDetailsId = null;
+          }
+
+          const isUpdate = Boolean(currentBankId);
           const url = isUpdate
-            ? `${baseUrl}/ApplicationBankExistingLoanDetails/${bank.data.applicationBankExistingLoanDetailsId}`
+            ? `${baseUrl}/ApplicationBankExistingLoanDetails/${currentBankId}`
             : `${baseUrl}/ApplicationBankExistingLoanDetails`;
 
           const payload = {
@@ -1162,7 +1210,7 @@ export default function BankExistingLoans() {
           };
 
           if (isUpdate) {
-            payload.ApplicationBankExistingLoanDetailsId = Number(bank.data.applicationBankExistingLoanDetailsId);
+            payload.ApplicationBankExistingLoanDetailsId = Number(currentBankId);
           }
 
           const response = await fetch(url, {
@@ -1183,7 +1231,10 @@ export default function BankExistingLoans() {
           
           const savedId = savedData?.applicationBankExistingLoanDetailsId || savedData?.ApplicationBankExistingLoanDetailsId || bank.data.applicationBankExistingLoanDetailsId;
           if (savedId) {
-            bank.data.applicationBankExistingLoanDetailsId = savedId;
+            bank.data.applicationBankExistingLoanDetailsId = Number(savedId);
+            claimedBankRecordIds.add(Number(savedId));
+          } else if (currentBankId) {
+            claimedBankRecordIds.add(currentBankId);
           }
 
           // Save Active Loan Details if any
@@ -1228,7 +1279,33 @@ export default function BankExistingLoans() {
         }
       }
 
-      saveApplication(appId, buildSectionUpdate(appData, 'bankExistingLoans', form));
+      const applicantBankIds = new Set([
+        form.applicant?.primaryBank?.applicationBankExistingLoanDetailsId,
+        form.applicant?.otherBank?.applicationBankExistingLoanDetailsId,
+      ].filter(Boolean));
+
+      const cleanCoApplicants = form.coApplicants.map((co) => {
+        const cleanPrimary = { ...co.primaryBank };
+        if (cleanPrimary.applicationBankExistingLoanDetailsId && applicantBankIds.has(cleanPrimary.applicationBankExistingLoanDetailsId)) {
+          cleanPrimary.applicationBankExistingLoanDetailsId = null;
+        }
+        const cleanOther = { ...co.otherBank };
+        if (cleanOther.applicationBankExistingLoanDetailsId && applicantBankIds.has(cleanOther.applicationBankExistingLoanDetailsId)) {
+          cleanOther.applicationBankExistingLoanDetailsId = null;
+        }
+        return {
+          ...co,
+          primaryBank: cleanPrimary,
+          otherBank: cleanOther,
+        };
+      });
+
+      const finalForm = {
+        ...form,
+        coApplicants: cleanCoApplicants,
+      };
+
+      saveApplication(appId, buildSectionUpdate(appData, 'bankExistingLoans', finalForm));
       navigate(ROUTES.COLLATERAL.replace(':applicationId', appId));
     } catch (err) {
       console.error('Error saving Bank Details:', err);

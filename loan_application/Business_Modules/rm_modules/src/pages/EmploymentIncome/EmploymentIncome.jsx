@@ -388,19 +388,35 @@ export default function EmploymentIncome() {
     ];
 
     try {
+      const claimedEmpRecordIds = new Set();
+
       for (const person of allPersons) {
         const addressId = person.isPrimary
           ? appData.sections?.addressDetails?.applicant?.addressDetailsId || appData.addressDetails?.applicant?.addressDetailsId
           : appData.sections?.addressDetails?.coApplicants?.[person.index]?.addressDetailsId || appData.addressDetails?.coApplicants?.[person.index]?.addressDetailsId;
 
         if (!addressId) {
-          console.warn('No Address Details ID found, skipping Employment API save');
+          console.warn(`No Address Details ID found for ${person.isPrimary ? 'Applicant' : `Co-Applicant ${person.index + 1}`}, skipping Employment API save`);
           continue;
         }
 
-        const isUpdate = !!person.employmentIncomeDetailsId;
+        let currentEmpId = person.employmentIncomeDetailsId ? Number(person.employmentIncomeDetailsId) : null;
+
+        // Prevent shared employment record ID across persons: if already claimed, clear it to force POST
+        if (currentEmpId && claimedEmpRecordIds.has(currentEmpId)) {
+          currentEmpId = null;
+          person.employmentIncomeDetailsId = null;
+        }
+
+        // Before PUT verify: if existing employment has a known address ID that does not match current addressId, do not reuse
+        if (currentEmpId && person.applicationAddressDetailsId && Number(person.applicationAddressDetailsId) !== Number(addressId)) {
+          currentEmpId = null;
+          person.employmentIncomeDetailsId = null;
+        }
+
+        const isUpdate = Boolean(currentEmpId);
         const url = isUpdate
-          ? `${baseUrl}/ApplicationEmploymentIncomeDetails/${person.employmentIncomeDetailsId}`
+          ? `${baseUrl}/ApplicationEmploymentIncomeDetails/${currentEmpId}`
           : `${baseUrl}/ApplicationEmploymentIncomeDetails`;
 
         const payload = {
@@ -419,7 +435,7 @@ export default function EmploymentIncome() {
         };
 
         if (isUpdate) {
-          payload.ApplicationEmploymentIncomeDetailsId = Number(person.employmentIncomeDetailsId);
+          payload.ApplicationEmploymentIncomeDetailsId = Number(currentEmpId);
         }
 
         const response = await fetch(url, {
@@ -440,17 +456,29 @@ export default function EmploymentIncome() {
         
         const savedId = savedData?.applicationEmploymentIncomeDetailsId || savedData?.ApplicationEmploymentIncomeDetailsId;
         if (savedId) {
-          person.employmentIncomeDetailsId = savedId;
+          person.employmentIncomeDetailsId = Number(savedId);
+          claimedEmpRecordIds.add(Number(savedId));
+        } else if (currentEmpId) {
+          claimedEmpRecordIds.add(currentEmpId);
         }
       }
 
+      const finalApplicantEmpId = allPersons[0]?.employmentIncomeDetailsId || form.applicant?.employmentIncomeDetailsId || null;
+      const finalCoApplicants = form.coApplicants.map((co, i) => {
+        let coEmpId = allPersons[i + 1]?.employmentIncomeDetailsId || co.employmentIncomeDetailsId || null;
+        if (coEmpId && coEmpId === finalApplicantEmpId) {
+          coEmpId = null;
+        }
+        return {
+          ...co,
+          employmentIncomeDetailsId: coEmpId,
+        };
+      });
+
       const finalForm = {
         ...form,
-        applicant: { ...form.applicant, employmentIncomeDetailsId: allPersons[0].employmentIncomeDetailsId },
-        coApplicants: form.coApplicants.map((co, i) => ({
-          ...co,
-          employmentIncomeDetailsId: allPersons[i + 1]?.employmentIncomeDetailsId || co.employmentIncomeDetailsId
-        }))
+        applicant: { ...form.applicant, employmentIncomeDetailsId: finalApplicantEmpId },
+        coApplicants: finalCoApplicants,
       };
 
       saveApplication(appId, buildSectionUpdate(appData, 'employmentIncome', finalForm));

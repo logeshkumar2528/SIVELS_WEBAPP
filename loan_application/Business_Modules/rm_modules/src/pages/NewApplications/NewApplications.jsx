@@ -21,6 +21,7 @@ import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import './NewApplications.css';
 import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
 import { resolveDocumentTypeId, validateApplicantDocumentFile } from '../../../../../Core/src/utils/documentTypeHelper';
+import { resolveVerificationIdByCodeOrName } from '../../../../../Core/src/utils/verificationHelper';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
@@ -31,20 +32,78 @@ const formatCurrency = (value) => {
   return `Rs. ${Number(value).toLocaleString('en-IN')}`;
 };
 
+export const getRejectionSortTime = (r) => {
+  const vTime = new Date(r?.verifiedAt || r?.VerifiedAt || 0).getTime();
+  if (vTime > 0) return vTime;
+  const resTime = new Date(r?.resubmittedAt || r?.ResubmittedAt || 0).getTime();
+  if (resTime > 0) return resTime;
+  const rejTime = new Date(r?.rejectedAt || r?.RejectedAt || 0).getTime();
+  if (rejTime > 0) return rejTime;
+  const cTime = new Date(r?.createdAt || r?.CreatedAt || 0).getTime();
+  return cTime > 0 ? cTime : 0;
+};
+
+export const sortRejectionsByLatest = (a, b) => {
+  const timeA = getRejectionSortTime(a);
+  const timeB = getRejectionSortTime(b);
+  if (timeA !== timeB) return timeB - timeA;
+  const idA = Number(a?.backOfficeDocumentRejectionId ?? a?.BackOfficeDocumentRejectionId ?? a?.id ?? 0);
+  const idB = Number(b?.backOfficeDocumentRejectionId ?? b?.BackOfficeDocumentRejectionId ?? b?.id ?? 0);
+  return idB - idA;
+};
+
+export const getRejectionSlotKey = (r) => {
+  const seq =
+    r?.applicantSequence !== undefined && r?.applicantSequence !== null
+      ? Number(r.applicantSequence)
+      : (r?.ApplicantSequence !== undefined && r?.ApplicantSequence !== null ? Number(r.ApplicantSequence) : 0);
+  const rawType = String(r?.rejectedDocumentType || r?.RejectedDocumentType || '').toUpperCase().trim();
+  const isZipManual = rawType.includes('ZIP') || rawType.includes('ARCHIVE') || rawType.includes('MANUAL');
+  const manualIdx =
+    r?.manualDocumentIndex !== undefined && r?.manualDocumentIndex !== null
+      ? Number(r.manualDocumentIndex)
+      : (r?.ManualDocumentIndex !== undefined && r?.ManualDocumentIndex !== null ? Number(r.ManualDocumentIndex) : null);
+
+  if (isZipManual && manualIdx !== null && !isNaN(manualIdx)) {
+    return `${seq}_MANUAL_SLOT_${manualIdx}`;
+  }
+  const docTypeId = r?.documentTypeId ?? r?.DocumentTypeId ?? '';
+  return `${seq}_${rawType}_${docTypeId}`;
+};
+
+export const deduplicateRejectionsPerSlot = (rejections = []) => {
+  if (!Array.isArray(rejections) || rejections.length === 0) return [];
+  const sorted = [...rejections].sort(sortRejectionsByLatest);
+  const seenKeys = new Set();
+  const deduped = [];
+  for (const rej of sorted) {
+    if (!rej) continue;
+    const key = getRejectionSlotKey(rej);
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      deduped.push(rej);
+    }
+  }
+  return deduped;
+};
+
 export const getRejectedDocumentLabel = (rejection) => {
   if (!rejection) return 'Document';
-  const rawType = String(rejection.rejectedDocumentType || '').toUpperCase().trim();
+  const rawType = String(rejection.rejectedDocumentType || rejection.RejectedDocumentType || '').toUpperCase().trim();
 
   const isCoApp =
     rawType.includes('CO_APPLICANT') ||
     rawType.includes('COAPPLICANT') ||
     rawType.startsWith('CO_') ||
     rawType.startsWith('CO-') ||
-    (rejection.applicantSequence !== undefined && rejection.applicantSequence !== null && Number(rejection.applicantSequence) > 0);
+    ((rejection.applicantSequence ?? rejection.ApplicantSequence) !== undefined &&
+      (rejection.applicantSequence ?? rejection.ApplicantSequence) !== null &&
+      Number(rejection.applicantSequence ?? rejection.ApplicantSequence) > 0);
 
   let prefix = isCoApp ? 'Co-Applicant' : 'Applicant';
-  if (rejection.applicantSequence !== undefined && rejection.applicantSequence !== null) {
-    const seq = Number(rejection.applicantSequence);
+  if ((rejection.applicantSequence ?? rejection.ApplicantSequence) !== undefined &&
+      (rejection.applicantSequence ?? rejection.ApplicantSequence) !== null) {
+    const seq = Number(rejection.applicantSequence ?? rejection.ApplicantSequence);
     if (seq === 0) prefix = 'Applicant';
     else if (seq === 1) prefix = 'Co-Applicant 1';
     else if (seq === 2) prefix = 'Co-Applicant 2';
@@ -55,20 +114,26 @@ export const getRejectedDocumentLabel = (rejection) => {
   const isSalary = rawType.includes('SALARY') || rawType.includes('INCOME_SHEET') || rawType.includes('INCOME SHEET');
   const isBank = rawType.includes('BANK') || rawType.includes('STATEMENT');
   const isProfile = rawType.includes('PROFILE') || rawType.includes('PHOTO') || rawType.includes('IMAGE');
-  const isAadhaar = rawType.includes('AADHAAR') || rawType.includes('ADHAAR') || rawType.includes('UID');
+  const isAadhaar = rawType.includes('AADHAAR') || rawType.includes('AADHAR') || rawType.includes('ADHAAR') || rawType.includes('UID');
   const isPan = rawType.includes('PAN');
-  const isZip = rawType.includes('ZIP') || rawType.includes('MANUAL');
+  const isZip = rawType.includes('ZIP') || rawType.includes('MANUAL') || rawType.includes('ARCHIVE');
 
   if (isSalary) return `${prefix} Salary Slip / Income Sheet`;
   if (isBank) return `${prefix} Bank Statement`;
   if (isProfile) return `${prefix} Profile Image`;
   if (isAadhaar) return `${prefix} Aadhaar Card`;
   if (isPan) return `${prefix} PAN Card`;
-  if (isZip) return `${prefix} ZIP File`;
+  if (isZip) {
+    const rawIdx = rejection.manualDocumentIndex ?? rejection.ManualDocumentIndex;
+    if (rawIdx !== undefined && rawIdx !== null && !isNaN(Number(rawIdx))) {
+      return `${prefix} Manual Document ${Number(rawIdx) + 1}`;
+    }
+    return `${prefix} Manual Document`;
+  }
   return `${prefix} ${rejection.rejectedDocumentType || 'Document'}`;
 };
 
-const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejections = []) => {
+const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejections = [], matchedProduct = null) => {
   const applicationId = item.applicationId || item.applicationNumber || item.agentCustomerId || item.customerId || `${index + 1}`;
   const ownership = resolveApplicationOwnership(item, agentsById, rmsById);
   let normalizedStatus = normalizeApplicationStatus(item.status, item.statusName || item.StatusName);
@@ -92,6 +157,12 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
     status: normalizedStatus,
     rawStatus: normalizedStatus,
     agentCustomerId: item.agentCustomerId || item.customerId || null,
+    applicationProductDetailsId:
+      matchedProduct?.applicationProductDetailsId ||
+      matchedProduct?.ApplicationProductDetailsId ||
+      item.applicationProductDetailsId ||
+      item.ApplicationProductDetailsId ||
+      null,
     agentId: ownership.agentId,
     rejections: rejections || [],
   };
@@ -265,11 +336,22 @@ export default function NewApplications({ initialFilter = 'All' }) {
 
       const mapped = filtered.map((item, index) => {
         const custId = String(item.agentCustomerId || item.customerId || '');
-        const itemRejections = activeRejectionsByCustId[custId] || [];
-        return mapBackendApplication(item, index, agentsById, rmsById, itemRejections);
+        const rawItemRejections = activeRejectionsByCustId[custId] || [];
+        const itemRejections = deduplicateRejectionsPerSlot(rawItemRejections);
+        const matchedProduct = appProdList.find(
+          (p) => String(p.agentCustomerId || p.AgentCustomerId) === custId
+        );
+        return mapBackendApplication(item, index, agentsById, rmsById, itemRejections, matchedProduct);
       });
 
       setApplications(mapped);
+      setSelectedReturnApp((prev) => {
+        if (!prev) return null;
+        const fresh = mapped.find(
+          (a) => String(a.id) === String(prev.id) || (a.agentCustomerId && String(a.agentCustomerId) === String(prev.agentCustomerId))
+        );
+        return fresh || prev;
+      });
     } catch (error) {
       console.error('Failed to fetch applications or rejections:', error);
       setApplications([]);
@@ -284,7 +366,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
   }, [loadApplications]);
 
   const handleResubmitDocument = async (rejection) => {
-    const rejId = rejection.backOfficeDocumentRejectionId;
+    const rejId = rejection.backOfficeDocumentRejectionId ?? rejection.BackOfficeDocumentRejectionId ?? rejection.id;
     const file = selectedFiles[rejId];
     if (!file) {
       setRejectionFeedback((prev) => ({
@@ -313,184 +395,242 @@ export default function NewApplications({ initialFilter = 'All' }) {
     setRejectionFeedback((prev) => ({ ...prev, [rejId]: null }));
 
     try {
-      const rawType = String(rejection.rejectedDocumentType || '').toUpperCase().trim();
+      const rawSeq = rejection.applicantSequence ?? rejection.ApplicantSequence;
+      const rawType = String(rejection.rejectedDocumentType ?? rejection.RejectedDocumentType ?? '').toUpperCase().trim();
+      const rawKycId =
+        rejection.kycDocumentId ??
+        rejection.KYCDocumentId ??
+        rejection.applicationKYCDocumentId ??
+        rejection.ApplicationKYCDocumentId;
+      const rawAppProdId =
+        rejection.applicationProductDetailsId ??
+        rejection.ApplicationProductDetailsId ??
+        selectedReturnApp?.applicationProductDetailsId ??
+        selectedReturnApp?.ApplicationProductDetailsId ??
+        selectedReturnApp?.id;
+
       const isCoApp =
         rawType.includes('CO_APPLICANT') ||
         rawType.includes('COAPPLICANT') ||
         rawType.startsWith('CO_') ||
         rawType.startsWith('CO-') ||
-        (rejection.applicantSequence !== undefined && rejection.applicantSequence !== null && Number(rejection.applicantSequence) > 0);
+        (rawSeq !== undefined && rawSeq !== null && rawSeq !== '' && Number(rawSeq) > 0);
 
-      const isSalary = rawType.includes('SALARY') || rawType.includes('INCOME_SHEET') || rawType.includes('INCOME SHEET');
-      const isBank = rawType.includes('BANK') || rawType.includes('STATEMENT');
+      const seq =
+        (rawSeq !== undefined && rawSeq !== null && rawSeq !== '')
+          ? Number(rawSeq)
+          : (isCoApp ? 1 : 0);
+
+      const appProdId = rawAppProdId;
+
       const isProfile = rawType.includes('PROFILE') || rawType.includes('PHOTO') || rawType.includes('IMAGE');
-      const isAadhaar = rawType.includes('AADHAAR') || rawType.includes('ADHAAR') || rawType.includes('UID');
+      const isAadhaar = rawType.includes('AADHAAR') || rawType.includes('AADHAR') || rawType.includes('ADHAAR') || rawType.includes('UID');
       const isPan = rawType.includes('PAN');
-      const isZip = rawType.includes('ZIP') || rawType.includes('MANUAL');
+      const isIdentityDoc = isProfile || isAadhaar || isPan;
 
-      // Step 1: Upload replacement document
-      if (isCoApp && (isSalary || isBank)) {
-        // Co-Applicant Salary Slip or Bank Statement -> ApplicationKYCDocuments composite tuple
-        let docTypeId = rejection.documentTypeId;
-        if (!docTypeId) {
+      const isZipManual =
+        rawType.includes('ZIP') ||
+        rawType.includes('ARCHIVE') ||
+        rawType.includes('MANUAL') ||
+        rawType === 'MANUAL_DOCUMENT' ||
+        rawType === 'ZIP_ARCHIVE';
+
+      if (isIdentityDoc || isZipManual) {
+        // Step 1: Resolve KYC Document ID from Direct Rejection field or Primary KYC Row fallback
+        let kycId = (rawKycId !== undefined && rawKycId !== null && rawKycId !== '') ? Number(rawKycId) : null;
+        if (!kycId && appProdId) {
           try {
-            const masterRes = await fetch(`${API_BASE}/DocumentTypeMaster`, { headers });
-            if (masterRes.ok) {
-              const masterData = await masterRes.json();
-              docTypeId = resolveDocumentTypeId(masterData, isSalary ? 'Salary Slip' : 'Bank Statement');
+            const kycRes = await fetch(`${API_BASE}/ApplicationKYCDocuments/by-application/${appProdId}`, { headers });
+            if (kycRes.ok) {
+              const kycData = await kycRes.json();
+              const kycArr = resolveApiArray(kycData);
+              const matchedKyc = kycArr.find((k) => {
+                if (!k || k.isActive === false || k.IsActive === false) return false;
+                // Exclude applicant document tuples (financial records)
+                if (k.documentStatus || k.DocumentStatus || k.originalFileName || k.OriginalFileName) return false;
+                const kSeq = (k.applicantSequence !== undefined && k.applicantSequence !== null)
+                  ? Number(k.applicantSequence)
+                  : ((k.ApplicantSequence !== undefined && k.ApplicantSequence !== null) ? Number(k.ApplicantSequence) : 0);
+                return kSeq === seq;
+              });
+              if (matchedKyc) {
+                const foundKycId =
+                  matchedKyc.applicationKYCDocumentId ??
+                  matchedKyc.ApplicationKYCDocumentId ??
+                  matchedKyc.kycDocumentId ??
+                  matchedKyc.KYCDocumentId ??
+                  matchedKyc.id ??
+                  matchedKyc.Id;
+                if (foundKycId !== undefined && foundKycId !== null && foundKycId !== '') {
+                  kycId = Number(foundKycId);
+                }
+              }
             }
           } catch {}
         }
-        if (!docTypeId) {
-          docTypeId = isSalary ? 4 : 5;
+
+        if (!kycId) {
+          throw new Error(`Application KYC Document ID could not be resolved for applicant sequence ${seq}. Please ensure KYC record exists before resubmitting.`);
         }
 
-        const appProdId = rejection.applicationProductDetailsId || selectedReturnApp?.applicationProductDetailsId || selectedReturnApp?.id;
-        const seq = rejection.applicantSequence !== undefined && rejection.applicantSequence !== null
-          ? Number(rejection.applicantSequence)
-          : 1;
+        if (isZipManual) {
+          // Confirmed backend contract: Slot-level manual document replacement
+          // PUT /api/ApplicationKYCDocuments/{kycDocumentId}/manual/{manualDocumentIndex} with multipart 'file'
+          const rawManualIdx = rejection.manualDocumentIndex ?? rejection.ManualDocumentIndex;
+          const manualDocumentIndex =
+            rawManualIdx !== undefined && rawManualIdx !== null ? Number(rawManualIdx) : 0;
 
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('applicationProductDetailsId', String(appProdId));
-        formData.append('applicantSequence', String(seq));
-        formData.append('documentTypeId', String(docTypeId));
-        formData.append('uploadedBy', String(rmId));
+          if (isNaN(manualDocumentIndex) || manualDocumentIndex < 0) {
+            throw new Error(`Invalid manual document slot index: ${rawManualIdx}. Resubmission blocked.`);
+          }
 
-        const uploadUrl = `${API_BASE}/ApplicationKYCDocuments/applicant-document/upload`;
-        let uploadRes = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers,
-          body: formData,
-        });
+          const formData = new FormData();
+          formData.append('file', file);
 
-        if (!uploadRes.ok && (uploadRes.status === 400 || uploadRes.status === 404 || uploadRes.status === 405)) {
-          uploadRes = await fetch(uploadUrl, {
+          const uploadUrl = `${API_BASE}/ApplicationKYCDocuments/${kycId}/manual/${manualDocumentIndex}`;
+          let uploadRes = await fetch(uploadUrl, {
+            method: 'PUT',
+            headers,
+            body: formData,
+          });
+
+          if (!uploadRes.ok) {
+            const errTxt = await uploadRes.text().catch(() => '');
+            throw new Error(`Failed to upload replacement manual document slot ${manualDocumentIndex + 1} (${uploadRes.status}): ${errTxt}`);
+          }
+        } else {
+          // Identity Documents: profile-image, aadhar, pan
+          let route = 'profile-image';
+          if (isAadhaar) route = 'aadhar';
+          else if (isPan) route = 'pan';
+
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('File', file);
+
+          const uploadUrl = `${API_BASE}/ApplicationKYCDocuments/${kycId}/${route}`;
+          let uploadRes = await fetch(uploadUrl, {
             method: 'POST',
             headers,
             body: formData,
           });
-        }
 
-        if (!uploadRes.ok) {
-          const errTxt = await uploadRes.text().catch(() => '');
-          throw new Error(`Failed to upload co-applicant replacement ${isSalary ? 'Salary Slip' : 'Bank Statement'} (${uploadRes.status}): ${errTxt}`);
+          if (!uploadRes.ok && uploadRes.status === 405) {
+            uploadRes = await fetch(uploadUrl, {
+              method: 'PUT',
+              headers,
+              body: formData,
+            });
+          }
+
+          if (!uploadRes.ok) {
+            const errTxt = await uploadRes.text().catch(() => '');
+            throw new Error(`Failed to upload replacement identity document (${uploadRes.status}): ${errTxt}`);
+          }
         }
-      } else if (!isCoApp && isBank) {
-        // Primary Applicant Bank Statement -> exists in ApplicationKYCDocuments
-        let docTypeId = rejection.documentTypeId;
+      } else {
+        // Generic Applicant Documents (Salary Slip, Bank Statement, Property, etc.)
+        // Step 1: Dynamically resolve DocumentTypeId from DocumentTypeMaster
+        let docTypeId = rejection.documentTypeId ?? rejection.DocumentTypeId;
         if (!docTypeId) {
+          let targetCategory = rejection.rejectedDocumentType ?? rejection.RejectedDocumentType ?? '';
+          if (rawType.includes('SALARY') || rawType.includes('INCOME')) targetCategory = 'Salary Slip';
+          else if (rawType.includes('BANK') || rawType.includes('STATEMENT')) targetCategory = 'Bank Statement';
+          else if (rawType.includes('PROPERTY')) targetCategory = 'property';
+
           try {
             const masterRes = await fetch(`${API_BASE}/DocumentTypeMaster`, { headers });
             if (masterRes.ok) {
               const masterData = await masterRes.json();
-              docTypeId = resolveDocumentTypeId(masterData, 'Bank Statement');
+              const masterList = resolveApiArray(masterData);
+              docTypeId = resolveDocumentTypeId(masterList, targetCategory);
             }
           } catch {}
         }
+
         if (!docTypeId) {
-          docTypeId = 3;
+          throw new Error(`Document Type could not be dynamically resolved from DocumentTypeMaster for "${rejection.rejectedDocumentType ?? rejection.RejectedDocumentType}". Resubmission blocked.`);
         }
 
-        const appProdId = rejection.applicationProductDetailsId || selectedReturnApp?.applicationProductDetailsId || selectedReturnApp?.id;
+        // Step 2: Dynamically resolve VerificationId from VerificationMaster
+        let verificationId = null;
+        try {
+          const vRes = await fetch(`${API_BASE}/VerificationMaster`, { headers });
+          if (vRes.ok) {
+            const vData = await vRes.json();
+            const vList = resolveApiArray(vData);
+            verificationId = resolveVerificationIdByCodeOrName(vList, 'Pending');
+          }
+        } catch {}
 
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('applicationProductDetailsId', String(appProdId));
-        formData.append('applicantSequence', '0');
-        formData.append('documentTypeId', String(docTypeId));
-        formData.append('uploadedBy', String(rmId));
-
-        const uploadUrl = `${API_BASE}/ApplicationKYCDocuments/applicant-document/upload`;
-        let uploadRes = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers,
-          body: formData,
-        });
-
-        if (!uploadRes.ok && (uploadRes.status === 400 || uploadRes.status === 404 || uploadRes.status === 405)) {
-          uploadRes = await fetch(uploadUrl, {
-            method: 'POST',
-            headers,
-            body: formData,
-          });
+        if (!verificationId) {
+          throw new Error('Unable to resolve Pending verification status from Verification Master.');
         }
 
-        if (!uploadRes.ok) {
-          const errTxt = await uploadRes.text().catch(() => '');
-          throw new Error(`Failed to upload applicant replacement Bank Statement (${uploadRes.status}): ${errTxt}`);
+        if (!appProdId) {
+          throw new Error('Application Product Details ID is missing. Resubmission blocked.');
         }
-      } else if (isCoApp) {
-        // Co-Applicant Profile / Aadhaar / PAN / ZIP -> ApplicationKYCDocuments route endpoints
-        let route = 'upload';
-        if (isAadhaar) route = 'aadhar';
-        else if (isPan) route = 'pan';
-        else if (isProfile) route = 'profile-image';
-        else if (isZip) route = 'upload';
 
+        // Step 3: Check whether tuple already exists in ApplicationKYCDocuments
+        let tupleExists = false;
+        try {
+          const checkRes = await fetch(
+            `${API_BASE}/ApplicationKYCDocuments/applicant-document?applicationProductDetailsId=${appProdId}&applicantSequence=${seq}&documentTypeId=${docTypeId}`,
+            { headers }
+          );
+          if (checkRes.ok) {
+            const checkData = await checkRes.json().catch(() => null);
+            if (checkData) tupleExists = true;
+          }
+        } catch {
+          tupleExists = false;
+        }
+
+        // Step 4: Construct FormData
         const formData = new FormData();
         formData.append('file', file);
         formData.append('File', file);
+        formData.append('applicationProductDetailsId', String(appProdId));
+        formData.append('applicantSequence', String(seq));
+        formData.append('documentTypeId', String(docTypeId));
+        formData.append('verificationId', String(verificationId));
+        formData.append('uploadedBy', String(rmId));
 
-        const uploadUrl = `${API_BASE}/ApplicationKYCDocuments/${rejection.kycDocumentId}/${route}`;
-        let uploadRes = await fetch(uploadUrl, {
-          method: 'POST',
-          headers,
-          body: formData,
-        });
+        // Step 5: Upload via PUT (if tuple exists) or POST (if new)
+        const uploadUrl = `${API_BASE}/ApplicationKYCDocuments/applicant-document/upload`;
+        let uploadRes;
 
-        if (!uploadRes.ok && uploadRes.status === 405) {
+        if (tupleExists) {
           uploadRes = await fetch(uploadUrl, {
             method: 'PUT',
             headers,
             body: formData,
           });
+
+          // Fallback to POST only if 404 or "No active document was found"
+          if (!uploadRes.ok) {
+            const errTxt = await uploadRes.text().catch(() => '');
+            if (uploadRes.status === 404 || errTxt.includes('No active document was found') || uploadRes.status === 405) {
+              uploadRes = await fetch(uploadUrl, {
+                method: 'POST',
+                headers,
+                body: formData,
+              });
+            } else {
+              throw new Error(`Failed to update replacement document (${uploadRes.status}): ${errTxt}`);
+            }
+          }
+        } else {
+          uploadRes = await fetch(uploadUrl, {
+            method: 'POST',
+            headers,
+            body: formData,
+          });
         }
 
         if (!uploadRes.ok) {
           const errTxt = await uploadRes.text().catch(() => '');
-          throw new Error(`Failed to upload co-applicant document (${uploadRes.status}): ${errTxt}`);
-        }
-      } else {
-        // Primary Applicant: Salary Slip, Profile, Aadhaar, PAN, ZIP -> AgentCustomerDocument/upload
-        let docTypeId = rejection.documentTypeId;
-        if (!docTypeId) {
-          if (isSalary) {
-            docTypeId = 4;
-            try {
-              const masterRes = await fetch(`${API_BASE}/DocumentTypeMaster`, { headers });
-              if (masterRes.ok) {
-                const masterData = await masterRes.json();
-                docTypeId = resolveDocumentTypeId(masterData, 'Salary Slip') || 4;
-              }
-            } catch {}
-          } else if (isProfile) docTypeId = 6;
-          else if (isAadhaar) docTypeId = 1;
-          else if (isPan) docTypeId = 2;
-          else if (isZip) docTypeId = 4;
-          else docTypeId = 4;
-        }
-
-        const custId = rejection.agentCustomerId || selectedReturnApp?.agentCustomerId;
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('File', file);
-        formData.append('agentCustomerId', String(custId));
-        formData.append('AgentCustomerId', String(custId));
-        formData.append('documentTypeId', String(docTypeId));
-        formData.append('DocumentTypeId', String(docTypeId));
-        formData.append('createdBy', String(rmId));
-        formData.append('CreatedBy', String(rmId));
-
-        const uploadRes = await fetch(`${API_BASE}/AgentCustomerDocument/upload`, {
-          method: 'POST',
-          headers,
-          body: formData,
-        });
-
-        if (!uploadRes.ok) {
-          const errTxt = await uploadRes.text().catch(() => '');
-          throw new Error(`Failed to upload applicant document (${uploadRes.status}): ${errTxt}`);
+          throw new Error(`Failed to upload replacement document (${uploadRes.status}): ${errTxt}`);
         }
       }
 
@@ -514,18 +654,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
         [rejId]: { type: 'success', message: 'Document corrected and successfully resubmitted to Back Office!' }
       }));
 
-      // Update the rejection in selectedReturnApp
-      setSelectedReturnApp((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          rejections: (prev.rejections || []).map((r) =>
-            r.backOfficeDocumentRejectionId === rejId ? { ...r, status: 'Resubmitted' } : r
-          ),
-        };
-      });
-
-      // Refresh application list
+      // Refresh application list from backend (source of truth)
       await loadApplications();
     } catch (err) {
       console.error('Error during resubmission:', err);
@@ -753,9 +882,9 @@ export default function NewApplications({ initialFilter = 'All' }) {
 
           <div className="return-rejections-list">
             {(selectedReturnApp.rejections || []).map((rej) => {
-              const rejId = rej.backOfficeDocumentRejectionId;
+              const rejId = rej.backOfficeDocumentRejectionId ?? rej.BackOfficeDocumentRejectionId ?? rej.id;
               const docLabel = getRejectedDocumentLabel(rej);
-              const isResubmitted = rej.status === 'Resubmitted';
+              const isResubmitted = (rej.status ?? rej.Status) === 'Resubmitted';
               const isSubmitting = isSubmittingRejection[rejId];
               const feedback = rejectionFeedback[rejId];
 
@@ -769,13 +898,13 @@ export default function NewApplications({ initialFilter = 'All' }) {
                       {isResubmitted ? '✓' : '⚠️'} {docLabel}
                     </div>
                     <span className="return-rejection-date">
-                      {rej.createdAt ? `Returned on: ${formatDate(rej.createdAt)}` : ''}
+                      {(rej.createdAt || rej.CreatedAt) ? `Returned on: ${formatDate(rej.createdAt || rej.CreatedAt)}` : ''}
                     </span>
                   </div>
 
                   <div className="return-rejection-remarks-box">
                     <div className="return-rejection-remarks-label">Back Office Rejection Remarks</div>
-                    <p className="return-rejection-remarks-text">{rej.rejectionRemarks || 'Document rejected. Please provide a clear updated copy.'}</p>
+                    <p className="return-rejection-remarks-text">{(rej.rejectionRemarks || rej.RejectionRemarks) || 'Document rejected. Please provide a clear updated copy.'}</p>
                   </div>
 
                   {!isResubmitted ? (

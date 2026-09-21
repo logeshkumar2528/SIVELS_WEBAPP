@@ -135,6 +135,15 @@ function isDocZip(doc) {
   return /\.(zip|rar|7z)$/i.test(name);
 }
 
+function isApplicantDocumentTuple(row) {
+  if (!row) return false;
+  if (['aadharDocumentPath', 'AadharDocumentPath', 'panCardPath', 'PanCardPath',
+    'profileImagePath', 'ProfileImagePath', 'aadhaarLastFourDigits', 'AadhaarLastFourDigits',
+    'panCardNo', 'PANCardNo', 'documentNumber', 'DocumentNumber'].some((field) => row[field])) return false;
+  return ['documentStatus', 'DocumentStatus', 'originalFileName', 'OriginalFileName',
+    'contentType', 'ContentType'].some((field) => String(row[field] || '').trim());
+}
+
 const STAGES = [
   { id: 0, label: 'Checking PAN details & Tax identification records...' },
   { id: 1, label: 'Connecting to Credit Bureau (TransUnion CIBIL / Experian)...' },
@@ -435,6 +444,76 @@ function resolveRowStatus({ rejection, hasFile, isVerified }) {
   return 'Not Verified';
 }
 
+const getRejectionSortTime = (r) => {
+  const vTime = new Date(r?.verifiedAt || r?.VerifiedAt || 0).getTime();
+  if (vTime > 0) return vTime;
+  const resTime = new Date(r?.resubmittedAt || r?.ResubmittedAt || 0).getTime();
+  if (resTime > 0) return resTime;
+  const rejTime = new Date(r?.rejectedAt || r?.RejectedAt || 0).getTime();
+  if (rejTime > 0) return rejTime;
+  const cTime = new Date(r?.createdAt || r?.CreatedAt || 0).getTime();
+  return cTime > 0 ? cTime : 0;
+};
+
+const sortRejectionsByLatest = (a, b) => {
+  const timeA = getRejectionSortTime(a);
+  const timeB = getRejectionSortTime(b);
+  if (timeA !== timeB) return timeB - timeA;
+  const idA = Number(a?.backOfficeDocumentRejectionId ?? a?.BackOfficeDocumentRejectionId ?? a?.id ?? 0);
+  const idB = Number(b?.backOfficeDocumentRejectionId ?? b?.BackOfficeDocumentRejectionId ?? b?.id ?? 0);
+  return idB - idA;
+};
+
+const findLatestRejectionForManualSlot = ({
+  rejections = [],
+  appProdId = null,
+  applicantSequence = 0,
+  kycDocumentId = null,
+  manualDocumentIndex = 0,
+}) => {
+  if (!Array.isArray(rejections) || rejections.length === 0) return null;
+  const targetSeq = Number(applicantSequence || 0);
+  const targetIdx = Number(manualDocumentIndex);
+
+  const matching = rejections.filter((r) => {
+    if (!r || r.isActive === false || r.IsActive === false) return false;
+
+    // 1. ApplicantSequence match
+    const rSeq =
+      r.applicantSequence !== undefined && r.applicantSequence !== null
+        ? Number(r.applicantSequence)
+        : (r.ApplicantSequence !== undefined && r.ApplicantSequence !== null ? Number(r.ApplicantSequence) : 0);
+    if (rSeq !== targetSeq) return false;
+
+    // 2. ApplicationProductDetailsId match (if present on rejection and target)
+    const rAppProdId = r.applicationProductDetailsId ?? r.ApplicationProductDetailsId;
+    if (appProdId && rAppProdId && Number(appProdId) !== Number(rAppProdId)) return false;
+
+    // 3. KYCDocumentId match (if present on rejection and target)
+    const rKycId = r.kycDocumentId ?? r.KYCDocumentId;
+    if (kycDocumentId && rKycId && Number(kycDocumentId) !== Number(rKycId)) return false;
+
+    // 4. ManualDocumentIndex match
+    const rIdx =
+      r.manualDocumentIndex !== undefined && r.manualDocumentIndex !== null
+        ? Number(r.manualDocumentIndex)
+        : (r.ManualDocumentIndex !== undefined && r.ManualDocumentIndex !== null ? Number(r.ManualDocumentIndex) : null);
+    if (rIdx === null || isNaN(rIdx) || rIdx !== targetIdx) return false;
+
+    // 5. Category/Type validation
+    const rType = String(r.rejectedDocumentType || r.RejectedDocumentType || '').toUpperCase().trim();
+    if (rType && !(rType.includes('ZIP') || rType.includes('ARCHIVE') || rType.includes('MANUAL'))) {
+      return false;
+    }
+
+    return true;
+  });
+
+  if (matching.length === 0) return null;
+  matching.sort(sortRejectionsByLatest);
+  return matching[0];
+};
+
 function getStatusInfo(status) {
   if (status === null || status === undefined) {
     return { label: 'Pending', className: 'bo-cv-pill-pending' };
@@ -531,6 +610,7 @@ export default function CustomerVerification() {
   const panDocTypeId = useMemo(() => resolveDocumentTypeId(docTypesList, 'PAN') || resolveDocumentTypeId(docTypesList, 'PAN Card'), [docTypesList]);
   const salarySlipDocTypeId = useMemo(() => resolveDocumentTypeId(docTypesList, 'Salary Slip'), [docTypesList]);
   const bankStatementDocTypeId = useMemo(() => resolveDocumentTypeId(docTypesList, 'Bank Statement'), [docTypesList]);
+  const zipArchiveDocTypeId = useMemo(() => resolveDocumentTypeId(docTypesList, 'zip') || resolveDocumentTypeId(docTypesList, 'zip_archive') || resolveDocumentTypeId(docTypesList, 'archive') || resolveDocumentTypeId(docTypesList, 'education certificate') || resolveDocumentTypeId(docTypesList, 'other'), [docTypesList]);
 
   // Persisted applicant and co-applicants financial documents (Salary Slip, Bank Statement)
   const [applicantFinancialDocs, setApplicantFinancialDocs] = useState({
@@ -695,8 +775,68 @@ export default function CustomerVerification() {
     return personalInfoList.length > 0 ? personalInfoList : list;
   }, [verificationData, personalInfoList]);
 
-  const applicantKycRecord = resolvedKycList[0] || null;
-  const applicantKycId = applicantKycRecord?.applicationKYCDocumentId || applicantKycRecord?.kycDocumentId || null;
+  // ── Authoritative Main Applicant KYC row (live backend data only) ────────────
+  // Identified the same way RM targets it: applicationProductDetailsId of THIS
+  // application + applicantSequence === 0 + active. Positional index 0 of a
+  // customer-wide list is not used, because it is not guaranteed to be the
+  // sequence-0 row of this application - which is how RM and Back Office could
+  // end up reading and writing different rows.
+  const mainApplicantKyc = useMemo(() => {
+    const appProdId = Number(
+      verificationData?.applicationProductDetailsId ||
+      verificationData?.application?.applicationProductDetailsId ||
+      verificationData?.application?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
+      verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId ||
+      0
+    );
+
+    if (!appProdId) {
+      return { row: null, id: null, rows: [], ambiguous: false, appProdId: 0 };
+    }
+
+    const rows = (resolvedKycList || []).filter((k) => {
+      if (!k) return false;
+      if (k.isActive === false || k.IsActive === false) return false;
+      if (isApplicantDocumentTuple(k)) return false;
+
+      const rowProdId = Number(k.applicationProductDetailsId ?? k.ApplicationProductDetailsId);
+      if (!Number.isFinite(rowProdId) || rowProdId !== appProdId) return false;
+
+      const rawSeq = k.applicantSequence ?? k.ApplicantSequence;
+      if (rawSeq === undefined || rawSeq === null) return false;
+      return Number(rawSeq) === 0;
+    });
+
+    const row = rows.length === 1 ? rows[0] : null;
+    const id = row
+      ? Number(row.applicationKYCDocumentId ?? row.ApplicationKYCDocumentId ?? row.kycDocumentId) || null
+      : null;
+
+    return { row, id, rows, ambiguous: rows.length > 1, appProdId };
+  }, [resolvedKycList, verificationData]);
+
+  // Deterministic report of a data inconsistency; no row is guessed and no file
+  // availability is fabricated - identity rows simply show Not Uploaded.
+  useEffect(() => {
+    if (mainApplicantKyc.ambiguous) {
+      console.error(
+        '[CustomerVerification] Data inconsistency: ' +
+          `${mainApplicantKyc.rows.length} active Main Applicant (applicantSequence 0) KYC rows found for ` +
+          `ApplicationProductDetailsId ${mainApplicantKyc.appProdId}. IDs: ` +
+          mainApplicantKyc.rows
+            .map((r) => r.applicationKYCDocumentId ?? r.ApplicationKYCDocumentId)
+            .filter(Boolean)
+            .join(', ') +
+          '. Exactly one is required; identity documents will show as Not Uploaded until this is corrected.'
+      );
+    }
+  }, [mainApplicantKyc]);
+
+  const applicantKycRecord = mainApplicantKyc.row;
+  const applicantKycId = mainApplicantKyc.id;
 
   // Dynamic Co-Applicants extraction (supports 0, 1, 2, 3+ co-applicants based strictly on configured count)
   const coApplicants = useMemo(() => {
@@ -718,7 +858,18 @@ export default function CustomerVerification() {
     const result = [];
     for (let i = 0; i < count; i++) {
       const pers = coPersonalList[i] || {};
-      const kyc = coKycList[i] || {};
+      const targetSeq = i + 1;
+      const kyc =
+        (resolvedKycList || []).find(
+          (k) =>
+            k &&
+            k.isActive !== false &&
+            k.IsActive !== false &&
+            !isApplicantDocumentTuple(k) &&
+            Number(k.applicantSequence ?? k.ApplicantSequence) === targetSeq
+        ) ||
+        coKycList[i] ||
+        {};
       const nameParts = [pers.firstName, pers.middleName, pers.lastName].filter(Boolean).join(' ');
       const name = nameParts || pers.fullName || pers.customerName || `Co-Applicant ${i + 1}`;
       const pan = kyc.panCardNo || pers.panCardNo || pers.pan || '';
@@ -726,17 +877,24 @@ export default function CustomerVerification() {
       const aadhaarDisplay = aadhaarLast4
         ? `XXXX-XXXX-${aadhaarLast4}`
         : (pers.aadhaarNumber ? String(pers.aadhaarNumber) : (kyc.aadhaarNumber ? String(kyc.aadhaarNumber) : '—'));
-      const kycDocumentId = kyc.applicationKYCDocumentId || kyc.kycDocumentId || kyc.id || null;
+      const kycDocumentId =
+        kyc.applicationKYCDocumentId ||
+        kyc.ApplicationKYCDocumentId ||
+        kyc.kycDocumentId ||
+        kyc.id ||
+        null;
 
       result.push({
         index: i,
         number: i + 1,
+        sequence: targetSeq,
         name,
         pan,
         aadhaarLast4,
         aadhaarDisplay,
         kycDocumentId,
         kycRecord: kyc,
+        kyc: kyc,
         personalRecord: pers,
       });
     }
@@ -878,7 +1036,8 @@ export default function CustomerVerification() {
               return {
                 loading: false,
                 url: null,
-                error: 'Previous version could not be retrieved from server.',
+                isHistoricalUnavailable: true,
+                error: 'Previous version file is no longer available on the server.',
                 fileName: defaultName || normalizedPath.split('/').pop() || '',
               };
             }
@@ -892,7 +1051,8 @@ export default function CustomerVerification() {
         return {
           loading: false,
           url: null,
-          error: 'Previous version could not be retrieved from server.',
+          isHistoricalUnavailable: true,
+          error: 'Previous version file is no longer available on the server.',
           fileName: defaultName || normalizedPath.split('/').pop() || '',
         };
       }
@@ -908,6 +1068,15 @@ export default function CustomerVerification() {
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const res = await fetch(`${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`, { headers });
+      if (res.status === 404) {
+        return {
+          loading: false,
+          url: null,
+          isHistoricalUnavailable: true,
+          error: 'Previous version file is no longer available on the server.',
+          fileName: defaultName || cleanPath.split('/').pop() || '',
+        };
+      }
       if (!res.ok) {
         return {
           loading: false,
@@ -967,7 +1136,8 @@ export default function CustomerVerification() {
       return {
         loading: false,
         url: null,
-        error: 'Previous version could not be retrieved from server.',
+        isHistoricalUnavailable: true,
+        error: 'Previous version file is no longer available on the server.',
         fileName: defaultName || '',
       };
     }
@@ -1172,9 +1342,10 @@ export default function CustomerVerification() {
       label: 'Applicant',
       name: mainName,
       isMain: true,
-      pan: verificationData?.personalInformation?.panNumber || resolvedKycList[0]?.panCardNo || '',
+      // Main Applicant row comes from the live sequence-0 resolver, not positional [0].
+      pan: verificationData?.personalInformation?.panNumber || mainApplicantKyc.row?.panCardNo || '',
       personalRecord: resolvedPersonalList[0] || null,
-      kycRecord: resolvedKycList[0] || null,
+      kycRecord: mainApplicantKyc.row || null,
     });
 
     (coApplicants || []).forEach((co, idx) => {
@@ -1195,6 +1366,7 @@ export default function CustomerVerification() {
     verificationData?.personalInformation?.panNumber,
     resolvedPersonalList,
     resolvedKycList,
+    mainApplicantKyc,
     coApplicants,
   ]);
 
@@ -4873,14 +5045,18 @@ export default function CustomerVerification() {
     uploadDate: null,
     comparison: null,
     rejectionId: null,
+    rejection: null,
     stepLabel: '',
     stepNum: null,
+    stepCode: null,
     kycId: null,
     isCoApplicant: false,
     applicantSequence: 0,
     documentTypeId: null,
     rejectedDocumentType: null,
     manualDocs: null,
+    isVerified: false,
+    status: '',
   });
 
   const handleOpenPreviewModal = useCallback((opts) => {
@@ -4899,14 +5075,18 @@ export default function CustomerVerification() {
       uploadDate: opts.uploadDate || null,
       comparison: opts.comparison || null,
       rejectionId: opts.rejectionId || null,
+      rejection: opts.rejection || null,
       stepLabel: opts.stepLabel || opts.docType || 'Document',
       stepNum: opts.stepNum || null,
+      stepCode: opts.stepCode || null,
       kycId: opts.kycId || null,
       isCoApplicant: Boolean(opts.isCoApplicant),
       applicantSequence: opts.applicantSequence !== undefined ? opts.applicantSequence : 0,
       documentTypeId: opts.documentTypeId || null,
       rejectedDocumentType: opts.rejectedDocumentType || null,
       manualDocs: opts.manualDocs || null,
+      isVerified: Boolean(opts.isVerified),
+      status: opts.status || '',
     });
   }, []);
 
@@ -4955,7 +5135,7 @@ export default function CustomerVerification() {
   // ----------------------------------------------------
 
   // Helper to determine if an AgentCustomerDocument matches the requested step/document type
-  const isMatchingApplicantDoc = useCallback((doc, stepNum, masterMap) => {
+  const isMatchingApplicantDoc = useCallback((doc, stepNumOrCode, masterMap) => {
     if (!doc) return false;
     const typeId = Number(doc.documentTypeId || doc.DocumentTypeId);
     const typeName = String(doc.documentTypeName || doc.DocumentTypeName || '').trim().toLowerCase();
@@ -4965,34 +5145,44 @@ export default function CustomerVerification() {
     const masterCode = String(master?.documentTypeCode || '').toUpperCase();
     const masterName = String(master?.documentTypeName || '').toLowerCase();
 
-    if (stepNum === 2) {
+    const s = String(stepNumOrCode ?? '').trim().toUpperCase();
+    const isStep2 = stepNumOrCode === 2 || s === '2' || s === 'PROFILE' || s === 'PROFILE_IMAGE' || s === 'PHOTO' || s === 'APPLICANT_PROFILE';
+    const isStep3 = stepNumOrCode === 3 || s === '3' || s === 'AADHAAR' || s === 'AADHAR' || s === 'APPLICANT_AADHAAR';
+    const isStep4 = stepNumOrCode === 4 || s === '4' || s === 'PAN' || s === 'PANCARD' || s === 'APPLICANT_PAN';
+    const isStep5 = stepNumOrCode === 5 || s === '5' || s === 'SALARY_SLIP' || s === 'SALARY' || s === 'PAYSLIP' || s === 'INCOME_PROOF';
+    const isStep6 = stepNumOrCode === 6 || s === '6' || s === 'BANK_STATEMENT' || s === 'BANKSTATEMENT' || s === 'BANK';
+    const isStep7 = stepNumOrCode === 7 || s === '7' || s === 'ZIP' || s === 'ZIP_ARCHIVE' || s === 'ARCHIVE' || s === 'MANUAL';
+
+    if (isStep2) {
       // Step 02: Profile Image / Photo
-      if (masterCode === 'PHOTO' || masterName.includes('photo') || masterName.includes('profile')) return true;
+      // Identity rule: Match only actual photo / profile assets
+      if (masterCode === 'PHOTO' || masterCode === 'PROFILE' || masterCode === 'PROFILE_IMAGE' || masterName.includes('photo') || masterName.includes('profile')) return true;
       if (typeName.includes('photo') || typeName.includes('picture') || typeName.includes('profile') || typeName.includes('client')) return true;
       if (/\.(jpg|jpeg|png|webp|gif)$/i.test(fileName) && /(profile|photo|client|picture|face|user)/i.test(fileName)) return true;
-      if (typeId === 6) return true;
+      if (profileDocTypeId && typeId === Number(profileDocTypeId)) return true;
       return false;
     }
 
-    if (stepNum === 3) {
+    if (isStep3) {
       // Step 03: Aadhaar Card
-      if (masterCode === 'AADHAAR' || masterName.includes('aadhaar') || masterName.includes('aadhar')) return true;
+      if (masterCode === 'AADHAAR' || masterCode === 'AADHAR' || masterName.includes('aadhaar') || masterName.includes('aadhar')) return true;
       if (typeName.includes('aadhaar') || typeName.includes('aadhar')) return true;
       if (/(aadhaar|aadhar|uid)/i.test(fileName)) return true;
-      if (typeId === 1) return true;
+      if (aadhaarDocTypeId && typeId === Number(aadhaarDocTypeId)) return true;
       return false;
     }
 
-    if (stepNum === 4) {
+    if (isStep4) {
       // Step 04: PAN Card
-      if (masterCode === 'PAN' || masterName === 'pan card' || masterName === 'pan') return true;
+      if (masterCode === 'PAN' || masterCode === 'PANCARD' || masterName === 'pan card' || masterName === 'pan') return true;
       if (typeName.includes('pan card') || typeName === 'pan') return true;
       if (/\bpan\b/i.test(fileName) || /pancard/i.test(fileName)) return true;
-      if (typeId === 2) return true;
+      if (panDocTypeId && typeId === Number(panDocTypeId)) return true;
       return false;
     }
 
-    if (stepNum === 5 || stepNum === 'SALARY_SLIP' || stepNum === 'salarySlip') {
+    if (isStep5) {
+      // Step 05: Salary Slip
       if (salarySlipDocTypeId && typeId === Number(salarySlipDocTypeId)) return true;
       if (masterCode === 'SALARY_SLIP' || masterCode === 'SALARY' || masterCode === 'PAYSLIP') return true;
       if (masterName.includes('salary') || masterName.includes('payslip') || masterName.includes('income')) return true;
@@ -5001,7 +5191,8 @@ export default function CustomerVerification() {
       return false;
     }
 
-    if (stepNum === 6 || stepNum === 'BANK_STATEMENT' || stepNum === 'bankStatement') {
+    if (isStep6) {
+      // Step 06: Bank Statement
       if (bankStatementDocTypeId && typeId === Number(bankStatementDocTypeId)) return true;
       if (masterCode === 'BANK_STATEMENT' || masterCode === 'BANKSTATEMENT' || masterCode === 'BANK') return true;
       if (masterName.includes('bank') || masterName.includes('statement')) return true;
@@ -5010,7 +5201,7 @@ export default function CustomerVerification() {
       return false;
     }
 
-    if (stepNum === 7) {
+    if (isStep7) {
       // Step 07: ZIP Archive / Manual Documents
       if (/\.(zip|rar|7z|tar|gz)$/i.test(fileName)) return true;
       if (typeName.includes('zip') || typeName.includes('archive') || typeName.includes('manual')) return true;
@@ -5018,7 +5209,13 @@ export default function CustomerVerification() {
     }
 
     return false;
-  }, [salarySlipDocTypeId, bankStatementDocTypeId]);
+  }, [
+    profileDocTypeId,
+    aadhaarDocTypeId,
+    panDocTypeId,
+    salarySlipDocTypeId,
+    bankStatementDocTypeId,
+  ]);
 
   // Helper to download a single customer document and create a managed blob URL
   const downloadAndPrepareDoc = useCallback(async (doc) => {
@@ -5349,45 +5546,46 @@ export default function CustomerVerification() {
       switch (code) {
         case 'PROFILE_IMAGE':
           return (
-            docTypeId === 6 ||
+            (profileDocTypeId && docTypeId === Number(profileDocTypeId)) ||
             rType.includes('PROFILE') ||
             rType.includes('PHOTO')
           );
         case 'AADHAAR':
           return (
-            docTypeId === 1 ||
+            (aadhaarDocTypeId && docTypeId === Number(aadhaarDocTypeId)) ||
             rType.includes('AADHAAR') ||
             rType.includes('AADHAR')
           );
         case 'PAN':
           return (
-            docTypeId === 2 ||
+            (panDocTypeId && docTypeId === Number(panDocTypeId)) ||
             rType.includes('PAN')
           );
         case 'SALARY_SLIP':
           return (
-            docTypeId === 4 ||
             (salarySlipDocTypeId && docTypeId === Number(salarySlipDocTypeId)) ||
             rType.includes('SALARY') ||
-            rType.includes('PAYSLIP')
+            rType.includes('PAYSLIP') ||
+            rType.includes('INCOME')
           );
         case 'BANK_STATEMENT':
           return (
-            docTypeId === 3 ||
             (bankStatementDocTypeId && docTypeId === Number(bankStatementDocTypeId)) ||
-            rType.includes('BANK')
+            rType.includes('BANK') ||
+            rType.includes('STATEMENT')
           );
         case 'ZIP_ARCHIVE':
           return (
-            docTypeId === 7 ||
+            (zipArchiveDocTypeId && docTypeId === Number(zipArchiveDocTypeId)) ||
             rType.includes('ZIP') ||
-            rType.includes('ARCHIVE')
+            rType.includes('ARCHIVE') ||
+            rType.includes('MANUAL')
           );
         default:
           return false;
       }
     },
-    [salarySlipDocTypeId, bankStatementDocTypeId]
+    [profileDocTypeId, aadhaarDocTypeId, panDocTypeId, salarySlipDocTypeId, bankStatementDocTypeId, zipArchiveDocTypeId]
   );
 
   const getUnresolvedRejectionsForStep = useCallback(
@@ -5616,29 +5814,6 @@ export default function CustomerVerification() {
     }
   }, [savingVerificationKey, resolvedAppProdId, verificationData, getAuthenticatedBackOfficeId, stepVerifications, hasUnresolvedRejectionForStep]);
 
-  const verifiedDocumentCount = useMemo(() => {
-    const applicableSequences = [
-      0,
-      ...(Array.isArray(coApplicants)
-        ? coApplicants.map((co) =>
-            co.sequence !== undefined
-              ? Number(co.sequence)
-              : co.number !== undefined
-              ? Number(co.number)
-              : Number(co.index || 0) + 1
-          )
-        : []),
-    ];
-
-    return DOCUMENT_STEP_CODES.filter((code) => {
-      return applicableSequences.every(
-        (seq) =>
-          Boolean(stepVerifications[seq]?.[code]?.isVerified) === true &&
-          !hasUnresolvedRejectionForStep(code, seq)
-      );
-    }).length;
-  }, [stepVerifications, hasUnresolvedRejectionForStep, coApplicants]);
-
   // Reconcile legacy contradictory state: persist isVerified: false for steps with unresolved rejections (Rule 9)
   useEffect(() => {
     if (!resolvedAppProdId || isFetchingStepVerifications || !applicationRejections || applicationRejections.length === 0) {
@@ -5788,19 +5963,19 @@ export default function CustomerVerification() {
             if (docTypeId && r.documentTypeId && Number(r.documentTypeId) === Number(docTypeId)) return true;
 
             // Document type specific matches
-            if (stepNum === 2 && (Number(r.documentTypeId) === Number(profileDocTypeId) || Number(r.documentTypeId) === 6 || /(profile|photo)/i.test(rType))) return true;
-            if (stepNum === 3 && (Number(r.documentTypeId) === Number(aadhaarDocTypeId) || Number(r.documentTypeId) === 1 || /(aadhaar|aadhar)/i.test(rType))) return true;
-            if (stepNum === 4 && (Number(r.documentTypeId) === Number(panDocTypeId) || Number(r.documentTypeId) === 2 || /\bpan\b/i.test(rType))) return true;
-            if (stepNum === 5 && (Number(r.documentTypeId) === Number(salarySlipDocTypeId) || /(salary|payslip)/i.test(rType))) return true;
-            if (stepNum === 6 && (Number(r.documentTypeId) === Number(bankStatementDocTypeId) || /(bank|statement)/i.test(rType))) return true;
-            if (stepNum === 7 && /(zip|archive)/i.test(rType)) return true;
+            if (stepNum === 2 && ((profileDocTypeId && Number(r.documentTypeId) === Number(profileDocTypeId)) || /(profile|photo)/i.test(rType))) return true;
+            if (stepNum === 3 && ((aadhaarDocTypeId && Number(r.documentTypeId) === Number(aadhaarDocTypeId)) || /(aadhaar|aadhar)/i.test(rType))) return true;
+            if (stepNum === 4 && ((panDocTypeId && Number(r.documentTypeId) === Number(panDocTypeId)) || /\bpan\b/i.test(rType))) return true;
+            if (stepNum === 5 && ((salarySlipDocTypeId && Number(r.documentTypeId) === Number(salarySlipDocTypeId)) || /(salary|payslip)/i.test(rType))) return true;
+            if (stepNum === 6 && ((bankStatementDocTypeId && Number(r.documentTypeId) === Number(bankStatementDocTypeId)) || /(bank|statement)/i.test(rType))) return true;
+            if (stepNum === 7 && ((zipArchiveDocTypeId && Number(r.documentTypeId) === Number(zipArchiveDocTypeId)) || /(zip|archive)/i.test(rType))) return true;
 
             return Boolean(baseType && (rType === baseType || rType === `APPLICANT_${baseType}` || rType.endsWith(`_${baseType}`) || rType.includes(baseType)));
           })
           .sort((a, b) => (b.backOfficeDocumentRejectionId || 0) - (a.backOfficeDocumentRejectionId || 0))[0] || null
       );
     },
-    [applicationRejections, applicantKycId, profileDocTypeId, aadhaarDocTypeId, panDocTypeId, salarySlipDocTypeId, bankStatementDocTypeId]
+    [applicationRejections, applicantKycId, profileDocTypeId, aadhaarDocTypeId, panDocTypeId, salarySlipDocTypeId, bankStatementDocTypeId, zipArchiveDocTypeId]
   );
 
   const getActiveRejectionForCoApplicant = useCallback(
@@ -5829,19 +6004,19 @@ export default function CustomerVerification() {
             }
 
             // Document type specific matches
-            if (stepNum === 2 && (Number(r.documentTypeId) === Number(profileDocTypeId) || Number(r.documentTypeId) === 6 || /(profile|photo)/i.test(rType))) return true;
-            if (stepNum === 3 && (Number(r.documentTypeId) === Number(aadhaarDocTypeId) || Number(r.documentTypeId) === 1 || /(aadhaar|aadhar)/i.test(rType))) return true;
-            if (stepNum === 4 && (Number(r.documentTypeId) === Number(panDocTypeId) || Number(r.documentTypeId) === 2 || /\bpan\b/i.test(rType))) return true;
-            if (stepNum === 5 && (Number(r.documentTypeId) === Number(salarySlipDocTypeId) || /(salary|payslip)/i.test(rType))) return true;
-            if (stepNum === 6 && (Number(r.documentTypeId) === Number(bankStatementDocTypeId) || /(bank|statement)/i.test(rType))) return true;
-            if (stepNum === 7 && /(zip|archive)/i.test(rType)) return true;
+            if (stepNum === 2 && ((profileDocTypeId && Number(r.documentTypeId) === Number(profileDocTypeId)) || /(profile|photo)/i.test(rType))) return true;
+            if (stepNum === 3 && ((aadhaarDocTypeId && Number(r.documentTypeId) === Number(aadhaarDocTypeId)) || /(aadhaar|aadhar)/i.test(rType))) return true;
+            if (stepNum === 4 && ((panDocTypeId && Number(r.documentTypeId) === Number(panDocTypeId)) || /\bpan\b/i.test(rType))) return true;
+            if (stepNum === 5 && ((salarySlipDocTypeId && Number(r.documentTypeId) === Number(salarySlipDocTypeId)) || /(salary|payslip)/i.test(rType))) return true;
+            if (stepNum === 6 && ((bankStatementDocTypeId && Number(r.documentTypeId) === Number(bankStatementDocTypeId)) || /(bank|statement)/i.test(rType))) return true;
+            if (stepNum === 7 && ((zipArchiveDocTypeId && Number(r.documentTypeId) === Number(zipArchiveDocTypeId)) || /(zip|archive)/i.test(rType))) return true;
 
             return Boolean(baseType && (rType === baseType || rType === `CO_APPLICANT_${baseType}` || rType.includes(baseType)));
           })
           .sort((a, b) => (b.backOfficeDocumentRejectionId || 0) - (a.backOfficeDocumentRejectionId || 0))[0] || null
       );
     },
-    [applicationRejections, profileDocTypeId, aadhaarDocTypeId, panDocTypeId, salarySlipDocTypeId, bankStatementDocTypeId]
+    [applicationRejections, profileDocTypeId, aadhaarDocTypeId, panDocTypeId, salarySlipDocTypeId, bankStatementDocTypeId, zipArchiveDocTypeId]
   );
 
   const getActiveRejectionForStep = useCallback(
@@ -6346,15 +6521,17 @@ export default function CustomerVerification() {
     (async () => {
       const appProfileRej = getActiveRejectionForApplicant(2, profileDocTypeId);
       const appRej = appProfileRej;
+      const canonicalProfile = applicantKycRecord?.profileImagePath || applicantKycRecord?.ProfileImagePath || null;
 
       if (appRej && appRej.status === 'Resubmitted') {
-        const { oldDoc, newDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 2, docTypeMasterMap);
         const oldPromise = appRej.originalDocumentPath
           ? fetchKycDocByPath(appRej.originalDocumentPath, 'Applicant_Profile_Old.jpg')
-          : (oldDoc ? downloadAndPrepareDoc(oldDoc) : Promise.resolve(null));
+          : Promise.resolve(null);
         const newPromise = appRej.currentDocumentPath
           ? fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Profile.jpg')
-          : (newDoc ? downloadAndPrepareDoc(newDoc) : (applicantKycId ? fetchKycDocBlob(applicantKycId, 'profile-image', 'Applicant_Profile') : Promise.resolve(null)));
+          : (applicantKycId && canonicalProfile
+              ? fetchKycDocBlob(applicantKycId, 'profile-image', 'Applicant_Profile')
+              : Promise.resolve(null));
 
         const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
         if (currentGen !== previewFetchGenRef.current) return;
@@ -6377,7 +6554,7 @@ export default function CustomerVerification() {
               rejection: appRej,
             },
             url: newRes?.url || oldRes?.url || null,
-            doc: newRes?.doc || oldRes?.doc || null,
+            doc: null,
             fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_Profile.jpg',
             size: newRes?.size || oldRes?.size || null,
             isImage: true,
@@ -6385,71 +6562,64 @@ export default function CustomerVerification() {
             rejection: appRej,
           },
         }));
+      } else if (canonicalProfile) {
+        const res = applicantKycId
+          ? await fetchKycDocBlob(applicantKycId, 'profile-image', 'Applicant_Profile')
+          : await fetchKycDocByPath(canonicalProfile, 'Applicant_Profile.jpg');
+        if (currentGen !== previewFetchGenRef.current) return;
+        setDocPreviews((prev) => ({
+          ...prev,
+          profile: {
+            ...(res || {}),
+            isComparison: false,
+            comparison: null,
+            rejection: appRej,
+          },
+        }));
       } else {
-        const latestDoc = selectLatestApplicantDoc(combinedDocs, 'PROFILE_IMAGE', docTypeMasterMap, 0);
-        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 2, docTypeMasterMap);
-        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc || latestDoc);
-
-        if (targetDoc) {
-          const res = await downloadAndPrepareDoc(targetDoc);
-          if (currentGen !== previewFetchGenRef.current) return;
-          setDocPreviews((prev) => ({
-            ...prev,
-            profile: {
-              loading: false,
-              error: res ? null : 'Failed to download document.',
-              isComparison: false,
-              comparison: null,
-              url: res?.url || null,
-              doc: targetDoc,
-              fileName: res?.fileName || targetDoc.fileName || 'Applicant_Profile.jpg',
-              size: res?.size || null,
-              isImage: true,
-              isPdf: false,
-              rejection: appRej,
-            },
-          }));
-        } else if (appRej?.currentDocumentPath) {
-          const res = await fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Profile.jpg');
-          if (currentGen !== previewFetchGenRef.current) return;
-          setDocPreviews((prev) => ({
-            ...prev,
-            profile: {
-              ...res,
-              isComparison: false,
-              comparison: null,
-              rejection: appRej,
-            },
-          }));
-        } else if (applicantKycId) {
-          const res = await fetchKycDocBlob(applicantKycId, 'profile-image', 'Applicant_Profile');
-          if (currentGen !== previewFetchGenRef.current) return;
-          setDocPreviews((prev) => ({
-            ...prev,
-            profile: { ...res, isComparison: false, comparison: null, rejection: appRej },
-          }));
-        } else {
-          if (currentGen !== previewFetchGenRef.current) return;
-          setDocPreviews((prev) => ({
-            ...prev,
-            profile: { loading: false, error: null, doc: null, url: null, rejection: appRej },
-          }));
-        }
+        if (currentGen !== previewFetchGenRef.current) return;
+        setDocPreviews((prev) => ({
+          ...prev,
+          profile: { loading: false, error: null, doc: null, url: null, rejection: appRej },
+        }));
       }
     })();
 
     // ── STEP 2: CO-APPLICANTS PROFILE IMAGES (CONCURRENT TASKS) ──────
     (coApplicants || []).forEach((co) => {
-      if (!co.kycDocumentId) return;
+      const coSeq = co.sequence !== undefined ? Number(co.sequence) : (co.index + 1);
+      const coKyc =
+        co.kycRecord ||
+        co.kyc ||
+        (resolvedKycList || []).find(
+          (k) =>
+            k &&
+            k.isActive !== false &&
+            k.IsActive !== false &&
+            !isApplicantDocumentTuple(k) &&
+            Number(k.applicantSequence ?? k.ApplicantSequence) === coSeq
+        ) ||
+        {};
+      const coKycId =
+        co.kycDocumentId ||
+        coKyc.applicationKYCDocumentId ||
+        coKyc.ApplicationKYCDocumentId ||
+        coKyc.kycDocumentId ||
+        coKyc.id ||
+        null;
+      const canonicalCoProfile = coKyc.profileImagePath || coKyc.ProfileImagePath || null;
+
       (async () => {
-        const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 2, co.sequence || co.number || (co.index + 1));
+        const coRej = getActiveRejectionForCoApplicant(coKycId, 2, coSeq);
         if (coRej && coRej.status === 'Resubmitted') {
           const oldPromise = coRej.originalDocumentPath
             ? fetchKycDocByPath(coRej.originalDocumentPath, `CoApplicant_${co.number}_Profile_Old.jpg`)
             : Promise.resolve(null);
           const newPromise = coRej.currentDocumentPath
             ? fetchKycDocByPath(coRej.currentDocumentPath, `CoApplicant_${co.number}_Profile.jpg`)
-            : fetchKycDocBlob(co.kycDocumentId, 'profile-image', `CoApplicant_${co.number}_Profile`);
+            : (coKycId && canonicalCoProfile
+                ? fetchKycDocBlob(coKycId, 'profile-image', `CoApplicant_${co.number}_Profile`)
+                : Promise.resolve(null));
 
           const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
           if (currentGen !== previewFetchGenRef.current) return;
@@ -6482,14 +6652,25 @@ export default function CustomerVerification() {
               },
             },
           }));
-        } else {
-          const res = await fetchKycDocBlob(co.kycDocumentId, 'profile-image', `CoApplicant_${co.number}_Profile`);
+        } else if (canonicalCoProfile) {
+          const res = coKycId
+            ? await fetchKycDocBlob(coKycId, 'profile-image', `CoApplicant_${co.number}_Profile`)
+            : await fetchKycDocByPath(canonicalCoProfile, `CoApplicant_${co.number}_Profile.jpg`);
           if (currentGen !== previewFetchGenRef.current) return;
           setCoDocPreviews((prev) => ({
             ...prev,
             [co.index]: {
               ...(prev[co.index] || {}),
-              profile: { ...res, isComparison: false, comparison: null, rejection: coRej },
+              profile: { ...(res || {}), isComparison: false, comparison: null, rejection: coRej },
+            },
+          }));
+        } else {
+          if (currentGen !== previewFetchGenRef.current) return;
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              profile: { loading: false, error: null, doc: null, url: null, rejection: coRej },
             },
           }));
         }
@@ -6500,15 +6681,17 @@ export default function CustomerVerification() {
     (async () => {
       const appAadhaarRej = getActiveRejectionForApplicant(3, aadhaarDocTypeId);
       const appRej = appAadhaarRej;
+      const canonicalAadhaar = applicantKycRecord?.aadharDocumentPath || applicantKycRecord?.AadharDocumentPath || null;
 
       if (appRej && appRej.status === 'Resubmitted') {
-        const { oldDoc, newDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 3, docTypeMasterMap);
         const oldPromise = appRej.originalDocumentPath
           ? fetchKycDocByPath(appRej.originalDocumentPath, 'Applicant_Aadhaar_Old')
-          : (oldDoc ? downloadAndPrepareDoc(oldDoc) : Promise.resolve(null));
-        const newPromise = appRej.currentDocumentPath
-          ? fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Aadhaar')
-          : (newDoc ? downloadAndPrepareDoc(newDoc) : (applicantKycId ? fetchKycDocBlob(applicantKycId, 'aadhar', 'Applicant_Aadhaar') : Promise.resolve(null)));
+          : Promise.resolve(null);
+        const newPromise = (applicantKycId && canonicalAadhaar)
+          ? fetchKycDocBlob(applicantKycId, 'aadhar', 'Applicant_Aadhaar')
+          : (appRej.currentDocumentPath
+              ? fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Aadhaar')
+              : Promise.resolve(null));
 
         const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
         if (currentGen !== previewFetchGenRef.current) return;
@@ -6531,7 +6714,7 @@ export default function CustomerVerification() {
               rejection: appRej,
             },
             url: newRes?.url || oldRes?.url || null,
-            doc: newRes?.doc || oldRes?.doc || null,
+            doc: null,
             fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_Aadhaar.pdf',
             size: newRes?.size || oldRes?.size || null,
             isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
@@ -6539,71 +6722,64 @@ export default function CustomerVerification() {
             rejection: appRej,
           },
         }));
+      } else if (canonicalAadhaar) {
+        const res = applicantKycId
+          ? await fetchKycDocBlob(applicantKycId, 'aadhar', 'Applicant_Aadhaar')
+          : await fetchKycDocByPath(canonicalAadhaar, 'Applicant_Aadhaar.pdf');
+        if (currentGen !== previewFetchGenRef.current) return;
+        setDocPreviews((prev) => ({
+          ...prev,
+          aadhaar: {
+            ...(res || {}),
+            isComparison: false,
+            comparison: null,
+            rejection: appRej,
+          },
+        }));
       } else {
-        const latestDoc = selectLatestApplicantDoc(combinedDocs, 'AADHAAR', docTypeMasterMap, 0);
-        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 3, docTypeMasterMap);
-        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc || latestDoc);
-
-        if (targetDoc) {
-          const res = await downloadAndPrepareDoc(targetDoc);
-          if (currentGen !== previewFetchGenRef.current) return;
-          setDocPreviews((prev) => ({
-            ...prev,
-            aadhaar: {
-              loading: false,
-              error: res ? null : 'Failed to download Aadhaar document.',
-              isComparison: false,
-              comparison: null,
-              url: res?.url || null,
-              doc: targetDoc,
-              fileName: res?.fileName || targetDoc.fileName || 'Applicant_Aadhaar.pdf',
-              size: res?.size || null,
-              isPdf: Boolean(res?.isPdf),
-              isImage: Boolean(res?.isImage),
-              rejection: appRej,
-            },
-          }));
-        } else if (appRej?.currentDocumentPath) {
-          const res = await fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_Aadhaar');
-          if (currentGen !== previewFetchGenRef.current) return;
-          setDocPreviews((prev) => ({
-            ...prev,
-            aadhaar: {
-              ...res,
-              isComparison: false,
-              comparison: null,
-              rejection: appRej,
-            },
-          }));
-        } else if (applicantKycId) {
-          const res = await fetchKycDocBlob(applicantKycId, 'aadhar', 'Applicant_Aadhaar');
-          if (currentGen !== previewFetchGenRef.current) return;
-          setDocPreviews((prev) => ({
-            ...prev,
-            aadhaar: { ...res, isComparison: false, comparison: null, rejection: appRej },
-          }));
-        } else {
-          if (currentGen !== previewFetchGenRef.current) return;
-          setDocPreviews((prev) => ({
-            ...prev,
-            aadhaar: { loading: false, error: null, doc: null, url: null, rejection: appRej },
-          }));
-        }
+        if (currentGen !== previewFetchGenRef.current) return;
+        setDocPreviews((prev) => ({
+          ...prev,
+          aadhaar: { loading: false, error: null, doc: null, url: null, rejection: appRej },
+        }));
       }
     })();
 
     // ── STEP 3: CO-APPLICANTS AADHAAR (CONCURRENT TASKS) ─────────────
     (coApplicants || []).forEach((co) => {
-      if (!co.kycDocumentId) return;
+      const coSeq = co.sequence !== undefined ? Number(co.sequence) : (co.index + 1);
+      const coKyc =
+        co.kycRecord ||
+        co.kyc ||
+        (resolvedKycList || []).find(
+          (k) =>
+            k &&
+            k.isActive !== false &&
+            k.IsActive !== false &&
+            !isApplicantDocumentTuple(k) &&
+            Number(k.applicantSequence ?? k.ApplicantSequence) === coSeq
+        ) ||
+        {};
+      const coKycId =
+        co.kycDocumentId ||
+        coKyc.applicationKYCDocumentId ||
+        coKyc.ApplicationKYCDocumentId ||
+        coKyc.kycDocumentId ||
+        coKyc.id ||
+        null;
+      const canonicalCoAadhaar = coKyc.aadharDocumentPath || coKyc.AadharDocumentPath || null;
+
       (async () => {
-        const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 3, co.sequence || co.number || (co.index + 1));
+        const coRej = getActiveRejectionForCoApplicant(coKycId, 3, coSeq);
         if (coRej && coRej.status === 'Resubmitted') {
           const oldPromise = coRej.originalDocumentPath
             ? fetchKycDocByPath(coRej.originalDocumentPath, `CoApplicant_${co.number}_Aadhaar_Old`)
             : Promise.resolve(null);
-          const newPromise = coRej.currentDocumentPath
-            ? fetchKycDocByPath(coRej.currentDocumentPath, `CoApplicant_${co.number}_Aadhaar`)
-            : fetchKycDocBlob(co.kycDocumentId, 'aadhar', `CoApplicant_${co.number}_Aadhaar`);
+          const newPromise = (coKycId && canonicalCoAadhaar)
+            ? fetchKycDocBlob(coKycId, 'aadhar', `CoApplicant_${co.number}_Aadhaar`)
+            : (coRej.currentDocumentPath
+                ? fetchKycDocByPath(coRej.currentDocumentPath, `CoApplicant_${co.number}_Aadhaar`)
+                : Promise.resolve(null));
 
           const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
           if (currentGen !== previewFetchGenRef.current) return;
@@ -6636,14 +6812,25 @@ export default function CustomerVerification() {
               },
             },
           }));
-        } else {
-          const res = await fetchKycDocBlob(co.kycDocumentId, 'aadhar', `CoApplicant_${co.number}_Aadhaar`);
+        } else if (canonicalCoAadhaar) {
+          const res = coKycId
+            ? await fetchKycDocBlob(coKycId, 'aadhar', `CoApplicant_${co.number}_Aadhaar`)
+            : await fetchKycDocByPath(canonicalCoAadhaar, `CoApplicant_${co.number}_Aadhaar.pdf`);
           if (currentGen !== previewFetchGenRef.current) return;
           setCoDocPreviews((prev) => ({
             ...prev,
             [co.index]: {
               ...(prev[co.index] || {}),
-              aadhaar: { ...res, isComparison: false, comparison: null, rejection: coRej },
+              aadhaar: { ...(res || {}), isComparison: false, comparison: null, rejection: coRej },
+            },
+          }));
+        } else {
+          if (currentGen !== previewFetchGenRef.current) return;
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              aadhaar: { loading: false, error: null, doc: null, url: null, rejection: coRej },
             },
           }));
         }
@@ -6654,15 +6841,17 @@ export default function CustomerVerification() {
     (async () => {
       const appPanRej = getActiveRejectionForApplicant(4, panDocTypeId);
       const appRej = appPanRej;
+      const canonicalPan = applicantKycRecord?.panCardPath || applicantKycRecord?.PanCardPath || applicantKycRecord?.PANCardPath || null;
 
       if (appRej && appRej.status === 'Resubmitted') {
-        const { oldDoc, newDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 4, docTypeMasterMap);
         const oldPromise = appRej.originalDocumentPath
           ? fetchKycDocByPath(appRej.originalDocumentPath, 'Applicant_PAN_Old')
-          : (oldDoc ? downloadAndPrepareDoc(oldDoc) : Promise.resolve(null));
-        const newPromise = appRej.currentDocumentPath
-          ? fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_PAN')
-          : (newDoc ? downloadAndPrepareDoc(newDoc) : (applicantKycId ? fetchKycDocBlob(applicantKycId, 'pan', 'Applicant_PAN') : Promise.resolve(null)));
+          : Promise.resolve(null);
+        const newPromise = (applicantKycId && canonicalPan)
+          ? fetchKycDocBlob(applicantKycId, 'pan', 'Applicant_PAN')
+          : (appRej.currentDocumentPath
+              ? fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_PAN')
+              : Promise.resolve(null));
 
         const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
         if (currentGen !== previewFetchGenRef.current) return;
@@ -6685,7 +6874,7 @@ export default function CustomerVerification() {
               rejection: appRej,
             },
             url: newRes?.url || oldRes?.url || null,
-            doc: newRes?.doc || oldRes?.doc || null,
+            doc: null,
             fileName: newRes?.fileName || oldRes?.fileName || 'Applicant_PAN.pdf',
             size: newRes?.size || oldRes?.size || null,
             isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
@@ -6693,71 +6882,64 @@ export default function CustomerVerification() {
             rejection: appRej,
           },
         }));
+      } else if (canonicalPan) {
+        const res = applicantKycId
+          ? await fetchKycDocBlob(applicantKycId, 'pan', 'Applicant_PAN')
+          : await fetchKycDocByPath(canonicalPan, 'Applicant_PAN.pdf');
+        if (currentGen !== previewFetchGenRef.current) return;
+        setDocPreviews((prev) => ({
+          ...prev,
+          pan: {
+            ...(res || {}),
+            isComparison: false,
+            comparison: null,
+            rejection: appRej,
+          },
+        }));
       } else {
-        const latestDoc = selectLatestApplicantDoc(combinedDocs, 'PAN', docTypeMasterMap, 0);
-        const { newDoc, oldDoc } = resolveOldAndNewDocs(combinedDocs, appRej, 4, docTypeMasterMap);
-        const targetDoc = appRej?.status === 'ReturnedToRM' && oldDoc ? oldDoc : (newDoc || oldDoc || latestDoc);
-
-        if (targetDoc) {
-          const res = await downloadAndPrepareDoc(targetDoc);
-          if (currentGen !== previewFetchGenRef.current) return;
-          setDocPreviews((prev) => ({
-            ...prev,
-            pan: {
-              loading: false,
-              error: res ? null : 'Failed to download PAN document.',
-              isComparison: false,
-              comparison: null,
-              url: res?.url || null,
-              doc: targetDoc,
-              fileName: res?.fileName || targetDoc.fileName || 'Applicant_PAN.pdf',
-              size: res?.size || null,
-              isPdf: Boolean(res?.isPdf),
-              isImage: Boolean(res?.isImage),
-              rejection: appRej,
-            },
-          }));
-        } else if (appRej?.currentDocumentPath) {
-          const res = await fetchKycDocByPath(appRej.currentDocumentPath, 'Applicant_PAN');
-          if (currentGen !== previewFetchGenRef.current) return;
-          setDocPreviews((prev) => ({
-            ...prev,
-            pan: {
-              ...res,
-              isComparison: false,
-              comparison: null,
-              rejection: appRej,
-            },
-          }));
-        } else if (applicantKycId) {
-          const res = await fetchKycDocBlob(applicantKycId, 'pan', 'Applicant_PAN');
-          if (currentGen !== previewFetchGenRef.current) return;
-          setDocPreviews((prev) => ({
-            ...prev,
-            pan: { ...res, isComparison: false, comparison: null, rejection: appRej },
-          }));
-        } else {
-          if (currentGen !== previewFetchGenRef.current) return;
-          setDocPreviews((prev) => ({
-            ...prev,
-            pan: { loading: false, error: null, doc: null, url: null, rejection: appRej },
-          }));
-        }
+        if (currentGen !== previewFetchGenRef.current) return;
+        setDocPreviews((prev) => ({
+          ...prev,
+          pan: { loading: false, error: null, doc: null, url: null, rejection: appRej },
+        }));
       }
     })();
 
     // ── STEP 4: CO-APPLICANTS PAN (CONCURRENT TASKS) ─────────────────
     (coApplicants || []).forEach((co) => {
-      if (!co.kycDocumentId) return;
+      const coSeq = co.sequence !== undefined ? Number(co.sequence) : (co.index + 1);
+      const coKyc =
+        co.kycRecord ||
+        co.kyc ||
+        (resolvedKycList || []).find(
+          (k) =>
+            k &&
+            k.isActive !== false &&
+            k.IsActive !== false &&
+            !isApplicantDocumentTuple(k) &&
+            Number(k.applicantSequence ?? k.ApplicantSequence) === coSeq
+        ) ||
+        {};
+      const coKycId =
+        co.kycDocumentId ||
+        coKyc.applicationKYCDocumentId ||
+        coKyc.ApplicationKYCDocumentId ||
+        coKyc.kycDocumentId ||
+        coKyc.id ||
+        null;
+      const canonicalCoPan = coKyc.panCardPath || coKyc.PanCardPath || coKyc.PANCardPath || null;
+
       (async () => {
-        const coRej = getActiveRejectionForCoApplicant(co.kycDocumentId, 4, co.sequence || co.number || (co.index + 1));
+        const coRej = getActiveRejectionForCoApplicant(coKycId, 4, coSeq);
         if (coRej && coRej.status === 'Resubmitted') {
           const oldPromise = coRej.originalDocumentPath
             ? fetchKycDocByPath(coRej.originalDocumentPath, `CoApplicant_${co.number}_PAN_Old`)
             : Promise.resolve(null);
-          const newPromise = coRej.currentDocumentPath
-            ? fetchKycDocByPath(coRej.currentDocumentPath, `CoApplicant_${co.number}_PAN`)
-            : fetchKycDocBlob(co.kycDocumentId, 'pan', `CoApplicant_${co.number}_PAN`);
+          const newPromise = (coKycId && canonicalCoPan)
+            ? fetchKycDocBlob(coKycId, 'pan', `CoApplicant_${co.number}_PAN`)
+            : (coRej.currentDocumentPath
+                ? fetchKycDocByPath(coRej.currentDocumentPath, `CoApplicant_${co.number}_PAN`)
+                : Promise.resolve(null));
 
           const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
           if (currentGen !== previewFetchGenRef.current) return;
@@ -6790,34 +6972,149 @@ export default function CustomerVerification() {
               },
             },
           }));
-        } else {
-          const res = await fetchKycDocBlob(co.kycDocumentId, 'pan', `CoApplicant_${co.number}_PAN`);
+        } else if (canonicalCoPan) {
+          const res = coKycId
+            ? await fetchKycDocBlob(coKycId, 'pan', `CoApplicant_${co.number}_PAN`)
+            : await fetchKycDocByPath(canonicalCoPan, `CoApplicant_${co.number}_PAN.pdf`);
           if (currentGen !== previewFetchGenRef.current) return;
           setCoDocPreviews((prev) => ({
             ...prev,
             [co.index]: {
               ...(prev[co.index] || {}),
-              pan: { ...res, isComparison: false, comparison: null, rejection: coRej },
+              pan: { ...(res || {}), isComparison: false, comparison: null, rejection: coRej },
+            },
+          }));
+        } else {
+          if (currentGen !== previewFetchGenRef.current) return;
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              pan: { loading: false, error: null, doc: null, url: null, rejection: coRej },
             },
           }));
         }
       })();
     });
 
-    // ── STEP 7: ZIP ARCHIVE ──────────────────────────────────────────
-    const zipDoc = combinedDocs.find(
-      (d) =>
-        /\.zip$/i.test(d.fileName || '') ||
-        /(zip|archive)/i.test(d.documentTypeName || d.name || d.fileName || '')
-    );
-    if (zipDoc) {
-      setDocPreviews((prev) => ({
-        ...prev,
-        zip: { loading: false, error: null, doc: zipDoc, url: null },
-      }));
-    } else {
-      setDocPreviews((prev) => ({ ...prev, zip: { loading: false, error: null, doc: null, url: null } }));
-    }
+    // ── STEP 7: ZIP ARCHIVE / MANUAL DOCUMENTS ────────────────────────
+    (async () => {
+      const appZipRej = getActiveRejectionForApplicant(7, zipArchiveDocTypeId);
+      if (appZipRej && appZipRej.status === 'Resubmitted') {
+        const slotIdx =
+          appZipRej.manualDocumentIndex !== undefined && appZipRej.manualDocumentIndex !== null
+            ? Number(appZipRej.manualDocumentIndex)
+            : 0;
+        const slotLabel = `Applicant_Manual_Doc_${slotIdx + 1}`;
+        const oldPromise = appZipRej.originalDocumentPath
+          ? fetchKycDocByPath(appZipRej.originalDocumentPath, `${slotLabel}_Old`)
+          : Promise.resolve(null);
+        const newPromise = appZipRej.currentDocumentPath
+          ? fetchKycDocByPath(appZipRej.currentDocumentPath, slotLabel)
+          : Promise.resolve(null);
+
+        const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+        if (currentGen !== previewFetchGenRef.current) return;
+        setDocPreviews((prev) => ({
+          ...prev,
+          zip: {
+            loading: false,
+            error: null,
+            isComparison: true,
+            comparison: {
+              oldDoc: oldRes,
+              newDoc: newRes,
+              hasOldVersion: Boolean(oldRes?.url),
+              hasNewVersion: Boolean(newRes?.url),
+              note: !oldRes?.url
+                ? (!appZipRej.originalDocumentPath
+                    ? 'Prior version path was not recorded for this rejection.'
+                    : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                : null,
+              rejection: appZipRej,
+            },
+            url: newRes?.url || oldRes?.url || null,
+            fileName: newRes?.fileName || oldRes?.fileName || `Applicant_Manual_Doc_${slotIdx + 1}`,
+            size: newRes?.size || oldRes?.size || null,
+            isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
+            isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+            rejection: appZipRej,
+          },
+        }));
+      } else {
+        const zipDoc = combinedDocs.find(
+          (d) =>
+            /\.zip$/i.test(d.fileName || '') ||
+            /(zip|archive)/i.test(d.documentTypeName || d.name || d.fileName || '')
+        );
+        if (currentGen !== previewFetchGenRef.current) return;
+        if (zipDoc) {
+          setDocPreviews((prev) => ({
+            ...prev,
+            zip: { loading: false, error: null, doc: zipDoc, url: null, comparison: null, rejection: appZipRej },
+          }));
+        } else {
+          setDocPreviews((prev) => ({
+            ...prev,
+            zip: { loading: false, error: null, doc: null, url: null, comparison: null, rejection: appZipRej },
+          }));
+        }
+      }
+    })();
+
+    // Co-applicants step 7 manual documents preview
+    (coApplicants || []).forEach((co) => {
+      const coKycId = co.kycDocumentId;
+      const coSeq = co.sequence || co.number || (co.index + 1);
+      (async () => {
+        const coZipRej = getActiveRejectionForCoApplicant(coKycId, 7, coSeq);
+        if (coZipRej && coZipRej.status === 'Resubmitted') {
+          const slotIdx =
+            coZipRej.manualDocumentIndex !== undefined && coZipRej.manualDocumentIndex !== null
+              ? Number(coZipRej.manualDocumentIndex)
+              : 0;
+          const slotLabel = `CoApplicant_${co.number}_Manual_Doc_${slotIdx + 1}`;
+          const oldPromise = coZipRej.originalDocumentPath
+            ? fetchKycDocByPath(coZipRej.originalDocumentPath, `${slotLabel}_Old`)
+            : Promise.resolve(null);
+          const newPromise = coZipRej.currentDocumentPath
+            ? fetchKycDocByPath(coZipRej.currentDocumentPath, slotLabel)
+            : Promise.resolve(null);
+
+          const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+          if (currentGen !== previewFetchGenRef.current) return;
+          setCoDocPreviews((prev) => ({
+            ...prev,
+            [co.index]: {
+              ...(prev[co.index] || {}),
+              zip: {
+                loading: false,
+                error: null,
+                isComparison: true,
+                comparison: {
+                  oldDoc: oldRes,
+                  newDoc: newRes,
+                  hasOldVersion: Boolean(oldRes?.url),
+                  hasNewVersion: Boolean(newRes?.url),
+                  note: !oldRes?.url
+                    ? (!coZipRej.originalDocumentPath
+                        ? 'Prior version path was not recorded for this rejection.'
+                        : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                    : null,
+                  rejection: coZipRej,
+                },
+                url: newRes?.url || oldRes?.url || null,
+                fileName: newRes?.fileName || oldRes?.fileName || `CoApplicant_${co.number}_Manual_Doc_${slotIdx + 1}`,
+                size: newRes?.size || oldRes?.size || null,
+                isPdf: Boolean(newRes?.isPdf ?? oldRes?.isPdf),
+                isImage: Boolean(newRes?.isImage ?? oldRes?.isImage),
+                rejection: coZipRej,
+              },
+            },
+          }));
+        }
+      })();
+    });
   }, [
     activeStep,
     verificationData,
@@ -6849,7 +7146,8 @@ export default function CustomerVerification() {
     customAppSeq = null,
     customDocTypeId = null,
     customRejectedType = null,
-    customRemarks = null
+    customRemarks = null,
+    manualDocumentIndex = null
   ) => {
     const remarks = (customRemarks !== null ? customRemarks : (stepRemarks[stepNum] || '')).trim();
     if (!remarks) {
@@ -6895,6 +7193,41 @@ export default function CustomerVerification() {
         ? (customKycId || null)
         : (customKycId !== undefined && customKycId !== null ? customKycId : (applicantKycId || null));
 
+    const isIdentityDoc = ['PROFILE_IMAGE', 'AADHAAR', 'PAN', 'APPLICANT_PROFILE', 'APPLICANT_AADHAAR', 'APPLICANT_PAN', 'CO_APPLICANT_PROFILE', 'CO_APPLICANT_AADHAAR', 'CO_APPLICANT_PAN'].includes(effectiveRejectedType);
+    if (isIdentityDoc) {
+      const targetSeq =
+        customAppSeq !== null && customAppSeq !== undefined
+          ? Number(customAppSeq)
+          : (isCoApplicant ? 1 : 0);
+
+      const targetKyc = targetSeq === 0
+        ? applicantKycRecord
+        : (coApplicants.find((c) => c.sequence === targetSeq || c.number === targetSeq || (c.index + 1) === targetSeq)?.kyc || resolvedKycList[targetSeq]);
+
+      const isProfile = effectiveRejectedType.includes('PROFILE') || effectiveRejectedType.includes('PHOTO');
+      const isAadhaar = effectiveRejectedType.includes('AADHAAR') || effectiveRejectedType.includes('AADHAR');
+      const isPan = effectiveRejectedType.includes('PAN');
+
+      const canonicalPath = isProfile
+        ? (targetKyc?.profileImagePath || targetKyc?.ProfileImagePath)
+        : isAadhaar
+          ? (targetKyc?.aadharDocumentPath || targetKyc?.AadharDocumentPath)
+          : isPan
+            ? (targetKyc?.panCardPath || targetKyc?.PanCardPath)
+            : null;
+
+      if (!kycId || !canonicalPath) {
+        setStepFeedback((prev) => ({
+          ...prev,
+          [stepNum]: {
+            type: 'error',
+            message: 'Identity document file is not available for return.',
+          },
+        }));
+        return;
+      }
+    }
+
     if (!appProdId) {
       setStepFeedback((prev) => ({
         ...prev,
@@ -6924,6 +7257,10 @@ export default function CustomerVerification() {
         rejectionRemarks: remarks,
         createdBy: backOfficeId,
       };
+
+      if (manualDocumentIndex !== null && manualDocumentIndex !== undefined && !isNaN(Number(manualDocumentIndex))) {
+        payload.manualDocumentIndex = Number(manualDocumentIndex);
+      }
 
       await backOfficeService.createDocumentRejection(payload);
       setStepFeedback((prev) => ({
@@ -6987,7 +7324,7 @@ export default function CustomerVerification() {
     return `Are you sure you want to reject this ${stepLabel}?`;
   };
 
-    // Open Return to RM Confirmation Modal
+  // Open Return to RM Confirmation Modal
   const handleOpenRejectConfirm = (
     stepNum,
     stepLabel,
@@ -6995,7 +7332,8 @@ export default function CustomerVerification() {
     isCoApplicant = false,
     applicantSequence = null,
     documentTypeId = null,
-    rejectedDocumentType = null
+    rejectedDocumentType = null,
+    manualDocumentIndex = null
   ) => {
     const existingRemarks = (stepRemarks[stepNum] || '').trim();
     setRejectConfirmModal({
@@ -7007,6 +7345,7 @@ export default function CustomerVerification() {
       applicantSequence,
       documentTypeId,
       rejectedDocumentType,
+      manualDocumentIndex,
       remarks: existingRemarks,
       error: '',
     });
@@ -7023,6 +7362,7 @@ export default function CustomerVerification() {
       applicantSequence: null,
       documentTypeId: null,
       rejectedDocumentType: null,
+      manualDocumentIndex: null,
       remarks: '',
       error: '',
     });
@@ -7038,6 +7378,7 @@ export default function CustomerVerification() {
       applicantSequence,
       documentTypeId,
       rejectedDocumentType,
+      manualDocumentIndex,
       remarks,
     } = rejectConfirmModal;
 
@@ -7061,6 +7402,7 @@ export default function CustomerVerification() {
       applicantSequence: null,
       documentTypeId: null,
       rejectedDocumentType: null,
+      manualDocumentIndex: null,
       remarks: '',
       error: '',
     });
@@ -7073,7 +7415,8 @@ export default function CustomerVerification() {
       applicantSequence,
       documentTypeId,
       rejectedDocumentType,
-      trimmed
+      trimmed,
+      manualDocumentIndex
     );
   };
 
@@ -7687,11 +8030,21 @@ export default function CustomerVerification() {
               ? cleanPath
               : `${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPathRel)}`;
 
+          const manualRej = findLatestRejectionForManualSlot({
+            rejections: applicationRejections,
+            appProdId: resolvedAppProdId,
+            applicantSequence: 0,
+            kycDocumentId: applicantKycRecord.applicationKYCDocumentId,
+            manualDocumentIndex: idx,
+          });
+
           list.push({
             id: applicantKycRecord.applicationKYCDocumentId
               ? `app_kyc_${applicantKycRecord.applicationKYCDocumentId}_${idx}`
               : `app_manual_${idx}`,
             applicationKYCDocumentId: applicantKycRecord.applicationKYCDocumentId,
+            manualDocumentIndex: idx,
+            applicantSequence: 0,
             fileName,
             path: cleanPath,
             fileTypeLabel,
@@ -7702,6 +8055,7 @@ export default function CustomerVerification() {
             uploadedOn: applicantKycRecord.createdAt || applicantKycRecord.modifiedAt || null,
             source: 'ApplicationKYCDocuments',
             size: applicantKycRecord.fileSize || null,
+            rejection: manualRej,
           });
         });
       }
@@ -7719,6 +8073,8 @@ export default function CustomerVerification() {
         list.push({
           id: docId || `agent_doc_${fn}`,
           agentCustomerDocumentId: docId,
+          manualDocumentIndex: 0,
+          applicantSequence: 0,
           fileName: fn || 'Customer_Documents_Bundle.zip',
           path: doc.filePath || fn,
           fileTypeLabel: 'Compressed ZIP Archive (.zip)',
@@ -7729,12 +8085,13 @@ export default function CustomerVerification() {
           uploadedOn: doc.uploadedOn || null,
           source: 'AgentCustomerDocument',
           size: doc.fileSize || null,
+          rejection: null,
         });
       }
     });
 
     return list;
-  }, [applicantKycRecord, verificationData]);
+  }, [applicantKycRecord, verificationData, applicationRejections, resolvedAppProdId]);
 
   // Extract real persisted manual documents / ZIP archives for Co-Applicants (dynamic)
   const coApplicantsManualDocs = useMemo(() => {
@@ -7743,6 +8100,7 @@ export default function CustomerVerification() {
       const list = [];
       const seenPaths = new Set();
       const kyc = co.kycRecord;
+      const coSeq = co.sequence !== undefined ? Number(co.sequence) : (co.number !== undefined ? Number(co.number) : (co.index + 1));
       if (kyc) {
         const docPathStr =
           kyc.documentPath ||
@@ -7775,11 +8133,21 @@ export default function CustomerVerification() {
                 ? cleanPath
                 : `${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPathRel)}`;
 
+            const manualRej = findLatestRejectionForManualSlot({
+              rejections: applicationRejections,
+              appProdId: resolvedAppProdId,
+              applicantSequence: coSeq,
+              kycDocumentId: kyc.applicationKYCDocumentId,
+              manualDocumentIndex: idx,
+            });
+
             list.push({
               id: kyc.applicationKYCDocumentId
                 ? `co_${co.number}_kyc_${kyc.applicationKYCDocumentId}_${idx}`
                 : `co_${co.number}_manual_${idx}`,
               applicationKYCDocumentId: kyc.applicationKYCDocumentId,
+              manualDocumentIndex: idx,
+              applicantSequence: coSeq,
               fileName,
               path: cleanPath,
               fileTypeLabel,
@@ -7790,6 +8158,7 @@ export default function CustomerVerification() {
               uploadedOn: kyc.createdAt || kyc.modifiedAt || null,
               source: 'ApplicationKYCDocuments',
               size: kyc.fileSize || null,
+              rejection: manualRej,
             });
           });
         }
@@ -7797,7 +8166,7 @@ export default function CustomerVerification() {
       map[co.index] = list;
     });
     return map;
-  }, [coApplicants]);
+  }, [coApplicants, applicationRejections, resolvedAppProdId]);
 
   // Combined manual documents for backwards compatibility
   const manualDocuments = useMemo(() => {
@@ -7851,8 +8220,9 @@ export default function CustomerVerification() {
 
     // 1. Profile Image (Step 02 / PROFILE_IMAGE)
     const profileRej = getActiveRejectionForApplicant(2, profileDocTypeId);
-    const hasProfileFile = Boolean(docPreviews.profile?.url || docPreviews.profile?.doc || profileRej?.currentDocumentPath);
-    const profileVerified = Boolean(stepVerifications[0]?.PROFILE_IMAGE?.isVerified) && !hasUnresolvedRejectionForStep('PROFILE_IMAGE', 0);
+    const canonicalProfilePath = applicantKycRecord?.profileImagePath || applicantKycRecord?.ProfileImagePath || null;
+    const hasProfileFile = Boolean(canonicalProfilePath || docPreviews.profile?.url || docPreviews.profile?.doc || profileRej?.currentDocumentPath);
+    const profileVerified = hasProfileFile && Boolean(stepVerifications[0]?.PROFILE_IMAGE?.isVerified) && !hasUnresolvedRejectionForStep('PROFILE_IMAGE', 0);
     const profileStatus = resolveRowStatus({ rejection: profileRej, hasFile: hasProfileFile, isVerified: profileVerified });
 
     rows.push({
@@ -7863,13 +8233,13 @@ export default function CustomerVerification() {
       icon: CameraIcon || UserIcon,
       hasFile: hasProfileFile,
       loading: Boolean(docPreviews.profile?.loading),
-      url: docPreviews.profile?.url || null,
+      url: hasProfileFile ? (docPreviews.profile?.url || null) : null,
       isImage: true,
       isPdf: false,
       isZip: false,
-      fileName: docPreviews.profile?.fileName || (hasProfileFile ? 'Applicant_Profile.jpg' : '—'),
-      fileSize: docPreviews.profile?.size || null,
-      uploadDate: docPreviews.profile?.doc?.createdAt || null,
+      fileName: hasProfileFile ? (docPreviews.profile?.fileName || 'Applicant_Profile.jpg') : '—',
+      fileSize: hasProfileFile ? (docPreviews.profile?.size || null) : null,
+      uploadDate: hasProfileFile ? (applicantKycRecord?.createdAt || null) : null,
       status: profileStatus,
       isVerified: profileVerified,
       rejection: profileRej,
@@ -7883,8 +8253,9 @@ export default function CustomerVerification() {
 
     // 2. Aadhaar Card (Step 03 / AADHAAR)
     const aadhaarRej = getActiveRejectionForApplicant(3, aadhaarDocTypeId);
-    const hasAadhaarFile = Boolean(docPreviews.aadhaar?.url || docPreviews.aadhaar?.doc || aadhaarRej?.currentDocumentPath);
-    const aadhaarVerified = Boolean(stepVerifications[0]?.AADHAAR?.isVerified) && !hasUnresolvedRejectionForStep('AADHAAR', 0);
+    const canonicalAadhaarPath = applicantKycRecord?.aadharDocumentPath || applicantKycRecord?.AadharDocumentPath || null;
+    const hasAadhaarFile = Boolean(canonicalAadhaarPath || docPreviews.aadhaar?.url || docPreviews.aadhaar?.doc || aadhaarRej?.currentDocumentPath);
+    const aadhaarVerified = hasAadhaarFile && Boolean(stepVerifications[0]?.AADHAAR?.isVerified) && !hasUnresolvedRejectionForStep('AADHAAR', 0);
     const aadhaarStatus = resolveRowStatus({ rejection: aadhaarRej, hasFile: hasAadhaarFile, isVerified: aadhaarVerified });
 
     rows.push({
@@ -7895,13 +8266,13 @@ export default function CustomerVerification() {
       icon: ShieldCheckIcon || FileTextIcon,
       hasFile: hasAadhaarFile,
       loading: Boolean(docPreviews.aadhaar?.loading),
-      url: docPreviews.aadhaar?.url || null,
+      url: hasAadhaarFile ? (docPreviews.aadhaar?.url || null) : null,
       isImage: isDocImage(docPreviews.aadhaar),
       isPdf: isDocPdf(docPreviews.aadhaar) || Boolean(docPreviews.aadhaar?.isPdf),
       isZip: false,
-      fileName: docPreviews.aadhaar?.fileName || docPreviews.aadhaar?.doc?.fileName || (hasAadhaarFile ? 'Applicant_Aadhaar.pdf' : '—'),
-      fileSize: docPreviews.aadhaar?.size || docPreviews.aadhaar?.doc?.fileSize || null,
-      uploadDate: docPreviews.aadhaar?.doc?.createdAt || null,
+      fileName: hasAadhaarFile ? (docPreviews.aadhaar?.fileName || docPreviews.aadhaar?.doc?.fileName || 'Applicant_Aadhaar.pdf') : '—',
+      fileSize: hasAadhaarFile ? (docPreviews.aadhaar?.size || docPreviews.aadhaar?.doc?.fileSize || null) : null,
+      uploadDate: hasAadhaarFile ? (applicantKycRecord?.createdAt || null) : null,
       status: aadhaarStatus,
       isVerified: aadhaarVerified,
       rejection: aadhaarRej,
@@ -7915,8 +8286,9 @@ export default function CustomerVerification() {
 
     // 3. PAN Card (Step 04 / PAN)
     const panRej = getActiveRejectionForApplicant(4, panDocTypeId);
-    const hasPanFile = Boolean(docPreviews.pan?.url || docPreviews.pan?.doc || panRej?.currentDocumentPath);
-    const panVerified = Boolean(stepVerifications[0]?.PAN?.isVerified) && !hasUnresolvedRejectionForStep('PAN', 0);
+    const canonicalPanPath = applicantKycRecord?.panCardPath || applicantKycRecord?.PanCardPath || applicantKycRecord?.PANCardPath || null;
+    const hasPanFile = Boolean(canonicalPanPath || docPreviews.pan?.url || docPreviews.pan?.doc || panRej?.currentDocumentPath);
+    const panVerified = hasPanFile && Boolean(stepVerifications[0]?.PAN?.isVerified) && !hasUnresolvedRejectionForStep('PAN', 0);
     const panStatus = resolveRowStatus({ rejection: panRej, hasFile: hasPanFile, isVerified: panVerified });
 
     rows.push({
@@ -7927,13 +8299,13 @@ export default function CustomerVerification() {
       icon: LandmarkIcon || FileTextIcon,
       hasFile: hasPanFile,
       loading: Boolean(docPreviews.pan?.loading),
-      url: docPreviews.pan?.url || null,
+      url: hasPanFile ? (docPreviews.pan?.url || null) : null,
       isImage: isDocImage(docPreviews.pan),
       isPdf: isDocPdf(docPreviews.pan) || Boolean(docPreviews.pan?.isPdf),
       isZip: false,
-      fileName: docPreviews.pan?.fileName || docPreviews.pan?.doc?.fileName || (hasPanFile ? 'Applicant_PAN.pdf' : '—'),
-      fileSize: docPreviews.pan?.size || docPreviews.pan?.doc?.fileSize || null,
-      uploadDate: docPreviews.pan?.doc?.createdAt || null,
+      fileName: hasPanFile ? (docPreviews.pan?.fileName || docPreviews.pan?.doc?.fileName || 'Applicant_PAN.pdf') : '—',
+      fileSize: hasPanFile ? (docPreviews.pan?.size || docPreviews.pan?.doc?.fileSize || null) : null,
+      uploadDate: hasPanFile ? (applicantKycRecord?.createdAt || null) : null,
       status: panStatus,
       isVerified: panVerified,
       rejection: panRej,
@@ -7950,7 +8322,7 @@ export default function CustomerVerification() {
     const salaryPreview = applicantFinancialDocs.salarySlip?.preview;
     const salaryData = applicantFinancialDocs.salarySlip?.data;
     const hasSalaryFile = Boolean(salaryPreview?.url || salaryData || salaryRej?.currentDocumentPath);
-    const salaryVerified = Boolean(stepVerifications[0]?.SALARY_SLIP?.isVerified) && !hasUnresolvedRejectionForStep('SALARY_SLIP', 0);
+    const salaryVerified = hasSalaryFile && Boolean(stepVerifications[0]?.SALARY_SLIP?.isVerified) && !hasUnresolvedRejectionForStep('SALARY_SLIP', 0);
     const salaryStatus = resolveRowStatus({ rejection: salaryRej, hasFile: hasSalaryFile, isVerified: salaryVerified });
 
     rows.push({
@@ -7984,7 +8356,7 @@ export default function CustomerVerification() {
     const bankPreview = applicantFinancialDocs.bankStatement?.preview;
     const bankData = applicantFinancialDocs.bankStatement?.data;
     const hasBankFile = Boolean(bankPreview?.url || bankData || bankRej?.currentDocumentPath);
-    const bankVerified = Boolean(stepVerifications[0]?.BANK_STATEMENT?.isVerified) && !hasUnresolvedRejectionForStep('BANK_STATEMENT', 0);
+    const bankVerified = hasBankFile && Boolean(stepVerifications[0]?.BANK_STATEMENT?.isVerified) && !hasUnresolvedRejectionForStep('BANK_STATEMENT', 0);
     const bankStatus = resolveRowStatus({ rejection: bankRej, hasFile: hasBankFile, isVerified: bankVerified });
 
     rows.push({
@@ -8016,7 +8388,7 @@ export default function CustomerVerification() {
     // 6. ZIP / Archive Package (Step 07 / ZIP_ARCHIVE)
     const zipRej = getActiveRejectionForApplicant(7);
     const hasZipFile = Boolean(docPreviews.zip?.doc || docPreviews.zip?.url || applicantManualDocs?.length > 0 || zipRej?.currentDocumentPath);
-    const zipVerified = Boolean(stepVerifications[0]?.ZIP_ARCHIVE?.isVerified) && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE', 0);
+    const zipVerified = hasZipFile && Boolean(stepVerifications[0]?.ZIP_ARCHIVE?.isVerified) && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE', 0);
     const zipStatus = resolveRowStatus({ rejection: zipRej, hasFile: hasZipFile, isVerified: zipVerified });
 
     rows.push({
@@ -8041,7 +8413,7 @@ export default function CustomerVerification() {
       kycId: applicantKycId,
       isCoApplicant: false,
       applicantSequence: 0,
-      documentTypeId: null,
+      documentTypeId: zipArchiveDocTypeId || null,
       rejectedDocumentType: 'ZIP_ARCHIVE',
       manualDocs: applicantManualDocs,
     });
@@ -8055,6 +8427,7 @@ export default function CustomerVerification() {
     CameraIcon,
     UserIcon,
     applicantKycId,
+    applicantKycRecord,
     profileDocTypeId,
     ShieldCheckIcon,
     FileTextIcon,
@@ -8069,6 +8442,7 @@ export default function CustomerVerification() {
     BuildingIcon,
     applicantManualDocs,
     FileCheckIcon,
+    zipArchiveDocTypeId,
   ]);
 
   const selectedCoApplicant = useMemo(() => {
@@ -8081,8 +8455,26 @@ export default function CustomerVerification() {
     const co = selectedCoApplicant;
     const coIdx = co.index !== undefined ? co.index : 0;
     const coSeq = co.sequence !== undefined ? co.sequence : (coIdx + 1);
-    const coKycId = co.kycDocumentId;
     const coNumber = co.number || (coIdx + 1);
+    const coKyc =
+      co.kycRecord ||
+      co.kyc ||
+      (resolvedKycList || []).find(
+        (k) =>
+          k &&
+          k.isActive !== false &&
+          k.IsActive !== false &&
+          !isApplicantDocumentTuple(k) &&
+          Number(k.applicantSequence ?? k.ApplicantSequence) === coSeq
+      ) ||
+      {};
+    const coKycId =
+      co.kycDocumentId ||
+      coKyc.applicationKYCDocumentId ||
+      coKyc.ApplicationKYCDocumentId ||
+      coKyc.kycDocumentId ||
+      coKyc.id ||
+      null;
 
     const rows = [];
     const coPrev = coDocPreviews[coIdx] || {};
@@ -8091,8 +8483,9 @@ export default function CustomerVerification() {
 
     // 1. Profile Image
     const profileRej = getActiveRejectionForCoApplicant(coKycId, 2, coSeq);
-    const hasProfile = Boolean(coPrev.profile?.url || profileRej?.currentDocumentPath);
-    const profileVerified = Boolean(stepVerifications[coSeq]?.PROFILE_IMAGE?.isVerified) && !hasUnresolvedRejectionForStep('PROFILE_IMAGE', coSeq);
+    const canonicalCoProfile = coKyc.profileImagePath || coKyc.ProfileImagePath || null;
+    const hasProfile = Boolean(canonicalCoProfile || coPrev.profile?.url || coPrev.profile?.doc || profileRej?.currentDocumentPath);
+    const profileVerified = hasProfile && Boolean(stepVerifications[coSeq]?.PROFILE_IMAGE?.isVerified) && !hasUnresolvedRejectionForStep('PROFILE_IMAGE', coSeq);
     const profileStatus = resolveRowStatus({ rejection: profileRej, hasFile: hasProfile, isVerified: profileVerified });
 
     rows.push({
@@ -8103,13 +8496,13 @@ export default function CustomerVerification() {
       icon: CameraIcon || UserIcon,
       hasFile: hasProfile,
       loading: Boolean(coPrev.profile?.loading),
-      url: coPrev.profile?.url || null,
+      url: hasProfile ? (coPrev.profile?.url || null) : null,
       isImage: true,
       isPdf: false,
       isZip: false,
-      fileName: coPrev.profile?.fileName || (hasProfile ? `CoApplicant_${coNumber}_Profile.jpg` : '—'),
-      fileSize: coPrev.profile?.size || null,
-      uploadDate: null,
+      fileName: hasProfile ? (coPrev.profile?.fileName || `CoApplicant_${coNumber}_Profile.jpg`) : '—',
+      fileSize: hasProfile ? (coPrev.profile?.size || null) : null,
+      uploadDate: hasProfile ? (coKyc.createdAt || coKyc.CreatedAt || null) : null,
       status: profileStatus,
       isVerified: profileVerified,
       rejection: profileRej,
@@ -8124,8 +8517,9 @@ export default function CustomerVerification() {
 
     // 2. Aadhaar Card
     const aadhaarRej = getActiveRejectionForCoApplicant(coKycId, 3, coSeq);
-    const hasAadhaar = Boolean(coPrev.aadhaar?.url || aadhaarRej?.currentDocumentPath);
-    const aadhaarVerified = Boolean(stepVerifications[coSeq]?.AADHAAR?.isVerified) && !hasUnresolvedRejectionForStep('AADHAAR', coSeq);
+    const canonicalCoAadhaar = coKyc.aadharDocumentPath || coKyc.AadharDocumentPath || null;
+    const hasAadhaar = Boolean(canonicalCoAadhaar || coPrev.aadhaar?.url || coPrev.aadhaar?.doc || aadhaarRej?.currentDocumentPath);
+    const aadhaarVerified = hasAadhaar && Boolean(stepVerifications[coSeq]?.AADHAAR?.isVerified) && !hasUnresolvedRejectionForStep('AADHAAR', coSeq);
     const aadhaarStatus = resolveRowStatus({ rejection: aadhaarRej, hasFile: hasAadhaar, isVerified: aadhaarVerified });
 
     rows.push({
@@ -8136,13 +8530,13 @@ export default function CustomerVerification() {
       icon: ShieldCheckIcon || FileTextIcon,
       hasFile: hasAadhaar,
       loading: Boolean(coPrev.aadhaar?.loading),
-      url: coPrev.aadhaar?.url || null,
+      url: hasAadhaar ? (coPrev.aadhaar?.url || null) : null,
       isImage: isDocImage(coPrev.aadhaar),
       isPdf: isDocPdf(coPrev.aadhaar) || Boolean(coPrev.aadhaar?.isPdf),
       isZip: false,
-      fileName: coPrev.aadhaar?.fileName || (hasAadhaar ? `CoApplicant_${coNumber}_Aadhaar.pdf` : '—'),
-      fileSize: coPrev.aadhaar?.size || null,
-      uploadDate: null,
+      fileName: hasAadhaar ? (coPrev.aadhaar?.fileName || coPrev.aadhaar?.doc?.fileName || `CoApplicant_${coNumber}_Aadhaar.pdf`) : '—',
+      fileSize: hasAadhaar ? (coPrev.aadhaar?.size || coPrev.aadhaar?.doc?.fileSize || null) : null,
+      uploadDate: hasAadhaar ? (coKyc.createdAt || coKyc.CreatedAt || null) : null,
       status: aadhaarStatus,
       isVerified: aadhaarVerified,
       rejection: aadhaarRej,
@@ -8157,8 +8551,9 @@ export default function CustomerVerification() {
 
     // 3. PAN Card
     const panRej = getActiveRejectionForCoApplicant(coKycId, 4, coSeq);
-    const hasPan = Boolean(coPrev.pan?.url || panRej?.currentDocumentPath);
-    const panVerified = Boolean(stepVerifications[coSeq]?.PAN?.isVerified) && !hasUnresolvedRejectionForStep('PAN', coSeq);
+    const canonicalCoPan = coKyc.panCardPath || coKyc.PanCardPath || coKyc.PANCardPath || null;
+    const hasPan = Boolean(canonicalCoPan || coPrev.pan?.url || coPrev.pan?.doc || panRej?.currentDocumentPath);
+    const panVerified = hasPan && Boolean(stepVerifications[coSeq]?.PAN?.isVerified) && !hasUnresolvedRejectionForStep('PAN', coSeq);
     const panStatus = resolveRowStatus({ rejection: panRej, hasFile: hasPan, isVerified: panVerified });
 
     rows.push({
@@ -8169,13 +8564,13 @@ export default function CustomerVerification() {
       icon: LandmarkIcon || FileTextIcon,
       hasFile: hasPan,
       loading: Boolean(coPrev.pan?.loading),
-      url: coPrev.pan?.url || null,
+      url: hasPan ? (coPrev.pan?.url || null) : null,
       isImage: isDocImage(coPrev.pan),
       isPdf: isDocPdf(coPrev.pan) || Boolean(coPrev.pan?.isPdf),
       isZip: false,
-      fileName: coPrev.pan?.fileName || (hasPan ? `CoApplicant_${coNumber}_PAN.pdf` : '—'),
-      fileSize: coPrev.pan?.size || null,
-      uploadDate: null,
+      fileName: hasPan ? (coPrev.pan?.fileName || coPrev.pan?.doc?.fileName || `CoApplicant_${coNumber}_PAN.pdf`) : '—',
+      fileSize: hasPan ? (coPrev.pan?.size || coPrev.pan?.doc?.fileSize || null) : null,
+      uploadDate: hasPan ? (coKyc.createdAt || coKyc.CreatedAt || null) : null,
       status: panStatus,
       isVerified: panVerified,
       rejection: panRej,
@@ -8193,7 +8588,7 @@ export default function CustomerVerification() {
     const salPrev = coFin.salarySlip?.preview;
     const salData = coFin.salarySlip?.data;
     const hasSal = Boolean(salPrev?.url || salData || salRej?.currentDocumentPath);
-    const salVerified = Boolean(stepVerifications[coSeq]?.SALARY_SLIP?.isVerified) && !hasUnresolvedRejectionForStep('SALARY_SLIP', coSeq);
+    const salVerified = hasSal && Boolean(stepVerifications[coSeq]?.SALARY_SLIP?.isVerified) && !hasUnresolvedRejectionForStep('SALARY_SLIP', coSeq);
     const salStatus = resolveRowStatus({ rejection: salRej, hasFile: hasSal, isVerified: salVerified });
 
     rows.push({
@@ -8228,7 +8623,7 @@ export default function CustomerVerification() {
     const bankPrev = coFin.bankStatement?.preview;
     const bankData = coFin.bankStatement?.data;
     const hasBank = Boolean(bankPrev?.url || bankData || bankRej?.currentDocumentPath);
-    const bankVerified = Boolean(stepVerifications[coSeq]?.BANK_STATEMENT?.isVerified) && !hasUnresolvedRejectionForStep('BANK_STATEMENT', coSeq);
+    const bankVerified = hasBank && Boolean(stepVerifications[coSeq]?.BANK_STATEMENT?.isVerified) && !hasUnresolvedRejectionForStep('BANK_STATEMENT', coSeq);
     const bankStatus = resolveRowStatus({ rejection: bankRej, hasFile: hasBank, isVerified: bankVerified });
 
     rows.push({
@@ -8261,7 +8656,7 @@ export default function CustomerVerification() {
     // 6. ZIP / Archive Package
     const zipRej = getActiveRejectionForCoApplicant(coKycId, 7, coSeq);
     const hasZip = Boolean(coPrev.zip?.url || coManual.length > 0 || zipRej?.currentDocumentPath);
-    const zipVerified = Boolean(stepVerifications[coSeq]?.ZIP_ARCHIVE?.isVerified) && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE', coSeq);
+    const zipVerified = hasZip && Boolean(stepVerifications[coSeq]?.ZIP_ARCHIVE?.isVerified) && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE', coSeq);
     const zipStatus = resolveRowStatus({ rejection: zipRej, hasFile: hasZip, isVerified: zipVerified });
 
     rows.push({
@@ -8286,7 +8681,7 @@ export default function CustomerVerification() {
       kycId: coKycId,
       isCoApplicant: true,
       applicantSequence: coSeq,
-      documentTypeId: null,
+      documentTypeId: zipArchiveDocTypeId || null,
       rejectedDocumentType: 'ZIP_ARCHIVE',
       manualDocs: coManual,
       coNumber,
@@ -8295,6 +8690,7 @@ export default function CustomerVerification() {
     return rows;
   }, [
     selectedCoApplicant,
+    resolvedKycList,
     coDocPreviews,
     coApplicantsFinancialDocs,
     coApplicantsManualDocs,
@@ -8315,7 +8711,18 @@ export default function CustomerVerification() {
     bankStatementDocTypeId,
     BuildingIcon,
     FileCheckIcon,
+    zipArchiveDocTypeId,
   ]);
+
+  const applicantVerifiedCount = useMemo(() => {
+    return applicantDocRows.filter((r) => r.isVerified && r.hasFile).length;
+  }, [applicantDocRows]);
+
+  const coApplicantVerifiedCount = useMemo(() => {
+    return coApplicantDocRows.filter((r) => r.isVerified && r.hasFile).length;
+  }, [coApplicantDocRows]);
+
+  const verifiedDocumentCount = applicantVerifiedCount;
 
   const handleRowView = useCallback((row) => {
     if (!row.hasFile) return;
@@ -8335,14 +8742,18 @@ export default function CustomerVerification() {
       uploadDate: row.uploadDate,
       comparison: row.comparison,
       rejectionId: row.rejection?.backOfficeDocumentRejectionId || row.rejection?.id || row.rejection?.agentCustomerRejectionId,
+      rejection: row.rejection,
       stepLabel: `${row.isCoApplicant ? `Co-Applicant ${row.coNumber || selectedCoApplicantIndex + 1}` : 'Applicant'} ${row.docType}`,
       stepNum: row.stepNum,
+      stepCode: row.stepCode,
       kycId: row.kycId,
       isCoApplicant: row.isCoApplicant,
       applicantSequence: row.applicantSequence,
       documentTypeId: row.documentTypeId,
       rejectedDocumentType: row.rejectedDocumentType,
       manualDocs: row.manualDocs,
+      isVerified: row.isVerified,
+      status: row.status,
     });
   }, [handleOpenPreviewModal, selectedCoApplicantIndex, selectedCoApplicant, applicantName]);
 
@@ -8355,8 +8766,10 @@ export default function CustomerVerification() {
     }
   }, [handleDownloadFile, handleDownloadManualDoc]);
 
-    const handleRowReturn = useCallback((row) => {
-    if (!row.hasFile) return;
+  const handleRowReturn = useCallback((row) => {
+    if (!row || !row.hasFile) return;
+    const isIdentity = ['PROFILE_IMAGE', 'AADHAAR', 'PAN'].includes(row.stepCode);
+    if (isIdentity && !row.hasFile) return;
     const label = `${row.isCoApplicant ? `Co-Applicant ${row.coNumber || selectedCoApplicantIndex + 1}` : 'Applicant'} ${row.docType}`;
     handleOpenRejectConfirm(
       row.stepNum,
@@ -8371,14 +8784,29 @@ export default function CustomerVerification() {
 
   const handleToggleRowVerification = useCallback(async (row) => {
     if (!row || !row.hasFile) return;
-    if (row.status === 'Returned to RM' || row.status === 'Returned' || row.status === 'Resubmitted') return;
+    if (row.status === 'Returned to RM' || row.status === 'Returned') return;
+
     const seq =
       row.applicantSequence !== undefined && row.applicantSequence !== null && !isNaN(Number(row.applicantSequence))
         ? Number(row.applicantSequence)
-        : (row.isCoApplicant ? 1 : 0);
-    if (hasUnresolvedRejectionForStep(row.stepCode, seq)) return;
+        : (row.isCoApplicant ? (selectedCoApplicantIndex + 1) : 0);
+
     const rowKey = `${seq}_${row.stepCode}`;
     if (savingVerificationKey === rowKey) return;
+
+    // If row is in 'Resubmitted' status with an active rejection ID, verify the rejection directly
+    if (row.status === 'Resubmitted' && row.rejection?.backOfficeDocumentRejectionId) {
+      const stepLabel = `${row.isCoApplicant ? `Co-Applicant ${row.coNumber || seq}` : 'Applicant'} ${row.docType}`;
+      await handleVerifyRejection(
+        row.rejection.backOfficeDocumentRejectionId,
+        stepLabel,
+        row.stepNum,
+        seq
+      );
+      return;
+    }
+
+    if (hasUnresolvedRejectionForStep(row.stepCode, seq)) return;
 
     const currentVerified = Boolean(row.isVerified);
     const nextVerified = !currentVerified;
@@ -8391,7 +8819,7 @@ export default function CustomerVerification() {
       remarks: currentRemarks,
       stepNum: row.stepNum,
     });
-  }, [hasUnresolvedRejectionForStep, savingVerificationKey, stepRemarks, handleSaveStepVerification]);
+  }, [hasUnresolvedRejectionForStep, savingVerificationKey, stepRemarks, handleSaveStepVerification, handleVerifyRejection, selectedCoApplicantIndex]);
 
 
   // Staged loading effect for CIBIL simulation (approx 2.3s)
@@ -8970,7 +9398,7 @@ export default function CustomerVerification() {
                     </div>
                     <div className="bo-cv-doc-card-header-right">
                       <span className="bo-cv-doc-card-count-badge">
-                        {applicantDocRows.filter((r) => r.hasFile).length} of {applicantDocRows.length} Available
+                        {applicantVerifiedCount} of {applicantDocRows.length} Verified
                       </span>
                     </div>
                   </div>
@@ -8996,8 +9424,7 @@ export default function CustomerVerification() {
                             !row.hasFile ||
                             row.status === 'Returned to RM' ||
                             row.status === 'Returned' ||
-                            row.status === 'Resubmitted' ||
-                            hasUnresolvedRejectionForStep(row.stepCode, 0) ||
+                            (row.status !== 'Resubmitted' && hasUnresolvedRejectionForStep(row.stepCode, 0)) ||
                             isThisRowSaving;
 
                           return (
@@ -9067,7 +9494,7 @@ export default function CustomerVerification() {
                                       : row.status === 'Returned to RM' || row.status === 'Returned'
                                       ? 'Cannot verify: Document is returned to RM'
                                       : row.status === 'Resubmitted'
-                                      ? 'Cannot verify: Resubmitted document must be verified via comparison review'
+                                      ? 'Click to verify resubmitted document'
                                       : hasUnresolvedRejectionForStep(row.stepCode, 0)
                                       ? 'Cannot verify: Unresolved rejection pending for this document'
                                       : row.isVerified
@@ -9116,7 +9543,13 @@ export default function CustomerVerification() {
                                   <button
                                     type="button"
                                     className="bo-cv-doc-action-btn bo-cv-doc-action-btn--return"
-                                    title={row.hasFile ? 'Return document to RM' : 'Document not available'}
+                                    title={
+                                      !row.hasFile
+                                        ? (['PROFILE_IMAGE', 'AADHAAR', 'PAN'].includes(row.stepCode)
+                                            ? 'Identity document file is not available for return.'
+                                            : 'Document not available')
+                                        : 'Return document to RM'
+                                    }
                                     disabled={!row.hasFile}
                                     onClick={() => handleRowReturn(row)}
                                   >
@@ -9217,8 +9650,7 @@ export default function CustomerVerification() {
                               !row.hasFile ||
                               row.status === 'Returned to RM' ||
                               row.status === 'Returned' ||
-                              row.status === 'Resubmitted' ||
-                              hasUnresolvedRejectionForStep(row.stepCode, row.applicantSequence) ||
+                              (row.status !== 'Resubmitted' && hasUnresolvedRejectionForStep(row.stepCode, row.applicantSequence)) ||
                               isThisRowSaving;
 
                             return (
@@ -9288,7 +9720,7 @@ export default function CustomerVerification() {
                                         : row.status === 'Returned to RM' || row.status === 'Returned'
                                         ? 'Cannot verify: Document is returned to RM'
                                         : row.status === 'Resubmitted'
-                                        ? 'Cannot verify: Resubmitted document must be verified via comparison review'
+                                        ? 'Click to verify resubmitted document'
                                         : hasUnresolvedRejectionForStep(row.stepCode, row.applicantSequence)
                                         ? 'Cannot verify: Unresolved rejection pending for this document'
                                         : row.isVerified
@@ -9337,7 +9769,13 @@ export default function CustomerVerification() {
                                     <button
                                       type="button"
                                       className="bo-cv-doc-action-btn bo-cv-doc-action-btn--return"
-                                      title={row.hasFile ? 'Return document to RM' : 'Document not available'}
+                                      title={
+                                        !row.hasFile
+                                          ? (['PROFILE_IMAGE', 'AADHAAR', 'PAN'].includes(row.stepCode)
+                                              ? 'Identity document file is not available for return.'
+                                              : 'Document not available')
+                                          : 'Return document to RM'
+                                      }
                                       disabled={!row.hasFile}
                                       onClick={() => handleRowReturn(row)}
                                     >
@@ -14354,7 +14792,12 @@ export default function CustomerVerification() {
                     {/* Previous (Rejected) Document */}
                     <div className="bo-cv-preview-comp-col is-previous">
                       <div className="bo-cv-preview-comp-header">
-                        <span className="bo-cv-preview-comp-badge is-rejected">Previous Version (Rejected)</span>
+                        <span className="bo-cv-preview-comp-badge is-rejected">
+                          {previewModal.comparison.rejection?.manualDocumentIndex !== undefined &&
+                          previewModal.comparison.rejection?.manualDocumentIndex !== null
+                            ? `Manual Document ${Number(previewModal.comparison.rejection.manualDocumentIndex) + 1} — Previous Version (Rejected)`
+                            : 'Previous Version (Rejected)'}
+                        </span>
                         {(previewModal.comparison.rejection?.rejectionRemarks || previewModal.comparison.rejection?.remarks) && (
                           <div className="bo-cv-preview-comp-reason">
                             <strong>Reason: </strong>{previewModal.comparison.rejection.rejectionRemarks || previewModal.comparison.rejection.remarks}
@@ -14378,7 +14821,11 @@ export default function CustomerVerification() {
                           )
                         ) : (
                           <div className="bo-cv-preview-empty-box">
-                            <span>Previous version not available for preview</span>
+                            <span>
+                              {previewModal.comparison.oldDoc?.error ||
+                                previewModal.comparison.note ||
+                                'Previous version file is no longer available on the server.'}
+                            </span>
                           </div>
                         )}
                       </div>
@@ -14398,7 +14845,12 @@ export default function CustomerVerification() {
                     {/* New (Resubmitted) Document */}
                     <div className="bo-cv-preview-comp-col is-resubmitted">
                       <div className="bo-cv-preview-comp-header">
-                        <span className="bo-cv-preview-comp-badge is-resubmitted">New Version (Resubmitted)</span>
+                        <span className="bo-cv-preview-comp-badge is-resubmitted">
+                          {previewModal.comparison.rejection?.manualDocumentIndex !== undefined &&
+                          previewModal.comparison.rejection?.manualDocumentIndex !== null
+                            ? `Manual Document ${Number(previewModal.comparison.rejection.manualDocumentIndex) + 1} — New Version (Resubmitted)`
+                            : 'New Version (Resubmitted)'}
+                        </span>
                         <div className="bo-cv-preview-comp-reason">
                           Ready for Underwriting Verification
                         </div>
@@ -14441,6 +14893,37 @@ export default function CustomerVerification() {
               ) : previewModal.isZip ? (
                 /* ZIP / Archive manual docs view */
                 <div className="bo-cv-preview-zip-view">
+                  {previewModal.status === 'Resubmitted' && previewModal.rejection && (
+                    <div className="bo-cv-preview-resubmit-alert" style={{ marginBottom: '16px' }}>
+                      <div className="bo-cv-preview-resubmit-alert-left">
+                        <strong>🔄 Resubmitted Package</strong>
+                        <span>
+                          {previewModal.rejection.rejectionRemarks || previewModal.rejection.remarks
+                            ? `Previous rejection reason: "${previewModal.rejection.rejectionRemarks || previewModal.rejection.remarks}". Resubmitted package is ready for review.`
+                            : 'Resubmitted package is ready for underwriting review.'}
+                        </span>
+                      </div>
+                      {previewModal.rejectionId && (
+                        <button
+                          type="button"
+                          className="bo-cv-preview-btn-verify-resubmitted"
+                          disabled={isVerifyingRejection}
+                          onClick={async () => {
+                            await handleVerifyRejection(
+                              previewModal.rejectionId,
+                              previewModal.stepLabel,
+                              previewModal.stepNum,
+                              previewModal.applicantSequence
+                            );
+                            handleClosePreviewModal();
+                          }}
+                        >
+                          {isVerifyingRejection ? 'Verifying...' : '✓ Verify Resubmitted Package'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   <div className="bo-cv-preview-zip-banner">
                     <div className="bo-cv-preview-zip-icon">
                       {FileCheckIcon ? <FileCheckIcon size={32} /> : <span>📦</span>}
@@ -14458,22 +14941,114 @@ export default function CustomerVerification() {
                   {previewModal.manualDocs && previewModal.manualDocs.length > 0 && (
                     <div className="bo-cv-preview-zip-list">
                       <div className="bo-cv-preview-zip-list-title">Archive Files</div>
-                      {previewModal.manualDocs.map((doc, idx) => (
-                        <div key={doc.id || doc.agentCustomerDocumentId || idx} className="bo-cv-preview-zip-item">
-                          <div className="bo-cv-preview-zip-item-left">
-                            <span className="bo-cv-preview-zip-item-num">{idx + 1}</span>
-                            <span className="bo-cv-preview-zip-item-name">{doc.fileName || doc.documentTypeName || `Document_${idx + 1}`}</span>
-                            {doc.fileSize && <span className="bo-cv-preview-zip-item-size">({formatFileSize(doc.fileSize)})</span>}
+                      {previewModal.manualDocs.map((doc, idx) => {
+                        const slotIdx =
+                          doc.manualDocumentIndex !== undefined && doc.manualDocumentIndex !== null
+                            ? Number(doc.manualDocumentIndex)
+                            : idx;
+                        const slotLabel = `Manual Document ${slotIdx + 1}`;
+                        const docRej = doc.rejection;
+                        const isReturned = docRej?.status === 'ReturnedToRM' || docRej?.status?.toLowerCase() === 'returned';
+                        const isResubmitted = docRej?.status === 'Resubmitted' || docRej?.status?.toLowerCase() === 'resubmitted';
+                        const isVerified = docRej?.status === 'Verified';
+
+                        return (
+                          <div key={doc.id || doc.agentCustomerDocumentId || slotIdx} className="bo-cv-preview-zip-item">
+                            <div className="bo-cv-preview-zip-item-left">
+                              <span className="bo-cv-preview-zip-item-num">{slotIdx + 1}</span>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                  <span style={{ fontWeight: 600, fontSize: '12px', color: '#334155' }}>{slotLabel}:</span>
+                                  <span className="bo-cv-preview-zip-item-name">{doc.fileName || doc.documentTypeName || `Document_${slotIdx + 1}`}</span>
+                                  {doc.fileSize && <span className="bo-cv-preview-zip-item-size">({formatFileSize(doc.fileSize)})</span>}
+                                  {isReturned && (
+                                    <span className="bo-cv-pill-returned" style={{ fontSize: '11px', padding: '2px 6px' }}>⚠️ Returned to RM</span>
+                                  )}
+                                  {isResubmitted && (
+                                    <span className="bo-cv-pill-resubmitted" style={{ fontSize: '11px', padding: '2px 6px' }}>🔄 Resubmitted</span>
+                                  )}
+                                  {isVerified && (
+                                    <span className="bo-cv-pill-verified" style={{ fontSize: '11px', padding: '2px 6px' }}>✓ Verified</span>
+                                  )}
+                                </div>
+                                {(docRej?.rejectionRemarks || docRej?.remarks) && (
+                                  <span style={{ fontSize: '11px', color: '#b91c1c' }}>
+                                    Reason: {docRej.rejectionRemarks || docRej.remarks}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {isResubmitted && (
+                                <button
+                                  type="button"
+                                  className="bo-btn bo-btn--outline"
+                                  style={{ fontSize: '11px', padding: '4px 8px', borderColor: '#2563eb', color: '#2563eb' }}
+                                  onClick={async () => {
+                                    const oldPromise = docRej.originalDocumentPath
+                                      ? fetchKycDocByPath(docRej.originalDocumentPath, `${previewModal.personLabel || 'Applicant'}_Manual_Doc_${slotIdx + 1}_Old`)
+                                      : Promise.resolve(null);
+                                    const newPromise = docRej.currentDocumentPath
+                                      ? fetchKycDocByPath(docRej.currentDocumentPath, `${previewModal.personLabel || 'Applicant'}_Manual_Doc_${slotIdx + 1}`)
+                                      : Promise.resolve(null);
+
+                                    const [oldRes, newRes] = await Promise.all([oldPromise, newPromise]);
+                                    setPreviewModal((prev) => ({
+                                      ...prev,
+                                      title: `Manual Document ${slotIdx + 1} Comparison — ${prev.personLabel}`,
+                                      isComparison: true,
+                                      comparison: {
+                                        oldDoc: oldRes,
+                                        newDoc: newRes,
+                                        hasOldVersion: Boolean(oldRes?.url),
+                                        hasNewVersion: Boolean(newRes?.url),
+                                        note: !oldRes?.url
+                                          ? (!docRej.originalDocumentPath
+                                              ? 'Prior version path was not recorded for this rejection.'
+                                              : (oldRes?.error || 'Previous version could not be retrieved from server.'))
+                                          : null,
+                                        rejection: docRej,
+                                      },
+                                      rejectionId: docRej.backOfficeDocumentRejectionId || docRej.id,
+                                      rejection: docRej,
+                                    }));
+                                  }}
+                                >
+                                  Compare
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="bo-cv-btn-download-sm"
+                                onClick={() => handleDownloadManualDoc(doc)}
+                              >
+                                {DownloadIcon ? <DownloadIcon size={13} /> : '⬇'} Download
+                              </button>
+                              {!isReturned && !isResubmitted && (
+                                <button
+                                  type="button"
+                                  className="bo-btn bo-btn--outline"
+                                  style={{ fontSize: '11px', padding: '4px 8px', borderColor: '#dc2626', color: '#dc2626' }}
+                                  onClick={() => {
+                                    handleOpenRejectConfirm(
+                                      previewModal.stepNum || 7,
+                                      `${previewModal.personLabel || 'Applicant'} ${slotLabel}`,
+                                      doc.applicationKYCDocumentId || previewModal.kycId,
+                                      previewModal.isCoApplicant,
+                                      previewModal.applicantSequence,
+                                      previewModal.documentTypeId,
+                                      'ZIP_ARCHIVE',
+                                      slotIdx
+                                    );
+                                  }}
+                                >
+                                  Return
+                                </button>
+                              )}
+                            </div>
                           </div>
-                          <button
-                            type="button"
-                            className="bo-cv-btn-download-sm"
-                            onClick={() => handleDownloadManualDoc(doc)}
-                          >
-                            {DownloadIcon ? <DownloadIcon size={13} /> : '⬇'} Download
-                          </button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -14507,6 +15082,65 @@ export default function CustomerVerification() {
 
             {/* Modal Footer */}
             <div className="bo-cv-preview-modal-footer">
+              {previewModal.isZip && !previewModal.isVerified && (
+                <button
+                  type="button"
+                  className="bo-btn bo-btn--primary bo-cv-preview-btn-verify-action"
+                  disabled={
+                    previewModal.status === 'Returned to RM' ||
+                    previewModal.status === 'Returned' ||
+                    isVerifyingRejection ||
+                    savingVerificationKey === `${previewModal.applicantSequence || 0}_ZIP_ARCHIVE`
+                  }
+                  onClick={async () => {
+                    if (previewModal.status === 'Resubmitted' && previewModal.rejectionId) {
+                      await handleVerifyRejection(
+                        previewModal.rejectionId,
+                        previewModal.stepLabel,
+                        previewModal.stepNum,
+                        previewModal.applicantSequence
+                      );
+                    } else {
+                      const seq = Number(previewModal.applicantSequence || 0);
+                      const currentRemarks = (stepRemarks[previewModal.stepNum || 7] || '').trim();
+                      await handleSaveStepVerification({
+                        applicantSequence: seq,
+                        stepCode: 'ZIP_ARCHIVE',
+                        isVerified: true,
+                        remarks: currentRemarks,
+                        stepNum: previewModal.stepNum || 7,
+                      });
+                    }
+                    handleClosePreviewModal();
+                  }}
+                >
+                  ✓ Verify Package
+                </button>
+              )}
+              {previewModal.isZip && previewModal.isVerified && (
+                <button
+                  type="button"
+                  className="bo-btn bo-btn--outline bo-cv-preview-btn-unverify-action"
+                  disabled={
+                    isVerifyingRejection ||
+                    savingVerificationKey === `${previewModal.applicantSequence || 0}_ZIP_ARCHIVE`
+                  }
+                  onClick={async () => {
+                    const seq = Number(previewModal.applicantSequence || 0);
+                    const currentRemarks = (stepRemarks[previewModal.stepNum || 7] || '').trim();
+                    await handleSaveStepVerification({
+                      applicantSequence: seq,
+                      stepCode: 'ZIP_ARCHIVE',
+                      isVerified: false,
+                      remarks: currentRemarks,
+                      stepNum: previewModal.stepNum || 7,
+                    });
+                    handleClosePreviewModal();
+                  }}
+                >
+                  ✕ Unverify Package
+                </button>
+              )}
               <button
                 type="button"
                 className="bo-cv-preview-btn-close"

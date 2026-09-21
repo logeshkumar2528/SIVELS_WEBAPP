@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
 import { masterService } from '../../../../../../Core/src/services/masterService'
+import { resolveDocumentTypeId } from '../../../../../../Core/src/utils/documentTypeHelper'
 import './ViewCustomerModal.css'
 
 function ViewCustomerModal({ customer, onClose }) {
@@ -44,6 +45,9 @@ function ViewCustomerModal({ customer, onClose }) {
     Object.keys(grouped).forEach((key) => {
       const list = grouped[key]
       list.sort((a, b) => {
+        // Original docs first, then by time
+        if (a.isRejectionDoc && !b.isRejectionDoc) return 1;
+        if (!a.isRejectionDoc && b.isRejectionDoc) return -1;
         const timeA = new Date(a.createdAt || 0).getTime()
         const timeB = new Date(b.createdAt || 0).getTime()
         if (timeA !== timeB) return timeA - timeB
@@ -51,15 +55,15 @@ function ViewCustomerModal({ customer, onClose }) {
       })
 
       list.forEach((doc, index) => {
-        const isOrig = index === 0
+        const isOrig = doc.isOriginal !== false && !doc.isRejectionDoc && index === 0
         const isLat = index === list.length - 1
-        const versionLabel = `V${index + 1}`
+        const versionLabel = isOrig ? 'Original Document' : (isLat ? 'Latest Updated' : 'Updated Document')
         const item = {
           ...doc,
           isOriginal: isOrig,
           isLatest: isLat,
           versionLabel,
-          versionDisplay: isOrig ? 'Original' : versionLabel,
+          versionDisplay: versionLabel,
         }
 
         if (isOrig) {
@@ -76,11 +80,20 @@ function ViewCustomerModal({ customer, onClose }) {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [docsRes, purpRes, empRes, docTypeRes] = await Promise.all([
-          agentCustomerService.getDocumentsByCustomerId(customer.agentCustomerId || customer.id).catch(() => []),
+        const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+        const targetCustId = customer.agentCustomerId || customer.id;
+        const appProdId = customer.applicationProductDetailsId || customer.ApplicationProductDetailsId || null;
+
+        const token = localStorage.getItem('authToken');
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const [docsRes, purpRes, empRes, docTypeRes, rejectionsRes] = await Promise.all([
+          agentCustomerService.getDocumentsByCustomerId(targetCustId).catch(() => []),
           masterService.getLoanPurposes().catch(() => []),
           masterService.getEmploymentTypes().catch(() => []),
-          masterService.getDocumentTypes().catch(() => [])
+          masterService.getDocumentTypes().catch(() => []),
+          fetch(`${API_BASE}/BackOfficeDocumentRejection`, { headers }).then(r => r.ok ? r.json() : []).catch(() => [])
         ])
 
         const extractArray = (res) => {
@@ -94,10 +107,130 @@ function ViewCustomerModal({ customer, onClose }) {
           return []
         }
 
-        setDocuments(extractArray(docsRes))
+        const rawDocs = extractArray(docsRes);
+        const allRejections = extractArray(rejectionsRes);
+        const docTypeList = extractArray(docTypeRes);
+
+        // Resolve a rejection record onto a numeric DocumentTypeId from the active
+        // DocumentTypeMaster. BackOfficeDocumentRejection identifies the document by
+        // `rejectedDocumentType` code and usually carries no documentTypeId; without
+        // this, a replacement groups separately from its original and is mis-versioned.
+        const resolveRejectionDocTypeId = (rej) => {
+          const explicit = Number(rej?.documentTypeId ?? rej?.DocumentTypeId);
+          if (Number.isFinite(explicit) && explicit > 0) return explicit;
+
+          const rejType = String(rej?.rejectedDocumentType ?? rej?.RejectedDocumentType ?? '').trim();
+          if (!rejType) return null;
+
+          return (
+            resolveDocumentTypeId(docTypeList, rejType) ||
+            resolveDocumentTypeId(docTypeList, rejType.replace(/^(CO_?APPLICANT|APPLICANT)_/i, '')) ||
+            null
+          );
+        };
+
+        // Filter rejections for this customer / application.
+        // This drawer shows the Main Applicant only, so replacement history is
+        // restricted to applicantSequence 0. Co-Applicant sequences (1, 2, ...) and
+        // CO_APPLICANT_* document codes must not leak into this list.
+        const matchingRejections = allRejections.filter((r) => {
+          if (!r || r.isActive === false || r.IsActive === false) return false;
+
+          const matchCust = targetCustId && String(r.agentCustomerId ?? r.AgentCustomerId ?? '') === String(targetCustId);
+          const matchApp = appProdId && String(r.applicationProductDetailsId ?? r.ApplicationProductDetailsId ?? '') === String(appProdId);
+          if (!(matchCust || matchApp)) return false;
+
+          const rawSeq = r.applicantSequence ?? r.ApplicantSequence;
+          const rSeq = rawSeq !== undefined && rawSeq !== null ? Number(rawSeq) : null;
+          if (rSeq !== null && rSeq !== 0) return false;
+
+          const rType = String(r.rejectedDocumentType ?? r.RejectedDocumentType ?? '').toUpperCase();
+          if (rType.startsWith('CO_APPLICANT') || rType.startsWith('COAPPLICANT')) return false;
+
+          const cleanCurr = String(r.currentDocumentPath ?? r.CurrentDocumentPath ?? '').trim();
+          const cleanOrig = String(r.originalDocumentPath ?? r.OriginalDocumentPath ?? '').trim();
+          return Boolean(cleanCurr && cleanCurr.toLowerCase() !== cleanOrig.toLowerCase());
+        });
+
+        // Reconstruct updated rejection documents.
+        // Ordered oldest-first so successive replacements of the same document receive
+        // ascending version numbers (V2, V3, ...) during grouping.
+        const seenRejKeys = new Set();
+        const updatedRejDocs = [];
+
+        const orderedRejections = [...matchingRejections].sort((a, b) => {
+          const timeA = new Date(a.resubmittedAt ?? a.ResubmittedAt ?? a.rejectedAt ?? a.RejectedAt ?? a.createdAt ?? a.CreatedAt ?? 0).getTime();
+          const timeB = new Date(b.resubmittedAt ?? b.ResubmittedAt ?? b.rejectedAt ?? b.RejectedAt ?? b.createdAt ?? b.CreatedAt ?? 0).getTime();
+          if (timeA !== timeB) return timeA - timeB;
+          return (
+            (Number(a.backOfficeDocumentRejectionId ?? a.BackOfficeDocumentRejectionId) || 0) -
+            (Number(b.backOfficeDocumentRejectionId ?? b.BackOfficeDocumentRejectionId) || 0)
+          );
+        });
+
+        orderedRejections.forEach((rej) => {
+          const cleanCurr = String(rej.currentDocumentPath ?? rej.CurrentDocumentPath ?? '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
+          const cleanOrig = String(rej.originalDocumentPath ?? rej.OriginalDocumentPath ?? '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
+          if (!cleanCurr || (cleanOrig && cleanCurr.toLowerCase() === cleanOrig.toLowerCase())) return;
+
+          // Resolve onto the same DocumentTypeMaster row as the original so both share
+          // a grouping key and the replacement is classified and versioned correctly.
+          const resolvedRejTypeId = resolveRejectionDocTypeId(rej);
+          const rejDocType = rej.rejectedDocumentType ?? rej.RejectedDocumentType ?? '';
+
+          // Dedupe on stable backend fields: application + sequence + document type + stored path.
+          const dedupeKey = `${appProdId || targetCustId}:0:${
+            resolvedRejTypeId || rejDocType
+          }:${cleanCurr.toLowerCase()}`;
+          if (seenRejKeys.has(dedupeKey)) return;
+          seenRejKeys.add(dedupeKey);
+
+          const fileName = cleanCurr.split('/').pop() || rejDocType || 'Updated_Document';
+          const ext = fileName.split('.').pop()?.toLowerCase();
+          const isPdf = ext === 'pdf';
+          const stableId = `rej_${rej.backOfficeDocumentRejectionId ?? rej.BackOfficeDocumentRejectionId ?? cleanCurr}`;
+
+          // If currentDocumentPath points to an AgentCustomer document, resolve matching agentCustomerDocumentId from rawDocs
+          let matchedAgentDocId = null;
+          const isAgentPath = cleanCurr.startsWith('UploadedFiles/AgentCustomers/') || cleanCurr.startsWith('AgentCustomers/');
+          if (isAgentPath) {
+            const cleanCurrLower = cleanCurr.toLowerCase();
+            const matchedDoc = rawDocs.find((d) => {
+              const p = String(d.filePath || d.documentPath || d.path || '').trim().replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
+              return p === cleanCurrLower;
+            });
+            const rawId = matchedDoc?.agentCustomerDocumentId ?? matchedDoc?.id ?? null;
+            if (rawId && Number.isInteger(Number(rawId)) && Number(rawId) > 0) {
+              matchedAgentDocId = Number(rawId);
+            }
+          }
+
+          updatedRejDocs.push({
+            id: stableId,
+            agentCustomerDocumentId: matchedAgentDocId,
+            rejectionId: rej.backOfficeDocumentRejectionId ?? rej.BackOfficeDocumentRejectionId,
+            documentTypeId: resolvedRejTypeId,
+            documentTypeName: rejDocType ? String(rejDocType).replace(/_/g, ' ') : 'Updated Document',
+            documentName: rejDocType ? String(rejDocType).replace(/_/g, ' ') : 'Updated Document',
+            fileName,
+            filePath: cleanCurr,
+            currentDocumentPath: cleanCurr,
+            // Explicit replacement markers - grouping relies on these, not array position.
+            isRejectionDoc: true,
+            fileType: isPdf ? 'pdf' : 'image',
+            isOriginal: false,
+            isLatest: true,
+            status: rej.status ?? rej.Status ?? 'Resubmitted',
+            rejectionRemarks: rej.rejectionRemarks ?? rej.RejectionRemarks,
+            createdAt: rej.resubmittedAt ?? rej.ResubmittedAt ?? rej.verifiedAt ?? rej.VerifiedAt ?? rej.rejectedAt ?? rej.RejectedAt,
+            isActive: true,
+          });
+        });
+
+        setDocuments([...rawDocs, ...updatedRejDocs])
         setLoanPurposes(extractArray(purpRes))
         setEmploymentTypes(extractArray(empRes))
-        setDocumentTypes(extractArray(docTypeRes))
+        setDocumentTypes(docTypeList)
       } catch (err) {
         console.error("Failed to load customer details", err)
       } finally {
@@ -151,53 +284,137 @@ function ViewCustomerModal({ customer, onClose }) {
   const getDocumentIcon = (name) => {
     const n = (name || '').toLowerCase()
     if (n.includes('image') || n.includes('photo')) return User
-    if (n.includes('pan') || n.includes('aadhaar') || n.includes('id')) return IdCard
+    if (n.includes('pan') || n.includes('aadhaar') || n.includes('aadhar') || n.includes('id')) return IdCard
     if (n.includes('bank') || n.includes('passbook')) return Landmark
     return FileText
   }
 
   const getDocumentName = (docTypeId, fallbackName) => {
+    if (docTypeId) {
+      const type = documentTypes.find(t => Number(t.documentTypeId || t.id) === Number(docTypeId))
+      if (type) return type.documentTypeName || type.name
+    }
     if (fallbackName) return fallbackName
-    const type = documentTypes.find(t => Number(t.documentTypeId || t.id) === Number(docTypeId))
-    return type ? (type.documentTypeName || type.name) : 'Document'
+    return 'Document'
   }
 
   const handleViewDocument = async (doc) => {
+    setViewError('')
     try {
-      const blob = await agentCustomerService.downloadDocument(doc.agentCustomerDocumentId || doc.id)
-      
-      const fileName = doc.fileName || doc.documentName || ''
-      let mimeType = 'application/octet-stream'
-      if (/\.(jpg|jpeg)$/i.test(fileName)) mimeType = 'image/jpeg'
-      else if (/\.png$/i.test(fileName)) mimeType = 'image/png'
-      else if (/\.pdf$/i.test(fileName)) mimeType = 'application/pdf'
-      else if (/\.gif$/i.test(fileName)) mimeType = 'image/gif'
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+      const token = localStorage.getItem('authToken');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const typedBlob = new Blob([blob], { type: mimeType })
-      const url = window.URL.createObjectURL(typedBlob)
+      let blob;
+
+      // 1. Resolve path with priority to currentDocumentPath for updated/rejection documents
+      const targetPath = String(
+        doc.currentDocumentPath ||
+        doc.CurrentDocumentPath ||
+        doc.filePath ||
+        doc.FilePath ||
+        doc.documentPath ||
+        ''
+      ).trim();
+      const cleanPath = targetPath.replace(/\\/g, '/').replace(/^\/+/, '');
+
+      // 2. Storage-provenance routing:
+      const isAgentPath = cleanPath.startsWith('UploadedFiles/AgentCustomers/') || cleanPath.startsWith('AgentCustomers/');
+      const isKycPath = cleanPath.startsWith('UploadedFiles/KYCDocuments/') || cleanPath.startsWith('KYCDocuments/');
+
+      // Route A: Agent Customer document path (UploadedFiles/AgentCustomers/... or AgentCustomers/...)
+      if (isAgentPath) {
+        let agentDocId = doc.agentCustomerDocumentId ?? doc.id ?? null;
+        if (!agentDocId || !Number.isInteger(Number(agentDocId)) || Number(agentDocId) <= 0) {
+          const cleanPathLower = cleanPath.toLowerCase();
+          const matchedDoc = documents.find((d) => {
+            const p = String(d.filePath || d.documentPath || d.path || '').trim().replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
+            return p === cleanPathLower;
+          });
+          const resolvedId = matchedDoc?.agentCustomerDocumentId ?? matchedDoc?.id ?? null;
+          if (resolvedId && Number.isInteger(Number(resolvedId)) && Number(resolvedId) > 0) {
+            agentDocId = Number(resolvedId);
+          }
+        }
+
+        if (!agentDocId) {
+          setViewError('Document file reference is not available.');
+          return;
+        }
+
+        blob = await agentCustomerService.downloadDocument(agentDocId);
+      }
+      // Route B: Application KYC document path (UploadedFiles/KYCDocuments/... or KYCDocuments/...)
+      else if (isKycPath) {
+        let serverPath = cleanPath;
+        if (!serverPath.startsWith('UploadedFiles/')) {
+          serverPath = `UploadedFiles/${serverPath}`;
+        }
+
+        const res = await fetch(`${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(serverPath)}`, { headers });
+        if (res.status === 404) {
+          setViewError('Document file not found on server.');
+          return;
+        }
+        if (!res.ok) {
+          setViewError(`Unable to retrieve document from server (HTTP ${res.status}).`);
+          return;
+        }
+        blob = await res.blob();
+      }
+      // Route C: Original document without explicit path but with valid agentCustomerDocumentId
+      else if (!doc.isRejectionDoc && (doc.agentCustomerDocumentId || doc.id)) {
+        const rawDocId = doc.agentCustomerDocumentId || doc.id;
+        blob = await agentCustomerService.downloadDocument(rawDocId);
+      }
+      // Route D: Unknown path prefix or missing reference
+      else {
+        setViewError('Document storage format is unsupported or file reference is missing.');
+        return;
+      }
+
+      if (!blob || blob.size === 0) {
+        setViewError('Document file is empty or unavailable.');
+        return;
+      }
       
-      const isImage = mimeType.startsWith('image/')
+      const fileName = doc.fileName || doc.documentName || doc.documentTypeName || cleanPath.split('/').pop() || '';
+      const isPdfByExt = /\.pdf$/i.test(fileName);
+      const isPdfByBlob = blob.type === 'application/pdf';
+      const isPdf = isPdfByBlob || isPdfByExt;
+
+      let mimeType = blob.type || (isPdf ? 'application/pdf' : 'image/jpeg');
+      if (/\.(jpg|jpeg)$/i.test(fileName)) mimeType = 'image/jpeg';
+      else if (/\.png$/i.test(fileName)) mimeType = 'image/png';
+      else if (/\.webp$/i.test(fileName)) mimeType = 'image/webp';
+      else if (/\.gif$/i.test(fileName)) mimeType = 'image/gif';
+      else if (isPdf) mimeType = 'application/pdf';
+
+      const typedBlob = new Blob([blob], { type: mimeType });
+      const url = window.URL.createObjectURL(typedBlob);
+      
+      const isImage = mimeType.startsWith('image/') || (!isPdf && !mimeType.includes('pdf'));
       
       if (isImage) {
         setModalImage({
           src: url,
-          title: getDocumentName(doc.documentTypeId, doc.documentName)
-        })
+          title: getDocumentName(doc.documentTypeId, doc.documentName || doc.documentTypeName || fileName)
+        });
       } else {
-        window.open(url, '_blank')
+        window.open(url, '_blank');
         // Automatically revoke the URL after the new tab has had time to load it
-        setTimeout(() => window.URL.revokeObjectURL(url), 10000)
+        setTimeout(() => window.URL.revokeObjectURL(url), 10000);
       }
     } catch (err) {
-      console.error("Failed to view document", err)
-      if (!err.response) {
-        setViewError("Unable to connect to document server.")
-      } else if (err.response.status === 404) {
-        setViewError("Document file not found.")
-      } else if (err.response.status >= 500) {
-        setViewError("Unable to retrieve document from server.")
+      console.error('Failed to view document', err);
+      const status = err.response?.status || err.status;
+      if (status === 404) {
+        setViewError('Document file not found.');
+      } else if (status >= 500) {
+        setViewError('Unable to retrieve document from server.');
       } else {
-        setViewError("Unable to view document.")
+        setViewError(err.message || 'Unable to view document.');
       }
     }
   }
@@ -345,7 +562,7 @@ function ViewCustomerModal({ customer, onClose }) {
                     const docName = getDocumentName(doc.documentTypeId, doc.documentName || doc.documentTypeName)
                     const IconComp = getDocumentIcon(docName)
                     return (
-                      <div className="drawer-doc-card" key={doc.agentCustomerDocumentId || doc.id || idx}>
+                      <div className="drawer-doc-card" key={doc.id || doc.agentCustomerDocumentId || idx}>
                         <div className="drawer-doc-info">
                           <div className="drawer-doc-icon">
                             <IconComp size={18} />
@@ -383,7 +600,7 @@ function ViewCustomerModal({ customer, onClose }) {
                       const docName = getDocumentName(doc.documentTypeId, doc.documentName || doc.documentTypeName)
                       const IconComp = getDocumentIcon(docName)
                       return (
-                        <div className="drawer-doc-card" key={doc.agentCustomerDocumentId || doc.id || idx}>
+                        <div className="drawer-doc-card" key={doc.id || doc.agentCustomerDocumentId || idx}>
                           <div className="drawer-doc-info">
                             <div className="drawer-doc-icon">
                               <IconComp size={18} />

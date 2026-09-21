@@ -3,6 +3,7 @@ import { CheckCircle2, Clock, Eye, RefreshCw, RotateCcw } from 'lucide-react'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
 import { formatDateTime } from '../../../../../../Core/src/utils/dateHelper'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
+import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
 import ViewCustomerModal from '../ViewCustomerModal/ViewCustomerModal'
 import './SubmittedCustomers.css'
 
@@ -55,7 +56,7 @@ function SubmittedCustomers() {
         const response = await agentCustomerService.getAllCustomers()
         const records = extractArray(response)
         const agentCustomers = records
-          .filter((customer) => Number(customer.agentId || customer.AgentId) === Number(agentId))
+          .filter((customer) => isCustomerOwnedByAgent(customer, agentId))
           .sort((a, b) => new Date(b.createdAt || b.CreatedAt || 0) - new Date(a.createdAt || a.CreatedAt || 0))
         if (active) setCustomers(agentCustomers)
       } catch (loadError) {
