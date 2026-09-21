@@ -3,6 +3,27 @@ import { useAuth } from '../../../../../Core/src/context/AuthContext';
 import axiosInstance from '../../../../../Core/src/api/axiosInstance';
 import { isMobileMatch, extractRecordMobile } from '../../../../../Core/src/services/moduleDetectionService';
 
+/**
+ * Safely unwrap agent object from potential API response variations (array, wrapped value/data, or single object).
+ */
+function normalizeAgentRecord(response) {
+  if (!response) return null;
+  const raw = response.value ?? response.data ?? response;
+  if (Array.isArray(raw)) {
+    return raw.length > 0 ? (raw[0]?.value ?? raw[0]?.data ?? raw[0]) : null;
+  }
+  if (typeof raw === 'object') {
+    if (Array.isArray(raw.value)) {
+      return raw.value.length > 0 ? raw.value[0] : null;
+    }
+    if (Array.isArray(raw.data)) {
+      return raw.data.length > 0 ? raw.data[0] : null;
+    }
+    return raw;
+  }
+  return null;
+}
+
 export function useAgentIdentity() {
   const { currentUser } = useAuth();
   
@@ -38,18 +59,42 @@ export function useAgentIdentity() {
         }
         try {
           const detailsRes = await axiosInstance.get(`/AgentMaster/${knownAgentId}`);
-          const details = detailsRes.data?.value ?? detailsRes.data ?? null;
+          const details = normalizeAgentRecord(detailsRes.data);
           if (isMounted) {
-            if (details) {
+            if (details && typeof details === 'object' && !Array.isArray(details)) {
               setAgentData(details);
             } else {
               setAgentData((prev) => prev || currentUser);
             }
           }
         } catch (detailErr) {
-          console.error("Failed to fetch full Agent details by ID", detailErr);
-          if (isMounted) {
-            setAgentData((prev) => prev || currentUser);
+          console.error("Failed to fetch full Agent details by ID, falling back to /AgentMaster", detailErr);
+          // Fallback to scanning /AgentMaster
+          try {
+            const listRes = await axiosInstance.get('/AgentMaster');
+            const rawList = listRes.data?.value ?? listRes.data ?? [];
+            const list = Array.isArray(rawList) ? rawList : (rawList?.data || []);
+            const found = Array.isArray(list) ? list.find((a) => {
+              const aid = a.agentId ?? a.AgentId ?? a.id ?? a.Id;
+              if (aid && String(aid) === String(knownAgentId)) return true;
+              if (currentUser?.mobileNumber) {
+                return isMobileMatch(extractRecordMobile(a), currentUser.mobileNumber);
+              }
+              return false;
+            }) : null;
+
+            if (isMounted) {
+              if (found) {
+                setAgentData(found);
+              } else {
+                setAgentData((prev) => prev || currentUser);
+              }
+            }
+          } catch (listErr) {
+            console.error("Failed to fetch AgentMaster list fallback", listErr);
+            if (isMounted) {
+              setAgentData((prev) => prev || currentUser);
+            }
           }
         } finally {
           if (isMounted) {
@@ -63,23 +108,25 @@ export function useAgentIdentity() {
       try {
         const res = await axiosInstance.get('/AgentMaster');
         const agents = res.data?.value ?? res.data ?? [];
-        const rawAgents = Array.isArray(agents) ? agents : [];
-        const match = rawAgents.find((a) => {
+        const rawAgents = Array.isArray(agents) ? agents : (agents?.data || []);
+        const match = Array.isArray(rawAgents) ? rawAgents.find((a) => {
           const recordMobile = extractRecordMobile(a);
           return isMobileMatch(recordMobile, currentUser.mobileNumber);
-        });
+        }) : null;
 
         if (isMounted) {
-          if (match && (match.agentId || match.AgentId)) {
-            const resolvedId = match.agentId ?? match.AgentId;
+          if (match && (match.agentId || match.AgentId || match.id)) {
+            const resolvedId = match.agentId ?? match.AgentId ?? match.id;
             setAgentId(resolvedId);
             setAgentData(match);
 
             // Fetch full details if needed
             try {
               const detailsRes = await axiosInstance.get(`/AgentMaster/${resolvedId}`);
-              const details = detailsRes.data?.value ?? detailsRes.data ?? match;
-              if (isMounted) setAgentData(details);
+              const details = normalizeAgentRecord(detailsRes.data);
+              if (isMounted && details && typeof details === 'object' && !Array.isArray(details)) {
+                setAgentData(details);
+              }
             } catch (detailErr) {
               console.error("Failed to fetch full Agent details", detailErr);
               if (isMounted) setAgentData(match);
@@ -87,14 +134,14 @@ export function useAgentIdentity() {
           } else {
             // Not found
             setAgentId(null);
-            setAgentData(null);
+            setAgentData(currentUser || null);
           }
         }
       } catch (err) {
         console.error("Failed to fetch Agent identity", err);
         if (isMounted) {
           setAgentId(null);
-          setAgentData(null);
+          setAgentData(currentUser || null);
         }
       } finally {
         if (isMounted) {
@@ -112,3 +159,4 @@ export function useAgentIdentity() {
 
   return { agentId, agentData, loadingAgent: loading };
 }
+
