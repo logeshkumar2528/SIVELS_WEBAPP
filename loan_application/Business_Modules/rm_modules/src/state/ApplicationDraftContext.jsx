@@ -929,10 +929,6 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     true
   );
 
-  // If applicant has no matching personal row in backend, personalInformationId must be null
-  if (!applicantPers) {
-    mappedApplicant.personalInformationId = null;
-  }
   // Guarantee applicant personalInformationId cannot collide with any co-applicant ID
   if (mappedApplicant.personalInformationId && coApplicantPersonalIds.has(Number(mappedApplicant.personalInformationId))) {
     mappedApplicant.personalInformationId = null;
@@ -2186,6 +2182,10 @@ export function ApplicationDraftProvider({ children }) {
         if (backendResult) {
           const currentDraft = applicationsRef.current[appIdStr] || getApplication(appIdStr);
           const mapped = mapBackendToApplication(backendResult, currentDraft);
+          applicationsRef.current = {
+            ...applicationsRef.current,
+            [appIdStr]: mapped,
+          };
           setApplications((prev) => ({
             ...prev,
             [appIdStr]: mapped,
