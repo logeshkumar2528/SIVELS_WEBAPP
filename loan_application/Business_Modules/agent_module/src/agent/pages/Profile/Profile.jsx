@@ -18,6 +18,7 @@ import {
   Loader2
 } from 'lucide-react'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
+import { useAuth } from '../../../../../../Core/src/context/AuthContext'
 import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
 import { getProfileImageUrl, updateProfileImage } from '../../utils/profileImageHelper'
 import './Profile.css'
@@ -35,14 +36,26 @@ function Profile() {
   const [selectedEmiCustomer, setSelectedEmiCustomer] = useState(null)
   const [customersCount, setCustomersCount] = useState('...')
 
+  const { currentUser } = useAuth()
   const { agentData, loadingAgent, agentId } = useAgentIdentity()
 
-  const resolvedAgentId = agentId || agentData?.agentId || agentData?.AgentId || (typeof window !== 'undefined' ? localStorage.getItem('agentId') : null)
+  const resolvedAgentId = agentId || agentData?.agentId || agentData?.AgentId || currentUser?.agentId || currentUser?.AgentId || (typeof window !== 'undefined' ? localStorage.getItem('agentId') : null)
   const profileImageUrl = getProfileImageUrl('Agent', resolvedAgentId, imageVersion)
 
   useEffect(() => {
     setImageError(false)
   }, [profileImageUrl])
+
+  useEffect(() => {
+    const handleUpdate = (e) => {
+      if (!e.detail?.role || e.detail.role.toLowerCase().includes('agent')) {
+        setImageVersion(e.detail?.timestamp || Date.now())
+        setImageError(false)
+      }
+    }
+    window.addEventListener('profile-image-updated', handleUpdate)
+    return () => window.removeEventListener('profile-image-updated', handleUpdate)
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -144,7 +157,7 @@ function Profile() {
     },
   ]
 
-  if (loadingAgent) {
+  if (loadingAgent && !agentData && !currentUser) {
     return (
       <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
         Loading profile...
@@ -152,12 +165,65 @@ function Profile() {
     )
   }
 
-  const agentName = agentData?.fullName || 'Agent'
-  const agentRole = agentData?.role || 'Field Agent'
-  const agentCode = agentData?.agentCode || 'N/A'
-  const agentBranch = agentData?.branch || 'N/A'
-  const agentMobile = agentData?.mobileNumber || 'N/A'
-  const agentEmail = agentData?.emailAddress || 'N/A'
+  const agentName =
+    agentData?.fullName ||
+    agentData?.FullName ||
+    agentData?.name ||
+    currentUser?.fullName ||
+    currentUser?.FullName ||
+    currentUser?.name ||
+    'Agent'
+
+  const agentRole =
+    agentData?.role ||
+    agentData?.Role ||
+    currentUser?.role ||
+    currentUser?.Role ||
+    'Field Agent'
+
+  const agentCode =
+    agentData?.agentCode ||
+    agentData?.AgentCode ||
+    agentData?.code ||
+    currentUser?.agentCode ||
+    currentUser?.AgentCode ||
+    currentUser?.code ||
+    'N/A'
+
+  const agentBranch =
+    agentData?.branch ||
+    agentData?.Branch ||
+    agentData?.branchName ||
+    agentData?.BranchName ||
+    currentUser?.branch ||
+    currentUser?.Branch ||
+    currentUser?.branchName ||
+    currentUser?.BranchName ||
+    'N/A'
+
+  const agentMobile =
+    agentData?.mobileNumber ||
+    agentData?.MobileNumber ||
+    agentData?.mobile ||
+    agentData?.Mobile ||
+    agentData?.phone ||
+    currentUser?.mobileNumber ||
+    currentUser?.MobileNumber ||
+    currentUser?.mobile ||
+    currentUser?.Mobile ||
+    currentUser?.phone ||
+    'N/A'
+
+  const agentEmail =
+    agentData?.emailAddress ||
+    agentData?.EmailAddress ||
+    agentData?.email ||
+    agentData?.Email ||
+    currentUser?.emailAddress ||
+    currentUser?.EmailAddress ||
+    currentUser?.email ||
+    currentUser?.Email ||
+    'N/A'
   
   const formatDate = (dateStr) => {
     if (!dateStr) return 'N/A'
@@ -165,12 +231,69 @@ function Profile() {
     return isNaN(date) ? 'N/A' : date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
   }
 
-  const agentDateJoined = formatDate(agentData?.dateJoined)
-  const agentDob = formatDate(agentData?.dateOfBirth)
-  const agentGender = agentData?.genderName || (agentData?.genderId === 6 ? 'Male' : agentData?.genderId === 7 ? 'Female' : 'N/A')
-  const agentAddress = agentData?.address || 'N/A'
-  const agentState = agentData?.state || 'N/A'
-  const agentPincode = agentData?.pincode || agentData?.Pincode || 'N/A'
+  const rawDateJoined =
+    agentData?.dateJoined ||
+    agentData?.DateJoined ||
+    agentData?.joinedDate ||
+    agentData?.JoinedDate ||
+    agentData?.createdAt ||
+    agentData?.CreatedAt ||
+    currentUser?.dateJoined ||
+    currentUser?.DateJoined ||
+    currentUser?.joinedDate ||
+    currentUser?.JoinedDate ||
+    currentUser?.createdAt ||
+    currentUser?.CreatedAt
+
+  const rawDob =
+    agentData?.dateOfBirth ||
+    agentData?.DateOfBirth ||
+    agentData?.dob ||
+    agentData?.DOB ||
+    currentUser?.dateOfBirth ||
+    currentUser?.DateOfBirth ||
+    currentUser?.dob ||
+    currentUser?.DOB
+
+  const agentDateJoined = formatDate(rawDateJoined)
+  const agentDob = formatDate(rawDob)
+
+  const genderId =
+    agentData?.genderId ??
+    agentData?.GenderId ??
+    currentUser?.genderId ??
+    currentUser?.GenderId
+
+  const genderName =
+    agentData?.genderName ||
+    agentData?.GenderName ||
+    currentUser?.genderName ||
+    currentUser?.GenderName
+
+  const agentGender =
+    genderName ||
+    (genderId === 6 || genderId === 1 ? 'Male' : genderId === 7 || genderId === 2 ? 'Female' : 'N/A')
+
+  const agentAddress =
+    agentData?.address ||
+    agentData?.Address ||
+    currentUser?.address ||
+    currentUser?.Address ||
+    'N/A'
+
+  const agentState =
+    agentData?.state ||
+    agentData?.State ||
+    currentUser?.state ||
+    currentUser?.State ||
+    'N/A'
+
+  const agentPincode =
+    agentData?.pincode ||
+    agentData?.Pincode ||
+    currentUser?.pincode ||
+    currentUser?.Pincode ||
+    'N/A'
 
   return (
     <div className="profile-page">
