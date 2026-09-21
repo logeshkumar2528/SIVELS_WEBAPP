@@ -25,6 +25,7 @@ import { getAllBackOffice, getBackOfficeById } from '../../api/backOfficeApi';
 import { getRelationshipManager } from '../../api/rmApi';
 import { getAgentById } from '../../api/agentApi';
 import { getProfileImageUrl, getDocumentUrl, buildFileUrl } from '../../utils/profileImageHelper';
+import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
 import './Dashboard.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -257,6 +258,7 @@ export function Dashboard() {
         };
       }).filter((rm) => rm.id && rm.name);
       const rmNames = new Map(liveRms.map((rm) => [String(rm.id), rm.name]));
+      const rmsById = new Map(liveRms.map((rm) => [String(rm.id), rm]));
 
       const agentRows = agentResult.status === 'fulfilled' ? unwrap(agentResult.value) : [];
       const agentLookup = new Map();
@@ -268,6 +270,8 @@ export function Dashboard() {
           id,
           agentId: id,
           name: read(agent, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name'], 'Unnamed agent'),
+          fullName: read(agent, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name'], 'Unnamed agent'),
+          agentCode: read(agent, ['agentCode', 'AgentCode', 'code', 'Code']),
           email: read(agent, ['emailAddress', 'EmailAddress', 'email', 'Email']),
           phone: read(agent, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
           branch: read(agent, ['branch', 'Branch', 'branchName', 'BranchName']),
@@ -278,16 +282,26 @@ export function Dashboard() {
 
       const customerRows = applicationResult.status === 'fulfilled' ? unwrap(applicationResult.value) : [];
       const liveApplications = customerRows.map((application) => {
-        const agentId = read(application, ['agentId', 'AgentId']);
-        const agent = agentLookup.get(String(agentId)) || {};
+        const ownership = resolveApplicationOwnership(application, agentLookup, rmsById);
+        const resolvedAgentId = ownership.agentId;
+        const agent = resolvedAgentId ? (agentLookup.get(String(resolvedAgentId)) || {}) : {};
+        const resolvedRmId = ownership.rmId || read(application, ['rmId', 'RMId']) || agent.rmId || '';
+        const rmObj = resolvedRmId ? (rmsById.get(String(resolvedRmId)) || {}) : {};
+        const resolvedRmName = ownership.rmName && ownership.rmName !== '—'
+          ? ownership.rmName
+          : (rmObj.name || rmNames.get(String(resolvedRmId)) || agent.rmName || 'Unassigned');
+        const resolvedAgentName = ownership.agentName && ownership.agentName !== '—'
+          ? ownership.agentName
+          : (read(application, ['agentName', 'AgentName']) || agent.name || '—');
+
         return {
           id: read(application, ['agentCustomerId', 'AgentCustomerId', 'applicationId', 'id']),
-          agentId,
-          agentName: read(application, ['agentName', 'AgentName']) || agent.name || '—',
+          agentId: resolvedAgentId,
+          agentName: resolvedAgentName,
           agentPhone: agent.phone || '—',
           agentEmail: agent.email || '—',
-          rmId: agent.rmId || '',
-          rmName: agent.rmName || 'Unassigned',
+          rmId: resolvedRmId,
+          rmName: resolvedRmName,
           customerName: read(application, ['fullName', 'customerName', 'FullName'], 'Unknown customer'),
           mobile: read(application, ['mobileNumber', 'MobileNumber', 'mobile'], '—'),
           email: read(application, ['email', 'Email', 'emailAddress'], '—'),
@@ -302,7 +316,7 @@ export function Dashboard() {
           isActive: application.isActive ?? application.IsActive ?? true,
           createdAt: read(application, ['createdAt', 'CreatedAt', 'createdDate']),
           updatedAt: read(application, ['modifiedAt', 'ModifiedAt', 'updatedAt', 'createdAt', 'createdDate']),
-          branch: agent.branch || '—',
+          branch: agent.branch || rmObj.branch || '—',
         };
       }).filter((application) => application.id);
 

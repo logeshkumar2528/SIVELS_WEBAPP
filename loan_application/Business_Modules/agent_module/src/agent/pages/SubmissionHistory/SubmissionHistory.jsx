@@ -16,6 +16,7 @@ import DatePicker from '../../components/DatePicker/DatePicker'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
 import { formatDateTime } from '../../../../../../Core/src/utils/dateHelper'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
+import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
 import { normalizeApplicationStatus } from '../../../../../rm_modules/src/utils/rmContext'
 import './SubmissionHistory.css'
 
@@ -70,8 +71,8 @@ function SubmissionHistory() {
 
       const allCustomers = extractArray(data)
       
-      // Filter by current AgentId
-      const myCustomers = allCustomers.filter(c => Number(c.agentId) === Number(agentId))
+      // Filter by current AgentId using shared ownership resolution
+      const myCustomers = allCustomers.filter(c => isCustomerOwnedByAgent(c, agentId))
       
       // Sort DESC by CreatedAt
       myCustomers.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))

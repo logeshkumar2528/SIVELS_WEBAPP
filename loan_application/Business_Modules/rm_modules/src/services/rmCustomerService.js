@@ -70,27 +70,73 @@ export const rmCustomerService = {
   },
 
   getDocumentsByCustomerId: async (rmCustomerId) => {
-    const response = await axiosInstance.get(`/RMCustomerDocument/bycustomer/${rmCustomerId}`);
-    return response.data;
+    try {
+      const response = await axiosInstance.get(`/RMCustomerDocument/bycustomer/${rmCustomerId}`, {
+        validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
+      });
+      if (response.status === 404) {
+        return [];
+      }
+      return response.data;
+    } catch (err) {
+      if (err?.response?.status === 404 || err?.status === 404) {
+        return [];
+      }
+      throw err;
+    }
   },
 
   getAgentCustomerDocumentsByCustomerId: async (customerId) => {
-    const response = await axiosInstance.get(`/AgentCustomerDocument/bycustomer/${customerId}`);
-    return response.data;
+    try {
+      const response = await axiosInstance.get(`/AgentCustomerDocument/bycustomer/${customerId}`, {
+        validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
+      });
+      if (response.status === 404) {
+        return [];
+      }
+      return response.data;
+    } catch (err) {
+      if (err?.response?.status === 404 || err?.status === 404) {
+        return [];
+      }
+      throw err;
+    }
   },
 
   downloadDocument: async (id) => {
-    const response = await axiosInstance.get(`/RMCustomerDocument/download/${id}`, {
-      responseType: 'blob',
-    });
-    return response.data;
+    try {
+      const response = await axiosInstance.get(`/RMCustomerDocument/download/${id}`, {
+        responseType: 'blob',
+        validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
+      });
+      if (response.status === 404) {
+        return null;
+      }
+      return response.data;
+    } catch (err) {
+      if (err?.response?.status === 404 || err?.status === 404) {
+        return null;
+      }
+      throw err;
+    }
   },
 
   downloadAgentCustomerDocument: async (documentId) => {
-    const response = await axiosInstance.get(`/AgentCustomerDocument/download/${documentId}`, {
-      responseType: 'blob',
-    });
-    return response.data;
+    try {
+      const response = await axiosInstance.get(`/AgentCustomerDocument/download/${documentId}`, {
+        responseType: 'blob',
+        validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
+      });
+      if (response.status === 404) {
+        return null;
+      }
+      return response.data;
+    } catch (err) {
+      if (err?.response?.status === 404 || err?.status === 404) {
+        return null;
+      }
+      throw err;
+    }
   },
 
   promoteRmCustomer: async (rmCustomerId, payload) => {
@@ -104,15 +150,29 @@ export const rmCustomerService = {
 
   /**
    * Retrieve applicant-level document metadata.
+   * Treats 404 as an expected empty state (document not uploaded yet) without logging errors.
    * @param {string|number} applicationProductDetailsId
    * @param {number} applicantSequence
    * @param {number} documentTypeId
    */
   getApplicantDocument: async (applicationProductDetailsId, applicantSequence, documentTypeId) => {
-    const response = await axiosInstance.get(
-      `/ApplicationKYCDocuments/applicant-document?applicationProductDetailsId=${encodeURIComponent(applicationProductDetailsId)}&applicantSequence=${encodeURIComponent(applicantSequence)}&documentTypeId=${encodeURIComponent(documentTypeId)}`
-    );
-    return response.data;
+    try {
+      const response = await axiosInstance.get(
+        `/ApplicationKYCDocuments/applicant-document?applicationProductDetailsId=${encodeURIComponent(applicationProductDetailsId)}&applicantSequence=${encodeURIComponent(applicantSequence)}&documentTypeId=${encodeURIComponent(documentTypeId)}`,
+        {
+          validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
+        }
+      );
+      if (response.status === 404) {
+        return null;
+      }
+      return response.data;
+    } catch (err) {
+      if (err?.response?.status === 404 || err?.status === 404) {
+        return null;
+      }
+      throw err;
+    }
   },
 
   /**
@@ -150,13 +210,24 @@ export const rmCustomerService = {
    * @param {string} path - Relative server path
    */
   downloadKycDocumentByPath: async (path) => {
-    const response = await axiosInstance.get(
-      `/ApplicationKYCDocuments/download?path=${encodeURIComponent(path)}`,
-      {
-        responseType: 'blob',
+    try {
+      const response = await axiosInstance.get(
+        `/ApplicationKYCDocuments/download?path=${encodeURIComponent(path)}`,
+        {
+          responseType: 'blob',
+          validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
+        }
+      );
+      if (response.status === 404) {
+        return null;
       }
-    );
-    return response.data;
+      return response.data;
+    } catch (err) {
+      if (err?.response?.status === 404 || err?.status === 404) {
+        return null;
+      }
+      throw err;
+    }
   },
 };
 

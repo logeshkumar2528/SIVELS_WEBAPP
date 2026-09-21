@@ -1,3 +1,4 @@
+import { mapKycPerson, primaryKycForSequence } from '../pages/KycDocuments/kycDocumentState';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { allNewApplications } from '../pages/NewApplications/newApplicationsData';
 import {
@@ -12,6 +13,7 @@ import {
   resolveApplicantName,
 } from '../pages/applicationWizard/flowUtils';
 import { toIstDateInput } from '../utils/dateHelper';
+import { resolveApplicationOwnership } from '../utils/ownershipHelper';
 
 const STORAGE_KEY = 'sivels-rm-onboarding-drafts-v9';
 
@@ -312,29 +314,41 @@ function normalizeApplicationRecord(record = {}) {
     ? resolvedApplicant
     : (record.customerName || record.fullName || record.applicantName || '');
 
+  const ownership = resolveApplicationOwnership(record);
   const isRmSourced = record.isRmSourced !== undefined
     ? Boolean(record.isRmSourced)
-    : ((record.agentId === null || record.agentId === undefined || record.agentId === '') && Boolean(record.rmId || record.RMId || record.createdBy));
-  const rawAgentId = record.agentId !== undefined ? record.agentId : (record.AgentId !== undefined ? record.AgentId : null);
-  const resolvedAgentId = (rawAgentId !== null && rawAgentId !== undefined && rawAgentId !== '')
-    ? rawAgentId
-    : null;
-  const rmId = record.rmId ?? record.RMId ?? (isRmSourced ? (record.createdBy ?? null) : null);
-  const rmCustomerId = record.rmCustomerId ?? record.RmCustomerId ?? null;
+    : ownership.isDirectRm;
+  const isAgentSourced = record.isAgentSourced !== undefined
+    ? Boolean(record.isAgentSourced)
+    : ownership.isAgentCreated;
+  const resolvedAgentId = ownership.agentId ?? (isAgentSourced ? (record.agentId ?? record.AgentId ?? null) : null);
+  const rmId = record.rmId ?? record.RMId ?? ownership.rmId ?? (isRmSourced ? (record.createdBy ?? record.CreatedBy ?? null) : null);
+  const rmCustomerId = record.rmCustomerId ?? record.RmCustomerId ?? record.RMCustomerId ?? null;
 
   return {
     ...record,
     customerName,
     id: record.id || applicationNumber,
     applicationNumber,
-    agentCustomerId: record.agentCustomerId || record.id || applicationNumber,
+    agentCustomerId: record.agentCustomerId || record.AgentCustomerId || record.id || applicationNumber,
+    AgentCustomerId: record.AgentCustomerId || record.agentCustomerId || record.id || applicationNumber,
     agentId: resolvedAgentId,
-    agentName: record.agentName || '',
-    agentCode: record.agentCode || '',
+    AgentId: resolvedAgentId,
+    agentName: record.agentName || record.AgentName || ownership.agentName || '',
+    agentCode: record.agentCode || record.AgentCode || '',
     rmId,
+    RMId: rmId,
     rmCustomerId,
+    RmCustomerId: rmCustomerId,
+    RMCustomerId: rmCustomerId,
+    createdByRole: record.createdByRole || record.CreatedByRole || '',
+    CreatedByRole: record.CreatedByRole || record.createdByRole || '',
+    createdByUserId: record.createdByUserId ?? record.CreatedByUserId ?? null,
+    CreatedByUserId: record.CreatedByUserId ?? record.createdByUserId ?? null,
+    createdBy: record.createdBy ?? record.CreatedBy ?? null,
+    CreatedBy: record.CreatedBy ?? record.createdBy ?? null,
     isRmSourced,
-    isAgentSourced: Boolean(resolvedAgentId),
+    isAgentSourced,
     branch: record.branch || inferBranch(record.address),
     location: record.location || inferLocation(record.address),
     sourcingChannel: record.sourcingChannel || '',
@@ -458,7 +472,40 @@ function buildBlankApplication(applicationId) {
       coApplicants: []
     },
     bankExistingLoans: {
+      applicant: {
+        primaryBank: {
+          applicationBankExistingLoanDetailsId: null,
+          bankName: '',
+          branch: '',
+          accountType: '',
+          accountNumber: '',
+          ifscCode: '',
+          accountHolderName: '',
+          bankAddress: '',
+          noOfActiveLoans: '',
+          noOfActiveCreditCards: '',
+          isPrimaryBank: true,
+          activeLoansDetails: [],
+          activeCreditCardsDetails: [],
+        },
+        otherBank: {
+          applicationBankExistingLoanDetailsId: null,
+          bankName: '',
+          branch: '',
+          accountType: '',
+          accountNumber: '',
+          ifscCode: '',
+          accountHolderName: '',
+          bankAddress: '',
+          noOfActiveLoans: '',
+          noOfActiveCreditCards: '',
+          isPrimaryBank: false,
+          activeLoansDetails: [],
+          activeCreditCardsDetails: [],
+        },
+      },
       primaryBank: {
+        applicationBankExistingLoanDetailsId: null,
         bankName: '',
         branch: '',
         accountType: '',
@@ -466,9 +513,28 @@ function buildBlankApplication(applicationId) {
         ifscCode: '',
         accountHolderName: '',
         bankAddress: '',
-        averageMonthlyBalance: '',
-        latestBalance: ''
+        noOfActiveLoans: '',
+        noOfActiveCreditCards: '',
+        isPrimaryBank: true,
+        activeLoansDetails: [],
+        activeCreditCardsDetails: [],
       },
+      otherBank: {
+        applicationBankExistingLoanDetailsId: null,
+        bankName: '',
+        branch: '',
+        accountType: '',
+        accountNumber: '',
+        ifscCode: '',
+        accountHolderName: '',
+        bankAddress: '',
+        noOfActiveLoans: '',
+        noOfActiveCreditCards: '',
+        isPrimaryBank: false,
+        activeLoansDetails: [],
+        activeCreditCardsDetails: [],
+      },
+      coApplicants: [],
       existingLoans: []
     },
     collateralDetails: {
@@ -517,19 +583,53 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   const rawCustomer = backendData.customer || backendData.Customer || backendData;
   const customer = Array.isArray(rawCustomer) ? (rawCustomer[0] || {}) : (rawCustomer || {});
   const rawProduct = backendData.productDetails || backendData.ProductDetails;
-  const productDetails = Array.isArray(rawProduct) ? (rawProduct[0] || {}) : (rawProduct || {});
-  const kycList = Array.isArray(backendData.kycDocuments || backendData.KycDocuments) ? (backendData.kycDocuments || backendData.KycDocuments) : [];
-  const personalList = Array.isArray(backendData.personalInformation || backendData.PersonalInformation) ? (backendData.personalInformation || backendData.PersonalInformation) : [];
-  const addressList = Array.isArray(backendData.addressDetails || backendData.AddressDetails) ? (backendData.addressDetails || backendData.AddressDetails) : [];
-  const empList = Array.isArray(backendData.employmentIncome || backendData.EmploymentIncome) ? (backendData.employmentIncome || backendData.EmploymentIncome) : [];
-  const bankList = Array.isArray(backendData.bankExistingLoans || backendData.BankExistingLoans) ? (backendData.bankExistingLoans || backendData.BankExistingLoans) : [];
-  const colList = Array.isArray(backendData.collateral || backendData.Collateral || backendData.collateralDetails || backendData.CollateralDetails || backendData.applicationCollateralDetails || backendData.ApplicationCollateralDetails) 
-    ? (backendData.collateral || backendData.Collateral || backendData.collateralDetails || backendData.CollateralDetails || backendData.applicationCollateralDetails || backendData.ApplicationCollateralDetails) 
-    : [];
-  const refList = Array.isArray(backendData.references || backendData.References) ? (backendData.references || backendData.References) : [];
+  const productDetails = Array.isArray(rawProduct) ? (rawProduct[0] || null) : (rawProduct || null);
+  const extractList = (raw) => {
+    if (Array.isArray(raw)) return raw;
+    if (Array.isArray(raw?.value)) return raw.value;
+    if (Array.isArray(raw?.data)) return raw.data;
+    if (raw && typeof raw === 'object' && Object.keys(raw).length > 0) return [raw];
+    return [];
+  };
 
-  const agentCustomerId = customer.agentCustomerId || customer.AgentCustomerId || productDetails.agentCustomerId || productDetails.AgentCustomerId || existingDraft.agentCustomerId || existingDraft.id;
+  const kycList = extractList(backendData.kycDocuments ?? backendData.KycDocuments ?? backendData.applicationKYCDocuments ?? backendData.ApplicationKYCDocuments);
+  const personalList = extractList(backendData.personalInformation ?? backendData.PersonalInformation ?? backendData.applicationPersonalInformation ?? backendData.ApplicationPersonalInformation);
+  const addressList = extractList(backendData.addressDetails ?? backendData.AddressDetails ?? backendData.applicationAddressDetails ?? backendData.ApplicationAddressDetails);
+  const empList = extractList(backendData.employmentIncome ?? backendData.EmploymentIncome ?? backendData.applicationEmploymentIncomeDetails ?? backendData.ApplicationEmploymentIncomeDetails);
+  const bankList = extractList(backendData.bankExistingLoans ?? backendData.BankExistingLoans ?? backendData.applicationBankExistingLoanDetails ?? backendData.ApplicationBankExistingLoanDetails);
+  const colList = extractList(
+    backendData.collateral ??
+    backendData.Collateral ??
+    backendData.collateralDetails ??
+    backendData.CollateralDetails ??
+    backendData.applicationCollateralDetails ??
+    backendData.ApplicationCollateralDetails
+  );
+  const refList = extractList(backendData.references ?? backendData.References ?? backendData.applicationReferenceDetails ?? backendData.ApplicationReferenceDetails);
+
+  const agentCustomerId = customer.agentCustomerId || customer.AgentCustomerId || productDetails?.agentCustomerId || productDetails?.AgentCustomerId || existingDraft.agentCustomerId || existingDraft.id;
   const appIdStr = String(agentCustomerId || existingDraft.id || '');
+  const currentAppIdNum = Number(appIdStr);
+
+  // Validate strict ownership of productDetails to current application only (supports both Agent and RM common-customer model)
+  const currentAgentCustId = Number(customer.agentCustomerId || customer.AgentCustomerId || agentCustomerId || currentAppIdNum);
+  const rawProductAgentCustId = productDetails?.agentCustomerId ?? productDetails?.AgentCustomerId;
+  const rawProductRmCustId = productDetails?.rmCustomerId ?? productDetails?.RmCustomerId ?? productDetails?.RMCustomerId;
+  const rawLegacyRmCustId = customer.rmCustomerId ?? customer.RmCustomerId ?? customer.RMCustomerId;
+
+  const isProductOwnedByCurrentApp = Boolean(
+    productDetails && (
+      // Priority 1: Match by AgentCustomerId for both Agent and RM common customers
+      (rawProductAgentCustId !== undefined && rawProductAgentCustId !== null && rawProductAgentCustId !== '' && Number(rawProductAgentCustId) === currentAgentCustId) ||
+      // Priority 2: Legacy fallback when product.AgentCustomerId is null/absent and authoritative legacy RMCustomerId is present
+      ((rawProductAgentCustId === undefined || rawProductAgentCustId === null || rawProductAgentCustId === '') &&
+       rawProductRmCustId !== undefined && rawProductRmCustId !== null && rawProductRmCustId !== '' &&
+       rawLegacyRmCustId !== undefined && rawLegacyRmCustId !== null && rawLegacyRmCustId !== '' &&
+       Number(rawProductRmCustId) === Number(rawLegacyRmCustId))
+    )
+  );
+
+  const effectiveProductDetails = isProductOwnedByCurrentApp ? productDetails : null;
 
   // 1. Customer & Product Details
   const customerName = customer.fullName || customer.FullName || customer.customerName || customer.CustomerName || existingDraft.customerName || '';
@@ -540,6 +640,38 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   const status = rawStatus === 2 ? 'Logged to HO' : (rawStatus === 1 ? 'Pending' : (rawStatus === 0 ? 'New' : (existingDraft.status || 'Draft')));
   const createdDate = customer.createdAt || customer.CreatedAt || customer.createdDate || customer.CreatedDate || existingDraft.createdDate || '';
   // Backend-resolved Ownership Fields (Single Source of Truth)
+  const createdByRole =
+    customer.createdByRole ??
+    customer.CreatedByRole ??
+    customer.created_by_role ??
+    backendData.createdByRole ??
+    backendData.CreatedByRole ??
+    existingDraft.createdByRole ??
+    existingDraft.CreatedByRole ??
+    '';
+
+  const createdByUserId =
+    customer.createdByUserId ??
+    customer.CreatedByUserId ??
+    customer.created_by_user_id ??
+    backendData.createdByUserId ??
+    backendData.CreatedByUserId ??
+    existingDraft.createdByUserId ??
+    existingDraft.CreatedByUserId ??
+    null;
+
+  const createdBy =
+    customer.createdBy ??
+    customer.CreatedBy ??
+    customer.created_by ??
+    backendData.createdBy ??
+    backendData.CreatedBy ??
+    effectiveProductDetails?.createdBy ??
+    effectiveProductDetails?.CreatedBy ??
+    existingDraft.createdBy ??
+    existingDraft.CreatedBy ??
+    null;
+
   const customerSource =
     backendData.customerSource ??
     backendData.CustomerSource ??
@@ -550,26 +682,36 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   const rawRmId =
     backendData.rmId ??
     backendData.RmId ??
+    backendData.RMId ??
     customer.rmId ??
     customer.RmId ??
-    productDetails.rmId ??
-    productDetails.RmId ??
-    customer.createdBy ??
+    customer.RMId ??
+    effectiveProductDetails?.rmId ??
+    effectiveProductDetails?.RmId ??
+    effectiveProductDetails?.RMId ??
+    existingDraft.rmId ??
+    existingDraft.RMId ??
     null;
   const rmId = (rawRmId !== null && rawRmId !== undefined && rawRmId !== '') ? Number(rawRmId) : null;
 
   const rmName =
     backendData.rmName ??
     backendData.RmName ??
+    backendData.RMName ??
     customer.rmName ??
     customer.RmName ??
+    customer.RMName ??
+    existingDraft.rmName ??
     null;
 
   const rmCode =
     backendData.rmCode ??
     backendData.RmCode ??
+    backendData.RMCode ??
     customer.rmCode ??
     customer.RmCode ??
+    customer.RMCode ??
+    existingDraft.rmCode ??
     null;
 
   const rawAgentId =
@@ -577,332 +719,903 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     (backendData.AgentId !== undefined ? backendData.AgentId :
     (customer.agentId !== undefined ? customer.agentId :
     (customer.AgentId !== undefined ? customer.AgentId :
-    (productDetails.agentId !== undefined ? productDetails.agentId :
-    (productDetails.AgentId !== undefined ? productDetails.AgentId : null)))));
-  const agentId = (rawAgentId !== null && rawAgentId !== undefined && rawAgentId !== '') ? rawAgentId : null;
+    (effectiveProductDetails?.agentId !== undefined ? effectiveProductDetails.agentId :
+    (effectiveProductDetails?.AgentId !== undefined ? effectiveProductDetails.AgentId :
+    (existingDraft.agentId !== undefined ? existingDraft.agentId :
+    (existingDraft.AgentId !== undefined ? existingDraft.AgentId : null)))))));
+  const agentId = (rawAgentId !== null && rawAgentId !== undefined && rawAgentId !== '') ? Number(rawAgentId) : null;
 
   const rawAgentName =
     backendData.agentName ??
     backendData.AgentName ??
     customer.agentName ??
     customer.AgentName ??
+    existingDraft.agentName ??
     null;
 
-  const resolvedCustomerSource = customerSource || (agentId ? 'Agent' : (rmId ? 'RM' : ''));
-  const isAgentSourced = resolvedCustomerSource === 'Agent' || Boolean(agentId);
-  const isRmSourced = resolvedCustomerSource === 'RM' || (!agentId && Boolean(rmId));
-  const agentName = isAgentSourced ? (rawAgentName || '') : '';
-  const rmCustomerId = productDetails.rmCustomerId ?? productDetails.RmCustomerId ?? customer.rmCustomerId ?? existingDraft.rmCustomerId ?? null;
+  const rawAgentCode =
+    backendData.agentCode ??
+    backendData.AgentCode ??
+    customer.agentCode ??
+    customer.AgentCode ??
+    existingDraft.agentCode ??
+    null;
 
-  const applicationProductDetailsId = productDetails.applicationProductDetailsId || productDetails.ApplicationProductDetailsId || existingDraft.applicationProductDetailsId || null;
-  const sourcingChannel = productDetails.sourcingChannelId ?? productDetails.SourcingChannelId ?? existingDraft.sourcingChannel ?? '';
-  const loanProduct = productDetails.loanProductId ?? productDetails.LoanProductId ?? existingDraft.loanProduct ?? '';
-  const loanVariation = productDetails.loanProductVariationId ?? productDetails.LoanProductVariationId ?? existingDraft.loanVariation ?? '';
-  const loanTransactionType = productDetails.loanTransactionTypeId ?? productDetails.LoanTransactionTypeId ?? existingDraft.loanTransactionType ?? '';
-  const purposeOfLoan = productDetails.loanPurposeId ?? productDetails.LoanPurposeId ?? customer.loanPurposeId ?? customer.LoanPurposeId ?? existingDraft.purposeOfLoan ?? '';
-  const loanAmount = productDetails.loanAmount !== undefined && productDetails.loanAmount !== null ? productDetails.loanAmount : (productDetails.LoanAmount !== undefined && productDetails.LoanAmount !== null ? productDetails.LoanAmount : (customer.expectedLoanAmount ?? customer.ExpectedLoanAmount ?? existingDraft.loanAmount ?? ''));
-  const loanTenureMonths = productDetails.loanTenure !== undefined && productDetails.loanTenure !== null ? productDetails.loanTenure : (productDetails.LoanTenure !== undefined && productDetails.LoanTenure !== null ? productDetails.LoanTenure : (productDetails.loanTenureMonths ?? productDetails.LoanTenureMonths ?? existingDraft.loanTenureMonths ?? ''));
-  const interestType = productDetails.interestTypeId ?? productDetails.InterestTypeId ?? existingDraft.interestType ?? '';
-  const roi = productDetails.roi !== undefined && productDetails.roi !== null ? productDetails.roi : (productDetails.Roi !== undefined && productDetails.Roi !== null ? productDetails.Roi : (productDetails.ROI !== undefined && productDetails.ROI !== null ? productDetails.ROI : existingDraft.roi ?? ''));
-  const distanceFromBranchKm = productDetails.distanceFromBranch !== undefined && productDetails.distanceFromBranch !== null ? productDetails.distanceFromBranch : (productDetails.DistanceFromBranch !== undefined && productDetails.DistanceFromBranch !== null ? productDetails.DistanceFromBranch : (productDetails.distanceFromBranchKm ?? productDetails.DistanceFromBranchKm ?? existingDraft.distanceFromBranchKm ?? ''));
-  const coApplicantsCount = productDetails.noOfCoApplicants !== undefined && productDetails.noOfCoApplicants !== null ? productDetails.noOfCoApplicants : (productDetails.NoOfCoApplicants !== undefined && productDetails.NoOfCoApplicants !== null ? productDetails.NoOfCoApplicants : (productDetails.coApplicantsCount ?? productDetails.CoApplicantsCount ?? existingDraft.coApplicantsCount ?? 0));
+  // Resolve ownership using the shared helper as the single source of truth
+  const ownership = resolveApplicationOwnership({
+    ...existingDraft,
+    ...customer,
+    ...backendData,
+    createdByRole,
+    CreatedByRole: createdByRole,
+    createdByUserId,
+    CreatedByUserId: createdByUserId,
+    createdBy,
+    CreatedBy: createdBy,
+    agentId,
+    AgentId: agentId,
+    rmId,
+    RMId: rmId,
+  });
+
+  const isAgentSourced = ownership.isAgentCreated;
+  const isRmSourced = ownership.isDirectRm;
+  const resolvedAgentId = ownership.agentId;
+  const resolvedRmId = ownership.rmId ?? rmId;
+  const agentName = isAgentSourced ? (rawAgentName || ownership.agentName || '') : '';
+  const agentCode = isAgentSourced ? (rawAgentCode || '') : '';
+  const resolvedCustomerSource = customerSource || (isAgentSourced ? 'Agent' : (isRmSourced ? 'RM' : ''));
+  const rmCustomerId = effectiveProductDetails?.rmCustomerId ?? effectiveProductDetails?.RmCustomerId ?? customer.rmCustomerId ?? customer.RmCustomerId ?? customer.RMCustomerId ?? existingDraft.rmCustomerId ?? null;
+
+  const applicationProductDetailsId = effectiveProductDetails?.applicationProductDetailsId || effectiveProductDetails?.ApplicationProductDetailsId || null;
+  const sourcingChannel = effectiveProductDetails?.sourcingChannelId ?? effectiveProductDetails?.SourcingChannelId ?? (isRmSourced ? 1 : (existingDraft.sourcingChannel ?? ''));
+  const loanProduct = effectiveProductDetails?.loanProductId ?? effectiveProductDetails?.LoanProductId ?? '';
+  const loanVariation = effectiveProductDetails?.loanProductVariationId ?? effectiveProductDetails?.LoanProductVariationId ?? '';
+  const loanTransactionType = effectiveProductDetails?.loanTransactionTypeId ?? effectiveProductDetails?.LoanTransactionTypeId ?? '';
+  const purposeOfLoan = effectiveProductDetails?.loanPurposeId ?? effectiveProductDetails?.LoanPurposeId ?? customer.loanPurposeId ?? customer.LoanPurposeId ?? '';
+  const loanAmount = (effectiveProductDetails?.loanAmount !== undefined && effectiveProductDetails?.loanAmount !== null && effectiveProductDetails?.loanAmount !== '')
+    ? effectiveProductDetails.loanAmount
+    : ((effectiveProductDetails?.LoanAmount !== undefined && effectiveProductDetails?.LoanAmount !== null && effectiveProductDetails?.LoanAmount !== '')
+      ? effectiveProductDetails.LoanAmount
+      : (customer.expectedLoanAmount ?? customer.ExpectedLoanAmount ?? ''));
+  const loanTenureMonths = (effectiveProductDetails?.loanTenure !== undefined && effectiveProductDetails?.loanTenure !== null && effectiveProductDetails?.loanTenure !== '')
+    ? effectiveProductDetails.loanTenure
+    : ((effectiveProductDetails?.LoanTenure !== undefined && effectiveProductDetails?.LoanTenure !== null && effectiveProductDetails?.LoanTenure !== '')
+      ? effectiveProductDetails.LoanTenure
+      : (effectiveProductDetails?.loanTenureMonths ?? effectiveProductDetails?.LoanTenureMonths ?? ''));
+  const interestType = effectiveProductDetails?.interestTypeId ?? effectiveProductDetails?.InterestTypeId ?? '';
+  const roi = (effectiveProductDetails?.roi !== undefined && effectiveProductDetails?.roi !== null && effectiveProductDetails?.roi !== '')
+    ? effectiveProductDetails.roi
+    : ((effectiveProductDetails?.Roi !== undefined && effectiveProductDetails?.Roi !== null && effectiveProductDetails?.Roi !== '')
+      ? effectiveProductDetails.Roi
+      : ((effectiveProductDetails?.ROI !== undefined && effectiveProductDetails?.ROI !== null && effectiveProductDetails?.ROI !== '')
+        ? effectiveProductDetails.ROI
+        : ''));
+  const distanceFromBranchKm = (effectiveProductDetails?.distanceFromBranch !== undefined && effectiveProductDetails?.distanceFromBranch !== null && effectiveProductDetails?.distanceFromBranch !== '')
+    ? effectiveProductDetails.distanceFromBranch
+    : ((effectiveProductDetails?.DistanceFromBranch !== undefined && effectiveProductDetails?.DistanceFromBranch !== null && effectiveProductDetails?.DistanceFromBranch !== '')
+      ? effectiveProductDetails.DistanceFromBranch
+      : (effectiveProductDetails?.distanceFromBranchKm ?? effectiveProductDetails?.DistanceFromBranchKm ?? ''));
+  const coApplicantsCount = (effectiveProductDetails?.noOfCoApplicants !== undefined && effectiveProductDetails?.noOfCoApplicants !== null && effectiveProductDetails?.noOfCoApplicants !== '')
+    ? Number(effectiveProductDetails.noOfCoApplicants)
+    : ((effectiveProductDetails?.NoOfCoApplicants !== undefined && effectiveProductDetails?.NoOfCoApplicants !== null && effectiveProductDetails?.NoOfCoApplicants !== '')
+      ? Number(effectiveProductDetails.NoOfCoApplicants)
+      : (effectiveProductDetails?.coApplicantsCount !== undefined && effectiveProductDetails?.coApplicantsCount !== null && effectiveProductDetails?.coApplicantsCount !== ''
+        ? Number(effectiveProductDetails.coApplicantsCount)
+        : (effectiveProductDetails?.CoApplicantsCount !== undefined && effectiveProductDetails?.CoApplicantsCount !== null && effectiveProductDetails?.CoApplicantsCount !== ''
+          ? Number(effectiveProductDetails.CoApplicantsCount)
+          : 0)));
 
   // 2. KYC Documents
-  const applicantKyc = kycList[0] || {};
-  const coApplicantKycs = kycList.slice(1);
+  const kycProductId = applicationProductDetailsId;
+  const applicantKyc = primaryKycForSequence(kycList, 0, kycProductId);
+  const coApplicantKycs = Array.from(
+    { length: Number(coApplicantsCount) || 0 },
+    (_, index) => primaryKycForSequence(kycList, index + 1, kycProductId)
+  );
   const kycDocuments = {
-    applicant: {
-      kycDocumentId: applicantKyc.applicationKYCDocumentId || existingDraft.kycDocuments?.applicant?.kycDocumentId || null,
-      applicationKYCDocumentId: applicantKyc.applicationKYCDocumentId || existingDraft.kycDocuments?.applicant?.applicationKYCDocumentId || null,
-      aadhaarLast4: applicantKyc.aadhaarLastFourDigits || existingDraft.kycDocuments?.applicant?.aadhaarLast4 || '',
-      panCardNo: applicantKyc.panCardNo || existingDraft.kycDocuments?.applicant?.panCardNo || '',
-      identityDocumentType: applicantKyc.documentTypeId || existingDraft.kycDocuments?.applicant?.identityDocumentType || '',
-      identityDocumentNo: applicantKyc.documentNumber || existingDraft.kycDocuments?.applicant?.identityDocumentNo || '',
-      verificationStatus: applicantKyc.verificationId ? (applicantKyc.verificationId === 1 ? 'Verified' : String(applicantKyc.verificationId)) : (existingDraft.kycDocuments?.applicant?.verificationStatus || 'Pending'),
-      identityDocumentCount: applicantKyc.documentNumber ? '1' : (existingDraft.kycDocuments?.applicant?.identityDocumentCount || ''),
-      identityDocumentFiles: existingDraft.kycDocuments?.applicant?.identityDocumentFiles || [],
-    },
-    coApplicants: coApplicantKycs.map((coKyc, idx) => {
-      const draftCo = existingDraft.kycDocuments?.coApplicants?.[idx] || {};
-      return {
-        kycDocumentId: coKyc.applicationKYCDocumentId || draftCo.kycDocumentId || null,
-        applicationKYCDocumentId: coKyc.applicationKYCDocumentId || draftCo.applicationKYCDocumentId || null,
-        aadhaarLast4: coKyc.aadhaarLastFourDigits || draftCo.aadhaarLast4 || '',
-        panCardNo: coKyc.panCardNo || draftCo.panCardNo || '',
-        identityDocumentType: coKyc.documentTypeId || draftCo.identityDocumentType || '',
-        identityDocumentNo: coKyc.documentNumber || draftCo.identityDocumentNo || '',
-        verificationStatus: coKyc.verificationId ? (coKyc.verificationId === 1 ? 'Verified' : String(coKyc.verificationId)) : (draftCo.verificationStatus || 'Pending'),
-        identityDocumentCount: coKyc.documentNumber ? '1' : (draftCo.identityDocumentCount || ''),
-        identityDocumentFiles: draftCo.identityDocumentFiles || [],
-      };
-    }),
+    applicant: mapKycPerson(applicantKyc, existingDraft.kycDocuments?.applicant),
+    coApplicants: coApplicantKycs.map((coKyc, index) =>
+      mapKycPerson(coKyc, existingDraft.kycDocuments?.coApplicants?.[index])
+    ),
   };
 
-  // 3. Personal Information / Customer Registration
-  const applicantPers = personalList[0] || {};
-  const coApplicantPers = personalList.slice(1);
+  // 3. Personal Information / Customer Registration (Sequence-Aware Relational Matching)
+  const findPersonalRowForSequence = (targetSeq, targetKycRow) => {
+    if (!Array.isArray(personalList) || personalList.length === 0) return null;
+    const targetKycId = targetKycRow?.applicationKYCDocumentId ?? targetKycRow?.ApplicationKYCDocumentId ?? targetKycRow?.kycDocumentId;
+
+    // 1. Primary: Strictly match by applicationKYCDocumentId
+    if (targetKycId) {
+      const matched = personalList.find((p) => {
+        const pKycId = p.applicationKYCDocumentId ?? p.ApplicationKYCDocumentId ?? p.kycDocumentId;
+        return pKycId !== undefined && pKycId !== null && pKycId !== '' && Number(pKycId) === Number(targetKycId);
+      });
+      if (matched) return matched;
+    }
+
+    // 2. Secondary: Match by applicantSequence if present on personal row
+    const matchedBySeq = personalList.find((p) => {
+      const rawSeq = p.applicantSequence ?? p.ApplicantSequence;
+      return rawSeq !== undefined && rawSeq !== null && rawSeq !== '' && Number(rawSeq) === targetSeq;
+    });
+    if (matchedBySeq) return matchedBySeq;
+
+    return null;
+  };
+
+  const mapPersonalPerson = (persRow = {}, draftPers = {}, kycRow = {}, defaultName = '', defaultMobile = '', defaultEmail = '', isPrimary = false) => {
+    const personalInformationId = persRow.personalInformationId ?? persRow.PersonalInformationId ?? draftPers.personalInformationId ?? null;
+    const relationshipWithApplicant = persRow.relationshipId ?? persRow.RelationshipId ?? persRow.relationshipWithApplicant ?? persRow.RelationshipWithApplicant ?? draftPers.relationshipWithApplicant ?? (isPrimary ? 'SELF' : '');
+    const title = persRow.titleId ?? persRow.TitleId ?? persRow.title ?? persRow.Title ?? draftPers.title ?? '';
+    const firstName = persRow.firstName ?? persRow.FirstName ?? (isPrimary ? (defaultName || draftPers.firstName || '') : (draftPers.firstName || ''));
+    const middleName = persRow.middleName ?? persRow.MiddleName ?? draftPers.middleName ?? '';
+    const lastName = persRow.lastName ?? persRow.LastName ?? draftPers.lastName ?? '';
+    const fatherOrSpouseName = persRow.fatherSpouseName ?? persRow.FatherSpouseName ?? persRow.fatherOrSpouseName ?? persRow.FatherOrSpouseName ?? draftPers.fatherOrSpouseName ?? '';
+    const mothersMaidenName = persRow.mothersMaidenName ?? persRow.MothersMaidenName ?? draftPers.mothersMaidenName ?? '';
+    const rawDob = persRow.dateOfBirth ?? persRow.DateOfBirth ?? draftPers.dateOfBirth;
+    const dateOfBirth = rawDob ? String(rawDob).slice(0, 10) : '';
+    const religion = persRow.religionId ?? persRow.ReligionId ?? persRow.religion ?? persRow.Religion ?? draftPers.religion ?? '';
+    const category = persRow.casteId ?? persRow.CasteId ?? persRow.category ?? persRow.Category ?? draftPers.category ?? '';
+    const gender = persRow.genderId ?? persRow.GenderId ?? persRow.gender ?? persRow.Gender ?? draftPers.gender ?? '';
+    const maritalStatus = persRow.maritalStatusId ?? persRow.MaritalStatusId ?? persRow.maritalStatus ?? persRow.MaritalStatus ?? draftPers.maritalStatus ?? '';
+    const mobileNo = persRow.mobileNumber ?? persRow.MobileNumber ?? persRow.mobileNo ?? persRow.MobileNo ?? (isPrimary ? (defaultMobile || draftPers.mobileNo || '') : (draftPers.mobileNo || ''));
+    const emailId = persRow.emailId ?? persRow.EmailId ?? persRow.email ?? persRow.Email ?? (isPrimary ? (defaultEmail || draftPers.emailId || '') : (draftPers.emailId || ''));
+    const panCardNo = kycRow?.panCardNo ?? kycRow?.PanCardNo ?? persRow.panCardNo ?? persRow.PanCardNo ?? draftPers.panCardNo ?? '';
+
+    return {
+      personalInformationId,
+      relationshipWithApplicant,
+      title,
+      firstName,
+      middleName,
+      lastName,
+      fatherOrSpouseName,
+      mothersMaidenName,
+      dateOfBirth,
+      religion,
+      category,
+      gender,
+      maritalStatus,
+      mobileNo,
+      emailId,
+      panCardNo,
+    };
+  };
+
+  const applicantPers = findPersonalRowForSequence(0, applicantKyc);
+  const coApplicantPersList = Array.from({ length: Number(coApplicantsCount) || 0 }, (_, idx) => {
+    return findPersonalRowForSequence(idx + 1, coApplicantKycs[idx]);
+  });
+
+  const coApplicantPersonalIds = new Set(
+    coApplicantPersList
+      .map((p) => p?.personalInformationId ?? p?.PersonalInformationId)
+      .filter((id) => id !== undefined && id !== null && id !== '')
+      .map(Number)
+  );
+
+  const mappedCoApplicants = Array.from({ length: Number(coApplicantsCount) || 0 }, (_, idx) => {
+    const coPers = coApplicantPersList[idx] || {};
+    const draftCo = existingDraft.registration?.personalInformation?.coApplicants?.[idx] || existingDraft.personalInformation?.coApplicants?.[idx] || {};
+    return mapPersonalPerson(coPers, draftCo, coApplicantKycs[idx], '', '', '', false);
+  });
+
+  const draftApplicant = existingDraft.registration?.personalInformation?.applicant || existingDraft.personalInformation?.applicant || {};
+  const draftAppId = draftApplicant.personalInformationId;
+  const isDraftAppIdConflicting = draftAppId && coApplicantPersonalIds.has(Number(draftAppId));
+
+  const cleanDraftApplicant = isDraftAppIdConflicting
+    ? {
+        ...draftApplicant,
+        personalInformationId: null,
+        fatherOrSpouseName: '',
+        mothersMaidenName: '',
+        dateOfBirth: '',
+        religion: '',
+        category: '',
+        gender: '',
+        maritalStatus: '',
+      }
+    : draftApplicant;
+
+  const mappedApplicant = mapPersonalPerson(
+    applicantPers || {},
+    cleanDraftApplicant,
+    applicantKyc,
+    customerName,
+    mobile,
+    email,
+    true
+  );
+
+  // If applicant has no matching personal row in backend, personalInformationId must be null
+  if (!applicantPers) {
+    mappedApplicant.personalInformationId = null;
+  }
+  // Guarantee applicant personalInformationId cannot collide with any co-applicant ID
+  if (mappedApplicant.personalInformationId && coApplicantPersonalIds.has(Number(mappedApplicant.personalInformationId))) {
+    mappedApplicant.personalInformationId = null;
+  }
+
   const personalInformation = {
-    applicant: {
-      personalInformationId: applicantPers.personalInformationId || existingDraft.registration?.personalInformation?.applicant?.personalInformationId || existingDraft.personalInformation?.applicant?.personalInformationId || null,
-      relationshipWithApplicant: applicantPers.relationshipId || existingDraft.registration?.personalInformation?.applicant?.relationshipWithApplicant || 'SELF',
-      title: applicantPers.titleId || existingDraft.registration?.personalInformation?.applicant?.title || '',
-      firstName: applicantPers.firstName || customerName || existingDraft.registration?.personalInformation?.applicant?.firstName || '',
-      middleName: applicantPers.middleName || existingDraft.registration?.personalInformation?.applicant?.middleName || '',
-      lastName: applicantPers.lastName || existingDraft.registration?.personalInformation?.applicant?.lastName || '',
-      fatherOrSpouseName: applicantPers.fatherSpouseName || existingDraft.registration?.personalInformation?.applicant?.fatherOrSpouseName || '',
-      mothersMaidenName: applicantPers.mothersMaidenName || existingDraft.registration?.personalInformation?.applicant?.mothersMaidenName || '',
-      dateOfBirth: applicantPers.dateOfBirth ? String(applicantPers.dateOfBirth).slice(0, 10) : (existingDraft.registration?.personalInformation?.applicant?.dateOfBirth || ''),
-      religion: applicantPers.religionId || existingDraft.registration?.personalInformation?.applicant?.religion || '',
-      category: applicantPers.casteId || existingDraft.registration?.personalInformation?.applicant?.category || '',
-      gender: applicantPers.genderId || existingDraft.registration?.personalInformation?.applicant?.gender || '',
-      maritalStatus: applicantPers.maritalStatusId || existingDraft.registration?.personalInformation?.applicant?.maritalStatus || '',
-      mobileNo: applicantPers.mobileNumber || mobile || existingDraft.registration?.personalInformation?.applicant?.mobileNo || '',
-      emailId: applicantPers.emailId || email || existingDraft.registration?.personalInformation?.applicant?.emailId || '',
-      panCardNo: applicantKyc.panCardNo || existingDraft.registration?.personalInformation?.applicant?.panCardNo || '',
-    },
-    coApplicants: coApplicantPers.map((coPers, idx) => {
-      const draftCo = existingDraft.registration?.personalInformation?.coApplicants?.[idx] || existingDraft.personalInformation?.coApplicants?.[idx] || {};
-      return {
-        personalInformationId: coPers.personalInformationId || draftCo.personalInformationId || null,
-        relationshipWithApplicant: coPers.relationshipId || draftCo.relationshipWithApplicant || '',
-        title: coPers.titleId || draftCo.title || '',
-        firstName: coPers.firstName || draftCo.firstName || '',
-        middleName: coPers.middleName || draftCo.middleName || '',
-        lastName: coPers.lastName || draftCo.lastName || '',
-        fatherOrSpouseName: coPers.fatherSpouseName || draftCo.fatherOrSpouseName || '',
-        mothersMaidenName: coPers.mothersMaidenName || draftCo.mothersMaidenName || '',
-        dateOfBirth: coPers.dateOfBirth ? String(coPers.dateOfBirth).slice(0, 10) : (draftCo.dateOfBirth || ''),
-        religion: coPers.religionId || draftCo.religion || '',
-        category: coPers.casteId || draftCo.category || '',
-        gender: coPers.genderId || draftCo.gender || '',
-        maritalStatus: coPers.maritalStatusId || draftCo.maritalStatus || '',
-        mobileNo: coPers.mobileNumber || draftCo.mobileNo || '',
-        emailId: coPers.emailId || draftCo.emailId || '',
-        panCardNo: coApplicantKycs[idx]?.panCardNo || draftCo.panCardNo || '',
-      };
-    }),
+    applicant: mappedApplicant,
+    coApplicants: mappedCoApplicants,
   };
 
-  // 4. Address Details
-  const applicantAddr = addressList[0] || {};
-  const coApplicantAddrs = addressList.slice(1);
-  const addressDetails = {
-    applicant: {
-      addressDetailsId: applicantAddr.applicationAddressDetailsId || null,
-      applicationAddressDetailsId: applicantAddr.applicationAddressDetailsId || null,
-      addressLine1: applicantAddr.addressLine1 || '',
-      addressLine2: applicantAddr.addressLine2 || '',
-      landmark: applicantAddr.landmark || '',
-      city: applicantAddr.cityId || '',
-      state: applicantAddr.stateId || '',
-      pincode: applicantAddr.pincode || applicantAddr.Pincode || applicantAddr.postalCode || applicantAddr.PostalCode || applicantAddr.pinCode || applicantAddr.PinCode || '',
-      mailingSameAsCurrent: applicantAddr.mailingAsCurrent !== undefined ? (applicantAddr.mailingAsCurrent ? 'Yes' : 'No') : 'No',
+  // 4. Address Details (Sequence-Aware Relational Matching with Claimed ID Protection)
+  const rawAddressSource =
+    backendData.addressDetails ??
+    backendData.AddressDetails ??
+    backendData.applicationAddressDetails ??
+    backendData.ApplicationAddressDetails;
+  const isBackendAddressExplicit = rawAddressSource !== undefined && rawAddressSource !== null;
+
+  const claimedAddressIds = new Set();
+
+  const getAddrId = (a) =>
+    a?.applicationAddressDetailsId ??
+    a?.ApplicationAddressDetailsId ??
+    a?.addressDetailsId ??
+    a?.AddressDetailsId ??
+    a?.id ??
+    a?.Id ??
+    null;
+
+  const findAddressRowForSequence = (targetSeq, resolvedPers, resolvedKyc) => {
+    if (!Array.isArray(addressList) || addressList.length === 0) return null;
+    const persId = resolvedPers?.personalInformationId ?? resolvedPers?.PersonalInformationId;
+    const kycId = resolvedKyc?.applicationKYCDocumentId ?? resolvedKyc?.ApplicationKYCDocumentId ?? resolvedKyc?.kycDocumentId;
+
+    const unclaimedList = addressList.filter((a) => {
+      const id = getAddrId(a);
+      return !id || !claimedAddressIds.has(Number(id));
+    });
+
+    if (unclaimedList.length === 0) return null;
+
+    // 1. Primary: Match by exact relational ownership: address.personalInformationId === resolvedPerson.personalInformationId
+    if (persId) {
+      const matchedByPers = unclaimedList.filter((a) => {
+        const aPersId = a.personalInformationId ?? a.PersonalInformationId;
+        return aPersId !== undefined && aPersId !== null && aPersId !== '' && Number(aPersId) === Number(persId);
+      });
+
+      if (matchedByPers.length === 1) {
+        const chosen = matchedByPers[0];
+        const id = getAddrId(chosen);
+        if (id) claimedAddressIds.add(Number(id));
+        return chosen;
+      }
+
+      if (matchedByPers.length > 1) {
+        // Multiple addresses under same personalInformationId (historical corrupted state)
+        // Check explicit sequence if present
+        const matchedBySeq = matchedByPers.find((a) => {
+          const rawSeq = a.applicantSequence ?? a.ApplicantSequence;
+          return rawSeq !== undefined && rawSeq !== null && rawSeq !== '' && Number(rawSeq) === targetSeq;
+        });
+        if (matchedBySeq) {
+          const id = getAddrId(matchedBySeq);
+          if (id) claimedAddressIds.add(Number(id));
+          return matchedBySeq;
+        }
+
+        // Last-resort recovery for historical records: deterministic stable allocation among unclaimed rows
+        const sorted = [...matchedByPers].sort((x, y) => (Number(getAddrId(x)) || 0) - (Number(getAddrId(y)) || 0));
+        const chosen = sorted[0];
+        if (chosen) {
+          const id = getAddrId(chosen);
+          if (id) claimedAddressIds.add(Number(id));
+          return chosen;
+        }
+      }
+
+      // Explicit personalInformationId exists but no matching address was found in backend.
+      // Do NOT fall back to addresses belonging to another person.
+      return null;
+    }
+
+    // 2. Secondary: Match by applicationKYCDocumentId if present
+    if (kycId) {
+      const matched = unclaimedList.find((a) => {
+        const aKycId = a.applicationKYCDocumentId ?? a.ApplicationKYCDocumentId;
+        return aKycId !== undefined && aKycId !== null && aKycId !== '' && Number(aKycId) === Number(kycId);
+      });
+      if (matched) {
+        const id = getAddrId(matched);
+        if (id) claimedAddressIds.add(Number(id));
+        return matched;
+      }
+    }
+
+    // 3. Match by applicantSequence if present
+    const matchedBySeq = unclaimedList.find((a) => {
+      const rawSeq = a.applicantSequence ?? a.ApplicantSequence;
+      return rawSeq !== undefined && rawSeq !== null && rawSeq !== '' && Number(rawSeq) === targetSeq;
+    });
+    if (matchedBySeq) {
+      const id = getAddrId(matchedBySeq);
+      if (id) claimedAddressIds.add(Number(id));
+      return matchedBySeq;
+    }
+
+    // 4. Main Applicant ONLY: fallback only if applicant has NO personalInformation row yet
+    // and candidate belongs to current application and does not belong to a co-applicant
+    if (targetSeq === 0 && !persId && unclaimedList.length > 0) {
+      const candidate = unclaimedList.find((a) => {
+        const aPersId = a.personalInformationId ?? a.PersonalInformationId;
+        if (aPersId && coApplicantPersonalIds.has(Number(aPersId))) return false;
+        const rawSeq = a.applicantSequence ?? a.ApplicantSequence;
+        return rawSeq === undefined || rawSeq === null || Number(rawSeq) === 0;
+      });
+      if (candidate) {
+        const id = getAddrId(candidate);
+        if (id) claimedAddressIds.add(Number(id));
+        return candidate;
+      }
+    }
+
+    return null;
+  };
+
+  const mapAddressPerson = (addrRow = {}, draftAddr = {}, targetSeq = 0, resolvedPersId = null) => {
+    // Foreign parent ID guard: reject if addrRow's personalInformationId conflicts with resolvedPersId
+    const rowPersId = addrRow.personalInformationId ?? addrRow.PersonalInformationId;
+    const isRowForeign = resolvedPersId && rowPersId && Number(rowPersId) !== Number(resolvedPersId);
+    const effectiveAddrRow = isRowForeign ? {} : addrRow;
+
+    const rawAddressId = getAddrId(effectiveAddrRow);
+    const addressDetailsId =
+      rawAddressId !== null && rawAddressId !== undefined && !isNaN(Number(rawAddressId)) && Number(rawAddressId) > 0
+        ? Number(rawAddressId)
+        : null;
+
+    // Stale draft protection: Do not restore draft address if its ID was claimed by another person,
+    // or if its personalInformationId belongs to a co-applicant while targetSeq is 0,
+    // or if its personalInformationId conflicts with resolvedPersId,
+    // or if backend returned an authoritative address array and this person has no address row in backend.
+    const isDraftIdClaimed = draftAddr.addressDetailsId && claimedAddressIds.has(Number(draftAddr.addressDetailsId)) && (!addressDetailsId || Number(draftAddr.addressDetailsId) !== addressDetailsId);
+    const isDraftPersConflicting =
+      (targetSeq === 0 && draftAddr.personalInformationId && coApplicantPersonalIds.has(Number(draftAddr.personalInformationId))) ||
+      (resolvedPersId && draftAddr.personalInformationId && Number(draftAddr.personalInformationId) !== Number(resolvedPersId));
+    const isDraftSuppressedByExplicitBackend = isBackendAddressExplicit && !addressDetailsId;
+
+    const safeDraftAddr = isDraftIdClaimed || isDraftPersConflicting || isDraftSuppressedByExplicitBackend ? {} : draftAddr;
+
+    const personalInformationId =
+      effectiveAddrRow.personalInformationId ??
+      effectiveAddrRow.PersonalInformationId ??
+      (targetSeq === 0 && safeDraftAddr.personalInformationId && coApplicantPersonalIds.has(Number(safeDraftAddr.personalInformationId)) ? null : safeDraftAddr.personalInformationId) ??
+      resolvedPersId ??
+      null;
+
+    const addressLine1 = effectiveAddrRow.addressLine1 ?? effectiveAddrRow.AddressLine1 ?? safeDraftAddr.addressLine1 ?? safeDraftAddr.current?.addressLine1 ?? '';
+    const addressLine2 = effectiveAddrRow.addressLine2 ?? effectiveAddrRow.AddressLine2 ?? safeDraftAddr.addressLine2 ?? safeDraftAddr.current?.addressLine2 ?? '';
+    const landmark = effectiveAddrRow.landmark ?? effectiveAddrRow.Landmark ?? safeDraftAddr.landmark ?? safeDraftAddr.current?.landmark ?? '';
+    const city = effectiveAddrRow.cityId ?? effectiveAddrRow.CityId ?? effectiveAddrRow.city ?? effectiveAddrRow.City ?? safeDraftAddr.city ?? safeDraftAddr.current?.city ?? '';
+    const state = effectiveAddrRow.stateId ?? effectiveAddrRow.StateId ?? effectiveAddrRow.state ?? effectiveAddrRow.State ?? safeDraftAddr.state ?? safeDraftAddr.current?.state ?? '';
+    const pincode = effectiveAddrRow.pincode ?? effectiveAddrRow.Pincode ?? effectiveAddrRow.postalCode ?? effectiveAddrRow.PostalCode ?? effectiveAddrRow.pinCode ?? effectiveAddrRow.PinCode ?? safeDraftAddr.pincode ?? safeDraftAddr.current?.pincode ?? '';
+    const rawMailing = effectiveAddrRow.mailingAsCurrent ?? effectiveAddrRow.MailingAsCurrent ?? effectiveAddrRow.mailingSameAsCurrent ?? effectiveAddrRow.MailingSameAsCurrent ?? safeDraftAddr.mailingSameAsCurrent;
+    const mailingSameAsCurrent = rawMailing !== undefined && rawMailing !== null && rawMailing !== ''
+      ? (rawMailing === true || rawMailing === 1 || String(rawMailing).toLowerCase() === 'yes' ? 'Yes' : 'No')
+      : (safeDraftAddr.mailingSameAsCurrent || 'No');
+
+    return {
+      addressDetailsId,
+      applicationAddressDetailsId: addressDetailsId,
+      personalInformationId,
+      addressLine1,
+      addressLine2,
+      landmark,
+      city,
+      cityId: city,
+      state,
+      stateId: state,
+      pincode,
+      mailingSameAsCurrent,
       current: {
-        addressLine1: applicantAddr.addressLine1 || '',
-        addressLine2: applicantAddr.addressLine2 || '',
-        landmark: applicantAddr.landmark || '',
-        city: applicantAddr.cityId || '',
-        state: applicantAddr.stateId || '',
-        pincode: applicantAddr.pincode || applicantAddr.Pincode || applicantAddr.postalCode || applicantAddr.PostalCode || applicantAddr.pinCode || applicantAddr.PinCode || '',
+        addressLine1,
+        addressLine2,
+        landmark,
+        city,
+        cityId: city,
+        state,
+        stateId: state,
+        pincode,
       },
-    },
-    coApplicants: coApplicantAddrs.map((coAddr, idx) => {
+    };
+  };
+
+  const applicantAddr = findAddressRowForSequence(0, applicantPers, applicantKyc) || {};
+  const coApplicantAddrsList = Array.from({ length: Number(coApplicantsCount) || 0 }, (_, idx) => {
+    return findAddressRowForSequence(idx + 1, coApplicantPersList[idx], coApplicantKycs[idx]) || {};
+  });
+
+  const addressDetails = {
+    applicant: mapAddressPerson(applicantAddr, existingDraft.addressDetails?.applicant, 0, applicantPers?.personalInformationId),
+    coApplicants: Array.from({ length: Number(coApplicantsCount) || 0 }, (_, idx) => {
+      const coAddr = coApplicantAddrsList[idx] || {};
       const draftCo = existingDraft.addressDetails?.coApplicants?.[idx] || {};
-      return {
-        addressDetailsId: coAddr.applicationAddressDetailsId || draftCo.addressDetailsId || null,
-        applicationAddressDetailsId: coAddr.applicationAddressDetailsId || draftCo.applicationAddressDetailsId || null,
-        addressLine1: coAddr.addressLine1 || draftCo.addressLine1 || '',
-        addressLine2: coAddr.addressLine2 || draftCo.addressLine2 || '',
-        landmark: coAddr.landmark || draftCo.landmark || '',
-        city: coAddr.cityId || draftCo.city || '',
-        state: coAddr.stateId || draftCo.state || '',
-        pincode: coAddr.pincode || coAddr.Pincode || coAddr.postalCode || coAddr.PostalCode || coAddr.pinCode || coAddr.PinCode || '',
-        mailingSameAsCurrent: coAddr.mailingAsCurrent !== undefined ? (coAddr.mailingAsCurrent ? 'Yes' : 'No') : (draftCo.mailingSameAsCurrent || 'No'),
-        current: {
-          addressLine1: coAddr.addressLine1 || draftCo.current?.addressLine1 || '',
-          addressLine2: coAddr.addressLine2 || draftCo.current?.addressLine2 || '',
-          landmark: coAddr.landmark || draftCo.current?.landmark || '',
-          city: coAddr.cityId || draftCo.current?.city || '',
-          state: coAddr.stateId || draftCo.current?.state || '',
-          pincode: coAddr.pincode || coAddr.Pincode || coAddr.postalCode || coAddr.PostalCode || coAddr.pinCode || coAddr.PinCode || '',
-        },
-      };
+      return mapAddressPerson(coAddr, draftCo, idx + 1, coApplicantPersList[idx]?.personalInformationId);
     }),
   };
 
-  // 5. Employment & Income Details
-  const applicantAddrId = applicantAddr.applicationAddressDetailsId;
-  const applicantEmp =
-    (applicantAddrId && empList.find((e) => e.applicationAddressDetailsId === applicantAddrId)) ||
-    empList.find((e) => Number(e.applicantSequence) === 0) ||
-    empList[0] ||
-    {};
+  // 5. Employment & Income Details (Sequence-Aware Relational Matching with Claimed ID Protection)
+  const rawEmpSource =
+    backendData.employmentIncome ??
+    backendData.EmploymentIncome ??
+    backendData.applicationEmploymentIncomeDetails ??
+    backendData.ApplicationEmploymentIncomeDetails;
+  const isBackendEmpExplicit = rawEmpSource !== undefined && rawEmpSource !== null;
 
-  const coApplicantEmps = coApplicantPers.map((coPers, idx) => {
-    const coAddr = coApplicantAddrs[idx] || {};
-    const coAddrId = coAddr.applicationAddressDetailsId;
-    return (
-      (coAddrId && empList.find((e) => e.applicationAddressDetailsId === coAddrId)) ||
-      empList.find((e) => Number(e.applicantSequence) === idx + 1) ||
-      empList[idx + 1] ||
-      {}
-    );
+  const claimedEmploymentIds = new Set();
+
+  const getEmpId = (e) =>
+    e?.applicationEmploymentIncomeDetailsId ??
+    e?.ApplicationEmploymentIncomeDetailsId ??
+    e?.employmentIncomeDetailsId ??
+    e?.EmploymentIncomeDetailsId ??
+    e?.id ??
+    e?.Id ??
+    null;
+
+  const findEmploymentRowForSequence = (targetSeq, resolvedAddr, resolvedPers, personName = '') => {
+    if (!Array.isArray(empList) || empList.length === 0) return null;
+    const addrId = resolvedAddr?.applicationAddressDetailsId ?? resolvedAddr?.ApplicationAddressDetailsId ?? resolvedAddr?.addressDetailsId;
+    const persId = resolvedPers?.personalInformationId ?? resolvedPers?.PersonalInformationId;
+
+    const unclaimedEmps = empList.filter((e) => {
+      const id = getEmpId(e);
+      return !id || !claimedEmploymentIds.has(Number(id));
+    });
+
+    if (unclaimedEmps.length === 0) return null;
+
+    // 1. Exact matching address ID + unclaimed employment row
+    if (addrId) {
+      const matchedByAddr = unclaimedEmps.filter((e) => {
+        const eAddrId = e.applicationAddressDetailsId ?? e.ApplicationAddressDetailsId ?? e.addressDetailsId ?? e.AddressDetailsId;
+        return eAddrId !== undefined && eAddrId !== null && eAddrId !== '' && Number(eAddrId) === Number(addrId);
+      });
+
+      if (matchedByAddr.length === 1) {
+        const chosen = matchedByAddr[0];
+        const id = getEmpId(chosen);
+        if (id) claimedEmploymentIds.add(Number(id));
+        return chosen;
+      }
+
+      if (matchedByAddr.length > 1) {
+        // Multiple employment records share the same addressId (historical corrupted state)
+        // Check explicit sequence if present
+        const matchedBySeq = matchedByAddr.find((e) => {
+          const rawSeq = e.applicantSequence ?? e.ApplicantSequence;
+          return rawSeq !== undefined && rawSeq !== null && rawSeq !== '' && Number(rawSeq) === targetSeq;
+        });
+        if (matchedBySeq) {
+          const id = getEmpId(matchedBySeq);
+          if (id) claimedEmploymentIds.add(Number(id));
+          return matchedBySeq;
+        }
+
+        // Weak recovery signal: check if employerBusinessName contains or matches the person's name
+        if (personName && String(personName).trim().length > 2) {
+          const nameLower = String(personName).trim().toLowerCase();
+          const nameParts = nameLower.split(/\s+/).filter((p) => p.length > 2);
+          const matchedByName = matchedByAddr.find((e) => {
+            const bizName = String(e.employerBusinessName || e.EmployerBusinessName || '').toLowerCase();
+            return nameParts.some((part) => bizName.includes(part));
+          });
+          if (matchedByName) {
+            const id = getEmpId(matchedByName);
+            if (id) claimedEmploymentIds.add(Number(id));
+            return matchedByName;
+          }
+        }
+
+        // Stable unclaimed candidate allocation for historical corrupted data with same address ID
+        const sorted = [...matchedByAddr].sort((x, y) => (Number(getEmpId(x)) || 0) - (Number(getEmpId(y)) || 0));
+        const chosen = sorted[0];
+        if (chosen) {
+          const id = getEmpId(chosen);
+          if (id) claimedEmploymentIds.add(Number(id));
+          return chosen;
+        }
+      }
+
+      // Explicit addressId provided but no matching employment record found.
+      // Do NOT fall back to employments belonging to other addresses.
+      return null;
+    }
+
+    // 2. Secondary: If addrId is missing, check explicit sequence ONLY among current application records
+    const matchedBySeq = unclaimedEmps.find((e) => {
+      const rawSeq = e.applicantSequence ?? e.ApplicantSequence;
+      return rawSeq !== undefined && rawSeq !== null && rawSeq !== '' && Number(rawSeq) === targetSeq;
+    });
+    if (matchedBySeq) {
+      const id = getEmpId(matchedBySeq);
+      if (id) claimedEmploymentIds.add(Number(id));
+      return matchedBySeq;
+    }
+
+    // 3. Match by personalInformationId if present on employment record
+    if (persId) {
+      const matched = unclaimedEmps.find((e) => {
+        const ePersId = e.personalInformationId ?? e.PersonalInformationId;
+        return ePersId !== undefined && ePersId !== null && ePersId !== '' && Number(ePersId) === Number(persId);
+      });
+      if (matched) {
+        const id = getEmpId(matched);
+        if (id) claimedEmploymentIds.add(Number(id));
+        return matched;
+      }
+    }
+
+    return null;
+  };
+
+  const mapEmploymentPerson = (empRow = {}, draftEmp = {}, resolvedAddrId = null) => {
+    // Foreign parent ID guard: reject if empRow's applicationAddressDetailsId conflicts with resolvedAddrId
+    const rowAddrId = empRow.applicationAddressDetailsId ?? empRow.ApplicationAddressDetailsId ?? empRow.addressDetailsId ?? empRow.AddressDetailsId;
+    const isRowForeign = resolvedAddrId && rowAddrId && Number(rowAddrId) !== Number(resolvedAddrId);
+    const effectiveEmpRow = isRowForeign ? {} : empRow;
+
+    const rawEmpId = getEmpId(effectiveEmpRow);
+    const isDraftIdClaimed = draftEmp.employmentIncomeDetailsId && claimedEmploymentIds.has(Number(draftEmp.employmentIncomeDetailsId)) && (!rawEmpId || Number(draftEmp.employmentIncomeDetailsId) !== Number(rawEmpId));
+    const isDraftAddrConflicting = resolvedAddrId && draftEmp.applicationAddressDetailsId && Number(draftEmp.applicationAddressDetailsId) !== Number(resolvedAddrId);
+    const isDraftSuppressedByExplicitBackend = isBackendEmpExplicit && !rawEmpId;
+
+    const safeDraftEmp = isDraftIdClaimed || isDraftAddrConflicting || isDraftSuppressedByExplicitBackend ? {} : draftEmp;
+
+    const employmentIncomeDetailsId =
+      rawEmpId !== null && rawEmpId !== undefined && !isNaN(Number(rawEmpId)) && Number(rawEmpId) > 0
+        ? Number(rawEmpId)
+        : (safeDraftEmp.employmentIncomeDetailsId ?? safeDraftEmp.applicationEmploymentIncomeDetailsId ?? null);
+
+    const applicationAddressDetailsId =
+      effectiveEmpRow.applicationAddressDetailsId ??
+      effectiveEmpRow.ApplicationAddressDetailsId ??
+      effectiveEmpRow.addressDetailsId ??
+      effectiveEmpRow.AddressDetailsId ??
+      resolvedAddrId ??
+      safeDraftEmp.applicationAddressDetailsId ??
+      null;
+
+    const employerBusinessName = effectiveEmpRow.employerBusinessName ?? effectiveEmpRow.EmployerBusinessName ?? effectiveEmpRow.employerName ?? effectiveEmpRow.EmployerName ?? safeDraftEmp.employerBusinessName ?? safeDraftEmp.employerName ?? '';
+    const designationNatureOfBusiness = effectiveEmpRow.designationNatureOfBusiness ?? effectiveEmpRow.DesignationNatureOfBusiness ?? effectiveEmpRow.designation ?? effectiveEmpRow.Designation ?? safeDraftEmp.designationNatureOfBusiness ?? safeDraftEmp.designation ?? '';
+    const employmentNature = effectiveEmpRow.employmentTypeId ?? effectiveEmpRow.EmploymentTypeId ?? effectiveEmpRow.employmentNature ?? effectiveEmpRow.EmploymentNature ?? effectiveEmpRow.employmentType ?? effectiveEmpRow.EmploymentType ?? safeDraftEmp.employmentNature ?? safeDraftEmp.employmentType ?? '';
+    const qualification = effectiveEmpRow.educationId ?? effectiveEmpRow.EducationId ?? effectiveEmpRow.qualification ?? effectiveEmpRow.Qualification ?? safeDraftEmp.qualification ?? safeDraftEmp.educationId ?? '';
+    const industryType = effectiveEmpRow.industryType ?? effectiveEmpRow.IndustryType ?? safeDraftEmp.industryType ?? '';
+    const totalExperience = effectiveEmpRow.totalExperience ?? effectiveEmpRow.TotalExperience ?? effectiveEmpRow.totalExperienceYears ?? effectiveEmpRow.TotalExperienceYears ?? safeDraftEmp.totalExperience ?? safeDraftEmp.totalExperienceYears ?? '';
+    const grossMonthlyIncome = effectiveEmpRow.grossMonthlyIncome ?? effectiveEmpRow.GrossMonthlyIncome ?? safeDraftEmp.grossMonthlyIncome ?? '';
+    const otherMonthlyIncome = effectiveEmpRow.otherMonthlyIncome ?? effectiveEmpRow.OtherMonthlyIncome ?? effectiveEmpRow.otherIncomeMonthly ?? effectiveEmpRow.OtherIncomeMonthly ?? safeDraftEmp.otherMonthlyIncome ?? safeDraftEmp.otherIncomeMonthly ?? '';
+    const netMonthlyIncome = effectiveEmpRow.netMonthlyIncome ?? effectiveEmpRow.NetMonthlyIncome ?? safeDraftEmp.netMonthlyIncome ?? '';
+    const grossAnnualIncome = effectiveEmpRow.grossAnnualIncome ?? effectiveEmpRow.GrossAnnualIncome ?? safeDraftEmp.grossAnnualIncome ?? '';
+
+    return {
+      employmentIncomeDetailsId,
+      applicationEmploymentIncomeDetailsId: employmentIncomeDetailsId,
+      applicationAddressDetailsId,
+      employerBusinessName,
+      employerName: employerBusinessName,
+      designationNatureOfBusiness,
+      designation: designationNatureOfBusiness,
+      employmentNature,
+      employmentType: employmentNature,
+      employmentTypeId: employmentNature,
+      qualification,
+      educationId: qualification,
+      industryType,
+      totalExperienceYears: totalExperience,
+      totalExperience,
+      grossMonthlyIncome,
+      otherIncomeMonthly: otherMonthlyIncome,
+      otherMonthlyIncome,
+      netMonthlyIncome,
+      grossAnnualIncome,
+    };
+  };
+
+  const applicantAddrId = addressDetails.applicant?.applicationAddressDetailsId ?? addressDetails.applicant?.addressDetailsId;
+  const applicantEmp = findEmploymentRowForSequence(0, addressDetails.applicant, applicantPers, customerName) || {};
+  const coApplicantEmpsList = Array.from({ length: Number(coApplicantsCount) || 0 }, (_, idx) => {
+    const coPers = coApplicantPersList[idx] || {};
+    const coName = [
+      coPers.firstName ?? coPers.FirstName,
+      coPers.middleName ?? coPers.MiddleName,
+      coPers.lastName ?? coPers.LastName
+    ].filter(Boolean).join(' ') || coPers.fullName || coPers.FullName || '';
+    return findEmploymentRowForSequence(idx + 1, addressDetails.coApplicants[idx], coPers, coName) || {};
   });
 
   const employmentIncome = {
-    applicant: {
-      employmentIncomeDetailsId: applicantEmp.applicationEmploymentIncomeDetailsId || null,
-      applicationEmploymentIncomeDetailsId: applicantEmp.applicationEmploymentIncomeDetailsId || null,
-      employerBusinessName: applicantEmp.employerBusinessName || '',
-      employerName: applicantEmp.employerBusinessName || '',
-      designationNatureOfBusiness: applicantEmp.designationNatureOfBusiness || '',
-      designation: applicantEmp.designationNatureOfBusiness || '',
-      employmentNature: applicantEmp.employmentTypeId || '',
-      employmentType: applicantEmp.employmentTypeId || '',
-      qualification: applicantEmp.educationId || '',
-      educationId: applicantEmp.educationId || '',
-      industryType: applicantEmp.industryType || '',
-      totalExperienceYears: applicantEmp.totalExperience !== undefined && applicantEmp.totalExperience !== null ? applicantEmp.totalExperience : '',
-      totalExperience: applicantEmp.totalExperience !== undefined && applicantEmp.totalExperience !== null ? applicantEmp.totalExperience : '',
-      grossMonthlyIncome: applicantEmp.grossMonthlyIncome !== undefined && applicantEmp.grossMonthlyIncome !== null ? applicantEmp.grossMonthlyIncome : '',
-      otherIncomeMonthly: applicantEmp.otherMonthlyIncome !== undefined && applicantEmp.otherMonthlyIncome !== null ? applicantEmp.otherMonthlyIncome : '',
-      otherMonthlyIncome: applicantEmp.otherMonthlyIncome !== undefined && applicantEmp.otherMonthlyIncome !== null ? applicantEmp.otherMonthlyIncome : '',
-      netMonthlyIncome: applicantEmp.netMonthlyIncome !== undefined && applicantEmp.netMonthlyIncome !== null ? applicantEmp.netMonthlyIncome : '',
-      grossAnnualIncome: applicantEmp.grossAnnualIncome !== undefined && applicantEmp.grossAnnualIncome !== null ? applicantEmp.grossAnnualIncome : '',
-    },
-    coApplicants: coApplicantEmps.map((coEmp, idx) => {
+    applicant: mapEmploymentPerson(applicantEmp, existingDraft.employmentIncome?.applicant, applicantAddrId),
+    coApplicants: Array.from({ length: Number(coApplicantsCount) || 0 }, (_, idx) => {
+      const coEmp = coApplicantEmpsList[idx] || {};
       const draftCo = existingDraft.employmentIncome?.coApplicants?.[idx] || {};
-      return {
-        employmentIncomeDetailsId: coEmp.applicationEmploymentIncomeDetailsId || draftCo.employmentIncomeDetailsId || null,
-        applicationEmploymentIncomeDetailsId: coEmp.applicationEmploymentIncomeDetailsId || draftCo.applicationEmploymentIncomeDetailsId || null,
-        employerBusinessName: coEmp.employerBusinessName || draftCo.employerBusinessName || '',
-        employerName: coEmp.employerBusinessName || draftCo.employerName || '',
-        designationNatureOfBusiness: coEmp.designationNatureOfBusiness || draftCo.designationNatureOfBusiness || '',
-        designation: coEmp.designationNatureOfBusiness || draftCo.designation || '',
-        employmentNature: coEmp.employmentTypeId || draftCo.employmentNature || '',
-        employmentType: coEmp.employmentTypeId || draftCo.employmentType || '',
-        qualification: coEmp.educationId || draftCo.qualification || '',
-        educationId: coEmp.educationId || draftCo.educationId || '',
-        industryType: coEmp.industryType || draftCo.industryType || '',
-        totalExperienceYears: coEmp.totalExperience !== undefined && coEmp.totalExperience !== null ? coEmp.totalExperience : (draftCo.totalExperienceYears || ''),
-        totalExperience: coEmp.totalExperience !== undefined && coEmp.totalExperience !== null ? coEmp.totalExperience : (draftCo.totalExperience || ''),
-        grossMonthlyIncome: coEmp.grossMonthlyIncome !== undefined && coEmp.grossMonthlyIncome !== null ? coEmp.grossMonthlyIncome : (draftCo.grossMonthlyIncome || ''),
-        otherIncomeMonthly: coEmp.otherMonthlyIncome !== undefined && coEmp.otherMonthlyIncome !== null ? coEmp.otherMonthlyIncome : (draftCo.otherIncomeMonthly || ''),
-        otherMonthlyIncome: coEmp.otherMonthlyIncome !== undefined && coEmp.otherMonthlyIncome !== null ? coEmp.otherMonthlyIncome : (draftCo.otherMonthlyIncome || ''),
-        netMonthlyIncome: coEmp.netMonthlyIncome !== undefined && coEmp.netMonthlyIncome !== null ? coEmp.netMonthlyIncome : (draftCo.netMonthlyIncome || ''),
-        grossAnnualIncome: coEmp.grossAnnualIncome !== undefined && coEmp.grossAnnualIncome !== null ? coEmp.grossAnnualIncome : (draftCo.grossAnnualIncome || ''),
-      };
+      const coAddrId = addressDetails.coApplicants[idx]?.applicationAddressDetailsId ?? addressDetails.coApplicants[idx]?.addressDetailsId;
+      return mapEmploymentPerson(coEmp, draftCo, coAddrId);
     }),
   };
 
-  // 6. Bank & Existing Loans Details
-  const applicantEmpId = applicantEmp.applicationEmploymentIncomeDetailsId;
-  const applicantBankList = bankList.filter((b) => {
-    if (applicantEmpId && b.applicationEmploymentIncomeDetailsId === applicantEmpId) return true;
-    if (b.applicantSequence !== undefined && b.applicantSequence !== null) return Number(b.applicantSequence) === 0;
-    return false;
-  });
-  const effectiveApplicantBanks = applicantBankList.length > 0 ? applicantBankList : [bankList[0]].filter(Boolean);
-  const primaryBankRecord = effectiveApplicantBanks.find((b) => b.isPrimaryBank === true) || effectiveApplicantBanks[0] || {};
-  const otherBankRecord = effectiveApplicantBanks.find((b) => b.isPrimaryBank === false && b !== primaryBankRecord) || effectiveApplicantBanks[1] || {};
+  // 6. Bank & Existing Loans Details (Sequence-Aware Relational Matching with Claimed ID Protection)
+  const rawBankSource =
+    backendData.bankExistingLoans ??
+    backendData.BankExistingLoans ??
+    backendData.applicationBankExistingLoanDetails ??
+    backendData.ApplicationBankExistingLoanDetails;
+  const isBackendBankExplicit = rawBankSource !== undefined && rawBankSource !== null;
 
-  const coApplicantBankList = coApplicantPers.map((coPers, idx) => {
-    const coEmp = coApplicantEmps[idx] || {};
-    const coEmpId = coEmp.applicationEmploymentIncomeDetailsId;
-    const matchedBanks = bankList.filter((b) => {
-      if (coEmpId && b.applicationEmploymentIncomeDetailsId === coEmpId) return true;
-      if (b.applicantSequence !== undefined && b.applicantSequence !== null) return Number(b.applicantSequence) === idx + 1;
-      return false;
+  const claimedBankIds = new Set();
+
+  const getBankId = (b) =>
+    b?.applicationBankExistingLoanDetailsId ??
+    b?.ApplicationBankExistingLoanDetailsId ??
+    b?.bankExistingLoansId ??
+    b?.id ??
+    b?.Id ??
+    null;
+
+  const filterBankRowsForSequence = (targetSeq, resolvedEmp) => {
+    if (!Array.isArray(bankList) || bankList.length === 0) return [];
+    const empId = resolvedEmp?.applicationEmploymentIncomeDetailsId ?? resolvedEmp?.ApplicationEmploymentIncomeDetailsId ?? resolvedEmp?.employmentIncomeDetailsId;
+
+    const unclaimedBanks = bankList.filter((b) => {
+      const id = getBankId(b);
+      return !id || !claimedBankIds.has(Number(id));
     });
-    const effectiveBanks = matchedBanks.length > 0 ? matchedBanks : [bankList[idx + 1]].filter(Boolean);
-    const coPrimary = effectiveBanks.find((b) => b.isPrimaryBank === true) || effectiveBanks[0] || {};
-    const coOther = effectiveBanks.find((b) => b.isPrimaryBank === false && b !== coPrimary) || effectiveBanks[1] || {};
-    const coName = [coPers.firstName, coPers.middleName, coPers.lastName].filter(Boolean).join(' ') || coPers.fullName || '';
+
+    if (unclaimedBanks.length === 0) return [];
+
+    // 1. Primary: Match by applicationEmploymentIncomeDetailsId
+    if (empId) {
+      const matched = unclaimedBanks.filter((b) => {
+        const bEmpId = b.applicationEmploymentIncomeDetailsId ?? b.ApplicationEmploymentIncomeDetailsId ?? b.employmentIncomeDetailsId ?? b.EmploymentIncomeDetailsId;
+        return bEmpId !== undefined && bEmpId !== null && bEmpId !== '' && Number(bEmpId) === Number(empId);
+      });
+      if (matched.length > 0) {
+        matched.forEach((b) => {
+          const id = getBankId(b);
+          if (id) claimedBankIds.add(Number(id));
+        });
+        return matched;
+      }
+
+      // Explicit empId provided but no matching bank record found.
+      // Do NOT fall back to bank rows belonging to other employments.
+      return [];
+    }
+
+    // 2. Secondary: Match by applicantSequence if present
+    const matchedBySeq = unclaimedBanks.filter((b) => {
+      const rawSeq = b.applicantSequence ?? b.ApplicantSequence;
+      return rawSeq !== undefined && rawSeq !== null && rawSeq !== '' && Number(rawSeq) === targetSeq;
+    });
+    if (matchedBySeq.length > 0) {
+      matchedBySeq.forEach((b) => {
+        const id = getBankId(b);
+        if (id) claimedBankIds.add(Number(id));
+      });
+      return matchedBySeq;
+    }
+
+    return [];
+  };
+
+  const mapBankRecord = (b = {}, defaultHolderName = '', draftBank = {}, resolvedEmpId = null) => {
+    // Foreign parent ID guard: reject if bank row's applicationEmploymentIncomeDetailsId conflicts with resolvedEmpId
+    const rowEmpId = b.applicationEmploymentIncomeDetailsId ?? b.ApplicationEmploymentIncomeDetailsId ?? b.employmentIncomeDetailsId ?? b.EmploymentIncomeDetailsId;
+    const isRowForeign = resolvedEmpId && rowEmpId && Number(rowEmpId) !== Number(resolvedEmpId);
+    const effectiveBankRow = isRowForeign ? {} : b;
+
+    const rawBankId = getBankId(effectiveBankRow);
+    const isDraftIdClaimed = draftBank.applicationBankExistingLoanDetailsId && claimedBankIds.has(Number(draftBank.applicationBankExistingLoanDetailsId)) && (!rawBankId || Number(draftBank.applicationBankExistingLoanDetailsId) !== Number(rawBankId));
+    const isDraftEmpConflicting = resolvedEmpId && draftBank.applicationEmploymentIncomeDetailsId && Number(draftBank.applicationEmploymentIncomeDetailsId) !== Number(resolvedEmpId);
+    const isDraftSuppressedByExplicitBackend = isBackendBankExplicit && !rawBankId;
+
+    const safeDraftBank = isDraftIdClaimed || isDraftEmpConflicting || isDraftSuppressedByExplicitBackend ? {} : draftBank;
+
+    const applicationBankExistingLoanDetailsId =
+      rawBankId !== null && rawBankId !== undefined && !isNaN(Number(rawBankId)) && Number(rawBankId) > 0
+        ? Number(rawBankId)
+        : (safeDraftBank.applicationBankExistingLoanDetailsId ?? null);
+
+    const bankName = effectiveBankRow.bankId ?? effectiveBankRow.BankId ?? effectiveBankRow.bankName ?? effectiveBankRow.BankName ?? safeDraftBank.bankName ?? safeDraftBank.bankId ?? '';
+    const bankBranch = effectiveBankRow.bankBranchId ?? effectiveBankRow.BankBranchId ?? effectiveBankRow.branch ?? effectiveBankRow.Branch ?? safeDraftBank.branch ?? safeDraftBank.bankBranchId ?? '';
+    const accountNumber = effectiveBankRow.accountNumber || effectiveBankRow.AccountNumber || safeDraftBank.accountNumber || '';
+    const accountHolderName = effectiveBankRow.accountHolderName || effectiveBankRow.AccountHolderName || safeDraftBank.accountHolderName || defaultHolderName || '';
+    const rawLoans = effectiveBankRow.noOfActiveLoans ?? effectiveBankRow.NoOfActiveLoans ?? safeDraftBank.noOfActiveLoans;
+    const noOfActiveLoans = rawLoans !== undefined && rawLoans !== null && rawLoans !== '' ? rawLoans : '';
+    const rawCards = effectiveBankRow.noOfActiveCreditCards ?? effectiveBankRow.NoOfActiveCreditCards ?? safeDraftBank.noOfActiveCreditCards;
+    const noOfActiveCreditCards = rawCards !== undefined && rawCards !== null && rawCards !== '' ? rawCards : '';
+    const ifscCode = effectiveBankRow.ifscCode || effectiveBankRow.IfscCode || safeDraftBank.ifscCode || '';
+    const accountType = effectiveBankRow.accountType || effectiveBankRow.AccountType || safeDraftBank.accountType || 'Savings';
+    const isPrimaryBank = effectiveBankRow.isPrimaryBank ?? effectiveBankRow.IsPrimaryBank ?? safeDraftBank.isPrimaryBank ?? false;
+    const activeLoansDetails = effectiveBankRow.activeLoansDetails || effectiveBankRow.ActiveLoansDetails || safeDraftBank.activeLoansDetails || [];
 
     return {
-      primaryBank: {
-        applicationBankExistingLoanDetailsId: coPrimary.applicationBankExistingLoanDetailsId || null,
-        bankName: coPrimary.bankId || '',
-        branch: coPrimary.bankBranchId || '',
-        ifscCode: '',
-        accountType: 'Savings',
-        accountNumber: coPrimary.accountNumber || '',
-        accountHolderName: coPrimary.accountHolderName || coName || '',
-        noOfActiveLoans: coPrimary.noOfActiveLoans !== undefined && coPrimary.noOfActiveLoans !== null ? coPrimary.noOfActiveLoans : '',
-        noOfActiveCreditCards: coPrimary.noOfActiveCreditCards !== undefined && coPrimary.noOfActiveCreditCards !== null ? coPrimary.noOfActiveCreditCards : '',
-      },
-      otherBank: {
-        applicationBankExistingLoanDetailsId: coOther.applicationBankExistingLoanDetailsId || null,
-        bankName: coOther.bankId || '',
-        branch: coOther.bankBranchId || '',
-        ifscCode: '',
-        accountType: 'Savings',
-        accountNumber: coOther.accountNumber || '',
-        accountHolderName: coOther.accountHolderName || coName || '',
-        noOfActiveLoans: coOther.noOfActiveLoans !== undefined && coOther.noOfActiveLoans !== null ? coOther.noOfActiveLoans : '',
-        noOfActiveCreditCards: coOther.noOfActiveCreditCards !== undefined && coOther.noOfActiveCreditCards !== null ? coOther.noOfActiveCreditCards : '',
-      },
+      applicationBankExistingLoanDetailsId,
+      bankName,
+      bankId: bankName,
+      branch: bankBranch,
+      bankBranchId: bankBranch,
+      ifscCode,
+      accountType,
+      accountNumber,
+      accountHolderName,
+      noOfActiveLoans,
+      noOfActiveCreditCards,
+      isPrimaryBank,
+      activeLoansDetails,
+    };
+  };
+
+  const createEmptyBankRecord = (holderName = '', isPrimary = false) => ({
+    applicationBankExistingLoanDetailsId: null,
+    bankName: '',
+    bankId: '',
+    branch: '',
+    bankBranchId: '',
+    ifscCode: '',
+    accountType: 'Savings',
+    accountNumber: '',
+    accountHolderName: holderName,
+    noOfActiveLoans: '',
+    noOfActiveCreditCards: '',
+    isPrimaryBank: isPrimary,
+    activeLoansDetails: [],
+    activeCreditCardsDetails: [],
+  });
+
+  const applicantEmpId = employmentIncome.applicant?.applicationEmploymentIncomeDetailsId ?? employmentIncome.applicant?.employmentIncomeDetailsId;
+  const applicantBankList = filterBankRowsForSequence(0, employmentIncome.applicant);
+  const draftAppPrimary = existingDraft.bankExistingLoans?.applicant?.primaryBank || existingDraft.bankExistingLoans?.primaryBank || {};
+  const draftAppOther = existingDraft.bankExistingLoans?.applicant?.otherBank || {};
+
+  const primaryBankRecord =
+    applicantBankList.find((b) => b.isPrimaryBank === true || b.IsPrimaryBank === true || b.isPrimary === true) ||
+    (applicantBankList.length > 0 ? applicantBankList[0] : null);
+
+  const otherBankRecord =
+    applicantBankList.find(
+      (b) => (b.isPrimaryBank === false || b.IsPrimaryBank === false || b.isPrimary === false) && b !== primaryBankRecord
+    ) || null;
+
+  const mappedPrimaryBank = primaryBankRecord
+    ? mapBankRecord(primaryBankRecord, customerName, draftAppPrimary, applicantEmpId)
+    : (!isBackendBankExplicit && draftAppPrimary.bankName ? mapBankRecord({}, customerName, draftAppPrimary, applicantEmpId) : createEmptyBankRecord(customerName, true));
+
+  const mappedOtherBank = otherBankRecord
+    ? mapBankRecord(otherBankRecord, customerName, draftAppOther, applicantEmpId)
+    : (!isBackendBankExplicit && draftAppOther.bankName ? mapBankRecord({}, customerName, draftAppOther, applicantEmpId) : createEmptyBankRecord(customerName, false));
+
+  const coApplicantBankList = Array.from({ length: Number(coApplicantsCount) || 0 }, (_, idx) => {
+    const coEmp = employmentIncome.coApplicants[idx] || {};
+    const coPers = coApplicantPersList[idx] || {};
+    const effectiveBanks = filterBankRowsForSequence(idx + 1, coEmp);
+    const coPrimary =
+      effectiveBanks.find((b) => b.isPrimaryBank === true || b.IsPrimaryBank === true || b.isPrimary === true) ||
+      (effectiveBanks.length > 0 ? effectiveBanks[0] : null);
+    const coOther =
+      effectiveBanks.find(
+        (b) => (b.isPrimaryBank === false || b.IsPrimaryBank === false || b.isPrimary === false) && b !== coPrimary
+      ) || null;
+    const coName = [
+      coPers.firstName ?? coPers.FirstName,
+      coPers.middleName ?? coPers.MiddleName,
+      coPers.lastName ?? coPers.LastName
+    ].filter(Boolean).join(' ') || coPers.fullName || coPers.FullName || '';
+
+    const draftCoBank = existingDraft.bankExistingLoans?.coApplicants?.[idx] || {};
+    const draftCoPrimary = draftCoBank.primaryBank || {};
+    const draftCoOther = draftCoBank.otherBank || {};
+    const coEmpId = coEmp.applicationEmploymentIncomeDetailsId ?? coEmp.employmentIncomeDetailsId;
+
+    return {
+      primaryBank: coPrimary
+        ? mapBankRecord(coPrimary, coName, draftCoPrimary, coEmpId)
+        : (!isBackendBankExplicit && draftCoPrimary.bankName ? mapBankRecord({}, coName, draftCoPrimary, coEmpId) : createEmptyBankRecord(coName, true)),
+      otherBank: coOther
+        ? mapBankRecord(coOther, coName, draftCoOther, coEmpId)
+        : (!isBackendBankExplicit && draftCoOther.bankName ? mapBankRecord({}, coName, draftCoOther, coEmpId) : createEmptyBankRecord(coName, false)),
     };
   });
 
   const bankExistingLoans = {
     applicant: {
-      primaryBank: {
-        applicationBankExistingLoanDetailsId: primaryBankRecord.applicationBankExistingLoanDetailsId || null,
-        bankName: primaryBankRecord.bankId || '',
-        branch: primaryBankRecord.bankBranchId || '',
-        ifscCode: '',
-        accountType: 'Savings',
-        accountNumber: primaryBankRecord.accountNumber || '',
-        accountHolderName: primaryBankRecord.accountHolderName || customerName || '',
-        noOfActiveLoans: primaryBankRecord.noOfActiveLoans !== undefined && primaryBankRecord.noOfActiveLoans !== null ? primaryBankRecord.noOfActiveLoans : '',
-        noOfActiveCreditCards: primaryBankRecord.noOfActiveCreditCards !== undefined && primaryBankRecord.noOfActiveCreditCards !== null ? primaryBankRecord.noOfActiveCreditCards : '',
-        activeLoansDetails: [],
-      },
-      otherBank: {
-        applicationBankExistingLoanDetailsId: otherBankRecord.applicationBankExistingLoanDetailsId || null,
-        bankName: otherBankRecord.bankId || '',
-        branch: otherBankRecord.bankBranchId || '',
-        ifscCode: '',
-        accountType: 'Savings',
-        accountNumber: otherBankRecord.accountNumber || '',
-        accountHolderName: otherBankRecord.accountHolderName || customerName || '',
-        noOfActiveLoans: otherBankRecord.noOfActiveLoans !== undefined && otherBankRecord.noOfActiveLoans !== null ? otherBankRecord.noOfActiveLoans : '',
-        noOfActiveCreditCards: otherBankRecord.noOfActiveCreditCards !== undefined && otherBankRecord.noOfActiveCreditCards !== null ? otherBankRecord.noOfActiveCreditCards : '',
-        activeLoansDetails: [],
-      },
+      primaryBank: mappedPrimaryBank,
+      otherBank: mappedOtherBank,
     },
-    primaryBank: {
-      applicationBankExistingLoanDetailsId: primaryBankRecord.applicationBankExistingLoanDetailsId || null,
-      bankName: primaryBankRecord.bankId || '',
-      branch: primaryBankRecord.bankBranchId || '',
-      accountNumber: primaryBankRecord.accountNumber || '',
-      accountHolderName: primaryBankRecord.accountHolderName || customerName || '',
-      noOfActiveLoans: primaryBankRecord.noOfActiveLoans !== undefined && primaryBankRecord.noOfActiveLoans !== null ? primaryBankRecord.noOfActiveLoans : '',
-      noOfActiveCreditCards: primaryBankRecord.noOfActiveCreditCards !== undefined && primaryBankRecord.noOfActiveCreditCards !== null ? primaryBankRecord.noOfActiveCreditCards : '',
-    },
+    primaryBank: mappedPrimaryBank,
+    otherBank: mappedOtherBank,
     coApplicants: coApplicantBankList,
   };
 
+  // Final Shared-Record Collision Guard between Applicant and Co-Applicants
+  const finalApplicantAddressId = addressDetails.applicant?.addressDetailsId;
+  if (finalApplicantAddressId) {
+    addressDetails.coApplicants.forEach((co) => {
+      if (co.addressDetailsId === finalApplicantAddressId) {
+        co.addressDetailsId = null;
+        co.applicationAddressDetailsId = null;
+      }
+    });
+  }
+
+  const finalApplicantEmpId = employmentIncome.applicant?.employmentIncomeDetailsId;
+  if (finalApplicantEmpId) {
+    employmentIncome.coApplicants.forEach((co) => {
+      if (co.employmentIncomeDetailsId === finalApplicantEmpId) {
+        co.employmentIncomeDetailsId = null;
+        co.applicationEmploymentIncomeDetailsId = null;
+      }
+    });
+  }
+
+  const finalApplicantBankIds = new Set([
+    bankExistingLoans.applicant?.primaryBank?.applicationBankExistingLoanDetailsId,
+    bankExistingLoans.applicant?.otherBank?.applicationBankExistingLoanDetailsId,
+  ].filter(Boolean));
+
+  if (finalApplicantBankIds.size > 0) {
+    bankExistingLoans.coApplicants.forEach((co) => {
+      if (co.primaryBank?.applicationBankExistingLoanDetailsId && finalApplicantBankIds.has(co.primaryBank.applicationBankExistingLoanDetailsId)) {
+        co.primaryBank.applicationBankExistingLoanDetailsId = null;
+      }
+      if (co.otherBank?.applicationBankExistingLoanDetailsId && finalApplicantBankIds.has(co.otherBank.applicationBankExistingLoanDetailsId)) {
+        co.otherBank.applicationBankExistingLoanDetailsId = null;
+      }
+    });
+  }
+
   // 7. Collateral Details
-  const prop1 = colList[0] || {};
-  const prop2 = colList[1] || {};
-  const collateralDetails = {
-    propertyOne: {
-      applicationCollateralDetailsId: prop1.applicationCollateralDetailsId || prop1.ApplicationCollateralDetailsId || existingDraft.collateralDetails?.propertyOne?.applicationCollateralDetailsId || null,
-      typeOfProperty: prop1.typeOfProperty ?? prop1.propertyId ?? prop1.PropertyId ?? prop1.propertyType ?? prop1.PropertyType ?? existingDraft.collateralDetails?.propertyOne?.typeOfProperty ?? '',
-      usage: prop1.usage ?? prop1.propertyUsageId ?? prop1.PropertyUsageId ?? prop1.propertyUsage ?? prop1.PropertyUsage ?? existingDraft.collateralDetails?.propertyOne?.usage ?? '',
-      locationAddress: prop1.locationAddress || prop1.LocationAddress || prop1.propertyAddress || prop1.PropertyAddress || existingDraft.collateralDetails?.propertyOne?.locationAddress || '',
-      estimatedValue: prop1.estimatedValue !== undefined && prop1.estimatedValue !== null ? prop1.estimatedValue : (prop1.EstimatedValue !== undefined && prop1.EstimatedValue !== null ? prop1.EstimatedValue : (existingDraft.collateralDetails?.propertyOne?.estimatedValue || '')),
-    },
-    propertyTwo: {
-      applicationCollateralDetailsId: prop2.applicationCollateralDetailsId || prop2.ApplicationCollateralDetailsId || existingDraft.collateralDetails?.propertyTwo?.applicationCollateralDetailsId || null,
-      typeOfProperty: prop2.typeOfProperty ?? prop2.propertyId ?? prop2.PropertyId ?? prop2.propertyType ?? prop2.PropertyType ?? existingDraft.collateralDetails?.propertyTwo?.typeOfProperty ?? '',
-      usage: prop2.usage ?? prop2.propertyUsageId ?? prop2.PropertyUsageId ?? prop2.propertyUsage ?? prop2.PropertyUsage ?? existingDraft.collateralDetails?.propertyTwo?.usage ?? '',
-      locationAddress: prop2.locationAddress || prop2.LocationAddress || prop2.propertyAddress || prop2.PropertyAddress || existingDraft.collateralDetails?.propertyTwo?.locationAddress || '',
-      estimatedValue: prop2.estimatedValue !== undefined && prop2.estimatedValue !== null ? prop2.estimatedValue : (prop2.EstimatedValue !== undefined && prop2.EstimatedValue !== null ? prop2.EstimatedValue : (existingDraft.collateralDetails?.propertyTwo?.estimatedValue || '')),
-    },
-  };
+  const rawColSource =
+    backendData.collateral ??
+    backendData.Collateral ??
+    backendData.collateralDetails ??
+    backendData.CollateralDetails ??
+    backendData.applicationCollateralDetails ??
+    backendData.ApplicationCollateralDetails;
+  const isBackendCollateralExplicit = rawColSource !== undefined && rawColSource !== null;
+
+  const prop1 = colList[0] || null;
+  const prop2 = colList[1] || null;
+
+  const createCleanProperty = () => ({
+    applicationCollateralDetailsId: null,
+    typeOfProperty: '',
+    usage: '',
+    locationAddress: '',
+    estimatedValue: '',
+  });
+
+  const mapPropertyRecord = (p) => ({
+    applicationCollateralDetailsId: p.applicationCollateralDetailsId || p.ApplicationCollateralDetailsId || null,
+    typeOfProperty: p.typeOfProperty ?? p.propertyId ?? p.PropertyId ?? p.propertyType ?? p.PropertyType ?? '',
+    usage: p.usage ?? p.propertyUsageId ?? p.PropertyUsageId ?? p.propertyUsage ?? p.PropertyUsage ?? '',
+    locationAddress: p.locationAddress || p.LocationAddress || p.propertyAddress || p.PropertyAddress || '',
+    estimatedValue: p.estimatedValue !== undefined && p.estimatedValue !== null
+      ? p.estimatedValue
+      : (p.EstimatedValue !== undefined && p.EstimatedValue !== null ? p.EstimatedValue : ''),
+  });
+
+  let collateralDetails;
+  if (isBackendCollateralExplicit) {
+    // Authoritative backend data: 0 rows = empty Property 1 & 2. Never resurrect existingDraft.
+    collateralDetails = {
+      propertyOne: prop1 ? mapPropertyRecord(prop1) : createCleanProperty(),
+      propertyTwo: prop2 ? mapPropertyRecord(prop2) : createCleanProperty(),
+    };
+  } else {
+    // Fallback only when backend explicitly omitted collateral data entirely
+    const draftCol = existingDraft.collateralDetails || {};
+    collateralDetails = {
+      propertyOne: draftCol.propertyOne ? { ...createCleanProperty(), ...draftCol.propertyOne } : createCleanProperty(),
+      propertyTwo: draftCol.propertyTwo ? { ...createCleanProperty(), ...draftCol.propertyTwo } : createCleanProperty(),
+    };
+  }
 
   // 8. Reference Details
   const ref1 = refList[0] || {};
@@ -928,13 +1641,20 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   const sourcing = {
     sourcingChannel,
     customerSource: resolvedCustomerSource,
-    agentId: isAgentSourced ? agentId : null,
+    agentId: isAgentSourced ? resolvedAgentId : null,
     agentName: isAgentSourced ? agentName : '',
-    rmId,
-    rmName: rmName || '',
+    agentCode: isAgentSourced ? agentCode : '',
+    rmId: resolvedRmId,
+    rmName: rmName || ownership.rmName || '',
     rmCode: rmCode || '',
-    sourcedBy: rmName || '',
-    employeeId: rmCode || '',
+    sourcedBy: isRmSourced ? (rmName || ownership.rmName || '') : (agentName || ownership.agentName || ''),
+    employeeId: isRmSourced ? (rmCode || '') : (agentCode || ''),
+    createdByRole,
+    CreatedByRole: createdByRole,
+    createdByUserId,
+    CreatedByUserId: createdByUserId,
+    createdBy,
+    CreatedBy: createdBy,
   };
 
   // 10. Declaration & Other Sections
@@ -966,13 +1686,48 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     id: appIdStr,
     applicationNumber: appIdStr,
     agentCustomerId,
+    AgentCustomerId: agentCustomerId,
     customerSource: resolvedCustomerSource,
-    agentId: isAgentSourced ? agentId : null,
-    agentName: isAgentSourced ? agentName : '',
-    rmId,
-    rmName: rmName || '',
+    CustomerSource: resolvedCustomerSource,
+    agentId: resolvedAgentId,
+    AgentId: resolvedAgentId,
+    agentName: isAgentSourced ? agentName : (ownership.agentName || ''),
+    AgentName: isAgentSourced ? agentName : (ownership.agentName || ''),
+    agentCode: isAgentSourced ? agentCode : '',
+    AgentCode: isAgentSourced ? agentCode : '',
+    rmId: resolvedRmId,
+    RMId: resolvedRmId,
+    rmName: rmName || ownership.rmName || '',
+    RmName: rmName || ownership.rmName || '',
+    RMName: rmName || ownership.rmName || '',
     rmCode: rmCode || '',
+    RmCode: rmCode || '',
+    RMCode: rmCode || '',
     rmCustomerId,
+    RmCustomerId: rmCustomerId,
+    RMCustomerId: rmCustomerId,
+    createdByRole,
+    CreatedByRole: createdByRole,
+    createdByUserId,
+    CreatedByUserId: createdByUserId,
+    createdBy,
+    CreatedBy: createdBy,
+    customer,
+    raw: {
+      ...(existingDraft.raw || {}),
+      customer,
+      backendData,
+      createdByRole,
+      CreatedByRole: createdByRole,
+      createdByUserId,
+      CreatedByUserId: createdByUserId,
+      createdBy,
+      CreatedBy: createdBy,
+      agentId: resolvedAgentId,
+      AgentId: resolvedAgentId,
+      rmId: resolvedRmId,
+      RMId: resolvedRmId,
+    },
     isRmSourced,
     isAgentSourced,
     customerName,
@@ -1073,9 +1828,7 @@ export function ApplicationDraftProvider({ children }) {
   const [hydratingMap, setHydratingMap] = useState({});
 
   const applicationsRef = useRef(applications);
-  useEffect(() => {
-    applicationsRef.current = applications;
-  }, [applications]);
+  applicationsRef.current = applications;
 
   useEffect(() => {
     saveStoredApplications(applications);
@@ -1113,17 +1866,24 @@ export function ApplicationDraftProvider({ children }) {
   }, []);
 
   const saveApplication = useCallback((applicationId, updates) => {
-    setApplications((current) => {
-      const currentRecord = current[applicationId] || APP_SEED_MAP[applicationId] || buildBlankApplication(applicationId);
-      const merged = deepMergeApplicationData(currentRecord, updates);
-      return {
-        ...current,
-        [applicationId]: normalizeApplicationRecord({
-          ...merged,
-          id: applicationId,
-        }),
-      };
+    const currentRecord = applicationsRef.current[applicationId] || APP_SEED_MAP[applicationId] || buildBlankApplication(applicationId);
+    const merged = deepMergeApplicationData(currentRecord, updates);
+    const normalized = normalizeApplicationRecord({
+      ...merged,
+      id: applicationId,
     });
+
+    applicationsRef.current = {
+      ...applicationsRef.current,
+      [applicationId]: normalized,
+    };
+
+    setApplications((current) => ({
+      ...current,
+      [applicationId]: normalized,
+    }));
+
+    return normalized;
   }, []);
 
   const loadApplicationFromBackend = useCallback(async (applicationId, forceRefresh = false) => {
@@ -1168,37 +1928,257 @@ export function ApplicationDraftProvider({ children }) {
             const custRecord = Array.isArray(custData) ? custData[0] : (custData?.value ? custData.value[0] : custData);
             if (custRecord) {
               backendResult = { customer: custRecord };
+            }
+          }
+        }
 
-              // Supplement with ApplicationProductDetails if available
-              try {
-                let prodData = null;
-                const prodRes = await fetch(`${baseUrl}/ApplicationProductDetails/bycustomer/${encodeURIComponent(appIdStr)}`);
-                if (prodRes.ok) {
-                  prodData = await prodRes.json();
-                } else {
-                  const allProdRes = await fetch(`${baseUrl}/ApplicationProductDetails`);
-                  if (allProdRes.ok) {
-                    const allProds = await allProdRes.json();
-                    const list = Array.isArray(allProds) ? allProds : (allProds?.value || []);
-                    const matched = list.find((p) =>
-                      String(p.agentCustomerId) === String(appIdStr) ||
-                      (custRecord.agentId === null && Number(p.rmId || p.createdBy) === Number(custRecord.createdBy))
-                    );
-                    if (matched) {
-                      prodData = matched;
-                    }
-                  }
-                }
+        // 3. Supplement any missing section lists from individual endpoints
+        if (backendResult) {
+          const extractArr = (raw) => {
+            if (Array.isArray(raw)) return raw;
+            if (Array.isArray(raw?.value)) return raw.value;
+            if (Array.isArray(raw?.data)) return raw.data;
+            if (Array.isArray(raw?.items)) return raw.items;
+            return [];
+          };
 
-                if (prodData) {
-                  const prod = Array.isArray(prodData) ? prodData[0] : (prodData?.value ? prodData.value[0] : prodData);
-                  if (prod) {
-                    backendResult.productDetails = prod;
-                  }
+          const hasKycs = extractArr(backendResult.kycDocuments ?? backendResult.KycDocuments ?? backendResult.applicationKYCDocuments ?? backendResult.ApplicationKYCDocuments).length > 0;
+          const hasPersonal = extractArr(backendResult.personalInformation ?? backendResult.PersonalInformation ?? backendResult.applicationPersonalInformation ?? backendResult.ApplicationPersonalInformation).length > 0;
+          const hasAddress = extractArr(backendResult.addressDetails ?? backendResult.AddressDetails ?? backendResult.applicationAddressDetails ?? backendResult.ApplicationAddressDetails).length > 0;
+          const hasEmp = extractArr(backendResult.employmentIncome ?? backendResult.EmploymentIncome ?? backendResult.applicationEmploymentIncomeDetails ?? backendResult.ApplicationEmploymentIncomeDetails).length > 0;
+          const hasBank = extractArr(backendResult.bankExistingLoans ?? backendResult.BankExistingLoans ?? backendResult.applicationBankExistingLoanDetails ?? backendResult.ApplicationBankExistingLoanDetails).length > 0;
+          const hasProd = Boolean(backendResult.productDetails || backendResult.ProductDetails);
+          const hasCol = extractArr(backendResult.collateral ?? backendResult.Collateral ?? backendResult.collateralDetails ?? backendResult.CollateralDetails ?? backendResult.applicationCollateralDetails ?? backendResult.ApplicationCollateralDetails).length > 0;
+
+          if (!hasProd || !hasKycs || !hasPersonal || !hasAddress || !hasEmp || !hasBank || !hasCol) {
+            const [
+              prodRes,
+              kycRes,
+              persRes,
+              addrRes,
+              empRes,
+              bankRes,
+              colRes
+            ] = await Promise.allSettled([
+              !hasProd ? fetch(`${baseUrl}/ApplicationProductDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasKycs ? fetch(`${baseUrl}/ApplicationKYCDocuments`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasPersonal ? fetch(`${baseUrl}/ApplicationPersonalInformation`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasAddress ? fetch(`${baseUrl}/ApplicationAddressDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasEmp ? fetch(`${baseUrl}/ApplicationEmploymentIncomeDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasBank ? fetch(`${baseUrl}/ApplicationBankExistingLoanDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasCol ? fetch(`${baseUrl}/ApplicationCollateralDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+            ]);
+
+            // Match Product if missing
+            if (!hasProd && prodRes.status === 'fulfilled' && prodRes.value) {
+              const allProds = extractArr(prodRes.value);
+              const currentId = Number(appIdStr);
+              const matched = allProds.find((p) => {
+                const pAgentCustId = p.agentCustomerId ?? p.AgentCustomerId;
+                if (pAgentCustId !== undefined && pAgentCustId !== null && pAgentCustId !== '') {
+                  return Number(pAgentCustId) === currentId;
                 }
-              } catch (prodErr) {
-                console.warn('Could not fetch supplemental product details in hydration:', prodErr);
+                const pRmCustId = p.rmCustomerId ?? p.RMCustomerId ?? p.RmCustomerId;
+                const custRec = backendResult.customer || {};
+                const legacyCustId = custRec.rmCustomerId ?? custRec.RMCustomerId ?? custRec.RmCustomerId;
+                if (pRmCustId !== undefined && pRmCustId !== null && pRmCustId !== '' &&
+                    legacyCustId !== undefined && legacyCustId !== null && legacyCustId !== '') {
+                  return Number(pRmCustId) === Number(legacyCustId);
+                }
+                return false;
+              });
+              if (matched) backendResult.productDetails = matched;
+            }
+
+            const effectiveProdId = backendResult.productDetails?.applicationProductDetailsId ?? backendResult.productDetails?.ApplicationProductDetailsId;
+
+            // Match KYCs if missing
+            if (!hasKycs && kycRes.status === 'fulfilled' && kycRes.value) {
+              const rawKycs = extractArr(kycRes.value);
+              const currentId = Number(appIdStr);
+              const filteredKycs = rawKycs.filter((k) =>
+                (effectiveProdId && Number(k.applicationProductDetailsId ?? k.ApplicationProductDetailsId) === Number(effectiveProdId)) ||
+                (Number(k.agentCustomerId ?? k.AgentCustomerId) === currentId)
+              );
+              if (filteredKycs.length > 0) {
+                backendResult.kycDocuments = filteredKycs;
               }
+            }
+
+            const currentKycs = extractArr(
+              backendResult.kycDocuments ??
+              backendResult.KycDocuments ??
+              backendResult.applicationKYCDocuments ??
+              backendResult.ApplicationKYCDocuments
+            );
+            const currentApplicationKycIds = new Set(
+              currentKycs
+                .map((k) => k.kycDocumentId ?? k.applicationKYCDocumentId ?? k.ApplicationKYCDocumentId)
+                .filter((id) => id !== undefined && id !== null && id !== '')
+                .map(Number)
+            );
+
+            if (!hasPersonal && persRes.status === 'fulfilled' && persRes.value) {
+              const rawPers = extractArr(persRes.value);
+              const matchedPers = currentApplicationKycIds.size > 0
+                ? rawPers.filter((p) => {
+                    const kycId = p.applicationKYCDocumentId ?? p.ApplicationKYCDocumentId ?? p.kycDocumentId;
+                    return kycId !== undefined && kycId !== null && currentApplicationKycIds.has(Number(kycId));
+                  })
+                : [];
+              backendResult.personalInformation = matchedPers;
+            } else if (!hasPersonal) {
+              backendResult.personalInformation = [];
+            } else if (hasPersonal) {
+              const existingPers = extractArr(
+                backendResult.personalInformation ??
+                backendResult.PersonalInformation ??
+                backendResult.applicationPersonalInformation ??
+                backendResult.ApplicationPersonalInformation
+              );
+              backendResult.personalInformation = currentApplicationKycIds.size > 0
+                ? existingPers.filter((p) => {
+                    const kycId = p.applicationKYCDocumentId ?? p.ApplicationKYCDocumentId ?? p.kycDocumentId;
+                    return kycId !== undefined && kycId !== null && currentApplicationKycIds.has(Number(kycId));
+                  })
+                : [];
+            }
+
+            // Build current application personal information ID set
+            const currentPersList = extractArr(
+              backendResult.personalInformation ??
+              backendResult.PersonalInformation ??
+              backendResult.applicationPersonalInformation ??
+              backendResult.ApplicationPersonalInformation
+            );
+            const currentApplicationPersonalIds = new Set(
+              currentPersList
+                .map((p) => p.personalInformationId ?? p.PersonalInformationId ?? p.id ?? p.Id)
+                .filter((id) => id !== undefined && id !== null && id !== '')
+                .map(Number)
+            );
+
+            // 1. Strict address pre-filtering by current application personalInformationIds
+            let matchedAddresses = [];
+            if (!hasAddress && addrRes.status === 'fulfilled' && addrRes.value) {
+              const rawAddrs = extractArr(addrRes.value);
+              matchedAddresses = currentApplicationPersonalIds.size > 0
+                ? rawAddrs.filter((a) => {
+                    const persId = a.personalInformationId ?? a.PersonalInformationId;
+                    return persId !== undefined && persId !== null && currentApplicationPersonalIds.has(Number(persId));
+                  })
+                : [];
+              backendResult.addressDetails = matchedAddresses;
+            } else if (!hasAddress) {
+              backendResult.addressDetails = [];
+            } else if (hasAddress) {
+              const existingAddrs = extractArr(
+                backendResult.addressDetails ??
+                backendResult.AddressDetails ??
+                backendResult.applicationAddressDetails ??
+                backendResult.ApplicationAddressDetails
+              );
+              matchedAddresses = currentApplicationPersonalIds.size > 0
+                ? existingAddrs.filter((a) => {
+                    const persId = a.personalInformationId ?? a.PersonalInformationId;
+                    return persId !== undefined && persId !== null && currentApplicationPersonalIds.has(Number(persId));
+                  })
+                : [];
+              backendResult.addressDetails = matchedAddresses;
+            }
+
+            // Build current application address ID set
+            const currentApplicationAddressIds = new Set(
+              matchedAddresses
+                .map((a) => a.applicationAddressDetailsId ?? a.ApplicationAddressDetailsId ?? a.addressDetailsId ?? a.AddressDetailsId ?? a.id ?? a.Id)
+                .filter((id) => id !== undefined && id !== null && id !== '')
+                .map(Number)
+            );
+
+            // 2. Strict employment pre-filtering by current application address IDs
+            let matchedEmployments = [];
+            if (!hasEmp && empRes.status === 'fulfilled' && empRes.value) {
+              const rawEmps = extractArr(empRes.value);
+              matchedEmployments = currentApplicationAddressIds.size > 0
+                ? rawEmps.filter((e) => {
+                    const addrId = e.applicationAddressDetailsId ?? e.ApplicationAddressDetailsId ?? e.addressDetailsId ?? e.AddressDetailsId;
+                    return addrId !== undefined && addrId !== null && currentApplicationAddressIds.has(Number(addrId));
+                  })
+                : [];
+              backendResult.employmentIncome = matchedEmployments;
+            } else if (!hasEmp) {
+              backendResult.employmentIncome = [];
+            } else if (hasEmp) {
+              const existingEmps = extractArr(
+                backendResult.employmentIncome ??
+                backendResult.EmploymentIncome ??
+                backendResult.applicationEmploymentIncomeDetails ??
+                backendResult.ApplicationEmploymentIncomeDetails
+              );
+              matchedEmployments = currentApplicationAddressIds.size > 0
+                ? existingEmps.filter((e) => {
+                    const addrId = e.applicationAddressDetailsId ?? e.ApplicationAddressDetailsId ?? e.addressDetailsId ?? e.AddressDetailsId;
+                    return addrId !== undefined && addrId !== null && currentApplicationAddressIds.has(Number(addrId));
+                  })
+                : [];
+              backendResult.employmentIncome = matchedEmployments;
+            }
+
+            // Build current application employment ID set
+            const currentApplicationEmploymentIds = new Set(
+              matchedEmployments
+                .map((e) => e.applicationEmploymentIncomeDetailsId ?? e.ApplicationEmploymentIncomeDetailsId ?? e.employmentIncomeDetailsId ?? e.EmploymentIncomeDetailsId ?? e.id ?? e.Id)
+                .filter((id) => id !== undefined && id !== null && id !== '')
+                .map(Number)
+            );
+
+            // 3. Strict bank pre-filtering by current application employment IDs
+            if (!hasBank && bankRes.status === 'fulfilled' && bankRes.value) {
+              const rawBanks = extractArr(bankRes.value);
+              const matchedBanks = currentApplicationEmploymentIds.size > 0
+                ? rawBanks.filter((b) => {
+                    const empId = b.applicationEmploymentIncomeDetailsId ?? b.ApplicationEmploymentIncomeDetailsId ?? b.employmentIncomeDetailsId ?? b.EmploymentIncomeDetailsId;
+                    return empId !== undefined && empId !== null && currentApplicationEmploymentIds.has(Number(empId));
+                  })
+                : [];
+              backendResult.bankExistingLoans = matchedBanks;
+            } else if (!hasBank) {
+              backendResult.bankExistingLoans = [];
+            } else if (hasBank) {
+              const existingBanks = extractArr(
+                backendResult.bankExistingLoans ??
+                backendResult.BankExistingLoans ??
+                backendResult.applicationBankExistingLoanDetails ??
+                backendResult.ApplicationBankExistingLoanDetails
+              );
+              backendResult.bankExistingLoans = currentApplicationEmploymentIds.size > 0
+                ? existingBanks.filter((b) => {
+                    const empId = b.applicationEmploymentIncomeDetailsId ?? b.ApplicationEmploymentIncomeDetailsId ?? b.employmentIncomeDetailsId ?? b.EmploymentIncomeDetailsId;
+                    return empId !== undefined && empId !== null && currentApplicationEmploymentIds.has(Number(empId));
+                  })
+                : [];
+            }
+
+            if (!hasCol && colRes.status === 'fulfilled' && colRes.value) {
+              const rawCols = extractArr(colRes.value);
+              const matchedCols = effectiveProdId
+                ? rawCols.filter((c) => Number(c.applicationProductDetailsId ?? c.ApplicationProductDetailsId) === Number(effectiveProdId))
+                : [];
+              backendResult.collateralDetails = matchedCols;
+            } else if (!hasCol) {
+              backendResult.collateralDetails = [];
+            } else if (hasCol) {
+              const existingCols = extractArr(
+                backendResult.collateral ??
+                backendResult.Collateral ??
+                backendResult.collateralDetails ??
+                backendResult.CollateralDetails ??
+                backendResult.applicationCollateralDetails ??
+                backendResult.ApplicationCollateralDetails
+              );
+              backendResult.collateralDetails = effectiveProdId
+                ? existingCols.filter((c) => Number(c.applicationProductDetailsId ?? c.ApplicationProductDetailsId) === Number(effectiveProdId))
+                : [];
             }
           }
         }

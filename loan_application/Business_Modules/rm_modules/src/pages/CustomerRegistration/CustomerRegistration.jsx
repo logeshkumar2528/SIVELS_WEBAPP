@@ -153,31 +153,9 @@ function buildPersonalInformationState(appData) {
   const savedApplicant = saved.applicant || saved.primaryApplicant || {};
   const savedCoApplicants = Array.isArray(saved.coApplicants) ? saved.coApplicants : [];
   const rawCustomerName = appData.customerName || appData.fullName || savedApplicant.fullName || '';
-  const existingFirstName = savedApplicant.firstName || '';
-  const applicantNameParts = splitFullName(existingFirstName || rawCustomerName || '');
   const coApplicantCount = getApplicantCount(appData);
 
-  const initialFirstName = existingFirstName || applicantNameParts.firstName || rawCustomerName || '';
-
-  const applicant = createEmptyPerson({
-    personalInformationId: savedApplicant.personalInformationId || null,
-    relationshipWithApplicant: savedApplicant.relationshipWithApplicant || 'SELF',
-    title: savedApplicant.title ?? '',
-    firstName: initialFirstName,
-    middleName: savedApplicant.middleName || applicantNameParts.middleName || '',
-    lastName: savedApplicant.lastName || applicantNameParts.lastName || '',
-    fatherOrSpouseName: savedApplicant.fatherOrSpouseName || '',
-    mothersMaidenName: savedApplicant.mothersMaidenName || '',
-    dateOfBirth: savedApplicant.dateOfBirth || savedApplicant.dob || '',
-    religion: savedApplicant.religion ?? '',
-    category: savedApplicant.category ?? '',
-    gender: savedApplicant.gender || appData.gender || '',
-    maritalStatus: savedApplicant.maritalStatus ?? '',
-    mobileNo: savedApplicant.mobileNo || appData.mobile || appData.mobileNumber || '',
-    emailId: savedApplicant.emailId || appData.email || '',
-    panCardNo: savedApplicant.panCardNo || appData.panNumber || '',
-  });
-
+  // Map co-applicants first so we know their valid IDs
   const coApplicants = Array.from({ length: coApplicantCount }, (_, index) => {
     const current = savedCoApplicants[index] || {};
     return createEmptyPerson({
@@ -198,6 +176,54 @@ function buildPersonalInformationState(appData) {
       emailId: current.emailId ?? current.email ?? '',
       panCardNo: current.panCardNo ?? current.panNumber ?? '',
     });
+  });
+
+  const coApplicantIds = new Set(
+    coApplicants
+      .map((c) => c.personalInformationId)
+      .filter(Boolean)
+      .map(Number)
+  );
+
+  // Detect collision: Does savedApplicant share personalInformationId with any co-applicant?
+  const applicantId = savedApplicant.personalInformationId;
+  const isCollision = applicantId && coApplicantIds.has(Number(applicantId));
+
+  // If collision detected, do not reuse the co-applicant's personal row or personal details
+  const cleanApplicantRow = isCollision
+    ? {
+        personalInformationId: null,
+        title: '',
+        relationshipWithApplicant: 'SELF',
+        fatherOrSpouseName: '',
+        mothersMaidenName: '',
+        dateOfBirth: '',
+        religion: '',
+        category: '',
+        maritalStatus: '',
+      }
+    : savedApplicant;
+
+  const applicantNameParts = splitFullName(rawCustomerName || '');
+  const initialFirstName = cleanApplicantRow.firstName || applicantNameParts.firstName || rawCustomerName || '';
+
+  const applicant = createEmptyPerson({
+    personalInformationId: cleanApplicantRow.personalInformationId || null,
+    relationshipWithApplicant: cleanApplicantRow.relationshipWithApplicant || 'SELF',
+    title: cleanApplicantRow.title ?? '',
+    firstName: initialFirstName,
+    middleName: cleanApplicantRow.middleName || applicantNameParts.middleName || '',
+    lastName: cleanApplicantRow.lastName || applicantNameParts.lastName || '',
+    fatherOrSpouseName: cleanApplicantRow.fatherOrSpouseName || '',
+    mothersMaidenName: cleanApplicantRow.mothersMaidenName || '',
+    dateOfBirth: cleanApplicantRow.dateOfBirth || cleanApplicantRow.dob || '',
+    religion: cleanApplicantRow.religion ?? '',
+    category: cleanApplicantRow.category ?? '',
+    gender: cleanApplicantRow.gender || appData.gender || '',
+    maritalStatus: cleanApplicantRow.maritalStatus ?? '',
+    mobileNo: cleanApplicantRow.mobileNo || appData.mobile || appData.mobileNumber || '',
+    emailId: cleanApplicantRow.emailId || appData.email || '',
+    panCardNo: cleanApplicantRow.panCardNo || appData.panNumber || '',
   });
 
   return {
@@ -563,7 +589,7 @@ export default function CustomerRegistration() {
   const navigate = useNavigate();
   const { applicationId } = useParams();
   const appId = applicationId;
-  const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
+  const { getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildPersonalInformationState(getApplication(appId)));
   const [applicantHeaderName, setApplicantHeaderName] = useState(() => {
     const initialData = getApplication(appId);
@@ -584,7 +610,10 @@ export default function CustomerRegistration() {
 
   useEffect(() => {
     ensureApplication(appId);
-  }, [appId, ensureApplication]);
+    if (loadApplicationFromBackend) {
+      loadApplicationFromBackend(appId);
+    }
+  }, [appId, ensureApplication, loadApplicationFromBackend]);
 
   useEffect(() => {
     let active = true;
@@ -686,6 +715,20 @@ export default function CustomerRegistration() {
   const coApplicantCount = getApplicantCount(appData);
   const applicationSteps = useMemo(() => APPLICATION_WIZARD_STEPS, []);
 
+  const resolvedApplicationProductDetailsId = useMemo(() => {
+    const raw = (
+      appData?.applicationProductDetailsId ??
+      appData?.ApplicationProductDetailsId ??
+      appData?.sections?.productDetails?.applicationProductDetailsId ??
+      appData?.sections?.productDetails?.ApplicationProductDetailsId ??
+      appData?.productDetails?.applicationProductDetailsId ??
+      appData?.productDetails?.ApplicationProductDetailsId ??
+      null
+    );
+    const num = Number(raw);
+    return Number.isFinite(num) && num > 0 ? num : null;
+  }, [appData]);
+
   // Handle application switch or initial load
   useEffect(() => {
     if (prevAppIdRef.current !== appId) {
@@ -703,25 +746,29 @@ export default function CustomerRegistration() {
   useEffect(() => {
     if (!hasUserEditedRef.current) {
       const currentData = getApplication(appId);
-      const built = buildPersonalInformationState(currentData);
-      if (built.applicant.firstName) {
-        setForm((prev) => {
-          if (!prev.applicant.firstName) {
-            return {
-              ...prev,
-              applicant: {
-                ...prev.applicant,
-                firstName: built.applicant.firstName,
-                middleName: prev.applicant.middleName || built.applicant.middleName,
-                lastName: prev.applicant.lastName || built.applicant.lastName,
-              },
-            };
-          }
-          return prev;
-        });
+      if (currentData?._isHydrated) {
+        setForm(buildPersonalInformationState(currentData));
+      } else {
+        const built = buildPersonalInformationState(currentData);
+        if (built.applicant.firstName) {
+          setForm((prev) => {
+            if (!prev.applicant.firstName) {
+              return {
+                ...prev,
+                applicant: {
+                  ...prev.applicant,
+                  firstName: built.applicant.firstName,
+                  middleName: prev.applicant.middleName || built.applicant.middleName,
+                  lastName: prev.applicant.lastName || built.applicant.lastName,
+                },
+              };
+            }
+            return prev;
+          });
+        }
       }
     }
-  }, [appId, appData?.customerName, appData?.fullName, getApplication]);
+  }, [appId, appData?._isHydrated, appData?.customerName, appData?.fullName, getApplication]);
 
   useEffect(() => {
     if (hasUserEditedRef.current || applicantHeaderName !== 'Applicant') return;
@@ -744,12 +791,14 @@ export default function CustomerRegistration() {
   const updatePersonField = (scope, field, value, index = null) => {
     hasUserEditedRef.current = true;
     if (scope === 'applicant') {
+      const nextApplicant = { ...form.applicant, [field]: value };
+      const fullName = composeFullName(nextApplicant);
+      if (fullName) {
+        setApplicantHeaderName(fullName);
+      }
       const nextForm = {
         ...form,
-        applicant: {
-          ...form.applicant,
-          [field]: value,
-        },
+        applicant: nextApplicant,
       };
       syncForm(nextForm);
       setErrors((current) => {
@@ -777,16 +826,16 @@ export default function CustomerRegistration() {
 
   const validateForm = () => {
     const nextErrors = {};
-    const applicantErrors = validatePerson(form.applicant);
-    Object.entries(applicantErrors).forEach(([field, message]) => {
+    const applicantErrors = validatePerson(form.applicant, { isCoApplicant: false });
+    for (const [field, message] of Object.entries(applicantErrors)) {
       nextErrors[`applicant.${field}`] = message;
-    });
+    }
 
-    form.coApplicants.forEach((person, index) => {
-      const personErrors = validatePerson(person, { isCoApplicant: true });
-      Object.entries(personErrors).forEach(([field, message]) => {
+    form.coApplicants.forEach((coPerson, index) => {
+      const coErrors = validatePerson(coPerson, { isCoApplicant: true });
+      for (const [field, message] of Object.entries(coErrors)) {
         nextErrors[`coApplicants.${index}.${field}`] = message;
-      });
+      }
     });
 
     return nextErrors;
@@ -806,12 +855,31 @@ export default function CustomerRegistration() {
     }
 
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+    const token = localStorage.getItem('authToken');
+    const authHeaders = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
     
     // Save to API for each person
     const allPersons = [
       { ...form.applicant, isPrimary: true },
       ...form.coApplicants.map((co, i) => ({ ...co, index: i, isPrimary: false }))
     ];
+
+    // Detect and resolve ID collision before calling API
+    const appPersId = allPersons[0]?.personalInformationId;
+    const coPersIds = new Set(
+      allPersons
+        .slice(1)
+        .map((c) => c.personalInformationId)
+        .filter(Boolean)
+        .map(Number)
+    );
+    if (appPersId && coPersIds.has(Number(appPersId))) {
+      console.warn('Duplicate personalInformationId detected between applicant and co-applicant. Clearing applicant ID to force new row creation.');
+      allPersons[0].personalInformationId = null;
+    }
 
     try {
       for (const person of allPersons) {
@@ -825,7 +893,32 @@ export default function CustomerRegistration() {
           continue;
         }
 
-        const isUpdate = !!person.personalInformationId;
+        // Verify ownership: if person has an ID, verify that it actually belongs to kycDocId
+        let isUpdate = false;
+        if (person.personalInformationId) {
+          try {
+            const checkRes = await fetch(`${baseUrl}/ApplicationPersonalInformation/${person.personalInformationId}`, { headers: authHeaders });
+            if (checkRes.ok) {
+              const checkData = await checkRes.json();
+              const row = Array.isArray(checkData) ? checkData[0] : (checkData?.value ? checkData.value[0] : checkData);
+              const rowKycId = row?.applicationKYCDocumentId ?? row?.ApplicationKYCDocumentId;
+              if (rowKycId !== undefined && rowKycId !== null && Number(rowKycId) === Number(kycDocId)) {
+                isUpdate = true;
+              } else {
+                console.warn(`personalInformationId ${person.personalInformationId} belongs to KYC ${rowKycId}, not ${kycDocId}. Switching to POST.`);
+                person.personalInformationId = null;
+              }
+            } else if (checkRes.status === 404) {
+              person.personalInformationId = null;
+            } else {
+              isUpdate = true;
+            }
+          } catch (verifyErr) {
+            console.warn('Could not verify personalInformationId ownership:', verifyErr);
+            isUpdate = true;
+          }
+        }
+
         const url = isUpdate
           ? `${baseUrl}/ApplicationPersonalInformation/${person.personalInformationId}`
           : `${baseUrl}/ApplicationPersonalInformation`;
@@ -864,7 +957,7 @@ export default function CustomerRegistration() {
 
         const response = await fetch(url, {
           method: isUpdate ? 'PUT' : 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders,
           body: JSON.stringify(payload),
         });
 
@@ -877,12 +970,51 @@ export default function CustomerRegistration() {
         let savedData = null;
         if (response.status !== 204) {
           const text = await response.text();
-          if (text) { try { savedData = JSON.parse(text); } catch (e) { /* ignore */ } }
+          if (text) {
+            try {
+              savedData = JSON.parse(text);
+            } catch (e) {
+              /* ignore */
+            }
+          }
         }
         
-        const savedId = savedData?.personalInformationId || savedData?.PersonalInformationId;
+        let savedId = (
+          savedData?.personalInformationId ??
+          savedData?.PersonalInformationId ??
+          savedData?.id ??
+          savedData?.Id ??
+          (typeof savedData === 'number' ? savedData : null)
+        );
+
+        if (!savedId) {
+          const loc = response.headers.get('location');
+          if (loc) {
+            const lastPart = loc.split('/').pop();
+            if (!isNaN(Number(lastPart))) {
+              savedId = Number(lastPart);
+            }
+          }
+        }
+
+        if (!savedId && !isUpdate && kycDocId) {
+          try {
+            const listRes = await fetch(`${baseUrl}/ApplicationPersonalInformation`, { headers: authHeaders });
+            if (listRes.ok) {
+              const allList = await listRes.json();
+              const arr = Array.isArray(allList) ? allList : (allList?.value ?? allList?.data ?? []);
+              const found = arr.find((p) => Number(p.applicationKYCDocumentId ?? p.ApplicationKYCDocumentId) === Number(kycDocId));
+              if (found) {
+                savedId = Number(found.personalInformationId ?? found.PersonalInformationId);
+              }
+            }
+          } catch (e) {
+            /* ignore */
+          }
+        }
+
         if (savedId) {
-          person.personalInformationId = savedId;
+          person.personalInformationId = Number(savedId);
         }
       }
 
@@ -896,11 +1028,17 @@ export default function CustomerRegistration() {
         }))
       };
 
+      setForm(finalForm);
+
       saveApplication(appId, {
         ...buildRegistrationPayload(finalForm, appData, applicantHeaderName),
         personalInformation: finalForm,
         sections: {
           ...(appData?.sections || {}),
+          personalInformation: finalForm,
+        },
+        registration: {
+          ...(appData?.registration || {}),
           personalInformation: finalForm,
         },
       });
@@ -926,6 +1064,11 @@ export default function CustomerRegistration() {
   const [aadhaarPreviews, setAadhaarPreviews] = useState({});
   const blobUrlsRef = useRef([]);
 
+  const applicantKycId = appData.sections?.kycDocuments?.applicant?.kycDocumentId || appData.kycDocuments?.applicant?.kycDocumentId;
+  const coApplicantKycIdsKey = (appData.sections?.kycDocuments?.coApplicants || appData.kycDocuments?.coApplicants || [])
+    .map((c) => c?.kycDocumentId || '')
+    .join('-');
+
   useEffect(() => {
     let isMounted = true;
     const token = localStorage.getItem('authToken');
@@ -936,38 +1079,48 @@ export default function CustomerRegistration() {
     const kycDocs = appData.sections?.kycDocuments || appData.kycDocuments || {};
 
     // 1. Load Applicant Aadhaar (Latest updated with original Agent-uploaded fallback)
-    resolveLatestApplicantAadhaar({ appData, appId, baseUrl, headers }).then((url) => {
+    resolveLatestApplicantAadhaar({
+      appData,
+      appId,
+      applicationProductDetailsId: resolvedApplicationProductDetailsId,
+      baseUrl,
+      headers,
+    }).then((url) => {
       if (isMounted && url) {
         blobUrlsRef.current.push(url);
-        setAadhaarPreviews((prev) => ({ ...prev, applicant: url }));
+        setAadhaarPreviews((prev) => (prev.applicant === url ? prev : { ...prev, applicant: url }));
       }
     });
 
     // 2. Load Co-Applicants Aadhaar (Latest updated with original RM-uploaded fallback)
-    form.coApplicants.forEach((coPerson, idx) => {
+    for (let idx = 0; idx < coApplicantCount; idx++) {
       const coKyc = kycDocs.coApplicants?.[idx] || {};
+      const coPerson = form.coApplicants?.[idx] || {};
       resolveLatestCoApplicantAadhaar({
         coKyc,
         coPersonalInfo: coPerson,
         coIndex: idx,
         appData,
         appId,
+        applicationProductDetailsId: resolvedApplicationProductDetailsId,
         baseUrl,
         headers,
       }).then((url) => {
         if (isMounted && url) {
           blobUrlsRef.current.push(url);
-          setAadhaarPreviews((prev) => ({ ...prev, [`co_${idx}`]: url }));
+          setAadhaarPreviews((prev) => (prev[`co_${idx}`] === url ? prev : { ...prev, [`co_${idx}`]: url }));
         }
       });
-    });
+    }
 
     return () => {
       isMounted = false;
-      blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      blobUrlsRef.current.forEach((url) => {
+        try { URL.revokeObjectURL(url); } catch {}
+      });
       blobUrlsRef.current = [];
     };
-  }, [appData, appId, form.coApplicants]);
+  }, [appId, resolvedApplicationProductDetailsId, coApplicantCount, applicantKycId, coApplicantKycIdsKey]);
 
   const aadhaarDocumentPeople = [
     {

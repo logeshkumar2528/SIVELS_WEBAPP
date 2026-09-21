@@ -12,44 +12,88 @@ import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { buildSectionUpdate, getSectionState } from '../applicationWizard/flowUtils';
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 
+export function createCleanCollateralState() {
+  return {
+    propertyOne: {
+      applicationCollateralDetailsId: null,
+      typeOfProperty: '',
+      usage: '',
+      locationAddress: '',
+      estimatedValue: '',
+    },
+    propertyTwo: {
+      applicationCollateralDetailsId: null,
+      typeOfProperty: '',
+      usage: '',
+      locationAddress: '',
+      estimatedValue: '',
+    },
+  };
+}
+
 function buildCollateralState(appData) {
   if (!appData) {
-    return {
-      propertyOne: { applicationCollateralDetailsId: null, typeOfProperty: '', usage: '', locationAddress: '', estimatedValue: '' },
-      propertyTwo: { applicationCollateralDetailsId: null, typeOfProperty: '', usage: '', locationAddress: '', estimatedValue: '' },
-    };
+    return createCleanCollateralState();
   }
+
+  const expectedProdId = appData.applicationProductDetailsId ?? appData.ApplicationProductDetailsId;
 
   const saved = getSectionState(appData, 'collateral', {});
   const rawColList = Array.isArray(appData.collateral || appData.Collateral || appData.collateralDetails || appData.CollateralDetails)
     ? (appData.collateral || appData.Collateral || appData.collateralDetails || appData.CollateralDetails)
     : [];
 
+  const validColList = expectedProdId
+    ? rawColList.filter((c) => Number(c.applicationProductDetailsId ?? c.ApplicationProductDetailsId) === Number(expectedProdId))
+    : [];
+
   const rawP1 =
     saved.propertyOne ||
     (Array.isArray(saved) ? saved[0] : null) ||
     (Array.isArray(saved.properties) ? saved.properties[0] : null) ||
-    rawColList[0] ||
+    validColList[0] ||
     (saved.typeOfProperty || saved.propertyId || saved.locationAddress || saved.propertyAddress || saved.estimatedValue ? saved : {});
 
   const rawP2 =
     saved.propertyTwo ||
     (Array.isArray(saved) ? saved[1] : null) ||
     (Array.isArray(saved.properties) ? saved.properties[1] : null) ||
-    rawColList[1] ||
+    validColList[1] ||
     {};
 
-  const createProperty = (source = {}) => ({
-    applicationCollateralDetailsId: source.applicationCollateralDetailsId ?? source.ApplicationCollateralDetailsId ?? null,
-    typeOfProperty: source.typeOfProperty ?? source.propertyId ?? source.PropertyId ?? source.propertyType ?? source.PropertyType ?? '',
-    usage: source.usage ?? source.propertyUsageId ?? source.PropertyUsageId ?? source.propertyUsage ?? source.PropertyUsage ?? '',
-    locationAddress: source.locationAddress || source.LocationAddress || source.propertyAddress || source.PropertyAddress || '',
-    estimatedValue: source.estimatedValue !== undefined && source.estimatedValue !== null && source.estimatedValue !== ''
-      ? source.estimatedValue
-      : (source.EstimatedValue !== undefined && source.EstimatedValue !== null && source.EstimatedValue !== ''
-      ? source.EstimatedValue
-      : (source.estimatedMarketValue ?? source.EstimatedMarketValue ?? '')),
-  });
+  const createProperty = (source = {}) => {
+    const srcProdId = source.applicationProductDetailsId ?? source.ApplicationProductDetailsId;
+    if (srcProdId && expectedProdId && Number(srcProdId) !== Number(expectedProdId)) {
+      return {
+        applicationCollateralDetailsId: null,
+        typeOfProperty: '',
+        usage: '',
+        locationAddress: '',
+        estimatedValue: '',
+      };
+    }
+    if (!expectedProdId && (source.applicationCollateralDetailsId || source.ApplicationCollateralDetailsId)) {
+      return {
+        applicationCollateralDetailsId: null,
+        typeOfProperty: '',
+        usage: '',
+        locationAddress: '',
+        estimatedValue: '',
+      };
+    }
+
+    return {
+      applicationCollateralDetailsId: source.applicationCollateralDetailsId ?? source.ApplicationCollateralDetailsId ?? null,
+      typeOfProperty: source.typeOfProperty ?? source.propertyId ?? source.PropertyId ?? source.propertyType ?? source.PropertyType ?? '',
+      usage: source.usage ?? source.propertyUsageId ?? source.PropertyUsageId ?? source.propertyUsage ?? source.PropertyUsage ?? '',
+      locationAddress: source.locationAddress || source.LocationAddress || source.propertyAddress || source.PropertyAddress || '',
+      estimatedValue: source.estimatedValue !== undefined && source.estimatedValue !== null && source.estimatedValue !== ''
+        ? source.estimatedValue
+        : (source.EstimatedValue !== undefined && source.EstimatedValue !== null && source.EstimatedValue !== ''
+        ? source.EstimatedValue
+        : (source.estimatedMarketValue ?? source.EstimatedMarketValue ?? '')),
+    };
+  };
 
   return {
     propertyOne: createProperty(rawP1),
@@ -64,19 +108,22 @@ function isItemActive(item) {
   return val === true || val === 1 || val === '1' || val === 'true' || val === 'Active';
 }
 
-function isPropertyPartiallyFilled(prop) {
-  if (!prop) return false;
-  const hasType = Boolean(prop.typeOfProperty && String(prop.typeOfProperty).trim() !== '');
-  const hasUsage = Boolean(prop.usage && String(prop.usage).trim() !== '');
-  const hasAddress = Boolean(String(prop.locationAddress || '').trim());
-  const hasValue = Boolean(prop.estimatedValue && parseAmountToNumber(prop.estimatedValue) > 0);
-  return hasType || hasUsage || hasAddress || hasValue;
+export function hasMeaningfulPropertyData(property) {
+  if (!property || typeof property !== 'object') return false;
+  const estVal = parseAmountToNumber(property.estimatedValue);
+  return Boolean(
+    (property.typeOfProperty && String(property.typeOfProperty).trim() !== '') ||
+    (property.usage && String(property.usage).trim() !== '') ||
+    String(property.locationAddress || '').trim() !== '' ||
+    (!isNaN(estVal) && estVal > 0) ||
+    (Number(property.estimatedValue) > 0)
+  );
 }
 
 function validateProperty(prop = {}, isProperty1 = false) {
   const errors = {};
 
-  if (!isProperty1 && !isPropertyPartiallyFilled(prop)) {
+  if (!isProperty1 && !hasMeaningfulPropertyData(prop)) {
     return errors;
   }
 
@@ -200,7 +247,11 @@ export default function CollateralDetails() {
   const { applicationId } = useParams();
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
-  const [form, setForm] = useState(() => buildCollateralState(getApplication(appId)));
+  const [form, setForm] = useState(() => {
+    const app = getApplication(appId);
+    if (!app || !app._isHydrated) return createCleanCollateralState();
+    return buildCollateralState(app);
+  });
   const [errors, setErrors] = useState({});
   const [errorPopup, setErrorPopup] = useState(null);
   const [isLoadingMasters, setIsLoadingMasters] = useState(true);
@@ -209,6 +260,18 @@ export default function CollateralDetails() {
   const [propertyOptions, setPropertyOptions] = useState([]);
   const [usageOptions, setUsageOptions] = useState([]);
   const [collateralMasterList, setCollateralMasterList] = useState([]);
+
+  const lastAppIdRef = useRef(appId);
+
+  useEffect(() => {
+    if (lastAppIdRef.current !== appId) {
+      lastAppIdRef.current = appId;
+      hydratedAppIdRef.current = null;
+      setForm(createCleanCollateralState());
+      setErrors({});
+      setErrorPopup(null);
+    }
+  }, [appId]);
 
   const loadMasters = useCallback(async () => {
     setIsLoadingMasters(true);
@@ -332,13 +395,10 @@ export default function CollateralDetails() {
 
             if (targetProdId) {
               fetchedCollaterals = colList.filter(
-                (c) => String(c.applicationProductDetailsId ?? c.ApplicationProductDetailsId) === String(targetProdId)
+                (c) => Number(c.applicationProductDetailsId ?? c.ApplicationProductDetailsId) === Number(targetProdId)
               );
-            }
-            if (fetchedCollaterals.length === 0 && hydratedApp?.applicationCollateralDetailsId) {
-              fetchedCollaterals = colList.filter(
-                (c) => String(c.applicationCollateralDetailsId ?? c.ApplicationCollateralDetailsId) === String(hydratedApp.applicationCollateralDetailsId)
-              );
+            } else {
+              fetchedCollaterals = [];
             }
           }
         } catch (apiErr) {
@@ -351,7 +411,7 @@ export default function CollateralDetails() {
         // 3. Map into state
         if (fetchedCollaterals.length > 0) {
           const prop1 = fetchedCollaterals[0] || {};
-          const prop2 = fetchedCollaterals[1] || {};
+          const prop2 = fetchedCollaterals[1] || null;
 
           const nextForm = {
             propertyOne: {
@@ -361,20 +421,28 @@ export default function CollateralDetails() {
               locationAddress: prop1.locationAddress || prop1.LocationAddress || prop1.propertyAddress || prop1.PropertyAddress || '',
               estimatedValue: prop1.estimatedValue ?? prop1.EstimatedValue ?? '',
             },
-            propertyTwo: {
+            propertyTwo: prop2 ? {
               applicationCollateralDetailsId: prop2.applicationCollateralDetailsId ?? prop2.ApplicationCollateralDetailsId ?? null,
               typeOfProperty: prop2.typeOfProperty ?? prop2.propertyId ?? prop2.PropertyId ?? prop2.propertyType ?? '',
               usage: prop2.usage ?? prop2.propertyUsageId ?? prop2.PropertyUsageId ?? prop2.propertyUsage ?? '',
               locationAddress: prop2.locationAddress || prop2.LocationAddress || prop2.propertyAddress || prop2.PropertyAddress || '',
               estimatedValue: prop2.estimatedValue ?? prop2.EstimatedValue ?? '',
+            } : {
+              applicationCollateralDetailsId: null,
+              typeOfProperty: '',
+              usage: '',
+              locationAddress: '',
+              estimatedValue: '',
             },
           };
 
           setForm(nextForm);
           saveApplication(appId, buildSectionUpdate(hydratedApp || getApplication(appId), 'collateral', nextForm));
-        } else if (hydratedApp) {
-          const nextForm = buildCollateralState(hydratedApp);
-          setForm(nextForm);
+        } else {
+          // Authoritative empty collateral state for this application
+          const cleanState = createCleanCollateralState();
+          setForm(cleanState);
+          saveApplication(appId, buildSectionUpdate(hydratedApp || getApplication(appId), 'collateral', cleanState));
         }
       } catch (err) {
         console.error('Error hydrating application collateral:', err);
@@ -429,18 +497,27 @@ export default function CollateralDetails() {
   }, [matchedCollateral]);
 
   const updateField = (scope, field, value) => {
-    setForm((prevForm) => {
-      const nextForm = {
-        ...prevForm,
-        [scope]: {
-          ...(prevForm[scope] || {}),
-          [field]: value,
-        },
-      };
-      const currentAppData = getApplication(appId);
-      saveApplication(appId, buildSectionUpdate(currentAppData, 'collateral', nextForm));
-      return nextForm;
-    });
+    const nextForm = {
+      ...form,
+      [scope]: {
+        ...(form[scope] || {}),
+        [field]: value,
+      },
+    };
+
+    setForm(nextForm);
+
+    const currentAppData = getApplication(appId);
+
+    saveApplication(
+      appId,
+      buildSectionUpdate(
+        currentAppData,
+        'collateral',
+        nextForm
+      )
+    );
+
     setErrors((prev) => {
       const next = { ...prev };
       delete next[`${scope}.${field}`];
@@ -475,17 +552,69 @@ export default function CollateralDetails() {
 
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
     const prodId = appData.applicationProductDetailsId;
+    const token = localStorage.getItem('authToken');
+    const authHeaders = { 'Content-Type': 'application/json' };
+    if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
+    // ── 1. Handle Optional Property 2 Deletion (Case D) ──
+    // Backend ID exists + user cleared all fields -> DELETE
+    const p2Id = form.propertyTwo?.applicationCollateralDetailsId;
+    const hasP2Data = hasMeaningfulPropertyData(form.propertyTwo);
+
+    if (p2Id && !hasP2Data) {
+      try {
+        const deleteUrl = `${baseUrl}/ApplicationCollateralDetails/${p2Id}`;
+        const deleteRes = await fetch(deleteUrl, {
+          method: 'DELETE',
+          headers: authHeaders,
+        });
+
+        // 204: No Content, 200: OK (Success), 404: Not Found (already removed on server)
+        if (deleteRes.status !== 204 && deleteRes.status !== 200 && deleteRes.status !== 404) {
+          const errText = await deleteRes.text().catch(() => '');
+          throw new Error(`Failed to remove Property 2 (HTTP ${deleteRes.status}): ${errText || deleteRes.statusText}`);
+        }
+
+        // Reset Property 2 completely in local state
+        const resetP2 = {
+          applicationCollateralDetailsId: null,
+          typeOfProperty: '',
+          usage: '',
+          locationAddress: '',
+          estimatedValue: '',
+        };
+        form.propertyTwo = resetP2;
+        setForm((prev) => ({
+          ...prev,
+          propertyTwo: resetP2,
+        }));
+      } catch (delErr) {
+        console.error('Error deleting Property 2:', delErr);
+        setErrorPopup({
+          title: 'Error Removing Property',
+          message: delErr.message || 'Failed to remove optional Property 2 from server. Please try again.',
+          variant: 'error',
+        });
+        return; // Halt continuation on error
+      }
+    }
+
+    // ── 2. Handle Save / Update for Property 1 and Property 2 ──
     if (collateralRequired && prodId) {
       try {
-        const properties = [
-          { key: 'propertyOne', data: form.propertyOne },
-          { key: 'propertyTwo', data: form.propertyTwo }
-        ];
+        const propertiesToSave = [];
 
-        for (const prop of properties) {
-          if (!prop.data.typeOfProperty) continue; // Skip if no property type selected
+        // Property 1: always save if typeOfProperty is present
+        if (form.propertyOne?.typeOfProperty) {
+          propertiesToSave.push({ key: 'propertyOne', data: form.propertyOne });
+        }
 
+        // Property 2: save only if user entered meaningful data
+        if (hasMeaningfulPropertyData(form.propertyTwo) && form.propertyTwo?.typeOfProperty) {
+          propertiesToSave.push({ key: 'propertyTwo', data: form.propertyTwo });
+        }
+
+        for (const prop of propertiesToSave) {
           const isUpdate = !!prop.data.applicationCollateralDetailsId;
           const url = isUpdate
             ? `${baseUrl}/ApplicationCollateralDetails/${prop.data.applicationCollateralDetailsId}`
@@ -497,7 +626,7 @@ export default function CollateralDetails() {
             PropertyUsageId: Number(prop.data.usage) || 0,
             LocationAddress: prop.data.locationAddress || '',
             EstimatedValue: parseAmountToNumber(prop.data.estimatedValue),
-            CreatedBy: 1
+            CreatedBy: 1,
           };
 
           if (isUpdate) {
@@ -506,7 +635,7 @@ export default function CollateralDetails() {
 
           const response = await fetch(url, {
             method: isUpdate ? 'PUT' : 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders,
             body: JSON.stringify(payload),
           });
 
@@ -517,9 +646,15 @@ export default function CollateralDetails() {
           let savedData = null;
           if (response.status !== 204) {
             const text = await response.text();
-            if (text) { try { savedData = JSON.parse(text); } catch (e) { /* ignore */ } }
+            if (text) {
+              try {
+                savedData = JSON.parse(text);
+              } catch (e) {
+                /* ignore */
+              }
+            }
           }
-          
+
           const savedId = savedData?.applicationCollateralDetailsId || savedData?.ApplicationCollateralDetailsId;
           if (savedId) {
             form[prop.key].applicationCollateralDetailsId = savedId;
@@ -536,7 +671,8 @@ export default function CollateralDetails() {
       }
     }
 
-    saveApplication(appId, buildSectionUpdate(appData, 'collateral', form));
+    const currentAppData = getApplication(appId) || appData;
+    saveApplication(appId, buildSectionUpdate(currentAppData, 'collateral', form));
     navigate(ROUTES.REFERENCES.replace(':applicationId', appId));
   };
 

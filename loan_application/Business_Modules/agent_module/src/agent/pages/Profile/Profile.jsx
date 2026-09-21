@@ -18,6 +18,7 @@ import {
   Loader2
 } from 'lucide-react'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
+import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
 import { getProfileImageUrl, updateProfileImage } from '../../utils/profileImageHelper'
 import './Profile.css'
 
@@ -100,7 +101,7 @@ function Profile() {
     if (loadingAgent || !agentId) return
     agentCustomerService.getAllCustomers().then(data => {
       const allCustomers = (Array.isArray(data) ? data : data?.data || data?.items || data?.result || data?.list || [])
-      const myCustomers = allCustomers.filter(c => Number(c.agentId) === Number(agentId))
+      const myCustomers = allCustomers.filter(c => isCustomerOwnedByAgent(c, agentId))
       setCustomersCount(myCustomers.length.toString())
     }).catch(err => {
       console.error("Failed to load customers count", err)

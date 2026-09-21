@@ -232,24 +232,22 @@ export default function Declaration() {
           });
 
           // Update form state with live API values
-          setForm((prev) => {
-            const shouldOverwriteAck = isObsoleteMock(prev.ackApplicantName) || !prev.ackApplicantName || prev.ackApplicantName === 'Muthu A';
-            const shouldOverwriteRm = isObsoleteRmName(prev.ackReceivedBy) || !prev.ackReceivedBy;
-            const shouldOverwriteProduct = !prev.ackProduct || isNumericId(prev.ackProduct) || isObsoleteMock(prev.ackProduct);
+          const shouldOverwriteAck = isObsoleteMock(form.ackApplicantName) || !form.ackApplicantName || form.ackApplicantName === 'Muthu A';
+          const shouldOverwriteRm = isObsoleteRmName(form.ackReceivedBy) || !form.ackReceivedBy;
+          const shouldOverwriteProduct = !form.ackProduct || isNumericId(form.ackProduct) || isObsoleteMock(form.ackProduct);
 
-            const next = {
-              ...prev,
-              applicantSignature: isObsoleteMock(prev.applicantSignature) ? '' : (prev.applicantSignature || ''),
-              applicantDate: isObsoleteMock(prev.applicantDate) ? today : (prev.applicantDate || today),
-              ackApplicantName: shouldOverwriteAck ? (custName || prev.ackApplicantName) : prev.ackApplicantName,
-              ackProduct: shouldOverwriteProduct ? prodName : (prev.ackProduct || prodName),
-              ackReceivedBy: shouldOverwriteRm ? (resolvedRmName || prev.ackReceivedBy) : (prev.ackReceivedBy || resolvedRmName),
-              ackDate: isObsoleteMock(prev.ackDate) ? today : (prev.ackDate || today),
-            };
+          const next = {
+            ...form,
+            applicantSignature: isObsoleteMock(form.applicantSignature) ? '' : (form.applicantSignature || ''),
+            applicantDate: isObsoleteMock(form.applicantDate) ? today : (form.applicantDate || today),
+            ackApplicantName: shouldOverwriteAck ? (custName || form.ackApplicantName) : form.ackApplicantName,
+            ackProduct: shouldOverwriteProduct ? prodName : (form.ackProduct || prodName),
+            ackReceivedBy: shouldOverwriteRm ? (resolvedRmName || form.ackReceivedBy) : (form.ackReceivedBy || resolvedRmName),
+            ackDate: isObsoleteMock(form.ackDate) ? today : (form.ackDate || today),
+          };
 
-            saveApplication(appId, buildSectionUpdate(getApplication(appId), 'declaration', next));
-            return next;
-          });
+          setForm(next);
+          saveApplication(appId, buildSectionUpdate(getApplication(appId), 'declaration', next));
         }
       } catch (err) {
         console.error('Error fetching live data for Declaration:', err);

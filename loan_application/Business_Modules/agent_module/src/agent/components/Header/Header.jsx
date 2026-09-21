@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Bell } from 'lucide-react'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
+import { useAuth } from '../../../../../../Core/src/context/AuthContext'
 import { getProfileImageUrl } from '../../utils/profileImageHelper'
 import './Header.css'
 
 function Header() {
   const [imageError, setImageError] = useState(false)
   const location = useLocation()
+  const { currentUser } = useAuth()
   const { agentId, agentData, loadingAgent } = useAgentIdentity()
 
   const getPageTitle = () => {
@@ -26,7 +28,7 @@ function Header() {
   }
 
   const [imageVersion, setImageVersion] = useState(Date.now())
-  const resolvedAgentId = agentId || agentData?.agentId || agentData?.AgentId || (typeof window !== 'undefined' ? localStorage.getItem('agentId') : null)
+  const resolvedAgentId = agentId || agentData?.agentId || agentData?.AgentId || currentUser?.agentId || currentUser?.AgentId || (typeof window !== 'undefined' ? localStorage.getItem('agentId') : null)
   const profileImageUrl = getProfileImageUrl('Agent', resolvedAgentId, imageVersion)
 
   useEffect(() => {
@@ -44,9 +46,9 @@ function Header() {
     return () => window.removeEventListener('profile-image-updated', handleUpdate)
   }, [])
 
-  const agentName = agentData?.fullName || 'Agent'
+  const agentName = agentData?.fullName || currentUser?.fullName || currentUser?.name || 'Agent'
   const agentInitial = agentName ? agentName.charAt(0).toUpperCase() : 'A'
-  const agentCode = agentData?.agentCode || 'N/A'
+  const agentCode = agentData?.agentCode || currentUser?.agentCode || 'N/A'
 
   return (
     <header className="header">

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Users, ClipboardList, Send, Banknote, Building2 } from 'lucide-react'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
+import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
 import './StatCards.css'
 
 function StatCards({ onTotalSubmittedClick }) {
@@ -10,13 +11,19 @@ function StatCards({ onTotalSubmittedClick }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (loadingAgent || !agentId) return
+    if (loadingAgent) return
+
+    if (!agentId) {
+      setCustomers([])
+      setLoading(false)
+      return
+    }
 
     const fetchCustomers = async () => {
       try {
         const data = await agentCustomerService.getAllCustomers()
         const allCustomers = (Array.isArray(data) ? data : data?.data || data?.items || data?.result || data?.list || [])
-        const myCustomers = allCustomers.filter(c => Number(c.agentId) === Number(agentId))
+        const myCustomers = allCustomers.filter(c => isCustomerOwnedByAgent(c, agentId))
         setCustomers(myCustomers)
       } catch (err) {
         console.error("Failed to load customers for stats", err)

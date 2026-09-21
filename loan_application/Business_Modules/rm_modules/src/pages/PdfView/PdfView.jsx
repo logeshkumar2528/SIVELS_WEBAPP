@@ -9,10 +9,33 @@ import Button from '../../components/Button/Button';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { formatDateTime, toIstDateInput } from '../../utils/dateHelper';
 import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
+import { isApplicantDocumentTuple } from '../KycDocuments/kycDocumentState';
 import './PdfView.css';
 import LogoImage from '../../assets/logo/Navbar_logo/Logo.jpg';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+
+function extractArray(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (Array.isArray(raw?.value)) return raw.value;
+  if (Array.isArray(raw?.data)) return raw.data;
+  if (Array.isArray(raw?.items)) return raw.items;
+  return [];
+}
+
+function mergeNonEmpty(primary = {}, fallback = {}) {
+  const result = { ...(fallback || {}) };
+  Object.entries(primary || {}).forEach(([k, v]) => {
+    if (v !== '' && v !== null && v !== undefined) {
+      if (typeof v === 'object' && !Array.isArray(v) && v !== null) {
+        result[k] = mergeNonEmpty(v, fallback?.[k] || {});
+      } else {
+        result[k] = v;
+      }
+    }
+  });
+  return result;
+}
 
 function composeFullName(person = {}) {
   return [person.firstName, person.middleName, person.lastName]
@@ -49,10 +72,16 @@ export default function PdfView() {
 
   const [liveCustomer, setLiveCustomer] = useState(null);
   const [liveRM, setLiveRM] = useState(null);
+  const [livePersonal, setLivePersonal] = useState(null);
+  const [liveAddress, setLiveAddress] = useState(null);
   const [liveEmployment, setLiveEmployment] = useState(null);
+  const [liveBank, setLiveBank] = useState(null);
   const [liveCollateral, setLiveCollateral] = useState(null);
   const [liveKycCoApplicants, setLiveKycCoApplicants] = useState([]);
   const [liveAllKycRecords, setLiveAllKycRecords] = useState([]);
+  const [applicantPhotoUrl, setApplicantPhotoUrl] = useState(null);
+  const [isApplicantPhotoLoading, setIsApplicantPhotoLoading] = useState(false);
+  const [liveApplicantKyc, setLiveApplicantKyc] = useState(null);
   const [coApplicantPhotos, setCoApplicantPhotos] = useState({});
   const [downloadedDocs, setDownloadedDocs] = useState([]);
   const [isMetadataLoading, setIsMetadataLoading] = useState(true);
@@ -75,6 +104,7 @@ export default function PdfView() {
     propertyUsages: {},
     employmentTypes: {},
     educations: {},
+    industryTypes: {},
     cities: {},
     states: {},
   });
@@ -118,7 +148,7 @@ export default function PdfView() {
             const res = await fetch(`${API_BASE}/${endpoint}`, { headers: authHeaders });
             if (res.ok) {
               const data = await res.json();
-              const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : (data?.data || []));
+              const rows = extractArray(data);
               const map = {};
               rows.forEach((r) => {
                 const id = r[idField] ?? r[idField.charAt(0).toUpperCase() + idField.slice(1)] ?? r[idField.toLowerCase()];
@@ -155,11 +185,13 @@ export default function PdfView() {
           propertyUsageMap,
           empTypeMap,
           eduMap,
+          industryTypeMap,
           cityMap,
           stateMap,
           empDetailsRes,
           addrDetailsRes,
           persInfoRes,
+          bankDetailsRes,
           collateralDetailsRes,
           productDetailsRes,
           kycDetailsRes,
@@ -183,11 +215,13 @@ export default function PdfView() {
           fetchMaster('PropertyUsageMaster', 'propertyUsageId', 'propertyUsageName'),
           fetchMaster('EmploymentType', 'employmentTypeId', 'employmentTypeName'),
           fetchMaster('EducationMaster', 'educationId', 'educationName'),
+          fetchMaster('masters/IndustryTypeMaster', 'industryTypeId', 'industryTypeName'),
           fetchMaster('City', 'cityId', 'cityName'),
           fetchMaster('State', 'stateId', 'stateName'),
           fetch(`${API_BASE}/ApplicationEmploymentIncomeDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
           fetch(`${API_BASE}/ApplicationAddressDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
           fetch(`${API_BASE}/ApplicationPersonalInformation`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${API_BASE}/ApplicationBankExistingLoanDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
           fetch(`${API_BASE}/ApplicationCollateralDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
           fetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
           fetch(`${API_BASE}/ApplicationKYCDocuments`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
@@ -208,82 +242,567 @@ export default function PdfView() {
             }
           }
 
-          if (empDetailsRes.status === 'fulfilled' && empDetailsRes.value) {
-            const empList = Array.isArray(empDetailsRes.value) ? empDetailsRes.value : [];
-            const addrList = addrDetailsRes.status === 'fulfilled' && Array.isArray(addrDetailsRes.value) ? addrDetailsRes.value : [];
-            const persList = persInfoRes.status === 'fulfilled' && Array.isArray(persInfoRes.value) ? persInfoRes.value : [];
+          // 1. Process KYC Records First (Sequence-Aware)
+          let allKycRecords = [];
+          if (fullDetailsRes?.status === 'fulfilled' && fullDetailsRes.value) {
+            const rawVal = fullDetailsRes.value?.value || fullDetailsRes.value?.data || fullDetailsRes.value;
+            const fullKyc =
+              rawVal?.kycDocuments ||
+              rawVal?.KycDocuments ||
+              rawVal?.applicationKYCDocumentId ||
+              rawVal?.applicationKYCDocuments ||
+              rawVal?.ApplicationKYCDocuments ||
+              rawVal;
+            allKycRecords.push(...extractArray(fullKyc));
+          }
 
-            const custName = (currentCust?.fullName || currentCust?.customerName || appData?.customerName || '').toLowerCase();
-            const custMobile = currentCust?.mobileNumber || currentCust?.mobile || appData?.mobile || '';
+          if (kycDetailsRes?.status === 'fulfilled' && kycDetailsRes.value) {
+            const rawKycList = extractArray(kycDetailsRes.value);
+            const prodList = productDetailsRes?.status === 'fulfilled' ? extractArray(productDetailsRes.value) : [];
 
-            const matchedPers = persList.find((p) =>
-              (custMobile && p.mobileNumber === custMobile) ||
-              (custName && (p.firstName?.toLowerCase() === custName || p.lastName?.toLowerCase() === custName))
-            ) || persList[0];
+            const matchedProduct = prodList.find(
+              (p) =>
+                String(p.agentCustomerId ?? p.AgentCustomerId) === String(resolvedCustomerId) ||
+                String(p.agentCustomerId ?? p.AgentCustomerId) === String(applicationId)
+            );
+            const targetProdId =
+              matchedProduct?.applicationProductDetailsId ??
+              matchedProduct?.ApplicationProductDetailsId ??
+              fullDetailsRes?.value?.productDetails?.applicationProductDetailsId ??
+              fullDetailsRes?.value?.productDetails?.ApplicationProductDetailsId ??
+              appData.applicationProductDetailsId;
 
-            let matchedAddrId = null;
-            if (matchedPers) {
-              const matchedAddr = addrList.find((a) => a.personalInformationId === matchedPers.personalInformationId);
-              if (matchedAddr) matchedAddrId = matchedAddr.applicationAddressDetailsId;
+            const filteredKycs = rawKycList.filter((k) =>
+              (targetProdId && String(k.applicationProductDetailsId ?? k.ApplicationProductDetailsId) === String(targetProdId)) ||
+              (resolvedCustomerId && String(k.agentCustomerId ?? k.AgentCustomerId) === String(resolvedCustomerId)) ||
+              (applicationId && String(k.agentCustomerId ?? k.AgentCustomerId) === String(applicationId))
+            );
+
+            allKycRecords.push(...filteredKycs);
+          }
+
+          let combinedKycList = [];
+          let applicantKyc = null;
+          let coApplicantKycs = [];
+
+          if (allKycRecords.length > 0) {
+            const uniqueKycMap = new Map();
+            allKycRecords.forEach((k) => {
+              const id = k.applicationKYCDocumentId || k.ApplicationKYCDocumentId || k.kycDocumentId || k.id;
+              if (id && !uniqueKycMap.has(String(id))) {
+                uniqueKycMap.set(String(id), k);
+              }
+            });
+            combinedKycList = Array.from(uniqueKycMap.values()).sort(
+              (a, b) =>
+                Number(a.applicantSequence ?? a.ApplicantSequence ?? 0) -
+                Number(b.applicantSequence ?? b.ApplicantSequence ?? 0)
+            );
+            setLiveAllKycRecords(combinedKycList);
+
+            applicantKyc = combinedKycList.find((k) => {
+              if (isApplicantDocumentTuple(k)) return false;
+              const seq = k.applicantSequence ?? k.ApplicantSequence;
+              return seq !== undefined && seq !== null && Number(seq) === 0;
+            }) || null;
+
+            if (applicantKyc) {
+              setLiveApplicantKyc(applicantKyc);
             }
 
-            const matchedEmp =
-              (matchedAddrId && empList.find((e) => e.applicationAddressDetailsId === matchedAddrId)) ||
-              empList.find((e) => Number(e.applicantSequence) === 0) ||
-              empList[0] ||
-              null;
+            const coKycs = combinedKycList.filter((k) => {
+              if (isApplicantDocumentTuple(k)) return false;
+              const seq = k.applicantSequence ?? k.ApplicantSequence;
+              return seq !== undefined && seq !== null && Number(seq) > 0;
+            });
 
-            const transformEmp = (e) => {
-              if (!e) return null;
-              return {
-                employerBusinessName: e.employerBusinessName || '',
-                employerName: e.employerBusinessName || '',
-                designationNatureOfBusiness: e.designationNatureOfBusiness || '',
-                designation: e.designationNatureOfBusiness || '',
-                employmentNature: e.employmentTypeId,
-                employmentType: e.employmentTypeId,
-                employmentTypeId: e.employmentTypeId,
-                qualification: e.educationId,
-                educationId: e.educationId,
-                industryType: e.industryType || '',
-                totalExperienceYears: e.totalExperience,
-                totalExperience: e.totalExperience,
-                grossMonthlyIncome: e.grossMonthlyIncome,
-                otherIncomeMonthly: e.otherMonthlyIncome,
-                otherMonthlyIncome: e.otherMonthlyIncome,
-                netMonthlyIncome: e.netMonthlyIncome,
-                grossAnnualIncome: e.grossAnnualIncome,
-              };
-            };
-
-            const coPersList = persList.slice(1);
-            const matchedCoEmps = coPersList.map((coP, idx) => {
-              const coAddr = addrList.find((a) => a.personalInformationId === coP.personalInformationId);
-              const coAddrId = coAddr?.applicationAddressDetailsId;
-              const coE =
-                (coAddrId && empList.find((e) => e.applicationAddressDetailsId === coAddrId)) ||
-                empList.find((e) => Number(e.applicantSequence) === idx + 1) ||
-                empList[idx + 1];
-              return transformEmp(coE);
-            }).filter(Boolean);
-
-            if (matchedEmp || matchedCoEmps.length > 0) {
-              const liveEmpObj = {
-                applicant: transformEmp(matchedEmp) || {},
-                coApplicants: matchedCoEmps,
-              };
-              setLiveEmployment(liveEmpObj);
+            if (coKycs.length > 0) {
+              coApplicantKycs = coKycs;
+              setLiveKycCoApplicants(coKycs);
             }
           }
 
-          if (collateralDetailsRes.status === 'fulfilled' && collateralDetailsRes.value) {
-            const rawColList = Array.isArray(collateralDetailsRes.value)
-              ? collateralDetailsRes.value
-              : (collateralDetailsRes.value?.value || collateralDetailsRes.value?.data || []);
+          // 2. Personal, Address, Employment, and Bank Relational Matching
+          const persList = persInfoRes.status === 'fulfilled' ? extractArray(persInfoRes.value) : [];
+          const addrList = addrDetailsRes.status === 'fulfilled' ? extractArray(addrDetailsRes.value) : [];
+          const empList = empDetailsRes.status === 'fulfilled' ? extractArray(empDetailsRes.value) : [];
+          const bankList = bankDetailsRes.status === 'fulfilled' ? extractArray(bankDetailsRes.value) : [];
 
-            const prodList = productDetailsRes.status === 'fulfilled' && Array.isArray(productDetailsRes.value)
-              ? productDetailsRes.value
-              : (productDetailsRes.value?.value || productDetailsRes.value?.data || []);
+          const findPersRow = (targetSeq, targetKyc) => {
+            if (!Array.isArray(persList) || persList.length === 0) return null;
+            const targetKycId = targetKyc?.applicationKYCDocumentId ?? targetKyc?.ApplicationKYCDocumentId ?? targetKyc?.kycDocumentId;
+            if (targetKycId) {
+              const matched = persList.find((p) => {
+                const pKycId = p.applicationKYCDocumentId ?? p.ApplicationKYCDocumentId ?? p.kycDocumentId;
+                return pKycId !== undefined && pKycId !== null && pKycId !== '' && Number(pKycId) === Number(targetKycId);
+              });
+              if (matched) return matched;
+            }
+            const matchedBySeq = persList.find((p) => {
+              const rawSeq = p.applicantSequence ?? p.ApplicantSequence;
+              return rawSeq !== undefined && rawSeq !== null && rawSeq !== '' && Number(rawSeq) === targetSeq;
+            });
+            if (matchedBySeq) return matchedBySeq;
+            if (targetSeq === 0 && persList.length === 1) {
+              const only = persList[0];
+              const onlySeq = only.applicantSequence ?? only.ApplicantSequence;
+              if (onlySeq === undefined || onlySeq === null || Number(onlySeq) === 0) {
+                return only;
+              }
+            }
+            return null;
+          };
+
+          const claimedPdfAddrIds = new Set();
+          const getPdfAddrId = (a) =>
+            a?.applicationAddressDetailsId ??
+            a?.ApplicationAddressDetailsId ??
+            a?.addressDetailsId ??
+            a?.AddressDetailsId ??
+            a?.id ??
+            a?.Id ??
+            null;
+
+          const findAddrRow = (targetSeq, resolvedPers, resolvedKyc) => {
+            if (!Array.isArray(addrList) || addrList.length === 0) return null;
+            const persId = resolvedPers?.personalInformationId ?? resolvedPers?.PersonalInformationId;
+            const kycId = resolvedKyc?.applicationKYCDocumentId ?? resolvedKyc?.ApplicationKYCDocumentId ?? resolvedKyc?.kycDocumentId;
+
+            const unclaimedList = addrList.filter((a) => {
+              const id = getPdfAddrId(a);
+              return !id || !claimedPdfAddrIds.has(Number(id));
+            });
+            if (unclaimedList.length === 0) return null;
+
+            if (persId) {
+              const matchedByPers = unclaimedList.filter((a) => {
+                const aPersId = a.personalInformationId ?? a.PersonalInformationId;
+                return aPersId !== undefined && aPersId !== null && aPersId !== '' && Number(aPersId) === Number(persId);
+              });
+
+              if (matchedByPers.length === 1) {
+                const chosen = matchedByPers[0];
+                const id = getPdfAddrId(chosen);
+                if (id) claimedPdfAddrIds.add(Number(id));
+                return chosen;
+              }
+
+              if (matchedByPers.length > 1) {
+                const matchedBySeq = matchedByPers.find((a) => {
+                  const rawSeq = a.applicantSequence ?? a.ApplicantSequence;
+                  return rawSeq !== undefined && rawSeq !== null && rawSeq !== '' && Number(rawSeq) === targetSeq;
+                });
+                if (matchedBySeq) {
+                  const id = getPdfAddrId(matchedBySeq);
+                  if (id) claimedPdfAddrIds.add(Number(id));
+                  return matchedBySeq;
+                }
+                const sorted = [...matchedByPers].sort((x, y) => (Number(getPdfAddrId(x)) || 0) - (Number(getPdfAddrId(y)) || 0));
+                const chosen = sorted[0];
+                if (chosen) {
+                  const id = getPdfAddrId(chosen);
+                  if (id) claimedPdfAddrIds.add(Number(id));
+                  return chosen;
+                }
+              }
+            }
+
+            if (kycId) {
+              const matched = unclaimedList.find((a) => {
+                const aKycId = a.applicationKYCDocumentId ?? a.ApplicationKYCDocumentId;
+                return aKycId !== undefined && aKycId !== null && aKycId !== '' && Number(aKycId) === Number(kycId);
+              });
+              if (matched) {
+                const id = getPdfAddrId(matched);
+                if (id) claimedPdfAddrIds.add(Number(id));
+                return matched;
+              }
+            }
+
+            const matchedBySeq = unclaimedList.find((a) => {
+              const rawSeq = a.applicantSequence ?? a.ApplicantSequence;
+              return rawSeq !== undefined && rawSeq !== null && rawSeq !== '' && Number(rawSeq) === targetSeq;
+            });
+            if (matchedBySeq) {
+              const id = getPdfAddrId(matchedBySeq);
+              if (id) claimedPdfAddrIds.add(Number(id));
+              return matchedBySeq;
+            }
+
+            if (targetSeq === 0 && unclaimedList.length > 0) {
+              const candidate = unclaimedList.find((a) => {
+                const rawSeq = a.applicantSequence ?? a.ApplicantSequence;
+                return rawSeq === undefined || rawSeq === null || Number(rawSeq) === 0;
+              });
+              if (candidate) {
+                const id = getPdfAddrId(candidate);
+                if (id) claimedPdfAddrIds.add(Number(id));
+                return candidate;
+              }
+            }
+
+            return null;
+          };
+
+          const claimedPdfEmpIds = new Set();
+          const getPdfEmpId = (e) =>
+            e?.applicationEmploymentIncomeDetailsId ??
+            e?.ApplicationEmploymentIncomeDetailsId ??
+            e?.employmentIncomeDetailsId ??
+            e?.EmploymentIncomeDetailsId ??
+            e?.id ??
+            e?.Id ??
+            null;
+
+          const findEmpRow = (targetSeq, resolvedAddr, resolvedPers, personName = '') => {
+            if (!Array.isArray(empList) || empList.length === 0) return null;
+            const addrId = resolvedAddr?.applicationAddressDetailsId ?? resolvedAddr?.ApplicationAddressDetailsId ?? resolvedAddr?.addressDetailsId;
+            const persId = resolvedPers?.personalInformationId ?? resolvedPers?.PersonalInformationId;
+
+            const unclaimedEmps = empList.filter((e) => {
+              const id = getPdfEmpId(e);
+              return !id || !claimedPdfEmpIds.has(Number(id));
+            });
+            if (unclaimedEmps.length === 0) return null;
+
+            if (addrId) {
+              const matchedByAddr = unclaimedEmps.filter((e) => {
+                const eAddrId = e.applicationAddressDetailsId ?? e.ApplicationAddressDetailsId;
+                return eAddrId !== undefined && eAddrId !== null && eAddrId !== '' && Number(eAddrId) === Number(addrId);
+              });
+
+              if (matchedByAddr.length === 1) {
+                const chosen = matchedByAddr[0];
+                const id = getPdfEmpId(chosen);
+                if (id) claimedPdfEmpIds.add(Number(id));
+                return chosen;
+              }
+
+              if (matchedByAddr.length > 1) {
+                const matchedBySeq = matchedByAddr.find((e) => {
+                  const rawSeq = e.applicantSequence ?? e.ApplicantSequence;
+                  return rawSeq !== undefined && rawSeq !== null && rawSeq !== '' && Number(rawSeq) === targetSeq;
+                });
+                if (matchedBySeq) {
+                  const id = getPdfEmpId(matchedBySeq);
+                  if (id) claimedPdfEmpIds.add(Number(id));
+                  return matchedBySeq;
+                }
+
+                if (personName && String(personName).trim().length > 2) {
+                  const nameLower = String(personName).trim().toLowerCase();
+                  const nameParts = nameLower.split(/\s+/).filter((p) => p.length > 2);
+                  const matchedByName = matchedByAddr.find((e) => {
+                    const bizName = String(e.employerBusinessName || e.EmployerBusinessName || '').toLowerCase();
+                    return nameParts.some((part) => bizName.includes(part));
+                  });
+                  if (matchedByName) {
+                    const id = getPdfEmpId(matchedByName);
+                    if (id) claimedPdfEmpIds.add(Number(id));
+                    return matchedByName;
+                  }
+                }
+
+                const sorted = [...matchedByAddr].sort((x, y) => (Number(getPdfEmpId(x)) || 0) - (Number(getPdfEmpId(y)) || 0));
+                const chosen = sorted[0];
+                if (chosen) {
+                  const id = getPdfEmpId(chosen);
+                  if (id) claimedPdfEmpIds.add(Number(id));
+                  return chosen;
+                }
+              }
+            }
+
+            const matchedBySeq = unclaimedEmps.find((e) => {
+              const rawSeq = e.applicantSequence ?? e.ApplicantSequence;
+              return rawSeq !== undefined && rawSeq !== null && rawSeq !== '' && Number(rawSeq) === targetSeq;
+            });
+            if (matchedBySeq) {
+              const id = getPdfEmpId(matchedBySeq);
+              if (id) claimedPdfEmpIds.add(Number(id));
+              return matchedBySeq;
+            }
+
+            if (persId) {
+              const matched = unclaimedEmps.find((e) => {
+                const ePersId = e.personalInformationId ?? e.PersonalInformationId;
+                return ePersId !== undefined && ePersId !== null && ePersId !== '' && Number(ePersId) === Number(persId);
+              });
+              if (matched) {
+                const id = getPdfEmpId(matched);
+                if (id) claimedPdfEmpIds.add(Number(id));
+                return matched;
+              }
+            }
+
+            if (personName && String(personName).trim().length > 2) {
+              const nameLower = String(personName).trim().toLowerCase();
+              const nameParts = nameLower.split(/\s+/).filter((p) => p.length > 2);
+              const matchedByName = unclaimedEmps.find((e) => {
+                const bizName = String(e.employerBusinessName || e.EmployerBusinessName || '').toLowerCase();
+                return nameParts.some((part) => bizName.includes(part));
+              });
+              if (matchedByName) {
+                const id = getPdfEmpId(matchedByName);
+                if (id) claimedPdfEmpIds.add(Number(id));
+                return matchedByName;
+              }
+            }
+
+            if (unclaimedEmps.length > 0) {
+              const sorted = [...unclaimedEmps].sort((x, y) => (Number(getPdfEmpId(x)) || 0) - (Number(getPdfEmpId(y)) || 0));
+              const chosen = sorted[0];
+              if (chosen) {
+                const id = getPdfEmpId(chosen);
+                if (id) claimedPdfEmpIds.add(Number(id));
+                return chosen;
+              }
+            }
+
+            return null;
+          };
+
+          const claimedPdfBankIds = new Set();
+          const getPdfBankId = (b) =>
+            b?.applicationBankExistingLoanDetailsId ??
+            b?.ApplicationBankExistingLoanDetailsId ??
+            b?.bankExistingLoansId ??
+            b?.id ??
+            b?.Id ??
+            null;
+
+          const findBankRowsForEmp = (resolvedEmp, targetSeq) => {
+            if (!Array.isArray(bankList) || bankList.length === 0) return [];
+            const empId =
+              resolvedEmp?.applicationEmploymentIncomeDetailsId ??
+              resolvedEmp?.ApplicationEmploymentIncomeDetailsId ??
+              resolvedEmp?.employmentIncomeDetailsId;
+
+            const unclaimedBanks = bankList.filter((b) => {
+              const id = getPdfBankId(b);
+              return !id || !claimedPdfBankIds.has(Number(id));
+            });
+            if (unclaimedBanks.length === 0) return [];
+
+            if (empId) {
+              const matched = unclaimedBanks.filter((b) => {
+                const bEmpId = b.applicationEmploymentIncomeDetailsId ?? b.ApplicationEmploymentIncomeDetailsId;
+                return bEmpId !== undefined && bEmpId !== null && bEmpId !== '' && Number(bEmpId) === Number(empId);
+              });
+              if (matched.length > 0) {
+                matched.forEach((b) => {
+                  const id = getPdfBankId(b);
+                  if (id) claimedPdfBankIds.add(Number(id));
+                });
+                return matched;
+              }
+            }
+
+            const matchedBySeq = unclaimedBanks.filter((b) => {
+              const rawSeq = b.applicantSequence ?? b.ApplicantSequence;
+              return rawSeq !== undefined && rawSeq !== null && rawSeq !== '' && Number(rawSeq) === targetSeq;
+            });
+            if (matchedBySeq.length > 0) {
+              matchedBySeq.forEach((b) => {
+                const id = getPdfBankId(b);
+                if (id) claimedPdfBankIds.add(Number(id));
+              });
+              return matchedBySeq;
+            }
+
+            if (targetSeq === 0 && unclaimedBanks.length === 1) {
+              const only = unclaimedBanks[0];
+              const onlySeq = only.applicantSequence ?? only.ApplicantSequence;
+              if (onlySeq === undefined || onlySeq === null || Number(onlySeq) === 0) {
+                const id = getPdfBankId(only);
+                if (id) claimedPdfBankIds.add(Number(id));
+                return [only];
+              }
+            }
+
+            return [];
+          };
+
+          const transformPers = (p) => {
+            if (!p) return null;
+            return {
+              personalInformationId: p.personalInformationId ?? p.PersonalInformationId ?? null,
+              relationshipWithApplicant: p.relationshipId ?? p.RelationshipId ?? '',
+              title: p.titleId ?? p.TitleId ?? '',
+              firstName: p.firstName ?? p.FirstName ?? '',
+              middleName: p.middleName ?? p.MiddleName ?? '',
+              lastName: p.lastName ?? p.LastName ?? '',
+              fatherOrSpouseName: p.fatherSpouseName ?? p.FatherSpouseName ?? p.fatherOrSpouseName ?? '',
+              mothersMaidenName: p.mothersMaidenName ?? p.MothersMaidenName ?? '',
+              dateOfBirth: p.dateOfBirth ? String(p.dateOfBirth).slice(0, 10) : '',
+              religion: p.religionId ?? p.ReligionId ?? '',
+              category: p.casteId ?? p.CasteId ?? '',
+              gender: p.genderId ?? p.GenderId ?? '',
+              maritalStatus: p.maritalStatusId ?? p.MaritalStatusId ?? '',
+              mobileNo: p.mobileNumber ?? p.MobileNumber ?? p.mobileNo ?? '',
+              emailId: p.emailId ?? p.EmailId ?? '',
+            };
+          };
+
+          const transformAddr = (a) => {
+            if (!a) return null;
+            const addressLine1 = a.addressLine1 ?? a.AddressLine1 ?? '';
+            const addressLine2 = a.addressLine2 ?? a.AddressLine2 ?? '';
+            const landmark = a.landmark ?? a.Landmark ?? '';
+            const city = a.cityId ?? a.CityId ?? a.city ?? a.City ?? '';
+            const state = a.stateId ?? a.StateId ?? a.state ?? a.State ?? '';
+            const pincode = a.pincode ?? a.Pincode ?? a.postalCode ?? a.PostalCode ?? a.pinCode ?? a.PinCode ?? '';
+            const rawMailing = a.mailingAsCurrent ?? a.MailingAsCurrent ?? a.mailingSameAsCurrent ?? a.MailingSameAsCurrent;
+            const mailingSameAsCurrent = rawMailing !== undefined && rawMailing !== null && rawMailing !== ''
+              ? (rawMailing === true || rawMailing === 1 || String(rawMailing).toLowerCase() === 'yes' ? 'Yes' : 'No')
+              : 'No';
+            return {
+              addressLine1,
+              addressLine2,
+              landmark,
+              city,
+              cityId: city,
+              state,
+              stateId: state,
+              pincode,
+              mailingSameAsCurrent,
+              current: {
+                addressLine1,
+                addressLine2,
+                landmark,
+                city,
+                cityId: city,
+                state,
+                stateId: state,
+                pincode,
+              },
+            };
+          };
+
+          const transformEmp = (e) => {
+            if (!e) return null;
+            return {
+              applicationEmploymentIncomeDetailsId: e.applicationEmploymentIncomeDetailsId ?? e.ApplicationEmploymentIncomeDetailsId ?? e.employmentIncomeDetailsId ?? null,
+              employmentIncomeDetailsId: e.applicationEmploymentIncomeDetailsId ?? e.ApplicationEmploymentIncomeDetailsId ?? e.employmentIncomeDetailsId ?? null,
+              employerBusinessName: e.employerBusinessName || e.EmployerBusinessName || '',
+              employerName: e.employerBusinessName || e.EmployerBusinessName || '',
+              designationNatureOfBusiness: e.designationNatureOfBusiness || e.DesignationNatureOfBusiness || '',
+              designation: e.designationNatureOfBusiness || e.DesignationNatureOfBusiness || '',
+              employmentNature: e.employmentTypeId ?? e.EmploymentTypeId ?? '',
+              employmentType: e.employmentTypeId ?? e.EmploymentTypeId ?? '',
+              employmentTypeId: e.employmentTypeId ?? e.EmploymentTypeId ?? '',
+              qualification: e.educationId ?? e.EducationId ?? '',
+              educationId: e.educationId ?? e.EducationId ?? '',
+              industryType: e.industryType || e.IndustryType || '',
+              totalExperienceYears: e.totalExperience ?? e.TotalExperience ?? '',
+              totalExperience: e.totalExperience ?? e.TotalExperience ?? '',
+              grossMonthlyIncome: e.grossMonthlyIncome ?? e.GrossMonthlyIncome ?? '',
+              otherIncomeMonthly: e.otherMonthlyIncome ?? e.OtherMonthlyIncome ?? '',
+              otherMonthlyIncome: e.otherMonthlyIncome ?? e.OtherMonthlyIncome ?? '',
+              netMonthlyIncome: e.netMonthlyIncome ?? e.NetMonthlyIncome ?? '',
+              grossAnnualIncome: e.grossAnnualIncome ?? e.GrossAnnualIncome ?? '',
+            };
+          };
+
+          const transformBank = (b) => {
+            if (!b) return null;
+            const bankName = b.bankId ?? b.BankId ?? b.bankName ?? b.BankName ?? '';
+            const branch = b.bankBranchId ?? b.BankBranchId ?? b.branch ?? b.Branch ?? '';
+            const accountNumber = b.accountNumber ?? b.AccountNumber ?? '';
+            const accountHolderName = b.accountHolderName ?? b.AccountHolderName ?? '';
+            const rawLoans = b.noOfActiveLoans ?? b.NoOfActiveLoans;
+            const noOfActiveLoans = rawLoans !== undefined && rawLoans !== null && rawLoans !== '' ? String(rawLoans) : '';
+            const rawCards = b.noOfActiveCreditCards ?? b.NoOfActiveCreditCards;
+            const noOfActiveCreditCards = rawCards !== undefined && rawCards !== null && rawCards !== '' ? String(rawCards) : '';
+            const isPrimaryBank = b.isPrimaryBank ?? b.IsPrimaryBank ?? false;
+            return {
+              applicationBankExistingLoanDetailsId: b.applicationBankExistingLoanDetailsId ?? b.ApplicationBankExistingLoanDetailsId ?? null,
+              bankName,
+              bankId: bankName,
+              branch,
+              bankBranchId: branch,
+              accountNumber,
+              accountHolderName,
+              noOfActiveLoans,
+              noOfActiveCreditCards,
+              isPrimaryBank,
+            };
+          };
+
+          const liveApplicantPers = findPersRow(0, applicantKyc);
+          const liveApplicantAddr = findAddrRow(0, liveApplicantPers, applicantKyc);
+          const applicantName = composeFullName(liveApplicantPers) || liveCustomer?.customerName || '';
+          const liveApplicantEmp = findEmpRow(0, liveApplicantAddr, liveApplicantPers, applicantName);
+          const liveApplicantBanks = findBankRowsForEmp(liveApplicantEmp, 0);
+          const livePrimaryBank = liveApplicantBanks.find((b) => b.isPrimaryBank === true || b.IsPrimaryBank === true) || liveApplicantBanks[0] || null;
+          const liveOtherBank = liveApplicantBanks.find((b) => (b.isPrimaryBank === false || b.IsPrimaryBank === false) && b !== livePrimaryBank) || liveApplicantBanks[1] || null;
+
+          const totalCoCount = Math.max(
+            coApplicantKycs.length,
+            Number(appData.coApplicantsCount || getApplicantCount(appData)) || 0
+          );
+
+          const liveCoPersList = [];
+          const liveCoAddrList = [];
+          const liveCoEmpList = [];
+          const liveCoBanksList = [];
+
+          for (let i = 0; i < totalCoCount; i++) {
+            const coKyc = coApplicantKycs[i] || null;
+            const coPers = findPersRow(i + 1, coKyc);
+            const coAddr = findAddrRow(i + 1, coPers, coKyc);
+            const coName = composeFullName(coPers);
+            const coEmp = findEmpRow(i + 1, coAddr, coPers, coName);
+            const coBanks = findBankRowsForEmp(coEmp, i + 1);
+            const coPrimary = coBanks.find((b) => b.isPrimaryBank === true || b.IsPrimaryBank === true) || coBanks[0] || null;
+            const coOther = coBanks.find((b) => (b.isPrimaryBank === false || b.IsPrimaryBank === false) && b !== coPrimary) || coBanks[1] || null;
+
+            liveCoPersList.push(transformPers(coPers) || {});
+            liveCoAddrList.push(transformAddr(coAddr) || {});
+            liveCoEmpList.push(transformEmp(coEmp) || {});
+            liveCoBanksList.push({
+              primaryBank: transformBank(coPrimary) || {},
+              otherBank: transformBank(coOther) || {},
+            });
+          }
+
+          if (liveApplicantPers || liveCoPersList.length > 0) {
+            setLivePersonal({
+              applicant: transformPers(liveApplicantPers) || {},
+              coApplicants: liveCoPersList,
+            });
+          }
+
+          if (liveApplicantAddr || liveCoAddrList.length > 0) {
+            setLiveAddress({
+              applicant: transformAddr(liveApplicantAddr) || {},
+              coApplicants: liveCoAddrList,
+            });
+          }
+
+          if (liveApplicantEmp || liveCoEmpList.length > 0) {
+            setLiveEmployment({
+              applicant: transformEmp(liveApplicantEmp) || {},
+              coApplicants: liveCoEmpList,
+            });
+          }
+
+          if (livePrimaryBank || liveOtherBank || liveCoBanksList.length > 0) {
+            setLiveBank({
+              applicant: {
+                primaryBank: transformBank(livePrimaryBank) || {},
+                otherBank: transformBank(liveOtherBank) || {},
+              },
+              primaryBank: transformBank(livePrimaryBank) || {},
+              otherBank: transformBank(liveOtherBank) || {},
+              coApplicants: liveCoBanksList,
+            });
+          }
+
+          // 3. Collateral details
+          if (collateralDetailsRes.status === 'fulfilled' && collateralDetailsRes.value) {
+            const rawColList = extractArray(collateralDetailsRes.value);
+            const prodList = productDetailsRes.status === 'fulfilled' ? extractArray(productDetailsRes.value) : [];
 
             // 1. Find product details record for this customer
             const matchedProduct = prodList.find(
@@ -324,71 +843,6 @@ export default function PdfView() {
             }
           }
 
-          let allKycRecords = [];
-          if (fullDetailsRes?.status === 'fulfilled' && fullDetailsRes.value) {
-            const rawVal = fullDetailsRes.value?.value || fullDetailsRes.value?.data || fullDetailsRes.value;
-            const fullKyc =
-              rawVal.kycDocuments ||
-              rawVal.KycDocuments ||
-              rawVal.applicationKYCDocuments ||
-              rawVal.ApplicationKYCDocuments ||
-              (Array.isArray(rawVal) ? rawVal : []);
-            if (Array.isArray(fullKyc)) {
-              allKycRecords.push(...fullKyc);
-            }
-          }
-
-          if (kycDetailsRes?.status === 'fulfilled' && kycDetailsRes.value) {
-            const rawKycList = Array.isArray(kycDetailsRes.value)
-              ? kycDetailsRes.value
-              : (kycDetailsRes.value?.value || kycDetailsRes.value?.data || []);
-
-            const prodList = productDetailsRes?.status === 'fulfilled' && Array.isArray(productDetailsRes.value)
-              ? productDetailsRes.value
-              : (productDetailsRes?.value?.value || productDetailsRes?.value?.data || []);
-
-            const matchedProduct = prodList.find(
-              (p) =>
-                String(p.agentCustomerId ?? p.AgentCustomerId) === String(resolvedCustomerId) ||
-                String(p.agentCustomerId ?? p.AgentCustomerId) === String(applicationId)
-            );
-            const targetProdId =
-              matchedProduct?.applicationProductDetailsId ??
-              matchedProduct?.ApplicationProductDetailsId ??
-              fullDetailsRes?.value?.productDetails?.applicationProductDetailsId ??
-              fullDetailsRes?.value?.productDetails?.ApplicationProductDetailsId ??
-              appData.applicationProductDetailsId;
-
-            const filteredKycs = rawKycList.filter((k) =>
-              (targetProdId && String(k.applicationProductDetailsId ?? k.ApplicationProductDetailsId) === String(targetProdId)) ||
-              (resolvedCustomerId && String(k.agentCustomerId ?? k.AgentCustomerId) === String(resolvedCustomerId)) ||
-              (applicationId && String(k.agentCustomerId ?? k.AgentCustomerId) === String(applicationId))
-            );
-
-            allKycRecords.push(...filteredKycs);
-          }
-
-          if (allKycRecords.length > 0) {
-            const uniqueKycMap = new Map();
-            allKycRecords.forEach((k) => {
-              const id = k.applicationKYCDocumentId || k.ApplicationKYCDocumentId || k.kycDocumentId || k.id;
-              if (id && !uniqueKycMap.has(String(id))) {
-                uniqueKycMap.set(String(id), k);
-              }
-            });
-            const combinedKycList = Array.from(uniqueKycMap.values()).sort(
-              (a, b) =>
-                Number(a.applicationKYCDocumentId || a.kycDocumentId || 0) -
-                Number(b.applicationKYCDocumentId || b.kycDocumentId || 0)
-            );
-            setLiveAllKycRecords(combinedKycList);
-            if (combinedKycList.length > 1) {
-              setLiveKycCoApplicants(combinedKycList.slice(1));
-            } else if (combinedKycList.length === 1 && (appData.coApplicantsCount > 0 || getApplicantCount(appData) > 0)) {
-              setLiveKycCoApplicants(combinedKycList);
-            }
-          }
-
           // Resolve RM & Ownership strictly from backend ApplicationFullDetails
           let resolvedOwnership = null;
           if (fullDetailsRes?.status === 'fulfilled' && fullDetailsRes.value) {
@@ -413,7 +867,7 @@ export default function PdfView() {
           // Secondary fallback to RMMaster only if ApplicationFullDetails didn't include rmName/rmCode
           if (!resolvedOwnership && rmRes.status === 'fulfilled' && rmRes.value) {
             const data = rmRes.value;
-            const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);
+            const rows = extractArray(data);
             const rmIdFromRecord = Number(
               currentCust?.rmId ||
               currentCust?.RMId ||
@@ -454,6 +908,7 @@ export default function PdfView() {
             propertyUsages: propertyUsageMap.status === 'fulfilled' ? propertyUsageMap.value : {},
             employmentTypes: empTypeMap.status === 'fulfilled' ? empTypeMap.value : {},
             educations: eduMap.status === 'fulfilled' ? eduMap.value : {},
+            industryTypes: industryTypeMap.status === 'fulfilled' ? industryTypeMap.value : {},
             cities: cityMap.status === 'fulfilled' ? cityMap.value : {},
             states: stateMap.status === 'fulfilled' ? stateMap.value : {},
           });
@@ -604,7 +1059,7 @@ export default function PdfView() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [errorPopup, setErrorPopup] = useState(null);
 
-  const isPdfMediaReady = !isMetadataLoading && !isDocsDownloading && !isCoPhotosLoading;
+  const isPdfMediaReady = !isMetadataLoading && !isDocsDownloading && !isCoPhotosLoading && !isApplicantPhotoLoading;
 
   // Generate continuous single long page PDF
   const handleDownloadPdf = async () => {
@@ -765,10 +1220,41 @@ export default function PdfView() {
     return val;
   };
 
-  const resolveEmploymentType = (val) => (masterMaps.employmentTypes && masterMaps.employmentTypes[val]) || val || '';
-  const resolveEducation = (val) => (masterMaps.educations && masterMaps.educations[val]) || val || '';
-  const resolveCity = (val) => (masterMaps.cities && masterMaps.cities[val]) || val || '';
-  const resolveState = (val) => (masterMaps.states && masterMaps.states[val]) || val || '';
+  const resolveEmploymentType = (val) => {
+    if (val === null || val === undefined || val === '') return '';
+    if (masterMaps.employmentTypes && (masterMaps.employmentTypes[val] !== undefined || masterMaps.employmentTypes[String(val)] !== undefined)) {
+      return masterMaps.employmentTypes[val] || masterMaps.employmentTypes[String(val)];
+    }
+    return String(val);
+  };
+  const resolveEducation = (val) => {
+    if (val === null || val === undefined || val === '') return '';
+    if (masterMaps.educations && (masterMaps.educations[val] !== undefined || masterMaps.educations[String(val)] !== undefined)) {
+      return masterMaps.educations[val] || masterMaps.educations[String(val)];
+    }
+    return String(val);
+  };
+  const resolveIndustryType = (val) => {
+    if (val === null || val === undefined || val === '') return '-';
+    if (masterMaps.industryTypes && (masterMaps.industryTypes[val] !== undefined || masterMaps.industryTypes[String(val)] !== undefined)) {
+      return masterMaps.industryTypes[val] || masterMaps.industryTypes[String(val)];
+    }
+    return String(val);
+  };
+  const resolveCity = (val) => {
+    if (val === null || val === undefined || val === '') return '';
+    if (masterMaps.cities && (masterMaps.cities[val] !== undefined || masterMaps.cities[String(val)] !== undefined)) {
+      return masterMaps.cities[val] || masterMaps.cities[String(val)];
+    }
+    return String(val);
+  };
+  const resolveState = (val) => {
+    if (val === null || val === undefined || val === '') return '';
+    if (masterMaps.states && (masterMaps.states[val] !== undefined || masterMaps.states[String(val)] !== undefined)) {
+      return masterMaps.states[val] || masterMaps.states[String(val)];
+    }
+    return String(val);
+  };
 
   const formatCurrencyOrDash = (val) => {
     if (val === null || val === undefined || val === '') return '-';
@@ -784,11 +1270,22 @@ export default function PdfView() {
   };
 
   const personalData = appData.registration?.personalInformation || appData.sections?.personalInformation || {};
-  const applicant = personalData.applicant || {};
-  const rawCoApplicants = Array.isArray(personalData.coApplicants) ? personalData.coApplicants : [];
+  const draftApplicant = personalData.applicant || {};
+  const draftCoApplicants = Array.isArray(personalData.coApplicants) ? personalData.coApplicants : [];
+
+  const applicant = useMemo(() => {
+    const base = { ...draftApplicant };
+    if (livePersonal?.applicant) {
+      Object.entries(livePersonal.applicant).forEach(([k, v]) => {
+        if (v !== '' && v !== null && v !== undefined) {
+          base[k] = v;
+        }
+      });
+    }
+    return base;
+  }, [draftApplicant, livePersonal]);
 
   const kycData = appData.kycDocuments || appData.sections?.kycDocuments || {};
-  const addressData = appData.addressDetails || appData.sections?.addressDetails || {};
 
   // Dynamic Co-Applicants Resolution using explicit count first
   const explicitCoApplicantCount =
@@ -809,17 +1306,53 @@ export default function PdfView() {
           getApplicantCount(appData),
           liveKycCoApplicants.length,
           Array.isArray(kycData.coApplicants) ? kycData.coApplicants.length : 0,
-          rawCoApplicants.length
+          draftCoApplicants.length,
+          livePersonal?.coApplicants?.length || 0
         );
-  const coApplicants = Array.from({ length: applicantCount }, (_, i) => rawCoApplicants[i] || {});
+
+  const coApplicants = useMemo(() => {
+    return Array.from({ length: applicantCount }, (_, i) => {
+      const draftCo = draftCoApplicants[i] || {};
+      const liveCo = livePersonal?.coApplicants?.[i] || {};
+      const merged = { ...draftCo };
+      Object.entries(liveCo).forEach(([k, v]) => {
+        if (v !== '' && v !== null && v !== undefined) {
+          merged[k] = v;
+        }
+      });
+      return merged;
+    });
+  }, [applicantCount, draftCoApplicants, livePersonal]);
+
   const hasCoApplicants = applicantCount > 0;
 
   const coApplicantKycIds = useMemo(() => {
     const rawCoKycs = Array.isArray(kycData.coApplicants) ? kycData.coApplicants : [];
     return Array.from({ length: applicantCount }, (_, i) => {
+      const targetSeq = i + 1;
+      const matchedLiveRecord = Array.isArray(liveAllKycRecords)
+        ? liveAllKycRecords.find((k) => {
+            if (!k || k.isActive === false || k.IsActive === false) return false;
+            if (isApplicantDocumentTuple(k)) return false;
+            const seq = k.applicantSequence ?? k.ApplicantSequence;
+            return seq !== undefined && seq !== null && Number(seq) === targetSeq;
+          })
+        : null;
+      const matchedLiveCo = Array.isArray(liveKycCoApplicants)
+        ? liveKycCoApplicants.find((k) => {
+            if (!k || k.isActive === false || k.IsActive === false) return false;
+            if (isApplicantDocumentTuple(k)) return false;
+            const seq = k.applicantSequence ?? k.ApplicantSequence;
+            return seq !== undefined && seq !== null && Number(seq) === targetSeq;
+          })
+        : null;
       const coKyc = rawCoKycs[i] || {};
-      const liveKyc = liveKycCoApplicants[i] || {};
+      const liveKyc = matchedLiveCo || liveKycCoApplicants[i] || {};
       return (
+        matchedLiveRecord?.applicationKYCDocumentId ||
+        matchedLiveRecord?.ApplicationKYCDocumentId ||
+        matchedLiveRecord?.kycDocumentId ||
+        matchedLiveRecord?.id ||
         coKyc.applicationKYCDocumentId ||
         coKyc.ApplicationKYCDocumentId ||
         coKyc.applicationKycDocumentId ||
@@ -837,11 +1370,124 @@ export default function PdfView() {
         null
       );
     });
-  }, [kycData.coApplicants, liveKycCoApplicants, applicantCount]);
+  }, [kycData.coApplicants, liveKycCoApplicants, liveAllKycRecords, applicantCount]);
 
   const coApplicantKycIdsKey = useMemo(() => {
     return coApplicantKycIds.map((id) => id || '').join(',');
   }, [coApplicantKycIds]);
+
+  // Resolve Applicant Primary KYC Record (Sequence 0 & Non-Tuple)
+  const resolvedApplicantKyc = useMemo(() => {
+    if (liveApplicantKyc && !isApplicantDocumentTuple(liveApplicantKyc)) {
+      return liveApplicantKyc;
+    }
+    const draftAppKyc = kycData.applicant || {};
+    if (
+      draftAppKyc &&
+      !isApplicantDocumentTuple(draftAppKyc) &&
+      (draftAppKyc.applicationKYCDocumentId || draftAppKyc.kycDocumentId || draftAppKyc.profileImagePath)
+    ) {
+      return draftAppKyc;
+    }
+    if (Array.isArray(liveAllKycRecords) && liveAllKycRecords.length > 0) {
+      const match = liveAllKycRecords.find((k) => {
+        if (!k || k.isActive === false || k.IsActive === false) return false;
+        if (isApplicantDocumentTuple(k)) return false;
+        const seq = k.applicantSequence ?? k.ApplicantSequence;
+        return seq !== undefined && seq !== null && Number(seq) === 0;
+      });
+      if (match) return match;
+    }
+    return null;
+  }, [liveApplicantKyc, kycData.applicant, liveAllKycRecords]);
+
+  const applicantKycId = useMemo(() => {
+    return (
+      resolvedApplicantKyc?.applicationKYCDocumentId ||
+      resolvedApplicantKyc?.ApplicationKYCDocumentId ||
+      resolvedApplicantKyc?.kycDocumentId ||
+      resolvedApplicantKyc?.KycDocumentId ||
+      resolvedApplicantKyc?.id ||
+      null
+    );
+  }, [resolvedApplicantKyc]);
+
+  const applicantProfilePath = useMemo(() => {
+    return (
+      resolvedApplicantKyc?.profileImagePath ||
+      resolvedApplicantKyc?.ProfileImagePath ||
+      null
+    );
+  }, [resolvedApplicantKyc]);
+
+  // Fetch Applicant Profile Image from Live KYC endpoint (primary) or path download (fallback)
+  useEffect(() => {
+    if (!applicantKycId && !applicantProfilePath) {
+      setIsApplicantPhotoLoading(false);
+      return;
+    }
+
+    setIsApplicantPhotoLoading(true);
+    let isMounted = true;
+    const token = localStorage.getItem('authToken');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    async function loadApplicantPhoto() {
+      let objectUrl = null;
+
+      // 1. Primary: GET /ApplicationKYCDocuments/{applicantKycId}/profile-image
+      if (applicantKycId) {
+        try {
+          const res = await fetch(`${API_BASE}/ApplicationKYCDocuments/${applicantKycId}/profile-image`, { headers });
+          if (res.ok && isMounted) {
+            const blob = await res.blob();
+            if (blob && blob.size > 0) {
+              const mimeType = blob.type || 'image/jpeg';
+              const typedBlob = new Blob([blob], { type: mimeType });
+              objectUrl = URL.createObjectURL(typedBlob);
+            }
+          }
+        } catch (err) {
+          console.warn(`Could not load profile image for applicant KYC ${applicantKycId}:`, err);
+        }
+      }
+
+      // 2. Fallback: GET /ApplicationKYCDocuments/download?path={encoded applicantProfilePath}
+      if (!objectUrl && applicantProfilePath && isMounted) {
+        try {
+          const cleanPath = String(applicantProfilePath).trim();
+          const dlRes = await fetch(`${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`, { headers });
+          if (dlRes.ok && isMounted) {
+            const blob = await dlRes.blob();
+            if (blob && blob.size > 0) {
+              const mimeType = blob.type || 'image/jpeg';
+              const typedBlob = new Blob([blob], { type: mimeType });
+              objectUrl = URL.createObjectURL(typedBlob);
+            }
+          }
+        } catch (dlErr) {
+          console.warn(`Could not download applicant profile by path ${applicantProfilePath}:`, dlErr);
+        }
+      }
+
+      if (isMounted) {
+        if (objectUrl) {
+          blobUrlsRef.current.push(objectUrl);
+          setApplicantPhotoUrl(objectUrl);
+        } else {
+          setApplicantPhotoUrl(null);
+        }
+        setIsApplicantPhotoLoading(false);
+      }
+    }
+
+    loadApplicantPhoto();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [applicantKycId, applicantProfilePath]);
 
   // Fetch Co-Applicant Profile Images using dynamic kycDocumentId
   useEffect(() => {
@@ -902,26 +1548,60 @@ export default function PdfView() {
       isMounted = false;
     };
   }, [hasCoApplicants, coApplicantKycIdsKey]);
+
+  const rawAddress = appData.addressDetails || appData.sections?.addressDetails || {};
+  const rawAddressApplicant = rawAddress.applicant || {};
+  const liveAddressApplicant = liveAddress?.applicant || {};
+  const mergedAddressApplicant = mergeNonEmpty(liveAddressApplicant, rawAddressApplicant);
+
+  const addressData = {
+    applicant: mergedAddressApplicant,
+    coApplicants: Array.from({ length: applicantCount }, (_, i) => {
+      const draftAddrCo = rawAddress.coApplicants?.[i] || {};
+      const liveAddrCo = liveAddress?.coApplicants?.[i] || {};
+      return mergeNonEmpty(liveAddrCo, draftAddrCo);
+    }),
+  };
   
   const rawEmp = appData.employmentIncome || appData.sections?.employmentIncome || {};
-  const rawApplicant = rawEmp.applicant || {};
-  const liveApplicant = liveEmployment?.applicant || {};
-
-  const mergedApplicant = { ...liveApplicant };
-  Object.entries(rawApplicant).forEach(([k, v]) => {
-    if (v !== '' && v !== null && v !== undefined) {
-      mergedApplicant[k] = v;
-    }
-  });
+  const rawEmpApplicant = rawEmp.applicant || {};
+  const liveEmpApplicant = liveEmployment?.applicant || {};
+  const mergedEmpApplicant = mergeNonEmpty(liveEmpApplicant, rawEmpApplicant);
 
   const empData = {
-    applicant: mergedApplicant,
-    coApplicants: Array.isArray(rawEmp.coApplicants) && rawEmp.coApplicants.length > 0
-      ? rawEmp.coApplicants
-      : (liveEmployment?.coApplicants || []),
+    applicant: mergedEmpApplicant,
+    coApplicants: Array.from({ length: applicantCount }, (_, i) => {
+      const draftEmpCo = rawEmp.coApplicants?.[i] || {};
+      const liveEmpCo = liveEmployment?.coApplicants?.[i] || {};
+      return mergeNonEmpty(liveEmpCo, draftEmpCo);
+    }),
   };
 
-  const bankData = appData.bankExistingLoans || appData.sections?.bankExistingLoans || {};
+  const rawBank = appData.bankExistingLoans || appData.sections?.bankExistingLoans || {};
+  const rawBankApplicantPrimary = rawBank.applicant?.primaryBank || rawBank.primaryBank || {};
+  const rawBankApplicantOther = rawBank.applicant?.otherBank || rawBank.otherBank || {};
+  const liveBankApplicantPrimary = liveBank?.applicant?.primaryBank || liveBank?.primaryBank || {};
+  const liveBankApplicantOther = liveBank?.applicant?.otherBank || liveBank?.otherBank || {};
+
+  const mergedBankApplicantPrimary = mergeNonEmpty(liveBankApplicantPrimary, rawBankApplicantPrimary);
+  const mergedBankApplicantOther = mergeNonEmpty(liveBankApplicantOther, rawBankApplicantOther);
+
+  const bankData = {
+    applicant: {
+      primaryBank: mergedBankApplicantPrimary,
+      otherBank: mergedBankApplicantOther,
+    },
+    primaryBank: mergedBankApplicantPrimary,
+    otherBank: mergedBankApplicantOther,
+    coApplicants: Array.from({ length: applicantCount }, (_, i) => {
+      const draftCo = rawBank.coApplicants?.[i] || {};
+      const liveCo = liveBank?.coApplicants?.[i] || {};
+      return {
+        primaryBank: mergeNonEmpty(liveCo?.primaryBank, draftCo?.primaryBank),
+        otherBank: mergeNonEmpty(liveCo?.otherBank, draftCo?.otherBank),
+      };
+    }),
+  };
   const colData = appData.collateral || appData.sections?.collateral || appData.collateralDetails || appData.sections?.collateralDetails || {};
 
   const resolveCollateralList = () => {
@@ -1045,13 +1725,20 @@ export default function PdfView() {
     return map;
   }, [effectiveDocs, coApplicants, coApplicantKycIds]);
 
-  // Resolve Applicant Profile Photo: Type-First & Latest Active Version
+  // Resolve Applicant Profile Photo: Type-First & Latest Active Version (Legacy Fallback Only)
   const clientPhotoDoc = useMemo(() => {
     if (!Array.isArray(downloadedDocs) || downloadedDocs.length === 0) return {};
+
+    const isApplicantDoc = (d) => {
+      const seq = d.applicantSequence !== undefined && d.applicantSequence !== null ? Number(d.applicantSequence) : null;
+      if (seq !== null && !isNaN(seq) && seq !== 0) return false;
+      return true;
+    };
 
     // 1. Primary: Official Photo records (documentTypeId === 6 or normalized documentTypeName === "photo")
     const officialPhotoDocs = downloadedDocs.filter((d) => {
       if (!d || !d.previewUrl || d.isActive === false) return false;
+      if (!isApplicantDoc(d)) return false;
       const typeId = Number(d.documentTypeId);
       const typeName = String(d.documentTypeName || '').trim().toLowerCase();
       return typeId === 6 || typeName === 'photo';
@@ -1073,6 +1760,7 @@ export default function PdfView() {
     const KNOWN_NON_PHOTO_TYPE_IDS = [1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15];
     const fallbackPhotoDocs = downloadedDocs.filter((d) => {
       if (!d || !d.previewUrl || d.isActive === false) return false;
+      if (!isApplicantDoc(d)) return false;
       const typeId = Number(d.documentTypeId);
       if (KNOWN_NON_PHOTO_TYPE_IDS.includes(typeId)) return false;
 
@@ -1231,7 +1919,7 @@ export default function PdfView() {
 
     // 3. Profile Photo verification
     if (!isCoApplicant) {
-      if (clientPhotoDoc?.previewUrl || person.profileImagePath || person.ProfileImagePath) {
+      if (applicantPhotoUrl || clientPhotoDoc?.previewUrl || person.profileImagePath || person.ProfileImagePath) {
         addName('Photo');
       }
     } else {
@@ -1415,8 +2103,12 @@ export default function PdfView() {
             <div className="pdf-office-photos">
               <div className="pdf-photo-column">
                 <div className="pdf-photo-box">
-                  {clientPhotoDoc?.previewUrl ? (
-                    <img src={clientPhotoDoc.previewUrl} alt="Applicant" style={{ objectFit: 'cover' }} />
+                  {applicantPhotoUrl || clientPhotoDoc?.previewUrl ? (
+                    <img
+                      src={applicantPhotoUrl || clientPhotoDoc.previewUrl}
+                      alt="Applicant"
+                      style={{ objectFit: 'cover' }}
+                    />
                   ) : (
                     <div style={{ color: '#64748b', fontSize: '10px', padding: '6px', textAlign: 'center' }}>
                       No Photo
@@ -1821,9 +2513,9 @@ export default function PdfView() {
               </tr>
               <tr>
                 <td>Industry Type</td>
-                <td>{empData.applicant?.industryType || '-'}</td>
+                <td>{resolveIndustryType(empData.applicant?.industryType)}</td>
                 {hasCoApplicants &&
-                  coApplicants.map((_, i) => <td key={i}>{empData.coApplicants?.[i]?.industryType || '-'}</td>)}
+                  coApplicants.map((_, i) => <td key={i}>{resolveIndustryType(empData.coApplicants?.[i]?.industryType)}</td>)}
               </tr>
               <tr>
                 <td>Total Experience</td>
@@ -1894,12 +2586,14 @@ export default function PdfView() {
               <tr>
                 <td>Applicant</td>
                 <td>
-                  {resolveBank(bankData.applicant?.primaryBank?.bankName || bankData.primaryBank?.bankName) ||
+                  {resolveBank(bankData.applicant?.primaryBank?.bankName || bankData.applicant?.primaryBank?.bankId || bankData.primaryBank?.bankName || bankData.primaryBank?.bankId) ||
                     bankData.applicant?.primaryBank?.bankName ||
+                    bankData.applicant?.primaryBank?.bankId ||
                     bankData.primaryBank?.bankName ||
+                    bankData.primaryBank?.bankId ||
                     '-'}
                 </td>
-                <td>{bankData.applicant?.primaryBank?.accountHolderName || customerDisplayName || '-'}</td>
+                <td>{bankData.applicant?.primaryBank?.accountHolderName || bankData.primaryBank?.accountHolderName || customerDisplayName || '-'}</td>
                 <td>
                   {bankData.applicant?.primaryBank?.accountNumber ||
                     bankData.primaryBank?.accountNumber ||
@@ -1908,9 +2602,11 @@ export default function PdfView() {
                 <td>
                   {bankData.applicant?.primaryBank?.noOfActiveLoans !== undefined && bankData.applicant?.primaryBank?.noOfActiveLoans !== ''
                     ? String(bankData.applicant.primaryBank.noOfActiveLoans)
-                    : bankData.applicant?.existingLoans?.[0]?.totalExistingEmi
-                    ? String(bankData.applicant.existingLoans[0].totalExistingEmi)
-                    : '0'}
+                    : (bankData.primaryBank?.noOfActiveLoans !== undefined && bankData.primaryBank?.noOfActiveLoans !== ''
+                      ? String(bankData.primaryBank.noOfActiveLoans)
+                      : (bankData.applicant?.existingLoans?.[0]?.totalExistingEmi
+                        ? String(bankData.applicant.existingLoans[0].totalExistingEmi)
+                        : '0'))}
                 </td>
               </tr>
               {hasCoApplicants &&
@@ -1918,8 +2614,9 @@ export default function PdfView() {
                   <tr key={i}>
                     <td>Co-Applicant {i + 1}</td>
                     <td>
-                      {resolveBank(bankData.coApplicants?.[i]?.primaryBank?.bankName) ||
+                      {resolveBank(bankData.coApplicants?.[i]?.primaryBank?.bankName || bankData.coApplicants?.[i]?.primaryBank?.bankId) ||
                         bankData.coApplicants?.[i]?.primaryBank?.bankName ||
+                        bankData.coApplicants?.[i]?.primaryBank?.bankId ||
                         '-'}
                     </td>
                     <td>
