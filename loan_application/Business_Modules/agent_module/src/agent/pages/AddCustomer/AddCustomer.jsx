@@ -381,14 +381,33 @@ function AddCustomer() {
       isValid = false
     }
 
-    // Document Validation
-    for (const mapping of documentMappings) {
-      if (mapping.isMandatory && !uploadedDocuments.includes(mapping.documentTypeId)) {
-        const files = selectedFiles[mapping.documentTypeId]
-        if (!files || (Array.isArray(files) && files.length === 0)) {
-          setGlobalError(`Please upload the required document: ${mapping.documentTypeName || 'Document'}.`)
-          isValid = false
-          break // show one document error at a time
+    // Required Documents Validation
+    if (formData.employmentTypeId && loadingMapping) {
+      setGlobalError('Loading required documents. Please wait.')
+      isValid = false
+    } else if (documentMappings.length > 0) {
+      const missingDocuments = []
+
+      for (const mapping of documentMappings) {
+        const isRequired = mapping.isMandatory !== false
+        if (isRequired) {
+          const isUploaded = uploadedDocuments.includes(mapping.documentTypeId)
+          const files = selectedFiles[mapping.documentTypeId]
+          const isMultiple = (mapping.documentTypeName || '').toLowerCase().includes('other')
+          const hasFile = isMultiple ? (Array.isArray(files) && files.length > 0) : Boolean(files)
+
+          if (!isUploaded && !hasFile) {
+            missingDocuments.push(mapping.documentTypeName || 'Document')
+          }
+        }
+      }
+
+      if (missingDocuments.length > 0) {
+        isValid = false
+        if (missingDocuments.length === 1) {
+          setGlobalError(`Please upload the required document: ${missingDocuments[0]}.`)
+        } else {
+          setGlobalError(`Please upload all required documents before continuing: ${missingDocuments.join(', ')}.`)
         }
       }
     }
