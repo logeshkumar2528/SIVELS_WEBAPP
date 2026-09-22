@@ -389,16 +389,13 @@ function AddCustomer() {
       const missingDocuments = []
 
       for (const mapping of documentMappings) {
-        const isRequired = mapping.isMandatory !== false
-        if (isRequired) {
-          const isUploaded = uploadedDocuments.includes(mapping.documentTypeId)
-          const files = selectedFiles[mapping.documentTypeId]
-          const isMultiple = (mapping.documentTypeName || '').toLowerCase().includes('other')
-          const hasFile = isMultiple ? (Array.isArray(files) && files.length > 0) : Boolean(files)
+        const isUploaded = uploadedDocuments.includes(mapping.documentTypeId)
+        const files = selectedFiles[mapping.documentTypeId]
+        const isMultiple = (mapping.documentTypeName || '').toLowerCase().includes('other')
+        const hasFile = isMultiple ? (Array.isArray(files) && files.length > 0) : Boolean(files)
 
-          if (!isUploaded && !hasFile) {
-            missingDocuments.push(mapping.documentTypeName || 'Document')
-          }
+        if (!isUploaded && !hasFile) {
+          missingDocuments.push(mapping.documentTypeName || 'Document')
         }
       }
 
@@ -800,6 +797,26 @@ function AddCustomer() {
 
                   return (
                     <div key={mapping.documentTypeId} className={`document-upload-card ${hasFile || isUploaded ? 'has-file' : ''}`}>
+                      <div className="document-card-top">
+                        <div className="document-icon-badge">
+                          <IconComponent size={16} strokeWidth={1.8} />
+                        </div>
+                        <div className="document-card-info">
+                          <h4>
+                            {docName}
+                            <span className="required-star">*</span>
+                          </h4>
+                          {!hasFile && !isUploaded && (
+                            <>
+                              <p>Upload clear image of {docName}</p>
+                              <p className="document-card-subtitle">
+                                {isMultiple ? 'Upload multiple files' : 'JPG, PNG or PDF (Max. 10MB)'}
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
                       {isUploaded ? (
                         <div className="file-preview-box" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -859,20 +876,7 @@ function AddCustomer() {
                             )}
                           </div>
                         )
-                      ) : (
-                        <div className="document-card-top">
-                          <div className="document-icon-badge">
-                            <IconComponent size={16} strokeWidth={1.8} />
-                          </div>
-                          <div className="document-card-info">
-                            <h4>{docName}{mapping.isMandatory && <span className="required-star">*</span>}</h4>
-                            <p>Upload clear image of {docName}</p>
-                            <p className="document-card-subtitle">
-                              {isMultiple ? 'Upload multiple files' : 'JPG, PNG or PDF (Max. 10MB)'}
-                            </p>
-                          </div>
-                        </div>
-                      )}
+                      ) : null}
 
                       {!isUploaded && (
                         <div className="file-actions-row">
