@@ -15,7 +15,11 @@ import CustomSelect from '../AddCustomer/CustomSelect'
 import DatePicker from '../../components/DatePicker/DatePicker'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
 import { masterService } from '../../../../../../Core/src/services/masterService'
-import { resolveDocumentTypeId } from '../../../../../../Core/src/utils/documentTypeHelper'
+import {
+  resolveDocumentTypeId,
+  selectLatestCustomerPhotoDoc,
+  selectLatestUpdatedCustomerPhotoRejection,
+} from '../../../../../../Core/src/utils/documentTypeHelper'
 import { formatDateTime } from '../../../../../../Core/src/utils/dateHelper'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
@@ -42,8 +46,9 @@ function SubmissionHistory() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  // Photo Resolution and Caching States
+  // Photo Resolution, Rejections, and Caching States
   const [photoDocTypeId, setPhotoDocTypeId] = useState(null)
+  const [documentRejections, setDocumentRejections] = useState([])
   const [customerPhotos, setCustomerPhotos] = useState({})
   const photoUrlsRef = useRef({})
 
@@ -59,12 +64,16 @@ function SubmissionHistory() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(7)
 
-  // Fetch DocumentTypeMaster once on mount to dynamically resolve Photo document type ID
+  // Fetch DocumentTypeMaster and DocumentRejections once on mount
   useEffect(() => {
     let isMounted = true
-    const loadDocTypes = async () => {
+    const loadInitialData = async () => {
       try {
-        const data = await masterService.getDocumentTypes()
+        const [docTypeData, rejectionsData] = await Promise.all([
+          masterService.getDocumentTypes().catch(() => []),
+          agentCustomerService.getDocumentRejections().catch(() => []),
+        ])
+
         const extractArray = (res) => {
           if (Array.isArray(res)) return res
           if (res && typeof res === 'object') {
@@ -75,16 +84,22 @@ function SubmissionHistory() {
           }
           return []
         }
-        const docTypeList = extractArray(data)
+
+        const docTypeList = extractArray(docTypeData)
+        const rejList = extractArray(rejectionsData)
+
         const resolvedId = resolveDocumentTypeId(docTypeList, 'photo')
-        if (isMounted && resolvedId) {
-          setPhotoDocTypeId(resolvedId)
+        if (isMounted) {
+          if (resolvedId) {
+            setPhotoDocTypeId(resolvedId)
+          }
+          setDocumentRejections(rejList)
         }
       } catch (err) {
-        console.error('Failed to resolve photo document type', err)
+        console.error('Failed to resolve initial master/rejection data', err)
       }
     }
-    loadDocTypes()
+    loadInitialData()
     return () => {
       isMounted = false
     }
@@ -186,7 +201,10 @@ function SubmissionHistory() {
     return filteredSubmissions.slice(start, start + pageSize)
   }, [filteredSubmissions, currentPage, pageSize])
 
-  // Load Photos for current visible page (paginatedData)
+  // Load Photos for current visible page (paginatedData) with priority:
+  // 1. Latest Updated Photo from BackOfficeDocumentRejection
+  // 2. Original Photo from AgentCustomerDocument
+  // 3. Initial letter avatar (null)
   useEffect(() => {
     if (!photoDocTypeId || !paginatedData || paginatedData.length === 0) return
 
@@ -204,58 +222,90 @@ function SubmissionHistory() {
       for (const item of uncheckedCustomers) {
         if (!isMounted) break
         const custId = item.agentCustomerId || item.AgentCustomerId || item.id
+        const appProdId = item.applicationProductDetailsId || item.ApplicationProductDetailsId || null
         if (!custId) continue
 
+        let loadedPhotoUrl = null
+
         try {
-          const docsRes = await agentCustomerService.getDocumentsByCustomerId(custId)
-          const extractArray = (res) => {
-            if (Array.isArray(res)) return res
-            if (res && typeof res === 'object') {
-              if (Array.isArray(res.data)) return res.data
-              if (Array.isArray(res.items)) return res.items
-              if (Array.isArray(res.result)) return res.result
-              if (Array.isArray(res.list)) return res.list
+          // STEP 1: Check for Latest Updated / Resubmitted Photo from BackOfficeDocumentRejection
+          const updatedRejDoc = selectLatestUpdatedCustomerPhotoRejection(
+            documentRejections,
+            custId,
+            appProdId
+          )
+
+          if (updatedRejDoc) {
+            const path = String(
+              updatedRejDoc.currentDocumentPath ?? updatedRejDoc.CurrentDocumentPath ?? ''
+            ).trim().replace(/\\/g, '/').replace(/^\/+/, '')
+
+            let rejBlob = null
+            if (path.startsWith('UploadedFiles/KYCDocuments/') || path.startsWith('KYCDocuments/')) {
+              rejBlob = await agentCustomerService.downloadKycDocument(path)
+            } else if (path.startsWith('UploadedFiles/AgentCustomers/') || path.startsWith('AgentCustomers/')) {
+              const agentDocId = updatedRejDoc.agentCustomerDocumentId ?? updatedRejDoc.AgentCustomerDocumentId ?? null
+              if (agentDocId) {
+                rejBlob = await agentCustomerService.downloadDocument(agentDocId)
+              }
             }
-            return []
+
+            if (rejBlob && rejBlob.size > 0) {
+              let mimeType = rejBlob.type || 'image/jpeg'
+              const fileName = path.split('/').pop() || ''
+              if (/\.png$/i.test(fileName)) mimeType = 'image/png'
+              else if (/\.(jpg|jpeg)$/i.test(fileName)) mimeType = 'image/jpeg'
+              else if (/\.webp$/i.test(fileName)) mimeType = 'image/webp'
+
+              const typedBlob = rejBlob.type ? rejBlob : new Blob([rejBlob], { type: mimeType })
+              loadedPhotoUrl = URL.createObjectURL(typedBlob)
+            }
           }
-          const docList = extractArray(docsRes)
 
-          // Find photo document matching resolved photoDocTypeId or documentTypeName containing 'photo'
-          const photoDoc = docList.find((doc) => {
-            if (!doc || doc.isActive === false || doc.IsActive === false) return false
-            const dtId = Number(doc.documentTypeId ?? doc.DocumentTypeId)
-            if (Number.isFinite(dtId) && dtId === Number(photoDocTypeId)) return true
-            const name = String(doc.documentTypeName || doc.documentName || doc.name || '').toLowerCase()
-            return name === 'photo' || name === 'profile photo' || name === 'profile image' || name === 'applicant photo'
-          })
+          // STEP 2: Fallback to Original Photo from AgentCustomerDocument if no updated photo
+          if (!loadedPhotoUrl) {
+            const docsRes = await agentCustomerService.getDocumentsByCustomerId(custId)
+            const extractArray = (res) => {
+              if (Array.isArray(res)) return res
+              if (res && typeof res === 'object') {
+                if (Array.isArray(res.data)) return res.data
+                if (Array.isArray(res.items)) return res.items
+                if (Array.isArray(res.result)) return res.result
+                if (Array.isArray(res.list)) return res.list
+              }
+              return []
+            }
+            const docList = extractArray(docsRes)
 
-          if (photoDoc) {
-            const docId = photoDoc.agentCustomerDocumentId ?? photoDoc.AgentCustomerDocumentId ?? photoDoc.id
-            if (docId) {
-              const blob = await agentCustomerService.downloadDocument(docId)
-              if (blob && blob.size > 0) {
-                let mimeType = blob.type || 'image/jpeg'
-                const fileName = photoDoc.fileName || photoDoc.documentName || ''
-                if (/\.png$/i.test(fileName)) mimeType = 'image/png'
-                else if (/\.(jpg|jpeg)$/i.test(fileName)) mimeType = 'image/jpeg'
-                else if (/\.webp$/i.test(fileName)) mimeType = 'image/webp'
-                
-                const typedBlob = blob.type ? blob : new Blob([blob], { type: mimeType })
-                const url = URL.createObjectURL(typedBlob)
+            const photoDoc = selectLatestCustomerPhotoDoc(docList, photoDocTypeId)
+            if (photoDoc) {
+              const docId = photoDoc.agentCustomerDocumentId ?? photoDoc.AgentCustomerDocumentId ?? photoDoc.id
+              if (docId) {
+                const blob = await agentCustomerService.downloadDocument(docId)
+                if (blob && blob.size > 0) {
+                  let mimeType = blob.type || 'image/jpeg'
+                  const fileName = photoDoc.fileName || photoDoc.documentName || ''
+                  if (/\.png$/i.test(fileName)) mimeType = 'image/png'
+                  else if (/\.(jpg|jpeg)$/i.test(fileName)) mimeType = 'image/jpeg'
+                  else if (/\.webp$/i.test(fileName)) mimeType = 'image/webp'
 
-                if (isMounted) {
-                  photoUrlsRef.current[custId] = url
-                  setCustomerPhotos((prev) => ({ ...prev, [custId]: url }))
-                } else {
-                  URL.revokeObjectURL(url)
+                  const typedBlob = blob.type ? blob : new Blob([blob], { type: mimeType })
+                  loadedPhotoUrl = URL.createObjectURL(typedBlob)
                 }
-                continue
               }
             }
           }
 
+          // STEP 3: Store loaded URL in cache, or null for initial avatar
           if (isMounted) {
-            setCustomerPhotos((prev) => ({ ...prev, [custId]: null }))
+            if (loadedPhotoUrl) {
+              photoUrlsRef.current[custId] = loadedPhotoUrl
+              setCustomerPhotos((prev) => ({ ...prev, [custId]: loadedPhotoUrl }))
+            } else {
+              setCustomerPhotos((prev) => ({ ...prev, [custId]: null }))
+            }
+          } else if (loadedPhotoUrl) {
+            URL.revokeObjectURL(loadedPhotoUrl)
           }
         } catch (err) {
           if (isMounted) {
@@ -270,7 +320,7 @@ function SubmissionHistory() {
     return () => {
       isMounted = false
     }
-  }, [paginatedData, photoDocTypeId, customerPhotos])
+  }, [paginatedData, photoDocTypeId, documentRejections, customerPhotos])
 
   // Cleanup all created Object URLs on unmount
   useEffect(() => {

@@ -37,5 +37,25 @@ export const agentCustomerService = {
       responseType: 'blob'
     });
     return response.data;
+  },
+
+  getDocumentRejections: async () => {
+    const response = await axiosInstance.get('/BackOfficeDocumentRejection');
+    return response.data;
+  },
+
+  downloadKycDocument: async (path) => {
+    let serverPath = String(path || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
+    if (!serverPath.startsWith('UploadedFiles/')) {
+      serverPath = `UploadedFiles/${serverPath}`;
+    }
+    const response = await axiosInstance.get(
+      `/ApplicationKYCDocuments/download?path=${encodeURIComponent(serverPath)}`,
+      {
+        responseType: 'blob',
+      }
+    );
+    return response.data;
   }
 };
+

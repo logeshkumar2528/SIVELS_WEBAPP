@@ -2,7 +2,11 @@ import { useEffect, useState, useRef } from 'react'
 import { CheckCircle2, Clock, Eye, RefreshCw, RotateCcw } from 'lucide-react'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
 import { masterService } from '../../../../../../Core/src/services/masterService'
-import { resolveDocumentTypeId } from '../../../../../../Core/src/utils/documentTypeHelper'
+import {
+  resolveDocumentTypeId,
+  selectLatestCustomerPhotoDoc,
+  selectLatestUpdatedCustomerPhotoRejection,
+} from '../../../../../../Core/src/utils/documentTypeHelper'
 import { formatDateTime } from '../../../../../../Core/src/utils/dateHelper'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
@@ -48,27 +52,37 @@ function SubmittedCustomers() {
   const [error, setError] = useState(null)
   const [selectedCustomer, setSelectedCustomer] = useState(null)
 
-  // Photo Resolution and Caching States
+  // Photo Resolution, Rejections, and Caching States
   const [photoDocTypeId, setPhotoDocTypeId] = useState(null)
+  const [documentRejections, setDocumentRejections] = useState([])
   const [customerPhotos, setCustomerPhotos] = useState({})
   const photoUrlsRef = useRef({})
 
-  // Fetch DocumentTypeMaster once on mount to dynamically resolve Photo document type ID
+  // Fetch DocumentTypeMaster and DocumentRejections once on mount
   useEffect(() => {
     let isMounted = true
-    const loadDocTypes = async () => {
+    const loadInitialData = async () => {
       try {
-        const data = await masterService.getDocumentTypes()
-        const docTypeList = extractArray(data)
+        const [docTypeData, rejectionsData] = await Promise.all([
+          masterService.getDocumentTypes().catch(() => []),
+          agentCustomerService.getDocumentRejections().catch(() => []),
+        ])
+
+        const docTypeList = extractArray(docTypeData)
+        const rejList = extractArray(rejectionsData)
+
         const resolvedId = resolveDocumentTypeId(docTypeList, 'photo')
-        if (isMounted && resolvedId) {
-          setPhotoDocTypeId(resolvedId)
+        if (isMounted) {
+          if (resolvedId) {
+            setPhotoDocTypeId(resolvedId)
+          }
+          setDocumentRejections(rejList)
         }
       } catch (err) {
-        console.error('Failed to resolve photo document type', err)
+        console.error('Failed to resolve photo document type and rejections', err)
       }
     }
-    loadDocTypes()
+    loadInitialData()
     return () => {
       isMounted = false
     }
@@ -107,7 +121,10 @@ function SubmittedCustomers() {
     return () => { active = false }
   }, [agentId, loadingAgent])
 
-  // Load Photos for submitted customers
+  // Load Photos for submitted customers with priority:
+  // 1. Latest Updated Photo from BackOfficeDocumentRejection
+  // 2. Original Photo from AgentCustomerDocument
+  // 3. Initial letter avatar (null)
   useEffect(() => {
     if (!photoDocTypeId || !customers || customers.length === 0) return
 
@@ -124,48 +141,80 @@ function SubmittedCustomers() {
       for (const customer of uncheckedCustomers) {
         if (!isMounted) break
         const custId = customer.agentCustomerId || customer.AgentCustomerId || customer.id
+        const appProdId = customer.applicationProductDetailsId || customer.ApplicationProductDetailsId || null
         if (!custId) continue
 
+        let loadedPhotoUrl = null
+
         try {
-          const docsRes = await agentCustomerService.getDocumentsByCustomerId(custId)
-          const docList = extractArray(docsRes)
+          // STEP 1: Check for Latest Updated / Resubmitted Photo from BackOfficeDocumentRejection
+          const updatedRejDoc = selectLatestUpdatedCustomerPhotoRejection(
+            documentRejections,
+            custId,
+            appProdId
+          )
 
-          // Find photo document matching resolved photoDocTypeId or documentTypeName containing 'photo'
-          const photoDoc = docList.find((doc) => {
-            if (!doc || doc.isActive === false || doc.IsActive === false) return false
-            const dtId = Number(doc.documentTypeId ?? doc.DocumentTypeId)
-            if (Number.isFinite(dtId) && dtId === Number(photoDocTypeId)) return true
-            const name = String(doc.documentTypeName || doc.documentName || doc.name || '').toLowerCase()
-            return name === 'photo' || name === 'profile photo' || name === 'profile image' || name === 'applicant photo'
-          })
+          if (updatedRejDoc) {
+            const path = String(
+              updatedRejDoc.currentDocumentPath ?? updatedRejDoc.CurrentDocumentPath ?? ''
+            ).trim().replace(/\\/g, '/').replace(/^\/+/, '')
 
-          if (photoDoc) {
-            const docId = photoDoc.agentCustomerDocumentId ?? photoDoc.AgentCustomerDocumentId ?? photoDoc.id
-            if (docId) {
-              const blob = await agentCustomerService.downloadDocument(docId)
-              if (blob && blob.size > 0) {
-                let mimeType = blob.type || 'image/jpeg'
-                const fileName = photoDoc.fileName || photoDoc.documentName || ''
-                if (/\.png$/i.test(fileName)) mimeType = 'image/png'
-                else if (/\.(jpg|jpeg)$/i.test(fileName)) mimeType = 'image/jpeg'
-                else if (/\.webp$/i.test(fileName)) mimeType = 'image/webp'
+            let rejBlob = null
+            if (path.startsWith('UploadedFiles/KYCDocuments/') || path.startsWith('KYCDocuments/')) {
+              rejBlob = await agentCustomerService.downloadKycDocument(path)
+            } else if (path.startsWith('UploadedFiles/AgentCustomers/') || path.startsWith('AgentCustomers/')) {
+              const agentDocId = updatedRejDoc.agentCustomerDocumentId ?? updatedRejDoc.AgentCustomerDocumentId ?? null
+              if (agentDocId) {
+                rejBlob = await agentCustomerService.downloadDocument(agentDocId)
+              }
+            }
 
-                const typedBlob = blob.type ? blob : new Blob([blob], { type: mimeType })
-                const url = URL.createObjectURL(typedBlob)
+            if (rejBlob && rejBlob.size > 0) {
+              let mimeType = rejBlob.type || 'image/jpeg'
+              const fileName = path.split('/').pop() || ''
+              if (/\.png$/i.test(fileName)) mimeType = 'image/png'
+              else if (/\.(jpg|jpeg)$/i.test(fileName)) mimeType = 'image/jpeg'
+              else if (/\.webp$/i.test(fileName)) mimeType = 'image/webp'
 
-                if (isMounted) {
-                  photoUrlsRef.current[custId] = url
-                  setCustomerPhotos((prev) => ({ ...prev, [custId]: url }))
-                } else {
-                  URL.revokeObjectURL(url)
+              const typedBlob = rejBlob.type ? rejBlob : new Blob([rejBlob], { type: mimeType })
+              loadedPhotoUrl = URL.createObjectURL(typedBlob)
+            }
+          }
+
+          // STEP 2: Fallback to Original Photo from AgentCustomerDocument if no updated photo
+          if (!loadedPhotoUrl) {
+            const docsRes = await agentCustomerService.getDocumentsByCustomerId(custId)
+            const docList = extractArray(docsRes)
+
+            const photoDoc = selectLatestCustomerPhotoDoc(docList, photoDocTypeId)
+            if (photoDoc) {
+              const docId = photoDoc.agentCustomerDocumentId ?? photoDoc.AgentCustomerDocumentId ?? photoDoc.id
+              if (docId) {
+                const blob = await agentCustomerService.downloadDocument(docId)
+                if (blob && blob.size > 0) {
+                  let mimeType = blob.type || 'image/jpeg'
+                  const fileName = photoDoc.fileName || photoDoc.documentName || ''
+                  if (/\.png$/i.test(fileName)) mimeType = 'image/png'
+                  else if (/\.(jpg|jpeg)$/i.test(fileName)) mimeType = 'image/jpeg'
+                  else if (/\.webp$/i.test(fileName)) mimeType = 'image/webp'
+
+                  const typedBlob = blob.type ? blob : new Blob([blob], { type: mimeType })
+                  loadedPhotoUrl = URL.createObjectURL(typedBlob)
                 }
-                continue
               }
             }
           }
 
+          // STEP 3: Store loaded URL in cache, or null for initial avatar
           if (isMounted) {
-            setCustomerPhotos((prev) => ({ ...prev, [custId]: null }))
+            if (loadedPhotoUrl) {
+              photoUrlsRef.current[custId] = loadedPhotoUrl
+              setCustomerPhotos((prev) => ({ ...prev, [custId]: loadedPhotoUrl }))
+            } else {
+              setCustomerPhotos((prev) => ({ ...prev, [custId]: null }))
+            }
+          } else if (loadedPhotoUrl) {
+            URL.revokeObjectURL(loadedPhotoUrl)
           }
         } catch (err) {
           if (isMounted) {
@@ -180,7 +229,7 @@ function SubmittedCustomers() {
     return () => {
       isMounted = false
     }
-  }, [customers, photoDocTypeId, customerPhotos])
+  }, [customers, photoDocTypeId, documentRejections, customerPhotos])
 
   // Cleanup all created Object URLs on unmount
   useEffect(() => {
