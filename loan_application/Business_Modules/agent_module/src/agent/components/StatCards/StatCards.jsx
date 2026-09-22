@@ -5,7 +5,7 @@ import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
 import './StatCards.css'
 
-function StatCards({ onTotalSubmittedClick }) {
+function StatCards({ activeSection, onTotalSubmittedClick }) {
   const { agentId, loadingAgent } = useAgentIdentity()
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -94,17 +94,21 @@ function StatCards({ onTotalSubmittedClick }) {
     <div className="stat-cards">
       {stats.map((stat) => {
         const Icon = stat.icon
+        const isClickable = stat.id === 'submitted'
+        const handleClick = stat.id === 'submitted' ? onTotalSubmittedClick : undefined
+        const ariaLabel = stat.id === 'submitted' ? 'Show submitted customers' : undefined
+
         return (
           <div
             key={stat.id}
-            className={`stat-card stat-card--${stat.theme} ${stat.id === 'submitted' ? 'stat-card--clickable' : ''}`}
-            onClick={stat.id === 'submitted' ? onTotalSubmittedClick : undefined}
-            onKeyDown={stat.id === 'submitted' ? (event) => {
-              if (event.key === 'Enter' || event.key === ' ') onTotalSubmittedClick?.()
+            className={`stat-card stat-card--${stat.theme} ${isClickable ? 'stat-card--clickable' : ''}`}
+            onClick={handleClick}
+            onKeyDown={isClickable ? (event) => {
+              if (event.key === 'Enter' || event.key === ' ') handleClick?.()
             } : undefined}
-            role={stat.id === 'submitted' ? 'button' : undefined}
-            tabIndex={stat.id === 'submitted' ? 0 : undefined}
-            aria-label={stat.id === 'submitted' ? 'Show submitted customers' : undefined}
+            role={isClickable ? 'button' : undefined}
+            tabIndex={isClickable ? 0 : undefined}
+            aria-label={ariaLabel}
           >
             <div className="stat-card-header">
               <div className={`stat-card-icon-circle stat-card-icon-circle--${stat.theme}`}>

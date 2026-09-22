@@ -4,6 +4,7 @@ import { agentCustomerService } from '../../../../../../Core/src/services/agentC
 import { formatDateTime } from '../../../../../../Core/src/utils/dateHelper'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
+import { normalizeApplicationStatus } from '../../../../../rm_modules/src/utils/rmContext'
 import ViewCustomerModal from '../ViewCustomerModal/ViewCustomerModal'
 import './SubmittedCustomers.css'
 
@@ -29,7 +30,7 @@ function StatusBadge({ status }) {
   const value = status || 'Unknown'
   const normalized = String(value).toLowerCase()
   const isReturned = normalized.includes('return') || normalized.includes('reject')
-  const isApproved = normalized.includes('approve') || normalized.includes('success')
+  const isApproved = normalized.includes('approve') || normalized.includes('success') || normalized.includes('logged to ho')
   const isReview = normalized.includes('review')
   const isPending = normalized.includes('pending') || normalized.includes('draft')
   const Icon = isReturned ? RotateCcw : isApproved ? CheckCircle2 : isReview ? RefreshCw : isPending ? Clock : CheckCircle2
@@ -58,6 +59,13 @@ function SubmittedCustomers() {
         const agentCustomers = records
           .filter((customer) => isCustomerOwnedByAgent(customer, agentId))
           .sort((a, b) => new Date(b.createdAt || b.CreatedAt || 0) - new Date(a.createdAt || a.CreatedAt || 0))
+          .map((customer) => ({
+            ...customer,
+            status: normalizeApplicationStatus(
+              customer.status ?? customer.Status,
+              customer.statusName ?? customer.StatusName
+            ),
+          }))
         if (active) setCustomers(agentCustomers)
       } catch (loadError) {
         console.error('Failed to load submitted customers', loadError)
