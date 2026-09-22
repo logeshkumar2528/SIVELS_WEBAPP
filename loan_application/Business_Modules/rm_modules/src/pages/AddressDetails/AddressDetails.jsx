@@ -456,6 +456,7 @@ export default function AddressDetails() {
 
       const rawApplicantPersonalInfoId =
         currentApp.registration?.personalInformation?.applicant?.personalInformationId ||
+        currentApp.registration?.primaryApplicant?.personalInformationId ||
         currentApp.sections?.personalInformation?.applicant?.personalInformationId ||
         currentApp.personalInformation?.applicant?.personalInformationId;
 
