@@ -191,13 +191,45 @@
   color: #1A7A3C;
 }
 
-.agent-datepicker-day.selected {
+.agent-datepicker-day.selected,
+.agent-datepicker-day.range-start,
+.agent-datepicker-day.range-end {
   background: #1A7A3C;
   color: #ffffff;
   font-weight: 600;
 }
 
-.agent-datepicker-day.today:not(.selected) {
+.agent-datepicker-day.range-start:not(.range-end) {
+  border-top-left-radius: 50%;
+  border-bottom-left-radius: 50%;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.agent-datepicker-day.range-end:not(.range-start) {
+  border-top-right-radius: 50%;
+  border-bottom-right-radius: 50%;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.agent-datepicker-day.range-start.range-end,
+.agent-datepicker-day.single-range {
+  border-radius: 50% !important;
+}
+
+.agent-datepicker-day.in-range {
+  background: #effaf2;
+  color: #1A7A3C;
+  border-radius: 0;
+  font-weight: 500;
+}
+
+.agent-datepicker-day.in-range:hover {
+  background: #dcf2e4;
+}
+
+.agent-datepicker-day.today:not(.selected):not(.range-start):not(.range-end):not(.in-range) {
   border-color: #1A7A3C;
   color: #1A7A3C;
   font-weight: 600;

@@ -43,14 +43,19 @@ function SubmissionHistory() {
   // Filter States
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedStatus, setSelectedStatus] = useState('All Status')
-  const [selectedDate, setSelectedDate] = useState('')
+  const [selectedDate, setSelectedDate] = useState({ startDate: '', endDate: '' })
 
   // View Customer Drawer State
   const [selectedCustomer, setSelectedCustomer] = useState(null)
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(5)
+  const [pageSize, setPageSize] = useState(7)
+
+  // Auto-reset to page 1 whenever any filter changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, selectedStatus, selectedDate])
 
   const fetchSubmissions = async () => {
     setLoading(true)
@@ -108,8 +113,28 @@ function SubmissionHistory() {
       const matchesStatus =
         selectedStatus === 'All Status' || String(item.status ?? '') === selectedStatus
 
-      const matchesDate =
-        !selectedDate || (item.createdAt && item.createdAt.startsWith(selectedDate))
+      let matchesDate = true
+      if (selectedDate && (selectedDate.startDate || selectedDate.endDate)) {
+        const { startDate, endDate } = selectedDate
+        if (item.createdAt) {
+          let itemDateStr = ''
+          if (typeof item.createdAt === 'string') {
+            itemDateStr = item.createdAt.split('T')[0].substring(0, 10)
+          } else if (item.createdAt instanceof Date) {
+            itemDateStr = item.createdAt.toISOString().split('T')[0]
+          }
+
+          if (startDate && endDate) {
+            matchesDate = Boolean(itemDateStr) && itemDateStr >= startDate && itemDateStr <= endDate
+          } else if (startDate) {
+            matchesDate = Boolean(itemDateStr) && itemDateStr >= startDate
+          } else if (endDate) {
+            matchesDate = Boolean(itemDateStr) && itemDateStr <= endDate
+          }
+        } else {
+          matchesDate = false
+        }
+      }
 
       return matchesSearch && matchesStatus && matchesDate
     })
@@ -126,7 +151,7 @@ function SubmissionHistory() {
   const handleResetFilters = () => {
     setSearchTerm('')
     setSelectedStatus('All Status')
-    setSelectedDate('')
+    setSelectedDate({ startDate: '', endDate: '' })
     setCurrentPage(1)
   }
 
@@ -320,7 +345,7 @@ function SubmissionHistory() {
               setPageSize(size)
               setCurrentPage(1)
             }}
-            pageSizeOptions={[5, 10, 15, 20]}
+            pageSizeOptions={[5, 7, 10]}
             useCustomSelect={true}
           />
         )}
