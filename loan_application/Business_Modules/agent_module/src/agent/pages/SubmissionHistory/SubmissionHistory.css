@@ -249,6 +249,12 @@
   flex-shrink: 0;
 }
 
+.history-avatar-img {
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
 .avatar--R { background-color: #D1FAE5; color: #065F46; }
 .avatar--P { background-color: #F3E8FF; color: #6B21A8; }
 .avatar--K { background-color: #FEF3C7; color: #92400E; }

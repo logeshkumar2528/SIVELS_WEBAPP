@@ -119,6 +119,15 @@
   flex-shrink: 0;
 }
 
+.submitted-avatar-img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  flex-shrink: 0;
+}
+
 .submitted-status {
   display: inline-flex;
   align-items: center;

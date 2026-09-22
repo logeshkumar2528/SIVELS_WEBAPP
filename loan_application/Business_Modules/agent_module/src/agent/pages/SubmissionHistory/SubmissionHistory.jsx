@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus,
@@ -14,6 +14,8 @@ import ViewCustomerModal from '../../components/ViewCustomerModal/ViewCustomerMo
 import CustomSelect from '../AddCustomer/CustomSelect'
 import DatePicker from '../../components/DatePicker/DatePicker'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
+import { masterService } from '../../../../../../Core/src/services/masterService'
+import { resolveDocumentTypeId } from '../../../../../../Core/src/utils/documentTypeHelper'
 import { formatDateTime } from '../../../../../../Core/src/utils/dateHelper'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
@@ -40,6 +42,11 @@ function SubmissionHistory() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // Photo Resolution and Caching States
+  const [photoDocTypeId, setPhotoDocTypeId] = useState(null)
+  const [customerPhotos, setCustomerPhotos] = useState({})
+  const photoUrlsRef = useRef({})
+
   // Filter States
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedStatus, setSelectedStatus] = useState('All Status')
@@ -51,6 +58,37 @@ function SubmissionHistory() {
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(7)
+
+  // Fetch DocumentTypeMaster once on mount to dynamically resolve Photo document type ID
+  useEffect(() => {
+    let isMounted = true
+    const loadDocTypes = async () => {
+      try {
+        const data = await masterService.getDocumentTypes()
+        const extractArray = (res) => {
+          if (Array.isArray(res)) return res
+          if (res && typeof res === 'object') {
+            if (Array.isArray(res.data)) return res.data
+            if (Array.isArray(res.items)) return res.items
+            if (Array.isArray(res.result)) return res.result
+            if (Array.isArray(res.list)) return res.list
+          }
+          return []
+        }
+        const docTypeList = extractArray(data)
+        const resolvedId = resolveDocumentTypeId(docTypeList, 'photo')
+        if (isMounted && resolvedId) {
+          setPhotoDocTypeId(resolvedId)
+        }
+      } catch (err) {
+        console.error('Failed to resolve photo document type', err)
+      }
+    }
+    loadDocTypes()
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   // Auto-reset to page 1 whenever any filter changes
   useEffect(() => {
@@ -147,6 +185,110 @@ function SubmissionHistory() {
     const start = (currentPage - 1) * pageSize
     return filteredSubmissions.slice(start, start + pageSize)
   }, [filteredSubmissions, currentPage, pageSize])
+
+  // Load Photos for current visible page (paginatedData)
+  useEffect(() => {
+    if (!photoDocTypeId || !paginatedData || paginatedData.length === 0) return
+
+    let isMounted = true
+
+    // Identify customers on the current visible page that haven't been checked/cached yet
+    const uncheckedCustomers = paginatedData.filter((item) => {
+      const custId = item.agentCustomerId || item.AgentCustomerId || item.id
+      return custId && customerPhotos[custId] === undefined
+    })
+
+    if (uncheckedCustomers.length === 0) return
+
+    const fetchPhotos = async () => {
+      for (const item of uncheckedCustomers) {
+        if (!isMounted) break
+        const custId = item.agentCustomerId || item.AgentCustomerId || item.id
+        if (!custId) continue
+
+        try {
+          const docsRes = await agentCustomerService.getDocumentsByCustomerId(custId)
+          const extractArray = (res) => {
+            if (Array.isArray(res)) return res
+            if (res && typeof res === 'object') {
+              if (Array.isArray(res.data)) return res.data
+              if (Array.isArray(res.items)) return res.items
+              if (Array.isArray(res.result)) return res.result
+              if (Array.isArray(res.list)) return res.list
+            }
+            return []
+          }
+          const docList = extractArray(docsRes)
+
+          // Find photo document matching resolved photoDocTypeId or documentTypeName containing 'photo'
+          const photoDoc = docList.find((doc) => {
+            if (!doc || doc.isActive === false || doc.IsActive === false) return false
+            const dtId = Number(doc.documentTypeId ?? doc.DocumentTypeId)
+            if (Number.isFinite(dtId) && dtId === Number(photoDocTypeId)) return true
+            const name = String(doc.documentTypeName || doc.documentName || doc.name || '').toLowerCase()
+            return name === 'photo' || name === 'profile photo' || name === 'profile image' || name === 'applicant photo'
+          })
+
+          if (photoDoc) {
+            const docId = photoDoc.agentCustomerDocumentId ?? photoDoc.AgentCustomerDocumentId ?? photoDoc.id
+            if (docId) {
+              const blob = await agentCustomerService.downloadDocument(docId)
+              if (blob && blob.size > 0) {
+                let mimeType = blob.type || 'image/jpeg'
+                const fileName = photoDoc.fileName || photoDoc.documentName || ''
+                if (/\.png$/i.test(fileName)) mimeType = 'image/png'
+                else if (/\.(jpg|jpeg)$/i.test(fileName)) mimeType = 'image/jpeg'
+                else if (/\.webp$/i.test(fileName)) mimeType = 'image/webp'
+                
+                const typedBlob = blob.type ? blob : new Blob([blob], { type: mimeType })
+                const url = URL.createObjectURL(typedBlob)
+
+                if (isMounted) {
+                  photoUrlsRef.current[custId] = url
+                  setCustomerPhotos((prev) => ({ ...prev, [custId]: url }))
+                } else {
+                  URL.revokeObjectURL(url)
+                }
+                continue
+              }
+            }
+          }
+
+          if (isMounted) {
+            setCustomerPhotos((prev) => ({ ...prev, [custId]: null }))
+          }
+        } catch (err) {
+          if (isMounted) {
+            setCustomerPhotos((prev) => ({ ...prev, [custId]: null }))
+          }
+        }
+      }
+    }
+
+    fetchPhotos()
+
+    return () => {
+      isMounted = false
+    }
+  }, [paginatedData, photoDocTypeId, customerPhotos])
+
+  // Cleanup all created Object URLs on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(photoUrlsRef.current).forEach((url) => {
+        if (url) URL.revokeObjectURL(url)
+      })
+    }
+  }, [])
+
+  const handleImageError = (custId) => {
+    const url = photoUrlsRef.current[custId]
+    if (url) {
+      URL.revokeObjectURL(url)
+      delete photoUrlsRef.current[custId]
+    }
+    setCustomerPhotos((prev) => ({ ...prev, [custId]: null }))
+  }
 
   const handleResetFilters = () => {
     setSearchTerm('')
@@ -299,15 +441,27 @@ function SubmissionHistory() {
               </thead>
               <tbody>
                 {paginatedData.map((item, idx) => {
+                  const custId = item.agentCustomerId || item.AgentCustomerId || item.id
                   const initial = (item.fullName || 'U').charAt(0).toUpperCase()
+                  const photoUrl = customerPhotos[custId]
+
                   return (
-                    <tr key={item.agentCustomerId || item.id}>
+                    <tr key={custId}>
                       <td className="index-col">{(currentPage - 1) * pageSize + idx + 1}</td>
                       <td>
                         <div className="history-customer-cell">
-                          <div className={`history-avatar avatar--${initial.match(/[A-M]/) ? 'P' : 'R'}`}>
-                            {initial}
-                          </div>
+                          {photoUrl ? (
+                            <img
+                              src={photoUrl}
+                              alt={item.fullName || 'Customer'}
+                              className="history-avatar history-avatar-img"
+                              onError={() => handleImageError(custId)}
+                            />
+                          ) : (
+                            <div className={`history-avatar avatar--${initial.match(/[A-M]/) ? 'P' : 'R'}`}>
+                              {initial}
+                            </div>
+                          )}
                           {item.fullName}
                         </div>
                       </td>

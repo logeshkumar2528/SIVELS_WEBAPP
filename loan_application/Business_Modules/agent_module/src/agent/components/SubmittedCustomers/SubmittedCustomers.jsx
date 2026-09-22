@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { CheckCircle2, Clock, Eye, RefreshCw, RotateCcw } from 'lucide-react'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
+import { masterService } from '../../../../../../Core/src/services/masterService'
+import { resolveDocumentTypeId } from '../../../../../../Core/src/utils/documentTypeHelper'
 import { formatDateTime } from '../../../../../../Core/src/utils/dateHelper'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
@@ -46,6 +48,32 @@ function SubmittedCustomers() {
   const [error, setError] = useState(null)
   const [selectedCustomer, setSelectedCustomer] = useState(null)
 
+  // Photo Resolution and Caching States
+  const [photoDocTypeId, setPhotoDocTypeId] = useState(null)
+  const [customerPhotos, setCustomerPhotos] = useState({})
+  const photoUrlsRef = useRef({})
+
+  // Fetch DocumentTypeMaster once on mount to dynamically resolve Photo document type ID
+  useEffect(() => {
+    let isMounted = true
+    const loadDocTypes = async () => {
+      try {
+        const data = await masterService.getDocumentTypes()
+        const docTypeList = extractArray(data)
+        const resolvedId = resolveDocumentTypeId(docTypeList, 'photo')
+        if (isMounted && resolvedId) {
+          setPhotoDocTypeId(resolvedId)
+        }
+      } catch (err) {
+        console.error('Failed to resolve photo document type', err)
+      }
+    }
+    loadDocTypes()
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
   useEffect(() => {
     if (loadingAgent || !agentId) return
 
@@ -79,6 +107,99 @@ function SubmittedCustomers() {
     return () => { active = false }
   }, [agentId, loadingAgent])
 
+  // Load Photos for submitted customers
+  useEffect(() => {
+    if (!photoDocTypeId || !customers || customers.length === 0) return
+
+    let isMounted = true
+
+    const uncheckedCustomers = customers.filter((customer) => {
+      const custId = customer.agentCustomerId || customer.AgentCustomerId || customer.id
+      return custId && customerPhotos[custId] === undefined
+    })
+
+    if (uncheckedCustomers.length === 0) return
+
+    const fetchPhotos = async () => {
+      for (const customer of uncheckedCustomers) {
+        if (!isMounted) break
+        const custId = customer.agentCustomerId || customer.AgentCustomerId || customer.id
+        if (!custId) continue
+
+        try {
+          const docsRes = await agentCustomerService.getDocumentsByCustomerId(custId)
+          const docList = extractArray(docsRes)
+
+          // Find photo document matching resolved photoDocTypeId or documentTypeName containing 'photo'
+          const photoDoc = docList.find((doc) => {
+            if (!doc || doc.isActive === false || doc.IsActive === false) return false
+            const dtId = Number(doc.documentTypeId ?? doc.DocumentTypeId)
+            if (Number.isFinite(dtId) && dtId === Number(photoDocTypeId)) return true
+            const name = String(doc.documentTypeName || doc.documentName || doc.name || '').toLowerCase()
+            return name === 'photo' || name === 'profile photo' || name === 'profile image' || name === 'applicant photo'
+          })
+
+          if (photoDoc) {
+            const docId = photoDoc.agentCustomerDocumentId ?? photoDoc.AgentCustomerDocumentId ?? photoDoc.id
+            if (docId) {
+              const blob = await agentCustomerService.downloadDocument(docId)
+              if (blob && blob.size > 0) {
+                let mimeType = blob.type || 'image/jpeg'
+                const fileName = photoDoc.fileName || photoDoc.documentName || ''
+                if (/\.png$/i.test(fileName)) mimeType = 'image/png'
+                else if (/\.(jpg|jpeg)$/i.test(fileName)) mimeType = 'image/jpeg'
+                else if (/\.webp$/i.test(fileName)) mimeType = 'image/webp'
+
+                const typedBlob = blob.type ? blob : new Blob([blob], { type: mimeType })
+                const url = URL.createObjectURL(typedBlob)
+
+                if (isMounted) {
+                  photoUrlsRef.current[custId] = url
+                  setCustomerPhotos((prev) => ({ ...prev, [custId]: url }))
+                } else {
+                  URL.revokeObjectURL(url)
+                }
+                continue
+              }
+            }
+          }
+
+          if (isMounted) {
+            setCustomerPhotos((prev) => ({ ...prev, [custId]: null }))
+          }
+        } catch (err) {
+          if (isMounted) {
+            setCustomerPhotos((prev) => ({ ...prev, [custId]: null }))
+          }
+        }
+      }
+    }
+
+    fetchPhotos()
+
+    return () => {
+      isMounted = false
+    }
+  }, [customers, photoDocTypeId, customerPhotos])
+
+  // Cleanup all created Object URLs on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(photoUrlsRef.current).forEach((url) => {
+        if (url) URL.revokeObjectURL(url)
+      })
+    }
+  }, [])
+
+  const handleImageError = (custId) => {
+    const url = photoUrlsRef.current[custId]
+    if (url) {
+      URL.revokeObjectURL(url)
+      delete photoUrlsRef.current[custId]
+    }
+    setCustomerPhotos((prev) => ({ ...prev, [custId]: null }))
+  }
+
   return (
     <section className="submitted-customers" aria-labelledby="submitted-customers-title">
       <div className="submitted-customers-header">
@@ -111,12 +232,29 @@ function SubmittedCustomers() {
             </thead>
             <tbody>
               {customers.map((customer, index) => {
+                const custId = customer.agentCustomerId || customer.AgentCustomerId || customer.id || `${customer.agentId}-${index}`
                 const name = customer.fullName || customer.FullName || 'Unknown Customer'
                 const initial = name.charAt(0).toUpperCase()
+                const photoUrl = customerPhotos[custId]
+
                 return (
-                  <tr key={customer.agentCustomerId || customer.id || `${customer.agentId}-${index}`}>
+                  <tr key={custId}>
                     <td>{index + 1}</td>
-                    <td><div className="submitted-customer-name"><span>{initial}</span>{name}</div></td>
+                    <td>
+                      <div className="submitted-customer-name">
+                        {photoUrl ? (
+                          <img
+                            src={photoUrl}
+                            alt={name}
+                            className="submitted-avatar-img"
+                            onError={() => handleImageError(custId)}
+                          />
+                        ) : (
+                          <span>{initial}</span>
+                        )}
+                        {name}
+                      </div>
+                    </td>
                     <td>{customer.mobileNumber || customer.MobileNumber || '-'}</td>
                     <td>{formatCurrency(customer.expectedLoanAmount || customer.ExpectedLoanAmount)}</td>
                     <td>{formatDate(customer.createdAt || customer.CreatedAt)}</td>
