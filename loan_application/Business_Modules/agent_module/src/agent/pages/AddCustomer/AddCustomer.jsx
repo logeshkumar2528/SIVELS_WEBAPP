@@ -545,7 +545,7 @@ function AddCustomer() {
 
   const loanPurposeOptions = loanPurposes.map(purpose => ({
     value: purpose.loanPurposeId || purpose.id,
-    label: purpose.productName || purpose.name
+    label: purpose.purposeName || purpose.name || purpose.productName
   }))
 
   const employmentPlaceholder = loadingMasters 
