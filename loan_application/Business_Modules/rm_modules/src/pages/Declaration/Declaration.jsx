@@ -392,8 +392,8 @@ export default function Declaration() {
       appId={appId}
       appData={appData}
       steps={APPLICATION_WIZARD_STEPS}
-      activeStep={12}
-      title="Step 12: Declaration"
+      activeStep={11}
+      title="Step 11: Declaration"
       subtitle="Final review of declaration and acknowledgement of receipt."
       backLabel="Back to Checklist"
       continueLabel="Review & Submit Application"

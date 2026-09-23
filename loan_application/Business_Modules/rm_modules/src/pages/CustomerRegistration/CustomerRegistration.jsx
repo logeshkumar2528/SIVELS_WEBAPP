@@ -21,6 +21,7 @@ import {
 import Modal from '../../components/Modal/Modal';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { formatDateTime, toIstDateInput } from '../../utils/dateHelper';
+import ApplicationTopSummary from '../../components/ApplicationTopSummary/ApplicationTopSummary';
 import './CustomerRegistration.css';
 
 function digitsOnly(value) {
@@ -1185,54 +1186,12 @@ export default function CustomerRegistration() {
             <div>
               <div className="ad-title-row">
                 <h1 className="ad-page-title">Step 3: Personal Information</h1>
-                <span className="ad-step-badge">Step 3 of 12</span>
+                <span className="ad-step-badge">Step 3 of 11</span>
               </div>
               <p className="ad-page-description">Capture the applicant details required for the PDF Section 2 and continue to Address Details.</p>
             </div>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={ArrowLeftIcon ? <ArrowLeftIcon size={14} /> : null}
-            onClick={handleBack}
-          >
-            Back to KYC Documents
-          </Button>
-        </div>
-
-        <div className="ad-premium-header-bottom">
-          <div className="ad-meta-item">
-            <span className="ad-meta-label">Applicant</span>
-            <div className="ad-meta-value-group highlight">
-              {iconMap['User'] && (() => { const User = iconMap['User']; return <User size={14} />; })()}
-              <span className="ad-meta-value">{applicantHeaderName}</span>
-            </div>
-          </div>
-          <div className="ad-meta-divider" />
-          <div className="ad-meta-item">
-            <span className="ad-meta-label">App ID</span>
-            <div className="ad-meta-value-group">
-              {iconMap['FileText'] && (() => { const FileText = iconMap['FileText']; return <FileText size={14} />; })()}
-              <span className="ad-meta-value">{buildApplicationDisplayId(appData, appId)}</span>
-            </div>
-          </div>
-          <div className="ad-meta-divider" />
-          <div className="ad-meta-item">
-            <span className="ad-meta-label">Branch</span>
-            <div className="ad-meta-value-group">
-              {iconMap['MapPin'] && (() => { const MapPin = iconMap['MapPin']; return <MapPin size={14} />; })()}
-              <span className="ad-meta-value">{appData.branch || 'Pending Branch'}</span>
-            </div>
-          </div>
-          <div className="ad-meta-divider" />
-          <div className="ad-meta-item">
-            <span className="ad-meta-label">Submitted</span>
-            <div className="ad-meta-value-group">
-              {iconMap['Calendar'] && (() => { const Calendar = iconMap['Calendar']; return <Calendar size={14} />; })()}
-              <span className="ad-meta-value">{formatDateTime(appData.createdDate || appData.createdAt, 'Not submitted')}</span>
-            </div>
-          </div>
-          <div className="ad-meta-action">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Button
               variant="outline"
               size="sm"
@@ -1240,7 +1199,19 @@ export default function CustomerRegistration() {
             >
               View Aadhaar
             </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={ArrowLeftIcon ? <ArrowLeftIcon size={14} /> : null}
+              onClick={handleBack}
+            >
+              Back to KYC Documents
+            </Button>
           </div>
+        </div>
+
+        <div className="ad-premium-header-bottom">
+          <ApplicationTopSummary appData={appData} appId={appId} />
         </div>
       </header>
 

@@ -99,7 +99,7 @@ export default function ScheduleOfCharges() {
   };
 
   const handleBack = () => {
-    navigate(ROUTES.SOURCING.replace(':applicationId', appId));
+    navigate(ROUTES.REFERENCES.replace(':applicationId', appId));
   };
 
   return (
@@ -107,10 +107,10 @@ export default function ScheduleOfCharges() {
       appId={appId}
       appData={appData}
       steps={APPLICATION_WIZARD_STEPS}
-      activeStep={10}
-      title="Step 10: Schedule of Charges"
+      activeStep={9}
+      title="Step 9: Schedule of Charges"
       subtitle="Read-only charge matrix aligned to the PDF structure."
-      backLabel="Back to Sourcing"
+      backLabel="Back to References"
       continueLabel="Save & Continue"
       onBack={handleBack}
       onContinue={handleContinue}
@@ -122,7 +122,7 @@ export default function ScheduleOfCharges() {
           icon={ArrowLeftIcon ? <ArrowLeftIcon size={14} /> : null}
           onClick={handleBack}
         >
-          Back to Sourcing
+          Back to References
         </Button>
       }
       showContinue

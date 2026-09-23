@@ -10,7 +10,6 @@ export const APPLICATION_WIZARD_STEPS = [
   { id: 'bank-existing-loans', label: 'Banking', route: ROUTES.BANK_EXISTING_LOANS },
   { id: 'collateral', label: 'Collateral', route: ROUTES.COLLATERAL },
   { id: 'references', label: 'Reference', route: ROUTES.REFERENCES },
-  { id: 'sourcing', label: 'Sourcing', route: ROUTES.SOURCING },
   { id: 'schedule-charges', label: 'Charges', route: ROUTES.SCHEDULE_CHARGES },
   { id: 'document-checklist', label: 'Checklist', route: ROUTES.DOCUMENT_CHECKLIST },
   { id: 'declaration', label: 'Declaration', route: ROUTES.DECLARATION },

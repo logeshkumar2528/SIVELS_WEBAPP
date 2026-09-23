@@ -279,7 +279,7 @@ export default function ReferenceDetails() {
     }
 
     saveApplication(appId, buildSectionUpdate(appData, 'references', form));
-    navigate(ROUTES.SOURCING.replace(':applicationId', appId));
+    navigate(ROUTES.SCHEDULE_CHARGES.replace(':applicationId', appId));
   };
 
   const handleBack = () => {
