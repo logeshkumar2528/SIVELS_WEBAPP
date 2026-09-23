@@ -263,10 +263,13 @@ function ViewCustomerModal({ customer, onClose }) {
   const status = customer.status || 'Draft'
   
   // Resolve Names
-  let loanPurposeName = customer.loanPurposeName || customer.productName
+  let loanPurposeName = customer.loanPurposeName
   if (!loanPurposeName && customer.loanPurposeId) {
     const p = loanPurposes.find(x => Number(x.loanPurposeId || x.id) === Number(customer.loanPurposeId))
-    if (p) loanPurposeName = p.productName || p.name
+    if (p) loanPurposeName = p.purposeName || p.name || p.productName
+  }
+  if (!loanPurposeName) {
+    loanPurposeName = customer.productName
   }
   
   let employmentTypeName = customer.employmentTypeName

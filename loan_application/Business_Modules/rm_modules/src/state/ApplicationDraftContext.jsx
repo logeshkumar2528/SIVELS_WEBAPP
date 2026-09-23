@@ -845,7 +845,17 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   };
 
   const mapPersonalPerson = (persRow = {}, draftPers = {}, kycRow = {}, defaultName = '', defaultMobile = '', defaultEmail = '', isPrimary = false) => {
-    const personalInformationId = persRow.personalInformationId ?? persRow.PersonalInformationId ?? draftPers.personalInformationId ?? null;
+    const rawPersId = persRow.personalInformationId ?? persRow.PersonalInformationId;
+    const rawDraftPersId = draftPers.personalInformationId;
+    const fallbackDraftPersId = isPrimary
+      ? (
+          existingDraft.registration?.personalInformation?.applicant?.personalInformationId ||
+          existingDraft.sections?.personalInformation?.applicant?.personalInformationId ||
+          existingDraft.personalInformation?.applicant?.personalInformationId ||
+          null
+        )
+      : null;
+    const personalInformationId = rawPersId ?? rawDraftPersId ?? fallbackDraftPersId ?? null;
     const relationshipWithApplicant = persRow.relationshipId ?? persRow.RelationshipId ?? persRow.relationshipWithApplicant ?? persRow.RelationshipWithApplicant ?? draftPers.relationshipWithApplicant ?? (isPrimary ? 'SELF' : '');
     const title = persRow.titleId ?? persRow.TitleId ?? persRow.title ?? persRow.Title ?? draftPers.title ?? '';
     const firstName = persRow.firstName ?? persRow.FirstName ?? (isPrimary ? (defaultName || draftPers.firstName || '') : (draftPers.firstName || ''));
@@ -901,8 +911,17 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     return mapPersonalPerson(coPers, draftCo, coApplicantKycs[idx], '', '', '', false);
   });
 
-  const draftApplicant = existingDraft.registration?.personalInformation?.applicant || existingDraft.personalInformation?.applicant || {};
-  const draftAppId = draftApplicant.personalInformationId;
+  const draftApplicant =
+    existingDraft.registration?.personalInformation?.applicant ||
+    existingDraft.sections?.personalInformation?.applicant ||
+    existingDraft.personalInformation?.applicant ||
+    {};
+  const draftAppId =
+    draftApplicant.personalInformationId ??
+    existingDraft.registration?.personalInformation?.applicant?.personalInformationId ??
+    existingDraft.sections?.personalInformation?.applicant?.personalInformationId ??
+    existingDraft.personalInformation?.applicant?.personalInformationId ??
+    null;
   const isDraftAppIdConflicting = draftAppId && coApplicantPersonalIds.has(Number(draftAppId));
 
   const cleanDraftApplicant = isDraftAppIdConflicting
@@ -917,7 +936,10 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
         gender: '',
         maritalStatus: '',
       }
-    : draftApplicant;
+    : {
+        ...draftApplicant,
+        personalInformationId: draftAppId,
+      };
 
   const mappedApplicant = mapPersonalPerson(
     applicantPers || {},
@@ -1129,11 +1151,16 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   });
 
   const addressDetails = {
-    applicant: mapAddressPerson(applicantAddr, existingDraft.addressDetails?.applicant, 0, applicantPers?.personalInformationId),
+    applicant: mapAddressPerson(
+      applicantAddr,
+      existingDraft.addressDetails?.applicant || existingDraft.sections?.addressDetails?.applicant,
+      0,
+      mappedApplicant?.personalInformationId || applicantPers?.personalInformationId
+    ),
     coApplicants: Array.from({ length: Number(coApplicantsCount) || 0 }, (_, idx) => {
       const coAddr = coApplicantAddrsList[idx] || {};
-      const draftCo = existingDraft.addressDetails?.coApplicants?.[idx] || {};
-      return mapAddressPerson(coAddr, draftCo, idx + 1, coApplicantPersList[idx]?.personalInformationId);
+      const draftCo = existingDraft.addressDetails?.coApplicants?.[idx] || existingDraft.sections?.addressDetails?.coApplicants?.[idx] || {};
+      return mapAddressPerson(coAddr, draftCo, idx + 1, mappedCoApplicants[idx]?.personalInformationId || coApplicantPersList[idx]?.personalInformationId);
     }),
   };
 

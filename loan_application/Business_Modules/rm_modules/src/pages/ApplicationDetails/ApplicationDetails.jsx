@@ -489,6 +489,28 @@ export default function ApplicationDetails() {
     loadAllMasters();
   }, []);
 
+  // Auto-resolve Loan Product from Loan Purpose Master relation
+  useEffect(() => {
+    if (loanPurposeOptions.length === 0 || !appData.purposeOfLoan) {
+      return;
+    }
+
+    const matchedPurpose = loanPurposeOptions.find(
+      (option) => String(option.value) === String(appData.purposeOfLoan)
+    );
+
+    const relatedLoanProductId =
+      matchedPurpose?.raw?.loanProductId ??
+      matchedPurpose?.raw?.LoanProductId;
+
+    if (
+      relatedLoanProductId &&
+      (!appData.loanProduct || String(appData.loanProduct) !== String(relatedLoanProductId))
+    ) {
+      saveApplication(appId, { loanProduct: relatedLoanProductId });
+    }
+  }, [appId, appData.purposeOfLoan, appData.loanProduct, loanPurposeOptions, saveApplication]);
+
   const selectedProduct = loanProductOptions.find(p => p.value === appData.loanProduct || (appData.loanProduct !== '' && appData.loanProduct !== null && appData.loanProduct !== undefined && String(p.value) === String(appData.loanProduct)));
   const requiresVariation = selectedProduct?.raw?.productCode === 'HL' || selectedProduct?.raw?.productCode === 'LAP';
   const variationOptions = useMemo(
@@ -582,6 +604,21 @@ export default function ApplicationDetails() {
 
     const updates = { [field]: nextValue };
 
+    if (field === 'purposeOfLoan') {
+      const matched = loanPurposeOptions.find((option) => String(option.value) === String(rawValue));
+      const relatedLoanProductId = matched?.raw?.loanProductId ?? matched?.raw?.LoanProductId;
+      if (relatedLoanProductId) {
+        updates.loanProduct = relatedLoanProductId;
+        const selectedProd = loanProductOptions.find((p) => String(p.value) === String(relatedLoanProductId));
+        const isVariationRequired = selectedProd?.raw?.productCode === 'HL' || selectedProd?.raw?.productCode === 'LAP';
+        if (!isVariationRequired) {
+          updates.loanVariation = '';
+        }
+        updates.roi = '';
+        updates.loanTenureMonths = '';
+      }
+    }
+
     if (field === 'loanProduct') {
       const selected = loanProductOptions.find((product) => product.value === rawValue);
       const isVariationRequired = selected?.raw?.productCode === 'HL' || selected?.raw?.productCode === 'LAP';
@@ -596,7 +633,8 @@ export default function ApplicationDetails() {
     setErrors((current) => {
       const nextErrors = { ...current };
       delete nextErrors[field];
-      if (field === 'loanProduct') {
+      if (field === 'loanProduct' || (field === 'purposeOfLoan' && updates.loanProduct)) {
+        delete nextErrors.loanProduct;
         delete nextErrors.loanVariation;
         delete nextErrors.roi;
         delete nextErrors.loanTenureMonths;

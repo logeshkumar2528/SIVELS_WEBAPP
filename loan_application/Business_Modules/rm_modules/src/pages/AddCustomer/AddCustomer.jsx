@@ -586,7 +586,7 @@ export default function AddCustomer() {
 
   const loanPurposeOptions = loanPurposes.map((purpose) => ({
     value: String(purpose.loanPurposeId || purpose.id),
-    label: purpose.productName || purpose.purposeName || purpose.name || 'Loan Purpose',
+    label: purpose.purposeName || purpose.name || purpose.productName || 'Loan Purpose',
   }));
 
   const employmentPlaceholder = loadingMasters

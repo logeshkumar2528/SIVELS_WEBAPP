@@ -4754,11 +4754,26 @@ export default function KycDocuments() {
       const updatedForm = {
         applicant: {
           ...form.applicant,
-          // The Main Applicant KYC id is intentionally NOT persisted to the draft.
-          // It is re-resolved live from (applicationProductDetailsId, applicantSequence 0)
-          // on every visit, so no stale browser-held id can ever become an upload target.
-          kycDocumentId: null,
-          applicationKYCDocumentId: null,
+          kycDocumentId:
+            form.applicant.kycDocumentId ||
+            form.applicant.applicationKYCDocumentId ||
+            allPersons[0]?.kycDocumentId ||
+            allPersons[0]?.applicationKYCDocumentId ||
+            appData.kycDocuments?.applicant?.kycDocumentId ||
+            appData.kycDocuments?.applicant?.applicationKYCDocumentId ||
+            appData.sections?.kycDocuments?.applicant?.kycDocumentId ||
+            appData.sections?.kycDocuments?.applicant?.applicationKYCDocumentId ||
+            null,
+          applicationKYCDocumentId:
+            form.applicant.applicationKYCDocumentId ||
+            form.applicant.kycDocumentId ||
+            allPersons[0]?.applicationKYCDocumentId ||
+            allPersons[0]?.kycDocumentId ||
+            appData.kycDocuments?.applicant?.applicationKYCDocumentId ||
+            appData.kycDocuments?.applicant?.kycDocumentId ||
+            appData.sections?.kycDocuments?.applicant?.applicationKYCDocumentId ||
+            appData.sections?.kycDocuments?.applicant?.kycDocumentId ||
+            null,
           numberOfDocuments: Number(allPersons[0].numberOfDocuments) || 0,
           documentPath: allPersons[0].documentPath || null,
           aadharDocumentPath: allPersons[0].aadharDocumentPath || form.applicant.aadharDocumentPath || null,

@@ -12,7 +12,7 @@ function Dashboard() {
   const navigate = useNavigate()
   const { currentUser } = useAuth()
   const { agentData, loadingAgent } = useAgentIdentity()
-  const [showSubmittedCustomers, setShowSubmittedCustomers] = useState(false)
+  const [activeSection, setActiveSection] = useState('pending-loans')
 
   if (loadingAgent && !agentData && !currentUser) {
     return (
@@ -50,12 +50,17 @@ function Dashboard() {
       </div>
 
       {/* 4 Stat Cards */}
-      <StatCards onTotalSubmittedClick={() => setShowSubmittedCustomers((isOpen) => !isOpen)} />
+      <StatCards
+        activeSection={activeSection}
+        onTotalSubmittedClick={() => setActiveSection('submitted')}
+      />
 
-      {showSubmittedCustomers && <SubmittedCustomers />}
-
-      {/* Pending Loans Table */}
-      <PendingLoans />
+      {/* Conditional Table Rendering */}
+      {activeSection === 'submitted' ? (
+        <SubmittedCustomers />
+      ) : (
+        <PendingLoans />
+      )}
     </div>
   )
 }

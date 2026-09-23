@@ -8,6 +8,11 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+const MONTH_NAMES_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+];
+
 const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
 // Generate years from 1900 to current year + 10
@@ -22,14 +27,52 @@ function getFirstDayOfMonth(year, month) {
   return new Date(year, month, 1).getDay();
 }
 
-function formatDateDisplay(dateStr) {
+function toDateStr(year, month, day) {
+  const y = String(year);
+  const m = String(month + 1).padStart(2, '0');
+  const d = String(day).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function formatSingleDate(dateStr) {
   if (!dateStr) return '';
+  const parts = String(dateStr).split('T')[0].split('-');
+  if (parts.length === 3) {
+    const year = parseInt(parts[0], 10);
+    const monthIdx = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    if (!isNaN(year) && !isNaN(monthIdx) && !isNaN(day) && monthIdx >= 0 && monthIdx < 12) {
+      const dayStr = String(day).padStart(2, '0');
+      const monthStr = MONTH_NAMES_SHORT[monthIdx];
+      return `${dayStr} ${monthStr} ${year}`;
+    }
+  }
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
+  if (isNaN(d.getTime())) return String(dateStr);
+  const dayStr = String(d.getDate()).padStart(2, '0');
+  const monthStr = MONTH_NAMES_SHORT[d.getMonth()];
   const year = d.getFullYear();
-  return `${day} - ${month} - ${year}`;
+  return `${dayStr} ${monthStr} ${year}`;
+}
+
+function formatRangeDisplay(value, tempStart) {
+  if (tempStart) {
+    return `${formatSingleDate(tempStart)} - Select end date`;
+  }
+  if (value && typeof value === 'object') {
+    const { startDate, endDate } = value;
+    if (startDate && endDate) {
+      return `${formatSingleDate(startDate)} - ${formatSingleDate(endDate)}`;
+    }
+    if (startDate) {
+      return `${formatSingleDate(startDate)}`;
+    }
+    return '';
+  }
+  if (typeof value === 'string' && value) {
+    return formatSingleDate(value);
+  }
+  return '';
 }
 
 export default function DatePicker({
@@ -43,35 +86,61 @@ export default function DatePicker({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [rect, setRect] = useState(null);
+  const [tempStart, setTempStart] = useState(null);
   const triggerRef = useRef(null);
-  
-  const initialDate = value && !isNaN(new Date(value).getTime()) ? new Date(value) : new Date();
-  const [viewDate, setViewDate] = useState(initialDate);
+
+  // Determine initial view date from value
+  const getInitialDate = () => {
+    let dateVal = null;
+    if (value && typeof value === 'object') {
+      dateVal = value.startDate || value.endDate;
+    } else if (typeof value === 'string' && value) {
+      dateVal = value;
+    }
+    if (dateVal && !isNaN(new Date(dateVal).getTime())) {
+      return new Date(dateVal);
+    }
+    return new Date();
+  };
+
+  const [viewDate, setViewDate] = useState(getInitialDate);
 
   useEffect(() => {
-    if (value && !isNaN(new Date(value).getTime())) {
-      setViewDate(new Date(value));
+    let dateVal = null;
+    if (value && typeof value === 'object') {
+      dateVal = value.startDate || value.endDate;
+    } else if (typeof value === 'string' && value) {
+      dateVal = value;
+    }
+    if (dateVal && !isNaN(new Date(dateVal).getTime())) {
+      setViewDate(new Date(dateVal));
     }
   }, [value]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setTempStart(null);
+      return;
+    }
 
     const handleDocumentClick = (e) => {
       if (triggerRef.current && triggerRef.current.contains(e.target)) return;
       if (e.target instanceof Element && e.target.closest('.agent-datepicker-dropdown')) return;
       setIsOpen(false);
+      setTempStart(null);
     };
 
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         setIsOpen(false);
+        setTempStart(null);
       }
     };
 
     const handleScroll = (e) => {
       if (e.target instanceof Element && e.target.closest('.agent-datepicker-dropdown')) return;
       setIsOpen(false);
+      setTempStart(null);
     };
 
     document.addEventListener('mousedown', handleDocumentClick);
@@ -95,7 +164,7 @@ export default function DatePicker({
       const spaceAbove = r.top;
       // Dropdown needs ~340px
       const openUp = spaceBelow < 340 && spaceAbove > spaceBelow;
-      
+
       setRect({
         bottom: r.bottom,
         top: r.top,
@@ -103,12 +172,9 @@ export default function DatePicker({
         width: r.width,
         openUp
       });
-      
-      if (value && !isNaN(new Date(value).getTime())) {
-        setViewDate(new Date(value));
-      } else {
-        setViewDate(new Date());
-      }
+
+      setTempStart(null);
+      setViewDate(getInitialDate());
     }
     setIsOpen(!isOpen);
   };
@@ -124,33 +190,46 @@ export default function DatePicker({
   };
 
   const handleMonthChange = (e) => {
-    setViewDate(new Date(viewDate.getFullYear(), parseInt(e.target.value), 1));
+    setViewDate(new Date(viewDate.getFullYear(), parseInt(e.target.value, 10), 1));
   };
 
   const handleYearChange = (e) => {
-    setViewDate(new Date(parseInt(e.target.value), viewDate.getMonth(), 1));
+    setViewDate(new Date(parseInt(e.target.value, 10), viewDate.getMonth(), 1));
   };
 
   const handleDateSelect = (day) => {
-    const selected = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
-    const offset = selected.getTimezoneOffset();
-    selected.setMinutes(selected.getMinutes() - offset);
-    onChange(selected.toISOString().split('T')[0]);
-    setIsOpen(false);
+    const clickedDateStr = toDateStr(viewDate.getFullYear(), viewDate.getMonth(), day);
+
+    if (!tempStart) {
+      // First click: select start date and keep calendar open
+      setTempStart(clickedDateStr);
+    } else {
+      // Second click: determine start and end date
+      let startDate = tempStart;
+      let endDate = clickedDateStr;
+      if (clickedDateStr < tempStart) {
+        startDate = clickedDateStr;
+        endDate = tempStart;
+      }
+      onChange && onChange({ startDate, endDate });
+      setTempStart(null);
+      setIsOpen(false);
+    }
   };
 
   const handleClear = (e) => {
     e.stopPropagation();
-    onChange('');
+    setTempStart(null);
+    onChange && onChange({ startDate: '', endDate: '' });
     setIsOpen(false);
   };
 
   const handleToday = (e) => {
     e.stopPropagation();
     const today = new Date();
-    const offset = today.getTimezoneOffset();
-    today.setMinutes(today.getMinutes() - offset);
-    onChange(today.toISOString().split('T')[0]);
+    const todayStr = toDateStr(today.getFullYear(), today.getMonth(), today.getDate());
+    onChange && onChange({ startDate: todayStr, endDate: todayStr });
+    setTempStart(null);
     setIsOpen(false);
   };
 
@@ -160,15 +239,27 @@ export default function DatePicker({
     const daysInMonth = getDaysInMonth(year, month);
     const firstDay = getFirstDayOfMonth(year, month);
     const daysInPrevMonth = getDaysInMonth(year, month - 1);
-    
+
     const maxDate = max ? new Date(max) : null;
     if (maxDate) maxDate.setHours(23, 59, 59, 999);
-    
+
     const today = new Date();
-    today.setHours(0,0,0,0);
-    
-    const selectedDate = value && !isNaN(new Date(value).getTime()) ? new Date(value) : null;
-    if (selectedDate) selectedDate.setHours(0,0,0,0);
+    const todayStr = toDateStr(today.getFullYear(), today.getMonth(), today.getDate());
+
+    // Resolve active range boundaries
+    let rangeStart = null;
+    let rangeEnd = null;
+
+    if (tempStart) {
+      rangeStart = tempStart;
+      rangeEnd = null;
+    } else if (value && typeof value === 'object') {
+      rangeStart = value.startDate || null;
+      rangeEnd = value.endDate || null;
+    } else if (typeof value === 'string' && value) {
+      rangeStart = value;
+      rangeEnd = value;
+    }
 
     const days = [];
 
@@ -183,17 +274,33 @@ export default function DatePicker({
 
     // Current month days
     for (let i = 1; i <= daysInMonth; i++) {
+      const currentDateStr = toDateStr(year, month, i);
       const currentDate = new Date(year, month, i);
-      currentDate.setHours(0,0,0,0);
-      
-      const isToday = currentDate.getTime() === today.getTime();
-      const isSelected = selectedDate && currentDate.getTime() === selectedDate.getTime();
       const isDisabled = maxDate && currentDate > maxDate;
 
+      const isToday = currentDateStr === todayStr;
+      const isRangeStart = rangeStart && currentDateStr === rangeStart;
+      const isRangeEnd = rangeEnd && currentDateStr === rangeEnd;
+      const isInRange = rangeStart && rangeEnd && currentDateStr > rangeStart && currentDateStr < rangeEnd;
+
+      let dayClasses = ['agent-datepicker-day'];
+      if (isToday) dayClasses.push('today');
+      if (isDisabled) dayClasses.push('disabled');
+
+      if (isRangeStart && isRangeEnd) {
+        dayClasses.push('selected', 'range-start', 'range-end', 'single-range');
+      } else if (isRangeStart) {
+        dayClasses.push('selected', 'range-start');
+      } else if (isRangeEnd) {
+        dayClasses.push('selected', 'range-end');
+      } else if (isInRange) {
+        dayClasses.push('in-range');
+      }
+
       days.push(
-        <div 
-          key={`day-${i}`} 
-          className={`agent-datepicker-day ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`}
+        <div
+          key={`day-${i}`}
+          className={dayClasses.join(' ')}
           onClick={() => !isDisabled && handleDateSelect(i)}
         >
           {i}
@@ -215,9 +322,11 @@ export default function DatePicker({
     return days;
   };
 
+  const displayText = formatRangeDisplay(value, tempStart);
+
   return (
     <div className={`agent-datepicker-container ${disabled ? 'is-disabled' : ''}`}>
-      <div 
+      <div
         ref={triggerRef}
         className={`agent-datepicker-trigger ${error ? 'has-error' : ''} ${isOpen ? 'is-open' : ''} ${className}`}
         onClick={handleToggle}
@@ -230,18 +339,18 @@ export default function DatePicker({
         }}
       >
         <CalendarIcon className="agent-datepicker-icon" size={16} />
-        <span className={`agent-datepicker-value ${!value ? 'is-placeholder' : ''}`}>
-          {value ? formatDateDisplay(value) : placeholder}
+        <span className={`agent-datepicker-value ${!displayText ? 'is-placeholder' : ''}`}>
+          {displayText || placeholder}
         </span>
       </div>
 
       {isOpen && rect && createPortal(
-        <div 
+        <div
           className={`agent-datepicker-dropdown ${rect.openUp ? 'open-up' : 'open-down'}`}
           style={{
             position: 'fixed',
-            ...(rect.openUp 
-                ? { bottom: `${window.innerHeight - rect.top + 4}px` } 
+            ...(rect.openUp
+                ? { bottom: `${window.innerHeight - rect.top + 4}px` }
                 : { top: `${rect.bottom + 4}px` }),
             left: `${rect.left}px`,
             zIndex: 99999
@@ -251,20 +360,20 @@ export default function DatePicker({
             <button onClick={handlePrevMonth} type="button" aria-label="Previous Month">
               <ChevronLeft size={16} />
             </button>
-            
+
             <div className="agent-datepicker-month-year">
-              <select 
-                className="agent-datepicker-select" 
-                value={viewDate.getMonth()} 
+              <select
+                className="agent-datepicker-select"
+                value={viewDate.getMonth()}
                 onChange={handleMonthChange}
               >
                 {MONTHS.map((m, i) => (
                   <option key={m} value={i}>{m}</option>
                 ))}
               </select>
-              <select 
-                className="agent-datepicker-select" 
-                value={viewDate.getFullYear()} 
+              <select
+                className="agent-datepicker-select"
+                value={viewDate.getFullYear()}
                 onChange={handleYearChange}
               >
                 {YEARS.map(y => (

@@ -885,11 +885,33 @@ export default function CustomerRegistration() {
       for (const person of allPersons) {
         // Find corresponding KYC doc ID
         const kycDocId = person.isPrimary 
-          ? appData.kycDocuments?.applicant?.kycDocumentId || appData.sections?.kycDocuments?.applicant?.kycDocumentId
-          : appData.kycDocuments?.coApplicants?.[person.index]?.kycDocumentId || appData.sections?.kycDocuments?.coApplicants?.[person.index]?.kycDocumentId;
+          ? (
+              appData.kycDocuments?.applicant?.kycDocumentId ||
+              appData.kycDocuments?.applicant?.applicationKYCDocumentId ||
+              appData.sections?.kycDocuments?.applicant?.kycDocumentId ||
+              appData.sections?.kycDocuments?.applicant?.applicationKYCDocumentId ||
+              appData.applicationKYCDocumentId ||
+              null
+            )
+          : (
+              appData.kycDocuments?.coApplicants?.[person.index]?.kycDocumentId ||
+              appData.kycDocuments?.coApplicants?.[person.index]?.applicationKYCDocumentId ||
+              appData.sections?.kycDocuments?.coApplicants?.[person.index]?.kycDocumentId ||
+              appData.sections?.kycDocuments?.coApplicants?.[person.index]?.applicationKYCDocumentId ||
+              null
+            );
+
+        if (!kycDocId && person.isPrimary) {
+          setErrorPopup({
+            title: 'Missing KYC Document',
+            message: 'Applicant KYC document information is missing. Please complete KYC before saving Personal Information.',
+            variant: 'validation',
+          });
+          return;
+        }
 
         if (!kycDocId) {
-          console.warn('No KYC Document ID found for person, skipping API save');
+          console.warn(`No KYC Document ID found for Co-Applicant ${person.index + 1}, skipping API save`);
           continue;
         }
 
@@ -1018,10 +1040,21 @@ export default function CustomerRegistration() {
         }
       }
 
+      // Verify that applicant personalInformationId was successfully saved/resolved
+      const applicantSavedId = allPersons[0]?.personalInformationId;
+      if (!applicantSavedId || isNaN(Number(applicantSavedId)) || Number(applicantSavedId) <= 0) {
+        setErrorPopup({
+          title: 'Save Incomplete',
+          message: 'Personal Information could not be confirmed for Applicant. Please try saving again.',
+          variant: 'error',
+        });
+        return;
+      }
+
       // Sync updated IDs back to form state
       const finalForm = {
         ...form,
-        applicant: { ...form.applicant, personalInformationId: allPersons[0].personalInformationId },
+        applicant: { ...form.applicant, personalInformationId: Number(applicantSavedId) },
         coApplicants: form.coApplicants.map((co, i) => ({
           ...co,
           personalInformationId: allPersons[i + 1]?.personalInformationId || co.personalInformationId

@@ -7,7 +7,7 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  min-height: 100%;
+  min-height: 0;
   box-sizing: border-box;
 }
 
@@ -61,7 +61,7 @@
   border: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  flex: 1;
+  flex: 0 1 auto;
   overflow: hidden;
 }
 
@@ -173,9 +173,10 @@
 
 /* Table Wrapper */
 .history-table-wrapper {
-  flex: 1;
+  flex: 0 1 auto;
   overflow-x: auto;
   overflow-y: auto;
+  max-height: calc(100vh - 240px);
 }
 
 .history-table {
@@ -246,6 +247,12 @@
   font-size: 13px;
   font-weight: 700;
   flex-shrink: 0;
+}
+
+.history-avatar-img {
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
 }
 
 .avatar--R { background-color: #D1FAE5; color: #065F46; }

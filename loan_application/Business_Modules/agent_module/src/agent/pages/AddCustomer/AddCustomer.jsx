@@ -381,14 +381,30 @@ function AddCustomer() {
       isValid = false
     }
 
-    // Document Validation
-    for (const mapping of documentMappings) {
-      if (mapping.isMandatory && !uploadedDocuments.includes(mapping.documentTypeId)) {
+    // Required Documents Validation
+    if (formData.employmentTypeId && loadingMapping) {
+      setGlobalError('Loading required documents. Please wait.')
+      isValid = false
+    } else if (documentMappings.length > 0) {
+      const missingDocuments = []
+
+      for (const mapping of documentMappings) {
+        const isUploaded = uploadedDocuments.includes(mapping.documentTypeId)
         const files = selectedFiles[mapping.documentTypeId]
-        if (!files || (Array.isArray(files) && files.length === 0)) {
-          setGlobalError(`Please upload the required document: ${mapping.documentTypeName || 'Document'}.`)
-          isValid = false
-          break // show one document error at a time
+        const isMultiple = (mapping.documentTypeName || '').toLowerCase().includes('other')
+        const hasFile = isMultiple ? (Array.isArray(files) && files.length > 0) : Boolean(files)
+
+        if (!isUploaded && !hasFile) {
+          missingDocuments.push(mapping.documentTypeName || 'Document')
+        }
+      }
+
+      if (missingDocuments.length > 0) {
+        isValid = false
+        if (missingDocuments.length === 1) {
+          setGlobalError(`Please upload the required document: ${missingDocuments[0]}.`)
+        } else {
+          setGlobalError(`Please upload all required documents before continuing: ${missingDocuments.join(', ')}.`)
         }
       }
     }
@@ -545,7 +561,7 @@ function AddCustomer() {
 
   const loanPurposeOptions = loanPurposes.map(purpose => ({
     value: purpose.loanPurposeId || purpose.id,
-    label: purpose.productName || purpose.name
+    label: purpose.purposeName || purpose.name || purpose.productName
   }))
 
   const employmentPlaceholder = loadingMasters 
@@ -781,6 +797,26 @@ function AddCustomer() {
 
                   return (
                     <div key={mapping.documentTypeId} className={`document-upload-card ${hasFile || isUploaded ? 'has-file' : ''}`}>
+                      <div className="document-card-top">
+                        <div className="document-icon-badge">
+                          <IconComponent size={16} strokeWidth={1.8} />
+                        </div>
+                        <div className="document-card-info">
+                          <h4>
+                            {docName}
+                            <span className="required-star">*</span>
+                          </h4>
+                          {!hasFile && !isUploaded && (
+                            <>
+                              <p>Upload clear image of {docName}</p>
+                              <p className="document-card-subtitle">
+                                {isMultiple ? 'Upload multiple files' : 'JPG, PNG or PDF (Max. 10MB)'}
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
                       {isUploaded ? (
                         <div className="file-preview-box" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -840,20 +876,7 @@ function AddCustomer() {
                             )}
                           </div>
                         )
-                      ) : (
-                        <div className="document-card-top">
-                          <div className="document-icon-badge">
-                            <IconComponent size={16} strokeWidth={1.8} />
-                          </div>
-                          <div className="document-card-info">
-                            <h4>{docName}{mapping.isMandatory && <span className="required-star">*</span>}</h4>
-                            <p>Upload clear image of {docName}</p>
-                            <p className="document-card-subtitle">
-                              {isMultiple ? 'Upload multiple files' : 'JPG, PNG or PDF (Max. 10MB)'}
-                            </p>
-                          </div>
-                        </div>
-                      )}
+                      ) : null}
 
                       {!isUploaded && (
                         <div className="file-actions-row">

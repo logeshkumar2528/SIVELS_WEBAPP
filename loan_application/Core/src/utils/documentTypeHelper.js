@@ -196,3 +196,173 @@ export function validateApplicantDocumentFile(file) {
 
   return { valid: true, error: null };
 }
+
+/**
+ * Selects the latest active customer photo document from a document list.
+ * 
+ * Priority:
+ * 1. Latest Updated Photo (newest timestamp / highest ID)
+ * 2. Original Photo (fallback if only one photo exists)
+ * 3. null (triggering initial-letter avatar fallback in UI)
+ * 
+ * @param {Array} docList - List of customer documents
+ * @param {number|string|null} photoDocTypeId - Dynamically resolved DocumentTypeId for Photo
+ * @returns {Object|null} The latest active photo document or null
+ */
+export function selectLatestCustomerPhotoDoc(docList = [], photoDocTypeId = null) {
+  if (!Array.isArray(docList) || docList.length === 0) return null;
+
+  const resolvedTypeIdNum =
+    photoDocTypeId !== null && photoDocTypeId !== undefined && !isNaN(Number(photoDocTypeId))
+      ? Number(photoDocTypeId)
+      : null;
+
+  const photoCandidates = docList.filter((doc) => {
+    if (!doc || doc.isActive === false || doc.IsActive === false) return false;
+
+    const dtId = Number(doc.documentTypeId ?? doc.DocumentTypeId);
+    if (resolvedTypeIdNum !== null && Number.isFinite(dtId) && dtId === resolvedTypeIdNum) {
+      return true;
+    }
+
+    const name = String(
+      doc.documentTypeName ||
+      doc.documentName ||
+      doc.name ||
+      doc.rejectedDocumentType ||
+      ''
+    ).trim().toLowerCase();
+
+    const code = String(doc.documentTypeCode || doc.code || '').trim().toUpperCase();
+
+    return (
+      code === 'PHOTO' ||
+      code === 'PROFILE' ||
+      code === 'PROFILE_IMAGE' ||
+      name === 'photo' ||
+      name === 'profile photo' ||
+      name === 'profile image' ||
+      name === 'applicant photo' ||
+      name === 'profile_image' ||
+      name === 'applicant_profile' ||
+      name === 'applicant_photo'
+    );
+  });
+
+  if (photoCandidates.length === 0) return null;
+
+  // Sort candidates NEWEST FIRST (Descending)
+  photoCandidates.sort((a, b) => {
+    const timeA = new Date(
+      a.resubmittedAt ?? a.ResubmittedAt ?? a.createdAt ?? a.CreatedAt ?? 0
+    ).getTime();
+    const timeB = new Date(
+      b.resubmittedAt ?? b.ResubmittedAt ?? b.createdAt ?? b.CreatedAt ?? 0
+    ).getTime();
+
+    if (timeA !== timeB) {
+      return timeB - timeA; // Newest timestamp first
+    }
+
+    const idA = Number(a.agentCustomerDocumentId ?? a.AgentCustomerDocumentId ?? a.id ?? 0) || 0;
+    const idB = Number(b.agentCustomerDocumentId ?? b.AgentCustomerDocumentId ?? b.id ?? 0) || 0;
+
+    return idB - idA; // Highest/newest ID first
+  });
+
+  return photoCandidates[0];
+}
+
+/**
+ * Selects the latest updated/resubmitted customer photo rejection record.
+ * 
+ * @param {Array} rejectionList - Full list of BackOfficeDocumentRejection records
+ * @param {string|number} customerId - Target agentCustomerId
+ * @param {string|number|null} applicationProductDetailsId - Optional applicationProductDetailsId
+ * @returns {Object|null} The latest updated photo rejection record or null
+ */
+export function selectLatestUpdatedCustomerPhotoRejection(
+  rejectionList = [],
+  customerId = null,
+  applicationProductDetailsId = null
+) {
+  if (!Array.isArray(rejectionList) || rejectionList.length === 0) return null;
+  if (!customerId && !applicationProductDetailsId) return null;
+
+  const targetCustIdStr = customerId !== null && customerId !== undefined ? String(customerId).trim() : '';
+  const targetAppIdStr =
+    applicationProductDetailsId !== null && applicationProductDetailsId !== undefined
+      ? String(applicationProductDetailsId).trim()
+      : '';
+
+  const photoRejections = rejectionList.filter((rej) => {
+    if (!rej || rej.isActive === false || rej.IsActive === false) return false;
+
+    // 1. Customer / Application Ownership Matching
+    const rejCustId = String(rej.agentCustomerId ?? rej.AgentCustomerId ?? '').trim();
+    const rejAppId = String(rej.applicationProductDetailsId ?? rej.ApplicationProductDetailsId ?? '').trim();
+
+    const matchCust = Boolean(targetCustIdStr && rejCustId && rejCustId === targetCustIdStr);
+    const matchApp = Boolean(targetAppIdStr && rejAppId && rejAppId === targetAppIdStr);
+
+    if (!(matchCust || matchApp)) return false;
+
+    // 2. Restrict to Main Applicant (Sequence 0)
+    const rawSeq = rej.applicantSequence ?? rej.ApplicantSequence;
+    const rSeq = rawSeq !== undefined && rawSeq !== null ? Number(rawSeq) : null;
+    if (rSeq !== null && rSeq !== 0) return false;
+
+    // 3. Exclude Co-Applicant document types
+    const rType = String(rej.rejectedDocumentType ?? rej.RejectedDocumentType ?? '').trim().toUpperCase();
+    if (rType.startsWith('CO_APPLICANT') || rType.startsWith('COAPPLICANT')) return false;
+
+    // 4. Photo/Profile Type Matching
+    const isPhotoType =
+      rType === 'PHOTO' ||
+      rType === 'PROFILE' ||
+      rType === 'PROFILE_IMAGE' ||
+      rType === 'PROFILE PHOTO' ||
+      rType === 'PROFILE IMAGE' ||
+      rType === 'APPLICANT PHOTO' ||
+      rType === 'APPLICANT_PHOTO' ||
+      rType === 'APPLICANT_PROFILE' ||
+      rType === 'APPLICANT_PROFILE_IMAGE' ||
+      rType.includes('PHOTO') ||
+      rType.includes('PROFILE');
+
+    if (!isPhotoType) return false;
+
+    // 5. Valid Updated Path Verification
+    const cleanCurr = String(rej.currentDocumentPath ?? rej.CurrentDocumentPath ?? '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
+    const cleanOrig = String(rej.originalDocumentPath ?? rej.OriginalDocumentPath ?? '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
+
+    if (!cleanCurr) return false;
+    if (cleanOrig && cleanCurr.toLowerCase() === cleanOrig.toLowerCase()) return false;
+
+    return true;
+  });
+
+  if (photoRejections.length === 0) return null;
+
+  // 6. Sort Candidates NEWEST FIRST (Descending)
+  photoRejections.sort((a, b) => {
+    const timeA = new Date(
+      a.resubmittedAt ?? a.ResubmittedAt ?? a.verifiedAt ?? a.VerifiedAt ?? a.rejectedAt ?? a.RejectedAt ?? a.createdAt ?? a.CreatedAt ?? 0
+    ).getTime();
+    const timeB = new Date(
+      b.resubmittedAt ?? b.ResubmittedAt ?? b.verifiedAt ?? b.VerifiedAt ?? b.rejectedAt ?? b.RejectedAt ?? b.createdAt ?? b.CreatedAt ?? 0
+    ).getTime();
+
+    if (timeA !== timeB) {
+      return timeB - timeA; // Newest timestamp first
+    }
+
+    const idA = Number(a.backOfficeDocumentRejectionId ?? a.BackOfficeDocumentRejectionId ?? a.id ?? 0) || 0;
+    const idB = Number(b.backOfficeDocumentRejectionId ?? b.BackOfficeDocumentRejectionId ?? b.id ?? 0) || 0;
+
+    return idB - idA; // Highest primary key ID first
+  });
+
+  return photoRejections[0];
+}
+
