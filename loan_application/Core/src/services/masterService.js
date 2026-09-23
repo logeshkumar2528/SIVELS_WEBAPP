@@ -11,6 +11,11 @@ export const masterService = {
     return response.data;
   },
 
+  getLoanProducts: async () => {
+    const response = await axiosInstance.get('/LoanProductMaster');
+    return response.data;
+  },
+
   getDocumentTypes: async () => {
     const response = await axiosInstance.get('/DocumentTypeMaster');
     return response.data;

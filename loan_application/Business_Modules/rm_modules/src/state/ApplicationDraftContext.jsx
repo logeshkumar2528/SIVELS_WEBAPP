@@ -769,7 +769,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
 
   const applicationProductDetailsId = effectiveProductDetails?.applicationProductDetailsId || effectiveProductDetails?.ApplicationProductDetailsId || null;
   const sourcingChannel = effectiveProductDetails?.sourcingChannelId ?? effectiveProductDetails?.SourcingChannelId ?? (isRmSourced ? 1 : (existingDraft.sourcingChannel ?? ''));
-  const loanProduct = effectiveProductDetails?.loanProductId ?? effectiveProductDetails?.LoanProductId ?? '';
+  const loanProduct = effectiveProductDetails?.loanProductId ?? effectiveProductDetails?.LoanProductId ?? customer.loanProductId ?? customer.LoanProductId ?? '';
   const loanVariation = effectiveProductDetails?.loanProductVariationId ?? effectiveProductDetails?.LoanProductVariationId ?? '';
   const loanTransactionType = effectiveProductDetails?.loanTransactionTypeId ?? effectiveProductDetails?.LoanTransactionTypeId ?? '';
   const purposeOfLoan = effectiveProductDetails?.loanPurposeId ?? effectiveProductDetails?.LoanPurposeId ?? customer.loanPurposeId ?? customer.LoanPurposeId ?? '';

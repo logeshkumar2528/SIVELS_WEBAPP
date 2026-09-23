@@ -150,7 +150,7 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
     displayId: buildApplicationDisplayId(item, applicationId),
     customerName: item.fullName || item.customerName || '',
     mobile: normalizeMobile(item.mobileNumber || item.mobile || ''),
-    loanType: item.loanPurposeName || item.loanType || '',
+    loanType: item.loanProductName || item.loanPurposeName || item.loanType || '',
     amount: formatCurrency(item.expectedLoanAmount ?? item.amount),
     agentName: ownership.agentName,
     createdDate: formatDate(item.createdAt || item.createdDate),
