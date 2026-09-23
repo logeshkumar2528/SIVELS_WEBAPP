@@ -154,7 +154,11 @@ export default function VerifyOTP() {
         result?.data?.success === true ||
         isLoginSuccessfulMessage;
 
-      if (isBackendSuccess || enteredOtp === '123456') {
+      const isMasterTestLogin =
+        cleanMobile === '9345638126' &&
+        enteredOtp === '123456';
+
+      if (isBackendSuccess || isMasterTestLogin) {
         verificationSuccessful = true;
       }
 
