@@ -69,7 +69,7 @@ function ReferenceCard({
         </div>
       </div>
       <div className="aw-mini-card__body">
-        <div className="aw-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', alignItems: 'start' }}>
           <div className="aw-field">
             <label className="form-label">Name</label>
             <div className="aw-input-wrapper">
@@ -319,7 +319,7 @@ export default function ReferenceDetails() {
         </Button>
       }
     >
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', alignItems: 'start' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <ReferenceCard
           title="REFERENCE 1"
           reference={form.reference1}
