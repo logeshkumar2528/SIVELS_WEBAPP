@@ -505,11 +505,33 @@ export default function ApplicationDetails() {
 
     if (
       relatedLoanProductId &&
-      (!appData.loanProduct || String(appData.loanProduct) !== String(relatedLoanProductId))
+      !appData.loanProduct
     ) {
-      saveApplication(appId, { loanProduct: relatedLoanProductId });
+      saveApplication(appId, {
+        loanProduct: relatedLoanProductId
+      });
     }
   }, [appId, appData.purposeOfLoan, appData.loanProduct, loanPurposeOptions, saveApplication]);
+
+  const filteredLoanPurposeOptions = useMemo(() => {
+    if (!appData.loanProduct) {
+      return [];
+    }
+
+    return loanPurposeOptions.filter((option) => {
+      const raw = option.raw;
+
+      if (!raw || raw.isActive === false) {
+        return false;
+      }
+
+      const relatedProductId =
+        raw.loanProductId ??
+        raw.LoanProductId;
+
+      return String(relatedProductId) === String(appData.loanProduct);
+    });
+  }, [loanPurposeOptions, appData.loanProduct]);
 
   const selectedProduct = loanProductOptions.find(p => p.value === appData.loanProduct || (appData.loanProduct !== '' && appData.loanProduct !== null && appData.loanProduct !== undefined && String(p.value) === String(appData.loanProduct)));
   const requiresVariation = selectedProduct?.raw?.productCode === 'HL' || selectedProduct?.raw?.productCode === 'LAP';
@@ -627,6 +649,21 @@ export default function ApplicationDetails() {
       }
       updates.roi = '';
       updates.loanTenureMonths = '';
+
+      if (appData.purposeOfLoan) {
+        const currentPurpose = loanPurposeOptions.find(
+          (option) =>
+            String(option.value) ===
+            String(appData.purposeOfLoan)
+        );
+        const currentPurposeProductId =
+          currentPurpose?.raw?.loanProductId ??
+          currentPurpose?.raw?.LoanProductId;
+
+        if (!rawValue || String(currentPurposeProductId) !== String(rawValue)) {
+          updates.purposeOfLoan = '';
+        }
+      }
     }
 
     saveApplication(appId, updates);
@@ -1177,10 +1214,18 @@ export default function ApplicationDetails() {
                       error={!!errors.purposeOfLoan}
                       value={appData.purposeOfLoan || ''}
                       onChange={(val) => updateField('purposeOfLoan', val)}
-                      placeholder={isLoadingMasters ? "Loading..." : "Select loan purpose"}
-                      options={loanPurposeOptions}
+                      placeholder={
+                        isLoadingMasters
+                          ? "Loading..."
+                          : !appData.loanProduct
+                          ? "Select loan product first"
+                          : filteredLoanPurposeOptions.length === 0
+                          ? "No purpose configured for this loan product"
+                          : "Select loan purpose"
+                      }
+                      options={filteredLoanPurposeOptions}
                       icon={<Target size={16} />}
-                      disabled={isLoadingMasters}
+                      disabled={isLoadingMasters || !appData.loanProduct || filteredLoanPurposeOptions.length === 0}
                     />
                   </div>
                   {errors.purposeOfLoan && <span className="ad-field-error">{errors.purposeOfLoan}</span>}
