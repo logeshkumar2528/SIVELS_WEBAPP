@@ -8873,6 +8873,26 @@
   border: 1px solid #e2e8f0 !important;
 }
 
+.bo-cv-status-badge--not-required {
+  background: #f1f5f9 !important;
+  color: #64748b !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+.bo-cv-status-badge--not-required .bo-cv-badge-dot {
+  background-color: #94a3b8 !important;
+}
+
+.bo-cv-status-badge--optional {
+  background: #f0fdf4 !important;
+  color: #166534 !important;
+  border: 1px solid #bbf7d0 !important;
+}
+
+.bo-cv-status-badge--optional .bo-cv-badge-dot {
+  background-color: #22c55e !important;
+}
+
 .bo-cv-badge-dot {
   width: 5.5px;
   height: 5.5px;

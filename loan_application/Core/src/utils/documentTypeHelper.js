@@ -366,3 +366,53 @@ export function selectLatestUpdatedCustomerPhotoRejection(
   return photoRejections[0];
 }
 
+/**
+ * Evaluates whether a document type is applicable/required for a given employment type.
+ * Based strictly on active EmploymentTypeDocumentMapping records.
+ *
+ * @param {Object} params
+ * @param {number|string|null} params.documentTypeId - Resolved DocumentTypeMaster ID
+ * @param {number|string|null} params.employmentTypeId - Applicant or co-applicant employmentTypeId
+ * @param {Array} params.mappings - Full or filtered list from /EmploymentTypeDocumentMapping
+ * @returns {{ isRequired: boolean, isOptional: boolean, isNotRequired: boolean, isMapped: boolean }}
+ */
+export function getDocumentApplicability({ documentTypeId, employmentTypeId, mappings = [] }) {
+  const dId = Number(documentTypeId);
+  const eId = Number(employmentTypeId);
+
+  // If IDs are missing or mappings not yet loaded, avoid falsely declaring unmapped
+  if (!dId || !eId || !Array.isArray(mappings) || mappings.length === 0) {
+    return {
+      isRequired: true,
+      isOptional: false,
+      isNotRequired: false,
+      isMapped: false,
+    };
+  }
+
+  const matched = mappings.find(
+    (m) =>
+      m &&
+      m.isActive !== false &&
+      Number(m.employmentTypeId) === eId &&
+      Number(m.documentTypeId) === dId
+  );
+
+  if (!matched) {
+    return {
+      isRequired: false,
+      isOptional: false,
+      isNotRequired: true,
+      isMapped: false,
+    };
+  }
+
+  const mandatory = matched.isMandatory !== false;
+  return {
+    isRequired: mandatory,
+    isOptional: !mandatory,
+    isNotRequired: false,
+    isMapped: true,
+  };
+}
+
