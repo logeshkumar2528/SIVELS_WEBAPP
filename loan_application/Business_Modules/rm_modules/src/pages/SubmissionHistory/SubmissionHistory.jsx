@@ -40,7 +40,7 @@ function mapSubmission(record, agentsById = {}, rmsById = {}) {
     id: buildApplicationDisplayId(record, id),
     customerName: record.fullName || record.FullName || record.customerName || 'Unknown',
     mobile: record.mobileNumber || record.MobileNumber || record.mobile || 'N/A',
-    loanType: record.loanPurposeName || record.LoanPurposeName || record.loanType || 'N/A',
+    loanType: record.loanProductName || record.loanPurposeName || record.LoanPurposeName || record.loanType || 'N/A',
     amount: record.expectedLoanAmount == null ? (record.amount || 'N/A') : `Rs. ${Number(record.expectedLoanAmount).toLocaleString('en-IN')}`,
     agentName: ownership.agentName,
     branch,

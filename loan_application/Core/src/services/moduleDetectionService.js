@@ -230,7 +230,7 @@ export async function detectAccountModule(mobileNumber) {
         error: null,
       };
     }
-    if (normalizedMobile === '9345638126' || normalizedMobile === '9841446699') {
+    if (normalizedMobile === '9345638126') {
       return {
         status: 'FOUND',
         role: 'Master',
@@ -280,7 +280,7 @@ export async function detectAccountModule(mobileNumber) {
   }
 
   // Fallback for Master Admin if not in DB
-  if (!detectedUser && (normalizedMobile === '9345638126' || normalizedMobile === '9841446699')) {
+  if (!detectedUser && normalizedMobile === '9345638126') {
     detectedUser = {
       mobileNumber: normalizedMobile,
       fullName: 'Master Admin',

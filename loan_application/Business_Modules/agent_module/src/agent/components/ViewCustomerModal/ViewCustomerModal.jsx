@@ -22,7 +22,6 @@ function ViewCustomerModal({ customer, onClose }) {
   const [viewError, setViewError] = useState('')
   
   // Masters for name lookup if backend only returned IDs
-  const [loanPurposes, setLoanPurposes] = useState([])
   const [employmentTypes, setEmploymentTypes] = useState([])
   const [documentTypes, setDocumentTypes] = useState([])
 
@@ -88,9 +87,8 @@ function ViewCustomerModal({ customer, onClose }) {
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const [docsRes, purpRes, empRes, docTypeRes, rejectionsRes] = await Promise.all([
+        const [docsRes, empRes, docTypeRes, rejectionsRes] = await Promise.all([
           agentCustomerService.getDocumentsByCustomerId(targetCustId).catch(() => []),
-          masterService.getLoanPurposes().catch(() => []),
           masterService.getEmploymentTypes().catch(() => []),
           masterService.getDocumentTypes().catch(() => []),
           fetch(`${API_BASE}/BackOfficeDocumentRejection`, { headers }).then(r => r.ok ? r.json() : []).catch(() => [])
@@ -228,7 +226,6 @@ function ViewCustomerModal({ customer, onClose }) {
         });
 
         setDocuments([...rawDocs, ...updatedRejDocs])
-        setLoanPurposes(extractArray(purpRes))
         setEmploymentTypes(extractArray(empRes))
         setDocumentTypes(docTypeList)
       } catch (err) {
@@ -263,14 +260,7 @@ function ViewCustomerModal({ customer, onClose }) {
   const status = customer.status || 'Draft'
   
   // Resolve Names
-  let loanPurposeName = customer.loanPurposeName
-  if (!loanPurposeName && customer.loanPurposeId) {
-    const p = loanPurposes.find(x => Number(x.loanPurposeId || x.id) === Number(customer.loanPurposeId))
-    if (p) loanPurposeName = p.purposeName || p.name || p.productName
-  }
-  if (!loanPurposeName) {
-    loanPurposeName = customer.productName
-  }
+  const productName = customer.loanProductName || customer.productName || 'N/A'
   
   let employmentTypeName = customer.employmentTypeName
   if (!employmentTypeName && customer.employmentTypeId) {
@@ -511,8 +501,8 @@ function ViewCustomerModal({ customer, onClose }) {
               </div>
               <div className="drawer-grid-2">
                 <div className="drawer-detail-item">
-                  <span className="detail-label">Loan Purpose</span>
-                  <span className="detail-value">{loanPurposeName || 'N/A'}</span>
+                  <span className="detail-label">Product Name</span>
+                  <span className="detail-value">{customer.loanProductName || customer.productName || 'N/A'}</span>
                 </div>
                 <div className="drawer-detail-item">
                   <span className="detail-label">Expected Loan Amount</span>

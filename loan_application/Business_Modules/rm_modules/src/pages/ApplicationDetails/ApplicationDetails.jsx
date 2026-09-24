@@ -29,6 +29,7 @@ import { buildValidationPopup, parseApiErrorBody } from '../../utils/formatUserF
 import { buildApplicationDisplayId, resolveApplicantName } from '../applicationWizard/flowUtils';
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import { getCurrentRMContext } from '../../utils/rmContext';
+import ApplicationTopSummary from '../../components/ApplicationTopSummary/ApplicationTopSummary';
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 import './ApplicationDetails.css';
 
@@ -505,11 +506,33 @@ export default function ApplicationDetails() {
 
     if (
       relatedLoanProductId &&
-      (!appData.loanProduct || String(appData.loanProduct) !== String(relatedLoanProductId))
+      !appData.loanProduct
     ) {
-      saveApplication(appId, { loanProduct: relatedLoanProductId });
+      saveApplication(appId, {
+        loanProduct: relatedLoanProductId
+      });
     }
   }, [appId, appData.purposeOfLoan, appData.loanProduct, loanPurposeOptions, saveApplication]);
+
+  const filteredLoanPurposeOptions = useMemo(() => {
+    if (!appData.loanProduct) {
+      return [];
+    }
+
+    return loanPurposeOptions.filter((option) => {
+      const raw = option.raw;
+
+      if (!raw || raw.isActive === false) {
+        return false;
+      }
+
+      const relatedProductId =
+        raw.loanProductId ??
+        raw.LoanProductId;
+
+      return String(relatedProductId) === String(appData.loanProduct);
+    });
+  }, [loanPurposeOptions, appData.loanProduct]);
 
   const selectedProduct = loanProductOptions.find(p => p.value === appData.loanProduct || (appData.loanProduct !== '' && appData.loanProduct !== null && appData.loanProduct !== undefined && String(p.value) === String(appData.loanProduct)));
   const requiresVariation = selectedProduct?.raw?.productCode === 'HL' || selectedProduct?.raw?.productCode === 'LAP';
@@ -627,6 +650,21 @@ export default function ApplicationDetails() {
       }
       updates.roi = '';
       updates.loanTenureMonths = '';
+
+      if (appData.purposeOfLoan) {
+        const currentPurpose = loanPurposeOptions.find(
+          (option) =>
+            String(option.value) ===
+            String(appData.purposeOfLoan)
+        );
+        const currentPurposeProductId =
+          currentPurpose?.raw?.loanProductId ??
+          currentPurpose?.raw?.LoanProductId;
+
+        if (!rawValue || String(currentPurposeProductId) !== String(rawValue)) {
+          updates.purposeOfLoan = '';
+        }
+      }
     }
 
     saveApplication(appId, updates);
@@ -1024,57 +1062,31 @@ export default function ApplicationDetails() {
               <div>
                 <div className="ad-title-row">
                   <h1 className="ad-page-title">Application & Product Details</h1>
-                  <span className="ad-step-badge">Step 1 of 12</span>
+                  <span className="ad-step-badge">Step 1 of 11</span>
                 </div>
                 <p className="ad-page-description">Fill in the primary loan details for verification</p>
               </div>
             </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<ArrowLeft size={14} />}
-              onClick={handleBack}
-              className="ad-back-button"
-            >
-              Back to Applications
-            </Button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <StatusBadge status={statusText} />
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<ArrowLeft size={14} />}
+                onClick={handleBack}
+                className="ad-back-button"
+              >
+                Back to Applications
+              </Button>
+            </div>
           </div>
 
           <div className="ad-premium-header-bottom">
-            <div className="ad-meta-item">
-              <span className="ad-meta-label">Applicant</span>
-              <div className="ad-meta-value-group highlight">
-                <User size={14} />
-                <span className="ad-meta-value">{isLoadingApplication && applicantName === 'Applicant' ? 'Loading...' : applicantName}</span>
-              </div>
-            </div>
-            <div className="ad-meta-divider" />
-            <div className="ad-meta-item">
-              <span className="ad-meta-label">App ID</span>
-              <div className="ad-meta-value-group">
-                <FileText size={14} />
-                <span className="ad-meta-value">{applicationDisplayId}</span>
-              </div>
-            </div>
-            <div className="ad-meta-divider" />
-            <div className="ad-meta-item">
-              <span className="ad-meta-label">Branch</span>
-              <div className="ad-meta-value-group">
-                <MapPin size={14} />
-                <span className="ad-meta-value">{branchName}</span>
-              </div>
-            </div>
-            <div className="ad-meta-divider" />
-            <div className="ad-meta-item">
-              <span className="ad-meta-label">Submitted</span>
-              <div className="ad-meta-value-group">
-                <Calendar size={14} />
-                <span className="ad-meta-value">{submittedTime || 'Not submitted'}</span>
-              </div>
-            </div>
-            <div className="ad-meta-item status">
-              <StatusBadge status={statusText} />
-            </div>
+            <ApplicationTopSummary
+              appData={displayRecord || appData}
+              appId={appId}
+              isHydrating={isLoadingApplication}
+            />
           </div>
         </header>
 
@@ -1177,10 +1189,18 @@ export default function ApplicationDetails() {
                       error={!!errors.purposeOfLoan}
                       value={appData.purposeOfLoan || ''}
                       onChange={(val) => updateField('purposeOfLoan', val)}
-                      placeholder={isLoadingMasters ? "Loading..." : "Select loan purpose"}
-                      options={loanPurposeOptions}
+                      placeholder={
+                        isLoadingMasters
+                          ? "Loading..."
+                          : !appData.loanProduct
+                          ? "Select loan product first"
+                          : filteredLoanPurposeOptions.length === 0
+                          ? "No purpose configured for this loan product"
+                          : "Select loan purpose"
+                      }
+                      options={filteredLoanPurposeOptions}
                       icon={<Target size={16} />}
-                      disabled={isLoadingMasters}
+                      disabled={isLoadingMasters || !appData.loanProduct || filteredLoanPurposeOptions.length === 0}
                     />
                   </div>
                   {errors.purposeOfLoan && <span className="ad-field-error">{errors.purposeOfLoan}</span>}

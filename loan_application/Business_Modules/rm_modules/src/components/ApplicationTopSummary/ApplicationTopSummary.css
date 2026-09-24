@@ -1,0 +1,55 @@
+.aw-top-summary-card {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.aw-summary-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 24px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aw-summary-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.aw-summary-value {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aw-summary-value.highlight {
+  color: #0f7a4c;
+  font-weight: 700;
+}
+
+@media (max-width: 860px) {
+  .aw-top-summary-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 14px;
+  }
+}
+
+@media (max-width: 540px) {
+  .aw-top-summary-card {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

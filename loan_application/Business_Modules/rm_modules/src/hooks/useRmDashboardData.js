@@ -52,7 +52,7 @@ const mapApplication = (item, index, agentsById = {}, rmsById = {}) => {
     displayId: buildApplicationDisplayId(item, applicationId),
     customerName: item.fullName || item.customerName || 'Unknown Customer',
     mobile: String(item.mobileNumber || item.mobile || ''),
-    loanType: item.loanPurposeName || item.loanType || '',
+    loanType: item.loanProductName || item.loanPurposeName || item.loanType || '',
     amount: formatCurrency(item.expectedLoanAmount ?? item.amount),
     agentName: ownership.agentName,
     createdDate: formatDate(item.createdAt || item.createdDate),

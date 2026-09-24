@@ -4742,6 +4742,8 @@ export default function CustomerVerification() {
   const [finalRemarksError, setFinalRemarksError] = useState('');
   const [finalRemarksBanner, setFinalRemarksBanner] = useState(null);
   const [isSendingToCreditOfficer, setIsSendingToCreditOfficer] = useState(false);
+  const [pdAssessmentId, setPdAssessmentId] = useState(null);
+  const [pdAssessmentLoading, setPdAssessmentLoading] = useState(false);
 
   // PD assessment values for the current application.
   const createRecommendationSheet = () => ({
@@ -4796,6 +4798,81 @@ export default function CustomerVerification() {
       };
     }));
   };
+
+  // Load existing PD assessment when entering Step 09 (Internal Step 14)
+  useEffect(() => {
+    if (activeStep !== 14 || !calculationAppProdId || calculationAppProdId <= 0) {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadPdAssessment() {
+      setPdAssessmentLoading(true);
+      try {
+        const record = await backOfficeService.getPdAssessmentByApplication(calculationAppProdId);
+        if (!isMounted) return;
+
+        const resolvedRecord = Array.isArray(record) ? record[0] : record;
+
+        if (resolvedRecord && (resolvedRecord.pdAssessmentId || resolvedRecord.PdAssessmentId || resolvedRecord.id)) {
+          const recId = resolvedRecord.pdAssessmentId ?? resolvedRecord.PdAssessmentId ?? resolvedRecord.id;
+          setPdAssessmentId(Number(recId));
+
+          const rawDate = resolvedRecord.dateOfPdVisit || resolvedRecord.DateOfPdVisit || '';
+          const formattedDate = rawDate ? String(rawDate).split('T')[0] : '';
+
+          const rawConditions = resolvedRecord.sanctionConditions || resolvedRecord.SanctionConditions || [];
+          const hydratedConditions = Array.isArray(rawConditions) && rawConditions.length > 0
+            ? rawConditions.map((c) => {
+                if (typeof c === 'string') return c;
+                return c?.conditionText ?? c?.ConditionText ?? '';
+              }).filter(Boolean)
+            : [''];
+
+          setRecommendationSheets([
+            {
+              id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              pdVisitDate: formattedDate,
+              endUseCategory: resolvedRecord.endUseCategorization ?? resolvedRecord.EndUseCategorization ?? '',
+              pdAddress: resolvedRecord.pdAddress ?? resolvedRecord.PdAddress ?? '',
+              personalDiscussionSiteVisit: resolvedRecord.personalDiscussionSiteVisit ?? resolvedRecord.PersonalDiscussionSiteVisit ?? '',
+              endUse: resolvedRecord.endUse ?? resolvedRecord.EndUse ?? '',
+              disbursementTransaction: resolvedRecord.disbursementTransaction ?? resolvedRecord.DisbursementTransaction ?? '',
+              applicantProfile: resolvedRecord.applicantProfile ?? resolvedRecord.ApplicantProfile ?? '',
+              coApplicantProfile: resolvedRecord.coApplicantProfile ?? resolvedRecord.CoApplicantProfile ?? '',
+              bureauReport: resolvedRecord.bureauReport ?? resolvedRecord.BureauReport ?? '',
+              proposedCollateral: resolvedRecord.proposedCollateral ?? resolvedRecord.ProposedCollateral ?? '',
+              legalAndTechnical: resolvedRecord.legalTechnicalReview ?? resolvedRecord.LegalTechnicalReview ?? '',
+              strengths: resolvedRecord.strengths ?? resolvedRecord.Strengths ?? '',
+              concerns: resolvedRecord.concerns ?? resolvedRecord.Concerns ?? '',
+              recommendation: resolvedRecord.recommendation ?? resolvedRecord.Recommendation ?? '',
+              otherSanctionConditions: hydratedConditions.length > 0 ? hydratedConditions : [''],
+            },
+          ]);
+
+          const remarks = resolvedRecord.finalRemarks ?? resolvedRecord.FinalRemarks ?? '';
+          setFinalRemarks(remarks);
+        } else {
+          setPdAssessmentId(null);
+        }
+      } catch (err) {
+        if (!isMounted) return;
+        console.warn('[CustomerVerification] No existing PD assessment found or failed to fetch:', err);
+        setPdAssessmentId(null);
+      } finally {
+        if (isMounted) {
+          setPdAssessmentLoading(false);
+        }
+      }
+    }
+
+    loadPdAssessment();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeStep, calculationAppProdId]);
 
   // Shared "Comments on other health checks" — particulars from GET /api/health-check-types
   const [healthCheckTypes, setHealthCheckTypes] = useState([]);
@@ -5105,8 +5182,8 @@ export default function CustomerVerification() {
   }, [verificationData]);
 
 
-  // Send to Credit Officer action handler
-  const handleSendToCreditOfficer = () => {
+  // Send to Credit Officer action handler (PD Assessment Save/Update)
+  const handleSendToCreditOfficer = async () => {
     const trimmed = finalRemarks.trim();
     if (!trimmed) {
       setFinalRemarksError('Remarks for Credit Officer are required.');
@@ -5114,16 +5191,103 @@ export default function CustomerVerification() {
       return;
     }
 
+    if (!calculationAppProdId || calculationAppProdId <= 0) {
+      setFinalRemarksBanner({
+        type: 'error',
+        message: 'Unable to resolve Application Product Details ID for this application. Cannot save PD Assessment.',
+      });
+      return;
+    }
+
+    const boAuth = getBackOfficeAuth();
+    const currentUserId = Number(
+      boAuth?.userId ||
+      boAuth?.id ||
+      boAuth?.backOfficeId ||
+      localStorage.getItem('userId') ||
+      localStorage.getItem('backOfficeId') ||
+      0
+    );
+
+    if (!currentUserId || isNaN(currentUserId) || currentUserId <= 0) {
+      setFinalRemarksBanner({
+        type: 'error',
+        message: 'Unable to identify authenticated Back Office user. Please log in again.',
+      });
+      return;
+    }
+
     setFinalRemarksError('');
     setIsSendingToCreditOfficer(true);
+    setFinalRemarksBanner(null);
 
-    setTimeout(() => {
-      setIsSendingToCreditOfficer(false);
+    const sheet = recommendationSheets[0] || {};
+    const payload = {
+      applicationProductDetailsId: Number(calculationAppProdId),
+      dateOfPdVisit: sheet.pdVisitDate || null,
+      pdAddress: sheet.pdAddress?.trim() || '',
+      endUseCategorization: sheet.endUseCategory?.trim() || '',
+      personalDiscussionSiteVisit: sheet.personalDiscussionSiteVisit?.trim() || '',
+      endUse: sheet.endUse?.trim() || '',
+      disbursementTransaction: sheet.disbursementTransaction?.trim() || '',
+      applicantProfile: sheet.applicantProfile?.trim() || '',
+      coApplicantProfile: sheet.coApplicantProfile?.trim() || '',
+      bureauReport: sheet.bureauReport?.trim() || '',
+      proposedCollateral: sheet.proposedCollateral?.trim() || '',
+      legalTechnicalReview: sheet.legalAndTechnical?.trim() || '',
+      strengths: sheet.strengths?.trim() || '',
+      concerns: sheet.concerns?.trim() || '',
+      recommendation: sheet.recommendation?.trim() || '',
+      finalRemarks: trimmed,
+      sanctionConditions: (sheet.otherSanctionConditions || [])
+        .map((c) => String(c || '').trim())
+        .filter(Boolean)
+        .map((text) => ({
+          conditionText: text,
+        })),
+      createdBy: currentUserId,
+    };
+
+    try {
+      if (pdAssessmentId && Number(pdAssessmentId) > 0) {
+        const updatePayload = {
+          ...payload,
+          pdAssessmentId: Number(pdAssessmentId),
+        };
+        await backOfficeService.updatePdAssessment(pdAssessmentId, updatePayload);
+        setFinalRemarksBanner({
+          type: 'info',
+          message: 'PD Assessment updated successfully.',
+        });
+      } else {
+        const created = await backOfficeService.createPdAssessment(payload);
+        const returnedId =
+          created?.pdAssessmentId ??
+          created?.PdAssessmentId ??
+          created?.id;
+
+        if (returnedId) {
+          setPdAssessmentId(Number(returnedId));
+        }
+        setFinalRemarksBanner({
+          type: 'info',
+          message: 'PD Assessment saved successfully.',
+        });
+      }
+    } catch (err) {
+      console.error('Failed to save PD Assessment:', err);
+      const errMsg =
+        err?.response?.data?.message ||
+        err?.response?.data?.title ||
+        err?.message ||
+        'Failed to save PD Assessment. Please try again.';
       setFinalRemarksBanner({
-        type: 'info',
-        message: 'Credit Officer assignment API is not available yet. Final remarks validated successfully.',
+        type: 'error',
+        message: errMsg,
       });
-    }, 400);
+    } finally {
+      setIsSendingToCreditOfficer(false);
+    }
   };
 
   // Top View Form Button handler: activates Step 1

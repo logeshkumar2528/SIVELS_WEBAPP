@@ -866,6 +866,57 @@ export const backOfficeService = {
     );
     return unwrapResponse(response);
   },
+
+  /* ==========================================
+     13. PD ASSESSMENT APIs (STEP 09)
+  ========================================== */
+
+  /**
+   * Retrieve PD Assessment record by applicationProductDetailsId.
+   * @param {string|number} applicationProductDetailsId
+   */
+  getPdAssessmentByApplication: async (applicationProductDetailsId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.PD_ASSESSMENT_BY_APPLICATION(applicationProductDetailsId)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve PD Assessment record by agentCustomerId.
+   * @param {string|number} agentCustomerId
+   */
+  getPdAssessmentByCustomer: async (agentCustomerId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.PD_ASSESSMENT_BY_CUSTOMER(agentCustomerId)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Create a new PD Assessment record (POST /api/ApplicationPdAssessment).
+   * @param {object} payload
+   */
+  createPdAssessment: async (payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.PD_ASSESSMENT,
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Update an existing PD Assessment record (PUT /api/ApplicationPdAssessment/{pdAssessmentId}).
+   * @param {string|number} pdAssessmentId
+   * @param {object} payload
+   */
+  updatePdAssessment: async (pdAssessmentId, payload) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.PD_ASSESSMENT_BY_ID(pdAssessmentId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
 };
 
 export default backOfficeService;

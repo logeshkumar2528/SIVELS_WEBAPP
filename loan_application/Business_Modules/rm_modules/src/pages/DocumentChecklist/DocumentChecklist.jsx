@@ -309,8 +309,8 @@ export default function DocumentChecklist() {
       appId={appId}
       appData={appData}
       steps={APPLICATION_WIZARD_STEPS}
-      activeStep={11}
-      title="Step 11: Document Checklist"
+      activeStep={10}
+      title="Step 10: Document Checklist"
       subtitle="Verify that all required documents have been collected."
       backLabel="Back to Schedule of Charges"
       continueLabel="Save & Continue"

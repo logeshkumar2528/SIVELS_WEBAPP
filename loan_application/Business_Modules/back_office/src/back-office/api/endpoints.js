@@ -147,4 +147,13 @@ export const BACK_OFFICE_ENDPOINTS = {
   STEP_VERIFICATION: '/BackOfficeStepVerification',
   STEP_VERIFICATION_BY_APPLICATION: (appProdId) =>
     `/BackOfficeStepVerification/application/${encodeURIComponent(appProdId)}`,
+
+  // PD Assessment APIs (Step 09)
+  PD_ASSESSMENT: '/ApplicationPdAssessment',
+  PD_ASSESSMENT_BY_ID: (id) =>
+    `/ApplicationPdAssessment/${encodeURIComponent(id)}`,
+  PD_ASSESSMENT_BY_APPLICATION: (applicationProductDetailsId) =>
+    `/ApplicationPdAssessment/byapplication/${encodeURIComponent(applicationProductDetailsId)}`,
+  PD_ASSESSMENT_BY_CUSTOMER: (agentCustomerId) =>
+    `/ApplicationPdAssessment/bycustomer/${encodeURIComponent(agentCustomerId)}`,
 };

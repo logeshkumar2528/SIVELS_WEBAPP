@@ -35,12 +35,12 @@ function AddCustomer() {
 
   // Master Data State
   const [employmentTypes, setEmploymentTypes] = useState([])
-  const [loanPurposes, setLoanPurposes] = useState([])
+  const [loanProducts, setLoanProducts] = useState([])
   const [documentTypes, setDocumentTypes] = useState([])
   
   // Specific Error States
   const [employmentTypesError, setEmploymentTypesError] = useState(false)
-  const [loanPurposesError, setLoanPurposesError] = useState(false)
+  const [loanProductsError, setLoanProductsError] = useState(false)
   
   // Loading States
   const [loadingMasters, setLoadingMasters] = useState(true)
@@ -58,7 +58,7 @@ function AddCustomer() {
     mobileNumber: '',
     email: '',
     employmentTypeId: '',
-    loanPurposeId: '',
+    loanProductId: '',
     expectedAmount: '',
     remarks: '',
   })
@@ -103,11 +103,14 @@ function AddCustomer() {
       }
 
       try {
-        const purposesRes = await masterService.getLoanPurposes()
-        const arr = extractArray(purposesRes)
-        setLoanPurposes(arr.filter(p => p.isActive !== false))
+        const productsRes = await masterService.getLoanProducts()
+        const arr = extractArray(productsRes)
+        const activeProducts = arr.filter(
+          (product) => product.isActive === true
+        );
+        setLoanProducts(activeProducts);
       } catch (err) {
-        setLoanPurposesError(true)
+        setLoanProductsError(true);
       }
       
       try {
@@ -356,9 +359,9 @@ function AddCustomer() {
       isValid = false
     }
 
-    // Loan Purpose Validation
-    if (!formData.loanPurposeId) {
-      newFieldErrors.loanPurposeId = 'Loan Purpose is required.'
+    // Loan Product Validation
+    if (!formData.loanProductId) {
+      newFieldErrors.loanProductId = 'Loan Product is required.'
       isValid = false
     }
 
@@ -428,7 +431,7 @@ function AddCustomer() {
           mobileNumber: formData.mobileNumber,
           email: processedEmail,
           employmentTypeId: Number(formData.employmentTypeId),
-          loanPurposeId: Number(formData.loanPurposeId),
+          loanProductId: Number(formData.loanProductId),
           expectedLoanAmount: parseAmountToNumber(formData.expectedAmount),
           remarks: formData.remarks,
           status: 0,
@@ -540,7 +543,7 @@ function AddCustomer() {
       mobileNumber: '',
       email: '',
       employmentTypeId: '',
-      loanPurposeId: '',
+      loanProductId: '',
       expectedAmount: '',
       remarks: '',
     })
@@ -559,9 +562,9 @@ function AddCustomer() {
     label: type.employmentTypeName || type.name
   }))
 
-  const loanPurposeOptions = loanPurposes.map(purpose => ({
-    value: purpose.loanPurposeId || purpose.id,
-    label: purpose.purposeName || purpose.name || purpose.productName
+  const loanProductOptions = loanProducts.map((product) => ({
+    value: String(product.loanProductId ?? product.id),
+    label: product.productName || product.productCode || 'Unnamed Product'
   }))
 
   const employmentPlaceholder = loadingMasters 
@@ -572,13 +575,13 @@ function AddCustomer() {
         ? 'No employment types available' 
         : 'Select employment type'
 
-  const loanPurposePlaceholder = loadingMasters 
-    ? 'Loading loan purposes...' 
-    : loanPurposesError 
-      ? 'Unable to load loan purposes. Please try again.' 
-      : loanPurposes.length === 0 
-        ? 'No loan purposes available' 
-        : 'Select purpose'
+  const loanProductPlaceholder = loadingMasters 
+    ? 'Loading loan products...' 
+    : loanProductsError 
+      ? 'Unable to load loan products. Please try again.' 
+      : loanProducts.length === 0 
+        ? 'No loan products available' 
+        : 'Select product'
 
   return (
     <div className="add-customer">
@@ -699,22 +702,22 @@ function AddCustomer() {
             </div>
 
             <div className="form-group">
-              <label className="form-label" htmlFor="loanPurposeId">
-                Loan Purpose<span className="required-star">*</span>
+              <label className="form-label" htmlFor="loanProductId">
+                Loan Product<span className="required-star">*</span>
               </label>
               <CustomSelect
-                id="loanPurposeId"
-                name="loanPurposeId"
-                value={formData.loanPurposeId}
+                id="loanProductId"
+                name="loanProductId"
+                value={formData.loanProductId}
                 onChange={handleInputChange}
-                options={loanPurposeOptions}
-                placeholder={loanPurposePlaceholder}
-                disabled={loadingMasters || loanPurposesError}
-                error={!!fieldErrors.loanPurposeId}
+                options={loanProductOptions}
+                placeholder={loanProductPlaceholder}
+                disabled={loadingMasters || loanProductsError}
+                error={!!fieldErrors.loanProductId}
                 icon={Target}
                 required
               />
-              {fieldErrors.loanPurposeId && <div className="form-field-error">{fieldErrors.loanPurposeId}</div>}
+              {fieldErrors.loanProductId && <div className="form-field-error">{fieldErrors.loanProductId}</div>}
             </div>
 
             <div className="form-group">

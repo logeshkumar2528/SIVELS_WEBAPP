@@ -7,7 +7,6 @@ export const ONBOARDING_STEPS = [
   { id: 'bank-existing-loans', label: 'Banking' },
   { id: 'collateral', label: 'Collateral' },
   { id: 'references', label: 'Reference' },
-  { id: 'sourcing', label: 'Sourcing' },
   { id: 'schedule-charges', label: 'Charges' },
   { id: 'document-checklist', label: 'Checklist' },
   { id: 'declaration', label: 'Declaration' },

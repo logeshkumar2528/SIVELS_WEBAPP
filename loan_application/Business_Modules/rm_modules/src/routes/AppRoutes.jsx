@@ -15,7 +15,6 @@ import EmploymentIncome from '../pages/EmploymentIncome/EmploymentIncome';
 import BankExistingLoans from '../pages/BankExistingLoans/BankExistingLoans';
 import CollateralDetails from '../pages/CollateralDetails/CollateralDetails';
 import ReferenceDetails from '../pages/ReferenceDetails/ReferenceDetails';
-import SourcingDetails from '../pages/SourcingDetails/SourcingDetails';
 import ScheduleOfCharges from '../pages/ScheduleOfCharges/ScheduleOfCharges';
 import DocumentChecklist from '../pages/DocumentChecklist/DocumentChecklist';
 import Declaration from '../pages/Declaration/Declaration';
@@ -180,7 +179,7 @@ export default function AppRoutes() {
         <Route
           path={ROUTES.APPLICATION_DETAILS}
           element={
-            <LayoutWrapper title="Application & Product Details" subtitle="Step 1 of 12">
+            <LayoutWrapper title="Application & Product Details" subtitle="Step 1 of 11">
               <ApplicationDetails />
             </LayoutWrapper>
           }
@@ -189,7 +188,7 @@ export default function AppRoutes() {
         <Route
           path={ROUTES.PERSONAL_INFORMATION}
           element={
-            <LayoutWrapper title="Personal Information" subtitle="Step 3 of 12">
+            <LayoutWrapper title="Personal Information" subtitle="Step 3 of 11">
               <CustomerRegistration />
             </LayoutWrapper>
           }
@@ -198,7 +197,7 @@ export default function AppRoutes() {
         <Route
           path={ROUTES.ADDRESS_DETAILS}
           element={
-            <LayoutWrapper title="Address Details" subtitle="Step 4 of 12">
+            <LayoutWrapper title="Address Details" subtitle="Step 4 of 11">
               <AddressDetails />
             </LayoutWrapper>
           }
@@ -207,7 +206,7 @@ export default function AppRoutes() {
         <Route
           path={ROUTES.KYC_DOCUMENTS}
           element={
-            <LayoutWrapper title="KYC Documents" subtitle="Step 2 of 12">
+            <LayoutWrapper title="KYC Documents" subtitle="Step 2 of 11">
               <KycDocuments />
             </LayoutWrapper>
           }
@@ -216,7 +215,7 @@ export default function AppRoutes() {
         <Route
           path={ROUTES.EMPLOYMENT_INCOME}
           element={
-            <LayoutWrapper title="Employment & Income Details" subtitle="Step 5 of 12">
+            <LayoutWrapper title="Employment & Income Details" subtitle="Step 5 of 11">
               <EmploymentIncome />
             </LayoutWrapper>
           }
@@ -225,7 +224,7 @@ export default function AppRoutes() {
         <Route
           path={ROUTES.BANK_EXISTING_LOANS}
           element={
-            <LayoutWrapper title="Bank / Existing Loan Details" subtitle="Step 6 of 12">
+            <LayoutWrapper title="Bank / Existing Loan Details" subtitle="Step 6 of 11">
               <BankExistingLoans />
             </LayoutWrapper>
           }
@@ -234,7 +233,7 @@ export default function AppRoutes() {
         <Route
           path={ROUTES.COLLATERAL}
           element={
-            <LayoutWrapper title="Collateral Details" subtitle="Step 7 of 12">
+            <LayoutWrapper title="Collateral Details" subtitle="Step 7 of 11">
               <CollateralDetails />
             </LayoutWrapper>
           }
@@ -243,17 +242,8 @@ export default function AppRoutes() {
         <Route
           path={ROUTES.REFERENCES}
           element={
-            <LayoutWrapper title="Reference Details" subtitle="Step 8 of 12">
+            <LayoutWrapper title="Reference Details" subtitle="Step 8 of 11">
               <ReferenceDetails />
-            </LayoutWrapper>
-          }
-        />
-
-        <Route
-          path={ROUTES.SOURCING}
-          element={
-            <LayoutWrapper title="Sourcing Details" subtitle="Step 9 of 12">
-              <SourcingDetails />
             </LayoutWrapper>
           }
         />
@@ -261,7 +251,7 @@ export default function AppRoutes() {
         <Route
           path={ROUTES.SCHEDULE_CHARGES}
           element={
-            <LayoutWrapper title="Schedule of Charges" subtitle="Step 10 of 12">
+            <LayoutWrapper title="Schedule of Charges" subtitle="Step 9 of 11">
               <ScheduleOfCharges />
             </LayoutWrapper>
           }
@@ -270,7 +260,7 @@ export default function AppRoutes() {
         <Route
           path={ROUTES.DOCUMENT_CHECKLIST}
           element={
-            <LayoutWrapper title="Document Checklist" subtitle="Step 11 of 12">
+            <LayoutWrapper title="Document Checklist" subtitle="Step 10 of 11">
               <DocumentChecklist />
             </LayoutWrapper>
           }
@@ -279,7 +269,7 @@ export default function AppRoutes() {
         <Route
           path={ROUTES.DECLARATION}
           element={
-            <LayoutWrapper title="Declaration" subtitle="Step 12 of 12">
+            <LayoutWrapper title="Declaration" subtitle="Step 11 of 11">
               <Declaration />
             </LayoutWrapper>
           }

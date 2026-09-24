@@ -93,10 +93,9 @@
 .ad-premium-header-bottom {
   display: flex;
   align-items: center;
-  padding: 10px 20px;
+  padding: 8px 18px;
   border-top: 1px solid var(--color-border-light, #e2e8f0);
   background: #fafcfb;
-  gap: 16px;
 }
 
 .ad-meta-item {

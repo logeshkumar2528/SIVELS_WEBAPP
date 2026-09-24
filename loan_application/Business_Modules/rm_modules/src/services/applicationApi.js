@@ -37,7 +37,7 @@ export async function loadApplicationHeader(applicationId) {
     branch: agent?.branch || agent?.Branch || customer.branch || customer.Branch || '',
     createdDate: customer.createdAt || customer.CreatedAt || customer.createdDate || customer.CreatedDate || '',
     applicationNumber: customer.applicationNumber || customer.ApplicationNumber || '',
-    loanType: customer.loanPurposeName || customer.LoanPurposeName || customer.loanType || '',
+    loanType: customer.loanProductName || customer.loanPurposeName || customer.LoanPurposeName || customer.loanType || '',
   };
 }
 

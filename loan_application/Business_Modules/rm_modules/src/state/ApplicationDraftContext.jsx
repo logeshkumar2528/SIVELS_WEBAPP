@@ -769,7 +769,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
 
   const applicationProductDetailsId = effectiveProductDetails?.applicationProductDetailsId || effectiveProductDetails?.ApplicationProductDetailsId || null;
   const sourcingChannel = effectiveProductDetails?.sourcingChannelId ?? effectiveProductDetails?.SourcingChannelId ?? (isRmSourced ? 1 : (existingDraft.sourcingChannel ?? ''));
-  const loanProduct = effectiveProductDetails?.loanProductId ?? effectiveProductDetails?.LoanProductId ?? '';
+  const loanProduct = effectiveProductDetails?.loanProductId ?? effectiveProductDetails?.LoanProductId ?? customer.loanProductId ?? customer.LoanProductId ?? '';
   const loanVariation = effectiveProductDetails?.loanProductVariationId ?? effectiveProductDetails?.LoanProductVariationId ?? '';
   const loanTransactionType = effectiveProductDetails?.loanTransactionTypeId ?? effectiveProductDetails?.LoanTransactionTypeId ?? '';
   const purposeOfLoan = effectiveProductDetails?.loanPurposeId ?? effectiveProductDetails?.LoanPurposeId ?? customer.loanPurposeId ?? customer.LoanPurposeId ?? '';
@@ -1494,25 +1494,44 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
 
   const applicantEmpId = employmentIncome.applicant?.applicationEmploymentIncomeDetailsId ?? employmentIncome.applicant?.employmentIncomeDetailsId;
   const applicantBankList = filterBankRowsForSequence(0, employmentIncome.applicant);
-  const draftAppPrimary = existingDraft.bankExistingLoans?.applicant?.primaryBank || existingDraft.bankExistingLoans?.primaryBank || {};
-  const draftAppOther = existingDraft.bankExistingLoans?.applicant?.otherBank || {};
+  const draftAppBanks = Array.isArray(existingDraft.bankExistingLoans?.applicant?.banks)
+    ? existingDraft.bankExistingLoans.applicant.banks
+    : (Array.isArray(existingDraft.bankExistingLoans?.banks) ? existingDraft.bankExistingLoans.banks : []);
+  const draftAppPrimary = existingDraft.bankExistingLoans?.applicant?.primaryBank || existingDraft.bankExistingLoans?.primaryBank || draftAppBanks[0] || {};
+  const draftAppOther = existingDraft.bankExistingLoans?.applicant?.otherBank || draftAppBanks[1] || {};
 
   const primaryBankRecord =
     applicantBankList.find((b) => b.isPrimaryBank === true || b.IsPrimaryBank === true || b.isPrimary === true) ||
     (applicantBankList.length > 0 ? applicantBankList[0] : null);
 
-  const otherBankRecord =
-    applicantBankList.find(
-      (b) => (b.isPrimaryBank === false || b.IsPrimaryBank === false || b.isPrimary === false) && b !== primaryBankRecord
-    ) || null;
+  const otherBankRecords = applicantBankList.filter((b) => b !== primaryBankRecord);
 
   const mappedPrimaryBank = primaryBankRecord
     ? mapBankRecord(primaryBankRecord, customerName, draftAppPrimary, applicantEmpId)
     : (!isBackendBankExplicit && draftAppPrimary.bankName ? mapBankRecord({}, customerName, draftAppPrimary, applicantEmpId) : createEmptyBankRecord(customerName, true));
 
-  const mappedOtherBank = otherBankRecord
-    ? mapBankRecord(otherBankRecord, customerName, draftAppOther, applicantEmpId)
-    : (!isBackendBankExplicit && draftAppOther.bankName ? mapBankRecord({}, customerName, draftAppOther, applicantEmpId) : createEmptyBankRecord(customerName, false));
+  const mappedOtherBanks = otherBankRecords.map((rec, idx) =>
+    mapBankRecord(rec, customerName, draftAppBanks[idx + 1] || (idx === 0 ? draftAppOther : {}), applicantEmpId)
+  );
+
+  let applicantBanks = [mappedPrimaryBank];
+  if (mappedOtherBanks.length > 0) {
+    applicantBanks = [mappedPrimaryBank, ...mappedOtherBanks];
+  } else if (draftAppBanks.length > 1) {
+    for (let i = 1; i < draftAppBanks.length; i++) {
+      if (!isBackendBankExplicit || draftAppBanks[i].applicationBankExistingLoanDetailsId) {
+        applicantBanks.push(mapBankRecord({}, customerName, draftAppBanks[i], applicantEmpId));
+      }
+    }
+  } else if (!isBackendBankExplicit && draftAppOther.bankName) {
+    applicantBanks.push(mapBankRecord({}, customerName, draftAppOther, applicantEmpId));
+  }
+
+  const mappedOtherBank = applicantBanks[1] || (
+    !isBackendBankExplicit && draftAppOther.bankName
+      ? mapBankRecord({}, customerName, draftAppOther, applicantEmpId)
+      : createEmptyBankRecord(customerName, false)
+  );
 
   const coApplicantBankList = Array.from({ length: Number(coApplicantsCount) || 0 }, (_, idx) => {
     const coEmp = employmentIncome.coApplicants[idx] || {};
@@ -1521,10 +1540,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     const coPrimary =
       effectiveBanks.find((b) => b.isPrimaryBank === true || b.IsPrimaryBank === true || b.isPrimary === true) ||
       (effectiveBanks.length > 0 ? effectiveBanks[0] : null);
-    const coOther =
-      effectiveBanks.find(
-        (b) => (b.isPrimaryBank === false || b.IsPrimaryBank === false || b.isPrimary === false) && b !== coPrimary
-      ) || null;
+    const coOtherRecords = effectiveBanks.filter((b) => b !== coPrimary);
     const coName = [
       coPers.firstName ?? coPers.FirstName,
       coPers.middleName ?? coPers.MiddleName,
@@ -1532,25 +1548,52 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     ].filter(Boolean).join(' ') || coPers.fullName || coPers.FullName || '';
 
     const draftCoBank = existingDraft.bankExistingLoans?.coApplicants?.[idx] || {};
-    const draftCoPrimary = draftCoBank.primaryBank || {};
-    const draftCoOther = draftCoBank.otherBank || {};
+    const draftCoBanks = Array.isArray(draftCoBank.banks) ? draftCoBank.banks : [];
+    const draftCoPrimary = draftCoBank.primaryBank || draftCoBanks[0] || {};
+    const draftCoOther = draftCoBank.otherBank || draftCoBanks[1] || {};
     const coEmpId = coEmp.applicationEmploymentIncomeDetailsId ?? coEmp.employmentIncomeDetailsId;
 
+    const mappedCoPrimary = coPrimary
+      ? mapBankRecord(coPrimary, coName, draftCoPrimary, coEmpId)
+      : (!isBackendBankExplicit && draftCoPrimary.bankName ? mapBankRecord({}, coName, draftCoPrimary, coEmpId) : createEmptyBankRecord(coName, true));
+
+    const mappedCoOthers = coOtherRecords.map((rec, rIdx) =>
+      mapBankRecord(rec, coName, draftCoBanks[rIdx + 1] || (rIdx === 0 ? draftCoOther : {}), coEmpId)
+    );
+
+    let coBanks = [mappedCoPrimary];
+    if (mappedCoOthers.length > 0) {
+      coBanks = [mappedCoPrimary, ...mappedCoOthers];
+    } else if (draftCoBanks.length > 1) {
+      for (let i = 1; i < draftCoBanks.length; i++) {
+        if (!isBackendBankExplicit || draftCoBanks[i].applicationBankExistingLoanDetailsId) {
+          coBanks.push(mapBankRecord({}, coName, draftCoBanks[i], coEmpId));
+        }
+      }
+    } else if (!isBackendBankExplicit && draftCoOther.bankName) {
+      coBanks.push(mapBankRecord({}, coName, draftCoOther, coEmpId));
+    }
+
+    const mappedCoOther = coBanks[1] || (
+      !isBackendBankExplicit && draftCoOther.bankName
+        ? mapBankRecord({}, coName, draftCoOther, coEmpId)
+        : createEmptyBankRecord(coName, false)
+    );
+
     return {
-      primaryBank: coPrimary
-        ? mapBankRecord(coPrimary, coName, draftCoPrimary, coEmpId)
-        : (!isBackendBankExplicit && draftCoPrimary.bankName ? mapBankRecord({}, coName, draftCoPrimary, coEmpId) : createEmptyBankRecord(coName, true)),
-      otherBank: coOther
-        ? mapBankRecord(coOther, coName, draftCoOther, coEmpId)
-        : (!isBackendBankExplicit && draftCoOther.bankName ? mapBankRecord({}, coName, draftCoOther, coEmpId) : createEmptyBankRecord(coName, false)),
+      banks: coBanks,
+      primaryBank: mappedCoPrimary,
+      otherBank: mappedCoOther,
     };
   });
 
   const bankExistingLoans = {
     applicant: {
+      banks: applicantBanks,
       primaryBank: mappedPrimaryBank,
       otherBank: mappedOtherBank,
     },
+    banks: applicantBanks,
     primaryBank: mappedPrimaryBank,
     otherBank: mappedOtherBank,
     coApplicants: coApplicantBankList,
@@ -1578,12 +1621,18 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   }
 
   const finalApplicantBankIds = new Set([
+    ...applicantBanks.map((b) => b?.applicationBankExistingLoanDetailsId),
     bankExistingLoans.applicant?.primaryBank?.applicationBankExistingLoanDetailsId,
     bankExistingLoans.applicant?.otherBank?.applicationBankExistingLoanDetailsId,
   ].filter(Boolean));
 
   if (finalApplicantBankIds.size > 0) {
     bankExistingLoans.coApplicants.forEach((co) => {
+      (co.banks || []).forEach((b) => {
+        if (b?.applicationBankExistingLoanDetailsId && finalApplicantBankIds.has(b.applicationBankExistingLoanDetailsId)) {
+          b.applicationBankExistingLoanDetailsId = null;
+        }
+      });
       if (co.primaryBank?.applicationBankExistingLoanDetailsId && finalApplicantBankIds.has(co.primaryBank.applicationBankExistingLoanDetailsId)) {
         co.primaryBank.applicationBankExistingLoanDetailsId = null;
       }

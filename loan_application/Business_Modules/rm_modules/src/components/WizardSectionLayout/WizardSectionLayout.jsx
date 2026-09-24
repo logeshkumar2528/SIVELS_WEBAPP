@@ -7,6 +7,7 @@ import { useMemo, useEffect, useState } from 'react';
 import { buildApplicationDisplayId, resolveApplicantName } from '../../pages/applicationWizard/flowUtils';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import { formatDateTime } from '../../utils/dateHelper';
+import ApplicationTopSummary from '../ApplicationTopSummary/ApplicationTopSummary';
 import './WizardSectionLayout.css';
 
 function getPrimaryBranch(appData) {
@@ -107,49 +108,14 @@ export default function WizardSectionLayout({
                 <p className="ad-page-description">{subtitle}</p>
               </div>
             </div>
-            {headerAction}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {metaAction}
+              {headerAction}
+            </div>
           </div>
 
           <div className="ad-premium-header-bottom">
-            <div className="ad-meta-item">
-              <span className="ad-meta-label">Applicant</span>
-              <div className="ad-meta-value-group highlight">
-                {iconMap['User'] && (() => { const User = iconMap['User']; return <User size={14} />; })()}
-                <span className="ad-meta-value">{isHydrating && applicantName === 'Applicant' ? 'Loading...' : applicantName}</span>
-              </div>
-            </div>
-            <div className="ad-meta-divider" />
-            <div className="ad-meta-item">
-              <span className="ad-meta-label">App ID</span>
-              <div className="ad-meta-value-group">
-                {iconMap['FileText'] && (() => { const FileText = iconMap['FileText']; return <FileText size={14} />; })()}
-                <span className="ad-meta-value">{applicationDisplayId}</span>
-              </div>
-            </div>
-            <div className="ad-meta-divider" />
-            <div className="ad-meta-item">
-              <span className="ad-meta-label">Branch</span>
-              <div className="ad-meta-value-group">
-                {iconMap['MapPin'] && (() => { const MapPin = iconMap['MapPin']; return <MapPin size={14} />; })()}
-                <span className="ad-meta-value">{getPrimaryBranch(appData)}</span>
-              </div>
-            </div>
-            <div className="ad-meta-divider" />
-            <div className="ad-meta-item">
-              <span className="ad-meta-label">Submitted</span>
-              <div className="ad-meta-value-group">
-                {iconMap['Calendar'] && (() => { const Calendar = iconMap['Calendar']; return <Calendar size={14} />; })()}
-                <span className="ad-meta-value">{formatSubmittedDate(appData.createdDate)}</span>
-              </div>
-            </div>
-            {metaAction && (
-              <>
-                <div className="ad-meta-divider" />
-                <div className="ad-meta-item" style={{ marginLeft: 'auto', paddingLeft: '16px' }}>
-                  {metaAction}
-                </div>
-              </>
-            )}
+            <ApplicationTopSummary appData={appData} appId={appId} isHydrating={isHydrating} />
           </div>
         </header>
 
