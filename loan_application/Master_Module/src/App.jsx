@@ -42,6 +42,7 @@ import { PDVerificationType } from './pages/masters/PDVerificationType/PDVerific
 import { RTRNormMaster } from './pages/masters/RTRNormMaster/RTRNormMaster';
 import { RTRLoanStatus } from './pages/masters/RTRLoanStatus/RTRLoanStatus';
 import { HealthCheckType } from './pages/masters/HealthCheckType/HealthCheckType';
+import { ProofMaster } from './pages/masters/ProofMaster/ProofMaster';
 import { CompanyConfiguration } from './features/company/CompanyConfiguration';
 import AgentCreate from './pages/Agent/AgentCreate';
 import RelationshipManagerCreate from './pages/RelationshipManager/RelationshipManagerCreate';
@@ -128,6 +129,7 @@ function App() {
             <Route path="rtr-norm-master" element={<RTRNormMaster />} />
             <Route path="rtr-loan-status" element={<RTRLoanStatus />} />
             <Route path="health-check-type" element={<HealthCheckType />} />
+            <Route path="proof-master" element={<ProofMaster />} />
           </Route>
         </Route>
       </Routes>
