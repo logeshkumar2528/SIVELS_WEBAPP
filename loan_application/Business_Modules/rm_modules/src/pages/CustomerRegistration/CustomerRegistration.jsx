@@ -1094,7 +1094,7 @@ export default function CustomerRegistration() {
 
   const applicant = form.applicant;
   const [showDocsModal, setShowDocsModal] = useState(false);
-  const [fullViewImage, setFullViewImage] = useState(null);
+  const [fullViewDoc, setFullViewDoc] = useState(null);
   const [aadhaarPreviews, setAadhaarPreviews] = useState({});
   const blobUrlsRef = useRef([]);
 
@@ -1109,7 +1109,7 @@ export default function CustomerRegistration() {
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+    const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
     const kycDocs = appData.sections?.kycDocuments || appData.kycDocuments || {};
 
     // 1. Load Applicant Aadhaar (Latest updated with original Agent-uploaded fallback)
@@ -1119,10 +1119,10 @@ export default function CustomerRegistration() {
       applicationProductDetailsId: resolvedApplicationProductDetailsId,
       baseUrl,
       headers,
-    }).then((url) => {
-      if (isMounted && url) {
-        blobUrlsRef.current.push(url);
-        setAadhaarPreviews((prev) => (prev.applicant === url ? prev : { ...prev, applicant: url }));
+    }).then((doc) => {
+      if (isMounted && doc) {
+        if (doc.url) blobUrlsRef.current.push(doc.url);
+        setAadhaarPreviews((prev) => ({ ...prev, applicant: doc }));
       }
     });
 
@@ -1139,10 +1139,10 @@ export default function CustomerRegistration() {
         applicationProductDetailsId: resolvedApplicationProductDetailsId,
         baseUrl,
         headers,
-      }).then((url) => {
-        if (isMounted && url) {
-          blobUrlsRef.current.push(url);
-          setAadhaarPreviews((prev) => (prev[`co_${idx}`] === url ? prev : { ...prev, [`co_${idx}`]: url }));
+      }).then((doc) => {
+        if (isMounted && doc) {
+          if (doc.url) blobUrlsRef.current.push(doc.url);
+          setAadhaarPreviews((prev) => ({ ...prev, [`co_${idx}`]: doc }));
         }
       });
     }
@@ -1159,11 +1159,13 @@ export default function CustomerRegistration() {
   const aadhaarDocumentPeople = [
     {
       label: 'Applicant',
-      previewUrl: aadhaarPreviews['applicant'] || null,
+      previewUrl: aadhaarPreviews['applicant']?.url || null,
+      isPdf: aadhaarPreviews['applicant']?.isPdf || false,
     },
     ...form.coApplicants.map((_, index) => ({
       label: `Co-Applicant ${index + 1}`,
-      previewUrl: aadhaarPreviews[`co_${index}`] || null,
+      previewUrl: aadhaarPreviews[`co_${index}`]?.url || null,
+      isPdf: aadhaarPreviews[`co_${index}`]?.isPdf || false,
     })),
   ];
 
@@ -1308,30 +1310,49 @@ export default function CustomerRegistration() {
             <div key={person.label} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 16px' }}>
               <h4 style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>{person.label}</h4>
               {person.previewUrl ? (
-                <div
-                  style={{
-                    width: '100%',
-                    height: '240px',
-                    backgroundColor: '#ffffff',
-                    borderRadius: '6px',
-                    overflow: 'hidden',
-                    border: '1px solid #e2e8f0',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                  onClick={() => setFullViewImage(person.previewUrl)}
-                  title="Click to view full size"
-                >
-                  <img
-                    src={person.previewUrl}
-                    alt={`${person.label} Aadhaar`}
-                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', transition: 'transform 0.2s' }}
-                    onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'}
-                    onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
-                  />
-                </div>
+                person.isPdf ? (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '350px',
+                      backgroundColor: '#ffffff',
+                      borderRadius: '6px',
+                      overflow: 'hidden',
+                      border: '1px solid #e2e8f0',
+                    }}
+                  >
+                    <iframe
+                      src={person.previewUrl}
+                      title={`${person.label} Aadhaar`}
+                      style={{ width: '100%', height: '100%', border: 'none' }}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '240px',
+                      backgroundColor: '#ffffff',
+                      borderRadius: '6px',
+                      overflow: 'hidden',
+                      border: '1px solid #e2e8f0',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    onClick={() => setFullViewDoc({ url: person.previewUrl, isPdf: false })}
+                    title="Click to view full size"
+                  >
+                    <img
+                      src={person.previewUrl}
+                      alt={`${person.label} Aadhaar`}
+                      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', transition: 'transform 0.2s' }}
+                      onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'}
+                      onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                    />
+                  </div>
+                )
               ) : (
                 <div
                   style={{
@@ -1356,13 +1377,23 @@ export default function CustomerRegistration() {
       </Modal>
 
       <Modal
-        show={!!fullViewImage}
-        onHide={() => setFullViewImage(null)}
+        show={Boolean(fullViewDoc)}
+        onHide={() => setFullViewDoc(null)}
         title="Full View"
         size="lg"
       >
         <div style={{ width: '100%', height: '70vh', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
-          {fullViewImage && <img src={fullViewImage} alt="Full View" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />}
+          {fullViewDoc && (
+            fullViewDoc.isPdf ? (
+              <iframe
+                src={fullViewDoc.url}
+                title="Full View PDF"
+                style={{ width: '100%', height: '100%', border: 'none' }}
+              />
+            ) : (
+              <img src={fullViewDoc.url} alt="Full View" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+            )
+          )}
         </div>
       </Modal>
     </div>

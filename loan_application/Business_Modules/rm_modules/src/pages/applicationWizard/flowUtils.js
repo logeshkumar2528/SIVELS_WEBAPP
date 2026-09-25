@@ -444,7 +444,7 @@ export function isAadhaarDoc(doc) {
 // In-memory session caches to prevent duplicate requests and infinite lookup loops
 // (Not persisted to localStorage/sessionStorage)
 const tupleLookupCache = new Map(); // key = `${prodDetailsId}:${seq}:${docTypeId}`
-const blobUrlCache = new Map(); // key = url
+const rawBlobCache = new Map(); // key = url -> Promise<{ blob: Blob, isPdf: boolean, mimeType: string }>
 const agentCustDocsCache = new Map(); // key = custId
 
 /**
@@ -452,43 +452,8 @@ const agentCustDocsCache = new Map(); // key = custId
  * Treats 404 silently as an expected empty state without console logging.
  */
 export async function fetchDocumentBlobAsUrl(url, headers = {}, fallbackFileName = '') {
-  if (!url) return null;
-  if (blobUrlCache.has(url)) {
-    return blobUrlCache.get(url);
-  }
-
-  const fetchPromise = (async () => {
-    try {
-      const res = await fetch(url, { headers });
-      if (res.status === 404) {
-        return null;
-      }
-      if (!res.ok) {
-        if (res.status !== 404) {
-          console.warn(`Unexpected status ${res.status} fetching document from ${url}`);
-        }
-        return null;
-      }
-      const blob = await res.blob();
-      if (!blob || blob.size === 0) return null;
-
-      const ext = String(fallbackFileName || url).split('?')[0].split('.').pop()?.toLowerCase();
-      let mimeType = blob.type || 'image/jpeg';
-      if (mimeType === 'application/octet-stream' || !mimeType) {
-        if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
-        else if (ext === 'png') mimeType = 'image/png';
-        else if (ext === 'webp') mimeType = 'image/webp';
-        else if (ext === 'pdf') mimeType = 'application/pdf';
-      }
-      const typedBlob = new Blob([blob], { type: mimeType });
-      return URL.createObjectURL(typedBlob);
-    } catch {
-      return null;
-    }
-  })();
-
-  blobUrlCache.set(url, fetchPromise);
-  return fetchPromise;
+  const meta = await fetchDocumentBlobWithMeta(url, headers, fallbackFileName);
+  return meta?.url || null;
 }
 
 /**
@@ -590,22 +555,22 @@ export async function resolveLatestApplicantAadhaar({
   );
 
   if (applicantKycId && Number(applicantKycId) > 0) {
-    const url = await fetchDocumentBlobAsUrl(
+    const docMeta = await fetchDocumentBlobWithMeta(
       `${finalBaseUrl}/ApplicationKYCDocuments/${encodeURIComponent(applicantKycId)}/aadhar`,
       headers,
-      'aadhar.jpg'
+      aadharPath || 'aadhar.jpg'
     );
-    if (url) return url;
+    if (docMeta) return docMeta;
   }
 
   // Fallback if dedicated endpoint blob fetch fails: download by canonical path
   const cleanPath = String(aadharPath).replace(/^[\\/]+/, '').replace(/\\/g, '/');
-  const url = await fetchDocumentBlobAsUrl(
+  const docMeta = await fetchDocumentBlobWithMeta(
     `${finalBaseUrl}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`,
     headers,
     aadharPath
   );
-  return url || null;
+  return docMeta || null;
 }
 
 /**
@@ -672,22 +637,22 @@ export async function resolveLatestCoApplicantAadhaar({
   );
 
   if (kycId && Number(kycId) > 0) {
-    const url = await fetchDocumentBlobAsUrl(
+    const docMeta = await fetchDocumentBlobWithMeta(
       `${finalBaseUrl}/ApplicationKYCDocuments/${encodeURIComponent(kycId)}/aadhar`,
       headers,
-      `co_applicant_${seq}_aadhar.jpg`
+      aadharPath || `co_applicant_${seq}_aadhar.jpg`
     );
-    if (url) return url;
+    if (docMeta) return docMeta;
   }
 
   // Fallback if dedicated endpoint blob fetch fails: download by canonical path
   const cleanPath = String(aadharPath).replace(/^[\\/]+/, '').replace(/\\/g, '/');
-  const url = await fetchDocumentBlobAsUrl(
+  const docMeta = await fetchDocumentBlobWithMeta(
     `${finalBaseUrl}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`,
     headers,
     aadharPath
   );
-  return url || null;
+  return docMeta || null;
 }
 
 // Backward-compatible aliases
@@ -701,39 +666,40 @@ export const loadCoApplicantAadhaarUrl = resolveLatestCoApplicantAadhaar;
  */
 export async function fetchDocumentBlobWithMeta(url, headers = {}, fallbackFileName = '') {
   if (!url) return null;
-  const cacheKey = `meta:${url}`;
-  if (blobUrlCache.has(cacheKey)) {
-    return blobUrlCache.get(cacheKey);
-  }
+  const cacheKey = url;
+  if (!rawBlobCache.has(cacheKey)) {
+    const fetchPromise = (async () => {
+      try {
+        const res = await fetch(url, { headers });
+        if (res.status === 404 || !res.ok) {
+          return null;
+        }
+        const blob = await res.blob();
+        if (!blob || blob.size === 0) return null;
 
-  const fetchPromise = (async () => {
-    try {
-      const res = await fetch(url, { headers });
-      if (res.status === 404 || !res.ok) {
+        const ext = String(fallbackFileName || url).split('?')[0].split('.').pop()?.toLowerCase();
+        let mimeType = blob.type || 'image/jpeg';
+        if (mimeType === 'application/octet-stream' || !mimeType) {
+          if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+          else if (ext === 'png') mimeType = 'image/png';
+          else if (ext === 'webp') mimeType = 'image/webp';
+          else if (ext === 'pdf') mimeType = 'application/pdf';
+        }
+        const isPdf = mimeType === 'application/pdf' || ext === 'pdf';
+        return { blob, isPdf, mimeType };
+      } catch {
         return null;
       }
-      const blob = await res.blob();
-      if (!blob || blob.size === 0) return null;
+    })();
+    rawBlobCache.set(cacheKey, fetchPromise);
+  }
 
-      const ext = String(fallbackFileName || url).split('?')[0].split('.').pop()?.toLowerCase();
-      let mimeType = blob.type || 'image/jpeg';
-      if (mimeType === 'application/octet-stream' || !mimeType) {
-        if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
-        else if (ext === 'png') mimeType = 'image/png';
-        else if (ext === 'webp') mimeType = 'image/webp';
-        else if (ext === 'pdf') mimeType = 'application/pdf';
-      }
-      const isPdf = mimeType === 'application/pdf' || ext === 'pdf';
-      const typedBlob = new Blob([blob], { type: mimeType });
-      const objectUrl = URL.createObjectURL(typedBlob);
-      return { url: objectUrl, isPdf, mimeType };
-    } catch {
-      return null;
-    }
-  })();
+  const meta = await rawBlobCache.get(cacheKey);
+  if (!meta || !meta.blob) return null;
 
-  blobUrlCache.set(cacheKey, fetchPromise);
-  return fetchPromise;
+  const typedBlob = new Blob([meta.blob], { type: meta.mimeType });
+  const objectUrl = URL.createObjectURL(typedBlob);
+  return { url: objectUrl, isPdf: meta.isPdf, mimeType: meta.mimeType };
 }
 
 /**
