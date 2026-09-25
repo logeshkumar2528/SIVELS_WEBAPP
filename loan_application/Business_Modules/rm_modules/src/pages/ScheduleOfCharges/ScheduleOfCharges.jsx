@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { CheckCircle, CreditCard } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
@@ -36,6 +36,7 @@ function buildChargeState(appData) {
 
 export default function ScheduleOfCharges() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { applicationId } = useParams();
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
@@ -99,6 +100,16 @@ export default function ScheduleOfCharges() {
   };
 
   const handleBack = () => {
+    if (location.state?.fromReview || location.state?.returnTo) {
+      navigate(ROUTES.APPLICATION_PDF_VIEW.replace(':applicationId', appId), {
+        state: {
+          returnTo: location.state?.collateralRoute || ROUTES.COLLATERAL.replace(':applicationId', appId),
+          closeTo: ROUTES.SCHEDULE_CHARGES.replace(':applicationId', appId),
+          reviewMode: true,
+        },
+      });
+      return;
+    }
     navigate(ROUTES.COLLATERAL.replace(':applicationId', appId));
   };
 
@@ -110,7 +121,7 @@ export default function ScheduleOfCharges() {
       activeStep={9}
       title="Step 9: Schedule of Charges"
       subtitle="Read-only charge matrix aligned to the PDF structure."
-      backLabel="Back to Collateral"
+      backLabel={location.state?.fromReview ? 'Back to PDF Review' : 'Back to Collateral'}
       continueLabel="Save & Continue"
       onBack={handleBack}
       onContinue={handleContinue}
@@ -122,7 +133,7 @@ export default function ScheduleOfCharges() {
           icon={ArrowLeftIcon ? <ArrowLeftIcon size={14} /> : null}
           onClick={handleBack}
         >
-          Back to Collateral
+          {location.state?.fromReview ? 'Back to PDF Review' : 'Back to Collateral'}
         </Button>
       }
       showContinue

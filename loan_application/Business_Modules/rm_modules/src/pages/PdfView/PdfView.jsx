@@ -2113,7 +2113,13 @@ export default function PdfView() {
       : []),
   ];
 
+  const isReviewMode = Boolean(location.state?.reviewMode);
+
   const handleBack = () => {
+    if (isReviewMode) {
+      navigate(location.state?.returnTo || ROUTES.COLLATERAL.replace(':applicationId', applicationId));
+      return;
+    }
     if (location.state?.returnTo) {
       navigate(location.state.returnTo);
       return;
@@ -2136,6 +2142,17 @@ export default function PdfView() {
     navigate(ROUTES.SUBMISSION_HISTORY);
   };
 
+  const handleConfirmAndContinue = () => {
+    const nextRoute = location.state?.closeTo || ROUTES.SCHEDULE_CHARGES.replace(':applicationId', applicationId);
+    navigate(nextRoute, {
+      state: {
+        fromReview: true,
+        returnTo: ROUTES.APPLICATION_PDF_VIEW.replace(':applicationId', applicationId),
+        collateralRoute: ROUTES.COLLATERAL.replace(':applicationId', applicationId),
+      },
+    });
+  };
+
   return (
     <div className="pdf-view-wrapper">
       <ErrorPopup
@@ -2151,7 +2168,7 @@ export default function PdfView() {
           variant="secondary"
           onClick={handleBack}
         >
-          Back to Application
+          {isReviewMode ? 'Back to Collateral' : 'Back to Application'}
         </Button>
         <Button onClick={handleDownloadPdf} disabled={isGeneratingPdf || !isPdfMediaReady}>
           {isGeneratingPdf
@@ -2167,6 +2184,15 @@ export default function PdfView() {
         >
           Share
         </Button>
+        {isReviewMode && (
+          <Button
+            variant="primary"
+            onClick={handleConfirmAndContinue}
+            disabled={isGeneratingPdf || !isPdfMediaReady}
+          >
+            Confirm & Continue to Charges
+          </Button>
+        )}
       </div>
 
       <div className="pdf-container" ref={pdfRef}>

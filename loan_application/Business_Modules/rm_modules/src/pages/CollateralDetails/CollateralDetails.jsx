@@ -673,7 +673,13 @@ export default function CollateralDetails() {
 
     const currentAppData = getApplication(appId) || appData;
     saveApplication(appId, buildSectionUpdate(currentAppData, 'collateral', form));
-    navigate(ROUTES.SCHEDULE_CHARGES.replace(':applicationId', appId));
+    navigate(ROUTES.APPLICATION_PDF_VIEW.replace(':applicationId', appId), {
+      state: {
+        returnTo: ROUTES.COLLATERAL.replace(':applicationId', appId),
+        closeTo: ROUTES.SCHEDULE_CHARGES.replace(':applicationId', appId),
+        reviewMode: true,
+      },
+    });
   };
 
   const handleBack = () => {
