@@ -112,6 +112,14 @@ export const backOfficeService = {
     return unwrapResponse(response);
   },
 
+  /**
+   * Retrieve all RTR Loan Status Master records (GET /rtr-loan-status-master).
+   */
+  getRtrLoanStatusMaster: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.RTR_LOAN_STATUS_MASTER);
+    return unwrapResponse(response);
+  },
+
   /* ==========================================
      4. CUSTOMER / APPLICATION QUEUE APIs
   ========================================== */
@@ -349,6 +357,63 @@ export const backOfficeService = {
     const response = await axiosInstance.patch(
       BACK_OFFICE_ENDPOINTS.CALCULATION_ASSESSMENT_RECOMMENDATION(loanEligibilityAssessmentId),
       payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /* ==========================================
+     8c. LOAN OBLIGATIONS APIs (Step 10 RTR Common Sheet)
+  ========================================== */
+
+  /**
+   * Retrieve loan obligations for an application and applicant sequence.
+   * GET /api/calculation/loan-obligations/{applicationProductDetailsId}/{applicantSequence}
+   * @param {string|number} applicationProductDetailsId
+   * @param {string|number} applicantSequence
+   */
+  getLoanObligations: async (applicationProductDetailsId, applicantSequence = 0) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.LOAN_OBLIGATIONS_BY_APPLICANT(applicationProductDetailsId, applicantSequence)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Create a new loan obligation record.
+   * POST /api/calculation/loan-obligations
+   * @param {object} payload
+   */
+  createLoanObligation: async (payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.LOAN_OBLIGATIONS,
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Update an existing loan obligation record.
+   * PUT /api/calculation/loan-obligations/{applicationLoanObligationDetailsId}
+   * @param {string|number} applicationLoanObligationDetailsId
+   * @param {object} payload
+   */
+  updateLoanObligation: async (applicationLoanObligationDetailsId, payload) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.LOAN_OBLIGATION_BY_ID(applicationLoanObligationDetailsId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Delete a loan obligation record.
+   * DELETE /api/calculation/loan-obligations/{applicationLoanObligationDetailsId}?modifiedBy={modifiedBy}
+   * @param {string|number} applicationLoanObligationDetailsId
+   * @param {string|number} modifiedBy
+   */
+  deleteLoanObligation: async (applicationLoanObligationDetailsId, modifiedBy) => {
+    const response = await axiosInstance.delete(
+      BACK_OFFICE_ENDPOINTS.LOAN_OBLIGATION_DELETE(applicationLoanObligationDetailsId, modifiedBy)
     );
     return unwrapResponse(response);
   },

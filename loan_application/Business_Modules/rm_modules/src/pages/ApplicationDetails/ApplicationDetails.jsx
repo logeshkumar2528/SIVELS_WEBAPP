@@ -497,7 +497,7 @@ export default function ApplicationDetails() {
     }
 
     const matchedPurpose = loanPurposeOptions.find(
-      (option) => String(option.value) === String(appData.purposeOfLoan)
+      (option) => String(option.value) === String(appData.purposeOfLoan) || Number(option.value) === Number(appData.purposeOfLoan)
     );
 
     const relatedLoanProductId =
@@ -509,17 +509,62 @@ export default function ApplicationDetails() {
       !appData.loanProduct
     ) {
       saveApplication(appId, {
-        loanProduct: relatedLoanProductId
+        loanProduct: Number(relatedLoanProductId) || relatedLoanProductId
       });
     }
   }, [appId, appData.purposeOfLoan, appData.loanProduct, loanPurposeOptions, saveApplication]);
+
+  const effectiveLoanProductOptions = useMemo(() => {
+    const options = [...loanProductOptions];
+    if (appData.loanProduct !== '' && appData.loanProduct !== null && appData.loanProduct !== undefined) {
+      const match = options.find((p) => String(p.value) === String(appData.loanProduct) || Number(p.value) === Number(appData.loanProduct));
+      if (!match) {
+        options.unshift({
+          value: Number(appData.loanProduct) || appData.loanProduct,
+          label: displayRecord?.loanProductName || displayRecord?.productName || displayRecord?.loanProductDisplay || String(appData.loanProduct),
+          raw: { loanProductId: appData.loanProduct }
+        });
+      }
+    }
+    return options;
+  }, [loanProductOptions, appData.loanProduct, displayRecord]);
+
+  const effectiveLoanTransactionTypeOptions = useMemo(() => {
+    const options = [...loanTransactionTypeOptions];
+    if (appData.loanTransactionType !== '' && appData.loanTransactionType !== null && appData.loanTransactionType !== undefined) {
+      const match = options.find((o) => String(o.value) === String(appData.loanTransactionType) || Number(o.value) === Number(appData.loanTransactionType));
+      if (!match) {
+        options.unshift({
+          value: Number(appData.loanTransactionType) || appData.loanTransactionType,
+          label: displayRecord?.loanTransactionTypeName || displayRecord?.transactionTypeName || String(appData.loanTransactionType),
+          raw: { loanTransactionTypeId: appData.loanTransactionType }
+        });
+      }
+    }
+    return options;
+  }, [loanTransactionTypeOptions, appData.loanTransactionType, displayRecord]);
+
+  const effectiveInterestTypeOptions = useMemo(() => {
+    const options = [...interestTypeOptions];
+    if (appData.interestType !== '' && appData.interestType !== null && appData.interestType !== undefined) {
+      const match = options.find((o) => String(o.value) === String(appData.interestType) || Number(o.value) === Number(appData.interestType));
+      if (!match) {
+        options.unshift({
+          value: Number(appData.interestType) || appData.interestType,
+          label: displayRecord?.interestTypeName || String(appData.interestType),
+          raw: { interestTypeId: appData.interestType }
+        });
+      }
+    }
+    return options;
+  }, [interestTypeOptions, appData.interestType, displayRecord]);
 
   const filteredLoanPurposeOptions = useMemo(() => {
     if (!appData.loanProduct) {
       return [];
     }
 
-    return loanPurposeOptions.filter((option) => {
+    const filtered = loanPurposeOptions.filter((option) => {
       const raw = option.raw;
 
       if (!raw || raw.isActive === false) {
@@ -530,45 +575,111 @@ export default function ApplicationDetails() {
         raw.loanProductId ??
         raw.LoanProductId;
 
-      return String(relatedProductId) === String(appData.loanProduct);
+      return String(relatedProductId) === String(appData.loanProduct) || Number(relatedProductId) === Number(appData.loanProduct);
     });
-  }, [loanPurposeOptions, appData.loanProduct]);
 
-  const selectedProduct = loanProductOptions.find(p => p.value === appData.loanProduct || (appData.loanProduct !== '' && appData.loanProduct !== null && appData.loanProduct !== undefined && String(p.value) === String(appData.loanProduct)));
+    if (appData.purposeOfLoan !== '' && appData.purposeOfLoan !== null && appData.purposeOfLoan !== undefined) {
+      const hasMatch = filtered.some((opt) => String(opt.value) === String(appData.purposeOfLoan) || Number(opt.value) === Number(appData.purposeOfLoan));
+      if (!hasMatch) {
+        const fullMatch = loanPurposeOptions.find((opt) => String(opt.value) === String(appData.purposeOfLoan) || Number(opt.value) === Number(appData.purposeOfLoan));
+        if (fullMatch) {
+          filtered.unshift(fullMatch);
+        } else if (displayRecord?.purposeOfLoanName || displayRecord?.loanPurposeName || displayRecord?.loanPurpose) {
+          filtered.unshift({
+            value: Number(appData.purposeOfLoan) || appData.purposeOfLoan,
+            label: displayRecord.purposeOfLoanName || displayRecord.loanPurposeName || displayRecord.loanPurpose,
+            raw: { loanPurposeId: appData.purposeOfLoan }
+          });
+        }
+      }
+    }
+
+    return filtered;
+  }, [loanPurposeOptions, appData.loanProduct, appData.purposeOfLoan, displayRecord]);
+
+  const selectedProduct = effectiveLoanProductOptions.find(p => p.value === appData.loanProduct || (appData.loanProduct !== '' && appData.loanProduct !== null && appData.loanProduct !== undefined && (String(p.value) === String(appData.loanProduct) || Number(p.value) === Number(appData.loanProduct))));
   const requiresVariation = selectedProduct?.raw?.productCode === 'HL' || selectedProduct?.raw?.productCode === 'LAP';
-  const variationOptions = useMemo(
-    () => loanVariationMaster.filter(opt => !opt.raw?.loanProductId || String(opt.raw?.loanProductId) === String(appData.loanProduct)),
-    [loanVariationMaster, appData.loanProduct]
-  );
+  const variationOptions = useMemo(() => {
+    const filtered = loanVariationMaster.filter(opt =>
+      !opt.raw?.loanProductId ||
+      String(opt.raw?.loanProductId) === String(appData.loanProduct) ||
+      Number(opt.raw?.loanProductId) === Number(appData.loanProduct)
+    );
+
+    if (appData.loanVariation !== '' && appData.loanVariation !== null && appData.loanVariation !== undefined) {
+      const match = filtered.find(o => String(o.value) === String(appData.loanVariation) || Number(o.value) === Number(appData.loanVariation));
+      if (!match) {
+        const fullMatch = loanVariationMaster.find(o => String(o.value) === String(appData.loanVariation) || Number(o.value) === Number(appData.loanVariation));
+        if (fullMatch) {
+          filtered.unshift(fullMatch);
+        } else if (displayRecord?.variationName || displayRecord?.loanVariationName) {
+          filtered.unshift({
+            value: Number(appData.loanVariation) || appData.loanVariation,
+            label: displayRecord.variationName || displayRecord.loanVariationName,
+            raw: { loanProductVariationId: appData.loanVariation }
+          });
+        }
+      }
+    }
+    return filtered;
+  }, [loanVariationMaster, appData.loanProduct, appData.loanVariation, displayRecord]);
+
   const roiOptions = useMemo(() => {
     if (!appData.loanProduct) return [];
     const options = rateOfInterestMaster
       .filter((opt) => {
         const raw = opt.raw;
         if (!raw || raw.isActive === false) return false;
-        return String(raw.loanProductId) === String(appData.loanProduct);
+        return String(raw.loanProductId) === String(appData.loanProduct) || Number(raw.loanProductId) === Number(appData.loanProduct);
       })
-      .map((opt) => ({
-        value: Number(opt.raw.interestRate),
-        label: `${opt.raw.interestCode} (${Number(opt.raw.interestRate).toFixed(2)}%)`,
-        raw: opt.raw,
-      }));
+      .map((opt) => {
+        const rateNum = Number(opt.raw.interestRate);
+        return {
+          value: rateNum,
+          label: opt.raw.interestCode ? `${opt.raw.interestCode} (${rateNum.toFixed(2)}%)` : `${rateNum.toFixed(2)}%`,
+          raw: opt.raw,
+        };
+      });
 
     if (
       appData.roi !== null &&
       appData.roi !== undefined &&
-      appData.roi !== '' &&
-      !options.some((o) => Number(o.value) === Number(appData.roi))
+      appData.roi !== ''
     ) {
-      options.unshift({
-        value: Number(appData.roi),
-        label: `${Number(appData.roi).toFixed(2)}%`,
-        raw: { interestRate: Number(appData.roi) },
-      });
+      const savedRoiNum = Number(appData.roi);
+      if (!isNaN(savedRoiNum)) {
+        const exists = options.some((o) => Number(o.value) === savedRoiNum);
+        if (!exists) {
+          options.unshift({
+            value: savedRoiNum,
+            label: `${savedRoiNum.toFixed(2)}%`,
+            raw: { interestRate: savedRoiNum },
+          });
+        }
+      }
     }
 
     return options;
   }, [rateOfInterestMaster, appData.loanProduct, appData.roi]);
+
+  const effectiveLoanTenureOptions = useMemo(() => {
+    const options = [...loanTenureOptions];
+    const savedTenure = appData.loanTenureMonths;
+    if (savedTenure !== '' && savedTenure !== null && savedTenure !== undefined) {
+      const numSaved = Number(savedTenure);
+      if (!isNaN(numSaved) && numSaved > 0) {
+        const exists = options.some((opt) => Number(opt.value) === numSaved || String(opt.value) === String(savedTenure));
+        if (!exists) {
+          options.unshift({
+            value: numSaved,
+            label: `${numSaved} Months`,
+            raw: { tenureValue: numSaved, tenureUnit: 'Months' },
+          });
+        }
+      }
+    }
+    return options;
+  }, [loanTenureOptions, appData.loanTenureMonths]);
 
   useEffect(() => {
     const productId = appData.loanProduct;
@@ -621,18 +732,20 @@ export default function ApplicationDetails() {
     let nextValue = rawValue;
     if (field === 'loanAmount') {
       nextValue = formatIndianAmount(rawValue);
-    } else if (['loanTenureMonths', 'coApplicantsCount', 'distanceFromBranchKm', 'roi'].includes(field)) {
+    } else if (['loanTenureMonths', 'coApplicantsCount', 'roi'].includes(field)) {
       nextValue = rawValue === '' ? '' : Number(rawValue);
+    } else if (field === 'distanceFromBranchKm') {
+      nextValue = rawValue === '' ? '' : (String(rawValue).endsWith('.') ? rawValue : (isNaN(Number(rawValue)) ? rawValue : Number(rawValue)));
     }
 
     const updates = { [field]: nextValue };
 
     if (field === 'purposeOfLoan') {
-      const matched = loanPurposeOptions.find((option) => String(option.value) === String(rawValue));
+      const matched = loanPurposeOptions.find((option) => String(option.value) === String(rawValue) || Number(option.value) === Number(rawValue));
       const relatedLoanProductId = matched?.raw?.loanProductId ?? matched?.raw?.LoanProductId;
-      if (relatedLoanProductId) {
-        updates.loanProduct = relatedLoanProductId;
-        const selectedProd = loanProductOptions.find((p) => String(p.value) === String(relatedLoanProductId));
+      if (relatedLoanProductId && String(relatedLoanProductId) !== String(appData.loanProduct) && Number(relatedLoanProductId) !== Number(appData.loanProduct)) {
+        updates.loanProduct = Number(relatedLoanProductId) || relatedLoanProductId;
+        const selectedProd = loanProductOptions.find((p) => String(p.value) === String(relatedLoanProductId) || Number(p.value) === Number(relatedLoanProductId));
         const isVariationRequired = selectedProd?.raw?.productCode === 'HL' || selectedProd?.raw?.productCode === 'LAP';
         if (!isVariationRequired) {
           updates.loanVariation = '';
@@ -643,26 +756,29 @@ export default function ApplicationDetails() {
     }
 
     if (field === 'loanProduct') {
-      const selected = loanProductOptions.find((product) => product.value === rawValue);
-      const isVariationRequired = selected?.raw?.productCode === 'HL' || selected?.raw?.productCode === 'LAP';
-      if (!isVariationRequired) {
-        updates.loanVariation = '';
-      }
-      updates.roi = '';
-      updates.loanTenureMonths = '';
+      const isActualChange = String(rawValue) !== String(appData.loanProduct) && Number(rawValue) !== Number(appData.loanProduct);
+      if (isActualChange) {
+        const selected = loanProductOptions.find((product) => String(product.value) === String(rawValue) || Number(product.value) === Number(rawValue));
+        const isVariationRequired = selected?.raw?.productCode === 'HL' || selected?.raw?.productCode === 'LAP';
+        if (!isVariationRequired) {
+          updates.loanVariation = '';
+        }
+        updates.roi = '';
+        updates.loanTenureMonths = '';
 
-      if (appData.purposeOfLoan) {
-        const currentPurpose = loanPurposeOptions.find(
-          (option) =>
-            String(option.value) ===
-            String(appData.purposeOfLoan)
-        );
-        const currentPurposeProductId =
-          currentPurpose?.raw?.loanProductId ??
-          currentPurpose?.raw?.LoanProductId;
+        if (appData.purposeOfLoan) {
+          const currentPurpose = loanPurposeOptions.find(
+            (option) =>
+              String(option.value) === String(appData.purposeOfLoan) ||
+              Number(option.value) === Number(appData.purposeOfLoan)
+          );
+          const currentPurposeProductId =
+            currentPurpose?.raw?.loanProductId ??
+            currentPurpose?.raw?.LoanProductId;
 
-        if (!rawValue || String(currentPurposeProductId) !== String(rawValue)) {
-          updates.purposeOfLoan = '';
+          if (!rawValue || (String(currentPurposeProductId) !== String(rawValue) && Number(currentPurposeProductId) !== Number(rawValue))) {
+            updates.purposeOfLoan = '';
+          }
         }
       }
     }
@@ -1041,6 +1157,27 @@ export default function ApplicationDetails() {
   const sourcingDisplayCode = isRmSourced
     ? (sourcingInfo.code || appData.agentCode || displayRecord?.rmCode || displayRecord?.RMCode || (ownership.rmId ? String(ownership.rmId) : '') || (appData.rmId ? String(appData.rmId) : ''))
     : (sourcingInfo.code || agentInfo.code || appData.agentCode || displayRecord?.agentCode || displayRecord?.AgentCode || (ownership.agentId ? String(ownership.agentId) : '') || (appData.agentId ? String(appData.agentId) : ''));
+  const selectedProductOption = effectiveLoanProductOptions.find(
+    (p) => String(p.value) === String(appData.loanProduct) || Number(p.value) === Number(appData.loanProduct)
+  );
+  const selectedTransactionTypeOption = effectiveLoanTransactionTypeOptions.find(
+    (o) => String(o.value) === String(appData.loanTransactionType) || Number(o.value) === Number(appData.loanTransactionType)
+  );
+  const selectedPurposeOption = filteredLoanPurposeOptions.find(
+    (o) => String(o.value) === String(appData.purposeOfLoan) || Number(o.value) === Number(appData.purposeOfLoan)
+  );
+  const selectedTenureOption = effectiveLoanTenureOptions.find(
+    (o) => Number(o.value) === Number(appData.loanTenureMonths) || String(o.value) === String(appData.loanTenureMonths)
+  );
+  const selectedInterestTypeOption = effectiveInterestTypeOptions.find(
+    (o) => String(o.value) === String(appData.interestType) || Number(o.value) === Number(appData.interestType)
+  );
+  const selectedRoiOption = roiOptions.find(
+    (o) => Number(o.value) === Number(appData.roi) || String(o.value) === String(appData.roi)
+  );
+  const selectedVariationOption = variationOptions.find(
+    (o) => String(o.value) === String(appData.loanVariation) || Number(o.value) === Number(appData.loanVariation)
+  );
 
   return (
     <div className="page-container ad-page-root compact-mode">
@@ -1155,12 +1292,12 @@ export default function ApplicationDetails() {
                   <div className="compact-input-wrapper">
                     <Select
                       error={!!errors.loanProduct}
-                      value={appData.loanProduct || ''}
+                      value={selectedProductOption ? selectedProductOption.value : (appData.loanProduct || '')}
                       onChange={(val) => updateField('loanProduct', val)}
-                      placeholder={isLoadingMasters ? "Loading..." : "Select loan product"}
-                      options={loanProductOptions}
+                      placeholder={isLoadingMasters && effectiveLoanProductOptions.length === 0 ? "Loading..." : "Select loan product"}
+                      options={effectiveLoanProductOptions}
                       icon={<Briefcase size={16} />}
-                      disabled={isLoadingMasters}
+                      disabled={isLoadingMasters && effectiveLoanProductOptions.length === 0}
                     />
                   </div>
                   {errors.loanProduct && <span className="ad-field-error">{errors.loanProduct}</span>}
@@ -1171,12 +1308,12 @@ export default function ApplicationDetails() {
                   <div className="compact-input-wrapper">
                     <Select
                       error={!!errors.loanTransactionType}
-                      value={appData.loanTransactionType || ''}
+                      value={selectedTransactionTypeOption ? selectedTransactionTypeOption.value : (appData.loanTransactionType || '')}
                       onChange={(val) => updateField('loanTransactionType', val)}
-                      placeholder={isLoadingMasters ? "Loading..." : "Select transaction type"}
-                      options={loanTransactionTypeOptions}
+                      placeholder={isLoadingMasters && effectiveLoanTransactionTypeOptions.length === 0 ? "Loading..." : "Select transaction type"}
+                      options={effectiveLoanTransactionTypeOptions}
                       icon={<RefreshCw size={16} />}
-                      disabled={isLoadingMasters}
+                      disabled={isLoadingMasters && effectiveLoanTransactionTypeOptions.length === 0}
                     />
                   </div>
                   {errors.loanTransactionType && <span className="ad-field-error">{errors.loanTransactionType}</span>}
@@ -1187,10 +1324,10 @@ export default function ApplicationDetails() {
                   <div className="compact-input-wrapper">
                     <Select
                       error={!!errors.purposeOfLoan}
-                      value={appData.purposeOfLoan || ''}
+                      value={selectedPurposeOption ? selectedPurposeOption.value : (appData.purposeOfLoan || '')}
                       onChange={(val) => updateField('purposeOfLoan', val)}
                       placeholder={
-                        isLoadingMasters
+                        isLoadingMasters && filteredLoanPurposeOptions.length === 0
                           ? "Loading..."
                           : !appData.loanProduct
                           ? "Select loan product first"
@@ -1200,7 +1337,7 @@ export default function ApplicationDetails() {
                       }
                       options={filteredLoanPurposeOptions}
                       icon={<Target size={16} />}
-                      disabled={isLoadingMasters || !appData.loanProduct || filteredLoanPurposeOptions.length === 0}
+                      disabled={!appData.loanProduct || (isLoadingMasters && filteredLoanPurposeOptions.length === 0)}
                     />
                   </div>
                   {errors.purposeOfLoan && <span className="ad-field-error">{errors.purposeOfLoan}</span>}
@@ -1229,20 +1366,20 @@ export default function ApplicationDetails() {
                   <div className="compact-input-wrapper">
                     <Select
                       error={!!errors.loanTenureMonths}
-                      value={appData.loanTenureMonths !== null && appData.loanTenureMonths !== undefined && appData.loanTenureMonths !== '' ? appData.loanTenureMonths : ''}
+                      value={selectedTenureOption ? selectedTenureOption.value : (appData.loanTenureMonths !== null && appData.loanTenureMonths !== undefined && appData.loanTenureMonths !== '' ? appData.loanTenureMonths : '')}
                       onChange={(val) => updateField('loanTenureMonths', val)}
                       placeholder={
                         !appData.loanProduct
                           ? "Select loan product first"
-                          : isLoadingTenures
+                          : isLoadingTenures && effectiveLoanTenureOptions.length === 0
                           ? "Loading tenures..."
-                          : loanTenureOptions.length === 0
+                          : effectiveLoanTenureOptions.length === 0
                           ? "No tenure configured for this loan product"
                           : "Select loan tenure"
                       }
-                      options={loanTenureOptions}
+                      options={effectiveLoanTenureOptions}
                       icon={<Calendar size={16} />}
-                      disabled={isLoadingMasters || !appData.loanProduct || isLoadingTenures || loanTenureOptions.length === 0}
+                      disabled={!appData.loanProduct || (isLoadingTenures && effectiveLoanTenureOptions.length === 0)}
                     />
                   </div>
                   {errors.loanTenureMonths && <span className="ad-field-error">{errors.loanTenureMonths}</span>}
@@ -1253,12 +1390,12 @@ export default function ApplicationDetails() {
                   <div className="compact-input-wrapper">
                     <Select
                       error={!!errors.interestType}
-                      value={appData.interestType || ''}
+                      value={selectedInterestTypeOption ? selectedInterestTypeOption.value : (appData.interestType || '')}
                       onChange={(val) => updateField('interestType', val)}
-                      placeholder={isLoadingMasters ? "Loading..." : "Select interest type"}
-                      options={interestTypeOptions}
+                      placeholder={isLoadingMasters && effectiveInterestTypeOptions.length === 0 ? "Loading..." : "Select interest type"}
+                      options={effectiveInterestTypeOptions}
                       icon={<TrendingUp size={16} />}
-                      disabled={isLoadingMasters}
+                      disabled={isLoadingMasters && effectiveInterestTypeOptions.length === 0}
                     />
                   </div>
                   {errors.interestType && <span className="ad-field-error">{errors.interestType}</span>}
@@ -1269,18 +1406,20 @@ export default function ApplicationDetails() {
                   <div className="compact-input-wrapper">
                     <Select
                       error={!!errors.roi}
-                      value={appData.roi !== null && appData.roi !== undefined && appData.roi !== '' ? appData.roi : ''}
+                      value={selectedRoiOption ? selectedRoiOption.value : (appData.roi !== null && appData.roi !== undefined && appData.roi !== '' ? appData.roi : '')}
                       onChange={(val) => updateField('roi', val)}
                       placeholder={
                         !appData.loanProduct
                           ? "Select loan product first"
+                          : isLoadingMasters && roiOptions.length === 0
+                          ? "Loading..."
                           : roiOptions.length === 0
                           ? "No ROI configured for this loan product"
                           : "Select ROI"
                       }
                       options={roiOptions}
                       icon={<Percent size={16} />}
-                      disabled={isLoadingMasters || !appData.loanProduct || roiOptions.length === 0}
+                      disabled={!appData.loanProduct || (isLoadingMasters && roiOptions.length === 0)}
                     />
                   </div>
                   {errors.roi && <span className="ad-field-error">{errors.roi}</span>}
@@ -1332,12 +1471,12 @@ export default function ApplicationDetails() {
                     <div className="compact-input-wrapper">
                       <Select
                         error={!!errors.loanVariation}
-                        value={appData.loanVariation || ''}
+                        value={selectedVariationOption ? selectedVariationOption.value : (appData.loanVariation || '')}
                         onChange={(val) => updateField('loanVariation', val)}
-                        placeholder={isLoadingMasters ? "Loading..." : "Select variation"}
+                        placeholder={isLoadingMasters && variationOptions.length === 0 ? "Loading..." : "Select variation"}
                         options={variationOptions}
                         icon={<GitBranch size={16} />}
-                        disabled={isLoadingMasters}
+                        disabled={isLoadingMasters && variationOptions.length === 0}
                       />
                     </div>
                     {errors.loanVariation && <span className="ad-field-error">{errors.loanVariation}</span>}

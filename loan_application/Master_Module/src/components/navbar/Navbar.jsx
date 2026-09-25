@@ -46,6 +46,7 @@ const MASTERS_MENU = [
   { label: 'Assessment Method', path: '/masters/assessment-method', icon: Calculator },
   { label: 'PD Verification Type', path: '/masters/pd-verification-type', icon: UserCheck },
   { label: 'RTR Norm Master', path: '/masters/rtr-norm-master', icon: FileSpreadsheet },
+  { label: 'RTR Loan Status', path: '/masters/rtr-loan-status', icon: FileSpreadsheet },
   { label: 'Health Check Type', path: '/masters/health-check-type', icon: Activity },
   { label: 'Company Configuration', path: '/company', icon: Building2 }
 ];

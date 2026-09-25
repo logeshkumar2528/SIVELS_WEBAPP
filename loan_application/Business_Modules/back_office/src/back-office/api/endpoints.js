@@ -23,6 +23,7 @@ export const BACK_OFFICE_ENDPOINTS = {
 
   PD_VERIFICATION_TYPES: '/PDVerificationTypeMaster',
   HEALTH_CHECK_TYPES: '/health-check-types',
+  RTR_LOAN_STATUS_MASTER: '/rtr-loan-status-master',
 
   BANKS_ACTIVE: '/masters/bank/active',
   BANK_BRANCHES: '/BankBranch',
@@ -99,6 +100,15 @@ export const BACK_OFFICE_ENDPOINTS = {
   CALCULATION_RTR_CALCULATE: '/calculation/rtr/calculate',
   CALCULATION_RTR_ASSESSMENTS_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
     `/calculation/rtr/assessments/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
+
+  // Loan Obligations (Step 10 RTR Common Sheet)
+  LOAN_OBLIGATIONS: '/calculation/loan-obligations',
+  LOAN_OBLIGATIONS_BY_APPLICANT: (applicationProductDetailsId, applicantSequence) =>
+    `/calculation/loan-obligations/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
+  LOAN_OBLIGATION_BY_ID: (applicationLoanObligationDetailsId) =>
+    `/calculation/loan-obligations/${encodeURIComponent(applicationLoanObligationDetailsId)}`,
+  LOAN_OBLIGATION_DELETE: (applicationLoanObligationDetailsId, modifiedBy) =>
+    `/calculation/loan-obligations/${encodeURIComponent(applicationLoanObligationDetailsId)}?modifiedBy=${encodeURIComponent(modifiedBy)}`,
 
   // Normal Income Calculation APIs
   CALCULATION_NORMAL_INCOME_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>

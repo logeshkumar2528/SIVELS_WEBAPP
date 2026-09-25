@@ -759,7 +759,9 @@ export default function BankExistingLoans() {
                 if (mapped.length > 0 || isPrimary) {
                   updatedBank = {
                     ...updatedBank,
-                    noOfActiveCreditCards: mapped.length > 0 ? String(mapped.length) : (bank.noOfActiveCreditCards || ''),
+                    noOfActiveCreditCards: mapped.length > 0
+                      ? String(mapped.length)
+                      : (bank.noOfActiveCreditCards !== undefined && bank.noOfActiveCreditCards !== null && bank.noOfActiveCreditCards !== '' ? String(bank.noOfActiveCreditCards) : ''),
                     activeCreditCardsDetails: mapped,
                   };
                 }
@@ -810,7 +812,9 @@ export default function BankExistingLoans() {
 
               updatedBank = {
                 ...updatedBank,
-                noOfActiveLoans: mappedLoans.length > 0 ? String(mappedLoans.length) : (bank.noOfActiveLoans || ''),
+                noOfActiveLoans: mappedLoans.length > 0
+                  ? String(mappedLoans.length)
+                  : (bank.noOfActiveLoans !== undefined && bank.noOfActiveLoans !== null && bank.noOfActiveLoans !== '' ? String(bank.noOfActiveLoans) : ''),
                 activeLoansDetails: mappedLoans,
               };
             }

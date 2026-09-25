@@ -16,8 +16,9 @@
  * - Step 07: Technical Value (File upload dropzone with <= 150 MB validation, View, Download, Remove).
  * - Step 08: CIBIL Check (Preserved Credit Bureau verification simulation + Manual CIBIL PAN Upload).
  * - Step 09: PD Verification (Personal Discussion mode selector from dynamic PDVerificationTypeMaster).
- * - Step 10: Eligibility Assessment (Methodology & multi-applicant credit assessment engine).
- * - Step 11: Recommendation Sheet (Credit underwriter recommendation placeholder).
+ * - Step 10: RTR Common Sheet (Obligation assessment).
+ * - Step 11: Eligibility Assessment (Methodology & multi-applicant credit assessment engine).
+ * - Step 12: Recommendation Sheet (Credit underwriter recommendation placeholder).
  * - Single-fetch shared data and VerificationStepModal are preserved in code for easy inspection.
  */
 
@@ -30,9 +31,10 @@ import { useVerificationWorkspace } from '../../hooks/useVerificationWorkspace';
 import backOfficeService from '../../api/backOfficeService';
 import { getBackOfficeAuth } from '../../auth/authStorage';
 import VerificationStepModal from '../../components/Verification/VerificationStepModal';
+import RtrCommonSheet from '../../components/RtrCommonSheet/RtrCommonSheet';
 import PdfView from '../../../../../rm_modules/src/pages/PdfView/PdfView';
 import { ApplicationDraftProvider } from '../../../../../rm_modules/src/state/ApplicationDraftContext';
-import { resolveDocumentTypeId, validateApplicantDocumentFile } from '../../../../../../Core/src/utils/documentTypeHelper';
+import { resolveDocumentTypeId, validateApplicantDocumentFile, getDocumentApplicability } from '../../../../../../Core/src/utils/documentTypeHelper';
 import './CustomerVerification.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -211,7 +213,7 @@ const INITIAL_STEP_VERIFICATIONS = {
 };
 
 /**
- * 11-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
+ * 12-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
  */
 const VERIFICATION_WORKFLOW_STEPS = [
   { id: 1, number: 1, visibleNum: '01', title: 'View Form', subtitle: 'Application form', group: 'FORM REVIEW' },
@@ -223,12 +225,13 @@ const VERIFICATION_WORKFLOW_STEPS = [
   { id: 12, number: 12, visibleNum: '07', title: 'Technical Value', subtitle: 'Valuation report upload', group: 'CREDIT & ASSESSMENT' },
   { id: 13, number: 13, visibleNum: '08', title: 'CIBIL Check', subtitle: 'Credit Bureau & PAN', group: 'CREDIT & ASSESSMENT' },
   { id: 14, number: 14, visibleNum: '09', title: 'PD Verification', subtitle: 'Personal discussion', group: 'CREDIT & ASSESSMENT' },
-  { id: 16, number: 16, visibleNum: '10', title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
-  { id: 17, number: 17, visibleNum: '11', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
+  { id: 15, number: 15, visibleNum: '10', title: 'RTR Common Sheet', subtitle: 'Obligation assessment', group: 'CREDIT & ASSESSMENT' },
+  { id: 16, number: 16, visibleNum: '11', title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
+  { id: 17, number: 17, visibleNum: '12', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
 ];
 
 /**
- * Visible Step (1–11) to Internal Step ID Mapping
+ * Visible Step (1–12) to Internal Step ID Mapping
  */
 const VISIBLE_TO_INTERNAL_STEP = {
   1: 1,
@@ -240,12 +243,13 @@ const VISIBLE_TO_INTERNAL_STEP = {
   7: 12,
   8: 13,
   9: 14,
-  10: 16,
-  11: 17,
+  10: 15,
+  11: 16,
+  12: 17,
 };
 
 /**
- * Internal Step ID to Visible Step (1–11) Mapping
+ * Internal Step ID to Visible Step (1–12) Mapping
  */
 const INTERNAL_TO_VISIBLE_STEP = {
   1: 1,
@@ -262,14 +266,15 @@ const INTERNAL_TO_VISIBLE_STEP = {
   12: 7,
   13: 8,
   14: 9,
-  16: 10,
-  17: 11,
+  15: 10,
+  16: 11,
+  17: 12,
 };
 
 function resolveInternalStepFromQuery(stepParam) {
   if (stepParam == null || stepParam === '') return 1;
   const parsed = Number(stepParam);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 11) {
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 12) {
     return 1;
   }
   return VISIBLE_TO_INTERNAL_STEP[parsed] ?? 1;
@@ -417,13 +422,17 @@ function createBureauReport(customerData) {
  */
 /**
  * Resolves document row status following strict underwriting priority:
- * 1. Returned to RM (rejection status === 'ReturnedToRM')
- * 2. Resubmitted (rejection status === 'Resubmitted')
- * 3. Not Uploaded (!hasFile)
- * 4. Verified (isVerified is true)
- * 5. Not Verified (otherwise for uploaded document)
+ * 1. Not Required (isNotRequired is true)
+ * 2. Returned to RM (rejection status === 'ReturnedToRM')
+ * 3. Resubmitted (rejection status === 'Resubmitted')
+ * 4. Not Uploaded (!hasFile, or Optional if isOptional)
+ * 5. Verified (isVerified is true)
+ * 6. Not Verified (otherwise for uploaded document)
  */
-function resolveRowStatus({ rejection, hasFile, isVerified }) {
+function resolveRowStatus({ rejection, hasFile, isVerified, isNotRequired, isOptional }) {
+  if (isNotRequired) {
+    return 'Not Required';
+  }
   const rejStatus = String(rejection?.status || '').trim();
   if (
     rejStatus === 'ReturnedToRM' ||
@@ -436,7 +445,7 @@ function resolveRowStatus({ rejection, hasFile, isVerified }) {
     return 'Resubmitted';
   }
   if (!hasFile) {
-    return 'Not Uploaded';
+    return isOptional ? 'Optional' : 'Not Uploaded';
   }
   if (isVerified) {
     return 'Verified';
@@ -619,7 +628,9 @@ export default function CustomerVerification() {
   });
   const [coApplicantsFinancialDocs, setCoApplicantsFinancialDocs] = useState({});
 
-  // Fetch DocumentTypeMaster on mount to dynamically resolve document types
+  const [employmentTypeDocMappings, setEmploymentTypeDocMappings] = useState([]);
+
+  // Fetch DocumentTypeMaster and EmploymentTypeDocumentMapping on mount
   useEffect(() => {
     let isMounted = true;
     async function fetchMasterData() {
@@ -627,9 +638,13 @@ export default function CustomerVerification() {
         const token = localStorage.getItem('authToken');
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
-        const res = await fetch(`${API_BASE}/DocumentTypeMaster`, { headers });
-        if (res.ok && isMounted) {
-          const data = await res.json();
+        const [resDoc, resMap] = await Promise.all([
+          fetch(`${API_BASE}/DocumentTypeMaster`, { headers }),
+          fetch(`${API_BASE}/EmploymentTypeDocumentMapping`, { headers }),
+        ]);
+
+        if (resDoc.ok && isMounted) {
+          const data = await resDoc.json();
           const list = Array.isArray(data) ? data : (data?.value || data?.data || []);
           setDocTypesList(list);
           const map = {};
@@ -642,8 +657,14 @@ export default function CustomerVerification() {
           });
           setDocTypeMasterMap(map);
         }
+
+        if (resMap.ok && isMounted) {
+          const mapData = await resMap.json();
+          const mapList = Array.isArray(mapData) ? mapData : (mapData?.value || mapData?.data || []);
+          setEmploymentTypeDocMappings(mapList);
+        }
       } catch (e) {
-        console.warn('Could not fetch DocumentTypeMaster:', e);
+        console.warn('Could not fetch master document mappings:', e);
       }
     }
     fetchMasterData();
@@ -715,8 +736,36 @@ export default function CustomerVerification() {
         if (kycRes.ok && isMounted) {
           const allKyc = await kycRes.json();
           const kycArr = Array.isArray(allKyc) ? allKyc : (allKyc?.value || allKyc?.data || []);
+          const targetAppProdId = Number(
+            verificationData?.applicationProductDetailsId ||
+            verificationData?.application?.product?.applicationProductDetailsId ||
+            verificationData?.application?.product?.ApplicationProductDetailsId ||
+            verificationData?.application?.applicationProductDetailsId ||
+            verificationData?.application?.ApplicationProductDetailsId ||
+            verificationData?.raw?.productDetails?.product?.applicationProductDetailsId ||
+            verificationData?.raw?.productDetails?.product?.ApplicationProductDetailsId ||
+            verificationData?.raw?.productDetailsList?.product?.applicationProductDetailsId ||
+            verificationData?.raw?.productDetailsList?.product?.ApplicationProductDetailsId ||
+            verificationData?.raw?.productDetails?.[0]?.product?.applicationProductDetailsId ||
+            verificationData?.raw?.productDetails?.[0]?.product?.ApplicationProductDetailsId ||
+            verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
+            verificationData?.raw?.productDetails?.applicationProductDetailsId ||
+            verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
+            verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId ||
+            0
+          );
           const filteredKyc = kycArr
-            .filter((k) => String(k.agentCustomerId ?? k.AgentCustomerId) === String(targetCustomerId))
+            .filter((k) => {
+              const kProdId = Number(k.applicationProductDetailsId ?? k.ApplicationProductDetailsId);
+              if (targetAppProdId > 0 && kProdId > 0) {
+                return kProdId === targetAppProdId;
+              }
+              const kCustId = k.agentCustomerId ?? k.AgentCustomerId;
+              if (kCustId !== undefined && kCustId !== null) {
+                return String(kCustId) === String(targetCustomerId);
+              }
+              return false;
+            })
             .sort((a, b) => (a.applicationKYCDocumentId || 0) - (b.applicationKYCDocumentId || 0));
           if (filteredKyc.length > 0) {
             setKycRecordsList(filteredKyc);
@@ -749,7 +798,7 @@ export default function CustomerVerification() {
     return () => {
       isMounted = false;
     };
-  }, [customerId, verificationData?.customerId]);
+  }, [customerId, verificationData?.customerId, verificationData?.application, verificationData?.raw?.productDetails]);
 
   // Merge full KYC & Personal lists
   const resolvedKycList = useMemo(() => {
@@ -784,8 +833,16 @@ export default function CustomerVerification() {
   const mainApplicantKyc = useMemo(() => {
     const appProdId = Number(
       verificationData?.applicationProductDetailsId ||
+      verificationData?.application?.product?.applicationProductDetailsId ||
+      verificationData?.application?.product?.ApplicationProductDetailsId ||
       verificationData?.application?.applicationProductDetailsId ||
       verificationData?.application?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.product?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.product?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.product?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.product?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.[0]?.product?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.[0]?.product?.ApplicationProductDetailsId ||
       verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.productDetails?.applicationProductDetailsId ||
       verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
@@ -1444,6 +1501,56 @@ export default function CustomerVerification() {
     return selectedApplicantSequence === 0 ? 1 : null;
   }, [selectedEmploymentRecord, verificationData, selectedApplicantSequence, employmentTypesList]);
 
+  // Authoritative Sequence-0 Main Applicant employmentTypeId
+  const mainApplicantEmploymentTypeId = useMemo(() => {
+    const rawEmp =
+      verificationData?.raw?.employmentIncome ||
+      verificationData?.raw?.EmploymentIncome ||
+      verificationData?.employmentIncome?.raw ||
+      [];
+    const empList = Array.isArray(rawEmp) ? rawEmp : (rawEmp ? [rawEmp] : []);
+    const directId = empList[0]?.employmentTypeId ?? empList[0]?.EmploymentTypeId;
+    if (directId != null && !isNaN(Number(directId)) && Number(directId) > 0) return Number(directId);
+
+    const custId =
+      verificationData?.customer?.employmentTypeId ??
+      verificationData?.customer?.EmploymentTypeId ??
+      verificationData?.raw?.customer?.employmentTypeId ??
+      verificationData?.raw?.customer?.EmploymentTypeId;
+    if (custId != null && !isNaN(Number(custId)) && Number(custId) > 0) return Number(custId);
+
+    const typeName = empList[0]?.employmentTypeName || verificationData?.employmentIncome?.employmentType;
+    if (typeName && Array.isArray(employmentTypesList)) {
+      const match = employmentTypesList.find(
+        (et) =>
+          (et.employmentTypeName && et.employmentTypeName.toLowerCase() === typeName.toLowerCase()) ||
+          (et.employmentCode && et.employmentCode.toLowerCase() === typeName.toLowerCase())
+      );
+      if (match?.employmentTypeId) return Number(match.employmentTypeId);
+    }
+
+    return null;
+  }, [verificationData, employmentTypesList]);
+
+  // Sequence-specific employmentTypeId getter (Applicant seq 0, Co-Applicants seq 1+)
+  const getEmploymentTypeIdForSequence = useCallback((seq) => {
+    if (seq === 0) return mainApplicantEmploymentTypeId;
+    const rawEmp =
+      verificationData?.raw?.employmentIncome ||
+      verificationData?.raw?.EmploymentIncome ||
+      [];
+    const empList = Array.isArray(rawEmp) ? rawEmp : (rawEmp ? [rawEmp] : []);
+    const coEmp = empList[seq];
+    const directId = coEmp?.employmentTypeId ?? coEmp?.EmploymentTypeId;
+    if (directId != null && !isNaN(Number(directId)) && Number(directId) > 0) return Number(directId);
+
+    const coPersonal = (resolvedPersonalList || [])[seq];
+    const coPersEmpId = coPersonal?.employmentTypeId ?? coPersonal?.EmploymentTypeId;
+    if (coPersEmpId != null && !isNaN(Number(coPersEmpId)) && Number(coPersEmpId) > 0) return Number(coPersEmpId);
+
+    return null;
+  }, [mainApplicantEmploymentTypeId, verificationData, resolvedPersonalList]);
+
   const selectedEmploymentTypeName = useMemo(() => {
     // 1. Direct name on record
     const directName =
@@ -1493,8 +1600,16 @@ export default function CustomerVerification() {
   const calculationAppProdId = useMemo(() => {
     return Number(
       verificationData?.applicationProductDetailsId ||
+      verificationData?.application?.product?.applicationProductDetailsId ||
+      verificationData?.application?.product?.ApplicationProductDetailsId ||
       verificationData?.application?.applicationProductDetailsId ||
       verificationData?.application?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.product?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.product?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.product?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.product?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.[0]?.product?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.[0]?.product?.ApplicationProductDetailsId ||
       verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.productDetails?.[0]?.ApplicationProductDetailsId ||
       verificationData?.raw?.productDetails?.applicationProductDetailsId ||
@@ -5528,8 +5643,16 @@ export default function CustomerVerification() {
   const fetchApplicationRejections = useCallback(async () => {
     const appProdId =
       verificationData?.applicationProductDetailsId ||
+      verificationData?.application?.product?.applicationProductDetailsId ||
+      verificationData?.application?.product?.ApplicationProductDetailsId ||
       verificationData?.application?.applicationProductDetailsId ||
       verificationData?.application?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.product?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.product?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.product?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.product?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.[0]?.product?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.[0]?.product?.ApplicationProductDetailsId ||
       verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.productDetails?.applicationProductDetailsId ||
       verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
@@ -5557,8 +5680,16 @@ export default function CustomerVerification() {
   // ----------------------------------------------------
   const resolvedAppProdId = Number(
     verificationData?.applicationProductDetailsId ||
+    verificationData?.application?.product?.applicationProductDetailsId ||
+    verificationData?.application?.product?.ApplicationProductDetailsId ||
     verificationData?.application?.applicationProductDetailsId ||
     verificationData?.application?.ApplicationProductDetailsId ||
+    verificationData?.raw?.productDetails?.product?.applicationProductDetailsId ||
+    verificationData?.raw?.productDetails?.product?.ApplicationProductDetailsId ||
+    verificationData?.raw?.productDetailsList?.product?.applicationProductDetailsId ||
+    verificationData?.raw?.productDetailsList?.product?.ApplicationProductDetailsId ||
+    verificationData?.raw?.productDetails?.[0]?.product?.applicationProductDetailsId ||
+    verificationData?.raw?.productDetails?.[0]?.product?.ApplicationProductDetailsId ||
     verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
     verificationData?.raw?.productDetails?.applicationProductDetailsId ||
     verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
@@ -6260,16 +6391,45 @@ export default function CustomerVerification() {
     const currentGen = ++financialFetchGenRef.current;
 
     // 1. Applicant Salary Slip (Parallel Task)
-    setApplicantFinancialDocs((prev) => ({
-      ...prev,
-      salarySlip: { ...(prev.salarySlip || {}), loading: true, error: null },
-    }));
-    const fetchSalaryPromise = (async () => {
-      try {
-        const rej = getActiveRejectionForApplicantDoc(sTypeId, 'SALARY_SLIP');
-        let preview = null;
-        let comparison = null;
-        let docData = null;
+    const isApplicantSalarySlipApplicable =
+      !sTypeId ||
+      !mainApplicantEmploymentTypeId ||
+      employmentTypeDocMappings.length === 0
+        ? true
+        : !getDocumentApplicability({
+            documentTypeId: sTypeId,
+            employmentTypeId: mainApplicantEmploymentTypeId,
+            mappings: employmentTypeDocMappings,
+          }).isNotRequired;
+
+    let fetchSalaryPromise = Promise.resolve();
+
+    if (!isApplicantSalarySlipApplicable) {
+      if (currentGen === financialFetchGenRef.current) {
+        setApplicantFinancialDocs((prev) => ({
+          ...prev,
+          salarySlip: {
+            loading: false,
+            data: null,
+            preview: null,
+            comparison: null,
+            rejection: null,
+            error: null,
+            isNotRequired: true,
+          },
+        }));
+      }
+    } else {
+      setApplicantFinancialDocs((prev) => ({
+        ...prev,
+        salarySlip: { ...(prev.salarySlip || {}), loading: true, error: null },
+      }));
+      fetchSalaryPromise = (async () => {
+        try {
+          const rej = getActiveRejectionForApplicantDoc(sTypeId, 'SALARY_SLIP');
+          let preview = null;
+          let comparison = null;
+          let docData = null;
 
         if (rej && rej.status === 'Resubmitted') {
           const { oldDoc, newDoc } = resolveOldAndNewDocs(allCustomerDocs, rej, 'SALARY_SLIP', docTypeMasterMap);
@@ -6348,6 +6508,7 @@ export default function CustomerVerification() {
         }
       }
     })();
+  }
 
     // 2. Applicant Bank Statement (Parallel Task)
     setApplicantFinancialDocs((prev) => ({
@@ -6448,8 +6609,30 @@ export default function CustomerVerification() {
           let coSalarySlip = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
           let coBankStatement = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
 
+          const coEmpId = getEmploymentTypeIdForSequence(seq);
+          const isCoSalarySlipApplicable =
+            !sTypeId || !coEmpId || employmentTypeDocMappings.length === 0
+              ? true
+              : !getDocumentApplicability({
+                  documentTypeId: sTypeId,
+                  employmentTypeId: coEmpId,
+                  mappings: employmentTypeDocMappings,
+                }).isNotRequired;
+
           const salaryCoPromise = (async () => {
             if (!sTypeId) return;
+            if (!isCoSalarySlipApplicable) {
+              coSalarySlip = {
+                loading: false,
+                data: null,
+                preview: null,
+                comparison: null,
+                rejection: null,
+                error: null,
+                isNotRequired: true,
+              };
+              return;
+            }
             try {
               const docRes = await backOfficeService.getApplicantDocument(appProdId, seq, sTypeId);
               const docData = docRes?.data || docRes?.value || docRes;
@@ -6552,6 +6735,9 @@ export default function CustomerVerification() {
     fetchKycDocByPath,
     selectLatestApplicantDoc,
     resolveOldAndNewDocs,
+    mainApplicantEmploymentTypeId,
+    getEmploymentTypeIdForSequence,
+    employmentTypeDocMappings,
   ]);
 
   useEffect(() => {
@@ -6726,26 +6912,54 @@ export default function CustomerVerification() {
             rejection: appRej,
           },
         }));
-      } else if (canonicalProfile) {
-        const res = applicantKycId
-          ? await fetchKycDocBlob(applicantKycId, 'profile-image', 'Applicant_Profile')
-          : await fetchKycDocByPath(canonicalProfile, 'Applicant_Profile.jpg');
-        if (currentGen !== previewFetchGenRef.current) return;
-        setDocPreviews((prev) => ({
-          ...prev,
-          profile: {
-            ...(res || {}),
-            isComparison: false,
-            comparison: null,
-            rejection: appRej,
-          },
-        }));
       } else {
+        let res = null;
+        if (canonicalProfile) {
+          if (applicantKycId) {
+            res = await fetchKycDocBlob(applicantKycId, 'profile-image', 'Applicant_Profile');
+          }
+          if (!res?.url) {
+            res = await fetchKycDocByPath(canonicalProfile, 'Applicant_Profile.jpg');
+          }
+        }
+
+        // Safe fallback to AgentCustomerDocument if canonical KYC is missing or unretrievable
+        if (!res?.url) {
+          const fallbackDoc = selectLatestApplicantDoc(allCustomerDocs, 2, docTypeMasterMap);
+          if (fallbackDoc) {
+            const fallbackRes = await downloadAndPrepareDoc(fallbackDoc);
+            if (fallbackRes?.url) {
+              res = {
+                loading: false,
+                error: null,
+                url: fallbackRes.url,
+                doc: fallbackDoc,
+                fileName: fallbackRes.fileName || 'Applicant_Profile.jpg',
+                size: fallbackRes.size,
+                isImage: true,
+                isPdf: false,
+              };
+            }
+          }
+        }
+
         if (currentGen !== previewFetchGenRef.current) return;
-        setDocPreviews((prev) => ({
-          ...prev,
-          profile: { loading: false, error: null, doc: null, url: null, rejection: appRej },
-        }));
+        if (res?.url) {
+          setDocPreviews((prev) => ({
+            ...prev,
+            profile: {
+              ...(res || {}),
+              isComparison: false,
+              comparison: null,
+              rejection: appRej,
+            },
+          }));
+        } else {
+          setDocPreviews((prev) => ({
+            ...prev,
+            profile: { loading: false, error: null, doc: null, url: null, rejection: appRej },
+          }));
+        }
       }
     })();
 
@@ -6845,7 +7059,7 @@ export default function CustomerVerification() {
     (async () => {
       const appAadhaarRej = getActiveRejectionForApplicant(3, aadhaarDocTypeId);
       const appRej = appAadhaarRej;
-      const canonicalAadhaar = applicantKycRecord?.aadharDocumentPath || applicantKycRecord?.AadharDocumentPath || null;
+      const canonicalAadhaar = applicantKycRecord?.aadharDocumentPath || applicantKycRecord?.AadharDocumentPath || applicantKycRecord?.aadhaarDocumentPath || applicantKycRecord?.AadhaarDocumentPath || null;
 
       if (appRej && appRej.status === 'Resubmitted') {
         const oldPromise = appRej.originalDocumentPath
@@ -6886,26 +7100,54 @@ export default function CustomerVerification() {
             rejection: appRej,
           },
         }));
-      } else if (canonicalAadhaar) {
-        const res = applicantKycId
-          ? await fetchKycDocBlob(applicantKycId, 'aadhar', 'Applicant_Aadhaar')
-          : await fetchKycDocByPath(canonicalAadhaar, 'Applicant_Aadhaar.pdf');
-        if (currentGen !== previewFetchGenRef.current) return;
-        setDocPreviews((prev) => ({
-          ...prev,
-          aadhaar: {
-            ...(res || {}),
-            isComparison: false,
-            comparison: null,
-            rejection: appRej,
-          },
-        }));
       } else {
+        let res = null;
+        if (canonicalAadhaar) {
+          if (applicantKycId) {
+            res = await fetchKycDocBlob(applicantKycId, 'aadhar', 'Applicant_Aadhaar');
+          }
+          if (!res?.url) {
+            res = await fetchKycDocByPath(canonicalAadhaar, 'Applicant_Aadhaar.pdf');
+          }
+        }
+
+        // Safe fallback to AgentCustomerDocument if canonical KYC is missing or unretrievable
+        if (!res?.url) {
+          const fallbackDoc = selectLatestApplicantDoc(allCustomerDocs, 3, docTypeMasterMap);
+          if (fallbackDoc) {
+            const fallbackRes = await downloadAndPrepareDoc(fallbackDoc);
+            if (fallbackRes?.url) {
+              res = {
+                loading: false,
+                error: null,
+                url: fallbackRes.url,
+                doc: fallbackDoc,
+                fileName: fallbackRes.fileName || 'Applicant_Aadhaar.pdf',
+                size: fallbackRes.size,
+                isImage: fallbackRes.isImage,
+                isPdf: fallbackRes.isPdf,
+              };
+            }
+          }
+        }
+
         if (currentGen !== previewFetchGenRef.current) return;
-        setDocPreviews((prev) => ({
-          ...prev,
-          aadhaar: { loading: false, error: null, doc: null, url: null, rejection: appRej },
-        }));
+        if (res?.url) {
+          setDocPreviews((prev) => ({
+            ...prev,
+            aadhaar: {
+              ...(res || {}),
+              isComparison: false,
+              comparison: null,
+              rejection: appRej,
+            },
+          }));
+        } else {
+          setDocPreviews((prev) => ({
+            ...prev,
+            aadhaar: { loading: false, error: null, doc: null, url: null, rejection: appRej },
+          }));
+        }
       }
     })();
 
@@ -7046,26 +7288,54 @@ export default function CustomerVerification() {
             rejection: appRej,
           },
         }));
-      } else if (canonicalPan) {
-        const res = applicantKycId
-          ? await fetchKycDocBlob(applicantKycId, 'pan', 'Applicant_PAN')
-          : await fetchKycDocByPath(canonicalPan, 'Applicant_PAN.pdf');
-        if (currentGen !== previewFetchGenRef.current) return;
-        setDocPreviews((prev) => ({
-          ...prev,
-          pan: {
-            ...(res || {}),
-            isComparison: false,
-            comparison: null,
-            rejection: appRej,
-          },
-        }));
       } else {
+        let res = null;
+        if (canonicalPan) {
+          if (applicantKycId) {
+            res = await fetchKycDocBlob(applicantKycId, 'pan', 'Applicant_PAN');
+          }
+          if (!res?.url) {
+            res = await fetchKycDocByPath(canonicalPan, 'Applicant_PAN.pdf');
+          }
+        }
+
+        // Safe fallback to AgentCustomerDocument if canonical KYC is missing or unretrievable
+        if (!res?.url) {
+          const fallbackDoc = selectLatestApplicantDoc(allCustomerDocs, 4, docTypeMasterMap);
+          if (fallbackDoc) {
+            const fallbackRes = await downloadAndPrepareDoc(fallbackDoc);
+            if (fallbackRes?.url) {
+              res = {
+                loading: false,
+                error: null,
+                url: fallbackRes.url,
+                doc: fallbackDoc,
+                fileName: fallbackRes.fileName || 'Applicant_PAN.pdf',
+                size: fallbackRes.size,
+                isImage: fallbackRes.isImage,
+                isPdf: fallbackRes.isPdf,
+              };
+            }
+          }
+        }
+
         if (currentGen !== previewFetchGenRef.current) return;
-        setDocPreviews((prev) => ({
-          ...prev,
-          pan: { loading: false, error: null, doc: null, url: null, rejection: appRej },
-        }));
+        if (res?.url) {
+          setDocPreviews((prev) => ({
+            ...prev,
+            pan: {
+              ...(res || {}),
+              isComparison: false,
+              comparison: null,
+              rejection: appRej,
+            },
+          }));
+        } else {
+          setDocPreviews((prev) => ({
+            ...prev,
+            pan: { loading: false, error: null, doc: null, url: null, rejection: appRej },
+          }));
+        }
       }
     })();
 
@@ -8383,11 +8653,22 @@ export default function CustomerVerification() {
     const rows = [];
 
     // 1. Profile Image (Step 02 / PROFILE_IMAGE)
+    const profileApplicability = getDocumentApplicability({
+      documentTypeId: profileDocTypeId,
+      employmentTypeId: mainApplicantEmploymentTypeId,
+      mappings: employmentTypeDocMappings,
+    });
     const profileRej = getActiveRejectionForApplicant(2, profileDocTypeId);
     const canonicalProfilePath = applicantKycRecord?.profileImagePath || applicantKycRecord?.ProfileImagePath || null;
     const hasProfileFile = Boolean(canonicalProfilePath || docPreviews.profile?.url || docPreviews.profile?.doc || profileRej?.currentDocumentPath);
     const profileVerified = hasProfileFile && Boolean(stepVerifications[0]?.PROFILE_IMAGE?.isVerified) && !hasUnresolvedRejectionForStep('PROFILE_IMAGE', 0);
-    const profileStatus = resolveRowStatus({ rejection: profileRej, hasFile: hasProfileFile, isVerified: profileVerified });
+    const profileStatus = resolveRowStatus({
+      rejection: profileRej,
+      hasFile: hasProfileFile,
+      isVerified: profileVerified,
+      isNotRequired: profileApplicability.isNotRequired,
+      isOptional: profileApplicability.isOptional,
+    });
 
     rows.push({
       id: 'applicant-profile',
@@ -8403,9 +8684,12 @@ export default function CustomerVerification() {
       isZip: false,
       fileName: hasProfileFile ? (docPreviews.profile?.fileName || 'Applicant_Profile.jpg') : '—',
       fileSize: hasProfileFile ? (docPreviews.profile?.size || null) : null,
-      uploadDate: hasProfileFile ? (applicantKycRecord?.createdAt || null) : null,
+      uploadDate: hasProfileFile ? (applicantKycRecord?.createdAt || docPreviews.profile?.doc?.createdAt || null) : null,
       status: profileStatus,
       isVerified: profileVerified,
+      isRequired: profileApplicability.isRequired,
+      isOptional: profileApplicability.isOptional,
+      isNotRequired: profileApplicability.isNotRequired,
       rejection: profileRej,
       comparison: docPreviews.profile?.comparison || null,
       kycId: applicantKycId,
@@ -8416,11 +8700,22 @@ export default function CustomerVerification() {
     });
 
     // 2. Aadhaar Card (Step 03 / AADHAAR)
+    const aadhaarApplicability = getDocumentApplicability({
+      documentTypeId: aadhaarDocTypeId,
+      employmentTypeId: mainApplicantEmploymentTypeId,
+      mappings: employmentTypeDocMappings,
+    });
     const aadhaarRej = getActiveRejectionForApplicant(3, aadhaarDocTypeId);
-    const canonicalAadhaarPath = applicantKycRecord?.aadharDocumentPath || applicantKycRecord?.AadharDocumentPath || null;
+    const canonicalAadhaarPath = applicantKycRecord?.aadharDocumentPath || applicantKycRecord?.AadharDocumentPath || applicantKycRecord?.aadhaarDocumentPath || applicantKycRecord?.AadhaarDocumentPath || null;
     const hasAadhaarFile = Boolean(canonicalAadhaarPath || docPreviews.aadhaar?.url || docPreviews.aadhaar?.doc || aadhaarRej?.currentDocumentPath);
     const aadhaarVerified = hasAadhaarFile && Boolean(stepVerifications[0]?.AADHAAR?.isVerified) && !hasUnresolvedRejectionForStep('AADHAAR', 0);
-    const aadhaarStatus = resolveRowStatus({ rejection: aadhaarRej, hasFile: hasAadhaarFile, isVerified: aadhaarVerified });
+    const aadhaarStatus = resolveRowStatus({
+      rejection: aadhaarRej,
+      hasFile: hasAadhaarFile,
+      isVerified: aadhaarVerified,
+      isNotRequired: aadhaarApplicability.isNotRequired,
+      isOptional: aadhaarApplicability.isOptional,
+    });
 
     rows.push({
       id: 'applicant-aadhaar',
@@ -8436,9 +8731,12 @@ export default function CustomerVerification() {
       isZip: false,
       fileName: hasAadhaarFile ? (docPreviews.aadhaar?.fileName || docPreviews.aadhaar?.doc?.fileName || 'Applicant_Aadhaar.pdf') : '—',
       fileSize: hasAadhaarFile ? (docPreviews.aadhaar?.size || docPreviews.aadhaar?.doc?.fileSize || null) : null,
-      uploadDate: hasAadhaarFile ? (applicantKycRecord?.createdAt || null) : null,
+      uploadDate: hasAadhaarFile ? (applicantKycRecord?.createdAt || docPreviews.aadhaar?.doc?.createdAt || null) : null,
       status: aadhaarStatus,
       isVerified: aadhaarVerified,
+      isRequired: aadhaarApplicability.isRequired,
+      isOptional: aadhaarApplicability.isOptional,
+      isNotRequired: aadhaarApplicability.isNotRequired,
       rejection: aadhaarRej,
       comparison: docPreviews.aadhaar?.comparison || null,
       kycId: applicantKycId,
@@ -8449,11 +8747,22 @@ export default function CustomerVerification() {
     });
 
     // 3. PAN Card (Step 04 / PAN)
+    const panApplicability = getDocumentApplicability({
+      documentTypeId: panDocTypeId,
+      employmentTypeId: mainApplicantEmploymentTypeId,
+      mappings: employmentTypeDocMappings,
+    });
     const panRej = getActiveRejectionForApplicant(4, panDocTypeId);
     const canonicalPanPath = applicantKycRecord?.panCardPath || applicantKycRecord?.PanCardPath || applicantKycRecord?.PANCardPath || null;
     const hasPanFile = Boolean(canonicalPanPath || docPreviews.pan?.url || docPreviews.pan?.doc || panRej?.currentDocumentPath);
     const panVerified = hasPanFile && Boolean(stepVerifications[0]?.PAN?.isVerified) && !hasUnresolvedRejectionForStep('PAN', 0);
-    const panStatus = resolveRowStatus({ rejection: panRej, hasFile: hasPanFile, isVerified: panVerified });
+    const panStatus = resolveRowStatus({
+      rejection: panRej,
+      hasFile: hasPanFile,
+      isVerified: panVerified,
+      isNotRequired: panApplicability.isNotRequired,
+      isOptional: panApplicability.isOptional,
+    });
 
     rows.push({
       id: 'applicant-pan',
@@ -8469,9 +8778,12 @@ export default function CustomerVerification() {
       isZip: false,
       fileName: hasPanFile ? (docPreviews.pan?.fileName || docPreviews.pan?.doc?.fileName || 'Applicant_PAN.pdf') : '—',
       fileSize: hasPanFile ? (docPreviews.pan?.size || docPreviews.pan?.doc?.fileSize || null) : null,
-      uploadDate: hasPanFile ? (applicantKycRecord?.createdAt || null) : null,
+      uploadDate: hasPanFile ? (applicantKycRecord?.createdAt || docPreviews.pan?.doc?.createdAt || null) : null,
       status: panStatus,
       isVerified: panVerified,
+      isRequired: panApplicability.isRequired,
+      isOptional: panApplicability.isOptional,
+      isNotRequired: panApplicability.isNotRequired,
       rejection: panRej,
       comparison: docPreviews.pan?.comparison || null,
       kycId: applicantKycId,
@@ -8482,12 +8794,23 @@ export default function CustomerVerification() {
     });
 
     // 4. Salary Slip (Step 05 / SALARY_SLIP)
+    const salaryApplicability = getDocumentApplicability({
+      documentTypeId: salarySlipDocTypeId,
+      employmentTypeId: mainApplicantEmploymentTypeId,
+      mappings: employmentTypeDocMappings,
+    });
     const salaryRej = applicantFinancialDocs.salarySlip?.rejection || getActiveRejectionForApplicantDoc(salarySlipDocTypeId, 'SALARY_SLIP');
     const salaryPreview = applicantFinancialDocs.salarySlip?.preview;
     const salaryData = applicantFinancialDocs.salarySlip?.data;
     const hasSalaryFile = Boolean(salaryPreview?.url || salaryData || salaryRej?.currentDocumentPath);
     const salaryVerified = hasSalaryFile && Boolean(stepVerifications[0]?.SALARY_SLIP?.isVerified) && !hasUnresolvedRejectionForStep('SALARY_SLIP', 0);
-    const salaryStatus = resolveRowStatus({ rejection: salaryRej, hasFile: hasSalaryFile, isVerified: salaryVerified });
+    const salaryStatus = resolveRowStatus({
+      rejection: salaryRej,
+      hasFile: hasSalaryFile,
+      isVerified: salaryVerified,
+      isNotRequired: salaryApplicability.isNotRequired,
+      isOptional: salaryApplicability.isOptional,
+    });
 
     rows.push({
       id: 'applicant-salary',
@@ -8506,6 +8829,9 @@ export default function CustomerVerification() {
       uploadDate: salaryData?.createdAt || salaryData?.uploadedAt || null,
       status: salaryStatus,
       isVerified: salaryVerified,
+      isRequired: salaryApplicability.isRequired,
+      isOptional: salaryApplicability.isOptional,
+      isNotRequired: salaryApplicability.isNotRequired,
       rejection: salaryRej,
       comparison: applicantFinancialDocs.salarySlip?.comparison || null,
       kycId: null,
@@ -8516,12 +8842,23 @@ export default function CustomerVerification() {
     });
 
     // 5. Bank Statement (Step 06 / BANK_STATEMENT)
+    const bankApplicability = getDocumentApplicability({
+      documentTypeId: bankStatementDocTypeId,
+      employmentTypeId: mainApplicantEmploymentTypeId,
+      mappings: employmentTypeDocMappings,
+    });
     const bankRej = applicantFinancialDocs.bankStatement?.rejection || getActiveRejectionForApplicantDoc(bankStatementDocTypeId, 'BANK_STATEMENT');
     const bankPreview = applicantFinancialDocs.bankStatement?.preview;
     const bankData = applicantFinancialDocs.bankStatement?.data;
     const hasBankFile = Boolean(bankPreview?.url || bankData || bankRej?.currentDocumentPath);
     const bankVerified = hasBankFile && Boolean(stepVerifications[0]?.BANK_STATEMENT?.isVerified) && !hasUnresolvedRejectionForStep('BANK_STATEMENT', 0);
-    const bankStatus = resolveRowStatus({ rejection: bankRej, hasFile: hasBankFile, isVerified: bankVerified });
+    const bankStatus = resolveRowStatus({
+      rejection: bankRej,
+      hasFile: hasBankFile,
+      isVerified: bankVerified,
+      isNotRequired: bankApplicability.isNotRequired,
+      isOptional: bankApplicability.isOptional,
+    });
 
     rows.push({
       id: 'applicant-bank',
@@ -8540,6 +8877,9 @@ export default function CustomerVerification() {
       uploadDate: bankData?.createdAt || bankData?.uploadedAt || null,
       status: bankStatus,
       isVerified: bankVerified,
+      isRequired: bankApplicability.isRequired,
+      isOptional: bankApplicability.isOptional,
+      isNotRequired: bankApplicability.isNotRequired,
       rejection: bankRej,
       comparison: applicantFinancialDocs.bankStatement?.comparison || null,
       kycId: null,
@@ -8550,10 +8890,17 @@ export default function CustomerVerification() {
     });
 
     // 6. ZIP / Archive Package (Step 07 / ZIP_ARCHIVE)
+    // Supplementary/manual container (not a DocumentTypeMaster record)
     const zipRej = getActiveRejectionForApplicant(7);
     const hasZipFile = Boolean(docPreviews.zip?.doc || docPreviews.zip?.url || applicantManualDocs?.length > 0 || zipRej?.currentDocumentPath);
     const zipVerified = hasZipFile && Boolean(stepVerifications[0]?.ZIP_ARCHIVE?.isVerified) && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE', 0);
-    const zipStatus = resolveRowStatus({ rejection: zipRej, hasFile: hasZipFile, isVerified: zipVerified });
+    const zipStatus = resolveRowStatus({
+      rejection: zipRej,
+      hasFile: hasZipFile,
+      isVerified: zipVerified,
+      isNotRequired: false,
+      isOptional: true,
+    });
 
     rows.push({
       id: 'applicant-zip',
@@ -8572,12 +8919,15 @@ export default function CustomerVerification() {
       uploadDate: docPreviews.zip?.doc?.createdAt || (applicantManualDocs?.length > 0 ? applicantManualDocs[0]?.uploadedOn : null),
       status: zipStatus,
       isVerified: zipVerified,
+      isRequired: false,
+      isOptional: true,
+      isNotRequired: false,
       rejection: zipRej,
       comparison: docPreviews.zip?.comparison || null,
       kycId: applicantKycId,
       isCoApplicant: false,
       applicantSequence: 0,
-      documentTypeId: zipArchiveDocTypeId || null,
+      documentTypeId: null,
       rejectedDocumentType: 'ZIP_ARCHIVE',
       manualDocs: applicantManualDocs,
     });
@@ -8607,6 +8957,8 @@ export default function CustomerVerification() {
     applicantManualDocs,
     FileCheckIcon,
     zipArchiveDocTypeId,
+    mainApplicantEmploymentTypeId,
+    employmentTypeDocMappings,
   ]);
 
   const selectedCoApplicant = useMemo(() => {
@@ -8644,13 +8996,25 @@ export default function CustomerVerification() {
     const coPrev = coDocPreviews[coIdx] || {};
     const coFin = coApplicantsFinancialDocs[coIdx] || {};
     const coManual = coApplicantsManualDocs[coIdx] || [];
+    const coEmpTypeId = getEmploymentTypeIdForSequence(coSeq);
 
     // 1. Profile Image
+    const profileApplicability = getDocumentApplicability({
+      documentTypeId: profileDocTypeId,
+      employmentTypeId: coEmpTypeId,
+      mappings: employmentTypeDocMappings,
+    });
     const profileRej = getActiveRejectionForCoApplicant(coKycId, 2, coSeq);
     const canonicalCoProfile = coKyc.profileImagePath || coKyc.ProfileImagePath || null;
     const hasProfile = Boolean(canonicalCoProfile || coPrev.profile?.url || coPrev.profile?.doc || profileRej?.currentDocumentPath);
     const profileVerified = hasProfile && Boolean(stepVerifications[coSeq]?.PROFILE_IMAGE?.isVerified) && !hasUnresolvedRejectionForStep('PROFILE_IMAGE', coSeq);
-    const profileStatus = resolveRowStatus({ rejection: profileRej, hasFile: hasProfile, isVerified: profileVerified });
+    const profileStatus = resolveRowStatus({
+      rejection: profileRej,
+      hasFile: hasProfile,
+      isVerified: profileVerified,
+      isNotRequired: profileApplicability.isNotRequired,
+      isOptional: profileApplicability.isOptional,
+    });
 
     rows.push({
       id: `co-${coIdx}-profile`,
@@ -8669,6 +9033,9 @@ export default function CustomerVerification() {
       uploadDate: hasProfile ? (coKyc.createdAt || coKyc.CreatedAt || null) : null,
       status: profileStatus,
       isVerified: profileVerified,
+      isRequired: profileApplicability.isRequired,
+      isOptional: profileApplicability.isOptional,
+      isNotRequired: profileApplicability.isNotRequired,
       rejection: profileRej,
       comparison: coPrev.profile?.comparison || null,
       kycId: coKycId,
@@ -8680,11 +9047,22 @@ export default function CustomerVerification() {
     });
 
     // 2. Aadhaar Card
+    const aadhaarApplicability = getDocumentApplicability({
+      documentTypeId: aadhaarDocTypeId,
+      employmentTypeId: coEmpTypeId,
+      mappings: employmentTypeDocMappings,
+    });
     const aadhaarRej = getActiveRejectionForCoApplicant(coKycId, 3, coSeq);
     const canonicalCoAadhaar = coKyc.aadharDocumentPath || coKyc.AadharDocumentPath || null;
     const hasAadhaar = Boolean(canonicalCoAadhaar || coPrev.aadhaar?.url || coPrev.aadhaar?.doc || aadhaarRej?.currentDocumentPath);
     const aadhaarVerified = hasAadhaar && Boolean(stepVerifications[coSeq]?.AADHAAR?.isVerified) && !hasUnresolvedRejectionForStep('AADHAAR', coSeq);
-    const aadhaarStatus = resolveRowStatus({ rejection: aadhaarRej, hasFile: hasAadhaar, isVerified: aadhaarVerified });
+    const aadhaarStatus = resolveRowStatus({
+      rejection: aadhaarRej,
+      hasFile: hasAadhaar,
+      isVerified: aadhaarVerified,
+      isNotRequired: aadhaarApplicability.isNotRequired,
+      isOptional: aadhaarApplicability.isOptional,
+    });
 
     rows.push({
       id: `co-${coIdx}-aadhaar`,
@@ -8703,6 +9081,9 @@ export default function CustomerVerification() {
       uploadDate: hasAadhaar ? (coKyc.createdAt || coKyc.CreatedAt || null) : null,
       status: aadhaarStatus,
       isVerified: aadhaarVerified,
+      isRequired: aadhaarApplicability.isRequired,
+      isOptional: aadhaarApplicability.isOptional,
+      isNotRequired: aadhaarApplicability.isNotRequired,
       rejection: aadhaarRej,
       comparison: coPrev.aadhaar?.comparison || null,
       kycId: coKycId,
@@ -8714,11 +9095,22 @@ export default function CustomerVerification() {
     });
 
     // 3. PAN Card
+    const panApplicability = getDocumentApplicability({
+      documentTypeId: panDocTypeId,
+      employmentTypeId: coEmpTypeId,
+      mappings: employmentTypeDocMappings,
+    });
     const panRej = getActiveRejectionForCoApplicant(coKycId, 4, coSeq);
     const canonicalCoPan = coKyc.panCardPath || coKyc.PanCardPath || coKyc.PANCardPath || null;
     const hasPan = Boolean(canonicalCoPan || coPrev.pan?.url || coPrev.pan?.doc || panRej?.currentDocumentPath);
     const panVerified = hasPan && Boolean(stepVerifications[coSeq]?.PAN?.isVerified) && !hasUnresolvedRejectionForStep('PAN', coSeq);
-    const panStatus = resolveRowStatus({ rejection: panRej, hasFile: hasPan, isVerified: panVerified });
+    const panStatus = resolveRowStatus({
+      rejection: panRej,
+      hasFile: hasPan,
+      isVerified: panVerified,
+      isNotRequired: panApplicability.isNotRequired,
+      isOptional: panApplicability.isOptional,
+    });
 
     rows.push({
       id: `co-${coIdx}-pan`,
@@ -8737,6 +9129,9 @@ export default function CustomerVerification() {
       uploadDate: hasPan ? (coKyc.createdAt || coKyc.CreatedAt || null) : null,
       status: panStatus,
       isVerified: panVerified,
+      isRequired: panApplicability.isRequired,
+      isOptional: panApplicability.isOptional,
+      isNotRequired: panApplicability.isNotRequired,
       rejection: panRej,
       comparison: coPrev.pan?.comparison || null,
       kycId: coKycId,
@@ -8748,12 +9143,23 @@ export default function CustomerVerification() {
     });
 
     // 4. Salary Slip
+    const salApplicability = getDocumentApplicability({
+      documentTypeId: salarySlipDocTypeId,
+      employmentTypeId: coEmpTypeId,
+      mappings: employmentTypeDocMappings,
+    });
     const salRej = coFin.salarySlip?.rejection || getActiveRejectionForCoApplicantDoc(coSeq, salarySlipDocTypeId, 'SALARY_SLIP');
     const salPrev = coFin.salarySlip?.preview;
     const salData = coFin.salarySlip?.data;
     const hasSal = Boolean(salPrev?.url || salData || salRej?.currentDocumentPath);
     const salVerified = hasSal && Boolean(stepVerifications[coSeq]?.SALARY_SLIP?.isVerified) && !hasUnresolvedRejectionForStep('SALARY_SLIP', coSeq);
-    const salStatus = resolveRowStatus({ rejection: salRej, hasFile: hasSal, isVerified: salVerified });
+    const salStatus = resolveRowStatus({
+      rejection: salRej,
+      hasFile: hasSal,
+      isVerified: salVerified,
+      isNotRequired: salApplicability.isNotRequired,
+      isOptional: salApplicability.isOptional,
+    });
 
     rows.push({
       id: `co-${coIdx}-salary`,
@@ -8772,6 +9178,9 @@ export default function CustomerVerification() {
       uploadDate: salData?.createdAt || salData?.uploadedAt || null,
       status: salStatus,
       isVerified: salVerified,
+      isRequired: salApplicability.isRequired,
+      isOptional: salApplicability.isOptional,
+      isNotRequired: salApplicability.isNotRequired,
       rejection: salRej,
       comparison: coFin.salarySlip?.comparison || null,
       kycId: null,
@@ -8783,12 +9192,23 @@ export default function CustomerVerification() {
     });
 
     // 5. Bank Statement
+    const bankApplicability = getDocumentApplicability({
+      documentTypeId: bankStatementDocTypeId,
+      employmentTypeId: coEmpTypeId,
+      mappings: employmentTypeDocMappings,
+    });
     const bankRej = coFin.bankStatement?.rejection || getActiveRejectionForCoApplicantDoc(coSeq, bankStatementDocTypeId, 'BANK_STATEMENT');
     const bankPrev = coFin.bankStatement?.preview;
     const bankData = coFin.bankStatement?.data;
     const hasBank = Boolean(bankPrev?.url || bankData || bankRej?.currentDocumentPath);
     const bankVerified = hasBank && Boolean(stepVerifications[coSeq]?.BANK_STATEMENT?.isVerified) && !hasUnresolvedRejectionForStep('BANK_STATEMENT', coSeq);
-    const bankStatus = resolveRowStatus({ rejection: bankRej, hasFile: hasBank, isVerified: bankVerified });
+    const bankStatus = resolveRowStatus({
+      rejection: bankRej,
+      hasFile: hasBank,
+      isVerified: bankVerified,
+      isNotRequired: bankApplicability.isNotRequired,
+      isOptional: bankApplicability.isOptional,
+    });
 
     rows.push({
       id: `co-${coIdx}-bank`,
@@ -8807,6 +9227,9 @@ export default function CustomerVerification() {
       uploadDate: bankData?.createdAt || bankData?.uploadedAt || null,
       status: bankStatus,
       isVerified: bankVerified,
+      isRequired: bankApplicability.isRequired,
+      isOptional: bankApplicability.isOptional,
+      isNotRequired: bankApplicability.isNotRequired,
       rejection: bankRej,
       comparison: coFin.bankStatement?.comparison || null,
       kycId: null,
@@ -8818,10 +9241,17 @@ export default function CustomerVerification() {
     });
 
     // 6. ZIP / Archive Package
+    // Supplementary/manual container (not a DocumentTypeMaster record)
     const zipRej = getActiveRejectionForCoApplicant(coKycId, 7, coSeq);
     const hasZip = Boolean(coPrev.zip?.url || coManual.length > 0 || zipRej?.currentDocumentPath);
     const zipVerified = hasZip && Boolean(stepVerifications[coSeq]?.ZIP_ARCHIVE?.isVerified) && !hasUnresolvedRejectionForStep('ZIP_ARCHIVE', coSeq);
-    const zipStatus = resolveRowStatus({ rejection: zipRej, hasFile: hasZip, isVerified: zipVerified });
+    const zipStatus = resolveRowStatus({
+      rejection: zipRej,
+      hasFile: hasZip,
+      isVerified: zipVerified,
+      isNotRequired: false,
+      isOptional: true,
+    });
 
     rows.push({
       id: `co-${coIdx}-zip`,
@@ -8840,12 +9270,15 @@ export default function CustomerVerification() {
       uploadDate: coManual.length > 0 ? coManual[0]?.uploadedOn : null,
       status: zipStatus,
       isVerified: zipVerified,
+      isRequired: false,
+      isOptional: true,
+      isNotRequired: false,
       rejection: zipRej,
       comparison: coPrev.zip?.comparison || null,
       kycId: coKycId,
       isCoApplicant: true,
       applicantSequence: coSeq,
-      documentTypeId: zipArchiveDocTypeId || null,
+      documentTypeId: null,
       rejectedDocumentType: 'ZIP_ARCHIVE',
       manualDocs: coManual,
       coNumber,
@@ -8876,15 +9309,37 @@ export default function CustomerVerification() {
     BuildingIcon,
     FileCheckIcon,
     zipArchiveDocTypeId,
+    getEmploymentTypeIdForSequence,
+    employmentTypeDocMappings,
   ]);
 
-  const applicantVerifiedCount = useMemo(() => {
-    return applicantDocRows.filter((r) => r.isVerified && r.hasFile).length;
+  const applicantApplicableRequiredRows = useMemo(() => {
+    return applicantDocRows.filter((r) => r.isRequired && !r.isNotRequired);
   }, [applicantDocRows]);
 
-  const coApplicantVerifiedCount = useMemo(() => {
-    return coApplicantDocRows.filter((r) => r.isVerified && r.hasFile).length;
+  const applicantRequiredCount = applicantApplicableRequiredRows.length;
+
+  const applicantVerifiedCount = useMemo(() => {
+    return applicantDocRows.filter((r) => r.isVerified && r.hasFile && !r.isNotRequired).length;
+  }, [applicantDocRows]);
+
+  const allApplicantDocsVerified =
+    applicantRequiredCount > 0 &&
+    applicantApplicableRequiredRows.every((r) => r.isVerified && r.hasFile);
+
+  const coApplicantApplicableRequiredRows = useMemo(() => {
+    return coApplicantDocRows.filter((r) => r.isRequired && !r.isNotRequired);
   }, [coApplicantDocRows]);
+
+  const coApplicantRequiredCount = coApplicantApplicableRequiredRows.length;
+
+  const coApplicantVerifiedCount = useMemo(() => {
+    return coApplicantDocRows.filter((r) => r.isVerified && r.hasFile && !r.isNotRequired).length;
+  }, [coApplicantDocRows]);
+
+  const allCoApplicantDocsVerified =
+    coApplicantRequiredCount > 0 &&
+    coApplicantApplicableRequiredRows.every((r) => r.isVerified && r.hasFile);
 
   const verifiedDocumentCount = applicantVerifiedCount;
 
@@ -8947,7 +9402,7 @@ export default function CustomerVerification() {
   }, [selectedCoApplicantIndex, handleOpenRejectConfirm]);
 
   const handleToggleRowVerification = useCallback(async (row) => {
-    if (!row || !row.hasFile) return;
+    if (!row || !row.hasFile || row.isNotRequired || row.status === 'Not Required') return;
     if (row.status === 'Returned to RM' || row.status === 'Returned') return;
 
     const seq =
@@ -9421,10 +9876,11 @@ export default function CustomerVerification() {
                 const isSelected = isDocStep
                   ? (activeStep >= 2 && activeStep <= 7)
                   : (activeStep === stepNum);
-                const allVerified = verifiedDocumentCount === 6;
+                const allVerified = allApplicantDocsVerified;
+                const totalRequired = applicantRequiredCount || 1;
                 const formattedNum = step.visibleNum || String(stepNum).padStart(2, '0');
                 const subtitle = isDocStep
-                  ? (allVerified ? '6/6 Verified' : `${verifiedDocumentCount}/6 Verified`)
+                  ? (allVerified ? `${totalRequired}/${totalRequired} Verified` : `${applicantVerifiedCount}/${totalRequired} Verified`)
                   : step.subtitle;
 
                 return (
@@ -9441,7 +9897,7 @@ export default function CustomerVerification() {
                           navigateToStep(stepNum);
                         }
                       }}
-                      aria-label={`Step ${formattedNum}: ${step.title}. ${isDocStep ? `${verifiedDocumentCount} of 6 verified.` : ''} Click to view.`}
+                      aria-label={`Step ${formattedNum}: ${step.title}. ${isDocStep ? `${applicantVerifiedCount} of ${totalRequired} verified.` : ''} Click to view.`}
                     >
                       <div className="bo-cv-step-num-box" aria-hidden="true">
                         {formattedNum}
@@ -9458,12 +9914,12 @@ export default function CustomerVerification() {
                             className={`bo-cv-sidebar-progress-pill ${
                               allVerified
                                 ? 'is-completed'
-                                : verifiedDocumentCount > 0
+                                : applicantVerifiedCount > 0
                                 ? 'is-progressing'
                                 : ''
                             }`}
                           >
-                            {allVerified ? '6/6 ✓' : `${verifiedDocumentCount}/6`}
+                            {allVerified ? `${totalRequired}/${totalRequired} ✓` : `${applicantVerifiedCount}/${totalRequired}`}
                           </span>
                         ) : !isSelected ? (
                           <span className="bo-cv-view-btn">
@@ -9498,7 +9954,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 01 of 11</span>
+                <span className="bo-cv-step-tag-pill">Step 01 of 12</span>
               </div>
 
               <div className="bo-cv-view-form-embed-wrapper">
@@ -9523,15 +9979,15 @@ export default function CustomerVerification() {
                       <h2 className="bo-cv-step-panel-title">DOCUMENT VERIFICATION</h2>
                       <span
                         className={`bo-cv-group-progress-badge ${
-                          verifiedDocumentCount === 6
+                          allApplicantDocsVerified
                             ? 'is-completed'
-                            : verifiedDocumentCount > 0
+                            : applicantVerifiedCount > 0
                             ? 'is-progressing'
                             : ''
                         }`}
                       >
-                        {verifiedDocumentCount === 6 && '✓ '}
-                        {verifiedDocumentCount}/6 VERIFIED
+                        {allApplicantDocsVerified && '✓ '}
+                        {applicantVerifiedCount}/{applicantRequiredCount || 1} VERIFIED
                       </span>
                     </div>
                     <p className="bo-cv-step-panel-desc">
@@ -9540,7 +9996,7 @@ export default function CustomerVerification() {
                   </div>
                 </div>
                 <div className="bo-cv-doc-header-right">
-                  <span className="bo-cv-step-tag-pill">Step 02 of 11</span>
+                  <span className="bo-cv-step-tag-pill">Step 02 of 12</span>
                 </div>
               </div>
 
@@ -9562,7 +10018,7 @@ export default function CustomerVerification() {
                     </div>
                     <div className="bo-cv-doc-card-header-right">
                       <span className="bo-cv-doc-card-count-badge">
-                        {applicantVerifiedCount} of {applicantDocRows.length} Verified
+                        {applicantVerifiedCount} of {applicantRequiredCount} Verified
                       </span>
                     </div>
                   </div>
@@ -9586,6 +10042,8 @@ export default function CustomerVerification() {
                           const isThisRowSaving = savingVerificationKey === `${row.applicantSequence || 0}_${row.stepCode}`;
                           const isCheckboxDisabled =
                             !row.hasFile ||
+                            row.isNotRequired ||
+                            row.status === 'Not Required' ||
                             row.status === 'Returned to RM' ||
                             row.status === 'Returned' ||
                             (row.status !== 'Resubmitted' && hasUnresolvedRejectionForStep(row.stepCode, 0)) ||
@@ -9606,9 +10064,9 @@ export default function CustomerVerification() {
                               </td>
                               <td className="bo-cv-doc-td-thumb" style={{ textAlign: 'center' }}>
                                 <div
-                                  className={`bo-cv-doc-thumb-box ${row.hasFile ? 'is-clickable' : 'is-empty'} ${row.loading ? 'is-loading' : ''}`}
-                                  onClick={() => row.hasFile && handleRowView(row)}
-                                  title={row.hasFile ? 'Click to preview' : 'No document uploaded'}
+                                  className={`bo-cv-doc-thumb-box ${row.hasFile && !row.isNotRequired ? 'is-clickable' : 'is-empty'} ${row.loading ? 'is-loading' : ''}`}
+                                  onClick={() => row.hasFile && !row.isNotRequired && handleRowView(row)}
+                                  title={row.isNotRequired ? 'Document not required' : row.hasFile ? 'Click to preview' : 'No document uploaded'}
                                 >
                                   {row.loading ? (
                                     <div className="bo-cv-doc-thumb-spinner" />
@@ -9621,7 +10079,7 @@ export default function CustomerVerification() {
                                   ) : (
                                     <div className="bo-cv-doc-thumb-placeholder">—</div>
                                   )}
-                                  {row.hasFile && (
+                                  {row.hasFile && !row.isNotRequired && (
                                     <div className="bo-cv-doc-thumb-hover-overlay">
                                       {EyeIcon ? <EyeIcon size={12} /> : <span>👁</span>}
                                     </div>
@@ -9642,7 +10100,7 @@ export default function CustomerVerification() {
                                         {row.fileSize && row.uploadDate && <span>•</span>}
                                         {row.uploadDate && <span>{formatUploadDate(row.uploadDate)}</span>}
                                         {!row.fileSize && !row.uploadDate && (
-                                          <span className="bo-cv-doc-meta-empty">{row.hasFile ? 'Uploaded' : 'Not available'}</span>
+                                          <span className="bo-cv-doc-meta-empty">{row.isNotRequired ? 'Not required' : row.hasFile ? 'Uploaded' : 'Not available'}</span>
                                         )}
                                       </>
                                     )}
@@ -9653,7 +10111,9 @@ export default function CustomerVerification() {
                                 <label
                                   className={`bo-cv-doc-verify-checkbox-label ${isCheckboxDisabled ? 'is-disabled' : ''} ${row.isVerified ? 'is-checked' : ''}`}
                                   title={
-                                    !row.hasFile
+                                    row.isNotRequired || row.status === 'Not Required'
+                                      ? 'Document is not required for this employment type'
+                                      : !row.hasFile
                                       ? 'Cannot verify: Document not uploaded'
                                       : row.status === 'Returned to RM' || row.status === 'Returned'
                                       ? 'Cannot verify: Document is returned to RM'
@@ -9689,8 +10149,8 @@ export default function CustomerVerification() {
                                   <button
                                     type="button"
                                     className="bo-cv-doc-action-btn bo-cv-doc-action-btn--view"
-                                    title={row.hasFile ? 'View document' : 'Document not available'}
-                                    disabled={!row.hasFile}
+                                    title={row.isNotRequired ? 'Document not required' : row.hasFile ? 'View document' : 'Document not available'}
+                                    disabled={!row.hasFile || row.isNotRequired}
                                     onClick={() => handleRowView(row)}
                                   >
                                     {EyeIcon ? <EyeIcon size={14} /> : <span>👁</span>}
@@ -9698,8 +10158,8 @@ export default function CustomerVerification() {
                                   <button
                                     type="button"
                                     className="bo-cv-doc-action-btn bo-cv-doc-action-btn--download"
-                                    title={row.hasFile ? 'Download document' : 'Document not available'}
-                                    disabled={!row.hasFile}
+                                    title={row.isNotRequired ? 'Document not required' : row.hasFile ? 'Download document' : 'Document not available'}
+                                    disabled={!row.hasFile || row.isNotRequired}
                                     onClick={() => handleRowDownload(row)}
                                   >
                                     {DownloadIcon ? <DownloadIcon size={14} /> : <span>⬇</span>}
@@ -9708,13 +10168,15 @@ export default function CustomerVerification() {
                                     type="button"
                                     className="bo-cv-doc-action-btn bo-cv-doc-action-btn--return"
                                     title={
-                                      !row.hasFile
+                                      row.isNotRequired
+                                        ? 'Document not required'
+                                        : !row.hasFile
                                         ? (['PROFILE_IMAGE', 'AADHAAR', 'PAN'].includes(row.stepCode)
                                             ? 'Identity document file is not available for return.'
                                             : 'Document not available')
                                         : 'Return document to RM'
                                     }
-                                    disabled={!row.hasFile}
+                                    disabled={!row.hasFile || row.isNotRequired}
                                     onClick={() => handleRowReturn(row)}
                                   >
                                     {RotateCcwIcon ? <RotateCcwIcon size={14} /> : <span>↩</span>}
@@ -9812,6 +10274,8 @@ export default function CustomerVerification() {
                             const isThisRowSaving = savingVerificationKey === `${row.applicantSequence}_${row.stepCode}`;
                             const isCheckboxDisabled =
                               !row.hasFile ||
+                              row.isNotRequired ||
+                              row.status === 'Not Required' ||
                               row.status === 'Returned to RM' ||
                               row.status === 'Returned' ||
                               (row.status !== 'Resubmitted' && hasUnresolvedRejectionForStep(row.stepCode, row.applicantSequence)) ||
@@ -9832,9 +10296,9 @@ export default function CustomerVerification() {
                                 </td>
                                 <td className="bo-cv-doc-td-thumb" style={{ textAlign: 'center' }}>
                                   <div
-                                    className={`bo-cv-doc-thumb-box ${row.hasFile ? 'is-clickable' : 'is-empty'} ${row.loading ? 'is-loading' : ''}`}
-                                    onClick={() => row.hasFile && handleRowView(row)}
-                                    title={row.hasFile ? 'Click to preview' : 'No document uploaded'}
+                                    className={`bo-cv-doc-thumb-box ${row.hasFile && !row.isNotRequired ? 'is-clickable' : 'is-empty'} ${row.loading ? 'is-loading' : ''}`}
+                                    onClick={() => row.hasFile && !row.isNotRequired && handleRowView(row)}
+                                    title={row.isNotRequired ? 'Document not required' : row.hasFile ? 'Click to preview' : 'No document uploaded'}
                                   >
                                     {row.loading ? (
                                       <div className="bo-cv-doc-thumb-spinner" />
@@ -9847,7 +10311,7 @@ export default function CustomerVerification() {
                                     ) : (
                                       <div className="bo-cv-doc-thumb-placeholder">—</div>
                                     )}
-                                    {row.hasFile && (
+                                    {row.hasFile && !row.isNotRequired && (
                                       <div className="bo-cv-doc-thumb-hover-overlay">
                                         {EyeIcon ? <EyeIcon size={12} /> : <span>👁</span>}
                                       </div>
@@ -9868,7 +10332,7 @@ export default function CustomerVerification() {
                                           {row.fileSize && row.uploadDate && <span>•</span>}
                                           {row.uploadDate && <span>{formatUploadDate(row.uploadDate)}</span>}
                                           {!row.fileSize && !row.uploadDate && (
-                                            <span className="bo-cv-doc-meta-empty">{row.hasFile ? 'Uploaded' : 'Not available'}</span>
+                                            <span className="bo-cv-doc-meta-empty">{row.isNotRequired ? 'Not required' : row.hasFile ? 'Uploaded' : 'Not available'}</span>
                                           )}
                                         </>
                                       )}
@@ -9879,7 +10343,9 @@ export default function CustomerVerification() {
                                   <label
                                     className={`bo-cv-doc-verify-checkbox-label ${isCheckboxDisabled ? 'is-disabled' : ''} ${row.isVerified ? 'is-checked' : ''}`}
                                     title={
-                                      !row.hasFile
+                                      row.isNotRequired || row.status === 'Not Required'
+                                        ? 'Document is not required for this employment type'
+                                        : !row.hasFile
                                         ? 'Cannot verify: Document not uploaded'
                                         : row.status === 'Returned to RM' || row.status === 'Returned'
                                         ? 'Cannot verify: Document is returned to RM'
@@ -9915,8 +10381,8 @@ export default function CustomerVerification() {
                                     <button
                                       type="button"
                                       className="bo-cv-doc-action-btn bo-cv-doc-action-btn--view"
-                                      title={row.hasFile ? 'View document' : 'Document not available'}
-                                      disabled={!row.hasFile}
+                                      title={row.isNotRequired ? 'Document not required' : row.hasFile ? 'View document' : 'Document not available'}
+                                      disabled={!row.hasFile || row.isNotRequired}
                                       onClick={() => handleRowView(row)}
                                     >
                                       {EyeIcon ? <EyeIcon size={14} /> : <span>👁</span>}
@@ -9924,8 +10390,8 @@ export default function CustomerVerification() {
                                     <button
                                       type="button"
                                       className="bo-cv-doc-action-btn bo-cv-doc-action-btn--download"
-                                      title={row.hasFile ? 'Download document' : 'Document not available'}
-                                      disabled={!row.hasFile}
+                                      title={row.isNotRequired ? 'Document not required' : row.hasFile ? 'Download document' : 'Document not available'}
+                                      disabled={!row.hasFile || row.isNotRequired}
                                       onClick={() => handleRowDownload(row)}
                                     >
                                       {DownloadIcon ? <DownloadIcon size={14} /> : <span>⬇</span>}
@@ -9934,13 +10400,15 @@ export default function CustomerVerification() {
                                       type="button"
                                       className="bo-cv-doc-action-btn bo-cv-doc-action-btn--return"
                                       title={
-                                        !row.hasFile
+                                        row.isNotRequired
+                                          ? 'Document not required'
+                                          : !row.hasFile
                                           ? (['PROFILE_IMAGE', 'AADHAAR', 'PAN'].includes(row.stepCode)
                                               ? 'Identity document file is not available for return.'
                                               : 'Document not available')
                                           : 'Return document to RM'
                                       }
-                                      disabled={!row.hasFile}
+                                      disabled={!row.hasFile || row.isNotRequired}
                                       onClick={() => handleRowReturn(row)}
                                     >
                                       {RotateCcwIcon ? <RotateCcwIcon size={14} /> : <span>↩</span>}
@@ -9969,7 +10437,7 @@ export default function CustomerVerification() {
                     <p className="bo-cv-step-panel-desc">Property Field Investigation details and collateral valuation.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 03 of 11</span>
+                <span className="bo-cv-step-tag-pill">Step 03 of 12</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -9998,7 +10466,7 @@ export default function CustomerVerification() {
                     <p className="bo-cv-step-panel-desc">Workplace and business establishment field investigation.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 04 of 11</span>
+                <span className="bo-cv-step-tag-pill">Step 04 of 12</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -10027,7 +10495,7 @@ export default function CustomerVerification() {
                     <p className="bo-cv-step-panel-desc">Physical residence field verification and neighbor check.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 05 of 11</span>
+                <span className="bo-cv-step-tag-pill">Step 05 of 12</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -10058,7 +10526,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 06 of 11</span>
+                <span className="bo-cv-step-tag-pill">Step 06 of 12</span>
               </div>
 
               <div className="bo-cv-upload-container">
@@ -10200,7 +10668,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 07 of 11</span>
+                <span className="bo-cv-step-tag-pill">Step 07 of 12</span>
               </div>
 
               <div className="bo-cv-upload-container">
@@ -10342,7 +10810,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 08 of 11</span>
+                <span className="bo-cv-step-tag-pill">Step 08 of 12</span>
               </div>
 
               {/* Manual CIBIL PAN Card Upload Reference Section */}
@@ -10890,7 +11358,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 09 of 11</span>
+                <span className="bo-cv-step-tag-pill">Step 09 of 12</span>
               </div>
 
               <div className="bo-cv-pd-container">
@@ -10963,7 +11431,18 @@ export default function CustomerVerification() {
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
-              STEP 14: ELIGIBILITY ASSESSMENT — COMMAND CENTER
+              STEP 10: RTR COMMON SHEET
+          ══════════════════════════════════════════════════════════════════ */}
+          {activeStep === 15 && (
+            <RtrCommonSheet
+              applicationProductDetailsId={resolvedAppProdId}
+              applicantSequence={0}
+              currentUserId={getAuthenticatedBackOfficeId()}
+            />
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              STEP 11: ELIGIBILITY ASSESSMENT — COMMAND CENTER
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 16 && (
             <div className="bo-cv-elig-deck">
@@ -10971,7 +11450,7 @@ export default function CustomerVerification() {
               <header className="bo-cv-elig-hero">
                 <div className="bo-cv-elig-hero-mesh" aria-hidden="true" />
                 <div className="bo-cv-elig-hero-copy">
-                  <span className="bo-cv-elig-kicker">Step 10 of 11 · Credit Assessment</span>
+                  <span className="bo-cv-elig-kicker">Step 11 of 12 · Credit Assessment</span>
                   <h2 className="bo-cv-elig-hero-title">Eligibility Engine</h2>
                   <p className="bo-cv-elig-hero-sub">
                     Pick a method and applicant, then open the calculator sheet to run inputs and get a decision amount — fast path for underwriters.
@@ -14385,7 +14864,7 @@ export default function CustomerVerification() {
                       </p>
                     </div>
                   </div>
-                  <span className="bo-cv-step-tag-pill">Step 09 of 11</span>
+                  <span className="bo-cv-step-tag-pill">Step 09 of 12</span>
                 </div>
 
                 <section className="bo-cv-recommendation-sheet" aria-label="Credit recommendation assessment">
@@ -14556,6 +15035,35 @@ export default function CustomerVerification() {
                 </div>
               </section>
             </>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              STEP 12: RECOMMENDATION SHEET (CREDIT RECOMMENDATION PLACEHOLDER)
+          ══════════════════════════════════════════════════════════════════ */}
+          {activeStep === 17 && (
+            <div className="bo-cv-step-panel">
+              <div className="bo-cv-step-panel-header">
+                <div className="bo-cv-step-header-left">
+                  <div className="bo-cv-step-badge-num">12</div>
+                  <div>
+                    <h2 className="bo-cv-step-panel-title">Recommendation Sheet</h2>
+                    <p className="bo-cv-step-panel-desc">
+                      Credit underwriter recommendation and final decision sign-off.
+                    </p>
+                  </div>
+                </div>
+                <span className="bo-cv-step-tag-pill">Step 12 of 12</span>
+              </div>
+
+              <div className="bo-cv-placeholder-panel">
+                <div className="bo-cv-placeholder-icon">
+                  {ShieldCheckIcon && <ShieldCheckIcon size={40} />}
+                </div>
+                <span className="bo-cv-placeholder-badge">CREDIT RECOMMENDATION</span>
+                <h3>Credit Recommendation Sheet</h3>
+                <p>Final credit underwriter recommendation and approval decision summary.</p>
+              </div>
+            </div>
           )}
         </main>
       </div>

@@ -186,32 +186,63 @@ function deepMergeApplicationData(target = {}, source = {}) {
 }
 
 function normalizeApplicationRecord(record = {}) {
-  const loanProduct = record.loanProduct !== undefined && record.loanProduct !== null && record.loanProduct !== ''
-    ? record.loanProduct
-    : (record.loanProductId ?? record.LoanProductId ?? inferLoanProductCode(record));
-  const loanVariation = record.loanVariation !== undefined && record.loanVariation !== null
+  const rawLoanProductId = record.loanProductId ?? record.LoanProductId;
+  const rawLoanProduct = (rawLoanProductId !== undefined && rawLoanProductId !== null && rawLoanProductId !== '')
+    ? rawLoanProductId
+    : (record.loanProduct !== undefined && record.loanProduct !== null && record.loanProduct !== '' ? record.loanProduct : inferLoanProductCode(record));
+  const loanProduct = (rawLoanProduct !== '' && rawLoanProduct !== null && rawLoanProduct !== undefined && !isNaN(Number(rawLoanProduct)))
+    ? Number(rawLoanProduct)
+    : rawLoanProduct;
+
+  const rawLoanVariation = record.loanVariation !== undefined && record.loanVariation !== null && record.loanVariation !== ''
     ? record.loanVariation
     : (record.loanProductVariationId ?? record.LoanProductVariationId ?? '');
-  const purposeOfLoan = record.purposeOfLoan !== undefined && record.purposeOfLoan !== null && record.purposeOfLoan !== ''
+  const loanVariation = (rawLoanVariation !== '' && rawLoanVariation !== null && rawLoanVariation !== undefined && !isNaN(Number(rawLoanVariation)))
+    ? Number(rawLoanVariation)
+    : rawLoanVariation;
+
+  const rawPurpose = record.purposeOfLoan !== undefined && record.purposeOfLoan !== null && record.purposeOfLoan !== ''
     ? record.purposeOfLoan
     : (record.loanPurposeId ?? record.LoanPurposeId ?? '');
-  const loanAmount = record.loanAmount !== undefined && record.loanAmount !== null && record.loanAmount !== ''
-    ? extractDigits(record.loanAmount)
-    : (record.amount !== undefined && record.amount !== null && record.amount !== '' ? extractDigits(record.amount) : '');
-  const loanTenureMonths = extractDigits(
-    record.loanTenureMonths !== undefined && record.loanTenureMonths !== null && record.loanTenureMonths !== ''
-      ? record.loanTenureMonths
-      : (record.loanTenure ?? record.LoanTenure)
-  );
-  const roi = record.roi !== undefined && record.roi !== null && record.roi !== ''
-    ? Number(record.roi)
-    : (record.ROI !== undefined && record.ROI !== null && record.ROI !== '' ? Number(record.ROI) : (record.roi === '' ? '' : ''));
-  const loanTransactionType = record.loanTransactionType !== undefined && record.loanTransactionType !== null && record.loanTransactionType !== ''
+  const purposeOfLoan = (rawPurpose !== '' && rawPurpose !== null && rawPurpose !== undefined && !isNaN(Number(rawPurpose)))
+    ? Number(rawPurpose)
+    : rawPurpose;
+
+  const rawAmount = record.loanAmount !== undefined && record.loanAmount !== null && record.loanAmount !== ''
+    ? record.loanAmount
+    : (record.amount !== undefined && record.amount !== null && record.amount !== '' ? record.amount : '');
+  const loanAmount = rawAmount !== '' && rawAmount !== null && rawAmount !== undefined && !isNaN(Number(String(rawAmount).replace(/,/g, '')))
+    ? Number(String(rawAmount).replace(/,/g, ''))
+    : (rawAmount !== '' ? extractDigits(rawAmount) : '');
+
+  const rawTenure = record.loanTenureMonths !== undefined && record.loanTenureMonths !== null && record.loanTenureMonths !== ''
+    ? record.loanTenureMonths
+    : (record.loanTenure ?? record.LoanTenure ?? '');
+  const loanTenureMonths = rawTenure !== '' && rawTenure !== null && rawTenure !== undefined && !isNaN(Number(rawTenure))
+    ? Number(rawTenure)
+    : (rawTenure !== '' ? extractDigits(rawTenure) : '');
+
+  const rawRoi = record.roi !== undefined && record.roi !== null && record.roi !== ''
+    ? record.roi
+    : (record.ROI !== undefined && record.ROI !== null && record.ROI !== '' ? record.ROI : '');
+  const roi = (rawRoi !== '' && rawRoi !== null && rawRoi !== undefined && !isNaN(Number(rawRoi)))
+    ? Number(rawRoi)
+    : '';
+
+  const rawTransType = record.loanTransactionType !== undefined && record.loanTransactionType !== null && record.loanTransactionType !== ''
     ? record.loanTransactionType
     : (record.loanTransactionTypeId ?? record.LoanTransactionTypeId ?? '');
-  const interestType = record.interestType !== undefined && record.interestType !== null && record.interestType !== ''
+  const loanTransactionType = (rawTransType !== '' && rawTransType !== null && rawTransType !== undefined && !isNaN(Number(rawTransType)))
+    ? Number(rawTransType)
+    : rawTransType;
+
+  const rawInterestType = record.interestType !== undefined && record.interestType !== null && record.interestType !== ''
     ? record.interestType
     : (record.interestTypeId ?? record.InterestTypeId ?? '');
+  const interestType = (rawInterestType !== '' && rawInterestType !== null && rawInterestType !== undefined && !isNaN(Number(rawInterestType)))
+    ? Number(rawInterestType)
+    : rawInterestType;
+
   const sourcingChannel = record.sourcingChannel !== undefined && record.sourcingChannel !== null && record.sourcingChannel !== ''
     ? record.sourcingChannel
     : (record.sourcingChannelId ?? record.SourcingChannelId ?? '');
@@ -246,10 +277,14 @@ function normalizeApplicationRecord(record = {}) {
       ? Math.max(0, rawCoAppCount)
       : countFromSections;
 
-  const distanceFromBranchKm =
-    record.distanceFromBranchKm !== '' && record.distanceFromBranchKm !== undefined && record.distanceFromBranchKm !== null
-      ? Number(record.distanceFromBranchKm)
-      : (record.distanceFromBranch !== '' && record.distanceFromBranch !== undefined && record.distanceFromBranch !== null ? Number(record.distanceFromBranch) : '');
+  const rawDistance = record.distanceFromBranchKm !== '' && record.distanceFromBranchKm !== undefined && record.distanceFromBranchKm !== null
+    ? record.distanceFromBranchKm
+    : (record.distanceFromBranch !== '' && record.distanceFromBranch !== undefined && record.distanceFromBranch !== null
+      ? record.distanceFromBranch
+      : (record.DistanceFromBranch !== '' && record.DistanceFromBranch !== undefined && record.DistanceFromBranch !== null ? record.DistanceFromBranch : ''));
+  const distanceFromBranchKm = (rawDistance !== '' && rawDistance !== null && rawDistance !== undefined && !isNaN(Number(rawDistance)))
+    ? Number(rawDistance)
+    : '';
 
   const applicationNumber = record.applicationNumber || record.id || '';
   const loanProductDisplay = getLoanProductDisplay(loanProduct, loanVariation);
@@ -351,17 +386,17 @@ function normalizeApplicationRecord(record = {}) {
     isAgentSourced,
     branch: record.branch || inferBranch(record.address),
     location: record.location || inferLocation(record.address),
-    sourcingChannel: record.sourcingChannel || '',
+    sourcingChannel: sourcingChannel || '',
     loanProduct,
     loanProductDisplay: loanProductDisplay || record.loanType || '',
     loanVariation,
-    loanTransactionType: record.loanTransactionType || '',
+    loanTransactionType: loanTransactionType !== undefined && loanTransactionType !== null && loanTransactionType !== '' ? loanTransactionType : '',
     purposeOfLoan,
     loanPurpose: purposeOfLoan,
     loanAmount,
     loanAmountDisplay: loanAmount === '' ? record.amount || '' : formatRupees(loanAmount),
     loanTenureMonths,
-    interestType: record.interestType || '',
+    interestType: interestType !== undefined && interestType !== null && interestType !== '' ? interestType : '',
     roi,
     coApplicantsCount,
     distanceFromBranchKm,
@@ -577,13 +612,142 @@ function buildBlankApplication(applicationId) {
   });
 }
 
+export function normalizeBankBackendRow(rawRow = {}) {
+  if (!rawRow || typeof rawRow !== 'object') return rawRow;
+  const inner = rawRow.bankLoan ?? rawRow.BankLoan ?? null;
+  const hasInner = inner && typeof inner === 'object';
+  const effectiveInner = hasInner ? inner : {};
+
+  const applicationBankExistingLoanDetailsId =
+    effectiveInner.applicationBankExistingLoanDetailsId ??
+    effectiveInner.ApplicationBankExistingLoanDetailsId ??
+    rawRow.applicationBankExistingLoanDetailsId ??
+    rawRow.ApplicationBankExistingLoanDetailsId ??
+    effectiveInner.bankExistingLoansId ??
+    effectiveInner.id ??
+    effectiveInner.Id ??
+    rawRow.id ??
+    rawRow.Id ??
+    null;
+
+  const applicationEmploymentIncomeDetailsId =
+    effectiveInner.applicationEmploymentIncomeDetailsId ??
+    effectiveInner.ApplicationEmploymentIncomeDetailsId ??
+    rawRow.applicationEmploymentIncomeDetailsId ??
+    rawRow.ApplicationEmploymentIncomeDetailsId ??
+    effectiveInner.employmentIncomeDetailsId ??
+    effectiveInner.EmploymentIncomeDetailsId ??
+    rawRow.employmentIncomeDetailsId ??
+    rawRow.EmploymentIncomeDetailsId ??
+    null;
+
+  const rawBankId =
+    effectiveInner.bankId ??
+    effectiveInner.BankId ??
+    rawRow.bankId ??
+    rawRow.BankId ??
+    (rawRow.bankName !== undefined && rawRow.bankName !== null && !isNaN(Number(rawRow.bankName)) && String(rawRow.bankName).trim() !== '' ? Number(rawRow.bankName) : null);
+
+  const bankId = rawBankId !== null && rawBankId !== undefined && !isNaN(Number(rawBankId)) && String(rawBankId).trim() !== ''
+    ? Number(rawBankId)
+    : rawBankId;
+
+  const rawBranchId =
+    effectiveInner.bankBranchId ??
+    effectiveInner.BankBranchId ??
+    rawRow.bankBranchId ??
+    rawRow.BankBranchId ??
+    effectiveInner.branch ??
+    effectiveInner.Branch ??
+    rawRow.branch ??
+    rawRow.Branch ??
+    (rawRow.bankBranchName !== undefined && rawRow.bankBranchName !== null && !isNaN(Number(rawRow.bankBranchName)) && String(rawRow.bankBranchName).trim() !== '' ? Number(rawRow.bankBranchName) : null);
+
+  const bankBranchId = rawBranchId !== null && rawBranchId !== undefined && !isNaN(Number(rawBranchId)) && String(rawBranchId).trim() !== ''
+    ? Number(rawBranchId)
+    : rawBranchId;
+
+  const accountNumber =
+    effectiveInner.accountNumber ??
+    effectiveInner.AccountNumber ??
+    rawRow.accountNumber ??
+    rawRow.AccountNumber ??
+    '';
+
+  const accountType =
+    effectiveInner.accountType ??
+    effectiveInner.AccountType ??
+    rawRow.accountType ??
+    rawRow.AccountType ??
+    'Savings';
+
+  const accountHolderName =
+    effectiveInner.accountHolderName ??
+    effectiveInner.AccountHolderName ??
+    rawRow.accountHolderName ??
+    rawRow.AccountHolderName ??
+    '';
+
+  const rawLoans =
+    effectiveInner.noOfActiveLoans ??
+    effectiveInner.NoOfActiveLoans ??
+    rawRow.noOfActiveLoans ??
+    rawRow.NoOfActiveLoans;
+  const noOfActiveLoans =
+    rawLoans !== undefined && rawLoans !== null && rawLoans !== ''
+      ? (typeof rawLoans === 'number' ? rawLoans : (!isNaN(Number(rawLoans)) ? Number(rawLoans) : rawLoans))
+      : '';
+
+  const rawCards =
+    effectiveInner.noOfActiveCreditCards ??
+    effectiveInner.NoOfActiveCreditCards ??
+    rawRow.noOfActiveCreditCards ??
+    rawRow.NoOfActiveCreditCards;
+  const noOfActiveCreditCards =
+    rawCards !== undefined && rawCards !== null && rawCards !== ''
+      ? (typeof rawCards === 'number' ? rawCards : (!isNaN(Number(rawCards)) ? Number(rawCards) : rawCards))
+      : '';
+
+  const isPrimaryBank = Boolean(
+    effectiveInner.isPrimaryBank ??
+    effectiveInner.IsPrimaryBank ??
+    rawRow.isPrimaryBank ??
+    rawRow.IsPrimaryBank ??
+    false
+  );
+
+  const isActive = Boolean(
+    effectiveInner.isActive ??
+    effectiveInner.IsActive ??
+    rawRow.isActive ??
+    rawRow.IsActive ??
+    true
+  );
+
+  return {
+    ...rawRow,
+    ...effectiveInner,
+    applicationBankExistingLoanDetailsId: applicationBankExistingLoanDetailsId !== null ? Number(applicationBankExistingLoanDetailsId) : null,
+    applicationEmploymentIncomeDetailsId: applicationEmploymentIncomeDetailsId !== null ? Number(applicationEmploymentIncomeDetailsId) : null,
+    bankId: bankId ?? '',
+    bankBranchId: bankBranchId ?? '',
+    accountNumber,
+    accountType,
+    accountHolderName,
+    noOfActiveLoans,
+    noOfActiveCreditCards,
+    isPrimaryBank,
+    isActive,
+    bankNameText: rawRow.bankName ?? effectiveInner.bankName ?? '',
+    bankBranchNameText: rawRow.bankBranchName ?? effectiveInner.bankBranchName ?? '',
+  };
+}
+
 export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   if (!backendData) return existingDraft;
 
   const rawCustomer = backendData.customer || backendData.Customer || backendData;
   const customer = Array.isArray(rawCustomer) ? (rawCustomer[0] || {}) : (rawCustomer || {});
-  const rawProduct = backendData.productDetails || backendData.ProductDetails;
-  const productDetails = Array.isArray(rawProduct) ? (rawProduct[0] || null) : (rawProduct || null);
   const extractList = (raw) => {
     if (Array.isArray(raw)) return raw;
     if (Array.isArray(raw?.value)) return raw.value;
@@ -592,11 +756,25 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     return [];
   };
 
+  const rawProduct =
+    backendData.productDetails ??
+    backendData.ProductDetails ??
+    backendData.applicationProductDetails ??
+    backendData.ApplicationProductDetails ??
+    customer.productDetails ??
+    customer.ProductDetails ??
+    customer.applicationProductDetails ??
+    customer.ApplicationProductDetails ??
+    backendData.product ??
+    backendData.Product;
+  const rawProductList = extractList(rawProduct);
+
   const kycList = extractList(backendData.kycDocuments ?? backendData.KycDocuments ?? backendData.applicationKYCDocuments ?? backendData.ApplicationKYCDocuments);
   const personalList = extractList(backendData.personalInformation ?? backendData.PersonalInformation ?? backendData.applicationPersonalInformation ?? backendData.ApplicationPersonalInformation);
   const addressList = extractList(backendData.addressDetails ?? backendData.AddressDetails ?? backendData.applicationAddressDetails ?? backendData.ApplicationAddressDetails);
   const empList = extractList(backendData.employmentIncome ?? backendData.EmploymentIncome ?? backendData.applicationEmploymentIncomeDetails ?? backendData.ApplicationEmploymentIncomeDetails);
-  const bankList = extractList(backendData.bankExistingLoans ?? backendData.BankExistingLoans ?? backendData.applicationBankExistingLoanDetails ?? backendData.ApplicationBankExistingLoanDetails);
+  const rawBankList = extractList(backendData.bankExistingLoans ?? backendData.BankExistingLoans ?? backendData.applicationBankExistingLoanDetails ?? backendData.ApplicationBankExistingLoanDetails);
+  const bankList = rawBankList.map(normalizeBankBackendRow);
   const colList = extractList(
     backendData.collateral ??
     backendData.Collateral ??
@@ -607,29 +785,90 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   );
   const refList = extractList(backendData.references ?? backendData.References ?? backendData.applicationReferenceDetails ?? backendData.ApplicationReferenceDetails);
 
-  const agentCustomerId = customer.agentCustomerId || customer.AgentCustomerId || productDetails?.agentCustomerId || productDetails?.AgentCustomerId || existingDraft.agentCustomerId || existingDraft.id;
+  const agentCustomerId = customer.agentCustomerId || customer.AgentCustomerId || existingDraft.agentCustomerId || existingDraft.id;
   const appIdStr = String(agentCustomerId || existingDraft.id || '');
   const currentAppIdNum = Number(appIdStr);
 
   // Validate strict ownership of productDetails to current application only (supports both Agent and RM common-customer model)
   const currentAgentCustId = Number(customer.agentCustomerId || customer.AgentCustomerId || agentCustomerId || currentAppIdNum);
-  const rawProductAgentCustId = productDetails?.agentCustomerId ?? productDetails?.AgentCustomerId;
-  const rawProductRmCustId = productDetails?.rmCustomerId ?? productDetails?.RmCustomerId ?? productDetails?.RMCustomerId;
+  const expectedAppProdId =
+    customer.applicationProductDetailsId ??
+    customer.ApplicationProductDetailsId ??
+    backendData.applicationProductDetailsId ??
+    backendData.ApplicationProductDetailsId ??
+    existingDraft.applicationProductDetailsId ??
+    existingDraft.ApplicationProductDetailsId;
   const rawLegacyRmCustId = customer.rmCustomerId ?? customer.RmCustomerId ?? customer.RMCustomerId;
 
-  const isProductOwnedByCurrentApp = Boolean(
-    productDetails && (
-      // Priority 1: Match by AgentCustomerId for both Agent and RM common customers
-      (rawProductAgentCustId !== undefined && rawProductAgentCustId !== null && rawProductAgentCustId !== '' && Number(rawProductAgentCustId) === currentAgentCustId) ||
-      // Priority 2: Legacy fallback when product.AgentCustomerId is null/absent and authoritative legacy RMCustomerId is present
-      ((rawProductAgentCustId === undefined || rawProductAgentCustId === null || rawProductAgentCustId === '') &&
-       rawProductRmCustId !== undefined && rawProductRmCustId !== null && rawProductRmCustId !== '' &&
-       rawLegacyRmCustId !== undefined && rawLegacyRmCustId !== null && rawLegacyRmCustId !== '' &&
-       Number(rawProductRmCustId) === Number(rawLegacyRmCustId))
+  // Find the valid ApplicationProductDetails row for the current application.
+  // Do NOT take unrelated rows. Do NOT use first row blindly.
+  const matchedProduct = rawProductList.find((p) => {
+    const pAgentCustId = p.agentCustomerId ?? p.AgentCustomerId;
+    if (pAgentCustId !== undefined && pAgentCustId !== null && pAgentCustId !== '') {
+      return Number(pAgentCustId) === currentAgentCustId;
+    }
+    const pProdId = p.applicationProductDetailsId ?? p.ApplicationProductDetailsId;
+    if (pProdId !== undefined && pProdId !== null && pProdId !== '' &&
+        expectedAppProdId !== undefined && expectedAppProdId !== null && expectedAppProdId !== '') {
+      return Number(pProdId) === Number(expectedAppProdId);
+    }
+    const pRmCustId = p.rmCustomerId ?? p.RmCustomerId ?? p.RMCustomerId;
+    if (pRmCustId !== undefined && pRmCustId !== null && pRmCustId !== '' &&
+        rawLegacyRmCustId !== undefined && rawLegacyRmCustId !== null && rawLegacyRmCustId !== '') {
+      return Number(pRmCustId) === Number(rawLegacyRmCustId);
+    }
+    return false;
+  });
+
+  // If no explicit ID match in list, but rawProduct was a single object directly embedded in the current application's details
+  const isEmbeddedInCurrentApp = Boolean(
+    (backendData.customer || backendData.Customer || backendData.id || backendData.applicationNumber) &&
+    currentAgentCustId &&
+    (
+      Number(customer.agentCustomerId || customer.AgentCustomerId) === currentAgentCustId ||
+      Number(backendData.id) === currentAgentCustId ||
+      Number(existingDraft.id) === currentAgentCustId
     )
   );
 
-  const effectiveProductDetails = isProductOwnedByCurrentApp ? productDetails : null;
+  const fallbackEmbeddedProduct = (!matchedProduct && rawProductList.length === 1)
+    ? rawProductList[0]
+    : null;
+
+  const candidateProduct = matchedProduct || (
+    fallbackEmbeddedProduct && (
+      fallbackEmbeddedProduct.agentCustomerId === undefined ||
+      fallbackEmbeddedProduct.agentCustomerId === null ||
+      fallbackEmbeddedProduct.agentCustomerId === '' ||
+      Number(fallbackEmbeddedProduct.agentCustomerId ?? fallbackEmbeddedProduct.AgentCustomerId) === currentAgentCustId
+    ) && isEmbeddedInCurrentApp
+      ? fallbackEmbeddedProduct
+      : null
+  );
+
+  const rawCandidateAgentCustId = candidateProduct?.agentCustomerId ?? candidateProduct?.AgentCustomerId;
+  const rawCandidateProdId = candidateProduct?.applicationProductDetailsId ?? candidateProduct?.ApplicationProductDetailsId;
+  const rawCandidateRmCustId = candidateProduct?.rmCustomerId ?? candidateProduct?.RmCustomerId ?? candidateProduct?.RMCustomerId;
+
+  const isProductOwnedByCurrentApp = Boolean(
+    candidateProduct && (
+      // Priority 1: Match by AgentCustomerId for both Agent and RM common customers
+      (rawCandidateAgentCustId !== undefined && rawCandidateAgentCustId !== null && rawCandidateAgentCustId !== '' && Number(rawCandidateAgentCustId) === currentAgentCustId) ||
+      // Priority 2: Match by ApplicationProductDetailsId
+      (rawCandidateProdId !== undefined && rawCandidateProdId !== null && rawCandidateProdId !== '' &&
+       expectedAppProdId !== undefined && expectedAppProdId !== null && expectedAppProdId !== '' &&
+       Number(rawCandidateProdId) === Number(expectedAppProdId)) ||
+      // Priority 3: Embedded current ApplicationFullDetails relationship (do NOT reject when RMId = null, RMCustomerId = null)
+      (isEmbeddedInCurrentApp && (!rawCandidateAgentCustId || Number(rawCandidateAgentCustId) === currentAgentCustId)) ||
+      // Priority 4: Legacy fallback when candidateProduct.AgentCustomerId is null/absent and authoritative legacy RMCustomerId is present
+      ((rawCandidateAgentCustId === undefined || rawCandidateAgentCustId === null || rawCandidateAgentCustId === '') &&
+       rawCandidateRmCustId !== undefined && rawCandidateRmCustId !== null && rawCandidateRmCustId !== '' &&
+       rawLegacyRmCustId !== undefined && rawLegacyRmCustId !== null && rawLegacyRmCustId !== '' &&
+       Number(rawCandidateRmCustId) === Number(rawLegacyRmCustId))
+    )
+  );
+
+  const effectiveProductDetails = isProductOwnedByCurrentApp ? candidateProduct : null;
 
   // 1. Customer & Product Details
   const customerName = customer.fullName || customer.FullName || customer.customerName || customer.CustomerName || existingDraft.customerName || '';
@@ -767,35 +1006,62 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   const resolvedCustomerSource = customerSource || (isAgentSourced ? 'Agent' : (isRmSourced ? 'RM' : ''));
   const rmCustomerId = effectiveProductDetails?.rmCustomerId ?? effectiveProductDetails?.RmCustomerId ?? customer.rmCustomerId ?? customer.RmCustomerId ?? customer.RMCustomerId ?? existingDraft.rmCustomerId ?? null;
 
-  const applicationProductDetailsId = effectiveProductDetails?.applicationProductDetailsId || effectiveProductDetails?.ApplicationProductDetailsId || null;
+  const applicationProductDetailsId = effectiveProductDetails?.applicationProductDetailsId || effectiveProductDetails?.ApplicationProductDetailsId || customer.applicationProductDetailsId || customer.ApplicationProductDetailsId || existingDraft.applicationProductDetailsId || null;
   const sourcingChannel = effectiveProductDetails?.sourcingChannelId ?? effectiveProductDetails?.SourcingChannelId ?? (isRmSourced ? 1 : (existingDraft.sourcingChannel ?? ''));
-  const loanProduct = effectiveProductDetails?.loanProductId ?? effectiveProductDetails?.LoanProductId ?? customer.loanProductId ?? customer.LoanProductId ?? '';
-  const loanVariation = effectiveProductDetails?.loanProductVariationId ?? effectiveProductDetails?.LoanProductVariationId ?? '';
-  const loanTransactionType = effectiveProductDetails?.loanTransactionTypeId ?? effectiveProductDetails?.LoanTransactionTypeId ?? '';
-  const purposeOfLoan = effectiveProductDetails?.loanPurposeId ?? effectiveProductDetails?.LoanPurposeId ?? customer.loanPurposeId ?? customer.LoanPurposeId ?? '';
-  const loanAmount = (effectiveProductDetails?.loanAmount !== undefined && effectiveProductDetails?.loanAmount !== null && effectiveProductDetails?.loanAmount !== '')
+  const rawLoanProduct = effectiveProductDetails?.loanProductId ?? effectiveProductDetails?.LoanProductId ?? customer.loanProductId ?? customer.LoanProductId ?? (isNaN(Number(existingDraft.loanProduct)) ? null : existingDraft.loanProduct);
+  const loanProduct = (rawLoanProduct !== null && rawLoanProduct !== undefined && rawLoanProduct !== '' && !isNaN(Number(rawLoanProduct)))
+    ? Number(rawLoanProduct)
+    : (rawLoanProduct || existingDraft.loanProduct || '');
+  const rawLoanVariation = effectiveProductDetails?.loanProductVariationId ?? effectiveProductDetails?.LoanProductVariationId ?? existingDraft.loanVariation ?? '';
+  const loanVariation = (rawLoanVariation !== '' && rawLoanVariation !== null && rawLoanVariation !== undefined && !isNaN(Number(rawLoanVariation)))
+    ? Number(rawLoanVariation)
+    : rawLoanVariation;
+  const rawLoanTransactionType = effectiveProductDetails?.loanTransactionTypeId ?? effectiveProductDetails?.LoanTransactionTypeId ?? existingDraft.loanTransactionType ?? '';
+  const loanTransactionType = (rawLoanTransactionType !== '' && rawLoanTransactionType !== null && rawLoanTransactionType !== undefined && !isNaN(Number(rawLoanTransactionType)))
+    ? Number(rawLoanTransactionType)
+    : rawLoanTransactionType;
+  const rawPurposeOfLoan = effectiveProductDetails?.loanPurposeId ?? effectiveProductDetails?.LoanPurposeId ?? customer.loanPurposeId ?? customer.LoanPurposeId ?? existingDraft.purposeOfLoan ?? '';
+  const purposeOfLoan = (rawPurposeOfLoan !== '' && rawPurposeOfLoan !== null && rawPurposeOfLoan !== undefined && !isNaN(Number(rawPurposeOfLoan)))
+    ? Number(rawPurposeOfLoan)
+    : rawPurposeOfLoan;
+  const rawLoanAmount = (effectiveProductDetails?.loanAmount !== undefined && effectiveProductDetails?.loanAmount !== null && effectiveProductDetails?.loanAmount !== '')
     ? effectiveProductDetails.loanAmount
     : ((effectiveProductDetails?.LoanAmount !== undefined && effectiveProductDetails?.LoanAmount !== null && effectiveProductDetails?.LoanAmount !== '')
       ? effectiveProductDetails.LoanAmount
-      : (customer.expectedLoanAmount ?? customer.ExpectedLoanAmount ?? ''));
-  const loanTenureMonths = (effectiveProductDetails?.loanTenure !== undefined && effectiveProductDetails?.loanTenure !== null && effectiveProductDetails?.loanTenure !== '')
+      : (customer.expectedLoanAmount ?? customer.ExpectedLoanAmount ?? existingDraft.loanAmount ?? ''));
+  const loanAmount = rawLoanAmount !== '' && rawLoanAmount !== null && rawLoanAmount !== undefined && !isNaN(Number(String(rawLoanAmount).replace(/,/g, '')))
+    ? Number(String(rawLoanAmount).replace(/,/g, ''))
+    : (rawLoanAmount !== '' ? extractDigits(rawLoanAmount) : '');
+  const rawLoanTenure = (effectiveProductDetails?.loanTenure !== undefined && effectiveProductDetails?.loanTenure !== null && effectiveProductDetails?.loanTenure !== '')
     ? effectiveProductDetails.loanTenure
     : ((effectiveProductDetails?.LoanTenure !== undefined && effectiveProductDetails?.LoanTenure !== null && effectiveProductDetails?.LoanTenure !== '')
       ? effectiveProductDetails.LoanTenure
-      : (effectiveProductDetails?.loanTenureMonths ?? effectiveProductDetails?.LoanTenureMonths ?? ''));
-  const interestType = effectiveProductDetails?.interestTypeId ?? effectiveProductDetails?.InterestTypeId ?? '';
-  const roi = (effectiveProductDetails?.roi !== undefined && effectiveProductDetails?.roi !== null && effectiveProductDetails?.roi !== '')
+      : (effectiveProductDetails?.loanTenureMonths ?? effectiveProductDetails?.LoanTenureMonths ?? existingDraft.loanTenureMonths ?? ''));
+  const loanTenureMonths = (rawLoanTenure !== '' && rawLoanTenure !== null && rawLoanTenure !== undefined && !isNaN(Number(rawLoanTenure)))
+    ? Number(rawLoanTenure)
+    : (rawLoanTenure !== '' ? extractDigits(rawLoanTenure) : '');
+  const rawInterestType = effectiveProductDetails?.interestTypeId ?? effectiveProductDetails?.InterestTypeId ?? existingDraft.interestType ?? '';
+  const interestType = (rawInterestType !== '' && rawInterestType !== null && rawInterestType !== undefined && !isNaN(Number(rawInterestType)))
+    ? Number(rawInterestType)
+    : rawInterestType;
+  const rawRoi = (effectiveProductDetails?.roi !== undefined && effectiveProductDetails?.roi !== null && effectiveProductDetails?.roi !== '')
     ? effectiveProductDetails.roi
     : ((effectiveProductDetails?.Roi !== undefined && effectiveProductDetails?.Roi !== null && effectiveProductDetails?.Roi !== '')
       ? effectiveProductDetails.Roi
       : ((effectiveProductDetails?.ROI !== undefined && effectiveProductDetails?.ROI !== null && effectiveProductDetails?.ROI !== '')
         ? effectiveProductDetails.ROI
-        : ''));
-  const distanceFromBranchKm = (effectiveProductDetails?.distanceFromBranch !== undefined && effectiveProductDetails?.distanceFromBranch !== null && effectiveProductDetails?.distanceFromBranch !== '')
+        : (existingDraft.roi !== undefined && existingDraft.roi !== null && existingDraft.roi !== '' ? existingDraft.roi : '')));
+  const roi = (rawRoi !== '' && rawRoi !== null && rawRoi !== undefined && !isNaN(Number(rawRoi)))
+    ? Number(rawRoi)
+    : '';
+  const rawDistance = (effectiveProductDetails?.distanceFromBranch !== undefined && effectiveProductDetails?.distanceFromBranch !== null && effectiveProductDetails?.distanceFromBranch !== '')
     ? effectiveProductDetails.distanceFromBranch
     : ((effectiveProductDetails?.DistanceFromBranch !== undefined && effectiveProductDetails?.DistanceFromBranch !== null && effectiveProductDetails?.DistanceFromBranch !== '')
       ? effectiveProductDetails.DistanceFromBranch
-      : (effectiveProductDetails?.distanceFromBranchKm ?? effectiveProductDetails?.DistanceFromBranchKm ?? ''));
+      : (effectiveProductDetails?.distanceFromBranchKm ?? effectiveProductDetails?.DistanceFromBranchKm ?? existingDraft.distanceFromBranchKm ?? ''));
+  const distanceFromBranchKm = (rawDistance !== '' && rawDistance !== null && rawDistance !== undefined && !isNaN(Number(rawDistance)))
+    ? Number(rawDistance)
+    : '';
   const coApplicantsCount = (effectiveProductDetails?.noOfCoApplicants !== undefined && effectiveProductDetails?.noOfCoApplicants !== null && effectiveProductDetails?.noOfCoApplicants !== '')
     ? Number(effectiveProductDetails.noOfCoApplicants)
     : ((effectiveProductDetails?.NoOfCoApplicants !== undefined && effectiveProductDetails?.NoOfCoApplicants !== null && effectiveProductDetails?.NoOfCoApplicants !== '')
@@ -1376,6 +1642,8 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   const getBankId = (b) =>
     b?.applicationBankExistingLoanDetailsId ??
     b?.ApplicationBankExistingLoanDetailsId ??
+    b?.bankLoan?.applicationBankExistingLoanDetailsId ??
+    b?.BankLoan?.ApplicationBankExistingLoanDetailsId ??
     b?.bankExistingLoansId ??
     b?.id ??
     b?.Id ??
@@ -1395,7 +1663,13 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     // 1. Primary: Match by applicationEmploymentIncomeDetailsId
     if (empId) {
       const matched = unclaimedBanks.filter((b) => {
-        const bEmpId = b.applicationEmploymentIncomeDetailsId ?? b.ApplicationEmploymentIncomeDetailsId ?? b.employmentIncomeDetailsId ?? b.EmploymentIncomeDetailsId;
+        const bEmpId =
+          b.applicationEmploymentIncomeDetailsId ??
+          b.ApplicationEmploymentIncomeDetailsId ??
+          b.bankLoan?.applicationEmploymentIncomeDetailsId ??
+          b.BankLoan?.ApplicationEmploymentIncomeDetailsId ??
+          b.employmentIncomeDetailsId ??
+          b.EmploymentIncomeDetailsId;
         return bEmpId !== undefined && bEmpId !== null && bEmpId !== '' && Number(bEmpId) === Number(empId);
       });
       if (matched.length > 0) {
@@ -1413,7 +1687,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
 
     // 2. Secondary: Match by applicantSequence if present
     const matchedBySeq = unclaimedBanks.filter((b) => {
-      const rawSeq = b.applicantSequence ?? b.ApplicantSequence;
+      const rawSeq = b.applicantSequence ?? b.ApplicantSequence ?? b.bankLoan?.applicantSequence;
       return rawSeq !== undefined && rawSeq !== null && rawSeq !== '' && Number(rawSeq) === targetSeq;
     });
     if (matchedBySeq.length > 0) {
@@ -1428,10 +1702,15 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   };
 
   const mapBankRecord = (b = {}, defaultHolderName = '', draftBank = {}, resolvedEmpId = null) => {
+    const normalizedB = normalizeBankBackendRow(b);
     // Foreign parent ID guard: reject if bank row's applicationEmploymentIncomeDetailsId conflicts with resolvedEmpId
-    const rowEmpId = b.applicationEmploymentIncomeDetailsId ?? b.ApplicationEmploymentIncomeDetailsId ?? b.employmentIncomeDetailsId ?? b.EmploymentIncomeDetailsId;
+    const rowEmpId =
+      normalizedB.applicationEmploymentIncomeDetailsId ??
+      normalizedB.ApplicationEmploymentIncomeDetailsId ??
+      normalizedB.employmentIncomeDetailsId ??
+      normalizedB.EmploymentIncomeDetailsId;
     const isRowForeign = resolvedEmpId && rowEmpId && Number(rowEmpId) !== Number(resolvedEmpId);
-    const effectiveBankRow = isRowForeign ? {} : b;
+    const effectiveBankRow = isRowForeign ? {} : normalizedB;
 
     const rawBankId = getBankId(effectiveBankRow);
     const isDraftIdClaimed = draftBank.applicationBankExistingLoanDetailsId && claimedBankIds.has(Number(draftBank.applicationBankExistingLoanDetailsId)) && (!rawBankId || Number(draftBank.applicationBankExistingLoanDetailsId) !== Number(rawBankId));
@@ -1445,17 +1724,37 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
         ? Number(rawBankId)
         : (safeDraftBank.applicationBankExistingLoanDetailsId ?? null);
 
-    const bankName = effectiveBankRow.bankId ?? effectiveBankRow.BankId ?? effectiveBankRow.bankName ?? effectiveBankRow.BankName ?? safeDraftBank.bankName ?? safeDraftBank.bankId ?? '';
-    const bankBranch = effectiveBankRow.bankBranchId ?? effectiveBankRow.BankBranchId ?? effectiveBankRow.branch ?? effectiveBankRow.Branch ?? safeDraftBank.branch ?? safeDraftBank.bankBranchId ?? '';
+    const rawBankVal =
+      effectiveBankRow.bankId !== undefined && effectiveBankRow.bankId !== null && effectiveBankRow.bankId !== '' && !isNaN(Number(effectiveBankRow.bankId))
+        ? Number(effectiveBankRow.bankId)
+        : ((effectiveBankRow.BankId !== undefined && effectiveBankRow.BankId !== null && effectiveBankRow.BankId !== '' && !isNaN(Number(effectiveBankRow.BankId)))
+          ? Number(effectiveBankRow.BankId)
+          : (safeDraftBank.bankId ?? safeDraftBank.bankName ?? ''));
+    const bankName = (rawBankVal !== '' && rawBankVal !== null && rawBankVal !== undefined && !isNaN(Number(rawBankVal)))
+      ? Number(rawBankVal)
+      : rawBankVal;
+
+    const rawBranchVal =
+      effectiveBankRow.bankBranchId !== undefined && effectiveBankRow.bankBranchId !== null && effectiveBankRow.bankBranchId !== '' && !isNaN(Number(effectiveBankRow.bankBranchId))
+        ? Number(effectiveBankRow.bankBranchId)
+        : ((effectiveBankRow.BankBranchId !== undefined && effectiveBankRow.BankBranchId !== null && effectiveBankRow.BankBranchId !== '' && !isNaN(Number(effectiveBankRow.BankBranchId)))
+          ? Number(effectiveBankRow.BankBranchId)
+          : ((effectiveBankRow.branch !== undefined && effectiveBankRow.branch !== null && effectiveBankRow.branch !== '' && !isNaN(Number(effectiveBankRow.branch)))
+            ? Number(effectiveBankRow.branch)
+            : (safeDraftBank.branch ?? safeDraftBank.bankBranchId ?? '')));
+    const bankBranch = (rawBranchVal !== '' && rawBranchVal !== null && rawBranchVal !== undefined && !isNaN(Number(rawBranchVal)))
+      ? Number(rawBranchVal)
+      : rawBranchVal;
+
     const accountNumber = effectiveBankRow.accountNumber || effectiveBankRow.AccountNumber || safeDraftBank.accountNumber || '';
     const accountHolderName = effectiveBankRow.accountHolderName || effectiveBankRow.AccountHolderName || safeDraftBank.accountHolderName || defaultHolderName || '';
     const rawLoans = effectiveBankRow.noOfActiveLoans ?? effectiveBankRow.NoOfActiveLoans ?? safeDraftBank.noOfActiveLoans;
-    const noOfActiveLoans = rawLoans !== undefined && rawLoans !== null && rawLoans !== '' ? rawLoans : '';
+    const noOfActiveLoans = rawLoans !== undefined && rawLoans !== null && rawLoans !== '' ? (typeof rawLoans === 'number' ? rawLoans : (!isNaN(Number(rawLoans)) ? Number(rawLoans) : rawLoans)) : '';
     const rawCards = effectiveBankRow.noOfActiveCreditCards ?? effectiveBankRow.NoOfActiveCreditCards ?? safeDraftBank.noOfActiveCreditCards;
-    const noOfActiveCreditCards = rawCards !== undefined && rawCards !== null && rawCards !== '' ? rawCards : '';
+    const noOfActiveCreditCards = rawCards !== undefined && rawCards !== null && rawCards !== '' ? (typeof rawCards === 'number' ? rawCards : (!isNaN(Number(rawCards)) ? Number(rawCards) : rawCards)) : '';
     const ifscCode = effectiveBankRow.ifscCode || effectiveBankRow.IfscCode || safeDraftBank.ifscCode || '';
     const accountType = effectiveBankRow.accountType || effectiveBankRow.AccountType || safeDraftBank.accountType || 'Savings';
-    const isPrimaryBank = effectiveBankRow.isPrimaryBank ?? effectiveBankRow.IsPrimaryBank ?? safeDraftBank.isPrimaryBank ?? false;
+    const isPrimaryBank = Boolean(effectiveBankRow.isPrimaryBank ?? effectiveBankRow.IsPrimaryBank ?? safeDraftBank.isPrimaryBank ?? false);
     const activeLoansDetails = effectiveBankRow.activeLoansDetails || effectiveBankRow.ActiveLoansDetails || safeDraftBank.activeLoansDetails || [];
 
     return {
@@ -2019,7 +2318,12 @@ export function ApplicationDraftProvider({ children }) {
           const hasAddress = extractArr(backendResult.addressDetails ?? backendResult.AddressDetails ?? backendResult.applicationAddressDetails ?? backendResult.ApplicationAddressDetails).length > 0;
           const hasEmp = extractArr(backendResult.employmentIncome ?? backendResult.EmploymentIncome ?? backendResult.applicationEmploymentIncomeDetails ?? backendResult.ApplicationEmploymentIncomeDetails).length > 0;
           const hasBank = extractArr(backendResult.bankExistingLoans ?? backendResult.BankExistingLoans ?? backendResult.applicationBankExistingLoanDetails ?? backendResult.ApplicationBankExistingLoanDetails).length > 0;
-          const hasProd = Boolean(backendResult.productDetails || backendResult.ProductDetails);
+          const hasProd = extractArr(
+            backendResult.productDetails ??
+            backendResult.ProductDetails ??
+            backendResult.applicationProductDetails ??
+            backendResult.ApplicationProductDetails
+          ).length > 0;
           const hasCol = extractArr(backendResult.collateral ?? backendResult.Collateral ?? backendResult.collateralDetails ?? backendResult.CollateralDetails ?? backendResult.applicationCollateralDetails ?? backendResult.ApplicationCollateralDetails).length > 0;
 
           if (!hasProd || !hasKycs || !hasPersonal || !hasAddress || !hasEmp || !hasBank || !hasCol) {
@@ -2045,13 +2349,19 @@ export function ApplicationDraftProvider({ children }) {
             if (!hasProd && prodRes.status === 'fulfilled' && prodRes.value) {
               const allProds = extractArr(prodRes.value);
               const currentId = Number(appIdStr);
+              const custRec = backendResult.customer || {};
+              const expectedProdId = custRec.applicationProductDetailsId ?? custRec.ApplicationProductDetailsId;
               const matched = allProds.find((p) => {
                 const pAgentCustId = p.agentCustomerId ?? p.AgentCustomerId;
                 if (pAgentCustId !== undefined && pAgentCustId !== null && pAgentCustId !== '') {
                   return Number(pAgentCustId) === currentId;
                 }
+                const pProdId = p.applicationProductDetailsId ?? p.ApplicationProductDetailsId;
+                if (pProdId !== undefined && pProdId !== null && pProdId !== '' &&
+                    expectedProdId !== undefined && expectedProdId !== null && expectedProdId !== '') {
+                  return Number(pProdId) === Number(expectedProdId);
+                }
                 const pRmCustId = p.rmCustomerId ?? p.RMCustomerId ?? p.RmCustomerId;
-                const custRec = backendResult.customer || {};
                 const legacyCustId = custRec.rmCustomerId ?? custRec.RMCustomerId ?? custRec.RmCustomerId;
                 if (pRmCustId !== undefined && pRmCustId !== null && pRmCustId !== '' &&
                     legacyCustId !== undefined && legacyCustId !== null && legacyCustId !== '') {
@@ -2062,7 +2372,11 @@ export function ApplicationDraftProvider({ children }) {
               if (matched) backendResult.productDetails = matched;
             }
 
-            const effectiveProdId = backendResult.productDetails?.applicationProductDetailsId ?? backendResult.productDetails?.ApplicationProductDetailsId;
+            const effectiveProdId =
+              backendResult.productDetails?.applicationProductDetailsId ??
+              backendResult.productDetails?.ApplicationProductDetailsId ??
+              backendResult.applicationProductDetails?.applicationProductDetailsId ??
+              backendResult.applicationProductDetails?.ApplicationProductDetailsId;
 
             // Match KYCs if missing
             if (!hasKycs && kycRes.status === 'fulfilled' && kycRes.value) {
@@ -2209,7 +2523,13 @@ export function ApplicationDraftProvider({ children }) {
               const rawBanks = extractArr(bankRes.value);
               const matchedBanks = currentApplicationEmploymentIds.size > 0
                 ? rawBanks.filter((b) => {
-                    const empId = b.applicationEmploymentIncomeDetailsId ?? b.ApplicationEmploymentIncomeDetailsId ?? b.employmentIncomeDetailsId ?? b.EmploymentIncomeDetailsId;
+                    const empId =
+                      b.applicationEmploymentIncomeDetailsId ??
+                      b.ApplicationEmploymentIncomeDetailsId ??
+                      b.bankLoan?.applicationEmploymentIncomeDetailsId ??
+                      b.BankLoan?.ApplicationEmploymentIncomeDetailsId ??
+                      b.employmentIncomeDetailsId ??
+                      b.EmploymentIncomeDetailsId;
                     return empId !== undefined && empId !== null && currentApplicationEmploymentIds.has(Number(empId));
                   })
                 : [];
@@ -2225,7 +2545,13 @@ export function ApplicationDraftProvider({ children }) {
               );
               backendResult.bankExistingLoans = currentApplicationEmploymentIds.size > 0
                 ? existingBanks.filter((b) => {
-                    const empId = b.applicationEmploymentIncomeDetailsId ?? b.ApplicationEmploymentIncomeDetailsId ?? b.employmentIncomeDetailsId ?? b.EmploymentIncomeDetailsId;
+                    const empId =
+                      b.applicationEmploymentIncomeDetailsId ??
+                      b.ApplicationEmploymentIncomeDetailsId ??
+                      b.bankLoan?.applicationEmploymentIncomeDetailsId ??
+                      b.BankLoan?.ApplicationEmploymentIncomeDetailsId ??
+                      b.employmentIncomeDetailsId ??
+                      b.EmploymentIncomeDetailsId;
                     return empId !== undefined && empId !== null && currentApplicationEmploymentIds.has(Number(empId));
                   })
                 : [];

@@ -1,0 +1,526 @@
+/**
+ * RtrCommonSheet.css
+ * --------------------
+ * Scoped styling for the Step 10 RTR Common Sheet component.
+ * Follows Back Office neutral/green aesthetic and Excel-style spreadsheet layout.
+ */
+
+.bo-rtr-panel {
+  padding: 24px;
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.bo-rtr-container {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  margin-top: 16px;
+}
+
+/* ── Top Summary Deck ─────────────────────────────────────────────── */
+.bo-rtr-summary-deck {
+  width: 100%;
+}
+
+.bo-rtr-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.bo-rtr-summary-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bo-rtr-summary-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+.bo-rtr-summary-card--wide {
+  grid-column: 1 / -1;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.bo-rtr-summary-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bo-rtr-group-number {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #0f7a4c;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bo-rtr-summary-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.35;
+}
+
+.bo-rtr-summary-fields {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.bo-rtr-summary-fields--quad {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.bo-rtr-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bo-rtr-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.bo-rtr-input {
+  width: 100%;
+  height: 34px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bo-rtr-input:focus {
+  border-color: #0f7a4c;
+  box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.12);
+}
+
+/* ── Table Section ────────────────────────────────────────────────── */
+.bo-rtr-table-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bo-rtr-table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.bo-rtr-table-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bo-rtr-section-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.bo-rtr-table-subtitle {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.bo-rtr-add-row-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  background: #0f7a4c;
+  border: 1px solid #0d6941;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.05s ease;
+}
+
+.bo-rtr-add-row-btn:hover {
+  background: #0d6941;
+}
+
+.bo-rtr-add-row-btn:active {
+  transform: translateY(1px);
+}
+
+.bo-rtr-add-row-btn--bottom {
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+.bo-rtr-add-row-btn--bottom:hover {
+  background: #e2e8f0;
+}
+
+/* Horizontal Scroll Container */
+.bo-rtr-table-scroll-container {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.bo-rtr-table {
+  width: 100%;
+  min-width: 2570px;
+  border-collapse: collapse;
+  font-size: 12px;
+  table-layout: fixed;
+}
+
+/* Table Head */
+.bo-rtr-th {
+  padding: 10px 8px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 2px solid #cbd5e1;
+  border-right: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: middle;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
+  line-height: 1.25;
+  box-sizing: border-box;
+}
+
+.bo-rtr-th:last-child {
+  border-right: none;
+}
+
+/* Column Width Specifications (Explicit Controlled Minimum Widths) */
+.bo-rtr-col-seq { width: 50px; min-width: 50px; text-align: center; }
+.bo-rtr-col-borrower { width: 150px; min-width: 150px; }
+.bo-rtr-col-bank { width: 150px; min-width: 150px; }
+.bo-rtr-col-acct { width: 180px; min-width: 180px; }
+.bo-rtr-col-product { width: 120px; min-width: 120px; }
+.bo-rtr-col-status { width: 180px; min-width: 180px; }
+.bo-rtr-col-amount { width: 140px; min-width: 140px; }
+.bo-rtr-col-emi { width: 110px; min-width: 110px; }
+.bo-rtr-col-pos { width: 110px; min-width: 110px; }
+.bo-rtr-col-cibil { width: 150px; min-width: 150px; }
+.bo-rtr-col-date { width: 135px; min-width: 135px; }
+.bo-rtr-col-tenor { width: 120px; min-width: 120px; }
+.bo-rtr-col-bounce { width: 170px; min-width: 170px; }
+.bo-rtr-col-for { width: 100px; min-width: 100px; }
+.bo-rtr-col-dpd { width: 160px; min-width: 160px; }
+.bo-rtr-col-comment { width: 180px; min-width: 180px; }
+.bo-rtr-col-actions { width: 90px; min-width: 90px; text-align: center; }
+
+/* Table Body */
+.bo-rtr-tr {
+  transition: background 0.1s ease;
+}
+
+.bo-rtr-tr:nth-child(even) {
+  background: #fafafa;
+}
+
+.bo-rtr-tr:hover {
+  background: #f1f5f9;
+}
+
+.bo-rtr-td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+
+.bo-rtr-td:last-child {
+  border-right: none;
+}
+
+.bo-rtr-td-seq {
+  text-align: center;
+  font-weight: 600;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.bo-rtr-cell-input {
+  width: 100%;
+  height: 30px;
+  padding: 4px 7px;
+  font-size: 12px;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bo-rtr-cell-input:focus {
+  border-color: #0f7a4c;
+  box-shadow: 0 0 0 2px rgba(15, 122, 76, 0.12);
+  background: #ffffff;
+}
+
+.bo-rtr-cell-number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bo-rtr-cell-date {
+  font-size: 11px;
+  padding: 3px 6px;
+}
+
+.bo-rtr-cell-select {
+  width: 100%;
+  height: 30px;
+  padding: 4px 6px;
+  font-size: 12px;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  outline: none;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.bo-rtr-cell-select:focus {
+  border-color: #0f7a4c;
+  box-shadow: 0 0 0 2px rgba(15, 122, 76, 0.12);
+}
+
+.bo-rtr-td-actions {
+  text-align: center;
+}
+
+.bo-rtr-remove-row-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #fecaca;
+  background: #fff5f5;
+  color: #dc2626;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.bo-rtr-remove-row-btn:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+/* Table Footer */
+.bo-rtr-table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 4px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.bo-rtr-rows-counter {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.bo-rtr-rows-counter strong {
+  color: #0f172a;
+}
+
+/* Action Groups */
+.bo-rtr-table-toolbar-actions,
+.bo-rtr-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Save Obligations Button */
+.bo-rtr-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  background: #0f7a4c;
+  border: 1px solid #0f7a4c;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bo-rtr-save-btn:hover:not(:disabled) {
+  background: #0c643e;
+  border-color: #0c643e;
+  box-shadow: 0 1px 3px rgba(15, 122, 76, 0.25);
+}
+
+.bo-rtr-save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Status / Alert Banners */
+.bo-rtr-banner {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.bo-rtr-banner--success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+.bo-rtr-banner--error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.bo-rtr-banner-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.bo-rtr-banner-close:hover {
+  opacity: 1;
+}
+
+/* Delete Confirmation Modal */
+.bo-rtr-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(2px);
+}
+
+.bo-rtr-modal-card {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 440px;
+  width: 90%;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bo-rtr-modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.bo-rtr-modal-desc {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.bo-rtr-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.bo-rtr-btn-secondary {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.bo-rtr-btn-secondary:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.bo-rtr-btn-danger {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #dc2626;
+  color: #ffffff;
+  border: 1px solid #dc2626;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.bo-rtr-btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+

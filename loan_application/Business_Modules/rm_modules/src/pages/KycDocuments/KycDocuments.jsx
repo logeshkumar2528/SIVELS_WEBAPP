@@ -30,7 +30,7 @@ import {
 } from '../applicationWizard/flowUtils';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { parseApiErrorBody } from '../../utils/formatUserFacingError';
-import { resolveDocumentTypeId, validateApplicantDocumentFile } from '../../../../../Core/src/utils/documentTypeHelper';
+import { resolveDocumentTypeId, validateApplicantDocumentFile, getDocumentApplicability } from '../../../../../Core/src/utils/documentTypeHelper';
 import { resolveVerificationIdByCodeOrName } from '../../../../../Core/src/utils/verificationHelper';
 import { getCurrentRMContext } from '../../utils/rmContext';
 import rmCustomerService from '../../services/rmCustomerService';
@@ -413,6 +413,8 @@ function KycCard({
   onViewPersistedDoc,
   onViewAgentDoc,
   onReplacePersistedSlot,
+  employmentTypeDocMappings = [],
+  coApplicantEmploymentTypeId = null,
 }) {
   const [otpStep, setOtpStep] = useState(person.verificationStatus === 'Verified' ? 'verified' : 'idle');
   const [otpValue, setOtpValue] = useState('');
@@ -422,6 +424,39 @@ function KycCard({
   const [slotError, setSlotError] = useState({});
   const fileInputRefs = useRef([]);
   const docInputRefs = useRef({ aadhaar: null, pan: null, profile: null, salarySlip: null, bankStatement: null });
+
+  const salarySlipTypeId = useMemo(
+    () => resolveDocumentTypeId(documentTypeOptions, 'Salary Slip'),
+    [documentTypeOptions]
+  );
+
+  const isSalarySlipNotRequired = useMemo(() => {
+    if (!isCoApplicant) return false;
+    if (!coApplicantEmploymentTypeId) return false;
+    if (!salarySlipTypeId) return false;
+    if (!Array.isArray(employmentTypeDocMappings) || employmentTypeDocMappings.length === 0) return false;
+
+    const applicability = getDocumentApplicability({
+      documentTypeId: salarySlipTypeId,
+      employmentTypeId: coApplicantEmploymentTypeId,
+      mappings: employmentTypeDocMappings,
+    });
+    return applicability.isNotRequired;
+  }, [isCoApplicant, coApplicantEmploymentTypeId, salarySlipTypeId, employmentTypeDocMappings]);
+
+  const applicableCategories = useMemo(() => {
+    if (!isCoApplicant) return KYC_CATEGORIES;
+    if (isSalarySlipNotRequired) {
+      return KYC_CATEGORIES.filter((c) => c.key !== 'salarySlip');
+    }
+    return KYC_CATEGORIES;
+  }, [isCoApplicant, isSalarySlipNotRequired]);
+
+  const uploadedCoDocsCount = useMemo(() => {
+    return applicableCategories.filter(
+      ({ key }) => coApplicantDocs?.[key] || coApplicantPersistedDocs?.[key]?.exists
+    ).length;
+  }, [applicableCategories, coApplicantDocs, coApplicantPersistedDocs]);
 
   const handleDocChange = (docType, event) => {
     const file = event.target.files?.[0];
@@ -951,7 +986,7 @@ function KycCard({
         {isCoApplicant && (
           <div className="co-applicant-docs-section">
             <div className="co-applicant-docs-header">
-              <span className="co-applicant-docs-title">CO-APPLICANT DOCUMENTS ({KYC_CATEGORIES.filter(({ key }) => coApplicantDocs?.[key] || coApplicantPersistedDocs?.[key]?.exists).length}/5)</span>
+              <span className="co-applicant-docs-title">CO-APPLICANT DOCUMENTS ({uploadedCoDocsCount}/{applicableCategories.length})</span>
             </div>
             <div className="co-applicant-docs-grid">
               {/* 1. Aadhaar */}
@@ -1265,18 +1300,32 @@ function KycCard({
 
               {/* 4. Salary Slip / Income Sheet */}
               <div className="co-doc-col">
-                <label className="form-label">Salary Slip / Income Sheet</label>
-                <input
-                  ref={(el) => {
-                    docInputRefs.current.salarySlip = el;
-                  }}
-                  type="file"
-                  style={coApplicantDocs?.salarySlip || coApplicantPersistedDocs?.salarySlip?.exists ? { display: 'none' } : undefined}
-                  className={!coApplicantDocs?.salarySlip && !coApplicantPersistedDocs?.salarySlip?.exists ? "form-input aw-input kyc-compact-file-input" : undefined}
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  aria-label="Upload Co-Applicant Salary Slip"
-                  onChange={(e) => handleDocChange('salarySlip', e)}
-                />
+                <label className="form-label">
+                  Salary Slip / Income Sheet
+                  {isSalarySlipNotRequired && (
+                    <span style={{ marginLeft: '8px', fontSize: '11px', color: '#64748b', fontWeight: 'normal', backgroundColor: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>
+                      Not Required
+                    </span>
+                  )}
+                </label>
+                {isSalarySlipNotRequired && !coApplicantDocs?.salarySlip && !coApplicantPersistedDocs?.salarySlip?.exists ? (
+                  <div className="co-doc-not-required-card" style={{ padding: '8px 12px', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '6px', color: '#64748b', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#94a3b8' }}></span>
+                    <span>Not required for this employment type</span>
+                  </div>
+                ) : (
+                  <input
+                    ref={(el) => {
+                      docInputRefs.current.salarySlip = el;
+                    }}
+                    type="file"
+                    style={coApplicantDocs?.salarySlip || coApplicantPersistedDocs?.salarySlip?.exists ? { display: 'none' } : undefined}
+                    className={!coApplicantDocs?.salarySlip && !coApplicantPersistedDocs?.salarySlip?.exists ? "form-input aw-input kyc-compact-file-input" : undefined}
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    aria-label="Upload Co-Applicant Salary Slip"
+                    onChange={(e) => handleDocChange('salarySlip', e)}
+                  />
+                )}
 
                 {/* Local fresh file selected */}
                 {coApplicantDocs?.salarySlip && (
@@ -1631,6 +1680,7 @@ export default function KycDocuments() {
   const [isLoadingMasters, setIsLoadingMasters] = useState(false);
   const [documentTypeOptions, setDocumentTypeOptions] = useState([]);
   const [verificationOptions, setVerificationOptions] = useState([]);
+  const [employmentTypeDocMappings, setEmploymentTypeDocMappings] = useState([]);
 
   // Dynamic resolver for VerificationMaster ID.
   // Delegates name/code matching to the shared Core helper so that only active
@@ -1700,6 +1750,17 @@ export default function KycDocuments() {
       await Promise.allSettled([
         fetchMaster('DocumentTypeMaster', 'documentTypeId', 'documentTypeName', setDocumentTypeOptions),
         fetchMaster('VerificationMaster', 'verificationId', 'verificationName', setVerificationOptions),
+        (async () => {
+          try {
+            const res = await fetch(`${API_BASE}/EmploymentTypeDocumentMapping`);
+            if (res.ok) {
+              const data = await res.json();
+              setEmploymentTypeDocMappings(Array.isArray(data) ? data : []);
+            }
+          } catch (e) {
+            console.error('Failed to fetch EmploymentTypeDocumentMapping:', e);
+          }
+        })(),
       ]);
       setIsLoadingMasters(false);
     }
@@ -1709,6 +1770,47 @@ export default function KycDocuments() {
   const appData = getApplication(appId);
   const ArrowLeftIcon = iconMap['ArrowLeft'];
   const activeCount = useMemo(() => getApplicantCount(appData), [appData]);
+
+  const getCoApplicantEmploymentTypeId = useCallback(
+    (index) => {
+      const coEmp =
+        appData?.employmentIncome?.coApplicants?.[index] ||
+        appData?.sections?.employmentIncome?.coApplicants?.[index] ||
+        appData?.raw?.employmentIncome?.coApplicants?.[index];
+
+      const fromDraft =
+        coEmp?.employmentTypeId ??
+        coEmp?.EmploymentTypeId ??
+        coEmp?.employmentNature ??
+        coEmp?.EmploymentNature ??
+        coEmp?.employmentType;
+
+      if (fromDraft !== undefined && fromDraft !== null && fromDraft !== '' && !isNaN(Number(fromDraft))) {
+        return Number(fromDraft);
+      }
+
+      const rawList =
+        appData?.raw?.employmentDetails ??
+        appData?.raw?.EmploymentDetails ??
+        appData?.employmentDetails ??
+        appData?.EmploymentDetails;
+
+      if (Array.isArray(rawList)) {
+        const targetSeq = index + 1;
+        const matched = rawList.find(
+          (row) =>
+            Number(row.applicantSequence ?? row.ApplicantSequence) === targetSeq
+        );
+        const tid = matched?.employmentTypeId ?? matched?.EmploymentTypeId;
+        if (tid !== undefined && tid !== null && tid !== '' && !isNaN(Number(tid))) {
+          return Number(tid);
+        }
+      }
+
+      return null;
+    },
+    [appData]
+  );
 
   // Stable scalar id for callbacks that must always use the live application.
   // Depending on the whole `appData` object would re-create those callbacks on
@@ -2558,6 +2660,15 @@ export default function KycDocuments() {
         const i = seq - 1; // coApplicantPersistedDocs is keyed by co-applicant index
         for (const { key, typeId, defaultBase } of docConfigs) {
           if (!typeId) continue;
+          if (key === 'salarySlip') {
+            const coEmpTypeId = getCoApplicantEmploymentTypeId(i);
+            const applicability = getDocumentApplicability({
+              documentTypeId: typeId,
+              employmentTypeId: coEmpTypeId,
+              mappings: employmentTypeDocMappings,
+            });
+            if (applicability.isNotRequired) continue;
+          }
           const cacheKey = `coapp_doc_${resolvedProductDetailsId}_${seq}_${typeId}`;
           if (hydratedCoFinancialKeysRef.current.has(cacheKey)) continue;
 
@@ -2613,7 +2724,7 @@ export default function KycDocuments() {
     return () => {
       isMounted = false;
     };
-  }, [resolvedProductDetailsId, savedCoApplicantSequencesKey, documentTypeOptions, isSaving, normalizeDocPath]);
+  }, [resolvedProductDetailsId, savedCoApplicantSequencesKey, documentTypeOptions, isSaving, normalizeDocPath, getCoApplicantEmploymentTypeId, employmentTypeDocMappings]);
 
 
   // NOTE: Main Applicant (sequence 0) Salary Slip / Bank Statement are NOT probed on
@@ -3445,7 +3556,14 @@ export default function KycDocuments() {
         const bankStatementTypeId = resolveDocumentTypeId(documentTypeOptions, 'Bank Statement');
         const seq = coAppIndex + 1;
 
-        if (salarySlipTypeId) {
+        const coEmpTypeId = getCoApplicantEmploymentTypeId(coAppIndex);
+        const salaryApplicability = getDocumentApplicability({
+          documentTypeId: salarySlipTypeId,
+          employmentTypeId: coEmpTypeId,
+          mappings: employmentTypeDocMappings,
+        });
+
+        if (salarySlipTypeId && !salaryApplicability.isNotRequired) {
           try {
             const res = await rmCustomerService.getApplicantDocument(productDetailsId, seq, salarySlipTypeId);
             const d = res?.data || res?.value || res;
@@ -3801,6 +3919,11 @@ export default function KycDocuments() {
     normalizeDocPath,
     fetchCoAppDocBlobByPath,
     revokeModalBlobUrls,
+    getCoApplicantEmploymentTypeId,
+    employmentTypeDocMappings,
+    setIsLoadingDocs,
+    setDocsLoadError,
+    setCustomerDocs,
   ]);
 
   // Open modal handler
@@ -4911,6 +5034,8 @@ export default function KycDocuments() {
               documentTypeOptions={documentTypeOptions}
               verificationOptions={verificationOptions}
               isLoadingMasters={isLoadingMasters}
+              employmentTypeDocMappings={employmentTypeDocMappings}
+              coApplicantEmploymentTypeId={getCoApplicantEmploymentTypeId(index)}
               errors={Object.fromEntries(
                 Object.entries(errors)
                   .filter(([key]) => key.startsWith(`coApplicants.${index}.`))
