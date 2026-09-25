@@ -1379,12 +1379,54 @@ export default function CustomerVerification() {
   const [employmentTypesList, setEmploymentTypesList] = useState([]);
   const [calcWorkspaceOpen, setCalcWorkspaceOpen] = useState(false);
   const [calcSheetTab, setCalcSheetTab] = useState('inputs'); // inputs | settings | results
+  const [proposedLoanOpen, setProposedLoanOpen] = useState(false);
+  const [proposedLoanSaving, setProposedLoanSaving] = useState(false);
+  const [proposedLoanBanner, setProposedLoanBanner] = useState(null);
+  const [proposedLoan, setProposedLoan] = useState({ manualROI: '', manualTenureMonths: '', recommendedLoanAmount: '' });
   const calcSheetRef = useRef(null);
 
   const openCalcWorkspace = useCallback((tab = 'inputs') => {
     setCalcSheetTab(tab);
     setCalcWorkspaceOpen(true);
   }, []);
+
+  const saveProposedLoan = async () => {
+    const roi = Number(proposedLoan.manualROI);
+    const tenure = Number(proposedLoan.manualTenureMonths);
+    const amount = Number(proposedLoan.recommendedLoanAmount);
+    if (!roi || roi <= 0 || !tenure || tenure <= 0 || !amount || amount <= 0) {
+      setProposedLoanBanner({ type: 'error', message: 'Enter valid positive ROI, tenure, and recommended loan amount.' });
+      return;
+    }
+    setProposedLoanSaving(true);
+    setProposedLoanBanner(null);
+    try {
+      const savedAssessment = await backOfficeService.calculateRTR({
+        applicationProductDetailsId: Number(calculationAppProdId),
+        applicantSequence: Number(selectedApplicantSequence),
+        manualROI: roi,
+        manualTenureMonths: tenure,
+        recommendedLoanAmount: amount,
+        createdBy: Number(getAuthenticatedBackOfficeId()),
+      });
+      const saved = savedAssessment?.value ?? savedAssessment?.data ?? savedAssessment;
+      if (saved && typeof saved === 'object') {
+        setRtrAssessmentsList((previous) => [saved, ...previous.filter((item) => item.applicationRTRAssessmentId !== saved.applicationRTRAssessmentId)]);
+        setProposedLoan((previous) => ({
+          ...previous,
+          manualROI: saved.manualROI ?? saved.manualRoi ?? previous.manualROI,
+          manualTenureMonths: saved.manualTenureMonths ?? saved.manualTenure ?? previous.manualTenureMonths,
+          recommendedLoanAmount: saved.recommendedLoanAmount ?? previous.recommendedLoanAmount,
+        }));
+      }
+      setProposedLoanBanner({ type: 'success', message: 'Proposed loan details saved successfully.' });
+      setProposedLoanOpen(false);
+    } catch (err) {
+      setProposedLoanBanner({ type: 'error', message: err?.response?.data?.message || err?.message || 'Unable to save proposed loan details.' });
+    } finally {
+      setProposedLoanSaving(false);
+    }
+  };
 
   // Dynamic applicants resolver (Applicant = Seq 0, Co-Applicants = Seq 1, 2, ...)
   const allApplicants = useMemo(() => {
@@ -1807,7 +1849,7 @@ export default function CustomerVerification() {
           const pct = existing.incentivePercentApplied != null ? Number(existing.incentivePercentApplied) : 0;
           const ded = Number(existing.deductionAmount) || 0;
           const consInc = existing.consideredIncentiveAmount != null ? Number(existing.consideredIncentiveAmount) : (inc * pct) / 100;
-          // Required business calculation: Basic + HRA + CCA + TA + Considered Incentive + Deductions (ADDED)
+          // Match the underwriting worksheet's salary-slip income model.
           const consIncome = b + h + c + t + consInc + ded;
 
           rows.push({
@@ -1980,7 +2022,7 @@ export default function CustomerVerification() {
       const ded = Number(row.deductionAmount) || 0;
       const pct = row.incentivePercentApplied === '' ? 0 : Number(row.incentivePercentApplied) || 0;
       const prevInc = (inc * pct) / 100;
-      // Deductions must be ADDED: basic + hra + cca + ta + consideredIncentive + deductionAmount
+      // Match the underwriting worksheet's salary-slip income model.
       const prevIncome = b + h + c + t + prevInc + ded;
 
       row.previewConsideredIncentive = prevInc;
@@ -2168,6 +2210,8 @@ export default function CustomerVerification() {
         applicationOtherIncomeDetailsId: r.applicationOtherIncomeDetailsId || null,
         incomeName: r.incomeName || '',
         incomeAmount: r.incomeAmount ?? '',
+        considerationPercentage:
+          r.considerationPercentage ?? r.considerationPercent ?? r.considerationPct ?? 100,
         isPersisted: true,
         isModified: false,
         errorMsg: null,
@@ -2190,6 +2234,7 @@ export default function CustomerVerification() {
         applicationOtherIncomeDetailsId: null,
         incomeName: '',
         incomeAmount: '',
+        considerationPercentage: 100,
         isPersisted: false,
         isModified: false,
         errorMsg: null,
@@ -2214,6 +2259,12 @@ export default function CustomerVerification() {
         } else {
           const num = Math.max(0, Number(value) || 0);
           row.incomeAmount = num;
+        }
+      } else if (field === 'considerationPercentage') {
+        if (value === '') {
+          row.considerationPercentage = '';
+        } else {
+          row.considerationPercentage = Math.min(100, Math.max(0, Number(value) || 0));
         }
       } else {
         row[field] = value;
@@ -2264,6 +2315,18 @@ export default function CustomerVerification() {
           message: `Valid Income Amount (>= 0) is required for Other Income row ${i + 1} (${row.incomeName}).`,
         };
       }
+      if (
+        row.considerationPercentage === '' ||
+        row.considerationPercentage === null ||
+        isNaN(Number(row.considerationPercentage)) ||
+        Number(row.considerationPercentage) < 0 ||
+        Number(row.considerationPercentage) > 100
+      ) {
+        return {
+          success: false,
+          message: `Valid Consideration % between 0 and 100 is required for Other Income row ${i + 1} (${row.incomeName}).`,
+        };
+      }
     }
 
     const rowsToPost = [];
@@ -2294,6 +2357,7 @@ export default function CustomerVerification() {
         applicantSequence: Number(selectedApplicantSequence),
         incomeName: String(row.incomeName).trim(),
         incomeAmount: Number(row.incomeAmount) || 0,
+        considerationPercentage: Number(row.considerationPercentage) || 0,
         modifiedBy: Number(currentUserId),
       };
 
@@ -2320,6 +2384,7 @@ export default function CustomerVerification() {
         applicantSequence: Number(selectedApplicantSequence),
         incomeName: String(row.incomeName).trim(),
         incomeAmount: Number(row.incomeAmount) || 0,
+        considerationPercentage: Number(row.considerationPercentage) || 0,
         createdBy: Number(currentUserId),
       };
 
@@ -2360,7 +2425,10 @@ export default function CustomerVerification() {
   const liveTotalOtherIncome = useMemo(() => {
     return otherIncomeRows.reduce((sum, r) => {
       const amt = Number(r.incomeAmount) || 0;
-      return sum + amt;
+      const pct = r.considerationPercentage !== '' && !isNaN(Number(r.considerationPercentage))
+        ? Number(r.considerationPercentage)
+        : 100;
+      return sum + Math.round((amt * pct) / 100);
     }, 0);
   }, [otherIncomeRows]);
 
@@ -3013,6 +3081,7 @@ export default function CustomerVerification() {
   const [rtrLoansError, setRtrLoansError] = useState(null);
   const [rtrLoansSaving, setRtrLoansSaving] = useState(false);
   const [rtrLoansBanner, setRtrLoansBanner] = useState(null);
+  const [rtrObligations, setRtrObligations] = useState([]);
 
   const [rtrAssessmentsList, setRtrAssessmentsList] = useState([]);
   const [rtrAssessmentsLoading, setRtrAssessmentsLoading] = useState(false);
@@ -3025,8 +3094,10 @@ export default function CustomerVerification() {
       {
         id: `rtr-draft-${seq}-0`,
         applicationRTRLoanDetailsId: 0,
+        applicationLoanObligationDetailsId: null,
         applicationProductDetailsId: Number(appProdId) || 0,
         applicantSequence: Number(seq) || 0,
+        rtrLoanStatusId: 1,
         lenderName: '',
         sanctionAmount: '',
         currentPOS: '',
@@ -3055,14 +3126,32 @@ export default function CustomerVerification() {
         const res = await backOfficeService.getRTRLoansBySeq(appProdId, seq);
         const records = Array.isArray(res) ? res : (res?.value ?? res?.data ?? []);
         const activeRecords = records.filter((r) => r.isActive !== false);
+        let obligationRecords = [];
+        try {
+          const obligationRes = await backOfficeService.getLoanObligations(appProdId, seq);
+          obligationRecords = Array.isArray(obligationRes)
+            ? obligationRes
+            : (obligationRes?.value ?? obligationRes?.data ?? []);
+        } catch (obligationErr) {
+          console.warn('Unable to hydrate RTR obligation links:', obligationErr);
+        }
+        setRtrObligations(obligationRecords.filter((o) => o.isActive !== false));
         setRtrLoans(activeRecords);
 
         if (activeRecords.length > 0) {
           const rows = activeRecords.map((r, i) => ({
             id: `rtr-loan-${r.applicationRTRLoanDetailsId || i}`,
             applicationRTRLoanDetailsId: r.applicationRTRLoanDetailsId || 0,
+            applicationLoanObligationDetailsId:
+              r.applicationLoanObligationDetailsId ||
+              (obligationRecords.find((o) =>
+                String(o.lenderName || '').trim().toLowerCase() === String(r.lenderName || '').trim().toLowerCase() &&
+                Number(o.currentPOS) === Number(r.currentPOS) &&
+                Number(o.emiAmount) === Number(r.emiAmount)
+              ) || (obligationRecords.length === 1 ? obligationRecords[0] : null))?.applicationLoanObligationDetailsId || null,
             applicationProductDetailsId: Number(appProdId),
             applicantSequence: Number(seq),
+            rtrLoanStatusId: r.rtrLoanStatusId != null ? Number(r.rtrLoanStatusId) : 1,
             lenderName: r.lenderName || '',
             sanctionAmount: r.sanctionAmount ?? '',
             currentPOS: r.currentPOS ?? '',
@@ -3080,7 +3169,11 @@ export default function CustomerVerification() {
           }));
           setRtrDraftLoans(rows);
         } else {
-          setRtrDraftLoans(getDefaultRtrDraftLoans(appProdId, seq));
+          const defaults = getDefaultRtrDraftLoans(appProdId, seq);
+          if (obligationRecords.length === 1) {
+            defaults[0].applicationLoanObligationDetailsId = obligationRecords[0].applicationLoanObligationDetailsId;
+          }
+          setRtrDraftLoans(defaults);
         }
       } catch (err) {
         console.warn('Failed to fetch RTR loans:', err);
@@ -3204,6 +3297,8 @@ export default function CustomerVerification() {
         row.emiStartDate = value;
       } else if (field === 'isActive') {
         row.isActive = Boolean(value);
+      } else if (field === 'applicationLoanObligationDetailsId') {
+        row.applicationLoanObligationDetailsId = value ? Number(value) : null;
       } else {
         if (value === '') {
           row[field] = '';
@@ -3222,6 +3317,10 @@ export default function CustomerVerification() {
     });
   };
 
+  const handleRtrObligationLinkChange = (index, value) => {
+    handleRtrLoanRowChange(index, 'applicationLoanObligationDetailsId', value ? Number(value) : null);
+  };
+
   // Handle Add RTR Loan row
   const handleAddRtrLoanRow = () => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -3230,8 +3329,10 @@ export default function CustomerVerification() {
       {
         id: `rtr-loan-new-${Date.now()}-${prev.length}`,
         applicationRTRLoanDetailsId: 0,
+        applicationLoanObligationDetailsId: null,
         applicationProductDetailsId: Number(calculationAppProdId) || 0,
         applicantSequence: Number(selectedApplicantSequence) || 0,
+        rtrLoanStatusId: 1,
         lenderName: '',
         sanctionAmount: '',
         currentPOS: '',
@@ -3363,8 +3464,12 @@ export default function CustomerVerification() {
 
       const payload = {
         applicationRTRLoanDetailsId: isNew ? 0 : Number(row.applicationRTRLoanDetailsId),
+        applicationLoanObligationDetailsId: row.applicationLoanObligationDetailsId
+          ? Number(row.applicationLoanObligationDetailsId)
+          : null,
         applicationProductDetailsId: Number(calculationAppProdId),
         applicantSequence: Number(selectedApplicantSequence),
+        rtrLoanStatusId: row.rtrLoanStatusId ? Number(row.rtrLoanStatusId) : 1,
         lenderName: String(row.lenderName).trim(),
         sanctionAmount: Number(row.sanctionAmount),
         currentPOS: Number(row.currentPOS),
@@ -3374,6 +3479,7 @@ export default function CustomerVerification() {
         odCount: Number(row.odCount) || 0,
         bounceCount: Number(row.bounceCount) || 0,
         isSelectedForRTR: Boolean(row.isSelectedForRTR),
+        isFoirApplicable: row.isFoirApplicable !== false,
         isActive: row.isActive !== false,
         createdBy: Number(currentUserId),
         modifiedBy: isNew ? null : Number(currentUserId),
@@ -3388,7 +3494,13 @@ export default function CustomerVerification() {
         saveCount++;
       } catch (err) {
         console.error(`Failed to save RTR loan #${i + 1}:`, err);
-        const errMsg = err?.response?.data?.message || err?.message || 'Save failed.';
+        const validationErrors = err?.response?.data?.errors;
+        const validationText = validationErrors && typeof validationErrors === 'object'
+          ? Object.entries(validationErrors)
+              .flatMap(([field, messages]) => (Array.isArray(messages) ? messages : [messages]).map((message) => `${field}: ${message}`))
+              .join('; ')
+          : '';
+        const errMsg = validationText || err?.response?.data?.message || err?.message || 'Save failed.';
         failedLoans.push({ lender: row.lenderName, error: errMsg });
       }
     }
@@ -3412,6 +3524,17 @@ export default function CustomerVerification() {
       await fetchRTRLoans(calculationAppProdId, selectedApplicantSequence);
       return { success: false, message: 'Some loan records failed to save.' };
     }
+  };
+
+  // Persist RTR facilities when the user leaves the Inputs step. This makes
+  // Continue to Settings a durable save point, while the calculation step can
+  // safely re-use the same synchronisation routine without duplicate inserts.
+  const handleContinueToSettings = async () => {
+    if (selectedMethodCode === 'RTR') {
+      const syncRes = await handleSaveRtrLoans();
+      if (!syncRes.success) return;
+    }
+    setCalcSheetTab('settings');
   };
 
   // Phase 3: Normal Income Method State & Handlers for Step 14 (AssessmentMethodId = 4, MethodCode = 'NORMAL_INCOME')
@@ -4193,21 +4316,13 @@ export default function CustomerVerification() {
         return;
       }
 
-      // Step 3c: Validate emiAmountFactor (required, numeric, > 0)
-      const factorStr =
-        currentCalcSettings.emiAmountFactor != null ? String(currentCalcSettings.emiAmountFactor).trim() : '';
-      if (!factorStr) {
+      const proposedAmount = Number(proposedLoan.recommendedLoanAmount);
+      const proposedRoi = Number(proposedLoan.manualROI);
+      const proposedTenure = Number(proposedLoan.manualTenureMonths);
+      if (!proposedRoi || proposedRoi <= 0 || !proposedTenure || proposedTenure <= 0) {
         setCalcBanner({
           type: 'error',
-          message: 'EMI Amount Factor is required before calculating RTR eligibility. Please enter a valid factor.',
-        });
-        return;
-      }
-      const factorNum = Number(factorStr);
-      if (isNaN(factorNum) || factorNum <= 0) {
-        setCalcBanner({
-          type: 'error',
-          message: 'Valid positive numeric EMI Amount Factor is required (e.g. 36).',
+          message: 'Enter valid ROI and tenure in Details of Proposed Loan before calculating.',
         });
         return;
       }
@@ -4217,7 +4332,9 @@ export default function CustomerVerification() {
         const rtrPayload = {
           applicationProductDetailsId: Number(calculationAppProdId),
           applicantSequence: Number(selectedApplicantSequence),
-          emiAmountFactor: factorNum,
+          manualROI: proposedRoi,
+          manualTenureMonths: proposedTenure,
+          recommendedLoanAmount: proposedAmount > 0 ? proposedAmount : null,
           createdBy: Number(auth.userId),
         };
 
@@ -9478,9 +9595,9 @@ export default function CustomerVerification() {
       details.raw?.loanTenureMonths ??
       details.raw?.LoanTenureMonths ??
       details.loanTenure;
-    if (raw == null || raw === '') return 24;
+    if (raw == null || raw === '') return null;
     const num = typeof raw === 'string' ? parseInt(raw.replace(/\D/g, ''), 10) : Number(raw);
-    return isNaN(num) || num <= 0 ? 24 : num;
+    return isNaN(num) || num <= 0 ? null : num;
   }, [verificationData]);
 
   // Safe normalized numeric ROI (% p.a.) resolver for Step 14
@@ -9493,10 +9610,18 @@ export default function CustomerVerification() {
       details.raw?.roi ??
       details.raw?.Roi ??
       details.interestRate;
-    if (raw == null || raw === '') return 10;
+    if (raw == null || raw === '') return null;
     const num = typeof raw === 'string' ? parseFloat(raw.replace(/[^\d.]/g, '')) : Number(raw);
-    return isNaN(num) || num <= 0 ? 10 : num;
+    return isNaN(num) || num <= 0 ? null : num;
   }, [verificationData]);
+
+  useEffect(() => {
+    setProposedLoan((previous) => ({
+      ...previous,
+      manualROI: previous.manualROI || (resolvedAppRoi != null ? String(resolvedAppRoi) : ''),
+      manualTenureMonths: previous.manualTenureMonths || (resolvedAppTenure != null ? String(resolvedAppTenure) : ''),
+    }));
+  }, [resolvedAppRoi, resolvedAppTenure]);
 
   // Real active existing loans resolved specifically for the selected applicant
   const selectedApplicantActiveLoans = useMemo(() => {
@@ -12150,6 +12275,7 @@ export default function CustomerVerification() {
                               <tr>
                                 <th style={{ minWidth: '220px' }}>Income Name</th>
                                 <th className="th-num" style={{ minWidth: '160px' }}>Income Amount (₹)</th>
+                                <th className="th-num" style={{ minWidth: '130px' }}>Consideration %</th>
                                 <th className="th-action" style={{ width: '60px' }}>Action</th>
                               </tr>
                             </thead>
@@ -12180,6 +12306,23 @@ export default function CustomerVerification() {
                                       disabled={otherIncomeSaving}
                                       aria-label={`Income Amount for Row ${idx + 1}`}
                                     />
+                                  </td>
+                                  <td className="td-num">
+                                    <div className="bo-cv-percentage-input-wrap">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        step="1"
+                                        placeholder="100"
+                                        className="bo-cv-salary-input bo-cv-percentage-input"
+                                        value={row.considerationPercentage === 0 ? '0' : row.considerationPercentage ?? ''}
+                                        onChange={(e) => handleOtherIncomeRowChange(idx, 'considerationPercentage', e.target.value)}
+                                        disabled={otherIncomeSaving}
+                                        aria-label={`Consideration Percentage for Row ${idx + 1}`}
+                                      />
+                                      <span>%</span>
+                                    </div>
                                   </td>
                                   <td className="td-action">
                                     <button
@@ -12372,6 +12515,41 @@ export default function CustomerVerification() {
                         </button>
                       </div>
 
+                      {proposedLoanBanner && (
+                        <div className={`bo-cv-salary-banner is-${proposedLoanBanner.type}`}>
+                          <div className="bo-cv-salary-banner-msg">{proposedLoanBanner.message}</div>
+                        </div>
+                      )}
+
+                      {proposedLoanOpen && (
+                        <div className="bo-cv-proposed-loan-backdrop" role="dialog" aria-modal="true">
+                          <div className="bo-cv-proposed-loan-modal">
+                            <div className="bo-cv-proposed-loan-header">
+                              <div><span className="bo-cv-calc-sheet-eyebrow">RTR Method</span><h3>Details of Proposed Loan</h3><p>Enter the proposed-loan assumptions used for the RTR calculation.</p></div>
+                              <button type="button" className="bo-cv-calc-sheet-close" onClick={() => setProposedLoanOpen(false)} aria-label="Close proposed loan dialog">×</button>
+                            </div>
+                            <div className="bo-cv-proposed-loan-baseline">
+                              <div>
+                                <span>RM application baseline</span>
+                                <strong>Values entered by RM</strong>
+                              </div>
+                              <div><small>ROI</small><strong>{resolvedAppRoi != null ? `${resolvedAppRoi}%` : 'Not available'}</strong></div>
+                              <div><small>Tenure</small><strong>{resolvedAppTenure != null ? `${resolvedAppTenure} months` : 'Not available'}</strong></div>
+                            </div>
+                            <div className="bo-cv-proposed-loan-section-label">Proposed RTR calculation values</div>
+                            <div className="bo-cv-rtr-facility-grid">
+                              <label className="bo-cv-rtr-field"><span>ROI (%)</span><input type="number" step="0.01" value={proposedLoan.manualROI} onChange={(e) => setProposedLoan((p) => ({ ...p, manualROI: e.target.value }))} /></label>
+                              <label className="bo-cv-rtr-field"><span>Tenure (Months)</span><input type="number" value={proposedLoan.manualTenureMonths} onChange={(e) => setProposedLoan((p) => ({ ...p, manualTenureMonths: e.target.value }))} /></label>
+                              <label className="bo-cv-rtr-field"><span>Recommended Loan Amount (₹)</span><input type="number" value={proposedLoan.recommendedLoanAmount} onChange={(e) => setProposedLoan((p) => ({ ...p, recommendedLoanAmount: e.target.value }))} /></label>
+                            </div>
+                            <div className="bo-cv-proposed-loan-actions">
+                              <button type="button" className="bo-btn bo-btn--outline" onClick={() => setProposedLoanOpen(false)} disabled={proposedLoanSaving}>Cancel</button>
+                              <button type="button" className="bo-btn bo-btn--primary" onClick={saveProposedLoan} disabled={proposedLoanSaving}>{proposedLoanSaving ? 'Saving...' : 'Save'}</button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {rtrDraftLoans.length === 0 ? (
                         <div className="bo-cv-rtr-empty">
                           <div className="bo-cv-rtr-empty-icon">
@@ -12541,6 +12719,16 @@ export default function CustomerVerification() {
                       <p className="bo-cv-rtr-footnote">
                         Saved automatically when you Calculate on Settings.
                       </p>
+                      <section className="bo-cv-proposed-loan-inline" aria-label="Details of Proposed Loan">
+                        <div className="bo-cv-proposed-loan-inline-heading">
+                          <div><span className="bo-cv-proposed-loan-launch-kicker">Next step</span><h4>Details of Proposed Loan</h4></div>
+                          <div className="bo-cv-proposed-loan-rm-values">RM values: ROI <strong>{resolvedAppRoi != null ? `${resolvedAppRoi}%` : '—'}</strong> · Tenure <strong>{resolvedAppTenure != null ? `${resolvedAppTenure} months` : '—'}</strong></div>
+                        </div>
+                        <div className="bo-cv-proposed-loan-inline-fields">
+                          <label><span>Proposed ROI (%)</span><input type="number" step="0.01" value={proposedLoan.manualROI} onChange={(e) => setProposedLoan((p) => ({ ...p, manualROI: e.target.value }))} /></label>
+                          <label><span>Proposed Tenure (Months)</span><input type="number" value={proposedLoan.manualTenureMonths} onChange={(e) => setProposedLoan((p) => ({ ...p, manualTenureMonths: e.target.value }))} /></label>
+                        </div>
+                      </section>
                     </div>
                   ) : selectedMethodCode === 'NORMAL_INCOME' ? (
                     /* Normal Income Method Workspace */
@@ -14438,6 +14626,11 @@ export default function CustomerVerification() {
                         </div>
                       </div>
 
+                      <div className="bo-cv-proposed-loan-recommendation">
+                        <div><span>Post-assessment decision</span><h4>Recommended Loan Amount (₹)</h4><p>Enter an amount after reviewing the calculated RTR eligibility.</p></div>
+                        <input type="number" min="0" value={proposedLoan.recommendedLoanAmount} onChange={(e) => setProposedLoan((p) => ({ ...p, recommendedLoanAmount: e.target.value }))} aria-label="Recommended Loan Amount" />
+                      </div>
+
                       {/* Metadata Footer */}
                       <div className="bo-cv-result-footer">
                         <div className="bo-cv-result-footer-left">
@@ -14632,17 +14825,24 @@ export default function CustomerVerification() {
                         {/* Actual FOIR */}
                         <div className="bo-cv-result-metric-card">
                           <span className="bo-cv-result-metric-label">Actual Calculated FOIR</span>
+                          {(() => {
+                            const income = Number(currentAssessment.totalConsideredIncome) || 0;
+                            const obligation = Number(currentAssessment.existingEMI) || 0;
+                            const calculatedFoir = income > 0 ? (obligation / income) * 100 : null;
+                            return (
                           <strong
                             className={`bo-cv-result-metric-val ${
                               currentAssessment.foirPercentApplied != null &&
-                              currentAssessment.actualFOIR != null &&
-                              Number(currentAssessment.actualFOIR) > Number(currentAssessment.foirPercentApplied)
+                              calculatedFoir != null &&
+                              calculatedFoir > Number(currentAssessment.foirPercentApplied)
                                 ? 'is-over-foir'
                                 : ''
                             }`}
                           >
-                            {currentAssessment.actualFOIR != null ? `${Number(currentAssessment.actualFOIR).toFixed(2)}%` : '—'}
+                            {calculatedFoir != null ? `${calculatedFoir.toFixed(2)}%` : '—'}
                           </strong>
+                            );
+                          })()}
                           <span className="bo-cv-result-metric-sub">
                             Benchmark: {currentAssessment.foirPercentApplied ? `${currentAssessment.foirPercentApplied}%` : '—'}
                           </span>
@@ -14713,9 +14913,10 @@ export default function CustomerVerification() {
                             <button
                               type="button"
                               className="bo-btn bo-btn--primary"
-                              onClick={() => setCalcSheetTab('settings')}
+                              onClick={handleContinueToSettings}
+                              disabled={selectedMethodCode === 'RTR' && rtrLoansSaving}
                             >
-                              Continue to Settings
+                              {selectedMethodCode === 'RTR' && rtrLoansSaving ? 'Saving facilities...' : 'Continue to Settings'}
                             </button>
                           )}
                           {calcSheetTab === 'settings' && (
@@ -14780,7 +14981,8 @@ export default function CustomerVerification() {
                   </div>
                 )}
 
-                {/* ── Company Recommendation Dock ────────────────────────── */}
+                {selectedMethodCode !== 'RTR' && (
+                /* ── Company Recommendation Dock ────────────────────────── */
                 <section className="bo-cv-elig-rec-dock" aria-label="Company recommendation">
                   <div className="bo-cv-elig-rec-dock-head">
                     <div>
@@ -14847,6 +15049,7 @@ export default function CustomerVerification() {
                     </button>
                   </div>
                 </section>
+                )}
             </div>
           )}
 

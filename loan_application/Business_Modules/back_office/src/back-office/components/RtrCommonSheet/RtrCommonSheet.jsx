@@ -169,6 +169,43 @@ export default function RtrCommonSheet({
     return (rtrLoanStatuses || []).filter((item) => item && item.isActive === true);
   }, [rtrLoanStatuses]);
 
+  // Summary cards 1, 2 and 5 are derived from the saved/draft obligation rows.
+  // The grouping comes from the dynamic status master, never from status IDs or labels.
+  const obligationSummary = useMemo(() => {
+    const statusBuckets = new Map(
+      (rtrLoanStatuses || []).map((status) => [Number(status.rtrLoanStatusId), status.summaryBucket])
+    );
+    const totals = {
+      LIVE: { pos: 0, emi: 0 },
+      CLOSURE: { pos: 0, emi: 0 },
+      EXCLUDED: { pos: 0, emi: 0 },
+    };
+
+    rows.forEach((row) => {
+      const bucket = statusBuckets.get(Number(row.rtrLoanStatusId));
+      if (!totals[bucket]) return;
+      totals[bucket].pos += Number(row.pos) || 0;
+      totals[bucket].emi += Number(row.emi) || 0;
+    });
+
+    const proposedPos = Number(summary.proposedLoanAmount) || 0;
+    const proposedEmi = Number(summary.proposedLoanEmi) || 0;
+
+    return {
+      live: totals.LIVE,
+      closure: totals.CLOSURE,
+      excluded: totals.EXCLUDED,
+      // Card 4 represents the complete obligation position, including live loans,
+      // closure/BT facilities, and the proposed Sivels facility.
+      withSivels: {
+        pos: totals.LIVE.pos + totals.CLOSURE.pos + proposedPos,
+        emi: totals.LIVE.emi + totals.CLOSURE.emi + proposedEmi,
+      },
+    };
+  }, [rows, rtrLoanStatuses, summary.proposedLoanAmount, summary.proposedLoanEmi]);
+
+  const formatSummaryValue = (value) => (value ? String(value) : '0');
+
   // Re-resolve status names and codes whenever status master is loaded
   useEffect(() => {
     if (activeStatuses.length > 0) {
@@ -511,20 +548,20 @@ export default function RtrCommonSheet({
                   <span className="bo-rtr-field-label">POS (In Rs.)</span>
                   <input
                     type="number"
-                    placeholder="Enter POS"
+                    readOnly
                     className="bo-rtr-input"
-                    value={summary.totalObligationsLivePos}
-                    onChange={(e) => handleSummaryChange('totalObligationsLivePos', e.target.value)}
+                    value={formatSummaryValue(obligationSummary.live.pos)}
+                    aria-label="Total live loan POS"
                   />
                 </label>
                 <label className="bo-rtr-field-group">
                   <span className="bo-rtr-field-label">EMI (In Rs.)</span>
                   <input
                     type="number"
-                    placeholder="Enter EMI"
+                    readOnly
                     className="bo-rtr-input"
-                    value={summary.totalObligationsLiveEmi}
-                    onChange={(e) => handleSummaryChange('totalObligationsLiveEmi', e.target.value)}
+                    value={formatSummaryValue(obligationSummary.live.emi)}
+                    aria-label="Total live loan EMI"
                   />
                 </label>
               </div>
@@ -543,20 +580,20 @@ export default function RtrCommonSheet({
                   <span className="bo-rtr-field-label">POS (In Rs.)</span>
                   <input
                     type="number"
-                    placeholder="Enter POS"
+                    readOnly
                     className="bo-rtr-input"
-                    value={summary.closureWithin12MonthsPos}
-                    onChange={(e) => handleSummaryChange('closureWithin12MonthsPos', e.target.value)}
+                    value={formatSummaryValue(obligationSummary.closure.pos)}
+                    aria-label="Closure obligations POS"
                   />
                 </label>
                 <label className="bo-rtr-field-group">
                   <span className="bo-rtr-field-label">EMI (In Rs.)</span>
                   <input
                     type="number"
-                    placeholder="Enter EMI"
+                    readOnly
                     className="bo-rtr-input"
-                    value={summary.closureWithin12MonthsEmi}
-                    onChange={(e) => handleSummaryChange('closureWithin12MonthsEmi', e.target.value)}
+                    value={formatSummaryValue(obligationSummary.closure.emi)}
+                    aria-label="Closure obligations EMI"
                   />
                 </label>
               </div>
@@ -624,20 +661,20 @@ export default function RtrCommonSheet({
                   <span className="bo-rtr-field-label">POS (In Rs.)</span>
                   <input
                     type="number"
-                    placeholder="Enter POS"
+                    readOnly
                     className="bo-rtr-input"
-                    value={summary.totalObligationsWithSivelsPos}
-                    onChange={(e) => handleSummaryChange('totalObligationsWithSivelsPos', e.target.value)}
+                    value={formatSummaryValue(obligationSummary.withSivels.pos)}
+                    aria-label="Total obligations including Sivels POS"
                   />
                 </label>
                 <label className="bo-rtr-field-group">
                   <span className="bo-rtr-field-label">EMI (In Rs.)</span>
                   <input
                     type="number"
-                    placeholder="Enter EMI"
+                    readOnly
                     className="bo-rtr-input"
-                    value={summary.totalObligationsWithSivelsEmi}
-                    onChange={(e) => handleSummaryChange('totalObligationsWithSivelsEmi', e.target.value)}
+                    value={formatSummaryValue(obligationSummary.withSivels.emi)}
+                    aria-label="Total obligations including Sivels EMI"
                   />
                 </label>
               </div>
@@ -654,20 +691,20 @@ export default function RtrCommonSheet({
                   <span className="bo-rtr-field-label">POS (In Rs.)</span>
                   <input
                     type="number"
-                    placeholder="Enter POS"
+                    readOnly
                     className="bo-rtr-input"
-                    value={summary.personalObligationNotConsideredPos}
-                    onChange={(e) => handleSummaryChange('personalObligationNotConsideredPos', e.target.value)}
+                    value={formatSummaryValue(obligationSummary.excluded.pos)}
+                    aria-label="Personal obligations not considered POS"
                   />
                 </label>
                 <label className="bo-rtr-field-group">
                   <span className="bo-rtr-field-label">EMI (In Rs.)</span>
                   <input
                     type="number"
-                    placeholder="Enter EMI"
+                    readOnly
                     className="bo-rtr-input"
-                    value={summary.personalObligationNotConsideredEmi}
-                    onChange={(e) => handleSummaryChange('personalObligationNotConsideredEmi', e.target.value)}
+                    value={formatSummaryValue(obligationSummary.excluded.emi)}
+                    aria-label="Personal obligations not considered EMI"
                   />
                 </label>
               </div>
