@@ -325,7 +325,7 @@ export const backOfficeService = {
 
   /**
    * Create a single other income record.
-   * @param {object} payload - { applicationProductDetailsId, agentCustomerId, applicantSequence, incomeName, incomeAmount, createdBy }
+   * @param {object} payload - { applicationProductDetailsId, agentCustomerId, applicantSequence, incomeName, incomeAmount, considerationPercentage, createdBy }
    */
   createOtherIncome: async (payload) => {
     const response = await axiosInstance.post(
@@ -338,7 +338,7 @@ export const backOfficeService = {
   /**
    * Update an existing other income record.
    * @param {string|number} applicationOtherIncomeDetailsId
-   * @param {object} payload - { applicationOtherIncomeDetailsId, applicationProductDetailsId, agentCustomerId, applicantSequence, incomeName, incomeAmount, modifiedBy }
+   * @param {object} payload - { applicationOtherIncomeDetailsId, applicationProductDetailsId, agentCustomerId, applicantSequence, incomeName, incomeAmount, considerationPercentage, modifiedBy }
    */
   updateOtherIncome: async (applicationOtherIncomeDetailsId, payload) => {
     const response = await axiosInstance.put(

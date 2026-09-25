@@ -5400,6 +5400,23 @@
   text-align: right;
 }
 
+.bo-cv-percentage-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.bo-cv-percentage-input-wrap > span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.bo-cv-percentage-input {
+  width: 60px;
+  text-align: right;
+}
+
 .bo-cv-salary-table tbody td.td-status {
   text-align: center;
 }

@@ -1849,7 +1849,7 @@ export default function CustomerVerification() {
           const pct = existing.incentivePercentApplied != null ? Number(existing.incentivePercentApplied) : 0;
           const ded = Number(existing.deductionAmount) || 0;
           const consInc = existing.consideredIncentiveAmount != null ? Number(existing.consideredIncentiveAmount) : (inc * pct) / 100;
-          // Required business calculation: Basic + HRA + CCA + TA + Considered Incentive + Deductions (ADDED)
+          // Match the underwriting worksheet's salary-slip income model.
           const consIncome = b + h + c + t + consInc + ded;
 
           rows.push({
@@ -2022,7 +2022,7 @@ export default function CustomerVerification() {
       const ded = Number(row.deductionAmount) || 0;
       const pct = row.incentivePercentApplied === '' ? 0 : Number(row.incentivePercentApplied) || 0;
       const prevInc = (inc * pct) / 100;
-      // Deductions must be ADDED: basic + hra + cca + ta + consideredIncentive + deductionAmount
+      // Match the underwriting worksheet's salary-slip income model.
       const prevIncome = b + h + c + t + prevInc + ded;
 
       row.previewConsideredIncentive = prevInc;
@@ -2210,6 +2210,8 @@ export default function CustomerVerification() {
         applicationOtherIncomeDetailsId: r.applicationOtherIncomeDetailsId || null,
         incomeName: r.incomeName || '',
         incomeAmount: r.incomeAmount ?? '',
+        considerationPercentage:
+          r.considerationPercentage ?? r.considerationPercent ?? r.considerationPct ?? 100,
         isPersisted: true,
         isModified: false,
         errorMsg: null,
@@ -2232,6 +2234,7 @@ export default function CustomerVerification() {
         applicationOtherIncomeDetailsId: null,
         incomeName: '',
         incomeAmount: '',
+        considerationPercentage: 100,
         isPersisted: false,
         isModified: false,
         errorMsg: null,
@@ -2256,6 +2259,12 @@ export default function CustomerVerification() {
         } else {
           const num = Math.max(0, Number(value) || 0);
           row.incomeAmount = num;
+        }
+      } else if (field === 'considerationPercentage') {
+        if (value === '') {
+          row.considerationPercentage = '';
+        } else {
+          row.considerationPercentage = Math.min(100, Math.max(0, Number(value) || 0));
         }
       } else {
         row[field] = value;
@@ -2306,6 +2315,18 @@ export default function CustomerVerification() {
           message: `Valid Income Amount (>= 0) is required for Other Income row ${i + 1} (${row.incomeName}).`,
         };
       }
+      if (
+        row.considerationPercentage === '' ||
+        row.considerationPercentage === null ||
+        isNaN(Number(row.considerationPercentage)) ||
+        Number(row.considerationPercentage) < 0 ||
+        Number(row.considerationPercentage) > 100
+      ) {
+        return {
+          success: false,
+          message: `Valid Consideration % between 0 and 100 is required for Other Income row ${i + 1} (${row.incomeName}).`,
+        };
+      }
     }
 
     const rowsToPost = [];
@@ -2336,6 +2357,7 @@ export default function CustomerVerification() {
         applicantSequence: Number(selectedApplicantSequence),
         incomeName: String(row.incomeName).trim(),
         incomeAmount: Number(row.incomeAmount) || 0,
+        considerationPercentage: Number(row.considerationPercentage) || 0,
         modifiedBy: Number(currentUserId),
       };
 
@@ -2362,6 +2384,7 @@ export default function CustomerVerification() {
         applicantSequence: Number(selectedApplicantSequence),
         incomeName: String(row.incomeName).trim(),
         incomeAmount: Number(row.incomeAmount) || 0,
+        considerationPercentage: Number(row.considerationPercentage) || 0,
         createdBy: Number(currentUserId),
       };
 
@@ -2402,7 +2425,10 @@ export default function CustomerVerification() {
   const liveTotalOtherIncome = useMemo(() => {
     return otherIncomeRows.reduce((sum, r) => {
       const amt = Number(r.incomeAmount) || 0;
-      return sum + amt;
+      const pct = r.considerationPercentage !== '' && !isNaN(Number(r.considerationPercentage))
+        ? Number(r.considerationPercentage)
+        : 100;
+      return sum + Math.round((amt * pct) / 100);
     }, 0);
   }, [otherIncomeRows]);
 
@@ -12249,6 +12275,7 @@ export default function CustomerVerification() {
                               <tr>
                                 <th style={{ minWidth: '220px' }}>Income Name</th>
                                 <th className="th-num" style={{ minWidth: '160px' }}>Income Amount (₹)</th>
+                                <th className="th-num" style={{ minWidth: '130px' }}>Consideration %</th>
                                 <th className="th-action" style={{ width: '60px' }}>Action</th>
                               </tr>
                             </thead>
@@ -12279,6 +12306,23 @@ export default function CustomerVerification() {
                                       disabled={otherIncomeSaving}
                                       aria-label={`Income Amount for Row ${idx + 1}`}
                                     />
+                                  </td>
+                                  <td className="td-num">
+                                    <div className="bo-cv-percentage-input-wrap">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        step="1"
+                                        placeholder="100"
+                                        className="bo-cv-salary-input bo-cv-percentage-input"
+                                        value={row.considerationPercentage === 0 ? '0' : row.considerationPercentage ?? ''}
+                                        onChange={(e) => handleOtherIncomeRowChange(idx, 'considerationPercentage', e.target.value)}
+                                        disabled={otherIncomeSaving}
+                                        aria-label={`Consideration Percentage for Row ${idx + 1}`}
+                                      />
+                                      <span>%</span>
+                                    </div>
                                   </td>
                                   <td className="td-action">
                                     <button
@@ -14781,17 +14825,24 @@ export default function CustomerVerification() {
                         {/* Actual FOIR */}
                         <div className="bo-cv-result-metric-card">
                           <span className="bo-cv-result-metric-label">Actual Calculated FOIR</span>
+                          {(() => {
+                            const income = Number(currentAssessment.totalConsideredIncome) || 0;
+                            const obligation = Number(currentAssessment.existingEMI) || 0;
+                            const calculatedFoir = income > 0 ? (obligation / income) * 100 : null;
+                            return (
                           <strong
                             className={`bo-cv-result-metric-val ${
                               currentAssessment.foirPercentApplied != null &&
-                              currentAssessment.actualFOIR != null &&
-                              Number(currentAssessment.actualFOIR) > Number(currentAssessment.foirPercentApplied)
+                              calculatedFoir != null &&
+                              calculatedFoir > Number(currentAssessment.foirPercentApplied)
                                 ? 'is-over-foir'
                                 : ''
                             }`}
                           >
-                            {currentAssessment.actualFOIR != null ? `${Number(currentAssessment.actualFOIR).toFixed(2)}%` : '—'}
+                            {calculatedFoir != null ? `${calculatedFoir.toFixed(2)}%` : '—'}
                           </strong>
+                            );
+                          })()}
                           <span className="bo-cv-result-metric-sub">
                             Benchmark: {currentAssessment.foirPercentApplied ? `${currentAssessment.foirPercentApplied}%` : '—'}
                           </span>
