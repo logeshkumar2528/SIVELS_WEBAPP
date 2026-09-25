@@ -32,6 +32,8 @@ export function unwrapResponse(res) {
   return data;
 }
 
+let inFlightDistrictsPromise = null;
+
 export const backOfficeService = {
   /* ==========================================
      1. MASTER / DISTRICT APIs
@@ -40,9 +42,19 @@ export const backOfficeService = {
   /**
    * Retrieve all districts across the state.
    */
-  getDistricts: async () => {
-    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.DISTRICTS);
-    return unwrapResponse(response);
+  getDistricts: () => {
+    if (inFlightDistrictsPromise) {
+      return inFlightDistrictsPromise;
+    }
+
+    inFlightDistrictsPromise = axiosInstance
+      .get(BACK_OFFICE_ENDPOINTS.DISTRICTS)
+      .then((response) => unwrapResponse(response))
+      .finally(() => {
+        inFlightDistrictsPromise = null;
+      });
+
+    return inFlightDistrictsPromise;
   },
 
   /**

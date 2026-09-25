@@ -15,7 +15,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import backOfficeService from '../api/backOfficeService';
-import { mapAgent, mapCustomer, mapRM } from '../mappers/hierarchyMapper';
+import { mapAgent, mapCustomer, mapDistrict, mapRM } from '../mappers/hierarchyMapper';
 import { resolveApplicationOwnership } from '../utils/ownershipHelper';
 import { isApplicationUnderwritingReady } from '../utils/readinessHelper';
 
@@ -192,6 +192,9 @@ const enrichCustomers = async (rawCustomers, rawRms, rawAgents, rawProductDetail
 
 export function useCustomerQueue() {
   const [customers, setCustomers] = useState([]);
+  const [rmsCount, setRmsCount] = useState(0);
+  const [agentsCount, setAgentsCount] = useState(0);
+  const [districtsCount, setDistrictsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -201,24 +204,35 @@ export function useCustomerQueue() {
     setError(null);
 
     try {
-      const [customerResult, rmResult, agentResult, prodResult] = await Promise.allSettled([
+      const [customerResult, rmResult, agentResult, prodResult, districtResult] = await Promise.allSettled([
         backOfficeService.getAllCustomers(),
         backOfficeService.getAllRMs(),
         backOfficeService.getAllAgents(),
         backOfficeService.getApplicationProductDetails(),
+        backOfficeService.getDistricts(),
       ]);
 
       if (customerResult.status === 'rejected') throw customerResult.reason;
 
+      const rawRms = rmResult.status === 'fulfilled' ? unwrapList(rmResult.value) : [];
+      const rawAgents = agentResult.status === 'fulfilled' ? unwrapList(agentResult.value) : [];
+      const rawDistricts = districtResult.status === 'fulfilled' ? unwrapList(districtResult.value) : [];
+      const mappedRms = rawRms.map(mapRM).filter(Boolean);
+      const mappedAgents = rawAgents.map(mapAgent).filter(Boolean);
+      const mappedDistricts = rawDistricts.map(mapDistrict).filter(Boolean);
+
       const mapped = await enrichCustomers(
         unwrapList(customerResult.value),
-        rmResult.status === 'fulfilled' ? unwrapList(rmResult.value) : [],
-        agentResult.status === 'fulfilled' ? unwrapList(agentResult.value) : [],
+        rawRms,
+        rawAgents,
         prodResult.status === 'fulfilled' ? unwrapList(prodResult.value) : []
       );
 
       if (isMounted) {
         setCustomers(mapped);
+        setRmsCount(mappedRms.length);
+        setAgentsCount(mappedAgents.length);
+        setDistrictsCount(mappedDistricts.length);
       }
     } catch (err) {
       if (isMounted) {
@@ -247,24 +261,35 @@ export function useCustomerQueue() {
       setError(null);
 
       try {
-        const [customerResult, rmResult, agentResult, prodResult] = await Promise.allSettled([
+        const [customerResult, rmResult, agentResult, prodResult, districtResult] = await Promise.allSettled([
           backOfficeService.getAllCustomers(),
           backOfficeService.getAllRMs(),
           backOfficeService.getAllAgents(),
           backOfficeService.getApplicationProductDetails(),
+          backOfficeService.getDistricts(),
         ]);
 
         if (customerResult.status === 'rejected') throw customerResult.reason;
 
+        const rawRms = rmResult.status === 'fulfilled' ? unwrapList(rmResult.value) : [];
+        const rawAgents = agentResult.status === 'fulfilled' ? unwrapList(agentResult.value) : [];
+        const rawDistricts = districtResult.status === 'fulfilled' ? unwrapList(districtResult.value) : [];
+        const mappedRms = rawRms.map(mapRM).filter(Boolean);
+        const mappedAgents = rawAgents.map(mapAgent).filter(Boolean);
+        const mappedDistricts = rawDistricts.map(mapDistrict).filter(Boolean);
+
         const mapped = await enrichCustomers(
           unwrapList(customerResult.value),
-          rmResult.status === 'fulfilled' ? unwrapList(rmResult.value) : [],
-          agentResult.status === 'fulfilled' ? unwrapList(agentResult.value) : [],
+          rawRms,
+          rawAgents,
           prodResult.status === 'fulfilled' ? unwrapList(prodResult.value) : []
         );
 
         if (active) {
           setCustomers(mapped);
+          setRmsCount(mappedRms.length);
+          setAgentsCount(mappedAgents.length);
+          setDistrictsCount(mappedDistricts.length);
         }
       } catch (err) {
         if (active) {
@@ -290,6 +315,9 @@ export function useCustomerQueue() {
 
   return {
     customers,
+    rmsCount,
+    agentsCount,
+    districtsCount,
     loading,
     error,
     refetch: fetchCustomers,

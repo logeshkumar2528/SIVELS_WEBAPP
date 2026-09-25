@@ -31,12 +31,13 @@
  *   - useNavigate and useLocation are used here (layout infrastructure only).
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import Sidebar from '../../components/Sidebar/Sidebar';
 import Header  from '../../components/Header/Header';
 import { NAV_ITEMS } from '../../config/navConfig';
+import { useCustomerQueue } from '../../hooks/useCustomerQueue';
 import './MainLayout.css';
 
 /* ==========================================
@@ -192,6 +193,20 @@ function MainLayout({
   /* ------------------------------------------
      Computed values
   ------------------------------------------ */
+  const { customers, rmsCount, agentsCount, districtsCount } = useCustomerQueue();
+  const liveBadgeCounts = useMemo(() => {
+    const customerMonitoring = customers.length;
+    const submitToCredit = customers.filter((c) => Boolean(c.isCreditReady || c.isUnderwritingReady)).length;
+    return {
+      districtOverview: districtsCount,
+      rmMonitoring: rmsCount,
+      agentMonitoring: agentsCount,
+      customerMonitoring,
+      submitToCredit,
+      ...badgeCounts,
+    };
+  }, [customers, rmsCount, agentsCount, districtsCount, badgeCounts]);
+
   const todayDate = formatHeaderDate(new Date());
   const fallbackUser = getCurrentUser();
   const resolvedUser = {
@@ -210,7 +225,7 @@ function MainLayout({
       <Sidebar
         menu={NAV_ITEMS}
         activeRoute={pathname}
-        badgeCounts={badgeCounts}
+        badgeCounts={liveBadgeCounts}
         isOpen={sidebarOpen}
         onNavigate={handleNavigate}
         onClose={handleSidebarClose}

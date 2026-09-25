@@ -30,6 +30,8 @@ function getInitials(name = '') {
 
 function mapSubmission(record, agentsById = {}, rmsById = {}) {
   const id = record.applicationId || record.applicationNumber || record.agentCustomerId || record.customerId;
+  const officialAppId = record.appId || record.AppId || record.App_Id || null;
+  const displayAppId = officialAppId || buildApplicationDisplayId(record, 'N/A');
   const submittedRaw = record.submittedAt || record.SubmittedAt || record.createdAt || record.CreatedAt || record.createdDate || '';
   const ownership = resolveApplicationOwnership(record, agentsById, rmsById);
   const agent = ownership.agentId ? (agentsById[String(ownership.agentId)] || {}) : {};
@@ -37,7 +39,8 @@ function mapSubmission(record, agentsById = {}, rmsById = {}) {
 
   return {
     internalId: String(id),
-    id: buildApplicationDisplayId(record, id),
+    appId: officialAppId,
+    id: displayAppId,
     customerName: record.fullName || record.FullName || record.customerName || 'Unknown',
     mobile: record.mobileNumber || record.MobileNumber || record.mobile || 'N/A',
     loanType: record.loanProductName || record.loanPurposeName || record.LoanPurposeName || record.loanType || 'N/A',
@@ -160,7 +163,7 @@ export default function SubmissionHistory() {
             return isAgentMapped || isRmDirectOwned;
           })
           .map((record) => mapSubmission(record, agentsById, rmsById))
-          .filter((record) => record.id && record.id !== 'undefined');
+          .filter((record) => record.internalId && record.internalId !== 'undefined');
 
         if (active) setSubmissions(liveRows);
       } catch (loadError) {
@@ -179,8 +182,8 @@ export default function SubmissionHistory() {
   const filteredData = useMemo(() => {
     const searchLower = searchTerm.trim().toLowerCase();
     return submissions
-      .filter((row) => [row.customerName, row.id, row.mobile, row.loanType, row.branch]
-        .some((value) => String(value).toLowerCase().includes(searchLower)))
+      .filter((row) => [row.customerName, row.appId, row.id, row.mobile, row.loanType, row.branch]
+        .some((value) => value && String(value).toLowerCase().includes(searchLower)))
       .sort((a, b) => getDateTimestamp(b.submittedAt) - getDateTimestamp(a.submittedAt));
   }, [submissions, searchTerm]);
 

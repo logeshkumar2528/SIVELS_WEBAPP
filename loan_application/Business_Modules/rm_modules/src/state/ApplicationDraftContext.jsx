@@ -1756,6 +1756,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     const accountType = effectiveBankRow.accountType || effectiveBankRow.AccountType || safeDraftBank.accountType || 'Savings';
     const isPrimaryBank = Boolean(effectiveBankRow.isPrimaryBank ?? effectiveBankRow.IsPrimaryBank ?? safeDraftBank.isPrimaryBank ?? false);
     const activeLoansDetails = effectiveBankRow.activeLoansDetails || effectiveBankRow.ActiveLoansDetails || safeDraftBank.activeLoansDetails || [];
+    const activeCreditCardsDetails = effectiveBankRow.activeCreditCardsDetails || effectiveBankRow.ActiveCreditCardsDetails || safeDraftBank.activeCreditCardsDetails || [];
 
     return {
       applicationBankExistingLoanDetailsId,
@@ -1771,6 +1772,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
       noOfActiveCreditCards,
       isPrimaryBank,
       activeLoansDetails,
+      activeCreditCardsDetails,
     };
   };
 

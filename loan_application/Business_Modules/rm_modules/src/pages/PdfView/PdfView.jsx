@@ -10,6 +10,7 @@ import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { formatDateTime, toIstDateInput } from '../../utils/dateHelper';
 import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
 import { isApplicantDocumentTuple } from '../KycDocuments/kycDocumentState';
+import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import './PdfView.css';
 import LogoImage from '../../assets/logo/Navbar_logo/Logo.jpg';
 
@@ -91,6 +92,7 @@ export default function PdfView() {
     sourcingChannels: {},
     loanProducts: {},
     loanPurposes: {},
+    loanVariations: {},
     titles: {},
     genders: {},
     castes: {},
@@ -172,6 +174,7 @@ export default function PdfView() {
           sourcingMap,
           prodMap,
           purposeMap,
+          variationMap,
           titleMap,
           casteMap,
           genderMap,
@@ -202,6 +205,7 @@ export default function PdfView() {
           fetchMaster('SourcingChannelMaster', 'sourcingChannelId', 'sourcingChannelName'),
           fetchMaster('LoanProductMaster', 'loanProductId', 'productName'),
           fetchMaster('LoanPurposeMaster', 'loanPurposeId', 'purposeName'),
+          fetchMaster('LoanProductVariationMaster', 'loanProductVariationId', 'variationName'),
           fetchMaster('TitleMaster', 'titleID', 'titleName'),
           fetchMaster('masters/CasteMaster', 'casteId', 'casteName'),
           fetchMaster('gender', 'genderId', 'genderName'),
@@ -895,6 +899,7 @@ export default function PdfView() {
             sourcingChannels: sourcingMap.status === 'fulfilled' ? sourcingMap.value : {},
             loanProducts: prodMap.status === 'fulfilled' ? prodMap.value : {},
             loanPurposes: purposeMap.status === 'fulfilled' ? purposeMap.value : {},
+            loanVariations: variationMap.status === 'fulfilled' ? variationMap.value : {},
             titles: titleMap.status === 'fulfilled' ? titleMap.value : {},
             genders: genderMap.status === 'fulfilled' ? genderMap.value : {},
             castes: casteMap.status === 'fulfilled' ? casteMap.value : {},
@@ -1061,84 +1066,91 @@ export default function PdfView() {
 
   const isPdfMediaReady = !isMetadataLoading && !isDocsDownloading && !isCoPhotosLoading && !isApplicantPhotoLoading;
 
-  // Generate continuous single long page PDF
+  // Shared helper to generate jsPDF instance from DOM
+  const generatePdfInstance = async () => {
+    const element = pdfRef.current;
+    if (!element) throw new Error('PDF container not found');
+
+    // Ensure images are fully loaded and decoded before rendering canvas
+    const imgElements = Array.from(element.querySelectorAll('img'));
+    await Promise.all(
+      imgElements.map(async (img) => {
+        if (!img.complete) {
+          await new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+        }
+        if (img.decode) {
+          try {
+            await img.decode();
+          } catch {
+            // Ignore decode errors if unsupported or already rendered
+          }
+        }
+      })
+    );
+
+    const fullHeight = element.scrollHeight || element.offsetHeight || 3000;
+    const fullWidth = element.scrollWidth || element.offsetWidth || 820;
+
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      width: fullWidth,
+      height: fullHeight,
+      windowWidth: fullWidth,
+      windowHeight: fullHeight,
+      x: 0,
+      y: 0,
+      scrollX: 0,
+      scrollY: 0,
+      onclone: (clonedDoc) => {
+        const clonedContainer = clonedDoc.querySelector('.pdf-container');
+        if (clonedContainer) {
+          clonedContainer.style.height = 'auto';
+          clonedContainer.style.maxHeight = 'none';
+          clonedContainer.style.overflow = 'visible';
+          clonedContainer.style.position = 'static';
+          clonedContainer.style.display = 'block';
+        }
+        const clonedPage = clonedDoc.querySelector('.pdf-page-continuous');
+        if (clonedPage) {
+          clonedPage.style.height = 'auto';
+          clonedPage.style.maxHeight = 'none';
+          clonedPage.style.overflow = 'visible';
+          clonedPage.style.position = 'static';
+          clonedPage.style.display = 'block';
+        }
+      },
+    });
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.98);
+
+    const pdfWidth = 210; // 210mm
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: [pdfWidth, pdfHeight],
+      compress: true,
+    });
+
+    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+    return pdf;
+  };
+
+  // Generate continuous single long page PDF for download
   const handleDownloadPdf = async () => {
     if (!pdfRef.current || isGeneratingPdf || !isPdfMediaReady) return;
     setIsGeneratingPdf(true);
 
     try {
-      const element = pdfRef.current;
-
-      // Ensure images are fully loaded and decoded before rendering canvas
-      const imgElements = Array.from(element.querySelectorAll('img'));
-      await Promise.all(
-        imgElements.map(async (img) => {
-          if (!img.complete) {
-            await new Promise((resolve) => {
-              img.onload = resolve;
-              img.onerror = resolve;
-            });
-          }
-          if (img.decode) {
-            try {
-              await img.decode();
-            } catch {
-              // Ignore decode errors if unsupported or already rendered
-            }
-          }
-        })
-      );
-
-      const fullHeight = element.scrollHeight || element.offsetHeight || 3000;
-      const fullWidth = element.scrollWidth || element.offsetWidth || 820;
-
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        width: fullWidth,
-        height: fullHeight,
-        windowWidth: fullWidth,
-        windowHeight: fullHeight,
-        x: 0,
-        y: 0,
-        scrollX: 0,
-        scrollY: 0,
-        onclone: (clonedDoc) => {
-          const clonedContainer = clonedDoc.querySelector('.pdf-container');
-          if (clonedContainer) {
-            clonedContainer.style.height = 'auto';
-            clonedContainer.style.maxHeight = 'none';
-            clonedContainer.style.overflow = 'visible';
-            clonedContainer.style.position = 'static';
-            clonedContainer.style.display = 'block';
-          }
-          const clonedPage = clonedDoc.querySelector('.pdf-page-continuous');
-          if (clonedPage) {
-            clonedPage.style.height = 'auto';
-            clonedPage.style.maxHeight = 'none';
-            clonedPage.style.overflow = 'visible';
-            clonedPage.style.position = 'static';
-            clonedPage.style.display = 'block';
-          }
-        },
-      });
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.98);
-
-      const pdfWidth = 210; // 210mm
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: [pdfWidth, pdfHeight],
-        compress: true,
-      });
-
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+      const pdf = await generatePdfInstance();
       pdf.save(`Loan_Application_${applicationId}.pdf`);
     } catch (err) {
       console.error('Error generating PDF:', err);
@@ -1152,9 +1164,67 @@ export default function PdfView() {
     }
   };
 
+  // Generate and share PDF via native Web Share API with download fallback
+  const handleSharePdf = async () => {
+    if (!pdfRef.current || isGeneratingPdf || !isPdfMediaReady) return;
+    setIsGeneratingPdf(true);
+
+    try {
+      const pdf = await generatePdfInstance();
+      const fileName = `Loan_Application_${applicationId}.pdf`;
+      const pdfBlob = pdf.output('blob');
+      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+      // Runtime feature detection for Web Share API and PDF file sharing support
+      const canShareFiles =
+        typeof navigator !== 'undefined' &&
+        typeof navigator.share === 'function' &&
+        typeof navigator.canShare === 'function' &&
+        navigator.canShare({ files: [pdfFile] });
+
+      if (canShareFiles) {
+        try {
+          await navigator.share({
+            files: [pdfFile],
+            title: 'Loan Application',
+            text: 'Loan Application PDF',
+          });
+        } catch (shareErr) {
+          if (shareErr.name === 'AbortError') {
+            // User cancelled or closed the native share sheet - do not show error or auto-download
+            return;
+          }
+          throw shareErr;
+        }
+      } else {
+        // Fallback for unsupported browsers: download the already generated PDF and inform user
+        pdf.save(fileName);
+        setErrorPopup({
+          title: 'Direct File Sharing Unsupported',
+          message:
+            'Direct file sharing is not supported in this browser. The PDF has been downloaded so you can share it manually.',
+          variant: 'info',
+        });
+      }
+    } catch (err) {
+      console.error('Error sharing PDF:', err);
+      setErrorPopup({
+        title: 'Sharing failed',
+        message: 'Failed to share PDF. Please try downloading it instead.',
+        variant: 'error',
+      });
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   // Master resolvers
   const resolveSourcingChannel = (val) => masterMaps.sourcingChannels[val] || val || '';
   const resolveLoanProduct = (val) => masterMaps.loanProducts[val] || appData.loanProductDisplay || val || '';
+  const resolveLoanVariation = (val) => {
+    if (val === null || val === undefined || val === '') return '';
+    return masterMaps.loanVariations?.[val] || masterMaps.loanVariations?.[String(val)] || '';
+  };
   const resolveLoanPurpose = (val) => masterMaps.loanPurposes[val] || appData.loanType || val || '';
   const resolveTitle = (val) => masterMaps.titles[val] || val || '';
   const resolveGender = (val) => masterMaps.genders[val] || val || '';
@@ -1672,6 +1742,18 @@ export default function PdfView() {
   const chargesData = appData.scheduleCharges || appData.sections?.scheduleCharges || {};
   const declarationData = appData.declaration || appData.sections?.declaration || {};
 
+  const ownership = useMemo(() => {
+    return resolveApplicationOwnership({
+      ...appData,
+      ...(liveCustomer || {}),
+      rmName: liveRM?.name || appData?.rmName,
+      rmCode: liveRM?.employeeId || appData?.rmCode,
+      agentName: liveRM?.agentName || liveCustomer?.agentName || appData?.agentName,
+      agentId: liveRM?.agentId ?? liveCustomer?.agentId ?? appData?.agentId,
+      createdByRole: liveCustomer?.createdByRole || appData?.createdByRole,
+    });
+  }, [appData, liveCustomer, liveRM]);
+
   // Resolved Customer Header Info
   const customerDisplayName =
     composeFullName(applicant) ||
@@ -1680,10 +1762,41 @@ export default function PdfView() {
     appData.customerName ||
     '';
 
+  const resolvedApplicantName = customerDisplayName || 'Applicant';
+  const resolvedApplicantDisplayId = applicationDisplayId || buildApplicationDisplayId(appData, applicationId) || applicationId || '-';
+
   const loanAmount = appData.loanAmount || liveCustomer?.expectedLoanAmount || '';
   const loanTenure = appData.loanTenureMonths || appData.loanTenure || '';
-  const resolvedRMName = appData.rmName || '-';
-  const resolvedEmployeeId = appData.rmCode || '-';
+
+  // Resolved RM Info
+  const resolvedRMName =
+    liveRM?.name ||
+    (ownership.rmName && ownership.rmName !== '—' ? ownership.rmName : '') ||
+    appData.rmName ||
+    '-';
+
+  const resolvedEmployeeId =
+    liveRM?.employeeId ||
+    appData.rmCode ||
+    (ownership.rmId ? (String(ownership.rmId).startsWith('RM') ? String(ownership.rmId) : `RM${ownership.rmId}`) : '') ||
+    '-';
+
+  // Resolved Agent / Sourcing Info
+  const isAgentCreated = Boolean(ownership.isAgentCreated);
+  const resolvedAgentName =
+    (ownership.agentName && ownership.agentName !== '—' && ownership.agentName !== 'Direct (RM)' ? ownership.agentName : '') ||
+    liveRM?.agentName ||
+    liveCustomer?.agentName ||
+    appData.agentName ||
+    '-';
+
+  const resolvedAgentCode =
+    appData.agentCode ||
+    liveCustomer?.agentCode ||
+    (ownership.agentId ? (String(ownership.agentId).startsWith('AG') ? String(ownership.agentId) : `AG${ownership.agentId}`) : '') ||
+    '-';
+
+  const resolvedSourceType = isAgentCreated ? 'Field Agent' : 'RM';
 
   // Resolved Applicant Signature & Date (Uses real backend identity)
   const resolvedApplicantSignature = customerDisplayName || '-';
@@ -1692,7 +1805,7 @@ export default function PdfView() {
     (!isObsoleteMock(declarationData.applicantDate) && declarationData.applicantDate) || '-';
 
   // Resolved RM Signature & Date
-  const resolvedRMSignature = appData.rmName || '-';
+  const resolvedRMSignature = resolvedRMName || appData.rmName || '-';
 
   const resolvedRMDate =
     (!isObsoleteMock(declarationData.ackDate) && declarationData.ackDate) || '-';
@@ -2000,7 +2113,13 @@ export default function PdfView() {
       : []),
   ];
 
+  const isReviewMode = Boolean(location.state?.reviewMode);
+
   const handleBack = () => {
+    if (isReviewMode) {
+      navigate(location.state?.returnTo || ROUTES.COLLATERAL.replace(':applicationId', applicationId));
+      return;
+    }
     if (location.state?.returnTo) {
       navigate(location.state.returnTo);
       return;
@@ -2023,6 +2142,17 @@ export default function PdfView() {
     navigate(ROUTES.SUBMISSION_HISTORY);
   };
 
+  const handleConfirmAndContinue = () => {
+    const nextRoute = location.state?.closeTo || ROUTES.SCHEDULE_CHARGES.replace(':applicationId', applicationId);
+    navigate(nextRoute, {
+      state: {
+        fromReview: true,
+        returnTo: ROUTES.APPLICATION_PDF_VIEW.replace(':applicationId', applicationId),
+        collateralRoute: ROUTES.COLLATERAL.replace(':applicationId', applicationId),
+      },
+    });
+  };
+
   return (
     <div className="pdf-view-wrapper">
       <ErrorPopup
@@ -2038,7 +2168,7 @@ export default function PdfView() {
           variant="secondary"
           onClick={handleBack}
         >
-          Back to Application
+          {isReviewMode ? 'Back to Collateral' : 'Back to Application'}
         </Button>
         <Button onClick={handleDownloadPdf} disabled={isGeneratingPdf || !isPdfMediaReady}>
           {isGeneratingPdf
@@ -2047,6 +2177,22 @@ export default function PdfView() {
             ? 'Preparing documents...'
             : 'Download PDF'}
         </Button>
+        <Button
+          variant="secondary"
+          onClick={handleSharePdf}
+          disabled={isGeneratingPdf || !isPdfMediaReady}
+        >
+          Share
+        </Button>
+        {isReviewMode && (
+          <Button
+            variant="primary"
+            onClick={handleConfirmAndContinue}
+            disabled={isGeneratingPdf || !isPdfMediaReady}
+          >
+            Confirm & Continue to Charges
+          </Button>
+        )}
       </div>
 
       <div className="pdf-container" ref={pdfRef}>
@@ -2054,18 +2200,55 @@ export default function PdfView() {
             CONTINUOUS SINGLE LONG PAGE LOAN APPLICATION FORM
         ==================================================================== */}
         <div className="pdf-page-continuous">
-          {/* HEADER */}
-          <div className="pdf-header">
-            <div className="pdf-title-box">
-              <h1>
-                LOAN APPLICATION FORM :-
-                <br />
-                {applicationDisplayId}
-              </h1>
-              <p>(Please Read the Guidelines on the last page)</p>
+          {/* TOP SUMMARY */}
+          <div className="pdf-top-summary">
+            {/* Block 1: Logo */}
+            <div className="pdf-summary-block pdf-summary-logo-block">
+              <img src={LogoImage} alt="Sivels Finance Logo" />
             </div>
-            <div className="pdf-logo">
-              <img src={LogoImage} alt="Logo" />
+
+            {/* Block 2: Applicant */}
+            <div className="pdf-summary-block">
+              <div className="pdf-summary-label">APPLICANT</div>
+              <div className="pdf-summary-name" title={resolvedApplicantName}>
+                {resolvedApplicantName}
+              </div>
+              <div className="pdf-summary-id" title={`ID: ${resolvedApplicantDisplayId}`}>
+                ID: {resolvedApplicantDisplayId}
+              </div>
+            </div>
+
+            {/* Block 3: RM */}
+            <div className="pdf-summary-block">
+              <div className="pdf-summary-label">RM</div>
+              <div className="pdf-summary-name" title={resolvedRMName}>
+                {resolvedRMName}
+              </div>
+              <div className="pdf-summary-id" title={`ID: ${resolvedEmployeeId}`}>
+                ID: {resolvedEmployeeId}
+              </div>
+            </div>
+
+            {/* Block 4: Agent / Source */}
+            <div className="pdf-summary-block">
+              {isAgentCreated ? (
+                <>
+                  <div className="pdf-summary-label">AGENT</div>
+                  <div className="pdf-summary-name" title={resolvedAgentName}>
+                    {resolvedAgentName}
+                  </div>
+                  <div className="pdf-summary-id" title={`ID: ${resolvedAgentCode}`}>
+                    ID: {resolvedAgentCode}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="pdf-summary-label">SOURCE</div>
+                  <div className="pdf-summary-name" title="Direct (RM)">
+                    Direct (RM)
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -2074,16 +2257,14 @@ export default function PdfView() {
           <div className="pdf-office-use">
             <div className="pdf-office-left">
               <div className="pdf-office-row">
-                <span className="pdf-office-label">Sourcing Channel:</span>
-                <div className="pdf-office-value">
-                  {resolveSourcingChannel(appData.sourcingChannel || sourcingData.sourcingChannel) || '-'}
-                </div>
+                <span className="pdf-office-label">Source Type:</span>
+                <div className="pdf-office-value">{resolvedSourceType}</div>
               </div>
               <div className="pdf-office-row">
                 <span className="pdf-office-label">Loan Product:</span>
                 <div className="pdf-office-value">
-                  {resolveLoanProduct(appData.loanProduct)}{' '}
-                  {appData.loanVariation ? `- ${appData.loanVariation}` : ''}
+                  {resolveLoanProduct(appData.loanProduct)}
+                  {resolveLoanVariation(appData.loanVariation) ? ` - ${resolveLoanVariation(appData.loanVariation)}` : ''}
                 </div>
               </div>
               <div className="pdf-office-row">
@@ -2093,9 +2274,15 @@ export default function PdfView() {
                 </div>
               </div>
               <div className="pdf-office-row">
-                <span className="pdf-office-label">Loan Amount & Tenure:</span>
+                <span className="pdf-office-label">Loan Amount:</span>
                 <div className="pdf-office-value">
-                  Rs. {loanAmount || '-'} for {loanTenure ? `${loanTenure} months` : '-'}
+                  {loanAmount ? (String(loanAmount).startsWith('Rs.') ? loanAmount : `Rs. ${isNaN(Number(String(loanAmount).replace(/,/g, ''))) ? loanAmount : Number(String(loanAmount).replace(/,/g, '')).toLocaleString('en-IN')}`) : '-'}
+                </div>
+              </div>
+              <div className="pdf-office-row">
+                <span className="pdf-office-label">Tenure:</span>
+                <div className="pdf-office-value">
+                  {loanTenure ? (String(loanTenure).toLowerCase().includes('month') ? loanTenure : `${loanTenure} Months`) : '-'}
                 </div>
               </div>
             </div>
@@ -2751,15 +2938,7 @@ export default function PdfView() {
           <table className="pdf-table">
             <tbody>
               <tr>
-                <td className="pdf-row-header">Sourcing Channel</td>
-                <td>{resolveSourcingChannel(appData.sourcingChannel || sourcingData.sourcingChannel) || '-'}</td>
-                <td className="pdf-row-header">Sourced By (RM Name)</td>
-                <td>{resolvedRMName || '-'}</td>
-              </tr>
-              <tr>
-                <td className="pdf-row-header">Employee ID</td>
-                <td>{resolvedEmployeeId || '-'}</td>
-                <td className="pdf-row-header">Admin Fee Status</td>
+                <td className="pdf-row-header" style={{ width: '25%' }}>Admin Fee Status</td>
                 <td>{chargesData.adminFeePaid ? 'Paid' : 'Pending / Not Applicable'}</td>
               </tr>
             </tbody>

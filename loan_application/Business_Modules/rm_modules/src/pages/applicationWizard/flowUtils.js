@@ -357,20 +357,65 @@ export function resolveApplicantName(appData = {}) {
   return 'Applicant';
 }
 
+/**
+ * Official Application Number Generator (Used ONCE during customer intake creation)
+ * Algorithm: First 2 letters of Applicant Name + DOB Day (DD) + Last 3 digits of Mobile Number
+ * Returns null if any required input is missing or invalid. Never invents fallback placeholders.
+ */
+export function generateOfficialAppId({ fullName = '', dateOfBirth = '', mobileNumber = '' } = {}) {
+  const firstName = String(fullName || '').trim().split(/\s+/)[0] || '';
+  if (firstName.length < 2) return null;
+  const initials = firstName.slice(0, 2).toUpperCase();
+
+  if (!dateOfBirth) return null;
+  const dobStr = String(dateOfBirth).trim();
+  // Match YYYY-MM-DD, YYYY/MM/DD, DD-MM-YYYY, DD/MM/YYYY
+  const isoMatch = dobStr.match(/^\d{4}[-/]\d{1,2}[-/](\d{1,2})/);
+  const dmyMatch = dobStr.match(/^(\d{1,2})[-/]\d{1,2}[-/]\d{4}/);
+  let dayStr = '';
+  if (isoMatch) {
+    dayStr = isoMatch[1].padStart(2, '0');
+  } else if (dmyMatch) {
+    dayStr = dmyMatch[1].padStart(2, '0');
+  } else {
+    const d = new Date(dobStr);
+    if (!isNaN(d.getTime())) {
+      dayStr = String(d.getDate()).padStart(2, '0');
+    }
+  }
+  if (!dayStr || dayStr === '00' || isNaN(Number(dayStr)) || Number(dayStr) < 1 || Number(dayStr) > 31) return null;
+
+  const cleanMobile = String(mobileNumber || '').replace(/\D/g, '');
+  if (cleanMobile.length < 3) return null;
+  const mobileTail = cleanMobile.slice(-3);
+
+  return `${initials}${dayStr}${mobileTail}`;
+}
+
+/**
+ * Official Application Number Reader / Formatter
+ * Priority: Returns the backend-persisted official appId (AgentAddCustomer.App_Id).
+ * Does NOT regenerate/recalculate IDs on the fly. Fallback for historical empty records is 'N/A'.
+ */
 export function buildApplicationDisplayId(record = {}, fallbackId = '') {
-  const applicant = record.registration?.personalInformation?.applicant ||
-    record.sections?.personalInformation?.applicant || record.personalInformation?.applicant ||
-    record.applicant || record.Applicant || {};
-  const firstName = String(applicant.firstName || applicant.FirstName || record.firstName || record.FirstName || record.fullName || record.FullName || record.customerName || record.CustomerName || '')
-    .trim().split(/\s+/)[0] || '';
-  const initials = firstName.slice(0, 2).toUpperCase().padEnd(2, 'X');
-  const applicationDate = record.applicationDate || record.ApplicationDate || record.createdDate || record.CreatedDate ||
-    record.createdAt || record.CreatedAt || record.submittedAt || record.SubmittedAt || '';
-  const dateMatch = String(applicationDate).match(/^(?:\d{4}[-/]\d{2}[-/](\d{2})|\d{2}[-/]\d{2}[-/]\d{4})/);
-  const applicationDay = dateMatch ? dateMatch[1] || String(applicationDate).slice(0, 2) : '00';
-  const mobile = String(applicant.mobileNo || applicant.MobileNo || applicant.mobileNumber || applicant.MobileNumber || record.mobileNumber || record.MobileNumber || record.mobile || record.Mobile || '').replace(/\D/g, '');
-  const mobileTail = mobile.slice(-3).padStart(3, '0');
-  return `${initials}${applicationDay}${mobileTail}`;
+  if (!record) return fallbackId || 'N/A';
+  const existingAppId =
+    record.appId ??
+    record.AppId ??
+    record.App_Id ??
+    record.applicationNo ??
+    record.ApplicationNo ??
+    record.applicationNumber ??
+    record.ApplicationNumber;
+
+  if (existingAppId && typeof existingAppId === 'string' && existingAppId.trim() !== '') {
+    const trimmed = existingAppId.trim();
+    if (!trimmed.startsWith('APP-') && trimmed !== 'N/A' && trimmed !== '-') {
+      return trimmed;
+    }
+  }
+
+  return 'N/A';
 }
 
 /**
@@ -399,7 +444,7 @@ export function isAadhaarDoc(doc) {
 // In-memory session caches to prevent duplicate requests and infinite lookup loops
 // (Not persisted to localStorage/sessionStorage)
 const tupleLookupCache = new Map(); // key = `${prodDetailsId}:${seq}:${docTypeId}`
-const blobUrlCache = new Map(); // key = url
+const rawBlobCache = new Map(); // key = url -> Promise<{ blob: Blob, isPdf: boolean, mimeType: string }>
 const agentCustDocsCache = new Map(); // key = custId
 
 /**
@@ -407,43 +452,8 @@ const agentCustDocsCache = new Map(); // key = custId
  * Treats 404 silently as an expected empty state without console logging.
  */
 export async function fetchDocumentBlobAsUrl(url, headers = {}, fallbackFileName = '') {
-  if (!url) return null;
-  if (blobUrlCache.has(url)) {
-    return blobUrlCache.get(url);
-  }
-
-  const fetchPromise = (async () => {
-    try {
-      const res = await fetch(url, { headers });
-      if (res.status === 404) {
-        return null;
-      }
-      if (!res.ok) {
-        if (res.status !== 404) {
-          console.warn(`Unexpected status ${res.status} fetching document from ${url}`);
-        }
-        return null;
-      }
-      const blob = await res.blob();
-      if (!blob || blob.size === 0) return null;
-
-      const ext = String(fallbackFileName || url).split('?')[0].split('.').pop()?.toLowerCase();
-      let mimeType = blob.type || 'image/jpeg';
-      if (mimeType === 'application/octet-stream' || !mimeType) {
-        if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
-        else if (ext === 'png') mimeType = 'image/png';
-        else if (ext === 'webp') mimeType = 'image/webp';
-        else if (ext === 'pdf') mimeType = 'application/pdf';
-      }
-      const typedBlob = new Blob([blob], { type: mimeType });
-      return URL.createObjectURL(typedBlob);
-    } catch {
-      return null;
-    }
-  })();
-
-  blobUrlCache.set(url, fetchPromise);
-  return fetchPromise;
+  const meta = await fetchDocumentBlobWithMeta(url, headers, fallbackFileName);
+  return meta?.url || null;
 }
 
 /**
@@ -545,22 +555,22 @@ export async function resolveLatestApplicantAadhaar({
   );
 
   if (applicantKycId && Number(applicantKycId) > 0) {
-    const url = await fetchDocumentBlobAsUrl(
+    const docMeta = await fetchDocumentBlobWithMeta(
       `${finalBaseUrl}/ApplicationKYCDocuments/${encodeURIComponent(applicantKycId)}/aadhar`,
       headers,
-      'aadhar.jpg'
+      aadharPath || 'aadhar.jpg'
     );
-    if (url) return url;
+    if (docMeta) return docMeta;
   }
 
   // Fallback if dedicated endpoint blob fetch fails: download by canonical path
   const cleanPath = String(aadharPath).replace(/^[\\/]+/, '').replace(/\\/g, '/');
-  const url = await fetchDocumentBlobAsUrl(
+  const docMeta = await fetchDocumentBlobWithMeta(
     `${finalBaseUrl}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`,
     headers,
     aadharPath
   );
-  return url || null;
+  return docMeta || null;
 }
 
 /**
@@ -627,25 +637,255 @@ export async function resolveLatestCoApplicantAadhaar({
   );
 
   if (kycId && Number(kycId) > 0) {
-    const url = await fetchDocumentBlobAsUrl(
+    const docMeta = await fetchDocumentBlobWithMeta(
       `${finalBaseUrl}/ApplicationKYCDocuments/${encodeURIComponent(kycId)}/aadhar`,
       headers,
-      `co_applicant_${seq}_aadhar.jpg`
+      aadharPath || `co_applicant_${seq}_aadhar.jpg`
     );
-    if (url) return url;
+    if (docMeta) return docMeta;
   }
 
   // Fallback if dedicated endpoint blob fetch fails: download by canonical path
   const cleanPath = String(aadharPath).replace(/^[\\/]+/, '').replace(/\\/g, '/');
-  const url = await fetchDocumentBlobAsUrl(
+  const docMeta = await fetchDocumentBlobWithMeta(
     `${finalBaseUrl}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`,
     headers,
     aadharPath
   );
-  return url || null;
+  return docMeta || null;
 }
 
 // Backward-compatible aliases
 export const loadApplicantAadhaarUrl = resolveLatestApplicantAadhaar;
 export const loadCoApplicantAadhaarUrl = resolveLatestCoApplicantAadhaar;
+
+/**
+ * Downloads a document as a Blob from a given URL and converts it into a browser Object URL
+ * along with format metadata (isPdf, mimeType).
+ * Treats 404 silently as an expected empty state without console logging.
+ */
+export async function fetchDocumentBlobWithMeta(url, headers = {}, fallbackFileName = '') {
+  if (!url) return null;
+  const cacheKey = url;
+  if (!rawBlobCache.has(cacheKey)) {
+    const fetchPromise = (async () => {
+      try {
+        const res = await fetch(url, { headers });
+        if (res.status === 404 || !res.ok) {
+          return null;
+        }
+        const blob = await res.blob();
+        if (!blob || blob.size === 0) return null;
+
+        const ext = String(fallbackFileName || url).split('?')[0].split('.').pop()?.toLowerCase();
+        let mimeType = blob.type || 'image/jpeg';
+        if (mimeType === 'application/octet-stream' || !mimeType) {
+          if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+          else if (ext === 'png') mimeType = 'image/png';
+          else if (ext === 'webp') mimeType = 'image/webp';
+          else if (ext === 'pdf') mimeType = 'application/pdf';
+        }
+        const isPdf = mimeType === 'application/pdf' || ext === 'pdf';
+        return { blob, isPdf, mimeType };
+      } catch {
+        return null;
+      }
+    })();
+    rawBlobCache.set(cacheKey, fetchPromise);
+  }
+
+  const meta = await rawBlobCache.get(cacheKey);
+  if (!meta || !meta.blob) return null;
+
+  const typedBlob = new Blob([meta.blob], { type: meta.mimeType });
+  const objectUrl = URL.createObjectURL(typedBlob);
+  return { url: objectUrl, isPdf: meta.isPdf, mimeType: meta.mimeType };
+}
+
+/**
+ * Generic Financial Document Resolver (Salary Slip & Bank Statement).
+ * Supports both Primary Applicant (seq 0) and Co-Applicants (seq 1..N).
+ *
+ * Priority Order:
+ * 1. Application-Level Tuple (Authoritative Replacement / Resubmitted Document):
+ *    GET /ApplicationKYCDocuments/applicant-document?applicationProductDetailsId={id}&applicantSequence={seq}&documentTypeId={typeId}
+ *    If tuple exists and has documentPath -> download via /ApplicationKYCDocuments/download?path={cleanPath}
+ * 2. Initial Draft Fallback (ONLY if tuple is 404 / not yet created):
+ *    GET /AgentCustomerDocument/bycustomer/{customerId}
+ *    Match sequence and documentTypeId / document category.
+ * 3. Fallback: null (Displays "Document not available")
+ */
+export async function resolveFinancialDocument({
+  appData = {},
+  appId = '',
+  applicationProductDetailsId = null,
+  sequence = 0,
+  documentTypeId = null,
+  documentCategory = '', // 'Salary Slip' | 'Bank Statement'
+  baseUrl = '',
+  headers = {},
+}) {
+  const finalBaseUrl = (baseUrl || import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
+  const seq = Number(sequence) || 0;
+
+  const prodDetailsId =
+    applicationProductDetailsId ||
+    appData?.applicationProductDetailsId ||
+    appData?.ApplicationProductDetailsId ||
+    appData?.sections?.productDetails?.applicationProductDetailsId ||
+    appData?.productDetails?.applicationProductDetailsId ||
+    null;
+
+  const resolvedTypeId =
+    documentTypeId !== null && documentTypeId !== undefined && !isNaN(Number(documentTypeId)) && Number(documentTypeId) > 0
+      ? Number(documentTypeId)
+      : null;
+
+  // Priority 1: Check Application-level tuple if product details ID and documentTypeId are available
+  if (prodDetailsId && resolvedTypeId) {
+    try {
+      const tupleRes = await fetch(
+        `${finalBaseUrl}/ApplicationKYCDocuments/applicant-document?applicationProductDetailsId=${encodeURIComponent(prodDetailsId)}&applicantSequence=${encodeURIComponent(seq)}&documentTypeId=${encodeURIComponent(resolvedTypeId)}`,
+        { headers }
+      );
+
+      if (tupleRes.ok) {
+        const contentType = tupleRes.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const tupleDoc = await tupleRes.json();
+          const docPath = tupleDoc?.documentPath || tupleDoc?.DocumentPath || tupleDoc?.filePath || tupleDoc?.FilePath;
+          if (docPath) {
+            const cleanPath = String(docPath).replace(/^[\\/]+/, '').replace(/\\/g, '/');
+            const docResult = await fetchDocumentBlobWithMeta(
+              `${finalBaseUrl}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`,
+              headers,
+              docPath
+            );
+            if (docResult) return docResult;
+          }
+        } else {
+          const blob = await tupleRes.blob();
+          if (blob && blob.size > 0) {
+            let mimeType = blob.type || 'image/jpeg';
+            if (mimeType === 'application/octet-stream') mimeType = 'image/jpeg';
+            const isPdf = mimeType === 'application/pdf';
+            const typedBlob = new Blob([blob], { type: mimeType });
+            return { url: URL.createObjectURL(typedBlob), isPdf, mimeType };
+          }
+        }
+      } else if (tupleRes.status !== 404) {
+        // If non-404 error (e.g. 500), do not silently fallback to stale agent docs
+        return null;
+      }
+    } catch (err) {
+      console.warn(`Error resolving application tuple for seq ${seq}, type ${resolvedTypeId}:`, err);
+    }
+  }
+
+  // Priority 2: Initial Draft Fallback (Agent customer document) ONLY if tuple not found (404 or missing prodId)
+  const customerId =
+    appId ||
+    appData?.agentCustomerId ||
+    appData?.AgentCustomerId ||
+    appData?.customerId ||
+    appData?.CustomerId ||
+    null;
+
+  if (customerId) {
+    try {
+      let custDocs = agentCustDocsCache.get(String(customerId));
+      if (!custDocs) {
+        const agentDocRes = await fetch(`${finalBaseUrl}/AgentCustomerDocument/bycustomer/${encodeURIComponent(customerId)}`, { headers });
+        if (agentDocRes.ok) {
+          const data = await agentDocRes.json();
+          custDocs = Array.isArray(data) ? data : (data?.value ?? data?.data ?? []);
+          agentCustDocsCache.set(String(customerId), custDocs);
+        } else {
+          custDocs = [];
+        }
+      }
+
+      if (Array.isArray(custDocs) && custDocs.length > 0) {
+        const normalizedCategory = String(documentCategory || '').trim().toLowerCase();
+        
+        const matched = custDocs.find((d) => {
+          if (!d || d.isActive === false || d.IsActive === false) return false;
+
+          // Sequence match
+          const dSeq = d.applicantSequence !== undefined && d.applicantSequence !== null ? Number(d.applicantSequence) : (d.ApplicantSequence !== undefined && d.ApplicantSequence !== null ? Number(d.ApplicantSequence) : 0);
+          if (dSeq !== seq) return false;
+
+          // Type ID match
+          const dTypeId = Number(d.documentTypeId ?? d.DocumentTypeId);
+          if (resolvedTypeId && Number.isFinite(dTypeId) && dTypeId === resolvedTypeId) {
+            return true;
+          }
+
+          // Category name match fallback
+          if (normalizedCategory) {
+            const dName = String(d.documentTypeName || d.documentName || d.name || '').toLowerCase();
+            const dCode = String(d.documentTypeCode || d.code || '').toLowerCase();
+            if (normalizedCategory.includes('salary') && (dName.includes('salary') || dCode.includes('salary') || dName.includes('income'))) return true;
+            if (normalizedCategory.includes('bank') && (dName.includes('bank') || dCode.includes('bank') || dName.includes('statement'))) return true;
+          }
+
+          return false;
+        });
+
+        if (matched) {
+          const docPath = matched.documentPath || matched.DocumentPath || matched.filePath || matched.FilePath;
+          if (docPath) {
+            const cleanPath = String(docPath).replace(/^[\\/]+/, '').replace(/\\/g, '/');
+            const docResult = await fetchDocumentBlobWithMeta(
+              `${finalBaseUrl}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`,
+              headers,
+              docPath
+            );
+            if (docResult) return docResult;
+          }
+        }
+      }
+    } catch (agentErr) {
+      console.warn(`Error resolving agent customer document for seq ${seq}:`, agentErr);
+    }
+  }
+
+  // Priority 3: Document not available
+  return null;
+}
+
+export async function resolveLatestApplicantSalarySlip(params) {
+  return resolveFinancialDocument({
+    ...params,
+    sequence: 0,
+    documentCategory: 'Salary Slip',
+  });
+}
+
+export async function resolveLatestCoApplicantSalarySlip(params) {
+  const seq = (params.coIndex !== undefined && params.coIndex !== null) ? (params.coIndex + 1) : (params.sequence || 1);
+  return resolveFinancialDocument({
+    ...params,
+    sequence: seq,
+    documentCategory: 'Salary Slip',
+  });
+}
+
+export async function resolveLatestApplicantBankStatement(params) {
+  return resolveFinancialDocument({
+    ...params,
+    sequence: 0,
+    documentCategory: 'Bank Statement',
+  });
+}
+
+export async function resolveLatestCoApplicantBankStatement(params) {
+  const seq = (params.coIndex !== undefined && params.coIndex !== null) ? (params.coIndex + 1) : (params.sequence || 1);
+  return resolveFinancialDocument({
+    ...params,
+    sequence: seq,
+    documentCategory: 'Bank Statement',
+  });
+}
+
 

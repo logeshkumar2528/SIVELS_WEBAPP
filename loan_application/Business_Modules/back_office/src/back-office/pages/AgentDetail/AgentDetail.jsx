@@ -160,23 +160,32 @@ export default function AgentDetail() {
     };
   }, [customers, agent]);
 
-  // 5. Filtered Customer List
+  // 5. Filtered Customer List (Sorted Newest-First)
   const filteredCustomers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return customers;
+    const list = term
+      ? customers.filter((c) => {
+          const customerName = (c.customerName || c.name || c.fullName || '').toLowerCase();
+          const appNo = String(c.appId || (c.applicationNo && !c.applicationNo.startsWith('APP-') ? c.applicationNo : '')).toLowerCase();
+          const loanType = (c.loanType || c.loanPurpose || '').toLowerCase();
+          const mobile = String(c.mobile || '');
 
-    return customers.filter((c) => {
-      const customerName = (c.customerName || c.name || c.fullName || '').toLowerCase();
-      const appNo = (c.applicationNo || (c.agentCustomerId ? `APP-${c.agentCustomerId}` : '')).toLowerCase();
-      const loanType = (c.loanType || c.loanPurpose || '').toLowerCase();
-      const mobile = String(c.mobile || '');
+          return (
+            customerName.includes(term) ||
+            appNo.includes(term) ||
+            loanType.includes(term) ||
+            mobile.includes(term)
+          );
+        })
+      : customers;
 
-      return (
-        customerName.includes(term) ||
-        appNo.includes(term) ||
-        loanType.includes(term) ||
-        mobile.includes(term)
-      );
+    return [...list].sort((a, b) => {
+      const timeA = new Date(a.createdAt || a.appliedDate || 0).getTime() || 0;
+      const timeB = new Date(b.createdAt || b.appliedDate || 0).getTime() || 0;
+      if (timeA !== timeB) return timeB - timeA;
+      const idA = Number(a.agentCustomerId ?? a.id ?? 0) || 0;
+      const idB = Number(b.agentCustomerId ?? b.id ?? 0) || 0;
+      return idB - idA;
     });
   }, [customers, searchTerm]);
 
@@ -413,7 +422,7 @@ export default function AgentDetail() {
             <tbody>
               {filteredCustomers.map((c) => {
                 const statusInfo = getStatusInfo(c.status);
-                const appNo = c.applicationNo || (c.agentCustomerId ? `APP-${c.agentCustomerId}` : '—');
+                const appNo = c.appId || (c.applicationNo && c.applicationNo !== 'N/A' && !c.applicationNo.startsWith('APP-') ? c.applicationNo : 'N/A');
                 const appliedDate = c.appliedDate || (c.createdAt ? String(c.createdAt).slice(0, 10) : '—');
                 const customerName = c.customerName || c.name || c.fullName || '—';
                 const employmentType = c.employmentType || 'Salaried';

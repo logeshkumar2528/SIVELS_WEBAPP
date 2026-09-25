@@ -102,7 +102,7 @@ export default function CustomerMonitoring() {
 
   // 3. Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(6);
 
   // 4. Icons
   const FileTextIcon = iconMap['FileText'];
@@ -138,57 +138,66 @@ export default function CustomerMonitoring() {
     setCurrentPage(1);
   }, [searchTerm, districtFilter, rmFilter, agentFilter, statusFilter]);
 
-  // 7. Multi-Dimensional Search & Filtering Logic
+  // 7. Multi-Dimensional Search & Filtering Logic (Sorted Newest-First)
   const filteredCustomers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
 
-    return customers.filter((c) => {
-      // District Filter
-      const matchDistrict =
-        districtFilter === 'All' ||
-        (c.districtName && c.districtName.toLowerCase() === districtFilter.toLowerCase()) ||
-        String(c.districtId) === districtFilter;
+    return customers
+      .filter((c) => {
+        // District Filter
+        const matchDistrict =
+          districtFilter === 'All' ||
+          (c.districtName && c.districtName.toLowerCase() === districtFilter.toLowerCase()) ||
+          String(c.districtId) === districtFilter;
 
-      // RM Filter
-      const matchRM =
-        rmFilter === 'All' ||
-        (c.rmName && c.rmName.toLowerCase() === rmFilter.toLowerCase()) ||
-        String(c.rmId) === rmFilter;
+        // RM Filter
+        const matchRM =
+          rmFilter === 'All' ||
+          (c.rmName && c.rmName.toLowerCase() === rmFilter.toLowerCase()) ||
+          String(c.rmId) === rmFilter;
 
-      // Agent Filter
-      const matchAgent =
-        agentFilter === 'All' ||
-        (c.agentName && c.agentName.toLowerCase() === agentFilter.toLowerCase()) ||
-        String(c.agentId) === agentFilter;
+        // Agent Filter
+        const matchAgent =
+          agentFilter === 'All' ||
+          (c.agentName && c.agentName.toLowerCase() === agentFilter.toLowerCase()) ||
+          String(c.agentId) === agentFilter;
 
-      // Status Filter
-      const statusLabel = getStatusInfo(c.status).label;
-      const matchStatus =
-        statusFilter === 'All' ||
-        statusLabel.toLowerCase() === statusFilter.toLowerCase();
+        // Status Filter
+        const statusLabel = getStatusInfo(c.status).label;
+        const matchStatus =
+          statusFilter === 'All' ||
+          statusLabel.toLowerCase() === statusFilter.toLowerCase();
 
-      // Search Query
-      if (!term) return matchDistrict && matchRM && matchAgent && matchStatus;
+        // Search Query
+        if (!term) return matchDistrict && matchRM && matchAgent && matchStatus;
 
-      const customerName = (c.customerName || c.name || '').toLowerCase();
-      const mobile = String(c.mobile || '');
-      const appNo = (c.applicationNo || `APP-${c.agentCustomerId || c.id || ''}`).toLowerCase();
-      const agentName = (c.agentName || '').toLowerCase();
-      const rmName = (c.rmName || '').toLowerCase();
-      const district = (c.districtName || '').toLowerCase();
-      const loanType = (c.loanType || c.loanPurpose || '').toLowerCase();
+        const customerName = (c.customerName || c.name || '').toLowerCase();
+        const mobile = String(c.mobile || '');
+        const appNo = String(c.appId || (c.applicationNo && !c.applicationNo.startsWith('APP-') ? c.applicationNo : '')).toLowerCase();
+        const agentName = (c.agentName || '').toLowerCase();
+        const rmName = (c.rmName || '').toLowerCase();
+        const district = (c.districtName || '').toLowerCase();
+        const loanType = (c.loanType || c.loanPurpose || '').toLowerCase();
 
-      const matchSearch =
-        customerName.includes(term) ||
-        mobile.includes(term) ||
-        appNo.includes(term) ||
-        agentName.includes(term) ||
-        rmName.includes(term) ||
-        district.includes(term) ||
-        loanType.includes(term);
+        const matchSearch =
+          customerName.includes(term) ||
+          mobile.includes(term) ||
+          appNo.includes(term) ||
+          agentName.includes(term) ||
+          rmName.includes(term) ||
+          district.includes(term) ||
+          loanType.includes(term);
 
-      return matchDistrict && matchRM && matchAgent && matchStatus && matchSearch;
-    });
+        return matchDistrict && matchRM && matchAgent && matchStatus && matchSearch;
+      })
+      .sort((a, b) => {
+        const timeA = new Date(a.createdAt || a.appliedDate || 0).getTime() || 0;
+        const timeB = new Date(b.createdAt || b.appliedDate || 0).getTime() || 0;
+        if (timeA !== timeB) return timeB - timeA;
+        const idA = Number(a.agentCustomerId ?? a.id ?? 0) || 0;
+        const idB = Number(b.agentCustomerId ?? b.id ?? 0) || 0;
+        return idB - idA;
+      });
   }, [customers, districtFilter, rmFilter, agentFilter, statusFilter, searchTerm]);
 
   // 8. Sliced Paginated Slice
@@ -363,7 +372,7 @@ export default function CustomerMonitoring() {
                 <tbody>
                   {paginatedCustomers.map((c) => {
                     const statusInfo = getStatusInfo(c.status);
-                    const appNo = c.applicationNo || (c.agentCustomerId ? `APP-${c.agentCustomerId}` : '—');
+                    const appNo = c.appId || (c.applicationNo && c.applicationNo !== 'N/A' && !c.applicationNo.startsWith('APP-') ? c.applicationNo : 'N/A');
                     const appliedDate = c.appliedDate || (c.createdAt ? String(c.createdAt).slice(0, 10) : '—');
                     const customerName = c.name || c.customerName || c.fullName || '—';
                     const mobile = c.mobile ? `+91 ${c.mobile}` : '—';
@@ -450,7 +459,7 @@ export default function CustomerMonitoring() {
                 pageSize={pageSize}
                 onPageChange={setCurrentPage}
                 onPageSizeChange={setPageSize}
-                pageSizeOptions={[5, 10, 20, 50]}
+                pageSizeOptions={[6, 10, 20, 50]}
               />
             )}
           </>

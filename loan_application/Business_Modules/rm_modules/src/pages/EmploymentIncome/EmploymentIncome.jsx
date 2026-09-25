@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Building2, Briefcase, UserCog, GraduationCap, Factory, Clock, IndianRupee } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
 import Select from '../../components/Select/Select';
+import Modal from '../../components/Modal/Modal';
 import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
@@ -14,8 +15,11 @@ import {
   createArray,
   getApplicantCount,
   getSectionState,
+  resolveLatestApplicantSalarySlip,
+  resolveLatestCoApplicantSalarySlip,
 } from '../applicationWizard/flowUtils';
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
+import { resolveDocumentTypeId } from '../../../../../Core/src/utils/documentTypeHelper';
 
 function buildEmploymentState(appData) {
   const saved = getSectionState(appData, 'employmentIncome', {});
@@ -36,8 +40,32 @@ function buildEmploymentState(appData) {
     grossAnnualIncome: source.grossAnnualIncome || '',
   });
 
+  const savedApplicant = saved.applicant || {};
+  const hasSavedApplicantNature =
+    savedApplicant.employmentNature !== undefined &&
+    savedApplicant.employmentNature !== null &&
+    String(savedApplicant.employmentNature).trim() !== '';
+
+  const fallbackApplicantNature =
+    appData?.customer?.employmentTypeId ??
+    appData?.customer?.EmploymentTypeId ??
+    appData?.raw?.customer?.employmentTypeId ??
+    appData?.raw?.customer?.EmploymentTypeId ??
+    appData?.employmentTypeId ??
+    appData?.EmploymentTypeId ??
+    '';
+
+  const applicantEmploymentNature = hasSavedApplicantNature
+    ? savedApplicant.employmentNature
+    : (fallbackApplicantNature !== '' && fallbackApplicantNature !== null && fallbackApplicantNature !== undefined
+        ? fallbackApplicantNature
+        : '');
+
   return {
-    applicant: createPerson(saved.applicant),
+    applicant: {
+      ...createPerson(savedApplicant),
+      employmentNature: applicantEmploymentNature,
+    },
     coApplicants: createArray(count, (index) => createPerson(savedCoApplicants[index])),
   };
 }
@@ -74,16 +102,6 @@ function validateEmployment(person = {}) {
     errors.grossMonthlyIncome = 'Gross monthly income is required';
   }
 
-  const netMonthly = parseAmountToNumber(person.netMonthlyIncome);
-  if (person.netMonthlyIncome === '' || person.netMonthlyIncome === null || person.netMonthlyIncome === undefined || isNaN(netMonthly) || netMonthly <= 0) {
-    errors.netMonthlyIncome = 'Net monthly income is required';
-  }
-
-  const grossAnnual = parseAmountToNumber(person.grossAnnualIncome);
-  if (person.grossAnnualIncome === '' || person.grossAnnualIncome === null || person.grossAnnualIncome === undefined || isNaN(grossAnnual) || grossAnnual <= 0) {
-    errors.grossAnnualIncome = 'Gross annual income is required';
-  }
-
   return errors;
 }
 
@@ -109,6 +127,21 @@ function EmploymentCard({
         String(opt.label).toLowerCase() === person.industryType.trim().toLowerCase())
   );
   const currentIndustryValue = matchedIndustryOption ? matchedIndustryOption.value : person.industryType;
+
+  const grossMonthly = parseAmountToNumber(person.grossMonthlyIncome);
+  const otherMonthly = parseAmountToNumber(person.otherIncomeMonthly);
+  const previewNetMonthly = grossMonthly + otherMonthly;
+  const previewGrossAnnual = previewNetMonthly * 12;
+
+  const displayNetMonthly =
+    previewNetMonthly > 0
+      ? formatIndianAmount(previewNetMonthly)
+      : (person.netMonthlyIncome ? formatIndianAmount(person.netMonthlyIncome) : '');
+
+  const displayGrossAnnual =
+    previewGrossAnnual > 0
+      ? formatIndianAmount(previewGrossAnnual)
+      : (person.grossAnnualIncome ? formatIndianAmount(person.grossAnnualIncome) : '');
 
   return (
     <div className="aw-mini-card">
@@ -243,14 +276,15 @@ function EmploymentCard({
             <div className="aw-input-wrapper">
               <IndianRupee className="aw-input-icon" size={14} />
               <input
-                className={`form-input aw-input aw-input--with-icon ${errors.netMonthlyIncome ? 'aw-input--invalid' : ''}`}
+                className="form-input aw-input aw-input--with-icon"
                 type="text"
-                inputMode="numeric"
-                value={formatIndianAmount(person.netMonthlyIncome)}
-                onChange={(e) => onChange('netMonthlyIncome', e.target.value)}
+                readOnly
+                tabIndex={-1}
+                value={displayNetMonthly}
+                placeholder="Auto-calculated"
+                style={{ backgroundColor: '#f8fafc', cursor: 'default' }}
               />
             </div>
-            {errors.netMonthlyIncome && <span className="aw-field-error">{errors.netMonthlyIncome}</span>}
           </div>
 
           <div className="aw-field">
@@ -258,14 +292,15 @@ function EmploymentCard({
             <div className="aw-input-wrapper">
               <IndianRupee className="aw-input-icon" size={14} />
               <input
-                className={`form-input aw-input aw-input--with-icon ${errors.grossAnnualIncome ? 'aw-input--invalid' : ''}`}
+                className="form-input aw-input aw-input--with-icon"
                 type="text"
-                inputMode="numeric"
-                value={formatIndianAmount(person.grossAnnualIncome)}
-                onChange={(e) => onChange('grossAnnualIncome', e.target.value)}
+                readOnly
+                tabIndex={-1}
+                value={displayGrossAnnual}
+                placeholder="Auto-calculated"
+                style={{ backgroundColor: '#f8fafc', cursor: 'default' }}
               />
             </div>
-            {errors.grossAnnualIncome && <span className="aw-field-error">{errors.grossAnnualIncome}</span>}
           </div>
         </div>
       </div>
@@ -286,6 +321,12 @@ export default function EmploymentIncome() {
   const [qualificationOptions, setQualificationOptions] = useState([]);
   const [employmentNatureOptions, setEmploymentNatureOptions] = useState([]);
   const [industryTypeOptions, setIndustryTypeOptions] = useState([]);
+  const [documentTypeOptions, setDocumentTypeOptions] = useState([]);
+
+  const [showDocsModal, setShowDocsModal] = useState(false);
+  const [fullViewDoc, setFullViewDoc] = useState(null);
+  const [salarySlipPreviews, setSalarySlipPreviews] = useState({});
+  const blobUrlsRef = useRef([]);
 
   useEffect(() => {
     async function fetchMaster(endpoint, idField, nameField, setStateFunc) {
@@ -315,6 +356,7 @@ export default function EmploymentIncome() {
         fetchMaster('EducationMaster', 'educationId', 'educationName', setQualificationOptions),
         fetchMaster('EmploymentType', 'employmentTypeId', 'employmentTypeName', setEmploymentNatureOptions),
         fetchMaster('masters/IndustryTypeMaster', 'industryTypeId', 'industryTypeName', setIndustryTypeOptions),
+        fetchMaster('DocumentTypeMaster', 'documentTypeId', 'documentTypeName', setDocumentTypeOptions),
       ]);
       setIsLoadingMasters(false);
     }
@@ -330,6 +372,87 @@ export default function EmploymentIncome() {
   const activeCount = useMemo(() => getApplicantCount(appData), [appData]);
   const ArrowLeftIcon = iconMap['ArrowLeft'];
   const InfoIcon = iconMap['Info'];
+
+  const resolvedApplicationProductDetailsId = useMemo(() => {
+    const raw =
+      appData?.applicationProductDetailsId ??
+      appData?.ApplicationProductDetailsId ??
+      appData?.sections?.productDetails?.applicationProductDetailsId ??
+      appData?.productDetails?.applicationProductDetailsId ??
+      null;
+    const num = Number(raw);
+    return Number.isFinite(num) && num > 0 ? num : null;
+  }, [appData]);
+
+  const salarySlipTypeId = useMemo(
+    () => resolveDocumentTypeId(documentTypeOptions, 'Salary Slip'),
+    [documentTypeOptions]
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+    const token = localStorage.getItem('authToken');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
+
+    // 1. Load Applicant Salary Slip
+    resolveLatestApplicantSalarySlip({
+      appData,
+      appId,
+      applicationProductDetailsId: resolvedApplicationProductDetailsId,
+      documentTypeId: salarySlipTypeId,
+      baseUrl,
+      headers,
+    }).then((doc) => {
+      if (isMounted && doc) {
+        if (doc.url) blobUrlsRef.current.push(doc.url);
+        setSalarySlipPreviews((prev) => ({ ...prev, applicant: doc }));
+      }
+    });
+
+    // 2. Load Co-Applicants Salary Slip
+    for (let idx = 0; idx < activeCount; idx++) {
+      resolveLatestCoApplicantSalarySlip({
+        coIndex: idx,
+        appData,
+        appId,
+        applicationProductDetailsId: resolvedApplicationProductDetailsId,
+        documentTypeId: salarySlipTypeId,
+        baseUrl,
+        headers,
+      }).then((doc) => {
+        if (isMounted && doc) {
+          if (doc.url) blobUrlsRef.current.push(doc.url);
+          setSalarySlipPreviews((prev) => ({ ...prev, [`co_${idx}`]: doc }));
+        }
+      });
+    }
+
+    return () => {
+      isMounted = false;
+      blobUrlsRef.current.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {}
+      });
+      blobUrlsRef.current = [];
+    };
+  }, [appId, resolvedApplicationProductDetailsId, activeCount, salarySlipTypeId]);
+
+  const salarySlipDocumentPeople = [
+    {
+      label: 'Applicant',
+      previewUrl: salarySlipPreviews['applicant']?.url || null,
+      isPdf: salarySlipPreviews['applicant']?.isPdf || false,
+    },
+    ...form.coApplicants.map((_, index) => ({
+      label: `Co-Applicant ${index + 1}`,
+      previewUrl: salarySlipPreviews[`co_${index}`]?.url || null,
+      isPdf: salarySlipPreviews[`co_${index}`]?.isPdf || false,
+    })),
+  ];
 
   useEffect(() => {
     setForm(buildEmploymentState(getApplication(appId)));
@@ -429,8 +552,6 @@ export default function EmploymentIncome() {
           TotalExperience: Number(person.totalExperienceYears) || 0,
           GrossMonthlyIncome: parseAmountToNumber(person.grossMonthlyIncome),
           OtherMonthlyIncome: parseAmountToNumber(person.otherIncomeMonthly),
-          NetMonthlyIncome: parseAmountToNumber(person.netMonthlyIncome),
-          GrossAnnualIncome: parseAmountToNumber(person.grossAnnualIncome),
           CreatedBy: 1
         };
 
@@ -461,23 +582,41 @@ export default function EmploymentIncome() {
         } else if (currentEmpId) {
           claimedEmpRecordIds.add(currentEmpId);
         }
+
+        const backendNetMonthly = savedData?.netMonthlyIncome ?? savedData?.NetMonthlyIncome;
+        if (backendNetMonthly !== undefined && backendNetMonthly !== null && backendNetMonthly !== '') {
+          person.netMonthlyIncome = formatIndianAmount(backendNetMonthly);
+        }
+
+        const backendGrossAnnual = savedData?.grossAnnualIncome ?? savedData?.GrossAnnualIncome;
+        if (backendGrossAnnual !== undefined && backendGrossAnnual !== null && backendGrossAnnual !== '') {
+          person.grossAnnualIncome = formatIndianAmount(backendGrossAnnual);
+        }
       }
 
-      const finalApplicantEmpId = allPersons[0]?.employmentIncomeDetailsId || form.applicant?.employmentIncomeDetailsId || null;
+      const finalApplicant = {
+        ...form.applicant,
+        employmentIncomeDetailsId: allPersons[0]?.employmentIncomeDetailsId || form.applicant?.employmentIncomeDetailsId || null,
+        netMonthlyIncome: allPersons[0]?.netMonthlyIncome || form.applicant?.netMonthlyIncome || '',
+        grossAnnualIncome: allPersons[0]?.grossAnnualIncome || form.applicant?.grossAnnualIncome || '',
+      };
+
       const finalCoApplicants = form.coApplicants.map((co, i) => {
         let coEmpId = allPersons[i + 1]?.employmentIncomeDetailsId || co.employmentIncomeDetailsId || null;
-        if (coEmpId && coEmpId === finalApplicantEmpId) {
+        if (coEmpId && coEmpId === finalApplicant.employmentIncomeDetailsId) {
           coEmpId = null;
         }
         return {
           ...co,
           employmentIncomeDetailsId: coEmpId,
+          netMonthlyIncome: allPersons[i + 1]?.netMonthlyIncome || co.netMonthlyIncome || '',
+          grossAnnualIncome: allPersons[i + 1]?.grossAnnualIncome || co.grossAnnualIncome || '',
         };
       });
 
       const finalForm = {
         ...form,
-        applicant: { ...form.applicant, employmentIncomeDetailsId: finalApplicantEmpId },
+        applicant: finalApplicant,
         coApplicants: finalCoApplicants,
       };
 
@@ -529,6 +668,15 @@ export default function EmploymentIncome() {
             Back to Address Details
           </Button>
         }
+        metaAction={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDocsModal(true)}
+          >
+            View Salary Slip
+          </Button>
+        }
         footerHint={`Employment and income data is stored for ${activeCount > 1 ? `${activeCount} applicant records` : 'the applicant record'} on the same application.`}
       >
         <EmploymentCard
@@ -564,6 +712,104 @@ export default function EmploymentIncome() {
           />
         ))}
       </WizardSectionLayout>
+
+      <Modal 
+        show={showDocsModal} 
+        onHide={() => setShowDocsModal(false)} 
+        title="Salary Slip Document View"
+        size="lg"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '0 8px' }}>
+          {salarySlipDocumentPeople.map((person) => (
+            <div key={person.label} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 16px' }}>
+              <h4 style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>{person.label}</h4>
+              {person.previewUrl ? (
+                person.isPdf ? (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '350px',
+                      backgroundColor: '#ffffff',
+                      borderRadius: '6px',
+                      overflow: 'hidden',
+                      border: '1px solid #e2e8f0',
+                    }}
+                  >
+                    <iframe
+                      src={person.previewUrl}
+                      title={`${person.label} Salary Slip`}
+                      style={{ width: '100%', height: '100%', border: 'none' }}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '240px',
+                      backgroundColor: '#ffffff',
+                      borderRadius: '6px',
+                      overflow: 'hidden',
+                      border: '1px solid #e2e8f0',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    onClick={() => setFullViewDoc({ url: person.previewUrl, isPdf: false })}
+                    title="Click to view full size"
+                  >
+                    <img
+                      src={person.previewUrl}
+                      alt={`${person.label} Salary Slip`}
+                      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', transition: 'transform 0.2s' }}
+                      onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'}
+                      onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                    />
+                  </div>
+                )
+              ) : (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100px',
+                    backgroundColor: '#ffffff',
+                    borderRadius: '6px',
+                    border: '1px dashed #cbd5e1',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#64748b',
+                    fontSize: '13px'
+                  }}
+                >
+                  Salary Slip not available
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </Modal>
+
+      <Modal
+        show={Boolean(fullViewDoc)}
+        onHide={() => setFullViewDoc(null)}
+        title="Full View"
+        size="lg"
+      >
+        <div style={{ width: '100%', height: '70vh', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+          {fullViewDoc && (
+            fullViewDoc.isPdf ? (
+              <iframe
+                src={fullViewDoc.url}
+                title="Full View PDF"
+                style={{ width: '100%', height: '100%', border: 'none' }}
+              />
+            ) : (
+              <img src={fullViewDoc.url} alt="Full View" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+            )
+          )}
+        </div>
+      </Modal>
     </>
   );
 }

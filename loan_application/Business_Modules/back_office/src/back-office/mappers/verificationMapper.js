@@ -146,9 +146,16 @@ export function mapApplicationFullDetails(response, extraDocs = []) {
 
   const aadhaarDisplay = aadhaarLast4 ? `XXXX-XXXX-${aadhaarLast4}` : (getValue(applicantKyc, 'aadhaarNumber', 'AadhaarNumber') || 'Not Available');
 
+  const rawAppId =
+    getValue(customer, 'appId', 'AppId', 'App_Id') ||
+    getValue(productDetails, 'appId', 'AppId', 'App_Id') ||
+    getValue(response, 'appId', 'AppId', 'App_Id');
+  const cleanAppId = rawAppId && typeof rawAppId === 'string' && rawAppId.trim() !== '' ? rawAppId.trim() : null;
+
   // STEP 1: Application Details
   const applicationDetails = {
-    applicationNo: `APP-${agentCustomerId}`,
+    appId: cleanAppId,
+    applicationNo: cleanAppId || 'N/A',
     appliedDate: appliedDate ? String(appliedDate).slice(0, 10) : 'Not Available',
     loanProduct: getValue(productDetails, 'loanProductName', 'LoanProductName', 'loanProduct') || getValue(customer, 'loanType', 'LoanType') || 'Personal Loan',
     loanAmount: amount,
@@ -488,7 +495,9 @@ export function mapApplicationFullDetails(response, extraDocs = []) {
   return {
     customerId: String(agentCustomerId),
     agentCustomerId: agentCustomerId ? Number(agentCustomerId) : null,
-    applicationId: `APP-${agentCustomerId}`,
+    appId: cleanAppId,
+    applicationId: cleanAppId || 'N/A',
+    applicationNo: cleanAppId || 'N/A',
     applicationProductDetailsId: appProdId ? Number(appProdId) : null,
     customerName,
     mobile: mobile ? String(mobile).replace(/\D/g, '').slice(-10) : 'Not Available',

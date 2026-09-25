@@ -6,7 +6,7 @@ import {
   CreditCard, Package, Target, Repeat, User, Heart, Building, 
   Map, Building2, Briefcase, Landmark, Globe, MapPin, Link, 
   Layers, ShieldCheck, Home, Key, GraduationCap, Star, Contact, Shield, TrendingUp, LogOut, ArrowLeft,
-  Factory, Clock, Calculator, UserCheck, FileSpreadsheet, Activity
+  Factory, Clock, Calculator, UserCheck, FileSpreadsheet, Activity, FileCheck
 } from 'lucide-react';
 import { MasterModal } from '../masters/MasterModal/MasterModal';
 import './Navbar.css';
@@ -48,6 +48,7 @@ const MASTERS_MENU = [
   { label: 'RTR Norm Master', path: '/masters/rtr-norm-master', icon: FileSpreadsheet },
   { label: 'RTR Loan Status', path: '/masters/rtr-loan-status', icon: FileSpreadsheet },
   { label: 'Health Check Type', path: '/masters/health-check-type', icon: Activity },
+  { label: 'Proof Master', path: '/masters/proof-master', icon: FileCheck },
   { label: 'Company Configuration', path: '/company', icon: Building2 }
 ];
 

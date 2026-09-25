@@ -145,15 +145,20 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
     }
   }
 
+  const officialAppId = item.appId || item.AppId || item.App_Id || null;
+
   return {
     id: String(applicationId),
-    displayId: buildApplicationDisplayId(item, applicationId),
+    appId: officialAppId,
+    displayId: officialAppId || buildApplicationDisplayId(item, 'N/A'),
     customerName: item.fullName || item.customerName || '',
     mobile: normalizeMobile(item.mobileNumber || item.mobile || ''),
     loanType: item.loanProductName || item.loanPurposeName || item.loanType || '',
     amount: formatCurrency(item.expectedLoanAmount ?? item.amount),
     agentName: ownership.agentName,
     createdDate: formatDate(item.createdAt || item.createdDate),
+    createdAt: item.createdAt || item.createdDate || item.CreatedAt || item.CreatedDate || null,
+    rawCreatedAt: item.createdAt || item.createdDate || item.CreatedAt || item.CreatedDate || item.submittedAt || item.SubmittedAt || null,
     status: normalizedStatus,
     rawStatus: normalizedStatus,
     agentCustomerId: item.agentCustomerId || item.customerId || null,
@@ -668,14 +673,25 @@ export default function NewApplications({ initialFilter = 'All' }) {
   };
 
   const filteredData = useMemo(() => {
-    return applications.filter((app) => {
-      const matchesSearch =
-        app.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        app.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        app.mobile.includes(searchTerm);
-      const matchesStatus = statusFilter === 'All' || app.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
+    return applications
+      .filter((app) => {
+        const matchesSearch =
+          app.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (app.appId && app.appId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (app.displayId && app.displayId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          app.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          app.mobile.includes(searchTerm);
+        const matchesStatus = statusFilter === 'All' || app.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      })
+      .sort((a, b) => {
+        const timeA = new Date(a.rawCreatedAt || a.createdAt || a.createdDate || 0).getTime() || 0;
+        const timeB = new Date(b.rawCreatedAt || b.createdAt || b.createdDate || 0).getTime() || 0;
+        if (timeA !== timeB) return timeB - timeA;
+        const idA = Number(a.agentCustomerId ?? a.id ?? 0) || 0;
+        const idB = Number(b.agentCustomerId ?? b.id ?? 0) || 0;
+        return idB - idA;
+      });
   }, [applications, searchTerm, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));

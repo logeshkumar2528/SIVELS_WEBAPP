@@ -13,9 +13,9 @@ import logo from '../../../../../../Core/Logo_img/Logo.png'
 import './Sidebar.css'
 
 const menuItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, route: '/Agent/dashboard' },
-  { id: 'add-customer', label: 'Add Customer', icon: UserPlus, route: '/Agent/add-customer' },
-  { id: 'submission-history', label: 'Submission History', icon: History, route: '/Agent/submission-history' },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, route: '/Agent/dashboard', badgeKey: null },
+  { id: 'add-customer', label: 'Add Customer', icon: UserPlus, route: '/Agent/add-customer', badgeKey: null },
+  { id: 'submission-history', label: 'Submission History', icon: History, route: '/Agent/submission-history', badgeKey: 'submissionHistory' },
 ]
 
 const bottomItems = [
@@ -23,7 +23,7 @@ const bottomItems = [
   { id: 'logout', label: 'Logout', icon: LogOut, route: '/login' },
 ]
 
-function Sidebar({ isOpen = false, onClose }) {
+function Sidebar({ isOpen = false, onClose, badgeCounts = {} }) {
   const [showLogoutModal, setShowLogoutModal] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
@@ -90,6 +90,7 @@ function Sidebar({ isOpen = false, onClose }) {
             {menuItems.map((item) => {
               const Icon = item.icon
               const active = isActive(item.route)
+              const badgeCount = item.badgeKey ? badgeCounts[item.badgeKey] : null
 
               return (
                 <li key={item.id}>
@@ -101,6 +102,11 @@ function Sidebar({ isOpen = false, onClose }) {
                       <Icon size={17} strokeWidth={1.8} />
                     </span>
                     <span className="sidebar-nav-label">{item.label}</span>
+                    {badgeCount != null && badgeCount > 0 && (
+                      <span className="sidebar-badge sidebar-badge--pending" role="status">
+                        {badgeCount}
+                      </span>
+                    )}
                   </button>
                 </li>
               )

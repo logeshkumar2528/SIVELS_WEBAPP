@@ -93,7 +93,7 @@ export default function SubmitToCreditDetail() {
             <div className="stc-summary-head">
               <div className="stc-summary-title-group">
                 <h2>{verificationData.customerName || persInfo.fullName || 'Customer Application'}</h2>
-                <p>Application Reference: <strong>{appDetails.applicationNo || `APP-${customerId}`}</strong></p>
+                <p>Application Reference: <strong>{appDetails.appId || (appDetails.applicationNo && appDetails.applicationNo !== 'N/A' && !appDetails.applicationNo.startsWith('APP-') ? appDetails.applicationNo : (verificationData.appId || 'N/A'))}</strong></p>
               </div>
               <span className="stc-pill stc-pill--verified">
                 ✓ Ready for Review
@@ -103,7 +103,7 @@ export default function SubmitToCreditDetail() {
             <div className="stc-summary-grid">
               <div className="stc-summary-item">
                 <span className="stc-summary-label">Application Number</span>
-                <span className="stc-summary-value">{appDetails.applicationNo || `APP-${customerId}`}</span>
+                <span className="stc-summary-value">{appDetails.appId || (appDetails.applicationNo && appDetails.applicationNo !== 'N/A' && !appDetails.applicationNo.startsWith('APP-') ? appDetails.applicationNo : (verificationData.appId || 'N/A'))}</span>
               </div>
               <div className="stc-summary-item">
                 <span className="stc-summary-label">Customer Name</span>

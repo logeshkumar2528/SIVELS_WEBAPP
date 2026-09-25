@@ -279,11 +279,11 @@ export default function ReferenceDetails() {
     }
 
     saveApplication(appId, buildSectionUpdate(appData, 'references', form));
-    navigate(ROUTES.SCHEDULE_CHARGES.replace(':applicationId', appId));
+    navigate(ROUTES.COLLATERAL.replace(':applicationId', appId));
   };
 
   const handleBack = () => {
-    navigate(ROUTES.COLLATERAL.replace(':applicationId', appId));
+    navigate(ROUTES.BANK_EXISTING_LOANS.replace(':applicationId', appId));
   };
 
   return (
@@ -300,10 +300,10 @@ export default function ReferenceDetails() {
       appId={appId}
       appData={appData}
       steps={APPLICATION_WIZARD_STEPS}
-      activeStep={8}
-      title="Step 8: Reference Details"
+      activeStep={7}
+      title="Step 7: Reference Details"
       subtitle="Capture two reference contacts exactly as required in the PDF."
-      backLabel="Back to Collateral"
+      backLabel="Back to Banking"
       continueLabel="Save & Continue"
       onBack={handleBack}
       onContinue={handleContinue}
@@ -315,7 +315,7 @@ export default function ReferenceDetails() {
           icon={ArrowLeftIcon ? <ArrowLeftIcon size={14} /> : null}
           onClick={handleBack}
         >
-          Back to Collateral
+          Back to Banking
         </Button>
       }
     >
