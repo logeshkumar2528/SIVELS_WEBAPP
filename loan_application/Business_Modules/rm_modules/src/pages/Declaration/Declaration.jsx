@@ -168,6 +168,74 @@ function buildDeclarationState(appData) {
   };
 }
 
+export function buildVerificationList(appData = {}) {
+  const list = [];
+  if (!appData) return list;
+
+  // 1. Primary Applicant (Sequence 0)
+  const resolvedName = resolveApplicantName(appData);
+  const primaryName =
+    resolvedName && resolvedName !== 'Applicant'
+      ? resolvedName
+      : (appData.customerName || appData.fullName || appData.applicantName || 'Primary Applicant');
+
+  const primaryMobile =
+    appData.registration?.personalInformation?.applicant?.mobileNo ||
+    appData.registration?.personalInformation?.applicant?.mobileNumber ||
+    appData.personalInformation?.applicant?.mobileNo ||
+    appData.personalInformation?.applicant?.mobileNumber ||
+    appData.sections?.personalInformation?.applicant?.mobileNo ||
+    appData.sections?.personalInformation?.applicant?.mobileNumber ||
+    appData.applicant?.mobileNo ||
+    appData.applicant?.mobileNumber ||
+    appData.mobileNo ||
+    appData.mobileNumber ||
+    appData.mobile ||
+    '';
+
+  list.push({
+    id: 'applicant_0',
+    sequenceNo: 0,
+    role: 'Primary Applicant',
+    name: primaryName,
+    mobile: String(primaryMobile || '').trim(),
+    otpSent: false,
+    otp: '',
+    isVerified: false,
+  });
+
+  // 2. Co-Applicants (Sequence 1..N)
+  const coApplicantCount = getApplicantCount(appData);
+  const coApplicants =
+    appData.registration?.personalInformation?.coApplicants ||
+    appData.personalInformation?.coApplicants ||
+    appData.sections?.personalInformation?.coApplicants ||
+    appData.coApplicants ||
+    [];
+
+  for (let i = 0; i < coApplicantCount; i++) {
+    const co = (Array.isArray(coApplicants) && coApplicants[i]) || {};
+    const nameParts = [co.firstName, co.middleName, co.lastName]
+      .map((part) => String(part || '').trim())
+      .filter(Boolean);
+    const coName = nameParts.length > 0 ? nameParts.join(' ') : `Co-Applicant ${i + 1}`;
+    const coMobile = co.mobileNo || co.mobileNumber || co.mobile || '';
+
+    list.push({
+      id: `coApplicant_${i + 1}`,
+      sequenceNo: i + 1,
+      role: `Co-Applicant ${i + 1}`,
+      name: coName,
+      mobile: String(coMobile || '').trim(),
+      otpSent: false,
+      otp: '',
+      isVerified: false,
+    });
+  }
+
+  return list;
+}
+
 export default function Declaration() {
   const navigate = useNavigate();
   const { applicationId } = useParams();
@@ -177,7 +245,7 @@ export default function Declaration() {
   const [errors, setErrors] = useState({});
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [otpStep, setOtpStep] = useState('initial');
-  const [otpValue, setOtpValue] = useState('');
+  const [verificationList, setVerificationList] = useState([]);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [errorPopup, setErrorPopup] = useState(null);
 
@@ -290,6 +358,39 @@ export default function Declaration() {
     return nextErrors;
   };
 
+  const handleSendOtpForPerson = (personId) => {
+    setVerificationList((prev) =>
+      prev.map((item) => (item.id === personId ? { ...item, otpSent: true } : item))
+    );
+  };
+
+  const handleOtpChangeForPerson = (personId, value) => {
+    const numericOnly = String(value || '').replace(/\D/g, '');
+    setVerificationList((prev) =>
+      prev.map((item) => (item.id === personId ? { ...item, otp: numericOnly } : item))
+    );
+  };
+
+  const handleVerifyPerson = (personId) => {
+    setVerificationList((prev) => {
+      const nextList = prev.map((item) => {
+        if (item.id === personId) {
+          if (item.otp && item.otp.trim().length > 0) {
+            return { ...item, isVerified: true };
+          }
+        }
+        return item;
+      });
+
+      const allVerified = nextList.length > 0 && nextList.every((item) => item.isVerified);
+      if (allVerified) {
+        setOtpStep('success');
+      }
+
+      return nextList;
+    });
+  };
+
   const handleSubmit = () => {
     const validationErrors = validateDeclaration();
     setErrors(validationErrors);
@@ -305,7 +406,8 @@ export default function Declaration() {
 
     saveApplication(appId, buildSectionUpdate(appData, 'declaration', form));
     setOtpStep('confirm_creation');
-    setOtpValue('');
+    const latestData = getApplication(appId) || appData;
+    setVerificationList(buildVerificationList(latestData));
     setShowSubmitModal(true);
   };
 
@@ -683,8 +785,14 @@ export default function Declaration() {
         onHide={() => {
           if (otpStep !== 'success') setShowSubmitModal(false);
         }}
-        title={otpStep === 'confirm_creation' ? 'Confirm Account Creation' : 'Verify Mobile Number'}
-        size="sm"
+        title={
+          otpStep === 'confirm_creation'
+            ? 'Confirm Account Creation'
+            : otpStep === 'success'
+            ? 'Application Submitted'
+            : 'Verify Mobile Number'
+        }
+        size={otpStep === 'confirm_creation' || otpStep === 'success' ? 'sm' : 'md'}
         footer={
           otpStep === 'confirm_creation' ? (
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', width: '100%' }}>
@@ -707,7 +815,10 @@ export default function Declaration() {
               </Button>
             </div>
           ) : (
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+              <span style={{ fontSize: '12px', color: '#64748b' }}>
+                {verificationList.filter((p) => p.isVerified).length} of {verificationList.length} verified
+              </span>
               <Button variant="secondary" onClick={() => setShowSubmitModal(false)}>
                 Cancel
               </Button>
@@ -724,7 +835,7 @@ export default function Declaration() {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              height: '140px',
+              minHeight: '140px',
             }}
           >
             <div
@@ -755,7 +866,7 @@ export default function Declaration() {
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'center',
-              height: '140px',
+              minHeight: '120px',
             }}
           >
             <p
@@ -773,113 +884,214 @@ export default function Declaration() {
             </p>
           </div>
         ) : (
-          <div
-            style={{
-              padding: '16px 4px',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              height: '140px',
-            }}
-          >
-            <div>
-              <p
-                style={{
-                  color: '#475569',
-                  fontSize: '13px',
-                  marginBottom: '16px',
-                  lineHeight: '1.5',
-                  textAlign: 'center',
-                }}
-              >
-                Please verify the applicant's mobile number.
-              </p>
+          <div style={{ padding: '4px 0' }}>
+            <p
+              style={{
+                color: '#475569',
+                fontSize: '13px',
+                marginBottom: '16px',
+                lineHeight: '1.5',
+                textAlign: 'center',
+              }}
+            >
+              Please verify mobile number for all applicants before final submission.
+            </p>
 
-              <div className="aw-field" style={{ marginBottom: '0' }}>
-                <div className="aw-input-wrapper">
-                  <Phone className="aw-input-icon" size={14} />
-                  <input
-                    className="form-input aw-input aw-input--with-icon"
-                    value={
-                      otpStep === 'otp_sent'
-                        ? otpValue
-                        : appData.registration?.personalInformation?.applicant?.mobileNo ||
-                          appData.mobileNo ||
-                          appData.mobile ||
-                          ''
-                    }
-                    disabled={otpStep !== 'otp_sent'}
-                    placeholder={otpStep === 'otp_sent' ? 'Enter 4-digit OTP' : ''}
-                    onChange={(e) => {
-                      if (otpStep === 'otp_sent') {
-                        setOtpValue(e.target.value.replace(/[^\d]/g, ''));
-                      }
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                maxHeight: '360px',
+                overflowY: 'auto',
+                paddingRight: '4px',
+              }}
+            >
+              {verificationList.map((person) => {
+                const isPrimary = person.sequenceNo === 0;
+                return (
+                  <div
+                    key={person.id}
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: '8px',
+                      border: person.isVerified ? '1px solid #86efac' : '1px solid #e2e8f0',
+                      backgroundColor: person.isVerified ? '#f0fdf4' : '#f8fafc',
+                      transition: 'all 0.2s ease',
                     }}
-                    maxLength={otpStep === 'otp_sent' ? 4 : 10}
-                  />
-                  {otpStep === 'initial' && (
-                    <button
-                      type="button"
-                      onClick={() => setOtpStep('otp_sent')}
+                  >
+                    <div
                       style={{
-                        position: 'absolute',
-                        right: '4px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        padding: '4px 12px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        background: '#0F7A4C',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        zIndex: 10,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '8px',
                       }}
                     >
-                      Send OTP
-                    </button>
-                  )}
-                  {otpStep === 'otp_sent' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (otpValue.length === 4) {
-                          setOtpStep('success');
-                        }
-                      }}
-                      disabled={otpValue.length < 4}
-                      style={{
-                        position: 'absolute',
-                        right: '4px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        padding: '4px 12px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        background: '#0F7A4C',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        zIndex: 10,
-                        opacity: otpValue.length < 4 ? 0.5 : 1,
-                      }}
-                    >
-                      Verify
-                    </button>
-                  )}
-                </div>
-                {otpStep === 'otp_sent' && (
-                  <p style={{ fontSize: '11px', color: '#64748b', marginTop: '6px', textAlign: 'center' }}>
-                    OTP sent to{' '}
-                    {appData.registration?.personalInformation?.applicant?.mobileNo ||
-                      appData.mobileNo ||
-                      appData.mobile ||
-                      ''}
-                  </p>
-                )}
-              </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            backgroundColor: isPrimary ? '#e0f2fe' : '#f1f5f9',
+                            color: isPrimary ? '#0369a1' : '#475569',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.3px',
+                          }}
+                        >
+                          {person.role}
+                        </span>
+                        <strong style={{ fontSize: '13px', color: '#1e293b' }}>{person.name}</strong>
+                      </div>
+                      {person.isVerified ? (
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            color: '#16a34a',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                          }}
+                        >
+                          <CheckCircle size={14} /> Verified
+                        </span>
+                      ) : !person.mobile ? (
+                        <span style={{ color: '#ef4444', fontSize: '11px', fontStyle: 'italic' }}>
+                          No mobile number
+                        </span>
+                      ) : (
+                        <span
+                          style={{
+                            color: '#64748b',
+                            fontSize: '12px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
+                        >
+                          <Phone size={12} /> {person.mobile}
+                        </span>
+                      )}
+                    </div>
+
+                    {person.isVerified ? (
+                      <div style={{ fontSize: '12px', color: '#15803d', marginTop: '4px' }}>
+                        Mobile verification completed
+                      </div>
+                    ) : !person.mobile ? (
+                      <div style={{ fontSize: '12px', color: '#dc2626', marginTop: '4px' }}>
+                        Mobile number unavailable in application data.
+                      </div>
+                    ) : !person.otpSent ? (
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginTop: '8px',
+                          gap: '8px',
+                        }}
+                      >
+                        <span style={{ fontSize: '12px', color: '#64748b' }}>
+                          Click Send OTP to receive verification code
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleSendOtpForPerson(person.id)}
+                          style={{
+                            padding: '5px 12px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            background: '#0F7A4C',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            flexShrink: 0,
+                          }}
+                        >
+                          Send OTP
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ marginTop: '8px' }}>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <div style={{ position: 'relative', flex: 1 }}>
+                            <input
+                              type="text"
+                              className="form-input aw-input"
+                              style={{
+                                height: '34px',
+                                fontSize: '12.5px',
+                                padding: '0 10px',
+                                width: '100%',
+                              }}
+                              placeholder="Enter OTP (e.g. 1234)"
+                              value={person.otp}
+                              onChange={(e) => handleOtpChangeForPerson(person.id, e.target.value)}
+                              maxLength={6}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleVerifyPerson(person.id)}
+                            disabled={!person.otp || person.otp.trim().length === 0}
+                            style={{
+                              padding: '5px 14px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              background: '#0F7A4C',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor:
+                                !person.otp || person.otp.trim().length === 0
+                                  ? 'not-allowed'
+                                  : 'pointer',
+                              opacity: !person.otp || person.otp.trim().length === 0 ? 0.5 : 1,
+                              height: '34px',
+                              flexShrink: 0,
+                            }}
+                          >
+                            Verify
+                          </button>
+                        </div>
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginTop: '4px',
+                          }}
+                        >
+                          <span style={{ fontSize: '11px', color: '#64748b' }}>
+                            OTP sent to {person.mobile}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleSendOtpForPerson(person.id)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#0F7A4C',
+                              fontSize: '11px',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              textDecoration: 'underline',
+                              padding: 0,
+                            }}
+                          >
+                            Resend OTP
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
