@@ -10,6 +10,7 @@ import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { formatDateTime, toIstDateInput } from '../../utils/dateHelper';
 import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
 import { isApplicantDocumentTuple } from '../KycDocuments/kycDocumentState';
+import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import './PdfView.css';
 import LogoImage from '../../assets/logo/Navbar_logo/Logo.jpg';
 
@@ -1672,6 +1673,18 @@ export default function PdfView() {
   const chargesData = appData.scheduleCharges || appData.sections?.scheduleCharges || {};
   const declarationData = appData.declaration || appData.sections?.declaration || {};
 
+  const ownership = useMemo(() => {
+    return resolveApplicationOwnership({
+      ...appData,
+      ...(liveCustomer || {}),
+      rmName: liveRM?.name || appData?.rmName,
+      rmCode: liveRM?.employeeId || appData?.rmCode,
+      agentName: liveRM?.agentName || liveCustomer?.agentName || appData?.agentName,
+      agentId: liveRM?.agentId ?? liveCustomer?.agentId ?? appData?.agentId,
+      createdByRole: liveCustomer?.createdByRole || appData?.createdByRole,
+    });
+  }, [appData, liveCustomer, liveRM]);
+
   // Resolved Customer Header Info
   const customerDisplayName =
     composeFullName(applicant) ||
@@ -1680,10 +1693,41 @@ export default function PdfView() {
     appData.customerName ||
     '';
 
+  const resolvedApplicantName = customerDisplayName || 'Applicant';
+  const resolvedApplicantDisplayId = applicationDisplayId || buildApplicationDisplayId(appData, applicationId) || applicationId || '-';
+
   const loanAmount = appData.loanAmount || liveCustomer?.expectedLoanAmount || '';
   const loanTenure = appData.loanTenureMonths || appData.loanTenure || '';
-  const resolvedRMName = appData.rmName || '-';
-  const resolvedEmployeeId = appData.rmCode || '-';
+
+  // Resolved RM Info
+  const resolvedRMName =
+    liveRM?.name ||
+    (ownership.rmName && ownership.rmName !== '—' ? ownership.rmName : '') ||
+    appData.rmName ||
+    '-';
+
+  const resolvedEmployeeId =
+    liveRM?.employeeId ||
+    appData.rmCode ||
+    (ownership.rmId ? (String(ownership.rmId).startsWith('RM') ? String(ownership.rmId) : `RM${ownership.rmId}`) : '') ||
+    '-';
+
+  // Resolved Agent / Sourcing Info
+  const isAgentCreated = Boolean(ownership.isAgentCreated);
+  const resolvedAgentName =
+    (ownership.agentName && ownership.agentName !== '—' && ownership.agentName !== 'Direct (RM)' ? ownership.agentName : '') ||
+    liveRM?.agentName ||
+    liveCustomer?.agentName ||
+    appData.agentName ||
+    '-';
+
+  const resolvedAgentCode =
+    appData.agentCode ||
+    liveCustomer?.agentCode ||
+    (ownership.agentId ? (String(ownership.agentId).startsWith('AG') ? String(ownership.agentId) : `AG${ownership.agentId}`) : '') ||
+    '-';
+
+  const resolvedSourceType = isAgentCreated ? 'Field Agent' : 'RM';
 
   // Resolved Applicant Signature & Date (Uses real backend identity)
   const resolvedApplicantSignature = customerDisplayName || '-';
@@ -1692,7 +1736,7 @@ export default function PdfView() {
     (!isObsoleteMock(declarationData.applicantDate) && declarationData.applicantDate) || '-';
 
   // Resolved RM Signature & Date
-  const resolvedRMSignature = appData.rmName || '-';
+  const resolvedRMSignature = resolvedRMName || appData.rmName || '-';
 
   const resolvedRMDate =
     (!isObsoleteMock(declarationData.ackDate) && declarationData.ackDate) || '-';
@@ -2054,18 +2098,55 @@ export default function PdfView() {
             CONTINUOUS SINGLE LONG PAGE LOAN APPLICATION FORM
         ==================================================================== */}
         <div className="pdf-page-continuous">
-          {/* HEADER */}
-          <div className="pdf-header">
-            <div className="pdf-title-box">
-              <h1>
-                LOAN APPLICATION FORM :-
-                <br />
-                {applicationDisplayId}
-              </h1>
-              <p>(Please Read the Guidelines on the last page)</p>
+          {/* TOP SUMMARY */}
+          <div className="pdf-top-summary">
+            {/* Block 1: Logo */}
+            <div className="pdf-summary-block pdf-summary-logo-block">
+              <img src={LogoImage} alt="Sivels Finance Logo" />
             </div>
-            <div className="pdf-logo">
-              <img src={LogoImage} alt="Logo" />
+
+            {/* Block 2: Applicant */}
+            <div className="pdf-summary-block">
+              <div className="pdf-summary-label">APPLICANT</div>
+              <div className="pdf-summary-name" title={resolvedApplicantName}>
+                {resolvedApplicantName}
+              </div>
+              <div className="pdf-summary-id" title={`ID: ${resolvedApplicantDisplayId}`}>
+                ID: {resolvedApplicantDisplayId}
+              </div>
+            </div>
+
+            {/* Block 3: RM */}
+            <div className="pdf-summary-block">
+              <div className="pdf-summary-label">RM</div>
+              <div className="pdf-summary-name" title={resolvedRMName}>
+                {resolvedRMName}
+              </div>
+              <div className="pdf-summary-id" title={`ID: ${resolvedEmployeeId}`}>
+                ID: {resolvedEmployeeId}
+              </div>
+            </div>
+
+            {/* Block 4: Agent / Source */}
+            <div className="pdf-summary-block">
+              {isAgentCreated ? (
+                <>
+                  <div className="pdf-summary-label">AGENT</div>
+                  <div className="pdf-summary-name" title={resolvedAgentName}>
+                    {resolvedAgentName}
+                  </div>
+                  <div className="pdf-summary-id" title={`ID: ${resolvedAgentCode}`}>
+                    ID: {resolvedAgentCode}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="pdf-summary-label">SOURCE</div>
+                  <div className="pdf-summary-name" title="Direct (RM)">
+                    Direct (RM)
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -2074,10 +2155,8 @@ export default function PdfView() {
           <div className="pdf-office-use">
             <div className="pdf-office-left">
               <div className="pdf-office-row">
-                <span className="pdf-office-label">Sourcing Channel:</span>
-                <div className="pdf-office-value">
-                  {resolveSourcingChannel(appData.sourcingChannel || sourcingData.sourcingChannel) || '-'}
-                </div>
+                <span className="pdf-office-label">Source Type:</span>
+                <div className="pdf-office-value">{resolvedSourceType}</div>
               </div>
               <div className="pdf-office-row">
                 <span className="pdf-office-label">Loan Product:</span>
@@ -2093,9 +2172,15 @@ export default function PdfView() {
                 </div>
               </div>
               <div className="pdf-office-row">
-                <span className="pdf-office-label">Loan Amount & Tenure:</span>
+                <span className="pdf-office-label">Loan Amount:</span>
                 <div className="pdf-office-value">
-                  Rs. {loanAmount || '-'} for {loanTenure ? `${loanTenure} months` : '-'}
+                  {loanAmount ? (String(loanAmount).startsWith('Rs.') ? loanAmount : `Rs. ${isNaN(Number(String(loanAmount).replace(/,/g, ''))) ? loanAmount : Number(String(loanAmount).replace(/,/g, '')).toLocaleString('en-IN')}`) : '-'}
+                </div>
+              </div>
+              <div className="pdf-office-row">
+                <span className="pdf-office-label">Tenure:</span>
+                <div className="pdf-office-value">
+                  {loanTenure ? (String(loanTenure).toLowerCase().includes('month') ? loanTenure : `${loanTenure} Months`) : '-'}
                 </div>
               </div>
             </div>
@@ -2751,15 +2836,7 @@ export default function PdfView() {
           <table className="pdf-table">
             <tbody>
               <tr>
-                <td className="pdf-row-header">Sourcing Channel</td>
-                <td>{resolveSourcingChannel(appData.sourcingChannel || sourcingData.sourcingChannel) || '-'}</td>
-                <td className="pdf-row-header">Sourced By (RM Name)</td>
-                <td>{resolvedRMName || '-'}</td>
-              </tr>
-              <tr>
-                <td className="pdf-row-header">Employee ID</td>
-                <td>{resolvedEmployeeId || '-'}</td>
-                <td className="pdf-row-header">Admin Fee Status</td>
+                <td className="pdf-row-header" style={{ width: '25%' }}>Admin Fee Status</td>
                 <td>{chargesData.adminFeePaid ? 'Paid' : 'Pending / Not Applicable'}</td>
               </tr>
             </tbody>
