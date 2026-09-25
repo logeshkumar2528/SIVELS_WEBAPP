@@ -694,3 +694,232 @@ export async function resolveLatestCoApplicantAadhaar({
 export const loadApplicantAadhaarUrl = resolveLatestApplicantAadhaar;
 export const loadCoApplicantAadhaarUrl = resolveLatestCoApplicantAadhaar;
 
+/**
+ * Downloads a document as a Blob from a given URL and converts it into a browser Object URL
+ * along with format metadata (isPdf, mimeType).
+ * Treats 404 silently as an expected empty state without console logging.
+ */
+export async function fetchDocumentBlobWithMeta(url, headers = {}, fallbackFileName = '') {
+  if (!url) return null;
+  const cacheKey = `meta:${url}`;
+  if (blobUrlCache.has(cacheKey)) {
+    return blobUrlCache.get(cacheKey);
+  }
+
+  const fetchPromise = (async () => {
+    try {
+      const res = await fetch(url, { headers });
+      if (res.status === 404 || !res.ok) {
+        return null;
+      }
+      const blob = await res.blob();
+      if (!blob || blob.size === 0) return null;
+
+      const ext = String(fallbackFileName || url).split('?')[0].split('.').pop()?.toLowerCase();
+      let mimeType = blob.type || 'image/jpeg';
+      if (mimeType === 'application/octet-stream' || !mimeType) {
+        if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+        else if (ext === 'png') mimeType = 'image/png';
+        else if (ext === 'webp') mimeType = 'image/webp';
+        else if (ext === 'pdf') mimeType = 'application/pdf';
+      }
+      const isPdf = mimeType === 'application/pdf' || ext === 'pdf';
+      const typedBlob = new Blob([blob], { type: mimeType });
+      const objectUrl = URL.createObjectURL(typedBlob);
+      return { url: objectUrl, isPdf, mimeType };
+    } catch {
+      return null;
+    }
+  })();
+
+  blobUrlCache.set(cacheKey, fetchPromise);
+  return fetchPromise;
+}
+
+/**
+ * Generic Financial Document Resolver (Salary Slip & Bank Statement).
+ * Supports both Primary Applicant (seq 0) and Co-Applicants (seq 1..N).
+ *
+ * Priority Order:
+ * 1. Application-Level Tuple (Authoritative Replacement / Resubmitted Document):
+ *    GET /ApplicationKYCDocuments/applicant-document?applicationProductDetailsId={id}&applicantSequence={seq}&documentTypeId={typeId}
+ *    If tuple exists and has documentPath -> download via /ApplicationKYCDocuments/download?path={cleanPath}
+ * 2. Initial Draft Fallback (ONLY if tuple is 404 / not yet created):
+ *    GET /AgentCustomerDocument/bycustomer/{customerId}
+ *    Match sequence and documentTypeId / document category.
+ * 3. Fallback: null (Displays "Document not available")
+ */
+export async function resolveFinancialDocument({
+  appData = {},
+  appId = '',
+  applicationProductDetailsId = null,
+  sequence = 0,
+  documentTypeId = null,
+  documentCategory = '', // 'Salary Slip' | 'Bank Statement'
+  baseUrl = '',
+  headers = {},
+}) {
+  const finalBaseUrl = (baseUrl || import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
+  const seq = Number(sequence) || 0;
+
+  const prodDetailsId =
+    applicationProductDetailsId ||
+    appData?.applicationProductDetailsId ||
+    appData?.ApplicationProductDetailsId ||
+    appData?.sections?.productDetails?.applicationProductDetailsId ||
+    appData?.productDetails?.applicationProductDetailsId ||
+    null;
+
+  const resolvedTypeId =
+    documentTypeId !== null && documentTypeId !== undefined && !isNaN(Number(documentTypeId)) && Number(documentTypeId) > 0
+      ? Number(documentTypeId)
+      : null;
+
+  // Priority 1: Check Application-level tuple if product details ID and documentTypeId are available
+  if (prodDetailsId && resolvedTypeId) {
+    try {
+      const tupleRes = await fetch(
+        `${finalBaseUrl}/ApplicationKYCDocuments/applicant-document?applicationProductDetailsId=${encodeURIComponent(prodDetailsId)}&applicantSequence=${encodeURIComponent(seq)}&documentTypeId=${encodeURIComponent(resolvedTypeId)}`,
+        { headers }
+      );
+
+      if (tupleRes.ok) {
+        const contentType = tupleRes.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const tupleDoc = await tupleRes.json();
+          const docPath = tupleDoc?.documentPath || tupleDoc?.DocumentPath || tupleDoc?.filePath || tupleDoc?.FilePath;
+          if (docPath) {
+            const cleanPath = String(docPath).replace(/^[\\/]+/, '').replace(/\\/g, '/');
+            const docResult = await fetchDocumentBlobWithMeta(
+              `${finalBaseUrl}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`,
+              headers,
+              docPath
+            );
+            if (docResult) return docResult;
+          }
+        } else {
+          const blob = await tupleRes.blob();
+          if (blob && blob.size > 0) {
+            let mimeType = blob.type || 'image/jpeg';
+            if (mimeType === 'application/octet-stream') mimeType = 'image/jpeg';
+            const isPdf = mimeType === 'application/pdf';
+            const typedBlob = new Blob([blob], { type: mimeType });
+            return { url: URL.createObjectURL(typedBlob), isPdf, mimeType };
+          }
+        }
+      } else if (tupleRes.status !== 404) {
+        // If non-404 error (e.g. 500), do not silently fallback to stale agent docs
+        return null;
+      }
+    } catch (err) {
+      console.warn(`Error resolving application tuple for seq ${seq}, type ${resolvedTypeId}:`, err);
+    }
+  }
+
+  // Priority 2: Initial Draft Fallback (Agent customer document) ONLY if tuple not found (404 or missing prodId)
+  const customerId =
+    appId ||
+    appData?.agentCustomerId ||
+    appData?.AgentCustomerId ||
+    appData?.customerId ||
+    appData?.CustomerId ||
+    null;
+
+  if (customerId) {
+    try {
+      let custDocs = agentCustDocsCache.get(String(customerId));
+      if (!custDocs) {
+        const agentDocRes = await fetch(`${finalBaseUrl}/AgentCustomerDocument/bycustomer/${encodeURIComponent(customerId)}`, { headers });
+        if (agentDocRes.ok) {
+          const data = await agentDocRes.json();
+          custDocs = Array.isArray(data) ? data : (data?.value ?? data?.data ?? []);
+          agentCustDocsCache.set(String(customerId), custDocs);
+        } else {
+          custDocs = [];
+        }
+      }
+
+      if (Array.isArray(custDocs) && custDocs.length > 0) {
+        const normalizedCategory = String(documentCategory || '').trim().toLowerCase();
+        
+        const matched = custDocs.find((d) => {
+          if (!d || d.isActive === false || d.IsActive === false) return false;
+
+          // Sequence match
+          const dSeq = d.applicantSequence !== undefined && d.applicantSequence !== null ? Number(d.applicantSequence) : (d.ApplicantSequence !== undefined && d.ApplicantSequence !== null ? Number(d.ApplicantSequence) : 0);
+          if (dSeq !== seq) return false;
+
+          // Type ID match
+          const dTypeId = Number(d.documentTypeId ?? d.DocumentTypeId);
+          if (resolvedTypeId && Number.isFinite(dTypeId) && dTypeId === resolvedTypeId) {
+            return true;
+          }
+
+          // Category name match fallback
+          if (normalizedCategory) {
+            const dName = String(d.documentTypeName || d.documentName || d.name || '').toLowerCase();
+            const dCode = String(d.documentTypeCode || d.code || '').toLowerCase();
+            if (normalizedCategory.includes('salary') && (dName.includes('salary') || dCode.includes('salary') || dName.includes('income'))) return true;
+            if (normalizedCategory.includes('bank') && (dName.includes('bank') || dCode.includes('bank') || dName.includes('statement'))) return true;
+          }
+
+          return false;
+        });
+
+        if (matched) {
+          const docPath = matched.documentPath || matched.DocumentPath || matched.filePath || matched.FilePath;
+          if (docPath) {
+            const cleanPath = String(docPath).replace(/^[\\/]+/, '').replace(/\\/g, '/');
+            const docResult = await fetchDocumentBlobWithMeta(
+              `${finalBaseUrl}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`,
+              headers,
+              docPath
+            );
+            if (docResult) return docResult;
+          }
+        }
+      }
+    } catch (agentErr) {
+      console.warn(`Error resolving agent customer document for seq ${seq}:`, agentErr);
+    }
+  }
+
+  // Priority 3: Document not available
+  return null;
+}
+
+export async function resolveLatestApplicantSalarySlip(params) {
+  return resolveFinancialDocument({
+    ...params,
+    sequence: 0,
+    documentCategory: 'Salary Slip',
+  });
+}
+
+export async function resolveLatestCoApplicantSalarySlip(params) {
+  const seq = (params.coIndex !== undefined && params.coIndex !== null) ? (params.coIndex + 1) : (params.sequence || 1);
+  return resolveFinancialDocument({
+    ...params,
+    sequence: seq,
+    documentCategory: 'Salary Slip',
+  });
+}
+
+export async function resolveLatestApplicantBankStatement(params) {
+  return resolveFinancialDocument({
+    ...params,
+    sequence: 0,
+    documentCategory: 'Bank Statement',
+  });
+}
+
+export async function resolveLatestCoApplicantBankStatement(params) {
+  const seq = (params.coIndex !== undefined && params.coIndex !== null) ? (params.coIndex + 1) : (params.sequence || 1);
+  return resolveFinancialDocument({
+    ...params,
+    sequence: seq,
+    documentCategory: 'Bank Statement',
+  });
+}
+
+

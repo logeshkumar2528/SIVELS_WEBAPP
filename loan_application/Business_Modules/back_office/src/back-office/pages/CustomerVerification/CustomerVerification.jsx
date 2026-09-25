@@ -895,12 +895,12 @@ export default function CustomerVerification() {
   const applicantKycRecord = mainApplicantKyc.row;
   const applicantKycId = mainApplicantKyc.id;
 
-  // Dynamic Co-Applicants extraction (supports 0, 1, 2, 3+ co-applicants based strictly on configured count)
+  // Dynamic Co-Applicants extraction (supports 0, 1, 2, 3+ co-applicants based on configured count or deduced sequence records)
   const coApplicants = useMemo(() => {
     const coPersonalList = resolvedPersonalList.slice(1);
     const coKycList = resolvedKycList.slice(1);
 
-    // Authoritative configured co-applicant count from Application / Product Details
+    // 1. Authoritative configured co-applicant count from Application / Product Details
     const rawConfiguredCount =
       verificationData?.applicationDetails?.coApplicantCount ??
       verificationData?.application?.noOfCoApplicants ??
@@ -908,9 +908,67 @@ export default function CustomerVerification() {
       verificationData?.raw?.productDetails?.noOfCoApplicants ??
       verificationData?.raw?.ProductDetails?.[0]?.NoOfCoApplicants ??
       verificationData?.raw?.ProductDetails?.NoOfCoApplicants ??
-      0;
+      null;
 
-    const count = Math.max(0, parseInt(rawConfiguredCount, 10) || 0);
+    const parsedConfiguredCount =
+      rawConfiguredCount !== null && rawConfiguredCount !== undefined && rawConfiguredCount !== ''
+        ? parseInt(rawConfiguredCount, 10)
+        : null;
+
+    let count = 0;
+
+    if (parsedConfiguredCount !== null && !isNaN(parsedConfiguredCount) && parsedConfiguredCount > 0) {
+      // Use explicit configured count when valid and positive
+      count = parsedConfiguredCount;
+    } else {
+      // 2. Otherwise derive actual Co-Applicant presence from existing sequence-bearing records
+      const coAppSequences = new Set();
+
+      // Scan resolved KYC records (excluding non-applicant document tuples & inactive rows)
+      (resolvedKycList || []).forEach((k) => {
+        if (!k || k.isActive === false || k.IsActive === false || isApplicantDocumentTuple(k)) return;
+        const rawSeq = k.applicantSequence ?? k.ApplicantSequence;
+        if (rawSeq !== undefined && rawSeq !== null && !isNaN(Number(rawSeq))) {
+          const seq = Number(rawSeq);
+          if (Number.isInteger(seq) && seq > 0) {
+            coAppSequences.add(seq);
+          }
+        }
+      });
+
+      // Scan resolved Personal Information records
+      (resolvedPersonalList || []).forEach((p, idx) => {
+        if (!p || p.isActive === false || p.IsActive === false) return;
+        const rawSeq = p.applicantSequence ?? p.ApplicantSequence;
+        if (rawSeq !== undefined && rawSeq !== null && !isNaN(Number(rawSeq))) {
+          const seq = Number(rawSeq);
+          if (Number.isInteger(seq) && seq > 0) {
+            coAppSequences.add(seq);
+          }
+        } else if (idx > 0) {
+          // Positional contract for personal records where index 0 is Primary Applicant
+          coAppSequences.add(idx);
+        }
+      });
+
+      // Scan other existing raw sections for sequence properties (address, employment, banking)
+      ['addressDetails', 'employmentIncome', 'bankExistingLoans'].forEach((sectionKey) => {
+        const sectionData = verificationData?.raw?.[sectionKey] || verificationData?.[sectionKey]?.raw;
+        const arr = Array.isArray(sectionData) ? sectionData : (sectionData ? [sectionData] : []);
+        arr.forEach((item) => {
+          if (!item || item.isActive === false || item.IsActive === false) return;
+          const rawSeq = item.applicantSequence ?? item.ApplicantSequence;
+          if (rawSeq !== undefined && rawSeq !== null && !isNaN(Number(rawSeq))) {
+            const seq = Number(rawSeq);
+            if (Number.isInteger(seq) && seq > 0) {
+              coAppSequences.add(seq);
+            }
+          }
+        });
+      });
+
+      count = coAppSequences.size > 0 ? Math.max(...coAppSequences) : 0;
+    }
 
     const result = [];
     for (let i = 0; i < count; i++) {

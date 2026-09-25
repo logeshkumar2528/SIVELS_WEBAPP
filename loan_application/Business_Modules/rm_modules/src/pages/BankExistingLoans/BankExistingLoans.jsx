@@ -14,8 +14,11 @@ import {
   buildSectionUpdate,
   getApplicantCount,
   getSectionState,
+  resolveLatestApplicantBankStatement,
+  resolveLatestCoApplicantBankStatement,
 } from '../applicationWizard/flowUtils';
 import { formatIndianAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
+import { resolveDocumentTypeId } from '../../../../../Core/src/utils/documentTypeHelper';
 
 function hasMeaningfulBankData(bank) {
   if (!bank) return false;
@@ -713,6 +716,12 @@ export default function BankExistingLoans() {
   const [isLoadingMasters, setIsLoadingMasters] = useState(false);
   const [bankOptions, setBankOptions] = useState([]);
   const [branchOptions, setBranchOptions] = useState([]);
+  const [documentTypeOptions, setDocumentTypeOptions] = useState([]);
+
+  const [showDocsModal, setShowDocsModal] = useState(false);
+  const [fullViewDoc, setFullViewDoc] = useState(null);
+  const [bankStatementPreviews, setBankStatementPreviews] = useState({});
+  const blobUrlsRef = useRef([]);
 
   useEffect(() => {
     async function fetchMaster(endpoint, idField, nameField, setStateFunc) {
@@ -733,6 +742,7 @@ export default function BankExistingLoans() {
       await Promise.allSettled([
         fetchMaster('masters/bank/active', 'bankId', 'bankName', setBankOptions),
         fetchMaster('BankBranch', 'bankBranchId', 'branchName', setBranchOptions),
+        fetchMaster('DocumentTypeMaster', 'documentTypeId', 'documentTypeName', setDocumentTypeOptions),
       ]);
       setIsLoadingMasters(false);
     }
@@ -943,6 +953,87 @@ export default function BankExistingLoans() {
   const appData = useMemo(() => getApplication(appId), [getApplication, appId]);
   const activeCount = useMemo(() => getApplicantCount(appData), [appData]);
   const ArrowLeftIcon = iconMap['ArrowLeft'];
+
+  const resolvedApplicationProductDetailsId = useMemo(() => {
+    const raw =
+      appData?.applicationProductDetailsId ??
+      appData?.ApplicationProductDetailsId ??
+      appData?.sections?.productDetails?.applicationProductDetailsId ??
+      appData?.productDetails?.applicationProductDetailsId ??
+      null;
+    const num = Number(raw);
+    return Number.isFinite(num) && num > 0 ? num : null;
+  }, [appData]);
+
+  const bankStatementTypeId = useMemo(
+    () => resolveDocumentTypeId(documentTypeOptions, 'Bank Statement'),
+    [documentTypeOptions]
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+    const token = localStorage.getItem('authToken');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
+
+    // 1. Load Applicant Bank Statement
+    resolveLatestApplicantBankStatement({
+      appData,
+      appId,
+      applicationProductDetailsId: resolvedApplicationProductDetailsId,
+      documentTypeId: bankStatementTypeId,
+      baseUrl,
+      headers,
+    }).then((doc) => {
+      if (isMounted && doc) {
+        if (doc.url) blobUrlsRef.current.push(doc.url);
+        setBankStatementPreviews((prev) => ({ ...prev, applicant: doc }));
+      }
+    });
+
+    // 2. Load Co-Applicants Bank Statement
+    for (let idx = 0; idx < activeCount; idx++) {
+      resolveLatestCoApplicantBankStatement({
+        coIndex: idx,
+        appData,
+        appId,
+        applicationProductDetailsId: resolvedApplicationProductDetailsId,
+        documentTypeId: bankStatementTypeId,
+        baseUrl,
+        headers,
+      }).then((doc) => {
+        if (isMounted && doc) {
+          if (doc.url) blobUrlsRef.current.push(doc.url);
+          setBankStatementPreviews((prev) => ({ ...prev, [`co_${idx}`]: doc }));
+        }
+      });
+    }
+
+    return () => {
+      isMounted = false;
+      blobUrlsRef.current.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {}
+      });
+      blobUrlsRef.current = [];
+    };
+  }, [appId, resolvedApplicationProductDetailsId, activeCount, bankStatementTypeId]);
+
+  const bankStatementDocumentPeople = [
+    {
+      label: 'Applicant',
+      previewUrl: bankStatementPreviews['applicant']?.url || null,
+      isPdf: bankStatementPreviews['applicant']?.isPdf || false,
+    },
+    ...form.coApplicants.map((_, index) => ({
+      label: `Co-Applicant ${index + 1}`,
+      previewUrl: bankStatementPreviews[`co_${index}`]?.url || null,
+      isPdf: bankStatementPreviews[`co_${index}`]?.isPdf || false,
+    })),
+  ];
 
   const persist = (nextForm) => {
     setForm(nextForm);
@@ -1928,6 +2019,15 @@ export default function BankExistingLoans() {
             Back to Employment & Income
           </Button>
         }
+        metaAction={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDocsModal(true)}
+          >
+            View Bank Statement
+          </Button>
+        }
         footerHint={`Bank information is stored for the same application ID. ${activeCount > 0 ? `${activeCount + 1} applicant records are linked.` : 'Only the applicant record is linked.'}`}
       >
         <PersonBankingSection
@@ -2246,6 +2346,104 @@ export default function BankExistingLoans() {
           </div>
         </Modal>
       </WizardSectionLayout>
+
+      <Modal 
+        show={showDocsModal} 
+        onHide={() => setShowDocsModal(false)} 
+        title="Bank Statement Document View"
+        size="lg"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '0 8px' }}>
+          {bankStatementDocumentPeople.map((person) => (
+            <div key={person.label} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 16px' }}>
+              <h4 style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>{person.label}</h4>
+              {person.previewUrl ? (
+                person.isPdf ? (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '350px',
+                      backgroundColor: '#ffffff',
+                      borderRadius: '6px',
+                      overflow: 'hidden',
+                      border: '1px solid #e2e8f0',
+                    }}
+                  >
+                    <iframe
+                      src={person.previewUrl}
+                      title={`${person.label} Bank Statement`}
+                      style={{ width: '100%', height: '100%', border: 'none' }}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '240px',
+                      backgroundColor: '#ffffff',
+                      borderRadius: '6px',
+                      overflow: 'hidden',
+                      border: '1px solid #e2e8f0',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    onClick={() => setFullViewDoc({ url: person.previewUrl, isPdf: false })}
+                    title="Click to view full size"
+                  >
+                    <img
+                      src={person.previewUrl}
+                      alt={`${person.label} Bank Statement`}
+                      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', transition: 'transform 0.2s' }}
+                      onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'}
+                      onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                    />
+                  </div>
+                )
+              ) : (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100px',
+                    backgroundColor: '#ffffff',
+                    borderRadius: '6px',
+                    border: '1px dashed #cbd5e1',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#64748b',
+                    fontSize: '13px'
+                  }}
+                >
+                  Bank Statement not available
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </Modal>
+
+      <Modal
+        show={Boolean(fullViewDoc)}
+        onHide={() => setFullViewDoc(null)}
+        title="Full View"
+        size="lg"
+      >
+        <div style={{ width: '100%', height: '70vh', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+          {fullViewDoc && (
+            fullViewDoc.isPdf ? (
+              <iframe
+                src={fullViewDoc.url}
+                title="Full View PDF"
+                style={{ width: '100%', height: '100%', border: 'none' }}
+              />
+            ) : (
+              <img src={fullViewDoc.url} alt="Full View" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+            )
+          )}
+        </div>
+      </Modal>
     </>
   );
 }
