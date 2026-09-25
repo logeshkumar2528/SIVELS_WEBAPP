@@ -16,8 +16,9 @@
  * - Step 07: Technical Value (File upload dropzone with <= 150 MB validation, View, Download, Remove).
  * - Step 08: CIBIL Check (Preserved Credit Bureau verification simulation + Manual CIBIL PAN Upload).
  * - Step 09: PD Verification (Personal Discussion mode selector from dynamic PDVerificationTypeMaster).
- * - Step 10: Eligibility Assessment (Methodology & multi-applicant credit assessment engine).
- * - Step 11: Recommendation Sheet (Credit underwriter recommendation placeholder).
+ * - Step 10: RTR Common Sheet (Obligation assessment).
+ * - Step 11: Eligibility Assessment (Methodology & multi-applicant credit assessment engine).
+ * - Step 12: Recommendation Sheet (Credit underwriter recommendation placeholder).
  * - Single-fetch shared data and VerificationStepModal are preserved in code for easy inspection.
  */
 
@@ -30,6 +31,7 @@ import { useVerificationWorkspace } from '../../hooks/useVerificationWorkspace';
 import backOfficeService from '../../api/backOfficeService';
 import { getBackOfficeAuth } from '../../auth/authStorage';
 import VerificationStepModal from '../../components/Verification/VerificationStepModal';
+import RtrCommonSheet from '../../components/RtrCommonSheet/RtrCommonSheet';
 import PdfView from '../../../../../rm_modules/src/pages/PdfView/PdfView';
 import { ApplicationDraftProvider } from '../../../../../rm_modules/src/state/ApplicationDraftContext';
 import { resolveDocumentTypeId, validateApplicantDocumentFile, getDocumentApplicability } from '../../../../../../Core/src/utils/documentTypeHelper';
@@ -211,7 +213,7 @@ const INITIAL_STEP_VERIFICATIONS = {
 };
 
 /**
- * 11-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
+ * 12-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
  */
 const VERIFICATION_WORKFLOW_STEPS = [
   { id: 1, number: 1, visibleNum: '01', title: 'View Form', subtitle: 'Application form', group: 'FORM REVIEW' },
@@ -223,12 +225,13 @@ const VERIFICATION_WORKFLOW_STEPS = [
   { id: 12, number: 12, visibleNum: '07', title: 'Technical Value', subtitle: 'Valuation report upload', group: 'CREDIT & ASSESSMENT' },
   { id: 13, number: 13, visibleNum: '08', title: 'CIBIL Check', subtitle: 'Credit Bureau & PAN', group: 'CREDIT & ASSESSMENT' },
   { id: 14, number: 14, visibleNum: '09', title: 'PD Verification', subtitle: 'Personal discussion', group: 'CREDIT & ASSESSMENT' },
-  { id: 16, number: 16, visibleNum: '10', title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
-  { id: 17, number: 17, visibleNum: '11', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
+  { id: 15, number: 15, visibleNum: '10', title: 'RTR Common Sheet', subtitle: 'Obligation assessment', group: 'CREDIT & ASSESSMENT' },
+  { id: 16, number: 16, visibleNum: '11', title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
+  { id: 17, number: 17, visibleNum: '12', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
 ];
 
 /**
- * Visible Step (1–11) to Internal Step ID Mapping
+ * Visible Step (1–12) to Internal Step ID Mapping
  */
 const VISIBLE_TO_INTERNAL_STEP = {
   1: 1,
@@ -240,12 +243,13 @@ const VISIBLE_TO_INTERNAL_STEP = {
   7: 12,
   8: 13,
   9: 14,
-  10: 16,
-  11: 17,
+  10: 15,
+  11: 16,
+  12: 17,
 };
 
 /**
- * Internal Step ID to Visible Step (1–11) Mapping
+ * Internal Step ID to Visible Step (1–12) Mapping
  */
 const INTERNAL_TO_VISIBLE_STEP = {
   1: 1,
@@ -262,14 +266,15 @@ const INTERNAL_TO_VISIBLE_STEP = {
   12: 7,
   13: 8,
   14: 9,
-  16: 10,
-  17: 11,
+  15: 10,
+  16: 11,
+  17: 12,
 };
 
 function resolveInternalStepFromQuery(stepParam) {
   if (stepParam == null || stepParam === '') return 1;
   const parsed = Number(stepParam);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 11) {
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 12) {
     return 1;
   }
   return VISIBLE_TO_INTERNAL_STEP[parsed] ?? 1;
@@ -9949,7 +9954,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 01 of 11</span>
+                <span className="bo-cv-step-tag-pill">Step 01 of 12</span>
               </div>
 
               <div className="bo-cv-view-form-embed-wrapper">
@@ -9991,7 +9996,7 @@ export default function CustomerVerification() {
                   </div>
                 </div>
                 <div className="bo-cv-doc-header-right">
-                  <span className="bo-cv-step-tag-pill">Step 02 of 11</span>
+                  <span className="bo-cv-step-tag-pill">Step 02 of 12</span>
                 </div>
               </div>
 
@@ -10432,7 +10437,7 @@ export default function CustomerVerification() {
                     <p className="bo-cv-step-panel-desc">Property Field Investigation details and collateral valuation.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 03 of 11</span>
+                <span className="bo-cv-step-tag-pill">Step 03 of 12</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -10461,7 +10466,7 @@ export default function CustomerVerification() {
                     <p className="bo-cv-step-panel-desc">Workplace and business establishment field investigation.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 04 of 11</span>
+                <span className="bo-cv-step-tag-pill">Step 04 of 12</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -10490,7 +10495,7 @@ export default function CustomerVerification() {
                     <p className="bo-cv-step-panel-desc">Physical residence field verification and neighbor check.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 05 of 11</span>
+                <span className="bo-cv-step-tag-pill">Step 05 of 12</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -10521,7 +10526,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 06 of 11</span>
+                <span className="bo-cv-step-tag-pill">Step 06 of 12</span>
               </div>
 
               <div className="bo-cv-upload-container">
@@ -10663,7 +10668,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 07 of 11</span>
+                <span className="bo-cv-step-tag-pill">Step 07 of 12</span>
               </div>
 
               <div className="bo-cv-upload-container">
@@ -10805,7 +10810,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 08 of 11</span>
+                <span className="bo-cv-step-tag-pill">Step 08 of 12</span>
               </div>
 
               {/* Manual CIBIL PAN Card Upload Reference Section */}
@@ -11353,7 +11358,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 09 of 11</span>
+                <span className="bo-cv-step-tag-pill">Step 09 of 12</span>
               </div>
 
               <div className="bo-cv-pd-container">
@@ -11426,7 +11431,18 @@ export default function CustomerVerification() {
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
-              STEP 14: ELIGIBILITY ASSESSMENT — COMMAND CENTER
+              STEP 10: RTR COMMON SHEET
+          ══════════════════════════════════════════════════════════════════ */}
+          {activeStep === 15 && (
+            <RtrCommonSheet
+              applicationProductDetailsId={resolvedAppProdId}
+              applicantSequence={0}
+              currentUserId={getAuthenticatedBackOfficeId()}
+            />
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              STEP 11: ELIGIBILITY ASSESSMENT — COMMAND CENTER
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 16 && (
             <div className="bo-cv-elig-deck">
@@ -11434,7 +11450,7 @@ export default function CustomerVerification() {
               <header className="bo-cv-elig-hero">
                 <div className="bo-cv-elig-hero-mesh" aria-hidden="true" />
                 <div className="bo-cv-elig-hero-copy">
-                  <span className="bo-cv-elig-kicker">Step 10 of 11 · Credit Assessment</span>
+                  <span className="bo-cv-elig-kicker">Step 11 of 12 · Credit Assessment</span>
                   <h2 className="bo-cv-elig-hero-title">Eligibility Engine</h2>
                   <p className="bo-cv-elig-hero-sub">
                     Pick a method and applicant, then open the calculator sheet to run inputs and get a decision amount — fast path for underwriters.
@@ -14848,7 +14864,7 @@ export default function CustomerVerification() {
                       </p>
                     </div>
                   </div>
-                  <span className="bo-cv-step-tag-pill">Step 09 of 11</span>
+                  <span className="bo-cv-step-tag-pill">Step 09 of 12</span>
                 </div>
 
                 <section className="bo-cv-recommendation-sheet" aria-label="Credit recommendation assessment">
@@ -15019,6 +15035,35 @@ export default function CustomerVerification() {
                 </div>
               </section>
             </>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              STEP 12: RECOMMENDATION SHEET (CREDIT RECOMMENDATION PLACEHOLDER)
+          ══════════════════════════════════════════════════════════════════ */}
+          {activeStep === 17 && (
+            <div className="bo-cv-step-panel">
+              <div className="bo-cv-step-panel-header">
+                <div className="bo-cv-step-header-left">
+                  <div className="bo-cv-step-badge-num">12</div>
+                  <div>
+                    <h2 className="bo-cv-step-panel-title">Recommendation Sheet</h2>
+                    <p className="bo-cv-step-panel-desc">
+                      Credit underwriter recommendation and final decision sign-off.
+                    </p>
+                  </div>
+                </div>
+                <span className="bo-cv-step-tag-pill">Step 12 of 12</span>
+              </div>
+
+              <div className="bo-cv-placeholder-panel">
+                <div className="bo-cv-placeholder-icon">
+                  {ShieldCheckIcon && <ShieldCheckIcon size={40} />}
+                </div>
+                <span className="bo-cv-placeholder-badge">CREDIT RECOMMENDATION</span>
+                <h3>Credit Recommendation Sheet</h3>
+                <p>Final credit underwriter recommendation and approval decision summary.</p>
+              </div>
+            </div>
           )}
         </main>
       </div>

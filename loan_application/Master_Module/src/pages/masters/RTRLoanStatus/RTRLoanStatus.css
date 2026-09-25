@@ -1,0 +1,222 @@
+/* RTR Loan Status Master Styles */
+.masters-page {
+  padding: var(--spacing-xl);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.masters-page-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+}
+
+.masters-page-header-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--border-radius-md, 8px);
+  background-color: rgba(36, 161, 72, 0.1);
+  color: var(--color-primary);
+}
+
+.masters-page-title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.masters-page-description {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.masters-page-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  flex-wrap: wrap;
+}
+
+.masters-page-search-area {
+  flex: 1;
+  min-width: 250px;
+}
+
+.masters-page-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+/* Buttons */
+.masters-btn-primary,
+.masters-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--border-radius-sm);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: none;
+}
+
+.masters-btn-primary {
+  background-color: var(--color-primary);
+  color: var(--color-surface);
+}
+
+.masters-btn-danger {
+  background-color: var(--color-danger);
+  color: var(--color-surface);
+}
+
+.masters-btn-primary:hover,
+.masters-btn-danger:hover {
+  opacity: 0.9;
+}
+
+.masters-btn-secondary {
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+}
+
+.masters-btn-secondary:hover {
+  background-color: var(--color-background);
+}
+
+.masters-btn-primary:focus-visible,
+.masters-btn-secondary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Form Styles */
+.rtr-loan-status-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md, 16px);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs, 4px);
+}
+
+.form-label {
+  font-size: var(--font-size-sm, 14px);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-primary, #0f172a);
+}
+
+.form-input {
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  transition: all 0.2s ease;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(36, 161, 72, 0.2);
+}
+
+.form-input-error {
+  border-color: var(--color-danger);
+}
+
+.form-input-error:focus {
+  box-shadow: 0 0 0 2px rgba(218, 30, 40, 0.2);
+}
+
+.form-error-msg {
+  font-size: 0.75rem;
+  color: var(--color-danger);
+  margin-top: 2px;
+}
+
+.text-danger {
+  color: var(--color-danger);
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.table-date-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: #475569;
+}
+
+.table-date-icon {
+  color: #94a3b8;
+}
+
+.rtr-status-code-badge {
+  display: inline-block;
+  font-family: monospace;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background-color: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+}
+
+.rtr-status-name-cell {
+  font-weight: 500;
+  color: var(--color-text-primary, #0f172a);
+}
+
+.master-spin {
+  animation: master-spin 1s linear infinite;
+}
+
+@keyframes master-spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .masters-page {
+    padding: var(--spacing-md);
+  }
+
+  .masters-page-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .masters-page-toolbar-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  
+  .masters-btn-primary {
+    width: 100%;
+  }
+}
