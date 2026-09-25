@@ -3013,6 +3013,7 @@ export default function CustomerVerification() {
   const [rtrLoansError, setRtrLoansError] = useState(null);
   const [rtrLoansSaving, setRtrLoansSaving] = useState(false);
   const [rtrLoansBanner, setRtrLoansBanner] = useState(null);
+  const [rtrObligations, setRtrObligations] = useState([]);
 
   const [rtrAssessmentsList, setRtrAssessmentsList] = useState([]);
   const [rtrAssessmentsLoading, setRtrAssessmentsLoading] = useState(false);
@@ -3025,8 +3026,10 @@ export default function CustomerVerification() {
       {
         id: `rtr-draft-${seq}-0`,
         applicationRTRLoanDetailsId: 0,
+        applicationLoanObligationDetailsId: null,
         applicationProductDetailsId: Number(appProdId) || 0,
         applicantSequence: Number(seq) || 0,
+        rtrLoanStatusId: 1,
         lenderName: '',
         sanctionAmount: '',
         currentPOS: '',
@@ -3055,14 +3058,32 @@ export default function CustomerVerification() {
         const res = await backOfficeService.getRTRLoansBySeq(appProdId, seq);
         const records = Array.isArray(res) ? res : (res?.value ?? res?.data ?? []);
         const activeRecords = records.filter((r) => r.isActive !== false);
+        let obligationRecords = [];
+        try {
+          const obligationRes = await backOfficeService.getLoanObligations(appProdId, seq);
+          obligationRecords = Array.isArray(obligationRes)
+            ? obligationRes
+            : (obligationRes?.value ?? obligationRes?.data ?? []);
+        } catch (obligationErr) {
+          console.warn('Unable to hydrate RTR obligation links:', obligationErr);
+        }
+        setRtrObligations(obligationRecords.filter((o) => o.isActive !== false));
         setRtrLoans(activeRecords);
 
         if (activeRecords.length > 0) {
           const rows = activeRecords.map((r, i) => ({
             id: `rtr-loan-${r.applicationRTRLoanDetailsId || i}`,
             applicationRTRLoanDetailsId: r.applicationRTRLoanDetailsId || 0,
+            applicationLoanObligationDetailsId:
+              r.applicationLoanObligationDetailsId ||
+              (obligationRecords.find((o) =>
+                String(o.lenderName || '').trim().toLowerCase() === String(r.lenderName || '').trim().toLowerCase() &&
+                Number(o.currentPOS) === Number(r.currentPOS) &&
+                Number(o.emiAmount) === Number(r.emiAmount)
+              ) || (obligationRecords.length === 1 ? obligationRecords[0] : null))?.applicationLoanObligationDetailsId || null,
             applicationProductDetailsId: Number(appProdId),
             applicantSequence: Number(seq),
+            rtrLoanStatusId: r.rtrLoanStatusId != null ? Number(r.rtrLoanStatusId) : 1,
             lenderName: r.lenderName || '',
             sanctionAmount: r.sanctionAmount ?? '',
             currentPOS: r.currentPOS ?? '',
@@ -3080,7 +3101,11 @@ export default function CustomerVerification() {
           }));
           setRtrDraftLoans(rows);
         } else {
-          setRtrDraftLoans(getDefaultRtrDraftLoans(appProdId, seq));
+          const defaults = getDefaultRtrDraftLoans(appProdId, seq);
+          if (obligationRecords.length === 1) {
+            defaults[0].applicationLoanObligationDetailsId = obligationRecords[0].applicationLoanObligationDetailsId;
+          }
+          setRtrDraftLoans(defaults);
         }
       } catch (err) {
         console.warn('Failed to fetch RTR loans:', err);
@@ -3204,6 +3229,8 @@ export default function CustomerVerification() {
         row.emiStartDate = value;
       } else if (field === 'isActive') {
         row.isActive = Boolean(value);
+      } else if (field === 'applicationLoanObligationDetailsId') {
+        row.applicationLoanObligationDetailsId = value ? Number(value) : null;
       } else {
         if (value === '') {
           row[field] = '';
@@ -3222,6 +3249,10 @@ export default function CustomerVerification() {
     });
   };
 
+  const handleRtrObligationLinkChange = (index, value) => {
+    handleRtrLoanRowChange(index, 'applicationLoanObligationDetailsId', value ? Number(value) : null);
+  };
+
   // Handle Add RTR Loan row
   const handleAddRtrLoanRow = () => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -3230,8 +3261,10 @@ export default function CustomerVerification() {
       {
         id: `rtr-loan-new-${Date.now()}-${prev.length}`,
         applicationRTRLoanDetailsId: 0,
+        applicationLoanObligationDetailsId: null,
         applicationProductDetailsId: Number(calculationAppProdId) || 0,
         applicantSequence: Number(selectedApplicantSequence) || 0,
+        rtrLoanStatusId: 1,
         lenderName: '',
         sanctionAmount: '',
         currentPOS: '',
@@ -3363,8 +3396,12 @@ export default function CustomerVerification() {
 
       const payload = {
         applicationRTRLoanDetailsId: isNew ? 0 : Number(row.applicationRTRLoanDetailsId),
+        applicationLoanObligationDetailsId: row.applicationLoanObligationDetailsId
+          ? Number(row.applicationLoanObligationDetailsId)
+          : null,
         applicationProductDetailsId: Number(calculationAppProdId),
         applicantSequence: Number(selectedApplicantSequence),
+        rtrLoanStatusId: row.rtrLoanStatusId ? Number(row.rtrLoanStatusId) : 1,
         lenderName: String(row.lenderName).trim(),
         sanctionAmount: Number(row.sanctionAmount),
         currentPOS: Number(row.currentPOS),
@@ -3374,6 +3411,7 @@ export default function CustomerVerification() {
         odCount: Number(row.odCount) || 0,
         bounceCount: Number(row.bounceCount) || 0,
         isSelectedForRTR: Boolean(row.isSelectedForRTR),
+        isFoirApplicable: row.isFoirApplicable !== false,
         isActive: row.isActive !== false,
         createdBy: Number(currentUserId),
         modifiedBy: isNew ? null : Number(currentUserId),
@@ -3388,7 +3426,13 @@ export default function CustomerVerification() {
         saveCount++;
       } catch (err) {
         console.error(`Failed to save RTR loan #${i + 1}:`, err);
-        const errMsg = err?.response?.data?.message || err?.message || 'Save failed.';
+        const validationErrors = err?.response?.data?.errors;
+        const validationText = validationErrors && typeof validationErrors === 'object'
+          ? Object.entries(validationErrors)
+              .flatMap(([field, messages]) => (Array.isArray(messages) ? messages : [messages]).map((message) => `${field}: ${message}`))
+              .join('; ')
+          : '';
+        const errMsg = validationText || err?.response?.data?.message || err?.message || 'Save failed.';
         failedLoans.push({ lender: row.lenderName, error: errMsg });
       }
     }
@@ -3412,6 +3456,17 @@ export default function CustomerVerification() {
       await fetchRTRLoans(calculationAppProdId, selectedApplicantSequence);
       return { success: false, message: 'Some loan records failed to save.' };
     }
+  };
+
+  // Persist RTR facilities when the user leaves the Inputs step. This makes
+  // Continue to Settings a durable save point, while the calculation step can
+  // safely re-use the same synchronisation routine without duplicate inserts.
+  const handleContinueToSettings = async () => {
+    if (selectedMethodCode === 'RTR') {
+      const syncRes = await handleSaveRtrLoans();
+      if (!syncRes.success) return;
+    }
+    setCalcSheetTab('settings');
   };
 
   // Phase 3: Normal Income Method State & Handlers for Step 14 (AssessmentMethodId = 4, MethodCode = 'NORMAL_INCOME')
@@ -14713,9 +14768,10 @@ export default function CustomerVerification() {
                             <button
                               type="button"
                               className="bo-btn bo-btn--primary"
-                              onClick={() => setCalcSheetTab('settings')}
+                              onClick={handleContinueToSettings}
+                              disabled={selectedMethodCode === 'RTR' && rtrLoansSaving}
                             >
-                              Continue to Settings
+                              {selectedMethodCode === 'RTR' && rtrLoansSaving ? 'Saving facilities...' : 'Continue to Settings'}
                             </button>
                           )}
                           {calcSheetTab === 'settings' && (
