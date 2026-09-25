@@ -357,20 +357,65 @@ export function resolveApplicantName(appData = {}) {
   return 'Applicant';
 }
 
+/**
+ * Official Application Number Generator (Used ONCE during customer intake creation)
+ * Algorithm: First 2 letters of Applicant Name + DOB Day (DD) + Last 3 digits of Mobile Number
+ * Returns null if any required input is missing or invalid. Never invents fallback placeholders.
+ */
+export function generateOfficialAppId({ fullName = '', dateOfBirth = '', mobileNumber = '' } = {}) {
+  const firstName = String(fullName || '').trim().split(/\s+/)[0] || '';
+  if (firstName.length < 2) return null;
+  const initials = firstName.slice(0, 2).toUpperCase();
+
+  if (!dateOfBirth) return null;
+  const dobStr = String(dateOfBirth).trim();
+  // Match YYYY-MM-DD, YYYY/MM/DD, DD-MM-YYYY, DD/MM/YYYY
+  const isoMatch = dobStr.match(/^\d{4}[-/]\d{1,2}[-/](\d{1,2})/);
+  const dmyMatch = dobStr.match(/^(\d{1,2})[-/]\d{1,2}[-/]\d{4}/);
+  let dayStr = '';
+  if (isoMatch) {
+    dayStr = isoMatch[1].padStart(2, '0');
+  } else if (dmyMatch) {
+    dayStr = dmyMatch[1].padStart(2, '0');
+  } else {
+    const d = new Date(dobStr);
+    if (!isNaN(d.getTime())) {
+      dayStr = String(d.getDate()).padStart(2, '0');
+    }
+  }
+  if (!dayStr || dayStr === '00' || isNaN(Number(dayStr)) || Number(dayStr) < 1 || Number(dayStr) > 31) return null;
+
+  const cleanMobile = String(mobileNumber || '').replace(/\D/g, '');
+  if (cleanMobile.length < 3) return null;
+  const mobileTail = cleanMobile.slice(-3);
+
+  return `${initials}${dayStr}${mobileTail}`;
+}
+
+/**
+ * Official Application Number Reader / Formatter
+ * Priority: Returns the backend-persisted official appId (AgentAddCustomer.App_Id).
+ * Does NOT regenerate/recalculate IDs on the fly. Fallback for historical empty records is 'N/A'.
+ */
 export function buildApplicationDisplayId(record = {}, fallbackId = '') {
-  const applicant = record.registration?.personalInformation?.applicant ||
-    record.sections?.personalInformation?.applicant || record.personalInformation?.applicant ||
-    record.applicant || record.Applicant || {};
-  const firstName = String(applicant.firstName || applicant.FirstName || record.firstName || record.FirstName || record.fullName || record.FullName || record.customerName || record.CustomerName || '')
-    .trim().split(/\s+/)[0] || '';
-  const initials = firstName.slice(0, 2).toUpperCase().padEnd(2, 'X');
-  const applicationDate = record.applicationDate || record.ApplicationDate || record.createdDate || record.CreatedDate ||
-    record.createdAt || record.CreatedAt || record.submittedAt || record.SubmittedAt || '';
-  const dateMatch = String(applicationDate).match(/^(?:\d{4}[-/]\d{2}[-/](\d{2})|\d{2}[-/]\d{2}[-/]\d{4})/);
-  const applicationDay = dateMatch ? dateMatch[1] || String(applicationDate).slice(0, 2) : '00';
-  const mobile = String(applicant.mobileNo || applicant.MobileNo || applicant.mobileNumber || applicant.MobileNumber || record.mobileNumber || record.MobileNumber || record.mobile || record.Mobile || '').replace(/\D/g, '');
-  const mobileTail = mobile.slice(-3).padStart(3, '0');
-  return `${initials}${applicationDay}${mobileTail}`;
+  if (!record) return fallbackId || 'N/A';
+  const existingAppId =
+    record.appId ??
+    record.AppId ??
+    record.App_Id ??
+    record.applicationNo ??
+    record.ApplicationNo ??
+    record.applicationNumber ??
+    record.ApplicationNumber;
+
+  if (existingAppId && typeof existingAppId === 'string' && existingAppId.trim() !== '') {
+    const trimmed = existingAppId.trim();
+    if (!trimmed.startsWith('APP-') && trimmed !== 'N/A' && trimmed !== '-') {
+      return trimmed;
+    }
+  }
+
+  return 'N/A';
 }
 
 /**

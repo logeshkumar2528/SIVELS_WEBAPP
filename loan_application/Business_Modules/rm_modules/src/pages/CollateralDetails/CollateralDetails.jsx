@@ -673,11 +673,11 @@ export default function CollateralDetails() {
 
     const currentAppData = getApplication(appId) || appData;
     saveApplication(appId, buildSectionUpdate(currentAppData, 'collateral', form));
-    navigate(ROUTES.REFERENCES.replace(':applicationId', appId));
+    navigate(ROUTES.SCHEDULE_CHARGES.replace(':applicationId', appId));
   };
 
   const handleBack = () => {
-    navigate(ROUTES.BANK_EXISTING_LOANS.replace(':applicationId', appId));
+    navigate(ROUTES.REFERENCES.replace(':applicationId', appId));
   };
 
   return (
@@ -694,10 +694,10 @@ export default function CollateralDetails() {
       appId={appId}
       appData={appData}
       steps={APPLICATION_WIZARD_STEPS}
-      activeStep={7}
-      title="Step 7: Collateral Details"
+      activeStep={8}
+      title="Step 8: Collateral Details"
       subtitle="Capture property details only when the selected loan product requires collateral."
-      backLabel="Back to Banking"
+      backLabel="Back to References"
       continueLabel="Save & Continue"
       onBack={handleBack}
       onContinue={handleContinue}
@@ -709,7 +709,7 @@ export default function CollateralDetails() {
           icon={ArrowLeftIcon ? <ArrowLeftIcon size={14} /> : null}
           onClick={handleBack}
         >
-          Back to Banking
+          Back to References
         </Button>
       }
     >

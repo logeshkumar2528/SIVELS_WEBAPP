@@ -62,10 +62,12 @@ const mapApplication = (item, index, agentsById = {}, rmsById = {}, rejections =
   }
 
   const ownership = resolveApplicationOwnership(item, agentsById, rmsById);
+  const officialAppId = item.appId || item.AppId || item.App_Id || null;
 
   return {
     id: String(applicationId),
-    displayId: buildApplicationDisplayId(item, applicationId),
+    appId: officialAppId,
+    displayId: officialAppId || buildApplicationDisplayId(item, applicationId),
     customerName: item.fullName || item.customerName || 'Unknown Customer',
     mobile: String(item.mobileNumber || item.mobile || ''),
     loanType: item.loanProductName || item.loanPurposeName || item.loanType || '',

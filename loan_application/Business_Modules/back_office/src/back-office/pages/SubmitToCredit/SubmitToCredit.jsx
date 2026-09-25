@@ -121,7 +121,7 @@ export default function SubmitToCredit() {
 
         const custName = String(c.customerName || c.fullName || '').toLowerCase();
         const mobile = String(c.mobile || c.mobileNumber || '');
-        const appNo = String(c.applicationNo || `APP-${c.agentCustomerId || c.id || ''}`).toLowerCase();
+        const appNo = String(c.appId || (c.applicationNo && !c.applicationNo.startsWith('APP-') ? c.applicationNo : '')).toLowerCase();
 
         const matchSearch =
           custName.includes(term) ||
@@ -278,7 +278,7 @@ export default function SubmitToCredit() {
                   {paginatedCustomers.map((c) => {
                     const custId = c.agentCustomerId || c.id;
                     const custName = c.customerName || c.fullName || 'Customer';
-                    const appNo = c.applicationNo || `APP-${custId}`;
+                    const appNo = c.appId || (c.applicationNo && c.applicationNo !== 'N/A' && !c.applicationNo.startsWith('APP-') ? c.applicationNo : 'N/A');
                     const appliedDate = c.createdAt || c.appliedDate;
                     const statusInfo = getStatusInfo(c.status);
 

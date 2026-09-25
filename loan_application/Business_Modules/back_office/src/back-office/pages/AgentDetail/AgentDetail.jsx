@@ -166,7 +166,7 @@ export default function AgentDetail() {
     const list = term
       ? customers.filter((c) => {
           const customerName = (c.customerName || c.name || c.fullName || '').toLowerCase();
-          const appNo = (c.applicationNo || (c.agentCustomerId ? `APP-${c.agentCustomerId}` : '')).toLowerCase();
+          const appNo = String(c.appId || (c.applicationNo && !c.applicationNo.startsWith('APP-') ? c.applicationNo : '')).toLowerCase();
           const loanType = (c.loanType || c.loanPurpose || '').toLowerCase();
           const mobile = String(c.mobile || '');
 
@@ -422,7 +422,7 @@ export default function AgentDetail() {
             <tbody>
               {filteredCustomers.map((c) => {
                 const statusInfo = getStatusInfo(c.status);
-                const appNo = c.applicationNo || (c.agentCustomerId ? `APP-${c.agentCustomerId}` : '—');
+                const appNo = c.appId || (c.applicationNo && c.applicationNo !== 'N/A' && !c.applicationNo.startsWith('APP-') ? c.applicationNo : 'N/A');
                 const appliedDate = c.appliedDate || (c.createdAt ? String(c.createdAt).slice(0, 10) : '—');
                 const customerName = c.customerName || c.name || c.fullName || '—';
                 const employmentType = c.employmentType || 'Salaried';

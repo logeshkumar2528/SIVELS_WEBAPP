@@ -265,12 +265,15 @@ export function mapCustomer(customer) {
     'AppliedDate'
   ) || '';
 
+  const rawAppId = getValue(customer, 'appId', 'AppId', 'App_Id');
+  const appId = rawAppId && typeof rawAppId === 'string' && rawAppId.trim() !== '' ? rawAppId.trim() : null;
   const idStr = agentCustomerId != null ? String(agentCustomerId) : '';
 
   return {
     id: idStr,
     agentCustomerId,
-    applicationNo: `APP-${idStr}`,
+    appId,
+    applicationNo: appId || 'N/A',
     name,
     customerName: name,
     fullName: name,

@@ -145,9 +145,12 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
     }
   }
 
+  const officialAppId = item.appId || item.AppId || item.App_Id || null;
+
   return {
     id: String(applicationId),
-    displayId: buildApplicationDisplayId(item, applicationId),
+    appId: officialAppId,
+    displayId: officialAppId || buildApplicationDisplayId(item, 'N/A'),
     customerName: item.fullName || item.customerName || '',
     mobile: normalizeMobile(item.mobileNumber || item.mobile || ''),
     loanType: item.loanProductName || item.loanPurposeName || item.loanType || '',
@@ -674,6 +677,8 @@ export default function NewApplications({ initialFilter = 'All' }) {
       .filter((app) => {
         const matchesSearch =
           app.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (app.appId && app.appId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (app.displayId && app.displayId.toLowerCase().includes(searchTerm.toLowerCase())) ||
           app.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
           app.mobile.includes(searchTerm);
         const matchesStatus = statusFilter === 'All' || app.status === statusFilter;

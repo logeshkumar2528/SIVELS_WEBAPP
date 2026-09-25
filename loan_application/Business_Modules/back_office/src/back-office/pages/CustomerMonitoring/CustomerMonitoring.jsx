@@ -173,7 +173,7 @@ export default function CustomerMonitoring() {
 
         const customerName = (c.customerName || c.name || '').toLowerCase();
         const mobile = String(c.mobile || '');
-        const appNo = (c.applicationNo || `APP-${c.agentCustomerId || c.id || ''}`).toLowerCase();
+        const appNo = String(c.appId || (c.applicationNo && !c.applicationNo.startsWith('APP-') ? c.applicationNo : '')).toLowerCase();
         const agentName = (c.agentName || '').toLowerCase();
         const rmName = (c.rmName || '').toLowerCase();
         const district = (c.districtName || '').toLowerCase();
@@ -372,7 +372,7 @@ export default function CustomerMonitoring() {
                 <tbody>
                   {paginatedCustomers.map((c) => {
                     const statusInfo = getStatusInfo(c.status);
-                    const appNo = c.applicationNo || (c.agentCustomerId ? `APP-${c.agentCustomerId}` : '—');
+                    const appNo = c.appId || (c.applicationNo && c.applicationNo !== 'N/A' && !c.applicationNo.startsWith('APP-') ? c.applicationNo : 'N/A');
                     const appliedDate = c.appliedDate || (c.createdAt ? String(c.createdAt).slice(0, 10) : '—');
                     const customerName = c.name || c.customerName || c.fullName || '—';
                     const mobile = c.mobile ? `+91 ${c.mobile}` : '—';

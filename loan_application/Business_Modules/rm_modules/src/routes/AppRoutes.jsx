@@ -231,19 +231,19 @@ export default function AppRoutes() {
         />
 
         <Route
-          path={ROUTES.COLLATERAL}
+          path={ROUTES.REFERENCES}
           element={
-            <LayoutWrapper title="Collateral Details" subtitle="Step 7 of 11">
-              <CollateralDetails />
+            <LayoutWrapper title="Reference Details" subtitle="Step 7 of 11">
+              <ReferenceDetails />
             </LayoutWrapper>
           }
         />
 
         <Route
-          path={ROUTES.REFERENCES}
+          path={ROUTES.COLLATERAL}
           element={
-            <LayoutWrapper title="Reference Details" subtitle="Step 8 of 11">
-              <ReferenceDetails />
+            <LayoutWrapper title="Collateral Details" subtitle="Step 8 of 11">
+              <CollateralDetails />
             </LayoutWrapper>
           }
         />

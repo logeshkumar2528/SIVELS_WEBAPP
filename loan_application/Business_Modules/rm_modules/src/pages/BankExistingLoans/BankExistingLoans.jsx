@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Building2, MapPin, Hash, List, CreditCard, Files, AlertCircle, RefreshCw, Trash2, Plus } from 'lucide-react';
+import { Building2, MapPin, CreditCard, Files, RefreshCw, Trash2, Plus } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
 import Select from '../../components/Select/Select';
@@ -15,9 +15,7 @@ import {
   getApplicantCount,
   getSectionState,
 } from '../applicationWizard/flowUtils';
-import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
-
-const ACCOUNT_TYPES = ['Savings', 'Current'];
+import { formatIndianAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 
 function hasMeaningfulBankData(bank) {
   if (!bank) return false;
@@ -38,31 +36,52 @@ function hasMeaningfulOtherBankData(bank) {
 }
 
 function createBankRecord(source = {}, isPrimary = false) {
+  const rawBankId = source.bankId ?? source.BankId ?? source.bankName;
+  const rawBranchId = source.bankBranchId ?? source.BankBranchId ?? source.branch;
+  const bankVal = rawBankId !== undefined && rawBankId !== null && rawBankId !== '' && !isNaN(Number(rawBankId))
+    ? Number(rawBankId)
+    : (source.bankName || '');
+  const branchVal = rawBranchId !== undefined && rawBranchId !== null && rawBranchId !== '' && !isNaN(Number(rawBranchId))
+    ? Number(rawBranchId)
+    : (source.branch || '');
+
   return {
     applicationBankExistingLoanDetailsId:
-      source.applicationBankExistingLoanDetailsId ||
-      source.ApplicationBankExistingLoanDetailsId ||
-      source.applicationBankDetailsId ||
-      source.ApplicationBankDetailsId ||
+      source.applicationBankExistingLoanDetailsId ??
+      source.ApplicationBankExistingLoanDetailsId ??
+      source.applicationBankDetailsId ??
+      source.ApplicationBankDetailsId ??
       null,
-    employmentIncomeDetailsId:
-      source.applicationEmploymentIncomeDetailsId ||
-      source.ApplicationEmploymentIncomeDetailsId ||
-      source.employmentIncomeDetailsId ||
-      source.EmploymentIncomeDetailsId ||
+    applicationProductDetailsId:
+      source.applicationProductDetailsId ??
+      source.ApplicationProductDetailsId ??
       null,
-    bankName: source.bankName || source.bankId || '',
-    bankId: source.bankId || source.bankName || '',
-    branch: source.branch || source.bankBranchId || '',
-    bankBranchId: source.bankBranchId || source.branch || '',
-    ifscCode: source.ifscCode || '',
-    accountType: source.accountType || 'Savings',
-    accountNumber: source.accountNumber || '',
-    accountHolderName: source.accountHolderName || '',
-    noOfActiveLoans: source.noOfActiveLoans !== undefined && source.noOfActiveLoans !== null ? String(source.noOfActiveLoans) : '',
-    noOfActiveCreditCards: source.noOfActiveCreditCards !== undefined && source.noOfActiveCreditCards !== null ? String(source.noOfActiveCreditCards) : '',
-    activeLoansDetails: Array.isArray(source.activeLoansDetails) ? source.activeLoansDetails : [],
-    activeCreditCardsDetails: Array.isArray(source.activeCreditCardsDetails) ? source.activeCreditCardsDetails : [],
+    applicantSequence:
+      source.applicantSequence !== undefined && source.applicantSequence !== null
+        ? Number(source.applicantSequence)
+        : (source.ApplicantSequence !== undefined && source.ApplicantSequence !== null ? Number(source.ApplicantSequence) : null),
+    applicationEmploymentIncomeDetailsId:
+      source.applicationEmploymentIncomeDetailsId ??
+      source.ApplicationEmploymentIncomeDetailsId ??
+      source.employmentIncomeDetailsId ??
+      source.EmploymentIncomeDetailsId ??
+      null,
+    bankName: bankVal,
+    bankId: bankVal,
+    branch: branchVal,
+    bankBranchId: branchVal,
+    ifscCode: source.ifscCode || source.IfscCode || '',
+    accountType: source.accountType || source.AccountType || 'Savings',
+    accountNumber: source.accountNumber || source.AccountNumber || '',
+    accountHolderName: source.accountHolderName || source.AccountHolderName || '',
+    noOfActiveLoans: source.noOfActiveLoans !== undefined && source.noOfActiveLoans !== null ? String(source.noOfActiveLoans) : (source.NoOfActiveLoans !== undefined && source.NoOfActiveLoans !== null ? String(source.NoOfActiveLoans) : ''),
+    noOfActiveCreditCards: source.noOfActiveCreditCards !== undefined && source.noOfActiveCreditCards !== null ? String(source.noOfActiveCreditCards) : (source.NoOfActiveCreditCards !== undefined && source.NoOfActiveCreditCards !== null ? String(source.NoOfActiveCreditCards) : ''),
+    activeLoansDetails: Array.isArray(source.activeLoansDetails)
+      ? source.activeLoansDetails
+      : (Array.isArray(source.ActiveLoansDetails) ? source.ActiveLoansDetails : []),
+    activeCreditCardsDetails: Array.isArray(source.activeCreditCardsDetails)
+      ? source.activeCreditCardsDetails
+      : (Array.isArray(source.ActiveCreditCardsDetails) ? source.ActiveCreditCardsDetails : []),
     isPrimaryBank: isPrimary,
   };
 }
@@ -74,7 +93,9 @@ function buildBankState(appData) {
 
   const extractBanks = (personData = {}) => {
     if (Array.isArray(personData.banks) && personData.banks.length > 0) {
-      return personData.banks.map((b, idx) => createBankRecord(b, idx === 0));
+      const primary = personData.banks.find((b) => b.isPrimaryBank === true || b.IsPrimaryBank === true) || personData.banks[0];
+      const others = personData.banks.filter((b) => b !== primary).map((b) => createBankRecord(b, false));
+      return [createBankRecord(primary, true), ...others];
     }
     const primary = createBankRecord(personData.primaryBank || personData, true);
     const banks = [primary];
@@ -97,20 +118,6 @@ function buildBankState(appData) {
 function validateBankRow(bank = {}, isPrimary = false) {
   const errors = {};
 
-  if (!isPrimary) {
-    if (!bank.bankName || String(bank.bankName).trim() === '') {
-      errors.bankName = 'Bank name is required';
-    }
-    if (!bank.branch || String(bank.branch).trim() === '') {
-      errors.branch = 'Branch is required';
-    }
-    if (!String(bank.accountNumber || '').trim()) {
-      errors.accountNumber = 'Account number is required';
-    }
-    return errors;
-  }
-
-  // Primary bank validations
   if (!bank.bankName || String(bank.bankName).trim() === '') {
     errors.bankName = 'Bank name is required';
   }
@@ -123,12 +130,14 @@ function validateBankRow(bank = {}, isPrimary = false) {
     errors.accountNumber = 'Account number is required';
   }
 
-  if (bank.noOfActiveLoans === '' || bank.noOfActiveLoans === null || bank.noOfActiveLoans === undefined || isNaN(Number(bank.noOfActiveLoans)) || Number(bank.noOfActiveLoans) < 0) {
-    errors.noOfActiveLoans = 'Number of active loans is required';
-  }
+  if (isPrimary) {
+    if (bank.noOfActiveLoans === '' || bank.noOfActiveLoans === null || bank.noOfActiveLoans === undefined || isNaN(Number(bank.noOfActiveLoans)) || Number(bank.noOfActiveLoans) < 0) {
+      errors.noOfActiveLoans = 'Number of active loans is required';
+    }
 
-  if (bank.noOfActiveCreditCards === '' || bank.noOfActiveCreditCards === null || bank.noOfActiveCreditCards === undefined || isNaN(Number(bank.noOfActiveCreditCards)) || Number(bank.noOfActiveCreditCards) < 0) {
-    errors.noOfActiveCreditCards = 'Number of active credit cards is required';
+    if (bank.noOfActiveCreditCards === '' || bank.noOfActiveCreditCards === null || bank.noOfActiveCreditCards === undefined || isNaN(Number(bank.noOfActiveCreditCards)) || Number(bank.noOfActiveCreditCards) < 0) {
+      errors.noOfActiveCreditCards = 'Number of active credit cards is required';
+    }
   }
 
   return errors;
@@ -181,6 +190,7 @@ function PersonBankingSection({
         <div className="aw-mini-card__body" style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px 16px' }}>
           {banks.map((bank, bIdx) => {
             const isPrimary = bIdx === 0;
+            const bankLabel = isPrimary ? 'Primary Bank' : `Other Bank ${bIdx}`;
             const bankErrPrefix = personType === 'applicant'
               ? `applicant.banks.${bIdx}.`
               : `coApplicants.${personIndex}.banks.${bIdx}.`;
@@ -206,7 +216,7 @@ function PersonBankingSection({
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
                   <span style={{ fontSize: '12.5px', fontWeight: 700, color: isPrimary ? '#0369a1' : '#334155' }}>
-                    {isPrimary ? 'Bank 1 (Primary Bank)' : `Bank ${bIdx + 1}`}
+                    {bankLabel}
                   </span>
                   {!isPrimary && (
                     <button
@@ -290,7 +300,7 @@ function PersonBankingSection({
         </div>
       </div>
 
-      {/* 2. EXISTING LOAN / CREDIT CARD SECTION (Person-Level, Tied to Primary Bank) */}
+      {/* 2. EXISTING LOAN / CREDIT CARD SECTION (Tied to Primary Bank) */}
       <div className="aw-mini-card">
         <div className="aw-mini-card__header" style={{ padding: '12px 16px' }}>
           <div>
@@ -407,7 +417,6 @@ function PersonBankingSection({
 async function syncActiveLoansForBank(bankId, loansToSave, activeCount, baseUrl, currentUserId = 1) {
   if (!bankId) return loansToSave;
 
-  // 1. Fetch existing active loans from backend for this bank
   let existingLoans = [];
   try {
     const res = await fetch(`${baseUrl}/ApplicationBankActiveLoanDetails`);
@@ -437,97 +446,122 @@ async function syncActiveLoansForBank(bankId, loansToSave, activeCount, baseUrl,
   });
 
   const updatedLoansList = [];
+  const processedLoanIds = new Set();
 
-  // 2. Save/Update loans within activeCount
   for (let i = 0; i < activeCount; i++) {
     const loan = loansToSave[i] || {};
+    const bankName = loan.bankName || '';
     const loanType = loan.loanType || '';
-    const totalLoanAmount = loan.totalLoanAmount !== '' && loan.totalLoanAmount !== null && loan.totalLoanAmount !== undefined ? parseAmountToNumber(loan.totalLoanAmount) : null;
-    const totalOutstanding = loan.totalOutstanding !== '' && loan.totalOutstanding !== null && loan.totalOutstanding !== undefined ? parseAmountToNumber(loan.totalOutstanding) : null;
-    const emiAmount = loan.emiAmount !== '' && loan.emiAmount !== null && loan.emiAmount !== undefined ? parseAmountToNumber(loan.emiAmount) : null;
+    const totalLoanAmount = loan.totalLoanAmount !== '' && loan.totalLoanAmount !== null && loan.totalLoanAmount !== undefined ? parseAmountToNumber(loan.totalLoanAmount) : 0;
+    const totalOutstanding = loan.totalOutstanding !== '' && loan.totalOutstanding !== null && loan.totalOutstanding !== undefined ? parseAmountToNumber(loan.totalOutstanding) : 0;
+    const emiAmount = loan.emiAmount !== '' && loan.emiAmount !== null && loan.emiAmount !== undefined ? parseAmountToNumber(loan.emiAmount) : 0;
+    const totalTenureMonths = loan.totalTenureMonths !== '' && loan.totalTenureMonths !== null && loan.totalTenureMonths !== undefined ? Number(loan.totalTenureMonths) : 0;
+    const balanceTenureMonths = loan.balanceTenureMonths !== '' && loan.balanceTenureMonths !== null && loan.balanceTenureMonths !== undefined ? Number(loan.balanceTenureMonths) : 0;
 
-    if (loanType || totalLoanAmount !== null || totalOutstanding !== null || emiAmount !== null) {
-      const loanId = loan.applicationBankActiveLoanDetailsId || loan.ApplicationBankActiveLoanDetailsId;
+    const loanId = loan.applicationBankActiveLoanDetailsId || loan.ApplicationBankActiveLoanDetailsId;
 
-      if (loanId && existingMap.has(String(loanId))) {
-        // PUT update
-        const putPayload = {
-          applicationBankActiveLoanDetailsId: Number(loanId),
-          applicationBankExistingLoanDetailsId: Number(bankId),
-          loanType: loanType,
-          totalLoanAmount: totalLoanAmount || 0,
-          totalOutstanding: totalOutstanding || 0,
-          emiAmount: emiAmount || 0,
-          status: loan.status || 'Active',
-          modifiedBy: Number(currentUserId) || 1,
-        };
+    if (loanId && existingMap.has(String(loanId))) {
+      processedLoanIds.add(String(loanId));
+      const putPayload = {
+        applicationBankActiveLoanDetailsId: Number(loanId),
+        applicationBankExistingLoanDetailsId: Number(bankId),
+        bankName: bankName,
+        loanType: loanType,
+        totalLoanAmount: totalLoanAmount,
+        totalOutstanding: totalOutstanding,
+        emiAmount: emiAmount,
+        totalTenureMonths: totalTenureMonths,
+        balanceTenureMonths: balanceTenureMonths,
+        status: loan.status || 'Active',
+        modifiedBy: Number(currentUserId) || 1,
+      };
 
-        const putRes = await fetch(`${baseUrl}/ApplicationBankActiveLoanDetails/${loanId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(putPayload),
-        });
+      const putRes = await fetch(`${baseUrl}/ApplicationBankActiveLoanDetails/${loanId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(putPayload),
+      });
 
-        if (!putRes.ok) {
-          throw new Error(`Failed to update active loan ${loanId} (HTTP ${putRes.status})`);
-        }
-
-        updatedLoansList.push({
-          ...loan,
-          applicationBankActiveLoanDetailsId: Number(loanId),
-          applicationBankExistingLoanDetailsId: Number(bankId),
-          loanType,
-          totalLoanAmount: totalLoanAmount !== null ? String(totalLoanAmount) : '',
-          totalOutstanding: totalOutstanding !== null ? String(totalOutstanding) : '',
-          emiAmount: emiAmount !== null ? String(emiAmount) : '',
-          status: loan.status || 'Active',
-        });
-      } else {
-        // POST new loan
-        const postPayload = {
-          applicationBankExistingLoanDetailsId: Number(bankId),
-          loanType: loanType,
-          totalLoanAmount: totalLoanAmount || 0,
-          totalOutstanding: totalOutstanding || 0,
-          emiAmount: emiAmount || 0,
-          status: loan.status || 'Active',
-          createdBy: Number(currentUserId) || 1,
-        };
-
-        const postRes = await fetch(`${baseUrl}/ApplicationBankActiveLoanDetails`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(postPayload),
-        });
-
-        if (!postRes.ok) {
-          throw new Error(`Failed to create active loan (HTTP ${postRes.status})`);
-        }
-
-        let newId = null;
-        if (postRes.status !== 204) {
-          const resText = await postRes.text();
-          if (resText) {
-            try {
-              const resJson = JSON.parse(resText);
-              newId = resJson?.applicationBankActiveLoanDetailsId || resJson?.ApplicationBankActiveLoanDetailsId || resJson?.id;
-            } catch (e) {}
-          }
-        }
-
-        updatedLoansList.push({
-          ...loan,
-          applicationBankActiveLoanDetailsId: newId || loan.applicationBankActiveLoanDetailsId || null,
-          applicationBankExistingLoanDetailsId: Number(bankId),
-          loanType,
-          totalLoanAmount: totalLoanAmount !== null ? String(totalLoanAmount) : '',
-          totalOutstanding: totalOutstanding !== null ? String(totalOutstanding) : '',
-          emiAmount: emiAmount !== null ? String(emiAmount) : '',
-          status: loan.status || 'Active',
-        });
+      if (!putRes.ok) {
+        throw new Error(`Failed to update active loan ${loanId} (HTTP ${putRes.status})`);
       }
+
+      updatedLoansList.push({
+        ...loan,
+        applicationBankActiveLoanDetailsId: Number(loanId),
+        applicationBankExistingLoanDetailsId: Number(bankId),
+        bankName,
+        loanType,
+        totalLoanAmount: totalLoanAmount !== null ? String(totalLoanAmount) : '',
+        totalOutstanding: totalOutstanding !== null ? String(totalOutstanding) : '',
+        emiAmount: emiAmount !== null ? String(emiAmount) : '',
+        totalTenureMonths: String(totalTenureMonths),
+        balanceTenureMonths: String(balanceTenureMonths),
+        status: loan.status || 'Active',
+      });
     } else {
-      updatedLoansList.push(loan);
+      const postPayload = {
+        applicationBankExistingLoanDetailsId: Number(bankId),
+        bankName: bankName,
+        loanType: loanType,
+        totalLoanAmount: totalLoanAmount,
+        totalOutstanding: totalOutstanding,
+        emiAmount: emiAmount,
+        totalTenureMonths: totalTenureMonths,
+        balanceTenureMonths: balanceTenureMonths,
+        status: loan.status || 'Active',
+        createdBy: Number(currentUserId) || 1,
+      };
+
+      const postRes = await fetch(`${baseUrl}/ApplicationBankActiveLoanDetails`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(postPayload),
+      });
+
+      if (!postRes.ok) {
+        throw new Error(`Failed to create active loan (HTTP ${postRes.status})`);
+      }
+
+      let newId = null;
+      if (postRes.status !== 204) {
+        const resText = await postRes.text();
+        if (resText) {
+          try {
+            const resJson = JSON.parse(resText);
+            newId = resJson?.applicationBankActiveLoanDetailsId || resJson?.ApplicationBankActiveLoanDetailsId || resJson?.id;
+          } catch (e) {}
+        }
+      }
+
+      if (newId) processedLoanIds.add(String(newId));
+
+      updatedLoansList.push({
+        ...loan,
+        applicationBankActiveLoanDetailsId: newId || loan.applicationBankActiveLoanDetailsId || null,
+        applicationBankExistingLoanDetailsId: Number(bankId),
+        bankName,
+        loanType,
+        totalLoanAmount: totalLoanAmount !== null ? String(totalLoanAmount) : '',
+        totalOutstanding: totalOutstanding !== null ? String(totalOutstanding) : '',
+        emiAmount: emiAmount !== null ? String(emiAmount) : '',
+        totalTenureMonths: String(totalTenureMonths),
+        balanceTenureMonths: String(balanceTenureMonths),
+        status: loan.status || 'Active',
+      });
+    }
+  }
+
+  for (const existingLoan of existingLoans) {
+    const lid = existingLoan.applicationBankActiveLoanDetailsId ?? existingLoan.ApplicationBankActiveLoanDetailsId ?? existingLoan.id;
+    if (lid && !processedLoanIds.has(String(lid))) {
+      try {
+        await fetch(`${baseUrl}/ApplicationBankActiveLoanDetails/${lid}`, {
+          method: 'DELETE',
+        });
+      } catch (delErr) {
+        console.warn(`Failed to delete removed active loan ${lid}:`, delErr);
+      }
     }
   }
 
@@ -537,7 +571,6 @@ async function syncActiveLoansForBank(bankId, loansToSave, activeCount, baseUrl,
 async function syncCreditCardsForBank(bankId, cardsToSave, activeCount, baseUrl, currentUserId = 1) {
   if (!bankId) return [];
 
-  // 1. Fetch existing credit cards from backend for this bank
   let existingCards = [];
   try {
     const res = await fetch(`${baseUrl}/ApplicationBankCreditCardDetails/by-bank/${bankId}`);
@@ -558,7 +591,6 @@ async function syncCreditCardsForBank(bankId, cardsToSave, activeCount, baseUrl,
   const updatedCardsList = [];
   const processedCardIds = new Set();
 
-  // 2. Save/Update cards within activeCount
   for (let i = 0; i < activeCount; i++) {
     const card = cardsToSave[i] || {};
     const cardName = card.cardName || '';
@@ -568,7 +600,6 @@ async function syncCreditCardsForBank(bankId, cardsToSave, activeCount, baseUrl,
       const cardId = card.applicationBankCreditCardDetailsId || card.ApplicationBankCreditCardDetailsId;
 
       if (cardId && existingMap.has(String(cardId))) {
-        // PUT update
         processedCardIds.add(String(cardId));
         const putPayload = {
           applicationBankCreditCardDetailsId: Number(cardId),
@@ -590,6 +621,9 @@ async function syncCreditCardsForBank(bankId, cardsToSave, activeCount, baseUrl,
               ...card,
               applicationBankCreditCardDetailsId: Number(cardId),
               applicationBankExistingLoanDetailsId: Number(bankId),
+              cardName,
+              cardNumber,
+              status: card.status || 'Active',
             });
           } else {
             updatedCardsList.push(card);
@@ -599,7 +633,6 @@ async function syncCreditCardsForBank(bankId, cardsToSave, activeCount, baseUrl,
           updatedCardsList.push(card);
         }
       } else {
-        // POST new card
         const postPayload = {
           applicationBankExistingLoanDetailsId: Number(bankId),
           cardName: cardName,
@@ -630,6 +663,9 @@ async function syncCreditCardsForBank(bankId, cardsToSave, activeCount, baseUrl,
               ...card,
               applicationBankCreditCardDetailsId: newId || card.applicationBankCreditCardDetailsId || null,
               applicationBankExistingLoanDetailsId: Number(bankId),
+              cardName,
+              cardNumber,
+              status: card.status || 'Active',
             });
           } else {
             updatedCardsList.push(card);
@@ -642,7 +678,6 @@ async function syncCreditCardsForBank(bankId, cardsToSave, activeCount, baseUrl,
     }
   }
 
-  // 3. Delete any previously existing cards from backend that are no longer active/present
   for (const existingCard of existingCards) {
     const cid = existingCard.applicationBankCreditCardDetailsId ?? existingCard.ApplicationBankCreditCardDetailsId ?? existingCard.id;
     if (cid && !processedCardIds.has(String(cid))) {
@@ -667,10 +702,10 @@ export default function BankExistingLoans() {
   const [form, setForm] = useState(() => buildBankState(getApplication(appId)));
   const [errors, setErrors] = useState({});
   const [errorPopup, setErrorPopup] = useState(null);
+  const [deletedBankIds, setDeletedBankIds] = useState([]);
   const [viewingLoansFor, setViewingLoansFor] = useState(null);
   const [isLoadingActiveLoans, setIsLoadingActiveLoans] = useState(false);
   const [isSavingLoans, setIsSavingLoans] = useState(false);
-  const [activeLoansError, setActiveLoansError] = useState(null);
   const [transientLoans, setTransientLoans] = useState({});
   const [viewingCardsFor, setViewingCardsFor] = useState(null);
   const [isLoadingCards, setIsLoadingCards] = useState(false);
@@ -722,10 +757,16 @@ export default function BankExistingLoans() {
         if (!active) return;
         hydratedAppIdRef.current = appId;
         if (hydratedApp) {
-          const initialBankState = buildBankState(hydratedApp);
           const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+          const prodId =
+            hydratedApp?.applicationProductDetailsId ??
+            hydratedApp?.ApplicationProductDetailsId ??
+            hydratedApp?.sections?.productDetails?.applicationProductDetailsId ??
+            hydratedApp?.productDetails?.applicationProductDetailsId ??
+            null;
 
-          // Fetch all active loans from backend for hydration
+          const coAppCount = getApplicantCount(hydratedApp);
+
           let allActiveLoans = [];
           try {
             const loanRes = await fetch(`${baseUrl}/ApplicationBankActiveLoanDetails`);
@@ -743,7 +784,7 @@ export default function BankExistingLoans() {
 
             let updatedBank = { ...bank };
 
-            // 1. Credit Cards Hydration (only for primary or if has ID)
+            // 1. Credit Cards Hydration
             try {
               const res = await fetch(`${baseUrl}/ApplicationBankCreditCardDetails/by-bank/${bankId}`);
               if (res.ok) {
@@ -788,6 +829,7 @@ export default function BankExistingLoans() {
                   item.id ??
                   null,
                 applicationBankExistingLoanDetailsId: Number(bankId),
+                bankName: item.bankName ?? item.BankName ?? item.bankNameOrNbfc ?? '',
                 loanType: item.loanType ?? item.LoanType ?? '',
                 totalLoanAmount:
                   item.totalLoanAmount !== undefined && item.totalLoanAmount !== null
@@ -807,6 +849,18 @@ export default function BankExistingLoans() {
                     : (item.EmiAmount !== undefined && item.EmiAmount !== null
                     ? String(item.EmiAmount)
                     : ''),
+                totalTenureMonths:
+                  item.totalTenureMonths !== undefined && item.totalTenureMonths !== null
+                    ? String(item.totalTenureMonths)
+                    : (item.TotalTenureMonths !== undefined && item.TotalTenureMonths !== null
+                    ? String(item.TotalTenureMonths)
+                    : (item.totalTenure ?? '')),
+                balanceTenureMonths:
+                  item.balanceTenureMonths !== undefined && item.balanceTenureMonths !== null
+                    ? String(item.balanceTenureMonths)
+                    : (item.BalanceTenureMonths !== undefined && item.BalanceTenureMonths !== null
+                    ? String(item.BalanceTenureMonths)
+                    : (item.balanceTenure ?? '')),
                 status: item.status ?? item.Status ?? 'Active',
               }));
 
@@ -822,15 +876,45 @@ export default function BankExistingLoans() {
             return updatedBank;
           };
 
-          const applicantBanks = await Promise.all(
-            initialBankState.applicant.banks.map((b, idx) => fetchBankFullDetails(b, idx === 0))
-          );
+          const fetchBanksForSequence = async (seq, defaultBanks = []) => {
+            let fetchedList = [];
+            if (prodId) {
+              try {
+                const res = await fetch(`${baseUrl}/ApplicationBankExistingLoanDetails/by-application/${prodId}/${seq}`);
+                if (res.ok) {
+                  const data = await res.json();
+                  fetchedList = Array.isArray(data) ? data : (data?.value ?? data?.data ?? []);
+                }
+              } catch (e) {
+                console.warn(`Failed to fetch banks by-application for seq ${seq}:`, e);
+              }
+            }
+
+            if (fetchedList.length > 0) {
+              const converted = fetchedList.map((b) => createBankRecord(b, Boolean(b.isPrimaryBank ?? b.IsPrimaryBank)));
+              const primary = converted.find((b) => b.isPrimaryBank === true) || converted[0];
+              const others = converted.filter((b) => b !== primary).map((b) => ({ ...b, isPrimaryBank: false }));
+              const ordered = [{ ...primary, isPrimaryBank: true }, ...others];
+              return Promise.all(ordered.map((b, idx) => fetchBankFullDetails(b, idx === 0)));
+            }
+
+            if (defaultBanks.length > 0) {
+              const primary = defaultBanks.find((b) => b.isPrimaryBank === true) || defaultBanks[0];
+              const others = defaultBanks.filter((b) => b !== primary).map((b) => ({ ...b, isPrimaryBank: false }));
+              const ordered = [{ ...primary, isPrimaryBank: true }, ...others];
+              return Promise.all(ordered.map((b, idx) => fetchBankFullDetails(b, idx === 0)));
+            }
+
+            return [createBankRecord({}, true)];
+          };
+
+          const initialBankState = buildBankState(hydratedApp);
+
+          const applicantBanks = await fetchBanksForSequence(0, initialBankState.applicant.banks);
 
           const coApplicants = await Promise.all(
-            initialBankState.coApplicants.map(async (co) => {
-              const coBanks = await Promise.all(
-                co.banks.map((b, idx) => fetchBankFullDetails(b, idx === 0))
-              );
+            Array.from({ length: Math.max(0, coAppCount) }, async (_, idx) => {
+              const coBanks = await fetchBanksForSequence(idx + 1, initialBankState.coApplicants[idx]?.banks || []);
               return { banks: coBanks };
             })
           );
@@ -886,9 +970,20 @@ export default function BankExistingLoans() {
       ? (appData.sections?.employmentIncome?.applicant?.employmentIncomeDetailsId || appData.employmentIncome?.applicant?.employmentIncomeDetailsId || null)
       : (appData.sections?.employmentIncome?.coApplicants?.[coAppIndex]?.employmentIncomeDetailsId || appData.employmentIncome?.coApplicants?.[coAppIndex]?.employmentIncomeDetailsId || null);
 
+    const prodId =
+      appData?.applicationProductDetailsId ??
+      appData?.ApplicationProductDetailsId ??
+      appData?.sections?.productDetails?.applicationProductDetailsId ??
+      appData?.productDetails?.applicationProductDetailsId ??
+      null;
+
+    const seq = personType === 'applicant' ? 0 : (coAppIndex + 1);
+
     const emptyBank = {
       applicationBankExistingLoanDetailsId: null,
-      employmentIncomeDetailsId: currentEmpId,
+      applicationProductDetailsId: prodId ? Number(prodId) : null,
+      applicantSequence: seq,
+      applicationEmploymentIncomeDetailsId: currentEmpId,
       bankName: '',
       bankId: '',
       branch: '',
@@ -927,9 +1022,11 @@ export default function BankExistingLoans() {
   };
 
   const handleRemoveBank = (personType, coAppIndex = null, bankIndex) => {
-    if (bankIndex === 0) return; // Do not allow removal of Primary Bank
+    if (bankIndex === 0) return;
 
+    let bankToRemove = null;
     if (personType === 'applicant') {
+      bankToRemove = form.applicant.banks[bankIndex];
       const updatedBanks = form.applicant.banks.filter((_, idx) => idx !== bankIndex);
       const nextForm = {
         ...form,
@@ -947,6 +1044,7 @@ export default function BankExistingLoans() {
         return next;
       });
     } else {
+      bankToRemove = form.coApplicants[coAppIndex]?.banks[bankIndex];
       const updatedBanks = form.coApplicants[coAppIndex].banks.filter((_, idx) => idx !== bankIndex);
       const nextForm = {
         ...form,
@@ -964,6 +1062,10 @@ export default function BankExistingLoans() {
         });
         return next;
       });
+    }
+
+    if (bankToRemove?.applicationBankExistingLoanDetailsId) {
+      setDeletedBankIds((prev) => [...prev, Number(bankToRemove.applicationBankExistingLoanDetailsId)]);
     }
   };
 
@@ -1055,23 +1157,20 @@ export default function BankExistingLoans() {
     const bank = getBankByTarget(target);
     const count = parseInt(bank?.noOfActiveLoans, 10) || 0;
 
-    // If already initialized in transientLoans for this session and count matches, keep existing edits
     if (transientLoans[key] && transientLoans[key].length === count) {
       return;
     }
 
-    // If local bank state already has activeLoansDetails saved
     if (bank?.activeLoansDetails && bank.activeLoansDetails.length > 0) {
       const existing = bank.activeLoansDetails;
       const loansArray = Array.from({ length: count }, (_, i) => existing[i] ? { ...existing[i] } : {
-        // Frontend-only until backend contract is added.
-        bankNameOrNbfc: '',
+        bankName: '',
         loanType: '',
         totalLoanAmount: '',
         totalOutstanding: '',
         emiAmount: '',
-        totalTenure: '',
-        balanceTenure: '',
+        totalTenureMonths: '',
+        balanceTenureMonths: '',
         status: 'Active',
       });
       setTransientLoans((prev) => ({ ...prev, [key]: loansArray }));
@@ -1091,26 +1190,22 @@ export default function BankExistingLoans() {
       bank?.applicationBankDetailsId ||
       bank?.ApplicationBankDetailsId;
 
-    // For a NEW application (no existing bank ID in backend), do NOT call backend API
     if (!bankId) {
       const loansArray = Array.from({ length: count }, () => ({
-        // Frontend-only until backend contract is added.
-        bankNameOrNbfc: '',
+        bankName: '',
         loanType: '',
         totalLoanAmount: '',
         totalOutstanding: '',
         emiAmount: '',
-        totalTenure: '',
-        balanceTenure: '',
+        totalTenureMonths: '',
+        balanceTenureMonths: '',
         status: 'Active',
       }));
       setTransientLoans((prev) => ({ ...prev, [key]: loansArray }));
       return;
     }
 
-    // Existing bank in edit mode: fetch active loan records from API
     setIsLoadingActiveLoans(true);
-    setActiveLoansError(null);
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
     try {
@@ -1131,41 +1226,37 @@ export default function BankExistingLoans() {
         const mappedLoans = matched.map((item) => ({
           applicationBankActiveLoanDetailsId: item.applicationBankActiveLoanDetailsId ?? item.ApplicationBankActiveLoanDetailsId ?? null,
           applicationBankExistingLoanDetailsId: Number(bankId),
-          // Frontend-only until backend contract is added.
-          bankNameOrNbfc: '',
+          bankName: item.bankName ?? item.BankName ?? item.bankNameOrNbfc ?? '',
           loanType: item.loanType ?? item.LoanType ?? '',
           totalLoanAmount: item.totalLoanAmount !== undefined && item.totalLoanAmount !== null ? formatIndianAmount(item.totalLoanAmount) : (item.TotalLoanAmount !== undefined && item.TotalLoanAmount !== null ? formatIndianAmount(item.TotalLoanAmount) : ''),
           totalOutstanding: item.totalOutstanding !== undefined && item.totalOutstanding !== null ? formatIndianAmount(item.totalOutstanding) : (item.TotalOutstanding !== undefined && item.TotalOutstanding !== null ? formatIndianAmount(item.TotalOutstanding) : ''),
           emiAmount: item.emiAmount !== undefined && item.emiAmount !== null ? formatIndianAmount(item.emiAmount) : (item.EmiAmount !== undefined && item.EmiAmount !== null ? formatIndianAmount(item.EmiAmount) : ''),
-          totalTenure: '',
-          balanceTenure: '',
+          totalTenureMonths: item.totalTenureMonths !== undefined && item.totalTenureMonths !== null ? String(item.totalTenureMonths) : (item.TotalTenureMonths !== undefined && item.TotalTenureMonths !== null ? String(item.TotalTenureMonths) : (item.totalTenure ?? '')),
+          balanceTenureMonths: item.balanceTenureMonths !== undefined && item.balanceTenureMonths !== null ? String(item.balanceTenureMonths) : (item.BalanceTenureMonths !== undefined && item.BalanceTenureMonths !== null ? String(item.BalanceTenureMonths) : (item.balanceTenure ?? '')),
           status: item.status ?? item.Status ?? 'Active',
         }));
 
         const loansArray = Array.from({ length: count }, (_, i) => mappedLoans[i] || {
-          // Frontend-only until backend contract is added.
-          bankNameOrNbfc: '',
+          bankName: '',
           loanType: '',
           totalLoanAmount: '',
           totalOutstanding: '',
           emiAmount: '',
-          totalTenure: '',
-          balanceTenure: '',
+          totalTenureMonths: '',
+          balanceTenureMonths: '',
           status: 'Active',
         });
 
         setTransientLoans((prev) => ({ ...prev, [key]: loansArray }));
       } else {
-        console.warn('Failed to fetch ApplicationBankActiveLoanDetails:', res.status);
         const loansArray = Array.from({ length: count }, () => ({
-          // Frontend-only until backend contract is added.
-          bankNameOrNbfc: '',
+          bankName: '',
           loanType: '',
           totalLoanAmount: '',
           totalOutstanding: '',
           emiAmount: '',
-          totalTenure: '',
-          balanceTenure: '',
+          totalTenureMonths: '',
+          balanceTenureMonths: '',
           status: 'Active',
         }));
         setTransientLoans((prev) => ({ ...prev, [key]: loansArray }));
@@ -1173,14 +1264,13 @@ export default function BankExistingLoans() {
     } catch (err) {
       console.error('Error fetching active loans from server:', err);
       const loansArray = Array.from({ length: count }, () => ({
-        // Frontend-only until backend contract is added.
-        bankNameOrNbfc: '',
+        bankName: '',
         loanType: '',
         totalLoanAmount: '',
         totalOutstanding: '',
         emiAmount: '',
-        totalTenure: '',
-        balanceTenure: '',
+        totalTenureMonths: '',
+        balanceTenureMonths: '',
         status: 'Active',
       }));
       setTransientLoans((prev) => ({ ...prev, [key]: loansArray }));
@@ -1200,14 +1290,13 @@ export default function BankExistingLoans() {
       const count = parseInt(bank?.noOfActiveLoans, 10) || 0;
       const currentList = prev[key] || bank?.activeLoansDetails || [];
       const loans = Array.from({ length: count }, (_, i) => ({
-        // Frontend-only until backend contract is added.
-        bankNameOrNbfc: '',
+        bankName: '',
         loanType: '',
         totalLoanAmount: '',
         totalOutstanding: '',
         emiAmount: '',
-        totalTenure: '',
-        balanceTenure: '',
+        totalTenureMonths: '',
+        balanceTenureMonths: '',
         status: 'Active',
         ...(currentList[i] || {}),
       }));
@@ -1224,26 +1313,78 @@ export default function BankExistingLoans() {
     const count = parseInt(bank?.noOfActiveLoans, 10) || 0;
     const currentList = transientLoans[key] || bank?.activeLoansDetails || [];
     const finalLoans = Array.from({ length: count }, (_, i) => ({
-      // Frontend-only until backend contract is added.
-      bankNameOrNbfc: '',
+      bankName: '',
       loanType: '',
       totalLoanAmount: '',
       totalOutstanding: '',
       emiAmount: '',
-      totalTenure: '',
-      balanceTenure: '',
+      totalTenureMonths: '',
+      balanceTenureMonths: '',
       status: 'Active',
       applicationBankExistingLoanDetailsId: bank?.applicationBankExistingLoanDetailsId || null,
       ...(currentList[i] || {}),
     }));
 
-    // Validate required fields: If count > 0, make sure every configured loan has a Loan Type
+    // Strict validation: Require all 7 fields for all configured loans
     for (let i = 0; i < count; i++) {
-      const loan = finalLoans[i];
+      const loan = finalLoans[i] || {};
+      if (!loan.bankName?.trim()) {
+        setErrorPopup({
+          title: 'Validation Error',
+          message: `Please enter the Bank Name / NBFC for Loan #${i + 1}.`,
+          variant: 'validation',
+        });
+        return;
+      }
       if (!loan.loanType?.trim()) {
         setErrorPopup({
           title: 'Validation Error',
           message: `Please enter the Loan Type for Loan #${i + 1}.`,
+          variant: 'validation',
+        });
+        return;
+      }
+      const totalAmt = parseAmountToNumber(loan.totalLoanAmount);
+      if (loan.totalLoanAmount === '' || loan.totalLoanAmount === null || loan.totalLoanAmount === undefined || isNaN(totalAmt) || totalAmt <= 0) {
+        setErrorPopup({
+          title: 'Validation Error',
+          message: `Please enter a valid Total Loan Amount for Loan #${i + 1}.`,
+          variant: 'validation',
+        });
+        return;
+      }
+      const outstanding = parseAmountToNumber(loan.totalOutstanding);
+      if (loan.totalOutstanding === '' || loan.totalOutstanding === null || loan.totalOutstanding === undefined || isNaN(outstanding) || outstanding < 0) {
+        setErrorPopup({
+          title: 'Validation Error',
+          message: `Please enter a valid Total Outstanding for Loan #${i + 1}.`,
+          variant: 'validation',
+        });
+        return;
+      }
+      const emi = parseAmountToNumber(loan.emiAmount);
+      if (loan.emiAmount === '' || loan.emiAmount === null || loan.emiAmount === undefined || isNaN(emi) || emi <= 0) {
+        setErrorPopup({
+          title: 'Validation Error',
+          message: `Please enter a valid EMI Amount for Loan #${i + 1}.`,
+          variant: 'validation',
+        });
+        return;
+      }
+      const totalTenure = Number(loan.totalTenureMonths);
+      if (loan.totalTenureMonths === '' || loan.totalTenureMonths === null || loan.totalTenureMonths === undefined || isNaN(totalTenure) || totalTenure <= 0) {
+        setErrorPopup({
+          title: 'Validation Error',
+          message: `Please enter Total Tenure (Months) for Loan #${i + 1}.`,
+          variant: 'validation',
+        });
+        return;
+      }
+      const balanceTenure = Number(loan.balanceTenureMonths);
+      if (loan.balanceTenureMonths === '' || loan.balanceTenureMonths === null || loan.balanceTenureMonths === undefined || isNaN(balanceTenure) || balanceTenure < 0) {
+        setErrorPopup({
+          title: 'Validation Error',
+          message: `Please enter Balance Tenure (Months) for Loan #${i + 1}.`,
           variant: 'validation',
         });
         return;
@@ -1258,7 +1399,7 @@ export default function BankExistingLoans() {
       setIsSavingLoans(true);
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
       const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || '{}');
-      const currentUserId = currentUser?.rmId || currentUser?.userId || currentUser?.id || 1;
+      const currentUserId = Number(currentUser?.rmId || currentUser?.userId || currentUser?.id || 1);
 
       try {
         const synced = await syncActiveLoansForBank(bankId, finalLoans, count, baseUrl, currentUserId);
@@ -1396,6 +1537,27 @@ export default function BankExistingLoans() {
       ...(cards[i] || {}),
     }));
 
+    // Strict validation: Require Card Name and Card Number for all configured cards
+    for (let i = 0; i < count; i++) {
+      const card = finalCards[i] || {};
+      if (!card.cardName?.trim()) {
+        setErrorPopup({
+          title: 'Validation Error',
+          message: `Please enter Card Name / Bank Name for Credit Card #${i + 1}.`,
+          variant: 'validation',
+        });
+        return;
+      }
+      if (!card.cardNumber?.trim()) {
+        setErrorPopup({
+          title: 'Validation Error',
+          message: `Please enter Card Number for Credit Card #${i + 1}.`,
+          variant: 'validation',
+        });
+        return;
+      }
+    }
+
     if (target.type === 'applicant') {
       updateApplicantBank(0, 'activeCreditCardsDetails', finalCards);
     } else {
@@ -1412,7 +1574,7 @@ export default function BankExistingLoans() {
     if (bankId) {
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
       const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || '{}');
-      const currentUserId = currentUser?.rmId || currentUser?.userId || currentUser?.id || 1;
+      const currentUserId = Number(currentUser?.rmId || currentUser?.userId || currentUser?.id || 1);
       try {
         const synced = await syncCreditCardsForBank(bankId, finalCards, count, baseUrl, currentUserId);
         if (synced && synced.length > 0) {
@@ -1442,61 +1604,154 @@ export default function BankExistingLoans() {
       return;
     }
 
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-    const allPersons = [
-      { banks: form.applicant.banks, isApplicant: true, index: null },
-      ...form.coApplicants.map((co, i) => ({ banks: co.banks, isApplicant: false, index: i }))
+    // Comprehensive Active Loans & Credit Cards completion validation
+    const prodId =
+      appData?.applicationProductDetailsId ??
+      appData?.ApplicationProductDetailsId ??
+      appData?.sections?.productDetails?.applicationProductDetailsId ??
+      appData?.productDetails?.applicationProductDetailsId ??
+      null;
+
+    const allPersonsForValidation = [
+      { banks: form.applicant.banks, isApplicant: true, index: null, title: 'Applicant', key: 'applicant-primary' },
+      ...form.coApplicants.map((co, i) => ({ banks: co.banks, isApplicant: false, index: i, title: `Co-Applicant ${i + 1}`, key: `coApplicant-${i}-primary` }))
     ];
 
+    for (const p of allPersonsForValidation) {
+      const primaryBank = p.banks[0] || {};
+      const activeLoanCount = parseInt(primaryBank.noOfActiveLoans, 10) || 0;
+      const activeCardCount = parseInt(primaryBank.noOfActiveCreditCards, 10) || 0;
+
+      // Validate all Active Loans if count > 0
+      if (activeLoanCount > 0) {
+        const loans = transientLoans[p.key] || primaryBank.activeLoansDetails || [];
+        for (let i = 0; i < activeLoanCount; i++) {
+          const loan = loans[i] || {};
+          if (!loan.bankName?.trim()) {
+            setErrorPopup({
+              title: 'Validation Error',
+              message: `Please enter Bank Name / NBFC for Loan #${i + 1} under ${p.title}.`,
+              variant: 'validation',
+            });
+            return;
+          }
+          if (!loan.loanType?.trim()) {
+            setErrorPopup({
+              title: 'Validation Error',
+              message: `Please enter Loan Type for Loan #${i + 1} under ${p.title}.`,
+              variant: 'validation',
+            });
+            return;
+          }
+          const totalAmt = parseAmountToNumber(loan.totalLoanAmount);
+          if (loan.totalLoanAmount === '' || loan.totalLoanAmount === null || loan.totalLoanAmount === undefined || isNaN(totalAmt) || totalAmt <= 0) {
+            setErrorPopup({
+              title: 'Validation Error',
+              message: `Please enter a valid Total Loan Amount for Loan #${i + 1} under ${p.title}.`,
+              variant: 'validation',
+            });
+            return;
+          }
+          const outstanding = parseAmountToNumber(loan.totalOutstanding);
+          if (loan.totalOutstanding === '' || loan.totalOutstanding === null || loan.totalOutstanding === undefined || isNaN(outstanding) || outstanding < 0) {
+            setErrorPopup({
+              title: 'Validation Error',
+              message: `Please enter a valid Total Outstanding for Loan #${i + 1} under ${p.title}.`,
+              variant: 'validation',
+            });
+            return;
+          }
+          const emi = parseAmountToNumber(loan.emiAmount);
+          if (loan.emiAmount === '' || loan.emiAmount === null || loan.emiAmount === undefined || isNaN(emi) || emi <= 0) {
+            setErrorPopup({
+              title: 'Validation Error',
+              message: `Please enter a valid EMI Amount for Loan #${i + 1} under ${p.title}.`,
+              variant: 'validation',
+            });
+            return;
+          }
+          const totalTenure = Number(loan.totalTenureMonths);
+          if (loan.totalTenureMonths === '' || loan.totalTenureMonths === null || loan.totalTenureMonths === undefined || isNaN(totalTenure) || totalTenure <= 0) {
+            setErrorPopup({
+              title: 'Validation Error',
+              message: `Please enter Total Tenure (Months) for Loan #${i + 1} under ${p.title}.`,
+              variant: 'validation',
+            });
+            return;
+          }
+          const balanceTenure = Number(loan.balanceTenureMonths);
+          if (loan.balanceTenureMonths === '' || loan.balanceTenureMonths === null || loan.balanceTenureMonths === undefined || isNaN(balanceTenure) || balanceTenure < 0) {
+            setErrorPopup({
+              title: 'Validation Error',
+              message: `Please enter Balance Tenure (Months) for Loan #${i + 1} under ${p.title}.`,
+              variant: 'validation',
+            });
+            return;
+          }
+        }
+      }
+
+      // Validate all Active Credit Cards if count > 0
+      if (activeCardCount > 0) {
+        const cards = transientCards[p.key] || primaryBank.activeCreditCardsDetails || [];
+        for (let i = 0; i < activeCardCount; i++) {
+          const card = cards[i] || {};
+          if (!card.cardName?.trim()) {
+            setErrorPopup({
+              title: 'Validation Error',
+              message: `Please enter Card Name / Bank Name for Credit Card #${i + 1} under ${p.title}.`,
+              variant: 'validation',
+            });
+            return;
+          }
+          if (!card.cardNumber?.trim()) {
+            setErrorPopup({
+              title: 'Validation Error',
+              message: `Please enter Card Number for Credit Card #${i + 1} under ${p.title}.`,
+              variant: 'validation',
+            });
+            return;
+          }
+        }
+      }
+    }
+
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+    const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || '{}');
+    const currentUserId = Number(currentUser?.rmId || currentUser?.userId || currentUser?.id || 1);
+
     try {
+      // 1. Delete removed bank records
+      for (const delId of deletedBankIds) {
+        try {
+          await fetch(`${baseUrl}/ApplicationBankExistingLoanDetails/${delId}`, {
+            method: 'DELETE',
+          });
+        } catch (delErr) {
+          console.warn(`Failed to delete removed bank ${delId}:`, delErr);
+        }
+      }
+      setDeletedBankIds([]);
+
+      // 2. Save / Update all person banks
       const claimedBankRecordIds = new Set();
+      const allPersons = [
+        { banks: form.applicant.banks, isApplicant: true, index: null, sequence: 0 },
+        ...form.coApplicants.map((co, i) => ({ banks: co.banks, isApplicant: false, index: i, sequence: i + 1 }))
+      ];
 
       for (const person of allPersons) {
         const empId = person.isApplicant
-          ? appData.sections?.employmentIncome?.applicant?.employmentIncomeDetailsId || appData.employmentIncome?.applicant?.employmentIncomeDetailsId
-          : appData.sections?.employmentIncome?.coApplicants?.[person.index]?.employmentIncomeDetailsId || appData.employmentIncome?.coApplicants?.[person.index]?.employmentIncomeDetailsId;
-
-        if (!empId) {
-          console.warn(`No Employment Income Details ID found for ${person.isApplicant ? 'Applicant' : `Co-Applicant ${person.index + 1}`}, skipping Bank API save`);
-          continue;
-        }
+          ? (appData.sections?.employmentIncome?.applicant?.employmentIncomeDetailsId || appData.employmentIncome?.applicant?.employmentIncomeDetailsId || null)
+          : (appData.sections?.employmentIncome?.coApplicants?.[person.index]?.employmentIncomeDetailsId || appData.employmentIncome?.coApplicants?.[person.index]?.employmentIncomeDetailsId || null);
 
         for (let bIdx = 0; bIdx < person.banks.length; bIdx++) {
           const bank = person.banks[bIdx];
           const isPrimary = bIdx === 0;
-          const hasData = isPrimary ? Boolean(bank.bankName) : hasMeaningfulBankData(bank);
-
-          if (!isPrimary && !hasData) {
-            const existingId = bank.applicationBankExistingLoanDetailsId;
-            if (existingId) {
-              try {
-                const delRes = await fetch(`${baseUrl}/ApplicationBankExistingLoanDetails/${existingId}`, {
-                  method: 'DELETE',
-                });
-                if (delRes.ok || delRes.status === 404) {
-                  bank.applicationBankExistingLoanDetailsId = null;
-                  bank.activeLoansDetails = [];
-                  bank.activeCreditCardsDetails = [];
-                }
-              } catch (delErr) {
-                console.warn(`Failed to delete cleared Bank row ${existingId}:`, delErr);
-              }
-            }
-            continue;
-          }
-
-          if (!hasData) continue;
 
           let currentBankId = bank.applicationBankExistingLoanDetailsId ? Number(bank.applicationBankExistingLoanDetailsId) : null;
 
-          // Prevent shared bank record ID across persons: if already claimed, clear it to force POST
           if (currentBankId && claimedBankRecordIds.has(currentBankId)) {
-            currentBankId = null;
-            bank.applicationBankExistingLoanDetailsId = null;
-          }
-
-          // Foreign parent ID check
-          if (currentBankId && bank.employmentIncomeDetailsId && Number(bank.employmentIncomeDetailsId) !== Number(empId)) {
             currentBankId = null;
             bank.applicationBankExistingLoanDetailsId = null;
           }
@@ -1507,18 +1762,21 @@ export default function BankExistingLoans() {
             : `${baseUrl}/ApplicationBankExistingLoanDetails`;
 
           const payload = {
-            ApplicationEmploymentIncomeDetailsId: Number(empId),
-            BankId: Number(bank.bankName),
-            BankBranchId: Number(bank.branch) || 0,
-            AccountNumber: bank.accountNumber || '',
-            NoOfActiveLoans: isPrimary ? (Number(bank.noOfActiveLoans) || 0) : 0,
-            NoOfActiveCreditCards: isPrimary ? (Number(bank.noOfActiveCreditCards) || 0) : 0,
-            IsPrimaryBank: isPrimary,
-            CreatedBy: 1
+            applicationEmploymentIncomeDetailsId: empId ? Number(empId) : null,
+            applicationProductDetailsId: prodId ? Number(prodId) : null,
+            applicantSequence: person.sequence,
+            bankId: Number(bank.bankName || bank.bankId),
+            bankBranchId: Number(bank.branch || bank.bankBranchId) || 0,
+            accountNumber: String(bank.accountNumber || '').trim(),
+            noOfActiveLoans: isPrimary ? (Number(bank.noOfActiveLoans) || 0) : 0,
+            noOfActiveCreditCards: isPrimary ? (Number(bank.noOfActiveCreditCards) || 0) : 0,
+            isPrimaryBank: isPrimary,
+            createdBy: currentUserId,
           };
 
           if (isUpdate) {
-            payload.ApplicationBankExistingLoanDetailsId = Number(currentBankId);
+            payload.applicationBankExistingLoanDetailsId = Number(currentBankId);
+            payload.modifiedBy = currentUserId;
           }
 
           const response = await fetch(url, {
@@ -1534,47 +1792,56 @@ export default function BankExistingLoans() {
           let savedData = null;
           if (response.status !== 204) {
             const text = await response.text();
-            if (text) { try { savedData = JSON.parse(text); } catch (e) { /* ignore */ } }
-          }
-          
-          const savedId = savedData?.applicationBankExistingLoanDetailsId || savedData?.ApplicationBankExistingLoanDetailsId || bank.applicationBankExistingLoanDetailsId;
-          if (savedId) {
-            bank.applicationBankExistingLoanDetailsId = Number(savedId);
-            claimedBankRecordIds.add(Number(savedId));
-          } else if (currentBankId) {
-            claimedBankRecordIds.add(currentBankId);
+            if (text) {
+              try {
+                savedData = JSON.parse(text);
+              } catch (e) {}
+            }
           }
 
-          // Save Active Loan & Credit Card details ONLY FOR PRIMARY BANK (banks[0])
+          const savedId =
+            savedData?.applicationBankExistingLoanDetailsId ??
+            savedData?.ApplicationBankExistingLoanDetailsId ??
+            savedData?.id ??
+            currentBankId;
+
+          if (savedId) {
+            bank.applicationBankExistingLoanDetailsId = Number(savedId);
+            bank.applicationProductDetailsId = prodId ? Number(prodId) : null;
+            bank.applicantSequence = person.sequence;
+            claimedBankRecordIds.add(Number(savedId));
+          }
+
+          // Save Active Loans & Credit Cards for Primary Bank
           if (isPrimary && savedId) {
             const loansKey = person.isApplicant ? 'applicant-primary' : `coApplicant-${person.index}-primary`;
             const loansToSave = transientLoans[loansKey] || bank.activeLoansDetails || [];
             const loansCount = Number(bank.noOfActiveLoans) || 0;
 
-            try {
-              const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || '{}');
-              const currentUserId = currentUser?.rmId || currentUser?.userId || currentUser?.id || 1;
-              const syncedLoans = await syncActiveLoansForBank(savedId, loansToSave, loansCount, baseUrl, currentUserId);
-              if (syncedLoans && syncedLoans.length > 0) {
-                bank.activeLoansDetails = syncedLoans;
+            if (loansCount > 0 || (bank.activeLoansDetails && bank.activeLoansDetails.length > 0)) {
+              try {
+                const syncedLoans = await syncActiveLoansForBank(savedId, loansToSave, loansCount, baseUrl, currentUserId);
+                if (syncedLoans && syncedLoans.length > 0) {
+                  bank.activeLoansDetails = syncedLoans;
+                }
+              } catch (loanErr) {
+                console.warn('Failed to save active loan items:', loanErr);
               }
-            } catch (loanErr) {
-              console.warn('Failed to save active loan items:', loanErr);
             }
 
             const cardsKey = person.isApplicant ? 'applicant-primary' : `coApplicant-${person.index}-primary`;
             const cardsToSave = transientCards[cardsKey] || bank.activeCreditCardsDetails || [];
             const cardsCount = Number(bank.noOfActiveCreditCards) || 0;
 
-            try {
-              const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || '{}');
-              const currentUserId = currentUser?.rmId || currentUser?.userId || currentUser?.id || 1;
-              const syncedCards = await syncCreditCardsForBank(savedId, cardsToSave, cardsCount, baseUrl, currentUserId);
-              if (syncedCards && syncedCards.length > 0) {
-                bank.activeCreditCardsDetails = syncedCards;
+            if (cardsCount > 0 || (bank.activeCreditCardsDetails && bank.activeCreditCardsDetails.length > 0)) {
+              try {
+                const syncedCards = await syncCreditCardsForBank(savedId, cardsToSave, cardsCount, baseUrl, currentUserId);
+                if (syncedCards && syncedCards.length > 0) {
+                  bank.activeCreditCardsDetails = syncedCards;
+                }
+              } catch (cardErr) {
+                console.warn('Failed to save credit card items:', cardErr);
               }
-            } catch (cardErr) {
-              console.warn('Failed to save credit card items:', cardErr);
             }
           }
         }
@@ -1614,7 +1881,7 @@ export default function BankExistingLoans() {
       };
 
       saveApplication(appId, buildSectionUpdate(appData, 'bankExistingLoans', finalForm));
-      navigate(ROUTES.COLLATERAL.replace(':applicationId', appId));
+      navigate(ROUTES.REFERENCES.replace(':applicationId', appId));
     } catch (err) {
       console.error('Error saving Bank Details:', err);
       setErrorPopup({
@@ -1698,6 +1965,7 @@ export default function BankExistingLoans() {
           </div>
         ))}
 
+        {/* ACTIVE CREDIT CARDS MODAL */}
         <Modal 
           show={viewingCardsFor !== null} 
           onHide={() => setViewingCardsFor(null)} 
@@ -1754,7 +2022,7 @@ export default function BankExistingLoans() {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
                           <div className="aw-field" style={{ marginBottom: 0 }}>
                             <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
-                              Card Name / Bank Name
+                              CARD NAME / BANK NAME
                             </label>
                             <input 
                               type="text" 
@@ -1766,7 +2034,7 @@ export default function BankExistingLoans() {
                           </div>
                           <div className="aw-field" style={{ marginBottom: 0 }}>
                             <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
-                              Card Number
+                              CARD NUMBER
                             </label>
                             <input 
                               type="text" 
@@ -1794,6 +2062,7 @@ export default function BankExistingLoans() {
           </div>
         </Modal>
 
+        {/* ACTIVE LOANS MODAL */}
         <Modal 
           show={viewingLoansFor !== null} 
           onHide={() => setViewingLoansFor(null)} 
@@ -1828,14 +2097,13 @@ export default function BankExistingLoans() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxHeight: '65vh', overflowY: 'auto', paddingRight: '4px' }}>
                   {Array.from({ length: count }).map((_, i) => {
                     const loan = loans[i] || {
-                      // Frontend-only until backend contract is added.
-                      bankNameOrNbfc: '',
+                      bankName: '',
                       loanType: '',
                       totalLoanAmount: '',
                       totalOutstanding: '',
                       emiAmount: '',
-                      totalTenure: '',
-                      balanceTenure: '',
+                      totalTenureMonths: '',
+                      balanceTenureMonths: '',
                       status: 'Active',
                     };
                     return (
@@ -1862,20 +2130,20 @@ export default function BankExistingLoans() {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
                           <div className="aw-field" style={{ marginBottom: 0 }}>
                             <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
-                              Bank Name / NBFC
+                              BANK NAME / NBFC
                             </label>
                             <input 
                               type="text" 
                               className="form-input compact-input" 
                               placeholder="e.g. HDFC Bank, SBI, Bajaj" 
-                              value={loan.bankNameOrNbfc || ''} 
-                              onChange={(e) => updateLoanDetail(i, 'bankNameOrNbfc', e.target.value)} 
+                              value={loan.bankName || ''} 
+                              onChange={(e) => updateLoanDetail(i, 'bankName', e.target.value)} 
                             />
                           </div>
 
                           <div className="aw-field" style={{ marginBottom: 0 }}>
                             <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
-                              Loan Type
+                              LOAN TYPE
                             </label>
                             <input 
                               type="text" 
@@ -1888,7 +2156,7 @@ export default function BankExistingLoans() {
 
                           <div className="aw-field" style={{ marginBottom: 0 }}>
                             <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
-                              Total Loan Amount (₹)
+                              TOTAL LOAN AMOUNT
                             </label>
                             <input 
                               type="text" 
@@ -1902,7 +2170,7 @@ export default function BankExistingLoans() {
 
                           <div className="aw-field" style={{ marginBottom: 0 }}>
                             <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
-                              Total Outstanding (₹)
+                              TOTAL OUTSTANDING
                             </label>
                             <input 
                               type="text" 
@@ -1915,11 +2183,11 @@ export default function BankExistingLoans() {
                           </div>
                         </div>
 
-                        {/* ROW 2: EMI Amount, Total Tenure, Balance Tenure */}
+                        {/* ROW 2: EMI Amount, Total Tenure (Months), Balance Tenure (Months) */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
                           <div className="aw-field" style={{ marginBottom: 0 }}>
                             <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
-                              EMI Amount (₹)
+                              EMI AMOUNT
                             </label>
                             <input 
                               type="text" 
@@ -1933,27 +2201,31 @@ export default function BankExistingLoans() {
 
                           <div className="aw-field" style={{ marginBottom: 0 }}>
                             <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
-                              Total Tenure
+                              TOTAL TENURE (MONTHS)
                             </label>
                             <input 
-                              type="text" 
+                              type="number" 
+                              min="1"
+                              step="1"
                               className="form-input compact-input" 
-                              placeholder="e.g. 240 Months / 20 Yrs" 
-                              value={loan.totalTenure || ''} 
-                              onChange={(e) => updateLoanDetail(i, 'totalTenure', e.target.value)} 
+                              placeholder="e.g. 240" 
+                              value={loan.totalTenureMonths || ''} 
+                              onChange={(e) => updateLoanDetail(i, 'totalTenureMonths', e.target.value)} 
                             />
                           </div>
 
                           <div className="aw-field" style={{ marginBottom: 0 }}>
                             <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
-                              Balance Tenure
+                              BALANCE TENURE (MONTHS)
                             </label>
                             <input 
-                              type="text" 
+                              type="number" 
+                              min="0"
+                              step="1"
                               className="form-input compact-input" 
-                              placeholder="e.g. 180 Months / 15 Yrs" 
-                              value={loan.balanceTenure || ''} 
-                              onChange={(e) => updateLoanDetail(i, 'balanceTenure', e.target.value)} 
+                              placeholder="e.g. 180" 
+                              value={loan.balanceTenureMonths || ''} 
+                              onChange={(e) => updateLoanDetail(i, 'balanceTenureMonths', e.target.value)} 
                             />
                           </div>
                         </div>
@@ -1977,4 +2249,3 @@ export default function BankExistingLoans() {
     </>
   );
 }
-
