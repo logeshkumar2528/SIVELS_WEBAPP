@@ -40,8 +40,32 @@ function buildEmploymentState(appData) {
     grossAnnualIncome: source.grossAnnualIncome || '',
   });
 
+  const savedApplicant = saved.applicant || {};
+  const hasSavedApplicantNature =
+    savedApplicant.employmentNature !== undefined &&
+    savedApplicant.employmentNature !== null &&
+    String(savedApplicant.employmentNature).trim() !== '';
+
+  const fallbackApplicantNature =
+    appData?.customer?.employmentTypeId ??
+    appData?.customer?.EmploymentTypeId ??
+    appData?.raw?.customer?.employmentTypeId ??
+    appData?.raw?.customer?.EmploymentTypeId ??
+    appData?.employmentTypeId ??
+    appData?.EmploymentTypeId ??
+    '';
+
+  const applicantEmploymentNature = hasSavedApplicantNature
+    ? savedApplicant.employmentNature
+    : (fallbackApplicantNature !== '' && fallbackApplicantNature !== null && fallbackApplicantNature !== undefined
+        ? fallbackApplicantNature
+        : '');
+
   return {
-    applicant: createPerson(saved.applicant),
+    applicant: {
+      ...createPerson(savedApplicant),
+      employmentNature: applicantEmploymentNature,
+    },
     coApplicants: createArray(count, (index) => createPerson(savedCoApplicants[index])),
   };
 }
