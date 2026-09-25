@@ -8,6 +8,10 @@ const BADGE_CLASS_MAP = {
   newApplications: 'sidebar-badge--new',
   verification: 'sidebar-badge--review',
   returned: 'sidebar-badge--return',
+  approved: 'sidebar-badge--approved',
+  customerSubmissionHistory: 'sidebar-badge--pending',
+  submissionHistory: 'sidebar-badge--pending',
+  myAgents: 'sidebar-badge--pending',
 };
 
 const BOTTOM_SECTION = 'BOTTOM';

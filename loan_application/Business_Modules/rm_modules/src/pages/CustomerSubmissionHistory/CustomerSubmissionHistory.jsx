@@ -22,6 +22,7 @@ import { rmCustomerService } from '../../services/rmCustomerService';
 import { masterService } from '../../../../../Core/src/services/masterService';
 import axiosInstance from '../../../../../Core/src/api/axiosInstance';
 import { getCurrentRMContext, normalizeApplicationStatus } from '../../utils/rmContext';
+import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import { resolveVerificationIdByCodeOrName } from '../../../../../Core/src/utils/verificationHelper';
 import { ROUTES } from '../../config/routeConfig';
 import './CustomerSubmissionHistory.css';
@@ -138,9 +139,55 @@ export default function CustomerSubmissionHistory() {
         verifications,
       });
 
-      // Filter by current RM identity
+      // Filter by current RM identity: strictly records created through RM Add Customer flow
       const myCustomers = currentRmId
-        ? allCustomers.filter((c) => Number(c.rmId || c.RMId || c.createdBy || c.CreatedBy) === Number(currentRmId))
+        ? allCustomers.filter((c) => {
+            const role = String(
+              c.createdByRole ??
+              c.CreatedByRole ??
+              c.created_by_role ??
+              c.raw?.createdByRole ??
+              ''
+            ).trim().toLowerCase();
+
+            const rawAgentId = Number(
+              c.agentId ??
+              c.AgentId ??
+              c.agent_id ??
+              c.raw?.agentId ??
+              0
+            );
+
+            // Exclude any record with an Agent owner or Agent role
+            if (role === 'agent' || rawAgentId > 0) return false;
+
+            const recordRmId = Number(
+              c.rmId ??
+              c.RmId ??
+              c.RMId ??
+              c.rm_id ??
+              c.raw?.rmId ??
+              0
+            );
+
+            const creatorId = Number(
+              c.createdByUserId ??
+              c.CreatedByUserId ??
+              c.created_by_user_id ??
+              c.createdBy ??
+              c.CreatedBy ??
+              c.created_by ??
+              c.raw?.createdByUserId ??
+              c.raw?.createdBy ??
+              0
+            );
+
+            const belongsToCurrentRm = recordRmId === currentRmId || creatorId === currentRmId;
+            const hasNoAgentOwner = !rawAgentId || rawAgentId <= 0;
+            const isExplicitRmCreated = role === 'rm';
+
+            return belongsToCurrentRm && hasNoAgentOwner && isExplicitRmCreated;
+          })
         : [];
 
       // Sort DESC by CreatedAt

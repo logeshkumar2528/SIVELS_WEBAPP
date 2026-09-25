@@ -177,6 +177,16 @@
   color: var(--color-badge-return-text);
 }
 
+.sidebar-badge--approved {
+  background-color: var(--color-badge-approved-bg);
+  color: var(--color-badge-approved-text);
+}
+
+.sidebar-badge--pending {
+  background-color: var(--color-badge-pending-bg);
+  color: var(--color-badge-pending-text);
+}
+
 .sidebar-bottom {
   padding: var(--spacing-3);
   border-top: 1px solid var(--color-sidebar-border);

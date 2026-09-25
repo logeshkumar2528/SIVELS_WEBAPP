@@ -42,7 +42,7 @@ export const NAV_ITEMS = [
     label:    'Logged to HO',
     icon:     'CheckCircle',
     route:    ROUTES.APPROVED_APPLICATIONS,
-    badgeKey: null,
+    badgeKey: 'approved',
     section:  'APPLICATIONS',
   },
   {
@@ -50,7 +50,7 @@ export const NAV_ITEMS = [
     label:    'Returned Applications',
     icon:     'RotateCcw',
     route:    ROUTES.RETURNED_APPLICATIONS,
-    badgeKey: null,
+    badgeKey: 'returned',
     section:  'APPLICATIONS',
   },
   {
@@ -58,7 +58,7 @@ export const NAV_ITEMS = [
     label:    'Customer Submission History',
     icon:     'FileText',
     route:    ROUTES.CUSTOMER_SUBMISSION_HISTORY,
-    badgeKey: null,
+    badgeKey: 'customerSubmissionHistory',
     section:  'APPLICATIONS',
   },
   {
@@ -66,7 +66,7 @@ export const NAV_ITEMS = [
     label:    'Submission History',
     icon:     'History',
     route:    ROUTES.SUBMISSION_HISTORY,
-    badgeKey: null,
+    badgeKey: 'submissionHistory',
     section:  'APPLICATIONS',
   },
 
@@ -75,7 +75,7 @@ export const NAV_ITEMS = [
     label:    'My Agents',
     icon:     'Users',
     route:    ROUTES.MY_AGENTS,
-    badgeKey: null,
+    badgeKey: 'myAgents',
     section:  'MANAGEMENT',
   },
   {

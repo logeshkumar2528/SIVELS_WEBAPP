@@ -50,7 +50,7 @@ export const NAV_ITEMS = [
     label:    'District Overview',
     icon:     'MapPin',
     route:    ROUTES.DISTRICTS,
-    badgeKey: null,
+    badgeKey: 'districtOverview',
     section:  'OPERATIONS',
   },
   {
@@ -58,7 +58,7 @@ export const NAV_ITEMS = [
     label:    'RM Monitoring',
     icon:     'Users',
     route:    ROUTES.RMS,
-    badgeKey: null,
+    badgeKey: 'rmMonitoring',
     section:  'OPERATIONS',
   },
   {
@@ -66,7 +66,7 @@ export const NAV_ITEMS = [
     label:    'Agent Monitoring',
     icon:     'UserCheck',
     route:    ROUTES.AGENTS,
-    badgeKey: null,
+    badgeKey: 'agentMonitoring',
     section:  'OPERATIONS',
   },
   {
@@ -74,7 +74,7 @@ export const NAV_ITEMS = [
     label:    'Customer Monitoring',
     icon:     'FileText',
     route:    ROUTES.CUSTOMERS,
-    badgeKey: null,
+    badgeKey: 'customerMonitoring',
     section:  'OPERATIONS',
   },
   {
@@ -82,7 +82,7 @@ export const NAV_ITEMS = [
     label:    'Submit to Credit Manager',
     icon:     'Send',
     route:    ROUTES.SUBMIT_TO_CREDIT,
-    badgeKey: null,
+    badgeKey: 'submitToCredit',
     section:  'OPERATIONS',
   },
 

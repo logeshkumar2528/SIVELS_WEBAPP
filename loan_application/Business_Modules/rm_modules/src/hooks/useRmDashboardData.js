@@ -13,7 +13,15 @@ import { buildApplicationDisplayId } from '../pages/applicationWizard/flowUtils'
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
 const EMPTY_DASHBOARD = {
-  badgeCounts: { newApplications: 0, verification: 0, returned: 0, approved: 0 },
+  badgeCounts: {
+    newApplications: 0,
+    verification: 0,
+    returned: 0,
+    approved: 0,
+    customerSubmissionHistory: 0,
+    submissionHistory: 0,
+    myAgents: 0,
+  },
   dashboardStats: [],
   recentApplicationsData: [],
   agentPerformanceData: [],
@@ -35,7 +43,7 @@ const formatCurrency = (value) => {
   return `₹${numericValue.toLocaleString('en-IN')}`;
 };
 
-const mapApplication = (item, index, agentsById = {}, rmsById = {}) => {
+const mapApplication = (item, index, agentsById = {}, rmsById = {}, rejections = []) => {
   const applicationId =
     item.applicationId ||
     item.applicationNumber ||
@@ -44,7 +52,15 @@ const mapApplication = (item, index, agentsById = {}, rmsById = {}) => {
     item.rmCustomerId ||
     item.rMCustomerId ||
     `${index + 1}`;
-  const normalizedStatus = normalizeApplicationStatus(item.status, item.statusName || item.StatusName);
+  let normalizedStatus = normalizeApplicationStatus(item.status, item.statusName || item.StatusName);
+
+  if (rejections && rejections.length > 0) {
+    const hasActiveReturn = rejections.some((r) => r.status === 'ReturnedToRM');
+    if (hasActiveReturn) {
+      normalizedStatus = 'Returned';
+    }
+  }
+
   const ownership = resolveApplicationOwnership(item, agentsById, rmsById);
 
   return {
@@ -64,6 +80,7 @@ const mapApplication = (item, index, agentsById = {}, rmsById = {}) => {
     rmId: ownership.rmId,
     isDirectRm: ownership.isDirectRm,
     isAgentCreated: ownership.isAgentCreated,
+    rejections: rejections || [],
   };
 };
 
@@ -146,27 +163,76 @@ export function useRmDashboardData() {
           throw new Error('No RM context found in session.');
         }
 
-        const [agentRes, customerRes, rmRes] = await Promise.all([
-          fetch(`${API_BASE}/AgentMaster`),
-          fetch(`${API_BASE}/AgentAddCustomer`),
-          fetch(`${API_BASE}/RMMaster`),
+        const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+        const authHeaders = {};
+        if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+
+        const [agentRes, customerRes, rmRes, rejectionsRes, appProdRes] = await Promise.all([
+          fetch(`${API_BASE}/AgentMaster`, { headers: authHeaders }),
+          fetch(`${API_BASE}/AgentAddCustomer`, { headers: authHeaders }),
+          fetch(`${API_BASE}/RMMaster`, { headers: authHeaders }).catch(() => null),
+          fetch(`${API_BASE}/BackOfficeDocumentRejection/rm/${rmContext.rmId}/returned`, { headers: authHeaders }).catch(() => null),
+          fetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).catch(() => null),
         ]);
 
         if (!agentRes.ok) throw new Error(`Failed to load agents (${agentRes.status})`);
         if (!customerRes.ok) throw new Error(`Failed to load applications (${customerRes.status})`);
 
-        const [agentsData, customersData, rmsData] = await Promise.all([
+        const [agentsData, customersData] = await Promise.all([
           agentRes.json(),
           customerRes.json(),
-          rmRes.ok ? rmRes.json() : Promise.resolve([]),
         ]);
 
-        const allRms = resolveApiArray(rmsData);
-        const rmsById = allRms.reduce((result, rm) => {
+        let rmsData = [];
+        if (rmRes && rmRes.ok) {
+          try {
+            const rData = await rmRes.json();
+            rmsData = resolveApiArray(rData);
+          } catch {
+            rmsData = [];
+          }
+        }
+        const rmsById = rmsData.reduce((result, rm) => {
           const id = rm.rmId || rm.RMId || rm.id;
           if (id !== undefined && id !== null) result[String(id)] = rm;
           return result;
         }, {});
+
+        let returnedRejections = [];
+        if (rejectionsRes && rejectionsRes.ok) {
+          try {
+            const rejData = await rejectionsRes.json();
+            returnedRejections = resolveApiArray(rejData);
+          } catch {
+            returnedRejections = [];
+          }
+        }
+
+        let appProdList = [];
+        if (appProdRes && appProdRes.ok) {
+          try {
+            const pData = await appProdRes.json();
+            appProdList = resolveApiArray(pData);
+          } catch {
+            appProdList = [];
+          }
+        }
+
+        const rmOwnedCustomerIds = new Set();
+        appProdList.forEach((p) => {
+          if (Number(p.rmId || p.RMId) === Number(rmContext.rmId) && p.agentCustomerId) {
+            rmOwnedCustomerIds.add(String(p.agentCustomerId));
+          }
+        });
+
+        const activeRejectionsByCustId = {};
+        returnedRejections.forEach((rej) => {
+          if (rej.status === 'ReturnedToRM' && rej.agentCustomerId) {
+            const k = String(rej.agentCustomerId);
+            if (!activeRejectionsByCustId[k]) activeRejectionsByCustId[k] = [];
+            activeRejectionsByCustId[k].push(rej);
+          }
+        });
 
         const allAgents = resolveApiArray(agentsData);
         const agentsById = allAgents.reduce((result, agent) => {
@@ -176,7 +242,7 @@ export function useRmDashboardData() {
         }, {});
 
         const matchedRm =
-          allRms.find(
+          rmsData.find(
             (rm) => Number(rm.rmId || rm.RMId || rm.id) === Number(rmContext.rmId)
           ) || null;
 
@@ -195,25 +261,117 @@ export function useRmDashboardData() {
             'Branch Details & Targets',
         };
 
-        const agents = filterAgentsForRm(allAgents, rmContext.rmId);
-        const allowedAgentIds = buildAllowedAgentIdSet(agents);
-        const applications = resolveApiArray(customersData)
-          .map((item, index) => mapApplication(item, index, agentsById, rmsById))
-          .filter((application) => {
+        const currentRmId = Number(rmContext.rmId || 0);
+        const matchedRmName = normalizeText(matchedRm?.fullName || rmContext?.fullName || '');
+
+        const myAgentsList = allAgents.filter((agent) => {
+          const agentRmId = Number(
+            agent.rmId ||
+            agent.RMId ||
+            agent.relationshipManagerId ||
+            agent.RelationshipManagerId ||
+            agent.managerId ||
+            agent.ManagerId ||
+            agent.reportingManagerId ||
+            agent.reportToRmId ||
+            0
+          );
+          const agentCreator = Number(agent.createdBy || agent.createdby || 0);
+          const assignedRmName = normalizeText(
+            agent.rmName ||
+            agent.RMName ||
+            agent.relationshipManager ||
+            agent.relationshipManagerName ||
+            ''
+          );
+
+          if (currentRmId && agentRmId === currentRmId) return true;
+          if (currentRmId && agentCreator === currentRmId) return true;
+          if (!agentRmId && matchedRmName && assignedRmName === matchedRmName) {
+            return true;
+          }
+          return false;
+        });
+
+        const allowedAgentIds = buildAllowedAgentIdSet(myAgentsList);
+
+        const allCustomers = resolveApiArray(customersData);
+        const applications = allCustomers
+          .filter((item) => {
+            const ownership = resolveApplicationOwnership(item, agentsById, rmsById);
+            const rowCustId = String(item.agentCustomerId || item.customerId || '');
             const isAgentOwned = Boolean(
-              application.isAgentCreated &&
-              application.agentId &&
-              allowedAgentIds.has(Number(application.agentId))
+              ownership.isAgentCreated &&
+              ownership.agentId &&
+              allowedAgentIds.has(Number(ownership.agentId))
             );
             const isDirectRmOwned = Boolean(
-              application.isDirectRm &&
-              Number(application.rmId) === Number(rmContext.rmId)
+              ownership.isDirectRm && (
+                rmOwnedCustomerIds.has(rowCustId) ||
+                Number(ownership.rmId) === Number(rmContext.rmId) ||
+                Number(item.rmId || item.RMId) === Number(rmContext.rmId) ||
+                Number(item.createdBy || item.CreatedBy) === Number(rmContext.rmId)
+              )
             );
-            return isAgentOwned || isDirectRmOwned;
+            const hasActiveRejection = Boolean(activeRejectionsByCustId[rowCustId]);
+            return isAgentOwned || isDirectRmOwned || hasActiveRejection;
+          })
+          .map((item, index) => {
+            const rowCustId = String(item.agentCustomerId || item.customerId || '');
+            const itemRejections = activeRejectionsByCustId[rowCustId] || [];
+            return mapApplication(item, index, agentsById, rmsById, itemRejections);
           });
 
+        const myDirectCustomers = allCustomers.filter((c) => {
+          const role = String(
+            c.createdByRole ??
+            c.CreatedByRole ??
+            c.created_by_role ??
+            c.raw?.createdByRole ??
+            ''
+          ).trim().toLowerCase();
+
+          const rawAgentId = Number(
+            c.agentId ??
+            c.AgentId ??
+            c.agent_id ??
+            c.raw?.agentId ??
+            0
+          );
+
+          // Exclude any record with an Agent owner or Agent role
+          if (role === 'agent' || rawAgentId > 0) return false;
+
+          const recordRmId = Number(
+            c.rmId ??
+            c.RmId ??
+            c.RMId ??
+            c.rm_id ??
+            c.raw?.rmId ??
+            0
+          );
+
+          const creatorId = Number(
+            c.createdByUserId ??
+            c.CreatedByUserId ??
+            c.created_by_user_id ??
+            c.createdBy ??
+            c.CreatedBy ??
+            c.created_by ??
+            c.raw?.createdByUserId ??
+            c.raw?.createdBy ??
+            0
+          );
+
+          const belongsToCurrentRm = recordRmId === currentRmId || creatorId === currentRmId;
+          const hasNoAgentOwner = !rawAgentId || rawAgentId <= 0;
+          const isExplicitRmCreated = role === 'rm';
+
+          return belongsToCurrentRm && hasNoAgentOwner && isExplicitRmCreated;
+        });
+
         // Filter active agents (not marked inactive or disabled)
-        const activeAgents = agents.filter((agent) => {
+        const activeAgents = myAgentsList.filter((agent) => {
           const statusStr = normalizeText(agent.status ?? agent.isActive ?? agent.IsActive);
           const isInactive =
             statusStr === '0' ||
@@ -233,6 +391,9 @@ export function useRmDashboardData() {
           verification: applications.filter((app) => normalizeText(app.status) === 'pending').length,
           returned: applications.filter((app) => normalizeText(app.status) === 'returned').length,
           approved: applications.filter((app) => normalizeText(app.status) === 'logged to ho').length,
+          customerSubmissionHistory: myDirectCustomers.length,
+          submissionHistory: totalApplications,
+          myAgents: myAgentsList.length,
         };
 
         const approvedLoansCount = badgeCounts.approved;
@@ -275,7 +436,7 @@ export function useRmDashboardData() {
         }
 
         const statusSummaryData = buildStatusSummary(applications);
-        const agentPerformanceData = buildAgentPerformance(applications, agents);
+        const agentPerformanceData = buildAgentPerformance(applications, myAgentsList);
 
         const dashboardStats = [
           {

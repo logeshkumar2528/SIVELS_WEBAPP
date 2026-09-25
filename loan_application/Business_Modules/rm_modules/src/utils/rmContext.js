@@ -15,15 +15,22 @@ export function getCurrentRMContext() {
   try {
     const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || 'null');
     const rmData = JSON.parse(localStorage.getItem('rmData') || 'null');
+    const isRmUser =
+      String(currentUser?.role || '').toLowerCase().includes('rm') ||
+      String(currentUser?.role || '').toLowerCase().includes('relationship');
+
+    const resolvedRmId =
+      currentUser?.rmId ||
+      currentUser?.RMId ||
+      currentUser?.rmid ||
+      rmData?.rmId ||
+      rmData?.RMId ||
+      rmData?.id ||
+      (isRmUser ? (currentUser?.id || currentUser?.userId || currentUser?.Id || currentUser?.UserId) : null) ||
+      null;
+
     return {
-      rmId:
-        currentUser?.rmId ||
-        currentUser?.RMId ||
-        currentUser?.rmid ||
-        rmData?.rmId ||
-        rmData?.RMId ||
-        Number(localStorage.getItem('rmId')) ||
-        null,
+      rmId: resolvedRmId ? Number(resolvedRmId) : null,
       branch:
         currentUser?.branch ||
         currentUser?.Branch ||
@@ -39,7 +46,7 @@ export function getCurrentRMContext() {
     };
   } catch {
     return {
-      rmId: Number(localStorage.getItem('rmId')) || null,
+      rmId: null,
       branch: '',
       fullName: '',
     };

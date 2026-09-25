@@ -92,6 +92,7 @@ export default function PdfView() {
     sourcingChannels: {},
     loanProducts: {},
     loanPurposes: {},
+    loanVariations: {},
     titles: {},
     genders: {},
     castes: {},
@@ -173,6 +174,7 @@ export default function PdfView() {
           sourcingMap,
           prodMap,
           purposeMap,
+          variationMap,
           titleMap,
           casteMap,
           genderMap,
@@ -203,6 +205,7 @@ export default function PdfView() {
           fetchMaster('SourcingChannelMaster', 'sourcingChannelId', 'sourcingChannelName'),
           fetchMaster('LoanProductMaster', 'loanProductId', 'productName'),
           fetchMaster('LoanPurposeMaster', 'loanPurposeId', 'purposeName'),
+          fetchMaster('LoanProductVariationMaster', 'loanProductVariationId', 'variationName'),
           fetchMaster('TitleMaster', 'titleID', 'titleName'),
           fetchMaster('masters/CasteMaster', 'casteId', 'casteName'),
           fetchMaster('gender', 'genderId', 'genderName'),
@@ -896,6 +899,7 @@ export default function PdfView() {
             sourcingChannels: sourcingMap.status === 'fulfilled' ? sourcingMap.value : {},
             loanProducts: prodMap.status === 'fulfilled' ? prodMap.value : {},
             loanPurposes: purposeMap.status === 'fulfilled' ? purposeMap.value : {},
+            loanVariations: variationMap.status === 'fulfilled' ? variationMap.value : {},
             titles: titleMap.status === 'fulfilled' ? titleMap.value : {},
             genders: genderMap.status === 'fulfilled' ? genderMap.value : {},
             castes: casteMap.status === 'fulfilled' ? casteMap.value : {},
@@ -1156,6 +1160,10 @@ export default function PdfView() {
   // Master resolvers
   const resolveSourcingChannel = (val) => masterMaps.sourcingChannels[val] || val || '';
   const resolveLoanProduct = (val) => masterMaps.loanProducts[val] || appData.loanProductDisplay || val || '';
+  const resolveLoanVariation = (val) => {
+    if (val === null || val === undefined || val === '') return '';
+    return masterMaps.loanVariations?.[val] || masterMaps.loanVariations?.[String(val)] || '';
+  };
   const resolveLoanPurpose = (val) => masterMaps.loanPurposes[val] || appData.loanType || val || '';
   const resolveTitle = (val) => masterMaps.titles[val] || val || '';
   const resolveGender = (val) => masterMaps.genders[val] || val || '';
@@ -2161,8 +2169,8 @@ export default function PdfView() {
               <div className="pdf-office-row">
                 <span className="pdf-office-label">Loan Product:</span>
                 <div className="pdf-office-value">
-                  {resolveLoanProduct(appData.loanProduct)}{' '}
-                  {appData.loanVariation ? `- ${appData.loanVariation}` : ''}
+                  {resolveLoanProduct(appData.loanProduct)}
+                  {resolveLoanVariation(appData.loanVariation) ? ` - ${resolveLoanVariation(appData.loanVariation)}` : ''}
                 </div>
               </div>
               <div className="pdf-office-row">

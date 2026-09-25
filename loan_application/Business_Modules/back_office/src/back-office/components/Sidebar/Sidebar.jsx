@@ -41,12 +41,17 @@ import './Sidebar.css';
    Matches badge types defined in navConfig.js.
 ========================================== */
 const BADGE_CLASS_MAP = {
-  newApplications: 'sidebar-badge--new',
-  verification:    'sidebar-badge--review',
-  fieldInvest:     'sidebar-badge--pending',
-  underwriting:    'sidebar-badge--underwriting',
-  approved:        'sidebar-badge--approved',
-  rejected:        'sidebar-badge--return',
+  districtOverview:   'sidebar-badge--pending',
+  rmMonitoring:       'sidebar-badge--pending',
+  agentMonitoring:    'sidebar-badge--pending',
+  customerMonitoring: 'sidebar-badge--review',
+  submitToCredit:     'sidebar-badge--approved',
+  newApplications:    'sidebar-badge--new',
+  verification:       'sidebar-badge--review',
+  fieldInvest:        'sidebar-badge--pending',
+  underwriting:       'sidebar-badge--underwriting',
+  approved:           'sidebar-badge--approved',
+  rejected:           'sidebar-badge--return',
 };
 
 /* ==========================================

@@ -45,17 +45,17 @@ export function normalizeCustomerResponse(data) {
 
 export const rmCustomerService = {
   createCustomer: async (customerData) => {
-    const response = await axiosInstance.post('/RMAddCustomer', customerData);
+    const response = await axiosInstance.post('/AgentAddCustomer', customerData);
     return normalizeCustomerResponse(response.data);
   },
 
   getAllCustomers: async () => {
-    const response = await axiosInstance.get('/RMAddCustomer');
+    const response = await axiosInstance.get('/AgentAddCustomer');
     return normalizeCustomerResponse(response.data);
   },
 
   getCustomerById: async (id) => {
-    const response = await axiosInstance.get(`/RMAddCustomer/${id}`);
+    const response = await axiosInstance.get(`/AgentAddCustomer/${id}`);
     return normalizeCustomerResponse(response.data);
   },
 
