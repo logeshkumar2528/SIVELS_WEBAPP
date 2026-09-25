@@ -74,16 +74,6 @@ function validateEmployment(person = {}) {
     errors.grossMonthlyIncome = 'Gross monthly income is required';
   }
 
-  const netMonthly = parseAmountToNumber(person.netMonthlyIncome);
-  if (person.netMonthlyIncome === '' || person.netMonthlyIncome === null || person.netMonthlyIncome === undefined || isNaN(netMonthly) || netMonthly <= 0) {
-    errors.netMonthlyIncome = 'Net monthly income is required';
-  }
-
-  const grossAnnual = parseAmountToNumber(person.grossAnnualIncome);
-  if (person.grossAnnualIncome === '' || person.grossAnnualIncome === null || person.grossAnnualIncome === undefined || isNaN(grossAnnual) || grossAnnual <= 0) {
-    errors.grossAnnualIncome = 'Gross annual income is required';
-  }
-
   return errors;
 }
 
@@ -109,6 +99,21 @@ function EmploymentCard({
         String(opt.label).toLowerCase() === person.industryType.trim().toLowerCase())
   );
   const currentIndustryValue = matchedIndustryOption ? matchedIndustryOption.value : person.industryType;
+
+  const grossMonthly = parseAmountToNumber(person.grossMonthlyIncome);
+  const otherMonthly = parseAmountToNumber(person.otherIncomeMonthly);
+  const previewNetMonthly = grossMonthly + otherMonthly;
+  const previewGrossAnnual = previewNetMonthly * 12;
+
+  const displayNetMonthly =
+    previewNetMonthly > 0
+      ? formatIndianAmount(previewNetMonthly)
+      : (person.netMonthlyIncome ? formatIndianAmount(person.netMonthlyIncome) : '');
+
+  const displayGrossAnnual =
+    previewGrossAnnual > 0
+      ? formatIndianAmount(previewGrossAnnual)
+      : (person.grossAnnualIncome ? formatIndianAmount(person.grossAnnualIncome) : '');
 
   return (
     <div className="aw-mini-card">
@@ -243,14 +248,15 @@ function EmploymentCard({
             <div className="aw-input-wrapper">
               <IndianRupee className="aw-input-icon" size={14} />
               <input
-                className={`form-input aw-input aw-input--with-icon ${errors.netMonthlyIncome ? 'aw-input--invalid' : ''}`}
+                className="form-input aw-input aw-input--with-icon"
                 type="text"
-                inputMode="numeric"
-                value={formatIndianAmount(person.netMonthlyIncome)}
-                onChange={(e) => onChange('netMonthlyIncome', e.target.value)}
+                readOnly
+                tabIndex={-1}
+                value={displayNetMonthly}
+                placeholder="Auto-calculated"
+                style={{ backgroundColor: '#f8fafc', cursor: 'default' }}
               />
             </div>
-            {errors.netMonthlyIncome && <span className="aw-field-error">{errors.netMonthlyIncome}</span>}
           </div>
 
           <div className="aw-field">
@@ -258,14 +264,15 @@ function EmploymentCard({
             <div className="aw-input-wrapper">
               <IndianRupee className="aw-input-icon" size={14} />
               <input
-                className={`form-input aw-input aw-input--with-icon ${errors.grossAnnualIncome ? 'aw-input--invalid' : ''}`}
+                className="form-input aw-input aw-input--with-icon"
                 type="text"
-                inputMode="numeric"
-                value={formatIndianAmount(person.grossAnnualIncome)}
-                onChange={(e) => onChange('grossAnnualIncome', e.target.value)}
+                readOnly
+                tabIndex={-1}
+                value={displayGrossAnnual}
+                placeholder="Auto-calculated"
+                style={{ backgroundColor: '#f8fafc', cursor: 'default' }}
               />
             </div>
-            {errors.grossAnnualIncome && <span className="aw-field-error">{errors.grossAnnualIncome}</span>}
           </div>
         </div>
       </div>
@@ -429,8 +436,6 @@ export default function EmploymentIncome() {
           TotalExperience: Number(person.totalExperienceYears) || 0,
           GrossMonthlyIncome: parseAmountToNumber(person.grossMonthlyIncome),
           OtherMonthlyIncome: parseAmountToNumber(person.otherIncomeMonthly),
-          NetMonthlyIncome: parseAmountToNumber(person.netMonthlyIncome),
-          GrossAnnualIncome: parseAmountToNumber(person.grossAnnualIncome),
           CreatedBy: 1
         };
 
@@ -461,23 +466,41 @@ export default function EmploymentIncome() {
         } else if (currentEmpId) {
           claimedEmpRecordIds.add(currentEmpId);
         }
+
+        const backendNetMonthly = savedData?.netMonthlyIncome ?? savedData?.NetMonthlyIncome;
+        if (backendNetMonthly !== undefined && backendNetMonthly !== null && backendNetMonthly !== '') {
+          person.netMonthlyIncome = formatIndianAmount(backendNetMonthly);
+        }
+
+        const backendGrossAnnual = savedData?.grossAnnualIncome ?? savedData?.GrossAnnualIncome;
+        if (backendGrossAnnual !== undefined && backendGrossAnnual !== null && backendGrossAnnual !== '') {
+          person.grossAnnualIncome = formatIndianAmount(backendGrossAnnual);
+        }
       }
 
-      const finalApplicantEmpId = allPersons[0]?.employmentIncomeDetailsId || form.applicant?.employmentIncomeDetailsId || null;
+      const finalApplicant = {
+        ...form.applicant,
+        employmentIncomeDetailsId: allPersons[0]?.employmentIncomeDetailsId || form.applicant?.employmentIncomeDetailsId || null,
+        netMonthlyIncome: allPersons[0]?.netMonthlyIncome || form.applicant?.netMonthlyIncome || '',
+        grossAnnualIncome: allPersons[0]?.grossAnnualIncome || form.applicant?.grossAnnualIncome || '',
+      };
+
       const finalCoApplicants = form.coApplicants.map((co, i) => {
         let coEmpId = allPersons[i + 1]?.employmentIncomeDetailsId || co.employmentIncomeDetailsId || null;
-        if (coEmpId && coEmpId === finalApplicantEmpId) {
+        if (coEmpId && coEmpId === finalApplicant.employmentIncomeDetailsId) {
           coEmpId = null;
         }
         return {
           ...co,
           employmentIncomeDetailsId: coEmpId,
+          netMonthlyIncome: allPersons[i + 1]?.netMonthlyIncome || co.netMonthlyIncome || '',
+          grossAnnualIncome: allPersons[i + 1]?.grossAnnualIncome || co.grossAnnualIncome || '',
         };
       });
 
       const finalForm = {
         ...form,
-        applicant: { ...form.applicant, employmentIncomeDetailsId: finalApplicantEmpId },
+        applicant: finalApplicant,
         coApplicants: finalCoApplicants,
       };
 
