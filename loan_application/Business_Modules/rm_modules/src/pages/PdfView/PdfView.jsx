@@ -1066,90 +1066,151 @@ export default function PdfView() {
 
   const isPdfMediaReady = !isMetadataLoading && !isDocsDownloading && !isCoPhotosLoading && !isApplicantPhotoLoading;
 
-  // Generate continuous single long page PDF
+  // Shared helper to generate jsPDF instance from DOM
+  const generatePdfInstance = async () => {
+    const element = pdfRef.current;
+    if (!element) throw new Error('PDF container not found');
+
+    // Ensure images are fully loaded and decoded before rendering canvas
+    const imgElements = Array.from(element.querySelectorAll('img'));
+    await Promise.all(
+      imgElements.map(async (img) => {
+        if (!img.complete) {
+          await new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+        }
+        if (img.decode) {
+          try {
+            await img.decode();
+          } catch {
+            // Ignore decode errors if unsupported or already rendered
+          }
+        }
+      })
+    );
+
+    const fullHeight = element.scrollHeight || element.offsetHeight || 3000;
+    const fullWidth = element.scrollWidth || element.offsetWidth || 820;
+
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      width: fullWidth,
+      height: fullHeight,
+      windowWidth: fullWidth,
+      windowHeight: fullHeight,
+      x: 0,
+      y: 0,
+      scrollX: 0,
+      scrollY: 0,
+      onclone: (clonedDoc) => {
+        const clonedContainer = clonedDoc.querySelector('.pdf-container');
+        if (clonedContainer) {
+          clonedContainer.style.height = 'auto';
+          clonedContainer.style.maxHeight = 'none';
+          clonedContainer.style.overflow = 'visible';
+          clonedContainer.style.position = 'static';
+          clonedContainer.style.display = 'block';
+        }
+        const clonedPage = clonedDoc.querySelector('.pdf-page-continuous');
+        if (clonedPage) {
+          clonedPage.style.height = 'auto';
+          clonedPage.style.maxHeight = 'none';
+          clonedPage.style.overflow = 'visible';
+          clonedPage.style.position = 'static';
+          clonedPage.style.display = 'block';
+        }
+      },
+    });
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.98);
+
+    const pdfWidth = 210; // 210mm
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: [pdfWidth, pdfHeight],
+      compress: true,
+    });
+
+    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+    return pdf;
+  };
+
+  // Generate continuous single long page PDF for download
   const handleDownloadPdf = async () => {
     if (!pdfRef.current || isGeneratingPdf || !isPdfMediaReady) return;
     setIsGeneratingPdf(true);
 
     try {
-      const element = pdfRef.current;
-
-      // Ensure images are fully loaded and decoded before rendering canvas
-      const imgElements = Array.from(element.querySelectorAll('img'));
-      await Promise.all(
-        imgElements.map(async (img) => {
-          if (!img.complete) {
-            await new Promise((resolve) => {
-              img.onload = resolve;
-              img.onerror = resolve;
-            });
-          }
-          if (img.decode) {
-            try {
-              await img.decode();
-            } catch {
-              // Ignore decode errors if unsupported or already rendered
-            }
-          }
-        })
-      );
-
-      const fullHeight = element.scrollHeight || element.offsetHeight || 3000;
-      const fullWidth = element.scrollWidth || element.offsetWidth || 820;
-
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        width: fullWidth,
-        height: fullHeight,
-        windowWidth: fullWidth,
-        windowHeight: fullHeight,
-        x: 0,
-        y: 0,
-        scrollX: 0,
-        scrollY: 0,
-        onclone: (clonedDoc) => {
-          const clonedContainer = clonedDoc.querySelector('.pdf-container');
-          if (clonedContainer) {
-            clonedContainer.style.height = 'auto';
-            clonedContainer.style.maxHeight = 'none';
-            clonedContainer.style.overflow = 'visible';
-            clonedContainer.style.position = 'static';
-            clonedContainer.style.display = 'block';
-          }
-          const clonedPage = clonedDoc.querySelector('.pdf-page-continuous');
-          if (clonedPage) {
-            clonedPage.style.height = 'auto';
-            clonedPage.style.maxHeight = 'none';
-            clonedPage.style.overflow = 'visible';
-            clonedPage.style.position = 'static';
-            clonedPage.style.display = 'block';
-          }
-        },
-      });
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.98);
-
-      const pdfWidth = 210; // 210mm
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: [pdfWidth, pdfHeight],
-        compress: true,
-      });
-
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+      const pdf = await generatePdfInstance();
       pdf.save(`Loan_Application_${applicationId}.pdf`);
     } catch (err) {
       console.error('Error generating PDF:', err);
       setErrorPopup({
         title: 'PDF generation failed',
         message: 'Failed to generate PDF. Please try again.',
+        variant: 'error',
+      });
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  // Generate and share PDF via native Web Share API with download fallback
+  const handleSharePdf = async () => {
+    if (!pdfRef.current || isGeneratingPdf || !isPdfMediaReady) return;
+    setIsGeneratingPdf(true);
+
+    try {
+      const pdf = await generatePdfInstance();
+      const fileName = `Loan_Application_${applicationId}.pdf`;
+      const pdfBlob = pdf.output('blob');
+      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+      // Runtime feature detection for Web Share API and PDF file sharing support
+      const canShareFiles =
+        typeof navigator !== 'undefined' &&
+        typeof navigator.share === 'function' &&
+        typeof navigator.canShare === 'function' &&
+        navigator.canShare({ files: [pdfFile] });
+
+      if (canShareFiles) {
+        try {
+          await navigator.share({
+            files: [pdfFile],
+            title: 'Loan Application',
+            text: 'Loan Application PDF',
+          });
+        } catch (shareErr) {
+          if (shareErr.name === 'AbortError') {
+            // User cancelled or closed the native share sheet - do not show error or auto-download
+            return;
+          }
+          throw shareErr;
+        }
+      } else {
+        // Fallback for unsupported browsers: download the already generated PDF and inform user
+        pdf.save(fileName);
+        setErrorPopup({
+          title: 'Direct File Sharing Unsupported',
+          message:
+            'Direct file sharing is not supported in this browser. The PDF has been downloaded so you can share it manually.',
+          variant: 'info',
+        });
+      }
+    } catch (err) {
+      console.error('Error sharing PDF:', err);
+      setErrorPopup({
+        title: 'Sharing failed',
+        message: 'Failed to share PDF. Please try downloading it instead.',
         variant: 'error',
       });
     } finally {
@@ -2098,6 +2159,13 @@ export default function PdfView() {
             : !isPdfMediaReady
             ? 'Preparing documents...'
             : 'Download PDF'}
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={handleSharePdf}
+          disabled={isGeneratingPdf || !isPdfMediaReady}
+        >
+          Share
         </Button>
       </div>
 
