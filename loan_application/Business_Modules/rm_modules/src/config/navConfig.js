@@ -55,7 +55,7 @@ export const NAV_ITEMS = [
   },
   {
     id:       'customer-submission-history',
-    label:    'Customer Submission History',
+    label:    "RM's Customer Submission History",
     icon:     'FileText',
     route:    ROUTES.CUSTOMER_SUBMISSION_HISTORY,
     badgeKey: 'customerSubmissionHistory',

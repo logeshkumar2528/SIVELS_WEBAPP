@@ -118,7 +118,7 @@ export default function AppRoutes() {
         <Route
           path={ROUTES.CUSTOMER_SUBMISSION_HISTORY}
           element={
-            <LayoutWrapper title="Customer Submission History" subtitle="Customers Created & Submitted by RM">
+            <LayoutWrapper title="RM's Customer Submission History" subtitle="Customers Created & Submitted by RM">
               <CustomerSubmissionHistory />
             </LayoutWrapper>
           }
