@@ -1064,10 +1064,14 @@ export default function BankExistingLoans() {
     if (bank?.activeLoansDetails && bank.activeLoansDetails.length > 0) {
       const existing = bank.activeLoansDetails;
       const loansArray = Array.from({ length: count }, (_, i) => existing[i] ? { ...existing[i] } : {
+        // Frontend-only until backend contract is added.
+        bankNameOrNbfc: '',
         loanType: '',
         totalLoanAmount: '',
         totalOutstanding: '',
         emiAmount: '',
+        totalTenure: '',
+        balanceTenure: '',
         status: 'Active',
       });
       setTransientLoans((prev) => ({ ...prev, [key]: loansArray }));
@@ -1090,10 +1094,14 @@ export default function BankExistingLoans() {
     // For a NEW application (no existing bank ID in backend), do NOT call backend API
     if (!bankId) {
       const loansArray = Array.from({ length: count }, () => ({
+        // Frontend-only until backend contract is added.
+        bankNameOrNbfc: '',
         loanType: '',
         totalLoanAmount: '',
         totalOutstanding: '',
         emiAmount: '',
+        totalTenure: '',
+        balanceTenure: '',
         status: 'Active',
       }));
       setTransientLoans((prev) => ({ ...prev, [key]: loansArray }));
@@ -1123,18 +1131,26 @@ export default function BankExistingLoans() {
         const mappedLoans = matched.map((item) => ({
           applicationBankActiveLoanDetailsId: item.applicationBankActiveLoanDetailsId ?? item.ApplicationBankActiveLoanDetailsId ?? null,
           applicationBankExistingLoanDetailsId: Number(bankId),
+          // Frontend-only until backend contract is added.
+          bankNameOrNbfc: '',
           loanType: item.loanType ?? item.LoanType ?? '',
           totalLoanAmount: item.totalLoanAmount !== undefined && item.totalLoanAmount !== null ? formatIndianAmount(item.totalLoanAmount) : (item.TotalLoanAmount !== undefined && item.TotalLoanAmount !== null ? formatIndianAmount(item.TotalLoanAmount) : ''),
           totalOutstanding: item.totalOutstanding !== undefined && item.totalOutstanding !== null ? formatIndianAmount(item.totalOutstanding) : (item.TotalOutstanding !== undefined && item.TotalOutstanding !== null ? formatIndianAmount(item.TotalOutstanding) : ''),
           emiAmount: item.emiAmount !== undefined && item.emiAmount !== null ? formatIndianAmount(item.emiAmount) : (item.EmiAmount !== undefined && item.EmiAmount !== null ? formatIndianAmount(item.EmiAmount) : ''),
+          totalTenure: '',
+          balanceTenure: '',
           status: item.status ?? item.Status ?? 'Active',
         }));
 
         const loansArray = Array.from({ length: count }, (_, i) => mappedLoans[i] || {
+          // Frontend-only until backend contract is added.
+          bankNameOrNbfc: '',
           loanType: '',
           totalLoanAmount: '',
           totalOutstanding: '',
           emiAmount: '',
+          totalTenure: '',
+          balanceTenure: '',
           status: 'Active',
         });
 
@@ -1142,10 +1158,14 @@ export default function BankExistingLoans() {
       } else {
         console.warn('Failed to fetch ApplicationBankActiveLoanDetails:', res.status);
         const loansArray = Array.from({ length: count }, () => ({
+          // Frontend-only until backend contract is added.
+          bankNameOrNbfc: '',
           loanType: '',
           totalLoanAmount: '',
           totalOutstanding: '',
           emiAmount: '',
+          totalTenure: '',
+          balanceTenure: '',
           status: 'Active',
         }));
         setTransientLoans((prev) => ({ ...prev, [key]: loansArray }));
@@ -1153,10 +1173,14 @@ export default function BankExistingLoans() {
     } catch (err) {
       console.error('Error fetching active loans from server:', err);
       const loansArray = Array.from({ length: count }, () => ({
+        // Frontend-only until backend contract is added.
+        bankNameOrNbfc: '',
         loanType: '',
         totalLoanAmount: '',
         totalOutstanding: '',
         emiAmount: '',
+        totalTenure: '',
+        balanceTenure: '',
         status: 'Active',
       }));
       setTransientLoans((prev) => ({ ...prev, [key]: loansArray }));
@@ -1176,10 +1200,14 @@ export default function BankExistingLoans() {
       const count = parseInt(bank?.noOfActiveLoans, 10) || 0;
       const currentList = prev[key] || bank?.activeLoansDetails || [];
       const loans = Array.from({ length: count }, (_, i) => ({
+        // Frontend-only until backend contract is added.
+        bankNameOrNbfc: '',
         loanType: '',
         totalLoanAmount: '',
         totalOutstanding: '',
         emiAmount: '',
+        totalTenure: '',
+        balanceTenure: '',
         status: 'Active',
         ...(currentList[i] || {}),
       }));
@@ -1196,10 +1224,14 @@ export default function BankExistingLoans() {
     const count = parseInt(bank?.noOfActiveLoans, 10) || 0;
     const currentList = transientLoans[key] || bank?.activeLoansDetails || [];
     const finalLoans = Array.from({ length: count }, (_, i) => ({
+      // Frontend-only until backend contract is added.
+      bankNameOrNbfc: '',
       loanType: '',
       totalLoanAmount: '',
       totalOutstanding: '',
       emiAmount: '',
+      totalTenure: '',
+      balanceTenure: '',
       status: 'Active',
       applicationBankExistingLoanDetailsId: bank?.applicationBankExistingLoanDetailsId || null,
       ...(currentList[i] || {}),
@@ -1697,14 +1729,54 @@ export default function BankExistingLoans() {
               }
 
               return (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', maxHeight: '65vh', overflowY: 'auto', paddingRight: '4px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '65vh', overflowY: 'auto', paddingRight: '4px' }}>
                   {Array.from({ length: count }).map((_, i) => {
                     const card = cards[i] || {};
                     return (
-                      <div key={i} style={{ padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        <div style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a' }}>Credit Card {i + 1}</div>
-                        <input className="form-input compact-input" placeholder="Card Name (e.g. HDFC Regalia)" value={card.cardName || ''} onChange={(e) => updateCardDetail(i, 'cardName', e.target.value)} />
-                        <input className="form-input compact-input" placeholder="Card Number (Last 4 digits or Full)" value={card.cardNumber || ''} onChange={(e) => updateCardDetail(i, 'cardNumber', e.target.value)} />
+                      <div 
+                        key={i} 
+                        style={{ 
+                          padding: '16px 20px', 
+                          borderRadius: '8px', 
+                          border: '1px solid #e2e8f0', 
+                          background: '#f8fafc', 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          gap: '12px',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+                          <span style={{ fontWeight: 700, fontSize: '14px', color: '#0f172a' }}>
+                            Credit Card #{i + 1}
+                          </span>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+                          <div className="aw-field" style={{ marginBottom: 0 }}>
+                            <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
+                              Card Name / Bank Name
+                            </label>
+                            <input 
+                              type="text" 
+                              className="form-input compact-input" 
+                              placeholder="e.g. HDFC Regalia" 
+                              value={card.cardName || ''} 
+                              onChange={(e) => updateCardDetail(i, 'cardName', e.target.value)} 
+                            />
+                          </div>
+                          <div className="aw-field" style={{ marginBottom: 0 }}>
+                            <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
+                              Card Number
+                            </label>
+                            <input 
+                              type="text" 
+                              className="form-input compact-input" 
+                              placeholder="1234 / Full Card Number" 
+                              value={card.cardNumber || ''} 
+                              onChange={(e) => updateCardDetail(i, 'cardNumber', e.target.value)} 
+                            />
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
@@ -1712,8 +1784,13 @@ export default function BankExistingLoans() {
               );
             })()
           )}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #edf2f7' }}>
-            <Button variant="primary" onClick={saveCardDetails}>Done</Button>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #edf2f7' }}>
+            <Button variant="secondary" onClick={() => setViewingCardsFor(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={saveCardDetails}>
+              Done
+            </Button>
           </div>
         </Modal>
 
@@ -1750,7 +1827,17 @@ export default function BankExistingLoans() {
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxHeight: '65vh', overflowY: 'auto', paddingRight: '4px' }}>
                   {Array.from({ length: count }).map((_, i) => {
-                    const loan = loans[i] || { loanType: '', totalLoanAmount: '', totalOutstanding: '', emiAmount: '', status: 'Active' };
+                    const loan = loans[i] || {
+                      // Frontend-only until backend contract is added.
+                      bankNameOrNbfc: '',
+                      loanType: '',
+                      totalLoanAmount: '',
+                      totalOutstanding: '',
+                      emiAmount: '',
+                      totalTenure: '',
+                      balanceTenure: '',
+                      status: 'Active',
+                    };
                     return (
                       <div 
                         key={i} 
@@ -1771,8 +1858,22 @@ export default function BankExistingLoans() {
                           </span>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
-                          <div className="aw-field">
+                        {/* ROW 1: Bank Name / NBFC, Loan Type, Total Loan Amount, Total Outstanding */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
+                          <div className="aw-field" style={{ marginBottom: 0 }}>
+                            <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
+                              Bank Name / NBFC
+                            </label>
+                            <input 
+                              type="text" 
+                              className="form-input compact-input" 
+                              placeholder="e.g. HDFC Bank, SBI, Bajaj" 
+                              value={loan.bankNameOrNbfc || ''} 
+                              onChange={(e) => updateLoanDetail(i, 'bankNameOrNbfc', e.target.value)} 
+                            />
+                          </div>
+
+                          <div className="aw-field" style={{ marginBottom: 0 }}>
                             <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
                               Loan Type
                             </label>
@@ -1785,7 +1886,7 @@ export default function BankExistingLoans() {
                             />
                           </div>
 
-                          <div className="aw-field">
+                          <div className="aw-field" style={{ marginBottom: 0 }}>
                             <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
                               Total Loan Amount (₹)
                             </label>
@@ -1799,7 +1900,7 @@ export default function BankExistingLoans() {
                             />
                           </div>
 
-                          <div className="aw-field">
+                          <div className="aw-field" style={{ marginBottom: 0 }}>
                             <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
                               Total Outstanding (₹)
                             </label>
@@ -1812,8 +1913,11 @@ export default function BankExistingLoans() {
                               onChange={(e) => updateLoanDetail(i, 'totalOutstanding', e.target.value)} 
                             />
                           </div>
+                        </div>
 
-                          <div className="aw-field">
+                        {/* ROW 2: EMI Amount, Total Tenure, Balance Tenure */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
+                          <div className="aw-field" style={{ marginBottom: 0 }}>
                             <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
                               EMI Amount (₹)
                             </label>
@@ -1827,18 +1931,29 @@ export default function BankExistingLoans() {
                             />
                           </div>
 
-                          <div className="aw-field">
+                          <div className="aw-field" style={{ marginBottom: 0 }}>
                             <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
-                              Status
+                              Total Tenure
                             </label>
-                            <Select 
-                              value={loan.status || 'Active'} 
-                              onChange={(val) => updateLoanDetail(i, 'status', val)} 
-                              placeholder="Select Status" 
-                              options={[
-                                { value: 'Active', label: 'Active' },
-                                { value: 'Closed', label: 'Closed' }
-                              ]} 
+                            <input 
+                              type="text" 
+                              className="form-input compact-input" 
+                              placeholder="e.g. 240 Months / 20 Yrs" 
+                              value={loan.totalTenure || ''} 
+                              onChange={(e) => updateLoanDetail(i, 'totalTenure', e.target.value)} 
+                            />
+                          </div>
+
+                          <div className="aw-field" style={{ marginBottom: 0 }}>
+                            <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
+                              Balance Tenure
+                            </label>
+                            <input 
+                              type="text" 
+                              className="form-input compact-input" 
+                              placeholder="e.g. 180 Months / 15 Yrs" 
+                              value={loan.balanceTenure || ''} 
+                              onChange={(e) => updateLoanDetail(i, 'balanceTenure', e.target.value)} 
                             />
                           </div>
                         </div>

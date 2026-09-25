@@ -108,27 +108,36 @@ export default function SubmitToCredit() {
     setCurrentPage(1);
   }, [searchTerm, districtFilter, rmFilter, agentFilter, statusFilter]);
 
-  // Filtering on verified applications queue
+  // Filtering on verified applications queue (Sorted Newest-First)
   const filteredCustomers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
 
-    return readyCustomers.filter((c) => {
-      const matchDistrict = districtFilter === 'All' || (c.districtName && c.districtName.toLowerCase() === districtFilter.toLowerCase());
-      const matchRM = rmFilter === 'All' || (c.rmName && c.rmName.toLowerCase() === rmFilter.toLowerCase());
-      const matchAgent = agentFilter === 'All' || (c.agentName && c.agentName.toLowerCase() === agentFilter.toLowerCase());
-      const matchStatus = statusFilter === 'All' || getStatusInfo(c.status).label.toLowerCase() === statusFilter.toLowerCase();
+    return readyCustomers
+      .filter((c) => {
+        const matchDistrict = districtFilter === 'All' || (c.districtName && c.districtName.toLowerCase() === districtFilter.toLowerCase());
+        const matchRM = rmFilter === 'All' || (c.rmName && c.rmName.toLowerCase() === rmFilter.toLowerCase());
+        const matchAgent = agentFilter === 'All' || (c.agentName && c.agentName.toLowerCase() === agentFilter.toLowerCase());
+        const matchStatus = statusFilter === 'All' || getStatusInfo(c.status).label.toLowerCase() === statusFilter.toLowerCase();
 
-      const custName = String(c.customerName || c.fullName || '').toLowerCase();
-      const mobile = String(c.mobile || c.mobileNumber || '');
-      const appNo = String(c.applicationNo || `APP-${c.agentCustomerId || c.id || ''}`).toLowerCase();
+        const custName = String(c.customerName || c.fullName || '').toLowerCase();
+        const mobile = String(c.mobile || c.mobileNumber || '');
+        const appNo = String(c.applicationNo || `APP-${c.agentCustomerId || c.id || ''}`).toLowerCase();
 
-      const matchSearch =
-        custName.includes(term) ||
-        mobile.includes(term) ||
-        appNo.includes(term);
+        const matchSearch =
+          custName.includes(term) ||
+          mobile.includes(term) ||
+          appNo.includes(term);
 
-      return matchDistrict && matchRM && matchAgent && matchStatus && matchSearch;
-    });
+        return matchDistrict && matchRM && matchAgent && matchStatus && matchSearch;
+      })
+      .sort((a, b) => {
+        const timeA = new Date(a.createdAt || a.appliedDate || 0).getTime() || 0;
+        const timeB = new Date(b.createdAt || b.appliedDate || 0).getTime() || 0;
+        if (timeA !== timeB) return timeB - timeA;
+        const idA = Number(a.agentCustomerId ?? a.id ?? 0) || 0;
+        const idB = Number(b.agentCustomerId ?? b.id ?? 0) || 0;
+        return idB - idA;
+      });
   }, [readyCustomers, districtFilter, rmFilter, agentFilter, statusFilter, searchTerm]);
 
   // Pagination Slice
