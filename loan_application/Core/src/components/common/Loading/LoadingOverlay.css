@@ -1,25 +1,36 @@
-/* LoadingOverlay.css
-   Backdrop, blur, positioning and fade only.
-   The loader's own animation/styles live in OrbitingCoinsLoader.css. */
+/* ==========================================================================
+   LoadingOverlay.css — Clean White/Light Mint Backdrop for SIVELS Finance
+   ========================================================================== */
 
 .loading-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999; /* above every layout, modal and toast */
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  background-color: rgba(10, 20, 32, 0.55);
+  box-sizing: border-box;
+  background-color: rgba(246, 253, 248, 0.92); /* Light mint / white clean financial backdrop */
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  animation: loading-overlay-fade 200ms ease-out;
+  animation: loading-overlay-fade 160ms ease-out;
+}
+
+.loading-overlay--fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 99999; /* Higher than all standard headers, sidebars, modals, and toasts */
+}
+
+.loading-overlay--container {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
 }
 
 .loading-overlay__panel {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
 }
 
 @keyframes loading-overlay-fade {
