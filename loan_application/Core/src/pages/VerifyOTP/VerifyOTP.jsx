@@ -5,6 +5,7 @@ import { CONSTANTS } from '../../utils/constants';
 import { detectAccountModule, normalizeMobileNumber } from '../../services/moduleDetectionService';
 import { authService } from '../../services/authService';
 import { useAuth } from '../../context/AuthContext';
+import { useLoading } from '../../context/LoadingContext';
 import './VerifyOTP.css';
 
 export default function VerifyOTP() {
@@ -21,6 +22,7 @@ export default function VerifyOTP() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
+  const { withLoading } = useLoading();
 
   const mobileNumber = location.state?.mobileNumber || '';
   const moduleName = location.state?.module;
@@ -123,6 +125,7 @@ export default function VerifyOTP() {
     e.preventDefault();
     const enteredOtp = otp.join('');
 
+    // Client-side length validation runs before global loader
     if (enteredOtp.length !== OTP_LENGTH) {
       setErrorMessage('Please enter all 6 digits.');
       showToast('error', 'Invalid OTP', 'Please enter all 6 digits.');
@@ -134,185 +137,185 @@ export default function VerifyOTP() {
     setErrorMessage('');
 
     try {
-      // 1. Verify OTP via API (POST /MobileOtp/verify-mobile-otp) or development fallback
-      let result = null;
-      let verificationSuccessful = false;
+      await withLoading(async () => {
+        // 1. Verify OTP via API (POST /MobileOtp/verify-mobile-otp) or development fallback
+        let result = null;
+        let verificationSuccessful = false;
 
-      try {
-        result = await authService.verifyMobileOtp(cleanMobile, enteredOtp);
-      } catch (apiErr) {
-        console.warn('[VerifyOTP] Backend OTP API notice:', apiErr?.message || apiErr);
-      }
+        try {
+          result = await authService.verifyMobileOtp(cleanMobile, enteredOtp);
+        } catch (apiErr) {
+          console.warn('[VerifyOTP] Backend OTP API notice:', apiErr?.message || apiErr);
+        }
 
-      const isLoginSuccessfulMessage =
-        typeof result?.message === 'string' &&
-        result.message.trim().toLowerCase() === 'login successful';
+        const isLoginSuccessfulMessage =
+          typeof result?.message === 'string' &&
+          result.message.trim().toLowerCase() === 'login successful';
 
-      const isBackendSuccess =
-        result?.success === true ||
-        result?.isSuccess === true ||
-        result?.data?.success === true ||
-        isLoginSuccessfulMessage;
+        const isBackendSuccess =
+          result?.success === true ||
+          result?.isSuccess === true ||
+          result?.data?.success === true ||
+          isLoginSuccessfulMessage;
 
-      const isTestOtp = enteredOtp === '123456';
-      if (isBackendSuccess || isTestOtp) {
-        verificationSuccessful = true;
-      }
+        const isTestOtp = enteredOtp === '123456';
+        if (isBackendSuccess || isTestOtp) {
+          verificationSuccessful = true;
+        }
 
-      if (!verificationSuccessful) {
-        setLoading(false);
-        const errMsg = result?.message || result?.error || 'Invalid OTP. Please check the code and try again.';
-        setErrorMessage(errMsg);
-        showToast('error', 'Invalid OTP', errMsg);
-        return;
-      }
-
-      // 2. Clear error banner and show brief success notification
-      setErrorMessage('');
-      showToast('success', 'OTP Verified', 'Verification successful. Redirecting...');
-
-      // 3. Resolve destination module & account data
-      let resolvedModule = moduleName;
-      let resolvedDestination = destination;
-      let resolvedAccount = accountData;
-
-      if (!resolvedModule || !resolvedDestination || !resolvedAccount) {
-        const detection = await detectAccountModule(cleanMobile);
-        if (detection.destination) {
-          resolvedModule = detection.role || detection.module;
-          resolvedDestination = detection.destination;
-          resolvedAccount = detection.accountData;
-        } else {
-          setErrorMessage(detection.error || 'Account could not be verified. Please log in again.');
-          setLoading(false);
+        if (!verificationSuccessful) {
+          const errMsg = result?.message || result?.error || 'Invalid OTP. Please check the code and try again.';
+          setErrorMessage(errMsg);
+          showToast('error', 'Invalid OTP', errMsg);
           return;
         }
-      }
 
-      // 4. Construct user profile & set auth session
-      const userData = {
-        ...resolvedAccount,
-        mobileNumber: cleanMobile,
-        role: resolvedModule,
-      };
+        // 2. Clear error banner and show brief success notification
+        setErrorMessage('');
+        showToast('success', 'OTP Verified', 'Verification successful. Redirecting...');
 
-      login(userData, result || {});
+        // 3. Resolve destination module & account data
+        let resolvedModule = moduleName;
+        let resolvedDestination = destination;
+        let resolvedAccount = accountData;
 
-      // 5. Persist common tokens & module-specific data
-      const token = result?.token || result?.accessToken || result?.access_token || result?.data?.token;
-      if (token) {
-        localStorage.setItem('authToken', token);
-      }
-      localStorage.setItem('sivels_currentUser', JSON.stringify(userData));
-
-      if (resolvedModule === 'Agent') {
-        localStorage.setItem('agentData', JSON.stringify(resolvedAccount));
-        const agentId = resolvedAccount?.agentId ?? resolvedAccount?.AgentId ?? resolvedAccount?.id;
-        if (agentId) {
-          localStorage.setItem('agentId', String(agentId));
-        }
-      } else if (resolvedModule === 'RM') {
-        localStorage.setItem('rmData', JSON.stringify(resolvedAccount));
-        const rmId = resolvedAccount?.rmId ?? resolvedAccount?.RMId ?? resolvedAccount?.id;
-        if (rmId) {
-          localStorage.setItem('rmId', String(rmId));
-        }
-      } else if (resolvedModule === 'AMS') {
-        localStorage.setItem('amsData', JSON.stringify(resolvedAccount));
-        const amsId = resolvedAccount?.amsId ?? resolvedAccount?.AmsId ?? resolvedAccount?.id;
-        if (amsId) {
-          localStorage.setItem('amsId', String(amsId));
-        }
-      } else if (resolvedModule === 'Customer') {
-        localStorage.setItem('customerData', JSON.stringify(resolvedAccount));
-        const customerId = resolvedAccount?.agentCustomerId ?? resolvedAccount?.customerId ?? resolvedAccount?.id;
-        if (customerId) {
-          localStorage.setItem('customerId', String(customerId));
-        }
-      } else if (resolvedModule === 'Master') {
-        localStorage.setItem('masterData', JSON.stringify(resolvedAccount));
-      } else if (
-        resolvedModule === 'BackOffice' ||
-        resolvedModule === 'Back Office' ||
-        resolvedModule === 'Operations' ||
-        String(result?.role || '').toLowerCase() === 'backoffice'
-      ) {
-        const boAccount = result?.backOffice || resolvedAccount || {};
-        localStorage.setItem('backOfficeData', JSON.stringify(boAccount));
-        const boId = boAccount?.backOfficeId ?? boAccount?.BackOfficeId ?? boAccount?.id ?? result?.userId;
-        if (boId) {
-          localStorage.setItem('backOfficeId', String(boId));
-        }
-        localStorage.setItem('backOfficeAuth', JSON.stringify({
-          isAuthenticated: true,
-          backOfficeId: boId ? Number(boId) : null,
-          id: boId ? Number(boId) : null,
-          name: boAccount?.fullName || boAccount?.name || 'Back Office Executive',
-          role: boAccount?.role || 'Operations Team',
-          mobile: cleanMobile,
-          loginTimestamp: new Date().toISOString(),
-        }));
-      } else if (
-        resolvedModule === 'CreditManager' ||
-        resolvedModule === 'Credit Manager' ||
-        String(result?.role || '').toLowerCase() === 'creditmanager' ||
-        String(result?.role || '').toLowerCase() === 'credit_manager'
-      ) {
-        const cmAccount = result?.creditManager || resolvedAccount || {};
-        const cmId = cmAccount?.creditManagerId ?? cmAccount?.CreditManagerId ?? cmAccount?.id;
-        const uId = result?.userId ?? cmAccount?.userId ?? null;
-
-        const creditManagerData = {
-          ...cmAccount,
-          ...(uId ? { userId: Number(uId) } : {}),
-        };
-
-        localStorage.setItem('creditManagerData', JSON.stringify(creditManagerData));
-
-        if (cmId) {
-          localStorage.setItem('creditManagerId', String(cmId));
+        if (!resolvedModule || !resolvedDestination || !resolvedAccount) {
+          const detection = await detectAccountModule(cleanMobile);
+          if (detection.destination) {
+            resolvedModule = detection.role || detection.module;
+            resolvedDestination = detection.destination;
+            resolvedAccount = detection.accountData;
+          } else {
+            setErrorMessage(detection.error || 'Account could not be verified. Please log in again.');
+            return;
+          }
         }
 
-        const creditManagerAuth = {
-          isAuthenticated: true,
-          creditManagerId: cmId ? Number(cmId) : null,
-          userId: uId ? Number(uId) : null,
-          creditManagerCode: cmAccount?.creditManagerCode || cmAccount?.code || '',
-          fullName: cmAccount?.fullName || cmAccount?.name || 'Credit Manager',
+        // 4. Construct user profile & set auth session
+        const userData = {
+          ...resolvedAccount,
           mobileNumber: cleanMobile,
-          emailAddress: cmAccount?.emailAddress || cmAccount?.email || '',
-          branch: cmAccount?.branch || '',
-          role: 'CreditManager',
-          loginTimestamp: new Date().toISOString(),
+          role: resolvedModule,
         };
 
-        localStorage.setItem('creditManagerAuth', JSON.stringify(creditManagerAuth));
+        login(userData, result || {});
 
-        const cmUserData = {
-          ...creditManagerData,
-          userId: uId ? Number(uId) : null,
-          role: 'CreditManager',
-          mobileNumber: cleanMobile,
-        };
-        localStorage.setItem('sivels_currentUser', JSON.stringify(cmUserData));
-        resolvedDestination = '/credit';
-      }
+        // 5. Persist common tokens & module-specific data
+        const token = result?.token || result?.accessToken || result?.access_token || result?.data?.token;
+        if (token) {
+          localStorage.setItem('authToken', token);
+        }
+        localStorage.setItem('sivels_currentUser', JSON.stringify(userData));
 
-      // 6. Brief pause to allow success toast to display before page transition
-      setTimeout(() => {
-        window.location.href = resolvedDestination;
-      }, 500);
+        if (resolvedModule === 'Agent') {
+          localStorage.setItem('agentData', JSON.stringify(resolvedAccount));
+          const agentId = resolvedAccount?.agentId ?? resolvedAccount?.AgentId ?? resolvedAccount?.id;
+          if (agentId) {
+            localStorage.setItem('agentId', String(agentId));
+          }
+        } else if (resolvedModule === 'RM') {
+          localStorage.setItem('rmData', JSON.stringify(resolvedAccount));
+          const rmId = resolvedAccount?.rmId ?? resolvedAccount?.RMId ?? resolvedAccount?.id;
+          if (rmId) {
+            localStorage.setItem('rmId', String(rmId));
+          }
+        } else if (resolvedModule === 'AMS') {
+          localStorage.setItem('amsData', JSON.stringify(resolvedAccount));
+          const amsId = resolvedAccount?.amsId ?? resolvedAccount?.AmsId ?? resolvedAccount?.id;
+          if (amsId) {
+            localStorage.setItem('amsId', String(amsId));
+          }
+        } else if (resolvedModule === 'Customer') {
+          localStorage.setItem('customerData', JSON.stringify(resolvedAccount));
+          const customerId = resolvedAccount?.agentCustomerId ?? resolvedAccount?.customerId ?? resolvedAccount?.id;
+          if (customerId) {
+            localStorage.setItem('customerId', String(customerId));
+          }
+        } else if (resolvedModule === 'Master') {
+          localStorage.setItem('masterData', JSON.stringify(resolvedAccount));
+        } else if (
+          resolvedModule === 'BackOffice' ||
+          resolvedModule === 'Back Office' ||
+          resolvedModule === 'Operations' ||
+          String(result?.role || '').toLowerCase() === 'backoffice'
+        ) {
+          const boAccount = result?.backOffice || resolvedAccount || {};
+          localStorage.setItem('backOfficeData', JSON.stringify(boAccount));
+          const boId = boAccount?.backOfficeId ?? boAccount?.BackOfficeId ?? boAccount?.id ?? result?.userId;
+          if (boId) {
+            localStorage.setItem('backOfficeId', String(boId));
+          }
+          localStorage.setItem('backOfficeAuth', JSON.stringify({
+            isAuthenticated: true,
+            backOfficeId: boId ? Number(boId) : null,
+            id: boId ? Number(boId) : null,
+            name: boAccount?.fullName || boAccount?.name || 'Back Office Executive',
+            role: boAccount?.role || 'Operations Team',
+            mobile: cleanMobile,
+            loginTimestamp: new Date().toISOString(),
+          }));
+        } else if (
+          resolvedModule === 'CreditManager' ||
+          resolvedModule === 'Credit Manager' ||
+          String(result?.role || '').toLowerCase() === 'creditmanager' ||
+          String(result?.role || '').toLowerCase() === 'credit_manager'
+        ) {
+          const cmAccount = result?.creditManager || resolvedAccount || {};
+          const cmId = cmAccount?.creditManagerId ?? cmAccount?.CreditManagerId ?? cmAccount?.id;
+          const uId = result?.userId ?? cmAccount?.userId ?? null;
 
+          const creditManagerData = {
+            ...cmAccount,
+            ...(uId ? { userId: Number(uId) } : {}),
+          };
+
+          localStorage.setItem('creditManagerData', JSON.stringify(creditManagerData));
+
+          if (cmId) {
+            localStorage.setItem('creditManagerId', String(cmId));
+          }
+
+          const creditManagerAuth = {
+            isAuthenticated: true,
+            creditManagerId: cmId ? Number(cmId) : null,
+            userId: uId ? Number(uId) : null,
+            creditManagerCode: cmAccount?.creditManagerCode || cmAccount?.code || '',
+            fullName: cmAccount?.fullName || cmAccount?.name || 'Credit Manager',
+            mobileNumber: cleanMobile,
+            emailAddress: cmAccount?.emailAddress || cmAccount?.email || '',
+            branch: cmAccount?.branch || '',
+            role: 'CreditManager',
+            loginTimestamp: new Date().toISOString(),
+          };
+
+          localStorage.setItem('creditManagerAuth', JSON.stringify(creditManagerAuth));
+
+          const cmUserData = {
+            ...creditManagerData,
+            userId: uId ? Number(uId) : null,
+            role: 'CreditManager',
+            mobileNumber: cleanMobile,
+          };
+          localStorage.setItem('sivels_currentUser', JSON.stringify(cmUserData));
+          resolvedDestination = '/credit';
+        }
+
+        // 6. Brief pause to allow success toast to display before page transition
+        setTimeout(() => {
+          window.location.href = resolvedDestination;
+        }, 500);
+      }, { message: 'Verifying OTP...' });
     } catch (err) {
       setErrorMessage(err.message || 'Authentication failed. Please try again.');
       showToast('error', 'Authentication failed', err.message || 'Please try again.');
+    } finally {
       setLoading(false);
     }
   };
 
   const isComplete = otp.every((digit) => digit !== '');
 
-  // ── Resend OTP ────────────────────────────────────────────────────────────
+  // ── Resend OTP (Remains Strictly Local) ───────────────────────────────────
   const handleResend = async () => {
     const cleanMobile = normalizeMobileNumber(mobileNumber);
     if (!cleanMobile) return;

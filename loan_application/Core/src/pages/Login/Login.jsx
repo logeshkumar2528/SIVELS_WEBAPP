@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Smartphone, ShieldCheck, ArrowRight, ChevronDown } from 'lucide-react';
 import { detectAccountModule, normalizeMobileNumber } from '../../services/moduleDetectionService';
 import { authService } from '../../services/authService';
+import { useLoading } from '../../context/LoadingContext';
 import './Login.css';
 
 export default function Login() {
@@ -10,6 +11,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { withLoading } = useLoading();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,38 +20,40 @@ export default function Login() {
       setLoading(true);
       setError('');
       try {
-        // Step 1: Detect account and role dynamically from Master APIs
-        const detection = await detectAccountModule(cleanMobile);
+        await withLoading(async () => {
+          // Step 1: Detect account and role dynamically from Master APIs
+          const detection = await detectAccountModule(cleanMobile);
 
-        if (detection.status === 'NOT_FOUND') {
-          setError(detection.error || 'No account found with this mobile number');
-          return;
-        }
+          if (detection.status === 'NOT_FOUND') {
+            setError(detection.error || 'No account found with this mobile number');
+            return;
+          }
 
-        if (detection.status === 'ERROR') {
-          setError(detection.error || 'Failed to verify account. Please check your connection and try again.');
-          return;
-        }
+          if (detection.status === 'ERROR') {
+            setError(detection.error || 'Failed to verify account. Please check your connection and try again.');
+            return;
+          }
 
-        // Step 2: Trigger OTP send after account is confirmed
-        let otpResponse = null;
-        try {
-          otpResponse = await authService.sendOtp(cleanMobile);
-        } catch (otpErr) {
-          console.warn('[Login] OTP send returned notice:', otpErr?.message || otpErr);
-          otpResponse = { success: false, message: otpErr?.message || 'OTP triggered' };
-        }
+          // Step 2: Trigger OTP send after account is confirmed
+          let otpResponse = null;
+          try {
+            otpResponse = await authService.sendOtp(cleanMobile);
+          } catch (otpErr) {
+            console.warn('[Login] OTP send returned notice:', otpErr?.message || otpErr);
+            otpResponse = { success: false, message: otpErr?.message || 'OTP triggered' };
+          }
 
-        // Step 3: Navigate to Verify OTP with detected role and account state
-        navigate('/verify', {
-          state: {
-            mobileNumber: cleanMobile,
-            module: detection.role || detection.module,
-            destination: detection.destination,
-            accountData: detection.accountData,
-            otpResponse,
-          },
-        });
+          // Step 3: Navigate to Verify OTP with detected role and account state
+          navigate('/verify', {
+            state: {
+              mobileNumber: cleanMobile,
+              module: detection.role || detection.module,
+              destination: detection.destination,
+              accountData: detection.accountData,
+              otpResponse,
+            },
+          });
+        }, { message: 'Signing you in...' });
       } catch (err) {
         setError(err.message || 'Failed to process login. Please check your connection and try again.');
       } finally {

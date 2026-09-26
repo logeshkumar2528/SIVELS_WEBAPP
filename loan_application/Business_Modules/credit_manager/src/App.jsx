@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { isCreditManagerAuthenticated } from './auth/authStorage';
+import { LoadingProvider } from '../../../Core/src/context/LoadingContext';
 import Dashboard from './pages/Dashboard';
 import ReceivedApplications from './pages/ReceivedApplications';
 import PendingReview from './pages/PendingReview';
@@ -73,9 +74,11 @@ const AppContent = () => {
 
 function App() {
   return (
-    <Router basename="/credit">
-      <AppContent />
-    </Router>
+    <LoadingProvider>
+      <Router basename="/credit">
+        <AppContent />
+      </Router>
+    </LoadingProvider>
   );
 }
 

@@ -9,6 +9,7 @@ import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
+import { useLoading } from '../../../../../Core/src/context/LoadingContext';
 import { buildApplicationDisplayId, buildSectionUpdate, getSectionState, getApplicantCount, createArray, resolveApplicantName } from '../applicationWizard/flowUtils';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -238,6 +239,7 @@ export function buildVerificationList(appData = {}) {
 
 export default function Declaration() {
   const navigate = useNavigate();
+  const { withLoading } = useLoading();
   const { applicationId } = useParams();
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
@@ -416,52 +418,54 @@ export default function Declaration() {
     setIsFinalizing(true);
 
     try {
-      // 1. Fetch latest customer record to ensure full payload
-      let customerRecord = null;
-      const getRes = await fetch(`${API_BASE}/AgentAddCustomer/${appId}`);
-      if (getRes.ok) {
-        const data = await getRes.json();
-        customerRecord = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
-      }
+      await withLoading(async () => {
+        // 1. Fetch latest customer record to ensure full payload
+        let customerRecord = null;
+        const getRes = await fetch(`${API_BASE}/AgentAddCustomer/${appId}`);
+        if (getRes.ok) {
+          const data = await getRes.json();
+          customerRecord = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
+        }
 
-      if (!customerRecord) {
-        throw new Error('Unable to retrieve customer record for status update.');
-      }
+        if (!customerRecord) {
+          throw new Error('Unable to retrieve customer record for status update.');
+        }
 
-      // 2. Build full payload with status: 2 (Logged to HO / Completed)
-      const rawAgentId = customerRecord.agentId !== undefined ? customerRecord.agentId : customerRecord.AgentId;
-      const resolvedAgentId = (rawAgentId === null || rawAgentId === undefined || rawAgentId === '')
-        ? null
-        : Number(rawAgentId);
+        // 2. Build full payload with status: 2 (Logged to HO / Completed)
+        const rawAgentId = customerRecord.agentId !== undefined ? customerRecord.agentId : customerRecord.AgentId;
+        const resolvedAgentId = (rawAgentId === null || rawAgentId === undefined || rawAgentId === '')
+          ? null
+          : Number(rawAgentId);
 
-      const payload = {
-        agentCustomerId: Number(customerRecord.agentCustomerId || customerRecord.AgentCustomerId || appId),
-        agentId: resolvedAgentId,
-        fullName: customerRecord.fullName || customerRecord.FullName || customerRecord.customerName || appData.customerName || '',
-        mobileNumber: customerRecord.mobileNumber || customerRecord.MobileNumber || customerRecord.mobile || appData.mobile || '',
-        email: customerRecord.email || customerRecord.Email || customerRecord.emailAddress || appData.email || '',
-        employmentTypeId: Number(customerRecord.employmentTypeId ?? customerRecord.EmploymentTypeId ?? 1),
-        loanPurposeId: Number(customerRecord.loanPurposeId ?? customerRecord.LoanPurposeId ?? 1),
-        expectedLoanAmount: Number(customerRecord.expectedLoanAmount ?? customerRecord.ExpectedLoanAmount ?? 0),
-        remarks: customerRecord.remarks || customerRecord.Remarks || '',
-        status: 2,
-        isActive: customerRecord.isActive !== undefined ? customerRecord.isActive : (customerRecord.IsActive !== undefined ? customerRecord.IsActive : true),
-      };
+        const payload = {
+          agentCustomerId: Number(customerRecord.agentCustomerId || customerRecord.AgentCustomerId || appId),
+          agentId: resolvedAgentId,
+          fullName: customerRecord.fullName || customerRecord.FullName || customerRecord.customerName || appData.customerName || '',
+          mobileNumber: customerRecord.mobileNumber || customerRecord.MobileNumber || customerRecord.mobile || appData.mobile || '',
+          email: customerRecord.email || customerRecord.Email || customerRecord.emailAddress || appData.email || '',
+          employmentTypeId: Number(customerRecord.employmentTypeId ?? customerRecord.EmploymentTypeId ?? 1),
+          loanPurposeId: Number(customerRecord.loanPurposeId ?? customerRecord.LoanPurposeId ?? 1),
+          expectedLoanAmount: Number(customerRecord.expectedLoanAmount ?? customerRecord.ExpectedLoanAmount ?? 0),
+          remarks: customerRecord.remarks || customerRecord.Remarks || '',
+          status: 2,
+          isActive: customerRecord.isActive !== undefined ? customerRecord.isActive : (customerRecord.IsActive !== undefined ? customerRecord.IsActive : true),
+        };
 
-      // 3. Send PUT request
-      const putRes = await fetch(`${API_BASE}/AgentAddCustomer/${appId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+        // 3. Send PUT request
+        const putRes = await fetch(`${API_BASE}/AgentAddCustomer/${appId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
 
-      if (!putRes.ok) {
-        throw new Error(`Failed to update application status to Logged to HO (${putRes.status})`);
-      }
+        if (!putRes.ok) {
+          throw new Error(`Failed to update application status to Logged to HO (${putRes.status})`);
+        }
 
-      saveApplication(appId, { status: 'Logged to HO' });
-      setShowSubmitModal(false);
-      navigate(ROUTES.APPROVED_APPLICATIONS);
+        saveApplication(appId, { status: 'Logged to HO' });
+        setShowSubmitModal(false);
+        navigate(ROUTES.APPROVED_APPLICATIONS);
+      }, { message: 'Submitting application...' });
     } catch (err) {
       console.error('Error finalizing application submission:', err);
       setErrorPopup({

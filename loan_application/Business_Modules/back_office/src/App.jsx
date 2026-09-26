@@ -7,13 +7,16 @@
 
 import { BrowserRouter } from 'react-router-dom';
 import { BackOfficeRoutes } from './back-office/index';
+import { LoadingProvider } from '../../../Core/src/context/LoadingContext';
 import './back-office/styles/variables.css';
 
 function App() {
   return (
-    <BrowserRouter>
-      <BackOfficeRoutes />
-    </BrowserRouter>
+    <LoadingProvider>
+      <BrowserRouter>
+        <BackOfficeRoutes />
+      </BrowserRouter>
+    </LoadingProvider>
   );
 }
 

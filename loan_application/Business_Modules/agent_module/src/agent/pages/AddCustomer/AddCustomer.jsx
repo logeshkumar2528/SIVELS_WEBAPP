@@ -23,12 +23,14 @@ import CustomSelect from './CustomSelect'
 import './AddCustomer.css'
 import { masterService } from '../../../../../../Core/src/services/masterService'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
+import { useLoading } from '../../../../../../Core/src/context/LoadingContext'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { getApiErrorMessage } from '../../../../../../Core/src/utils/apiErrorHandler'
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../../Core/src/utils/amountHelper'
 
 function AddCustomer() {
   const navigate = useNavigate()
+  const { withLoading } = useLoading()
   const [searchParams] = useSearchParams()
   const location = useLocation()
   const editCustomerId = searchParams.get('id') || location.state?.customerId || null
@@ -146,42 +148,44 @@ function AddCustomer() {
       setLoadingCustomer(true)
       setGlobalError(null)
       try {
-        const [custRes, docsRes] = await Promise.all([
-          agentCustomerService.getCustomerById(editCustomerId),
-          agentCustomerService.getDocumentsByCustomerId(editCustomerId).catch(() => [])
-        ])
+        await withLoading(async () => {
+          const [custRes, docsRes] = await Promise.all([
+            agentCustomerService.getCustomerById(editCustomerId),
+            agentCustomerService.getDocumentsByCustomerId(editCustomerId).catch(() => [])
+          ])
 
-        const extractArray = (res) => {
-          if (Array.isArray(res)) return res
-          if (res && typeof res === 'object') {
-            if (Array.isArray(res.data)) return res.data
-            if (Array.isArray(res.items)) return res.items
-            if (Array.isArray(res.result)) return res.result
-            if (Array.isArray(res.list)) return res.list
+          const extractArray = (res) => {
+            if (Array.isArray(res)) return res
+            if (res && typeof res === 'object') {
+              if (Array.isArray(res.data)) return res.data
+              if (Array.isArray(res.items)) return res.items
+              if (Array.isArray(res.result)) return res.result
+              if (Array.isArray(res.list)) return res.list
+            }
+            return []
           }
-          return []
-        }
 
-        const customer = custRes?.data || custRes
-        const docList = extractArray(docsRes)
+          const customer = custRes?.data || custRes
+          const docList = extractArray(docsRes)
 
-        if (isMounted && customer) {
-          const empTypeId = customer.employmentTypeId ? String(customer.employmentTypeId) : ''
-          setLoadedEmploymentTypeId(empTypeId)
-          setFormData({
-            fullName: customer.fullName || '',
-            mobileNumber: customer.mobileNumber || '',
-            email: customer.email || '',
-            employmentTypeId: empTypeId,
-            loanProductId: customer.loanProductId ? String(customer.loanProductId) : '',
-            expectedAmount: customer.expectedLoanAmount ? formatIndianAmount(customer.expectedLoanAmount, true, 2) : '',
-            remarks: customer.remarks || '',
-          })
+          if (isMounted && customer) {
+            const empTypeId = customer.employmentTypeId ? String(customer.employmentTypeId) : ''
+            setLoadedEmploymentTypeId(empTypeId)
+            setFormData({
+              fullName: customer.fullName || '',
+              mobileNumber: customer.mobileNumber || '',
+              email: customer.email || '',
+              employmentTypeId: empTypeId,
+              loanProductId: customer.loanProductId ? String(customer.loanProductId) : '',
+              expectedAmount: customer.expectedLoanAmount ? formatIndianAmount(customer.expectedLoanAmount, true, 2) : '',
+              remarks: customer.remarks || '',
+            })
 
-          const uploadedIds = docList.map(d => Number(d.documentTypeId || d.DocumentTypeId)).filter(Boolean)
-          setUploadedDocuments(uploadedIds)
-          setExistingCustomerDocs(docList)
-        }
+            const uploadedIds = docList.map(d => Number(d.documentTypeId || d.DocumentTypeId)).filter(Boolean)
+            setUploadedDocuments(uploadedIds)
+            setExistingCustomerDocs(docList)
+          }
+        }, { message: 'Loading customer details...' })
       } catch (err) {
         console.error('Failed to load customer details for edit', err)
         if (isMounted) {
@@ -200,7 +204,7 @@ function AddCustomer() {
     return () => {
       isMounted = false
     }
-  }, [isEditMode, editCustomerId])
+  }, [isEditMode, editCustomerId, withLoading])
 
   // When Employment Type Changes -> Load Document Mappings
   useEffect(() => {
@@ -515,28 +519,13 @@ function AddCustomer() {
     }
 
     try {
-      let agentCustomerId = isEditMode ? editCustomerId : createdCustomerId
+      await withLoading(async () => {
+        let agentCustomerId = isEditMode ? editCustomerId : createdCustomerId
 
-      // 1. Create or Update Customer
-      if (isEditMode) {
-        const updatePayload = {
-          agentCustomerId: Number(editCustomerId),
-          fullName: formData.fullName.trim(),
-          mobileNumber: formData.mobileNumber.trim(),
-          email: processedEmail,
-          employmentTypeId: Number(formData.employmentTypeId),
-          loanProductId: Number(formData.loanProductId),
-          expectedLoanAmount: parseAmountToNumber(formData.expectedAmount),
-          remarks: formData.remarks.trim(),
-          modifiedBy: Number(agentId)
-        }
-
-        await agentCustomerService.updateCustomer(editCustomerId, updatePayload)
-      } else {
-        // Create Customer (only if not already created)
-        if (!agentCustomerId) {
-          const customerPayload = {
-            agentId: Number(agentId),
+        // 1. Create or Update Customer
+        if (isEditMode) {
+          const updatePayload = {
+            agentCustomerId: Number(editCustomerId),
             fullName: formData.fullName.trim(),
             mobileNumber: formData.mobileNumber.trim(),
             email: processedEmail,
@@ -544,109 +533,130 @@ function AddCustomer() {
             loanProductId: Number(formData.loanProductId),
             expectedLoanAmount: parseAmountToNumber(formData.expectedAmount),
             remarks: formData.remarks.trim(),
-            status: 0,
-            isActive: true,
-            createdBy: Number(agentId) // using agentId as createdBy
+            modifiedBy: Number(agentId)
           }
 
-          const createResponse = await agentCustomerService.createCustomer(customerPayload)
-          agentCustomerId =
-            createResponse?.agentCustomerId ||
-            createResponse?.id ||
-            createResponse?.data?.agentCustomerId ||
-            createResponse?.data?.id
-
+          await agentCustomerService.updateCustomer(editCustomerId, updatePayload)
+        } else {
+          // Create Customer (only if not already created)
           if (!agentCustomerId) {
-            throw new Error('Failed to retrieve Customer ID from server.')
-          }
-          setCreatedCustomerId(agentCustomerId)
-        }
-      }
+            const customerPayload = {
+              agentId: Number(agentId),
+              fullName: formData.fullName.trim(),
+              mobileNumber: formData.mobileNumber.trim(),
+              email: processedEmail,
+              employmentTypeId: Number(formData.employmentTypeId),
+              loanProductId: Number(formData.loanProductId),
+              expectedLoanAmount: parseAmountToNumber(formData.expectedAmount),
+              remarks: formData.remarks.trim(),
+              status: 0,
+              isActive: true,
+              createdBy: Number(agentId) // using agentId as createdBy
+            }
 
-      // 2. Upload Documents sequentially to track failures correctly
-      const failedUploads = []
-      const successfulUploads = []
+            const createResponse = await agentCustomerService.createCustomer(customerPayload)
+            agentCustomerId =
+              createResponse?.agentCustomerId ||
+              createResponse?.id ||
+              createResponse?.data?.agentCustomerId ||
+              createResponse?.data?.id
 
-      for (const docTypeIdStr of Object.keys(selectedFiles)) {
-        const docTypeId = Number(docTypeIdStr)
-        const filesData = selectedFiles[docTypeIdStr]
-        if (!filesData) continue
-        const filesArray = Array.isArray(filesData) ? filesData : [filesData]
-
-        for (let i = 0; i < filesArray.length; i++) {
-          const file = filesArray[i]
-          const docFormData = new FormData()
-          docFormData.append('file', file)
-          docFormData.append('agentCustomerId', String(agentCustomerId))
-          docFormData.append('documentTypeId', String(docTypeId))
-          docFormData.append('createdBy', String(agentId))
-
-          try {
-            await agentCustomerService.uploadDocument(docFormData)
-            successfulUploads.push({ docTypeId, index: i, isMultiple: Array.isArray(filesData) })
-          } catch (err) {
-            failedUploads.push(file.name)
+            if (!agentCustomerId) {
+              throw new Error('Failed to retrieve Customer ID from server.')
+            }
+            setCreatedCustomerId(agentCustomerId)
           }
         }
-      }
 
-      // Remove successful uploads from state
-      if (successfulUploads.length > 0) {
-        // Mark documents as uploaded so they bypass validation on retry
-        setUploadedDocuments((prev) => {
-          const newDocIds = successfulUploads.map((u) => u.docTypeId)
-          return Array.from(new Set([...prev, ...newDocIds]))
-        })
+        // 2. Upload Documents sequentially to track failures correctly
+        const failedUploads = []
+        const successfulUploads = []
 
-        setSelectedFiles((prev) => {
-          const newFiles = { ...prev }
-          // Process in reverse to avoid index shifting if multiple files per docType
-          for (let i = successfulUploads.length - 1; i >= 0; i--) {
-            const { docTypeId, index, isMultiple } = successfulUploads[i]
-            if (isMultiple && Array.isArray(newFiles[docTypeId])) {
-              newFiles[docTypeId] = newFiles[docTypeId].filter((_, idx) => idx !== index)
-              if (newFiles[docTypeId].length === 0) {
-                delete newFiles[docTypeId]
-              }
-            } else {
-              delete newFiles[docTypeId]
+        for (const docTypeIdStr of Object.keys(selectedFiles)) {
+          const docTypeId = Number(docTypeIdStr)
+          const filesData = selectedFiles[docTypeIdStr]
+          if (!filesData) continue
+          const filesArray = Array.isArray(filesData) ? filesData : [filesData]
+
+          for (let i = 0; i < filesArray.length; i++) {
+            const file = filesArray[i]
+            const docFormData = new FormData()
+            docFormData.append('file', file)
+            docFormData.append('agentCustomerId', String(agentCustomerId))
+            docFormData.append('documentTypeId', String(docTypeId))
+            docFormData.append('createdBy', String(agentId))
+
+            try {
+              await agentCustomerService.uploadDocument(docFormData)
+              successfulUploads.push({ docTypeId, index: i, isMultiple: Array.isArray(filesData) })
+            } catch (err) {
+              failedUploads.push(file.name)
             }
           }
-          return newFiles
-        })
-      }
+        }
 
-      if (failedUploads.length > 0) {
-        setGlobalError(
-          isEditMode
-            ? `Customer updated successfully, but some documents failed to upload: ${failedUploads.join(', ')}. Please retry uploading the remaining documents.`
-            : `Customer created successfully, but some documents failed to upload: ${failedUploads.join(', ')}. Please retry submitting the remaining documents.`
-        )
-        window.scrollTo(0, 0)
-        return // Do not show success screen yet
-      }
+        // Remove successful uploads from state
+        if (successfulUploads.length > 0) {
+          // Mark documents as uploaded so they bypass validation on retry
+          setUploadedDocuments((prev) => {
+            const newDocIds = successfulUploads.map((u) => u.docTypeId)
+            return Array.from(new Set([...prev, ...newDocIds]))
+          })
 
-      // 3. Success Handling
-      if (isEditMode) {
-        navigate('/Agent/submission-history')
-      } else {
-        const now = new Date()
-        const formattedDateTime = now.toLocaleString('en-IN', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-        })
+          setSelectedFiles((prev) => {
+            const newFiles = { ...prev }
+            // Process in reverse to avoid index shifting if multiple files per docType
+            for (let i = successfulUploads.length - 1; i >= 0; i--) {
+              const { docTypeId, index, isMultiple } = successfulUploads[i]
+              if (isMultiple && Array.isArray(newFiles[docTypeId])) {
+                newFiles[docTypeId] = newFiles[docTypeId].filter((_, idx) => idx !== index)
+                if (newFiles[docTypeId].length === 0) {
+                  delete newFiles[docTypeId]
+                }
+              } else {
+                delete newFiles[docTypeId]
+              }
+            }
+            return newFiles
+          })
+        }
 
-        setSubmittedData({
-          customerName: formData.fullName,
-          mobileNumber: formData.mobileNumber,
-          submissionDate: formattedDateTime,
-          referenceId: `REF${agentCustomerId}`,
-        })
-      }
+        if (failedUploads.length > 0) {
+          setGlobalError(
+            isEditMode
+              ? `Customer updated successfully, but some documents failed to upload: ${failedUploads.join(', ')}. Please retry uploading the remaining documents.`
+              : `Customer created successfully, but some documents failed to upload: ${failedUploads.join(', ')}. Please retry submitting the remaining documents.`
+          )
+          window.scrollTo(0, 0)
+          return // Do not show success screen yet
+        }
+
+        // 3. Success Handling
+        if (isEditMode) {
+          navigate('/Agent/submission-history')
+        } else {
+          const now = new Date()
+          const formattedDateTime = now.toLocaleString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+          })
+
+          setSubmittedData({
+            customerName: formData.fullName,
+            mobileNumber: formData.mobileNumber,
+            submissionDate: formattedDateTime,
+            referenceId: `REF${agentCustomerId}`,
+          })
+        }
+      }, {
+        message: isEditMode
+          ? 'Saving customer changes...'
+          : 'Creating customer application...'
+      })
     } catch (err) {
       console.error('Failed to save customer', err)
       const apiError = getApiErrorMessage(err)

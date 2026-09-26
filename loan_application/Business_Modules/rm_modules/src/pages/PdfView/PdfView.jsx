@@ -7,6 +7,7 @@ import { ROUTES } from '../../config/routeConfig';
 import { getApplicantCount } from '../applicationWizard/flowUtils';
 import Button from '../../components/Button/Button';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
+import { useLoading } from '../../../../../Core/src/context/LoadingContext';
 import { formatDateTime, toIstDateInput } from '../../utils/dateHelper';
 import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
 import { isApplicantDocumentTuple } from '../KycDocuments/kycDocumentState';
@@ -63,6 +64,7 @@ function isObsoleteMock(val) {
 
 export default function PdfView() {
   const params = useParams();
+  const { withLoading } = useLoading();
   const applicationId = params.applicationId || params.customerId;
   const navigate = useNavigate();
   const location = useLocation();
@@ -1150,8 +1152,10 @@ export default function PdfView() {
     setIsGeneratingPdf(true);
 
     try {
-      const pdf = await generatePdfInstance();
-      pdf.save(`Loan_Application_${applicationId}.pdf`);
+      await withLoading(async () => {
+        const pdf = await generatePdfInstance();
+        pdf.save(`Loan_Application_${applicationId}.pdf`);
+      }, { message: 'Generating application PDF...' });
     } catch (err) {
       console.error('Error generating PDF:', err);
       setErrorPopup({
