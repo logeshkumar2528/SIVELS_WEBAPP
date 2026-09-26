@@ -72,6 +72,9 @@ function AddCustomer() {
   // Modal Full Image Preview State
   const [modalImage, setModalImage] = useState(null)
 
+  // Confirmation Modal State
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+
   // Submitted Popup Success State
   const [submittedData, setSubmittedData] = useState(null)
   const [createdCustomerId, setCreatedCustomerId] = useState(null)
@@ -418,7 +421,19 @@ function AddCustomer() {
       return
     }
 
+    // Validation succeeded: Show confirmation modal before calling API
+    setShowConfirmModal(true)
+  }
+
+  const handleConfirmSave = async () => {
+    setShowConfirmModal(false)
     setSubmitting(true)
+    setGlobalError(null)
+
+    let processedEmail = null
+    if (formData.email && formData.email.trim() !== '') {
+      processedEmail = formData.email.trim()
+    }
 
     try {
       let agentCustomerId = createdCustomerId;
@@ -532,6 +547,10 @@ function AddCustomer() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const handleCancelConfirm = () => {
+    setShowConfirmModal(false)
   }
 
   const handleResetForm = () => {
@@ -922,12 +941,55 @@ function AddCustomer() {
             <X size={15} strokeWidth={2} /> Cancel
           </button>
           <button type="submit" className="btn-submit" disabled={submitting}>
-            {submitting ? 'Saving Customer...' : (
-              <>Save & Continue to Documents <ArrowRight size={15} strokeWidth={2} /></>
-            )}
+            {submitting ? 'Saving Customer...' : 'Save'}
           </button>
         </div>
       </form>
+
+      {showConfirmModal && (
+        <div
+          className="agent-confirm-modal-backdrop"
+          onClick={() => !submitting && setShowConfirmModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-modal-title"
+        >
+          <div
+            className="agent-confirm-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="agent-confirm-modal-header">
+              <div className="agent-confirm-modal-icon">
+                <User size={20} />
+              </div>
+              <h3 id="confirm-modal-title" className="agent-confirm-modal-title">
+                Confirm Customer Creation
+              </h3>
+            </div>
+            <p className="agent-confirm-modal-message">
+              Are you sure you want to create customer "{formData.fullName?.trim() || 'this customer'}"?
+            </p>
+            <div className="agent-confirm-modal-actions">
+              <button
+                type="button"
+                className="agent-confirm-modal-btn-cancel"
+                onClick={handleCancelConfirm}
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="agent-confirm-modal-btn-confirm"
+                onClick={handleConfirmSave}
+                disabled={submitting}
+              >
+                {submitting ? 'Creating...' : 'Yes, Create Customer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modalImage && (
         <div className="image-modal-backdrop" onClick={() => setModalImage(null)}>

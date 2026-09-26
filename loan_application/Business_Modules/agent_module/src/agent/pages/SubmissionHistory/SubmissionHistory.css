@@ -69,21 +69,23 @@
 .filter-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px 20px;
+  gap: 8px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--color-border-light);
   flex-wrap: wrap;
 }
 
 .filter-search-box {
   position: relative;
-  width: 360px;
-  max-width: 100%;
+  width: 290px;
+  min-width: 250px;
+  max-width: 320px;
+  flex: 1 1 280px;
 }
 
 .filter-search-icon {
   position: absolute;
-  left: 14px;
+  left: 12px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--color-text-muted);
@@ -92,12 +94,12 @@
 
 .filter-search-input {
   width: 100%;
-  height: 44px;
-  padding: 0 14px 0 38px;
+  height: 38px;
+  padding: 0 12px 0 34px;
   border: 1px solid #D5DDE5;
   border-radius: 8px;
   background-color: #FFFFFF;
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--color-text-primary);
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -106,7 +108,7 @@
 
 .filter-search-input::placeholder {
   color: #9CA3AF;
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
 .filter-search-input:hover {
@@ -118,41 +120,135 @@
   box-shadow: 0 0 0 3px rgba(26, 122, 60, 0.12);
 }
 
-.filter-date-box {
+.filter-unified-date-box {
   position: relative;
-  width: 220px;
-  min-width: 220px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid #D5DDE5;
+  border-radius: 8px;
+  background-color: #FFFFFF;
+  cursor: pointer;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.filter-unified-date-box:hover {
+  border-color: #A8B2BF;
+}
+
+.filter-unified-date-box:focus-within {
+  border-color: #1A7A3C;
+  box-shadow: 0 0 0 3px rgba(26, 122, 60, 0.12);
+}
+
+.filter-date-icon {
+  color: var(--color-text-muted, #64748B);
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.filter-date-prefix {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.filter-unified-date-box .filter-date-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-primary);
+  width: 110px;
+  cursor: pointer;
+  box-shadow: none;
 }
 
 .filter-status-box {
-  width: 205px;
-  min-width: 205px;
+  width: 135px;
+  min-width: 125px;
+  flex-shrink: 0;
 }
 
-.btn-reset-link {
+.filter-status-box .agent-custom-select-trigger {
+  height: 38px;
+  min-height: 38px;
+  padding: 0 10px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+.btn-search-filter {
   display: inline-flex;
   align-items: center;
-  height: 44px;
-  background: none;
+  justify-content: center;
+  gap: 5px;
+  height: 38px;
+  padding: 0 14px;
   border: none;
-  color: var(--color-primary);
+  border-radius: 8px;
+  background-color: var(--color-primary);
+  color: #FFFFFF;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  padding: 0 8px;
+  box-shadow: var(--shadow-sm);
+  transition: background-color var(--transition-fast);
+  white-space: nowrap;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
+.btn-search-filter:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.btn-reset-filter,
+.btn-reset-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 14px;
+  background-color: #F8FAFC;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+  white-space: nowrap;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.btn-reset-filter:hover,
 .btn-reset-link:hover {
-  text-decoration: underline;
+  background-color: #E2E8F0;
+  border-color: #94A3B8;
+  color: #0F172A;
+  text-decoration: none;
 }
 
 .btn-add-customer-filter {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  height: 44px;
-  padding: 0 16px;
+  height: 38px;
+  padding: 0 14px;
   border: none;
   border-radius: 8px;
   background-color: var(--color-primary);
@@ -165,10 +261,23 @@
   white-space: nowrap;
   margin-left: auto;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .btn-add-customer-filter:hover {
   background-color: var(--color-primary-hover);
+}
+
+.filter-date-error-row {
+  padding: 6px 20px 10px 20px;
+  display: flex;
+  align-items: center;
+}
+
+.filter-date-error-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: #dc2626;
 }
 
 /* Table Wrapper */
@@ -229,12 +338,52 @@
   white-space: nowrap;
 }
 
-/* Customer Avatar Circle Colors */
+/* Customer Avatar Circle Colors & Interactive Hover */
 .history-customer-cell {
   display: flex;
   align-items: center;
   gap: 12px;
   font-weight: 600;
+}
+
+.history-avatar-btn {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.history-avatar-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.history-avatar-hover-overlay {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.55);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.history-avatar-btn:hover .history-avatar-hover-overlay,
+.history-avatar-btn:focus-visible .history-avatar-hover-overlay {
+  opacity: 1;
 }
 
 .history-avatar {
@@ -253,6 +402,8 @@
   object-fit: cover;
   border-radius: 50%;
   display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .avatar--R { background-color: #D1FAE5; color: #065F46; }

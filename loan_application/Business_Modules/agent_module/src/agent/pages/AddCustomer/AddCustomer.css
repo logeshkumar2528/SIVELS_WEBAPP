@@ -704,6 +704,111 @@
 }
 
 /* =============================================
+   CONFIRMATION MODAL
+   ============================================= */
+
+.agent-confirm-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  padding: 1rem;
+}
+
+.agent-confirm-modal-content {
+  background-color: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 440px;
+  padding: 1.5rem;
+  box-sizing: border-box;
+}
+
+.agent-confirm-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 1rem;
+}
+
+.agent-confirm-modal-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background-color: #f0fdf4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #16a34a;
+  flex-shrink: 0;
+}
+
+.agent-confirm-modal-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.agent-confirm-modal-message {
+  margin: 0 0 1.5rem 0;
+  color: #64748b;
+  font-size: 0.925rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.agent-confirm-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.agent-confirm-modal-btn-cancel {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #334155;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.agent-confirm-modal-btn-cancel:hover:not(:disabled) {
+  background-color: #f8fafc;
+}
+
+.agent-confirm-modal-btn-confirm {
+  padding: 0.5rem 1.15rem;
+  border-radius: 8px;
+  border: none;
+  background-color: #1A7A3C;
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.agent-confirm-modal-btn-confirm:hover:not(:disabled) {
+  background-color: #15692F;
+}
+
+.agent-confirm-modal-btn-cancel:disabled,
+.agent-confirm-modal-btn-confirm:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* =============================================
    RESPONSIVE - TABLET
    ============================================= */
 
