@@ -9,4 +9,4 @@ export { default as ScanPulseLoader } from './ScanPulseLoader/ScanPulseLoader';
 export { default as OrbitingCoinsLoader } from './OrbitingCoinsLoader/OrbitingCoinsLoader';
 
 // Export context controller and hook for convenient module consumption
-export { LoadingProvider, useLoading } from '../../context/LoadingContext';
+export { LoadingProvider, useLoading } from '../../../context/LoadingContext';
