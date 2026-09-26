@@ -56,6 +56,16 @@ export const agentCustomerService = {
       }
     );
     return response.data;
+  },
+
+  updateCustomer: async (id, customerData) => {
+    const response = await axiosInstance.put(`/AgentAddCustomer/${id}`, customerData);
+    return response?.data ?? { success: true };
+  },
+
+  deleteCustomer: async (id, modifiedBy) => {
+    const response = await axiosInstance.delete(`/AgentAddCustomer/${id}?modifiedBy=${modifiedBy}`);
+    return response?.data ?? { success: true };
   }
 };
 

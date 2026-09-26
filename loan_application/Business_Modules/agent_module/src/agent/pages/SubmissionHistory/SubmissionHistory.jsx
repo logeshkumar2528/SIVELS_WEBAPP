@@ -4,6 +4,8 @@ import {
   Plus,
   Search,
   Eye,
+  Edit2,
+  Trash2,
   Clock,
   RefreshCw,
   CheckCircle2,
@@ -21,6 +23,7 @@ import {
   selectLatestUpdatedCustomerPhotoRejection,
 } from '../../../../../../Core/src/utils/documentTypeHelper'
 import { formatDateTime } from '../../../../../../Core/src/utils/dateHelper'
+import { getApiErrorMessage } from '../../../../../../Core/src/utils/apiErrorHandler'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
 import { normalizeApplicationStatus } from '../../../../../rm_modules/src/utils/rmContext'
@@ -79,6 +82,11 @@ function SubmissionHistory() {
 
   // View Customer Drawer State
   const [selectedCustomer, setSelectedCustomer] = useState(null)
+
+  // Delete Customer Modal State
+  const [customerToDelete, setCustomerToDelete] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState(null)
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1)
@@ -358,6 +366,51 @@ function SubmissionHistory() {
     setCustomerPhotos((prev) => ({ ...prev, [custId]: null }))
   }
 
+  const handleEditCustomer = (customer) => {
+    const custId = customer.agentCustomerId || customer.AgentCustomerId || customer.id
+    if (!custId) return
+    navigate(`/Agent/add-customer?id=${custId}&mode=edit`, {
+      state: { customerId: custId, mode: 'edit' }
+    })
+  }
+
+  const handleOpenDeleteModal = (customer) => {
+    setCustomerToDelete(customer)
+    setDeleteError(null)
+  }
+
+  const handleCloseDeleteModal = () => {
+    if (!isDeleting) {
+      setCustomerToDelete(null)
+      setDeleteError(null)
+    }
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!customerToDelete) return
+    const custId = customerToDelete.agentCustomerId || customerToDelete.AgentCustomerId || customerToDelete.id
+    if (!custId) return
+
+    setIsDeleting(true)
+    setDeleteError(null)
+    try {
+      await agentCustomerService.deleteCustomer(custId, Number(agentId))
+      setCustomerToDelete(null)
+      await fetchSubmissions()
+    } catch (err) {
+      console.error('Failed to delete customer', err)
+      const errInfo = getApiErrorMessage(err)
+      const errMsg =
+        errInfo?.global ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to delete customer. Please try again.'
+      setDeleteError(errMsg)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   const handleSearch = () => {
     if (draftFromDate && draftToDate && draftFromDate > draftToDate) {
       setDateRangeError('From Date cannot be after To Date.')
@@ -602,9 +655,32 @@ function SubmissionHistory() {
                             type="button"
                             className="btn-view-details"
                             onClick={() => setSelectedCustomer(item)}
+                            title="View customer details"
                           >
                             <Eye size={15} strokeWidth={1.8} /> View Details
                           </button>
+                          {getStatusType(item.status) === 'new-rm' && (
+                            <>
+                              <button
+                                type="button"
+                                className="btn-edit-customer"
+                                onClick={() => handleEditCustomer(item)}
+                                title="Edit customer details"
+                                aria-label={`Edit ${item.fullName || 'Customer'}`}
+                              >
+                                <Edit2 size={14} strokeWidth={1.8} /> Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-delete-customer"
+                                onClick={() => handleOpenDeleteModal(item)}
+                                title="Delete customer application"
+                                aria-label={`Delete ${item.fullName || 'Customer'}`}
+                              >
+                                <Trash2 size={14} strokeWidth={1.8} /> Delete
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -638,6 +714,60 @@ function SubmissionHistory() {
           customer={selectedCustomer}
           onClose={() => setSelectedCustomer(null)}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {customerToDelete && (
+        <div
+          className="history-delete-modal-backdrop"
+          onClick={handleCloseDeleteModal}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-modal-title"
+        >
+          <div
+            className="history-delete-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="history-delete-modal-header">
+              <div className="history-delete-modal-icon">
+                <Trash2 size={20} />
+              </div>
+              <h3 id="delete-modal-title" className="history-delete-modal-title">
+                Delete Customer Application
+              </h3>
+            </div>
+
+            {deleteError && (
+              <div className="history-delete-modal-error">
+                {deleteError}
+              </div>
+            )}
+
+            <p className="history-delete-modal-message">
+              Are you sure you want to delete customer <strong>"{customerToDelete?.fullName || 'this customer'}"</strong>? This action cannot be undone.
+            </p>
+
+            <div className="history-delete-modal-actions">
+              <button
+                type="button"
+                className="history-delete-modal-btn-cancel"
+                onClick={handleCloseDeleteModal}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="history-delete-modal-btn-confirm"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
