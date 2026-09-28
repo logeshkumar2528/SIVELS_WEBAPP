@@ -1,0 +1,282 @@
+.people-directory-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 28px max(24px, calc((100vw - 1440px) / 2 + 24px)) 40px;
+}
+
+.people-dir-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: #198038;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 0;
+  width: fit-content;
+  transition: color 0.15s ease;
+}
+
+.people-dir-back-btn:hover {
+  color: #0f7a4c;
+  text-decoration: underline;
+}
+
+.people-directory-card {
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.people-dir-header {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.people-dir-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.people-dir-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.people-dir-title-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.people-dir-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.people-dir-title-badge h1 {
+  margin: 0;
+  color: #161616;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.people-dir-count-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #defbe6;
+  color: #198038;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.people-dir-subtitle {
+  margin: 4px 0 0;
+  color: #6f6f6f;
+  font-size: 13px;
+}
+
+.people-dir-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.people-dir-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #c6c6c6;
+  border-radius: 6px;
+  padding: 8px 12px;
+  width: 320px;
+  min-width: 240px;
+  color: #6f6f6f;
+  background: #ffffff;
+}
+
+.people-dir-search-box input {
+  border: 0;
+  outline: 0;
+  width: 100%;
+  font-size: 13px;
+  background: transparent;
+}
+
+.people-dir-search-clear {
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  color: #8d8d8d;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.people-dir-search-clear:hover {
+  color: #161616;
+}
+
+.people-dir-search-badge {
+  font-size: 12px;
+  color: #6f6f6f;
+  background: #f4faf6;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #dfece3;
+}
+
+.people-dir-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.people-dir-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  min-width: 750px;
+}
+
+.people-dir-table-wrap th {
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #6f6f6f;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fafafa;
+}
+
+.people-dir-table-wrap td {
+  padding: 14px;
+  border-bottom: 1px solid #f0f0f0;
+  color: #393939;
+}
+
+.people-dir-pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #edf2ef;
+  flex-wrap: wrap;
+}
+
+.people-dir-pagination-info {
+  color: #6f6f6f;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.people-dir-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.people-dir-page-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #d8e1db;
+  background: #ffffff;
+  color: #393939;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.people-dir-page-btn:hover:not(:disabled) {
+  border-color: #24a148;
+  color: #198038;
+  background: #f4faf6;
+}
+
+.people-dir-page-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.people-dir-page-numbers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.people-dir-page-number {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #393939;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.people-dir-page-number:hover:not(.active) {
+  background: #f0f5f1;
+  color: #198038;
+}
+
+.people-dir-page-number.active {
+  background: #24a148;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  .people-directory-page {
+    padding: 16px;
+  }
+
+  .people-dir-heading-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .people-dir-search-box {
+    width: 100%;
+  }
+
+  .people-dir-pagination-bar {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+}

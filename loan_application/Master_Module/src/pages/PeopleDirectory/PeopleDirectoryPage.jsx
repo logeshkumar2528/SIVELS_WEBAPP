@@ -1,15 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
-  Activity,
-  AlertCircle,
   ArrowLeft,
-  ArrowRight,
   ArrowUpRight,
   BriefcaseBusiness,
   Building2,
   Camera,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Eye,
@@ -17,22 +13,24 @@ import {
   LoaderCircle,
   Pencil,
   Plus,
-  RefreshCw,
   Search,
   ShieldCheck,
   Users,
   X,
 } from 'lucide-react';
 import { formatDateTime, formatDateTimeFriendly } from '../../utils/dateHelper';
-import { getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
+import { getAllAgents, getAgentById } from '../../api/agentApi';
+import { getAllRelationshipManagers, getRelationshipManager } from '../../api/rmApi';
 import { getAllBackOffice, getBackOfficeById } from '../../api/backOfficeApi';
-import { getRelationshipManager } from '../../api/rmApi';
-import { getAgentById } from '../../api/agentApi';
+import { getAllAMS, getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
+import { agentCustomerService } from '../../../../Core/src/services/agentCustomerService';
 import { getProfileImageUrl, getDocumentUrl, buildFileUrl } from '../../utils/profileImageHelper';
 import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
-import './Dashboard.css';
+import './PeopleDirectory.css';
+import '../Dashboard/Dashboard.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+
 const unwrap = (response) => {
   if (Array.isArray(response)) return response;
   if (Array.isArray(response?.data)) return response.data;
@@ -40,63 +38,38 @@ const unwrap = (response) => {
   if (Array.isArray(response?.data?.value)) return response.data.value;
   return [];
 };
-const read = (record, keys, fallback = '') => keys.map((key) => record?.[key]).find((value) => value !== undefined && value !== null && value !== '') ?? fallback;
-const status = (value, fallback = 'Active') => typeof value === 'boolean' ? (value ? 'Active' : 'Inactive') : String(value || fallback).replace(/^./, (letter) => letter.toUpperCase());
-const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'A';
 
-function MasterAvatar({ role, id, name, className = 'role-avatar', style, version = null }) {
-  const [error, setError] = useState(false);
-  const [liveVersion, setLiveVersion] = useState(version || Date.now());
+const read = (record, keys, fallback = '') =>
+  keys.map((key) => record?.[key]).find((value) => value !== undefined && value !== null && value !== '') ?? fallback;
 
-  useEffect(() => {
-    if (version) {
-      setLiveVersion(version);
-      setError(false);
-    }
-  }, [version]);
+const status = (value, fallback = 'Active') =>
+  typeof value === 'boolean'
+    ? value
+      ? 'Active'
+      : 'Inactive'
+    : String(value || fallback).replace(/^./, (letter) => letter.toUpperCase());
 
-  useEffect(() => {
-    const handleUpdate = (e) => {
-      if (!e.detail?.role || e.detail.role.toLowerCase() === String(role).toLowerCase()) {
-        setLiveVersion(e.detail?.timestamp || Date.now());
-        setError(false);
-      }
-    };
-    window.addEventListener('profile-image-updated', handleUpdate);
-    return () => window.removeEventListener('profile-image-updated', handleUpdate);
-  }, [role]);
-
-  const effectiveVersion = version || liveVersion;
-  const imageUrl = getProfileImageUrl(role, id, effectiveVersion);
-
-  useEffect(() => {
-    setError(false);
-  }, [imageUrl]);
-
-  if (imageUrl && !error) {
-    return (
-      <span className={className} style={{ overflow: 'hidden', padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', ...style }}>
-        <img
-          src={imageUrl}
-          alt={`${name || role} avatar`}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
-          onError={() => setError(true)}
-        />
-      </span>
-    );
-  }
-
-  return <span className={className} style={style}>{initials(name)}</span>;
-}
+const initials = (name = '') =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase() || 'A';
 
 const money = (value) => Number(String(value ?? '').replace(/[^0-9.-]/g, '')) || 0;
-const formatAmount = (amount) => amount > 0 ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount) : '—';
 
-export const getFileUrl = (path) => buildFileUrl(path);
+const formatAmount = (amount) =>
+  amount > 0
+    ? new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: 0,
+      }).format(amount)
+    : '—';
 
-export { getDocumentUrl, buildFileUrl };
-
-export const getAadhaarPath = (record) =>
+const getAadhaarPath = (record) =>
   read(record, [
     'aadhaarDocumentPath',
     'AadhaarDocumentPath',
@@ -112,7 +85,7 @@ export const getAadhaarPath = (record) =>
     'AadharCardPath',
   ]);
 
-export const getPanPath = (record) =>
+const getPanPath = (record) =>
   read(record, [
     'panCardPath',
     'PanCardPath',
@@ -125,7 +98,7 @@ export const getPanPath = (record) =>
     'PANPath',
   ]);
 
-export const getProfilePath = (record) =>
+const getProfilePath = (record) =>
   read(record, [
     'profileImagePath',
     'ProfileImagePath',
@@ -137,12 +110,12 @@ export const getProfilePath = (record) =>
     'ProfilePicturePath',
   ]);
 
-export const isPdfFile = (urlOrPath = '') => {
+const isPdfFile = (urlOrPath = '') => {
   if (!urlOrPath) return false;
   return /\.pdf(\?.*)?$/i.test(String(urlOrPath));
 };
 
-export const formatDistrictList = (districts) => {
+const formatDistrictList = (districts) => {
   if (!districts || !Array.isArray(districts) || districts.length === 0) {
     return 'No districts assigned';
   }
@@ -189,34 +162,131 @@ const normalizeApplicationStatus = (value, statusName = '') => {
   return raw.replace(/^./, (letter) => letter.toUpperCase());
 };
 
-const formatWhen = (value) => {
-  const date = new Date(value);
-  if (!value || Number.isNaN(date.getTime())) return 'Recently updated';
-  const minutes = Math.max(1, Math.floor((Date.now() - date.getTime()) / 60000));
-  if (minutes < 60) return `${minutes} min ago`;
-  if (minutes < 1440) return `${Math.floor(minutes / 60)} hr ago`;
-  return `${Math.floor(minutes / 1440)} days ago · ${formatDateTimeFriendly(value)}`;
-};
-
 const authHeaders = () => {
   const token = localStorage.getItem('authToken');
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-export function Dashboard() {
+function DirectoryAvatar({ role, id, name, className = 'role-avatar', style, version = null }) {
+  const [error, setError] = useState(false);
+  const [liveVersion, setLiveVersion] = useState(version || Date.now());
+
+  useEffect(() => {
+    if (version) {
+      setLiveVersion(version);
+      setError(false);
+    }
+  }, [version]);
+
+  useEffect(() => {
+    const handleUpdate = (e) => {
+      if (!e.detail?.role || e.detail.role.toLowerCase() === String(role).toLowerCase()) {
+        setLiveVersion(e.detail?.timestamp || Date.now());
+        setError(false);
+      }
+    };
+    window.addEventListener('profile-image-updated', handleUpdate);
+    return () => window.removeEventListener('profile-image-updated', handleUpdate);
+  }, [role]);
+
+  const effectiveVersion = version || liveVersion;
+  const imageUrl = getProfileImageUrl(role, id, effectiveVersion);
+
+  useEffect(() => {
+    setError(false);
+  }, [imageUrl]);
+
+  if (imageUrl && !error) {
+    return (
+      <span
+        className={className}
+        style={{
+          overflow: 'hidden',
+          padding: 0,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          ...style,
+        }}
+      >
+        <img
+          src={imageUrl}
+          alt={`${name || role} avatar`}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+          onError={() => setError(true)}
+        />
+      </span>
+    );
+  }
+
+  return <span className={className} style={style}>{initials(name)}</span>;
+}
+
+const ROLE_META = {
+  agent: {
+    key: 'agent',
+    title: 'Agents',
+    subtitle: 'Field agents sourcing applications and managing client relationships.',
+    icon: BriefcaseBusiness,
+    color: 'blue',
+    searchPlaceholder: 'Search agents by name, contact, RM, branch...',
+    emptyText: 'No agents found.',
+    addLabel: 'Add user',
+  },
+  rm: {
+    key: 'rm',
+    title: 'Relationship Managers',
+    subtitle: 'Own agent coverage, regional operations, and team performance.',
+    icon: Users,
+    color: 'green',
+    searchPlaceholder: 'Search relationship managers by name, phone, branch...',
+    emptyText: 'No relationship managers found.',
+    addLabel: 'Add user',
+  },
+  backOffice: {
+    key: 'backOffice',
+    title: 'Back Office',
+    subtitle: 'Support verification, branch processing, and operations.',
+    icon: Building2,
+    color: 'teal',
+    searchPlaceholder: 'Search back office by name, code, contact, branch...',
+    emptyText: 'No back office users found.',
+    addLabel: 'Add user',
+  },
+  ams: {
+    key: 'ams',
+    title: 'Area Specialists (AMS)',
+    subtitle: 'Cover designated districts, local channels, and regional operations.',
+    icon: ShieldCheck,
+    color: 'purple',
+    searchPlaceholder: 'Search AMS by name, code, contact, branch, city...',
+    emptyText: 'No area specialists found.',
+    addLabel: 'Add user',
+  },
+  customer: {
+    key: 'customer',
+    title: 'Customers',
+    subtitle: 'Network customer and application records.',
+    icon: FileText,
+    color: 'orange',
+    searchPlaceholder: 'Search customers by name, mobile, loan purpose, status...',
+    emptyText: 'No customer records found.',
+    addLabel: 'Add user',
+  },
+};
+
+export function PeopleDirectoryPage({ roleKey = 'agent' }) {
   const navigate = useNavigate();
-  const location = useLocation();
-  const [agents, setAgents] = useState([]);
-  const [applications, setApplications] = useState([]);
-  const [rms, setRms] = useState([]);
-  const [amsList, setAmsList] = useState([]);
-  const [backOfficeList, setBackOfficeList] = useState([]);
-  const [query, setQuery] = useState('');
-  const [applicationQuery, setApplicationQuery] = useState('');
-  const [applicationStatusFilter, setApplicationStatusFilter] = useState('All');
+  const meta = ROLE_META[roleKey] || ROLE_META.agent;
+  const RoleIcon = meta.icon;
+
+  const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [updatedAt, setUpdatedAt] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [selectedAms, setSelectedAms] = useState(null);
@@ -224,291 +294,338 @@ export function Dashboard() {
   const [previewDoc, setPreviewDoc] = useState(null);
   const [imageVersion, setImageVersion] = useState(() => Date.now());
 
-  const loadDashboard = useCallback(async () => {
-    setImageVersion(Date.now());
-    setLoading(true);
-    setError('');
-    try {
-      const headers = authHeaders();
-      const [agentResult, applicationResult, rmResult, amsResult, backOfficeResult] = await Promise.allSettled([
-        fetch(`${API_BASE}/AgentMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Agents request failed'))),
-        fetch(`${API_BASE}/AgentAddCustomer`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Applications request failed'))),
-        fetch(`${API_BASE}/RMMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('RM request failed'))),
-        fetch(`${API_BASE}/AMSMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('AMS request failed'))),
-        getAllBackOffice(),
-      ]);
+  const blobUrlsRef = useRef([]);
 
-      if ([agentResult, applicationResult, rmResult, amsResult, backOfficeResult].some((result) => result.status === 'rejected')) {
-        setError('Some live records could not be loaded. Available data is shown below.');
+  const cleanupBlobUrls = useCallback(() => {
+    blobUrlsRef.current.forEach((url) => {
+      try {
+        if (url && url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
+      } catch (e) {
+        // ignore
       }
-
-      const rmRows = rmResult.status === 'fulfilled' ? unwrap(rmResult.value) : [];
-      const liveRms = rmRows.map((rm) => {
-        const id = read(rm, ['rmId', 'RMId', 'id', 'Id']);
-        const rmName = read(rm, ['fullName', 'FullName', 'rmName', 'RMName', 'name', 'Name']) || `${read(rm, ['firstName', 'FirstName'], '')} ${read(rm, ['lastName', 'LastName'], '')}`.trim() || 'Unnamed RM';
-        return {
-          id,
-          rmId: id,
-          name: rmName,
-          fullName: rmName,
-          email: read(rm, ['emailAddress', 'EmailAddress', 'email', 'Email']),
-          phone: read(rm, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
-          branch: read(rm, ['branch', 'Branch', 'branchName', 'BranchName']),
-          status: status(read(rm, ['status', 'Status', 'isActive', 'IsActive'])),
-          aadhaarDocumentPath: getAadhaarPath(rm),
-          panCardPath: getPanPath(rm),
-          profileImagePath: getProfilePath(rm),
-          rawRecord: rm,
-        };
-      }).filter((rm) => rm.id && rm.name);
-      const rmNames = new Map(liveRms.map((rm) => [String(rm.id), rm.name]));
-      const rmsById = new Map(liveRms.map((rm) => [String(rm.id), rm]));
-
-      const agentRows = agentResult.status === 'fulfilled' ? unwrap(agentResult.value) : [];
-      const agentLookup = new Map();
-      agentRows.forEach((agent) => {
-        const id = read(agent, ['agentId', 'AgentId', 'id', 'Id']);
-        if (!id) return;
-        const rmId = read(agent, ['rmId', 'RMId', 'relationshipManagerId', 'RelationshipManagerId', 'createdBy']);
-        agentLookup.set(String(id), {
-          id,
-          agentId: id,
-          name: read(agent, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name'], 'Unnamed agent'),
-          fullName: read(agent, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name'], 'Unnamed agent'),
-          agentCode: read(agent, ['agentCode', 'AgentCode', 'code', 'Code']),
-          email: read(agent, ['emailAddress', 'EmailAddress', 'email', 'Email']),
-          phone: read(agent, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
-          branch: read(agent, ['branch', 'Branch', 'branchName', 'BranchName']),
-          rmId,
-          rmName: read(agent, ['rmName', 'RMName', 'relationshipManager', 'RelationshipManager']) || rmNames.get(String(rmId)) || 'Unassigned',
-        });
-      });
-
-      const customerRows = applicationResult.status === 'fulfilled' ? unwrap(applicationResult.value) : [];
-      const liveApplications = customerRows.map((application) => {
-        const ownership = resolveApplicationOwnership(application, agentLookup, rmsById);
-        const resolvedAgentId = ownership.agentId;
-        const agent = resolvedAgentId ? (agentLookup.get(String(resolvedAgentId)) || {}) : {};
-        const resolvedRmId = ownership.rmId || read(application, ['rmId', 'RMId']) || agent.rmId || '';
-        const rmObj = resolvedRmId ? (rmsById.get(String(resolvedRmId)) || {}) : {};
-        const resolvedRmName = ownership.rmName && ownership.rmName !== '—'
-          ? ownership.rmName
-          : (rmObj.name || rmNames.get(String(resolvedRmId)) || agent.rmName || 'Unassigned');
-        const resolvedAgentName = ownership.agentName && ownership.agentName !== '—'
-          ? ownership.agentName
-          : (read(application, ['agentName', 'AgentName']) || agent.name || '—');
-
-        return {
-          id: read(application, ['agentCustomerId', 'AgentCustomerId', 'applicationId', 'id']),
-          agentId: resolvedAgentId,
-          agentName: resolvedAgentName,
-          agentPhone: agent.phone || '—',
-          agentEmail: agent.email || '—',
-          rmId: resolvedRmId,
-          rmName: resolvedRmName,
-          customerName: read(application, ['fullName', 'customerName', 'FullName'], 'Unknown customer'),
-          mobile: read(application, ['mobileNumber', 'MobileNumber', 'mobile'], '—'),
-          email: read(application, ['email', 'Email', 'emailAddress'], '—'),
-          employmentType: read(application, ['employmentTypeName', 'EmploymentTypeName'], '—'),
-          loanPurpose: read(application, ['loanPurposeName', 'LoanPurposeName', 'loanType'], '—'),
-          amount: money(read(application, ['expectedLoanAmount', 'ExpectedLoanAmount', 'disbursedAmount', 'loanAmount', 'requestedAmount'])),
-          remarks: read(application, ['remarks', 'Remarks'], '—'),
-          status: normalizeApplicationStatus(
-            read(application, ['status', 'applicationStatus', 'ApplicationStatus'], '0'),
-            read(application, ['statusName', 'StatusName'])
-          ),
-          isActive: application.isActive ?? application.IsActive ?? true,
-          createdAt: read(application, ['createdAt', 'CreatedAt', 'createdDate']),
-          updatedAt: read(application, ['modifiedAt', 'ModifiedAt', 'updatedAt', 'createdAt', 'createdDate']),
-          branch: agent.branch || rmObj.branch || '—',
-        };
-      }).filter((application) => application.id);
-
-      const applicationsByAgent = liveApplications.reduce(
-        (map, application) => map.set(String(application.agentId || ''), (map.get(String(application.agentId || '')) || 0) + 1),
-        new Map()
-      );
-
-      const liveAgents = agentRows.map((agent) => {
-        const rmId = read(agent, ['rmId', 'RMId', 'relationshipManagerId', 'RelationshipManagerId', 'createdBy']);
-        const id = read(agent, ['agentId', 'AgentId', 'id', 'Id']);
-        const agentName = read(agent, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name'], 'Unnamed agent');
-        return {
-          id,
-          agentId: id,
-          name: agentName,
-          fullName: agentName,
-          email: read(agent, ['emailAddress', 'EmailAddress', 'email', 'Email']),
-          phone: read(agent, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
-          rm: read(agent, ['relationshipManager', 'RelationshipManager', 'rmName', 'RMName']) || rmNames.get(String(rmId)) || 'Unassigned',
-          rmId,
-          branch: read(agent, ['branch', 'Branch', 'branchName', 'BranchName']),
-          status: status(read(agent, ['status', 'Status', 'isActive', 'IsActive'])),
-          applications: applicationsByAgent.get(String(id)) || 0,
-          updatedAt: read(agent, ['modifiedAt', 'ModifiedAt', 'updatedAt', 'UpdatedAt', 'createdAt', 'CreatedAt', 'createdDate', 'dateJoined', 'DateJoined']),
-          aadhaarDocumentPath: getAadhaarPath(agent),
-          panCardPath: getPanPath(agent),
-          profileImagePath: getProfilePath(agent),
-          rawRecord: agent,
-        };
-      }).filter((agent) => agent.id || agent.name);
-
-      const amsRows = amsResult.status === 'fulfilled' ? unwrap(amsResult.value) : [];
-      const liveAms = amsRows.map((item) => {
-        const id = read(item, ['amsId', 'AmsId', 'id', 'Id']);
-        const fullName = read(item, ['fullName', 'FullName', 'name', 'Name'], 'Unnamed AMS');
-        return {
-          id,
-          amsId: id,
-          amsCode: read(item, ['amsCode', 'AmsCode', 'code', 'Code']),
-          fullName,
-          name: fullName,
-          genderId: item.genderId ?? item.GenderId,
-          genderName: read(item, ['genderName', 'GenderName', 'gender', 'Gender']),
-          dateOfBirth: read(item, ['dateOfBirth', 'DateOfBirth', 'dob', 'DOB']),
-          address: read(item, ['address', 'Address']),
-          stateId: item.stateId ?? item.StateId,
-          stateName: read(item, ['stateName', 'StateName', 'state', 'State']),
-          cityId: item.cityId ?? item.CityId,
-          cityName: read(item, ['cityName', 'CityName', 'city', 'City']),
-          pincode: read(item, ['pincode', 'Pincode']),
-          mobileNumber: read(item, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
-          emailAddress: read(item, ['emailAddress', 'EmailAddress', 'email', 'Email']),
-          branch: read(item, ['branch', 'Branch', 'branchName', 'BranchName']),
-          dateJoined: read(item, ['dateJoined', 'DateJoined']),
-          isActive: item.isActive ?? item.IsActive ?? true,
-          accountNumber: read(item, ['accountNumber', 'AccountNumber']),
-          ifscCode: read(item, ['ifscCode', 'IfscCode']),
-          aadhaarDocumentPath: getAadhaarPath(item),
-          panCardPath: getPanPath(item),
-          profileImagePath: getProfilePath(item),
-          districtNames: Array.isArray(item.districtNames || item.districts || item.amsDistricts)
-            ? item.districtNames || item.districts || item.amsDistricts
-            : [],
-          rawRecord: item,
-        };
-      }).filter((a) => a.id || a.fullName);
-
-      const backOfficeRows = backOfficeResult.status === 'fulfilled' ? unwrap(backOfficeResult.value) : [];
-      const liveBackOffice = backOfficeRows.map((item) => {
-        const id = read(item, ['backOfficeId', 'BackOfficeId', 'id', 'Id']);
-        const boName = read(item, ['fullName', 'FullName', 'name', 'Name'], 'Unnamed back office officer');
-        return {
-          id,
-          backOfficeId: id,
-          backOfficeCode: read(item, ['backOfficeCode', 'BackOfficeCode', 'code', 'Code']),
-          name: boName,
-          fullName: boName,
-          email: read(item, ['emailAddress', 'EmailAddress', 'email', 'Email']),
-          phone: read(item, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
-          branch: read(item, ['branch', 'Branch', 'branchName', 'BranchName']),
-          status: status(read(item, ['status', 'Status', 'isActive', 'IsActive'])),
-          aadhaarDocumentPath: getAadhaarPath(item),
-          panCardPath: getPanPath(item),
-          profileImagePath: getProfilePath(item),
-          rawRecord: item,
-        };
-      }).filter((item) => item.id || item.name);
-
-      setAgents(liveAgents);
-      setApplications(liveApplications);
-      setRms(liveRms);
-      setAmsList(liveAms);
-      setBackOfficeList(liveBackOffice);
-      setUpdatedAt(new Date());
-    } catch {
-      setError('Live dashboard data is unavailable. Check your connection and try again.');
-      setAgents([]);
-      setApplications([]);
-      setRms([]);
-      setAmsList([]);
-      setBackOfficeList([]);
-    } finally {
-      setLoading(false);
-    }
+    });
+    blobUrlsRef.current = [];
   }, []);
 
   useEffect(() => {
-    loadDashboard();
-  }, [loadDashboard, location.key, location.pathname]);
+    return () => {
+      cleanupBlobUrls();
+    };
+  }, [cleanupBlobUrls]);
 
-  const filteredAgents = useMemo(
-    () => agents.filter((agent) => `${agent.name} ${agent.email} ${agent.rm}`.toLowerCase().includes(query.toLowerCase())),
-    [agents, query]
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    setImageVersion(Date.now());
+    try {
+      if (roleKey === 'agent') {
+        const [agentResult, rmResult, appResult] = await Promise.allSettled([
+          getAllAgents(),
+          getAllRelationshipManagers(),
+          agentCustomerService.getAllCustomers(),
+        ]);
+
+        const agentRows = agentResult.status === 'fulfilled' ? unwrap(agentResult.value) : [];
+        const rmRows = rmResult.status === 'fulfilled' ? unwrap(rmResult.value) : [];
+        const appRows = appResult.status === 'fulfilled' ? unwrap(appResult.value) : [];
+
+        const rmNames = new Map(
+          rmRows.map((rm) => {
+            const id = read(rm, ['rmId', 'RMId', 'id', 'Id']);
+            const name =
+              read(rm, ['fullName', 'FullName', 'rmName', 'RMName', 'name', 'Name']) ||
+              `${read(rm, ['firstName', 'FirstName'], '')} ${read(rm, ['lastName', 'LastName'], '')}`.trim();
+            return [String(id), name];
+          })
+        );
+
+        const appsByAgent = appRows.reduce((map, app) => {
+          const aId = read(app, ['agentId', 'AgentId', 'assignedAgentId']);
+          if (aId) map.set(String(aId), (map.get(String(aId)) || 0) + 1);
+          return map;
+        }, new Map());
+
+        const liveAgents = agentRows
+          .map((agent) => {
+            const rmId = read(agent, ['rmId', 'RMId', 'relationshipManagerId', 'RelationshipManagerId', 'createdBy']);
+            const id = read(agent, ['agentId', 'AgentId', 'id', 'Id']);
+            const agentName = read(agent, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name'], 'Unnamed agent');
+            return {
+              id,
+              agentId: id,
+              name: agentName,
+              fullName: agentName,
+              agentCode: read(agent, ['agentCode', 'AgentCode', 'code', 'Code']),
+              email: read(agent, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+              phone: read(agent, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+              rm: read(agent, ['relationshipManager', 'RelationshipManager', 'rmName', 'RMName']) || rmNames.get(String(rmId)) || 'Unassigned',
+              rmId,
+              branch: read(agent, ['branch', 'Branch', 'branchName', 'BranchName']),
+              status: status(read(agent, ['status', 'Status', 'isActive', 'IsActive'])),
+              applications: appsByAgent.get(String(id)) || 0,
+              aadhaarDocumentPath: getAadhaarPath(agent),
+              panCardPath: getPanPath(agent),
+              profileImagePath: getProfilePath(agent),
+              rawRecord: agent,
+            };
+          })
+          .filter((a) => a.id || a.name);
+
+        setRecords(liveAgents);
+      } else if (roleKey === 'rm') {
+        const [rmResult, agentResult] = await Promise.allSettled([
+          getAllRelationshipManagers(),
+          getAllAgents(),
+        ]);
+
+        const rmRows = rmResult.status === 'fulfilled' ? unwrap(rmResult.value) : [];
+        const agentRows = agentResult.status === 'fulfilled' ? unwrap(agentResult.value) : [];
+
+        const liveRms = rmRows
+          .map((rm) => {
+            const id = read(rm, ['rmId', 'RMId', 'id', 'Id']);
+            const rmName =
+              read(rm, ['fullName', 'FullName', 'rmName', 'RMName', 'name', 'Name']) ||
+              `${read(rm, ['firstName', 'FirstName'], '')} ${read(rm, ['lastName', 'LastName'], '')}`.trim() ||
+              'Unnamed RM';
+            const assignedAgentsCount = agentRows.filter((agent) => {
+              const aRmId = read(agent, ['rmId', 'RMId', 'relationshipManagerId', 'RelationshipManagerId', 'createdBy']);
+              const aRmName = read(agent, ['relationshipManager', 'RelationshipManager', 'rmName', 'RMName']);
+              return String(aRmId) === String(id) || aRmName === rmName;
+            }).length;
+
+            return {
+              id,
+              rmId: id,
+              name: rmName,
+              fullName: rmName,
+              email: read(rm, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+              phone: read(rm, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+              branch: read(rm, ['branch', 'Branch', 'branchName', 'BranchName']),
+              status: status(read(rm, ['status', 'Status', 'isActive', 'IsActive'])),
+              agents: assignedAgentsCount,
+              aadhaarDocumentPath: getAadhaarPath(rm),
+              panCardPath: getPanPath(rm),
+              profileImagePath: getProfilePath(rm),
+              rawRecord: rm,
+            };
+          })
+          .filter((rm) => rm.id && rm.name);
+
+        setRecords(liveRms);
+      } else if (roleKey === 'backOffice') {
+        const backOfficeResult = await getAllBackOffice();
+        const backOfficeRows = unwrap(backOfficeResult);
+        const liveBackOffice = backOfficeRows
+          .map((item) => {
+            const id = read(item, ['backOfficeId', 'BackOfficeId', 'id', 'Id']);
+            const boName = read(item, ['fullName', 'FullName', 'name', 'Name'], 'Unnamed back office officer');
+            return {
+              id,
+              backOfficeId: id,
+              backOfficeCode: read(item, ['backOfficeCode', 'BackOfficeCode', 'code', 'Code']),
+              name: boName,
+              fullName: boName,
+              email: read(item, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+              phone: read(item, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+              branch: read(item, ['branch', 'Branch', 'branchName', 'BranchName']),
+              status: status(read(item, ['status', 'Status', 'isActive', 'IsActive'])),
+              aadhaarDocumentPath: getAadhaarPath(item),
+              panCardPath: getPanPath(item),
+              profileImagePath: getProfilePath(item),
+              rawRecord: item,
+            };
+          })
+          .filter((item) => item.id || item.name);
+
+        setRecords(liveBackOffice);
+      } else if (roleKey === 'ams') {
+        const amsResult = await getAllAMS();
+        const amsRows = unwrap(amsResult);
+        const liveAms = amsRows
+          .map((item) => {
+            const id = read(item, ['amsId', 'AmsId', 'id', 'Id']);
+            const fullName = read(item, ['fullName', 'FullName', 'name', 'Name'], 'Unnamed AMS');
+            return {
+              id,
+              amsId: id,
+              amsCode: read(item, ['amsCode', 'AmsCode', 'code', 'Code']),
+              fullName,
+              name: fullName,
+              genderId: item.genderId ?? item.GenderId,
+              genderName: read(item, ['genderName', 'GenderName', 'gender', 'Gender']),
+              dateOfBirth: read(item, ['dateOfBirth', 'DateOfBirth', 'dob', 'DOB']),
+              address: read(item, ['address', 'Address']),
+              stateId: item.stateId ?? item.StateId,
+              stateName: read(item, ['stateName', 'StateName', 'state', 'State']),
+              cityId: item.cityId ?? item.CityId,
+              cityName: read(item, ['cityName', 'CityName', 'city', 'City']),
+              pincode: read(item, ['pincode', 'Pincode']),
+              mobileNumber: read(item, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+              emailAddress: read(item, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+              branch: read(item, ['branch', 'Branch', 'branchName', 'BranchName']),
+              dateJoined: read(item, ['dateJoined', 'DateJoined']),
+              isActive: item.isActive ?? item.IsActive ?? true,
+              accountNumber: read(item, ['accountNumber', 'AccountNumber']),
+              ifscCode: read(item, ['ifscCode', 'IfscCode']),
+              aadhaarDocumentPath: getAadhaarPath(item),
+              panCardPath: getPanPath(item),
+              profileImagePath: getProfilePath(item),
+              districtNames: Array.isArray(item.districtNames || item.districts || item.amsDistricts)
+                ? item.districtNames || item.districts || item.amsDistricts
+                : [],
+              rawRecord: item,
+            };
+          })
+          .filter((a) => a.id || a.fullName);
+
+        setRecords(liveAms);
+      } else if (roleKey === 'customer') {
+        const [appResult, agentResult, rmResult] = await Promise.allSettled([
+          agentCustomerService.getAllCustomers(),
+          getAllAgents(),
+          getAllRelationshipManagers(),
+        ]);
+
+        const customerRows = appResult.status === 'fulfilled' ? unwrap(appResult.value) : [];
+        const agentRows = agentResult.status === 'fulfilled' ? unwrap(agentResult.value) : [];
+        const rmRows = rmResult.status === 'fulfilled' ? unwrap(rmResult.value) : [];
+
+        const liveRms = rmRows.map((rm) => {
+          const id = read(rm, ['rmId', 'RMId', 'id', 'Id']);
+          const name = read(rm, ['fullName', 'FullName', 'rmName', 'RMName', 'name', 'Name']) || `${read(rm, ['firstName', 'FirstName'], '')} ${read(rm, ['lastName', 'LastName'], '')}`.trim() || 'Unnamed RM';
+          return { id, name, branch: read(rm, ['branch', 'Branch', 'branchName', 'BranchName']) };
+        });
+        const rmNames = new Map(liveRms.map((rm) => [String(rm.id), rm.name]));
+        const rmsById = new Map(liveRms.map((rm) => [String(rm.id), rm]));
+
+        const agentLookup = new Map();
+        agentRows.forEach((agent) => {
+          const id = read(agent, ['agentId', 'AgentId', 'id', 'Id']);
+          if (!id) return;
+          const rmId = read(agent, ['rmId', 'RMId', 'relationshipManagerId', 'RelationshipManagerId', 'createdBy']);
+          agentLookup.set(String(id), {
+            id,
+            name: read(agent, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name'], 'Unnamed agent'),
+            email: read(agent, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+            phone: read(agent, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+            branch: read(agent, ['branch', 'Branch', 'branchName', 'BranchName']),
+            rmId,
+            rmName: read(agent, ['relationshipManager', 'RelationshipManager', 'rmName', 'RMName']) || rmNames.get(String(rmId)) || 'Unassigned',
+          });
+        });
+
+        const liveApplications = customerRows
+          .map((application) => {
+            const ownership = resolveApplicationOwnership(application, agentLookup, rmsById);
+            const resolvedAgentId = ownership.agentId;
+            const agent = resolvedAgentId ? (agentLookup.get(String(resolvedAgentId)) || {}) : {};
+            const resolvedRmId = ownership.rmId || read(application, ['rmId', 'RMId']) || agent.rmId || '';
+            const rmObj = resolvedRmId ? (rmsById.get(String(resolvedRmId)) || {}) : {};
+            const resolvedRmName = ownership.rmName && ownership.rmName !== '—'
+              ? ownership.rmName
+              : (rmObj.name || rmNames.get(String(resolvedRmId)) || agent.rmName || 'Unassigned');
+            const resolvedAgentName = ownership.agentName && ownership.agentName !== '—'
+              ? ownership.agentName
+              : (read(application, ['agentName', 'AgentName']) || agent.name || '—');
+
+            return {
+              id: read(application, ['agentCustomerId', 'AgentCustomerId', 'applicationId', 'id']),
+              agentId: resolvedAgentId,
+              agentName: resolvedAgentName,
+              agentPhone: agent.phone || '—',
+              agentEmail: agent.email || '—',
+              rmId: resolvedRmId,
+              rmName: resolvedRmName,
+              customerName: read(application, ['fullName', 'customerName', 'FullName'], 'Unknown customer'),
+              mobile: read(application, ['mobileNumber', 'MobileNumber', 'mobile'], '—'),
+              email: read(application, ['email', 'Email', 'emailAddress'], '—'),
+              employmentType: read(application, ['employmentTypeName', 'EmploymentTypeName'], '—'),
+              loanPurpose: read(application, ['loanPurposeName', 'LoanPurposeName', 'loanType'], '—'),
+              amount: money(read(application, ['expectedLoanAmount', 'ExpectedLoanAmount', 'disbursedAmount', 'loanAmount', 'requestedAmount'])),
+              remarks: read(application, ['remarks', 'Remarks'], '—'),
+              status: normalizeApplicationStatus(
+                read(application, ['status', 'applicationStatus', 'ApplicationStatus'], '0'),
+                read(application, ['statusName', 'StatusName'])
+              ),
+              isActive: application.isActive ?? application.IsActive ?? true,
+              createdAt: read(application, ['createdAt', 'CreatedAt', 'createdDate']),
+              updatedAt: read(application, ['modifiedAt', 'ModifiedAt', 'updatedAt', 'createdAt', 'createdDate']),
+              branch: agent.branch || rmObj.branch || '—',
+            };
+          })
+          .filter((application) => application.id);
+
+        setRecords(liveApplications);
+      }
+    } catch (err) {
+      console.error(`Failed to load ${roleKey} directory data:`, err);
+      setError(`Unable to load live ${meta.title.toLowerCase()} records. Check your connection.`);
+      setRecords([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [roleKey, meta.title]);
+
+  useEffect(() => {
+    loadData();
+    setSearchQuery('');
+    setCurrentPage(1);
+  }, [loadData]);
+
+  const filteredRecords = useMemo(() => {
+    const search = searchQuery.trim().toLowerCase();
+    if (!search) return records;
+
+    return records.filter((item) => {
+      if (roleKey === 'agent') {
+        return [item.name, item.fullName, item.email, item.phone, item.rm, item.branch, item.status]
+          .some((val) => String(val || '').toLowerCase().includes(search));
+      }
+      if (roleKey === 'rm') {
+        return [item.name, item.fullName, item.email, item.phone, item.branch, item.status]
+          .some((val) => String(val || '').toLowerCase().includes(search));
+      }
+      if (roleKey === 'backOffice') {
+        return [item.name, item.fullName, item.email, item.phone, item.backOfficeCode, item.branch, item.status]
+          .some((val) => String(val || '').toLowerCase().includes(search));
+      }
+      if (roleKey === 'ams') {
+        return [item.fullName, item.name, item.amsCode, item.emailAddress, item.mobileNumber, item.genderName, item.branch, item.cityName]
+          .some((val) => String(val || '').toLowerCase().includes(search));
+      }
+      if (roleKey === 'customer') {
+        return [item.id, item.customerName, item.mobile, item.email, item.loanPurpose, item.agentName, item.rmName, item.status]
+          .some((val) => String(val || '').toLowerCase().includes(search));
+      }
+      return true;
+    });
+  }, [records, searchQuery, roleKey]);
+
+  const totalRecords = filteredRecords.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalRecords);
+  const visibleRecords = useMemo(
+    () => filteredRecords.slice(startIndex, startIndex + pageSize),
+    [filteredRecords, startIndex, pageSize]
   );
 
-  const filteredApplications = useMemo(() => {
-    const search = applicationQuery.trim().toLowerCase();
-    return applications.filter((application) => {
-      const matchesStatus = applicationStatusFilter === 'All' || application.status === applicationStatusFilter;
-      if (!matchesStatus) return false;
-      if (!search) return true;
-      return [
-        application.id,
-        application.customerName,
-        application.mobile,
-        application.agentName,
-        application.rmName,
-        application.loanPurpose,
-        application.status,
-      ].some((value) => String(value || '').toLowerCase().includes(search));
-    });
-  }, [applications, applicationQuery, applicationStatusFilter]);
-
-  const pending = applications.filter((application) => /pending|review|new|submitted/i.test(application.status));
-  const approved = applications.filter((application) => /approved/i.test(application.status));
-  const disbursed = applications.filter((application) => /disburs/i.test(application.status));
-  const coverage = rms.map((rm) => ({
-    ...rm,
-    agents: agents.filter((agent) => String(agent.rmId) === String(rm.id) || agent.rm === rm.name).length,
-  }));
-  const maxCoverage = Math.max(...coverage.map((rm) => rm.agents), 1);
-  const topAgents = [...agents].sort((a, b) => (b.applications || 0) - (a.applications || 0)).slice(0, 4);
-  const topCoverage = [...coverage].sort((a, b) => (b.agents || 0) - (a.agents || 0)).slice(0, 5);
-  const recentApplications = [...applications]
-    .filter((application) => application.createdAt)
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .slice(0, 5);
-
-  // 5 Stats Cards: RM, Agents, AMS, Applications, Approved Amount
-  const stats = [
-    [Users, 'green', 'Relationship managers', rms.length, 'Live RM master'],
-    [BriefcaseBusiness, 'blue', 'Total agents', agents.length, 'Live agent master'],
-    [ShieldCheck, 'teal', 'Total AMS', amsList.length, 'Live AMS master'],
-    [FileText, 'orange', 'Total applications', applications.length, `${pending.length} pending · ${approved.length} approved`],
-    [CheckCircle2, 'purple', 'Approved amount', formatAmount(approved.reduce((total, application) => total + application.amount, 0)), disbursed.length ? `${disbursed.length} disbursed` : `${approved.length} approved loans`],
-  ];
-
-  const openEdit = (person) => {
-    if (!person?.id) return;
-    setSelectedPerson(null);
-    if (person.type === 'Agent') {
-      navigate(`/edit-agent/${person.id}`);
-      return;
-    }
-    if (person.type === 'Back Office') {
-      navigate(`/edit-back-office/${person.id}`);
-      return;
-    }
-    navigate(`/edit-relationship-manager/${person.id}`);
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
+    setCurrentPage(1);
   };
 
-  const openEditAms = (ams) => {
-    const targetId = ams?.id || ams?.amsId || ams?.AmsId;
-    if (!targetId) return;
-    setSelectedAms(null);
-    navigate(`/edit-ams/${targetId}`);
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setCurrentPage(1);
   };
 
-  const openEditBackOffice = (backOffice) => {
-    const targetId = backOffice?.id || backOffice?.backOfficeId || backOffice?.BackOfficeId;
-    if (!targetId) return;
-    setSelectedPerson(null);
-    navigate(`/edit-back-office/${targetId}`);
-  };
-
+  // View Person Modal Handler
   const handleOpenPersonDetails = async (person, type) => {
-    const roleType = type || person?.type || 'Agent';
+    const roleType = type || (roleKey === 'rm' ? 'Relationship manager' : roleKey === 'backOffice' ? 'Back Office' : 'Agent');
     const targetId = person?.id || person?.agentId || person?.rmId || person?.backOfficeId;
     if (!targetId && !person) return;
 
@@ -539,17 +656,17 @@ export function Dashboard() {
           : (recordValue?.value?.[0] || recordValue?.data || recordValue?.value || recordValue);
 
         if (record && typeof record === 'object') {
-          const freshName = read(record, ['fullName', 'FullName', 'rmName', 'RMName', 'name', 'Name']) || `${read(record, ['firstName', 'FirstName'], '')} ${read(record, ['lastName', 'LastName'], '')}`.trim() || initialPerson.name;
+          const freshName =
+            read(record, ['fullName', 'FullName', 'rmName', 'RMName', 'name', 'Name']) ||
+            `${read(record, ['firstName', 'FirstName'], '')} ${read(record, ['lastName', 'LastName'], '')}`.trim() ||
+            initialPerson.name;
           const freshEmail = read(record, ['emailAddress', 'EmailAddress', 'email', 'Email']) || initialPerson.email;
           const freshPhone = read(record, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']) || initialPerson.phone;
           const freshBranch = read(record, ['branch', 'Branch', 'branchName', 'BranchName']) || initialPerson.branch;
           const freshStatus = status(read(record, ['status', 'Status', 'isActive', 'IsActive']), initialPerson.status);
-          const freshAadhaar = getAadhaarPath(record) || initialPerson.aadhaarDocumentPath;
-          const freshPan = getPanPath(record) || initialPerson.panCardPath;
-          const freshProfile = getProfilePath(record) || initialPerson.profileImagePath;
 
-          const updatedPerson = {
-            ...initialPerson,
+          setSelectedPerson((prev) => ({
+            ...prev,
             ...record,
             id: targetId,
             rmId: targetId,
@@ -560,36 +677,11 @@ export function Dashboard() {
             phone: freshPhone,
             branch: freshBranch,
             status: freshStatus,
-            aadhaarDocumentPath: freshAadhaar,
-            panCardPath: freshPan,
-            profileImagePath: freshProfile,
+            aadhaarDocumentPath: getAadhaarPath(record) || initialPerson.aadhaarDocumentPath,
+            panCardPath: getPanPath(record) || initialPerson.panCardPath,
+            profileImagePath: getProfilePath(record) || initialPerson.profileImagePath,
             rawRecord: record,
-          };
-
-          setSelectedPerson(updatedPerson);
-
-          setRms((prevList) =>
-            prevList.map((item) =>
-              (item.id === targetId || item.rmId === targetId)
-                ? {
-                    ...item,
-                    ...record,
-                    id: targetId,
-                    rmId: targetId,
-                    name: freshName,
-                    fullName: freshName,
-                    email: freshEmail,
-                    phone: freshPhone,
-                    branch: freshBranch,
-                    status: freshStatus,
-                    aadhaarDocumentPath: freshAadhaar,
-                    panCardPath: freshPan,
-                    profileImagePath: freshProfile,
-                    rawRecord: record,
-                  }
-                : item
-            )
-          );
+          }));
         }
       } else if (roleType === 'Back Office') {
         const response = await getBackOfficeById(targetId);
@@ -605,12 +697,9 @@ export function Dashboard() {
           const freshPhone = read(record, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']) || initialPerson.phone;
           const freshBranch = read(record, ['branch', 'Branch', 'branchName', 'BranchName']) || initialPerson.branch;
           const freshStatus = status(read(record, ['status', 'Status', 'isActive', 'IsActive']), initialPerson.status);
-          const freshAadhaar = getAadhaarPath(record) || initialPerson.aadhaarDocumentPath;
-          const freshPan = getPanPath(record) || initialPerson.panCardPath;
-          const freshProfile = getProfilePath(record) || initialPerson.profileImagePath;
 
-          const updatedPerson = {
-            ...initialPerson,
+          setSelectedPerson((prev) => ({
+            ...prev,
             ...record,
             id: targetId,
             backOfficeId: targetId,
@@ -622,37 +711,11 @@ export function Dashboard() {
             phone: freshPhone,
             branch: freshBranch,
             status: freshStatus,
-            aadhaarDocumentPath: freshAadhaar,
-            panCardPath: freshPan,
-            profileImagePath: freshProfile,
+            aadhaarDocumentPath: getAadhaarPath(record) || initialPerson.aadhaarDocumentPath,
+            panCardPath: getPanPath(record) || initialPerson.panCardPath,
+            profileImagePath: getProfilePath(record) || initialPerson.profileImagePath,
             rawRecord: record,
-          };
-
-          setSelectedPerson(updatedPerson);
-
-          setBackOfficeList((prevList) =>
-            prevList.map((item) =>
-              (item.id === targetId || item.backOfficeId === targetId)
-                ? {
-                    ...item,
-                    ...record,
-                    id: targetId,
-                    backOfficeId: targetId,
-                    name: freshName,
-                    fullName: freshName,
-                    backOfficeCode: freshCode,
-                    email: freshEmail,
-                    phone: freshPhone,
-                    branch: freshBranch,
-                    status: freshStatus,
-                    aadhaarDocumentPath: freshAadhaar,
-                    panCardPath: freshPan,
-                    profileImagePath: freshProfile,
-                    rawRecord: record,
-                  }
-                : item
-            )
-          );
+          }));
         }
       } else if (roleType === 'Agent') {
         const response = await getAgentById(targetId);
@@ -668,12 +731,9 @@ export function Dashboard() {
           const freshRm = read(record, ['relationshipManager', 'RelationshipManager', 'rmName', 'RMName']) || initialPerson.rm;
           const freshBranch = read(record, ['branch', 'Branch', 'branchName', 'BranchName']) || initialPerson.branch;
           const freshStatus = status(read(record, ['status', 'Status', 'isActive', 'IsActive']), initialPerson.status);
-          const freshAadhaar = getAadhaarPath(record) || initialPerson.aadhaarDocumentPath;
-          const freshPan = getPanPath(record) || initialPerson.panCardPath;
-          const freshProfile = getProfilePath(record) || initialPerson.profileImagePath;
 
-          const updatedPerson = {
-            ...initialPerson,
+          setSelectedPerson((prev) => ({
+            ...prev,
             ...record,
             id: targetId,
             agentId: targetId,
@@ -685,37 +745,11 @@ export function Dashboard() {
             rm: freshRm,
             branch: freshBranch,
             status: freshStatus,
-            aadhaarDocumentPath: freshAadhaar,
-            panCardPath: freshPan,
-            profileImagePath: freshProfile,
+            aadhaarDocumentPath: getAadhaarPath(record) || initialPerson.aadhaarDocumentPath,
+            panCardPath: getPanPath(record) || initialPerson.panCardPath,
+            profileImagePath: getProfilePath(record) || initialPerson.profileImagePath,
             rawRecord: record,
-          };
-
-          setSelectedPerson(updatedPerson);
-
-          setAgents((prevList) =>
-            prevList.map((item) =>
-              (item.id === targetId || item.agentId === targetId)
-                ? {
-                    ...item,
-                    ...record,
-                    id: targetId,
-                    agentId: targetId,
-                    name: freshName,
-                    fullName: freshName,
-                    email: freshEmail,
-                    phone: freshPhone,
-                    rm: freshRm,
-                    branch: freshBranch,
-                    status: freshStatus,
-                    aadhaarDocumentPath: freshAadhaar,
-                    panCardPath: freshPan,
-                    profileImagePath: freshProfile,
-                    rawRecord: record,
-                  }
-                : item
-            )
-          );
+          }));
         }
       }
     } catch (err) {
@@ -723,6 +757,7 @@ export function Dashboard() {
     }
   };
 
+  // View AMS Modal Handler
   const handleOpenAmsDetails = async (ams) => {
     const targetId = ams?.id || ams?.amsId || ams?.AmsId;
     if (!targetId) return;
@@ -789,39 +824,12 @@ export function Dashboard() {
       };
 
       setSelectedAms(mappedAms);
-
-      setAmsList((prevList) =>
-        prevList.map((item) =>
-          (item.id === targetId || item.amsId === targetId) ? { ...item, ...mappedAms } : item
-        )
-      );
     } catch (err) {
       console.error('Failed to load full AMS details:', err);
     } finally {
       setLoadingAmsModal(false);
     }
   };
-
-  const blobUrlsRef = useRef([]);
-
-  const cleanupBlobUrls = useCallback(() => {
-    blobUrlsRef.current.forEach((url) => {
-      try {
-        if (url && url.startsWith('blob:')) {
-          URL.revokeObjectURL(url);
-        }
-      } catch (e) {
-        // ignore
-      }
-    });
-    blobUrlsRef.current = [];
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      cleanupBlobUrls();
-    };
-  }, [cleanupBlobUrls]);
 
   const handleClosePreview = () => {
     cleanupBlobUrls();
@@ -830,7 +838,10 @@ export function Dashboard() {
 
   const handlePreviewDocument = async (title, rawPath, role = null, entityId = null, version = null) => {
     let targetUrl = '';
-    const isProfile = String(title || '').toLowerCase().includes('profile') || String(title || '').toLowerCase().includes('photo') || String(title || '').toLowerCase().includes('image');
+    const isProfile =
+      String(title || '').toLowerCase().includes('profile') ||
+      String(title || '').toLowerCase().includes('photo') ||
+      String(title || '').toLowerCase().includes('image');
     const effectiveVersion = version || imageVersion;
 
     if (isProfile && role && entityId) {
@@ -839,22 +850,8 @@ export function Dashboard() {
       targetUrl = getDocumentUrl(role, entityId, title, rawPath);
     }
 
-    const isAgent =
-      String(role || '').toLowerCase() === 'agent' ||
-      String(role || '').toLowerCase() === 'agentmaster' ||
-      String(role || '').toLowerCase() === 'fieldagent' ||
-      selectedPerson?.type === 'Agent';
-
-    if (isAgent) {
-      console.log("Agent record:", selectedPerson || rawPath);
-      console.log("Agent entityId:", entityId);
-      console.log("Agent document type:", title);
-      console.log("Final Agent document URL:", targetUrl);
-    }
-
     if (!targetUrl) return;
 
-    // Direct image display without XHR/fetch for Profile Images to prevent CORS block
     if (isProfile) {
       setPreviewDoc({
         title,
@@ -903,193 +900,467 @@ export function Dashboard() {
     }
   };
 
-
   return (
-    <div className="dashboard-page">
-      <section className="dashboard-hero">
-        <div className="dashboard-hero-copy">
-          <span className="eyebrow">MASTER WORKSPACE</span>
-          <h1 className="dashboard-title">Admin dashboard</h1>
-          <p className="dashboard-description">
-            A cleaner operating view for the lending network, built for quick scanning and easy action.
-          </p>
-          <div className="dashboard-meta-row">
-            <span><Activity size={14} /> Live data</span>
-            <span><Users size={14} /> {agents.length} agents</span>
-            <span><ShieldCheck size={14} /> {rms.length} RMs</span>
-            {updatedAt && <span><ArrowUpRight size={14} /> Synced {formatDateTimeFriendly(updatedAt)}</span>}
+    <div className="people-directory-page">
+      <button
+        type="button"
+        className="people-dir-back-btn"
+        onClick={() => navigate('/dashboard')}
+        aria-label="Back to Dashboard"
+      >
+        <ArrowLeft size={16} /> Back to Dashboard
+      </button>
+
+      <div className="people-directory-card">
+        <div className="people-dir-header">
+          <div className="people-dir-heading-row">
+            <div className="people-dir-title-wrap">
+              <div className="people-dir-title-badge">
+                <div className={`people-dir-icon ${meta.color}`}>
+                  <RoleIcon size={20} />
+                </div>
+                <h1>{meta.title}</h1>
+                <span className="people-dir-count-badge">
+                  {records.length} {records.length === 1 ? 'record' : 'records'}
+                </span>
+              </div>
+              <p className="people-dir-subtitle">{meta.subtitle}</p>
+            </div>
+
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => navigate('/create-user')}
+            >
+              <Plus size={16} /> {meta.addLabel}
+            </button>
+          </div>
+
+          <div className="people-dir-controls">
+            <div className="people-dir-search-box">
+              <Search size={16} />
+              <input
+                aria-label={`Search ${meta.title}`}
+                placeholder={meta.searchPlaceholder}
+                value={searchQuery}
+                onChange={handleSearchChange}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  className="people-dir-search-clear"
+                  onClick={handleClearSearch}
+                  aria-label="Clear search"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            {searchQuery && (
+              <span className="people-dir-search-badge">
+                Filtered: {totalRecords} of {records.length}
+              </span>
+            )}
           </div>
         </div>
-        <div className="dashboard-hero-actions">
-          <button className="masters-btn-secondary dashboard-refresh-button" onClick={loadDashboard} disabled={loading}>
-            <RefreshCw size={17} className={loading ? 'master-spin' : ''} /> Refresh data
-          </button>
-          <button className="primary-button dashboard-create-button" onClick={() => navigate('/create-user')}>
-            <Plus size={18} /> Create user
-          </button>
-          <div className="dashboard-hero-card">
-            <span>Pending</span>
-            <strong>{pending.length}</strong>
-            <small>Applications waiting for action</small>
-          </div>
+
+        {error && <div className="dashboard-error" role="status" style={{ marginBottom: '16px' }}>{error}</div>}
+
+        <div className="people-dir-table-wrap">
+          {roleKey === 'agent' && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Contact</th>
+                  <th>Assigned RM</th>
+                  <th>Applications</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td className="empty-table" colSpan="6">Loading live agent data…</td></tr>
+                ) : visibleRecords.length ? (
+                  visibleRecords.map((agent) => (
+                    <tr key={agent.id || agent.name}>
+                      <td>
+                        <div className="agent-name">
+                          <DirectoryAvatar role="Agent" id={agent.id} name={agent.name} version={imageVersion} />
+                          <strong>{agent.name}</strong>
+                        </div>
+                      </td>
+                      <td>
+                        <div>{agent.email || '—'}</div>
+                        <small>{agent.phone || '—'}</small>
+                      </td>
+                      <td>{agent.rm || 'Unassigned'}</td>
+                      <td><strong>{agent.applications || 0}</strong></td>
+                      <td>
+                        <span className={`status ${String(agent.status || 'active').toLowerCase().replace(/\s+/g, '-')}`}>
+                          {agent.status || 'Active'}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="action-buttons">
+                          <button
+                            type="button"
+                            className="details-button"
+                            onClick={() => handleOpenPersonDetails(agent, 'Agent')}
+                          >
+                            <Eye size={15} /> View
+                          </button>
+                          <button
+                            type="button"
+                            className="details-button edit-button"
+                            onClick={() => navigate(`/edit-agent/${agent.id}`)}
+                          >
+                            <Pencil size={15} /> Edit
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="empty-table" colSpan="6">
+                      {searchQuery ? 'No matching agents found.' : meta.emptyText}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {roleKey === 'rm' && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Relationship Manager</th>
+                  <th>Contact</th>
+                  <th>Branch</th>
+                  <th>Assigned Agents</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td className="empty-table" colSpan="6">Loading live manager data…</td></tr>
+                ) : visibleRecords.length ? (
+                  visibleRecords.map((rm) => (
+                    <tr key={rm.id || rm.name}>
+                      <td>
+                        <div className="agent-name">
+                          <DirectoryAvatar role="RM" id={rm.id} name={rm.name} version={imageVersion} />
+                          <strong>{rm.name}</strong>
+                        </div>
+                      </td>
+                      <td>
+                        <div>{rm.email || '—'}</div>
+                        <small>{rm.phone || '—'}</small>
+                      </td>
+                      <td>{rm.branch || '—'}</td>
+                      <td>
+                        <strong>{rm.agents || 0}</strong>
+                        <small style={{ display: 'block' }}>{rm.agents === 1 ? 'agent' : 'agents'}</small>
+                      </td>
+                      <td>
+                        <span className={`status ${String(rm.status || 'active').toLowerCase().replace(/\s+/g, '-')}`}>
+                          {rm.status || 'Active'}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="action-buttons">
+                          <button
+                            type="button"
+                            className="details-button"
+                            onClick={() => handleOpenPersonDetails(rm, 'Relationship manager')}
+                          >
+                            <Eye size={15} /> View
+                          </button>
+                          <button
+                            type="button"
+                            className="details-button edit-button"
+                            onClick={() => navigate(`/edit-relationship-manager/${rm.id}`)}
+                          >
+                            <Pencil size={15} /> Edit
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="empty-table" colSpan="6">
+                      {searchQuery ? 'No matching relationship managers found.' : meta.emptyText}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {roleKey === 'backOffice' && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Officer</th>
+                  <th>Code / ID</th>
+                  <th>Contact</th>
+                  <th>Branch</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td className="empty-table" colSpan="6">Loading live back office data…</td></tr>
+                ) : visibleRecords.length ? (
+                  visibleRecords.map((backOffice) => {
+                    const displayName = backOffice.name || 'Unnamed officer';
+                    const boId = backOffice.id || backOffice.backOfficeId;
+                    return (
+                      <tr key={boId || backOffice.backOfficeCode || displayName}>
+                        <td>
+                          <div className="agent-name">
+                            <DirectoryAvatar role="BackOffice" id={boId} name={displayName} version={imageVersion} />
+                            <strong>{displayName}</strong>
+                          </div>
+                        </td>
+                        <td>
+                          <strong>{backOffice.backOfficeCode || (boId ? `#${boId}` : '—')}</strong>
+                        </td>
+                        <td>
+                          <div>{backOffice.email || '—'}</div>
+                          <small>{backOffice.phone || '—'}</small>
+                        </td>
+                        <td>{backOffice.branch || '—'}</td>
+                        <td>
+                          <span className={`status ${String(backOffice.status || 'active').toLowerCase().replace(/\s+/g, '-')}`}>
+                            {backOffice.status || 'Active'}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="action-buttons">
+                            <button
+                              type="button"
+                              className="details-button"
+                              onClick={() => handleOpenPersonDetails(backOffice, 'Back Office')}
+                            >
+                              <Eye size={15} /> View
+                            </button>
+                            <button
+                              type="button"
+                              className="details-button edit-button"
+                              onClick={() => navigate(`/edit-back-office/${boId}`)}
+                            >
+                              <Pencil size={15} /> Edit
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td className="empty-table" colSpan="6">
+                      {searchQuery ? 'No matching back office officers found.' : meta.emptyText}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {roleKey === 'ams' && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Specialist</th>
+                  <th>AMS Code</th>
+                  <th>Contact</th>
+                  <th>Gender / Details</th>
+                  <th>Branch / Location</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td className="empty-table" colSpan="7">Loading live AMS data…</td></tr>
+                ) : visibleRecords.length ? (
+                  visibleRecords.map((ams) => {
+                    const displayName = ams.fullName || ams.name || 'Unnamed specialist';
+                    const amsId = ams.id || ams.amsId;
+                    const genderLabel =
+                      ams.genderName ||
+                      (ams.genderId === 1 ? 'Male' : ams.genderId === 2 ? 'Female' : ams.genderId === 3 ? 'Other' : '—');
+                    return (
+                      <tr key={amsId || ams.amsCode || displayName}>
+                        <td>
+                          <div className="agent-name">
+                            <DirectoryAvatar role="AMS" id={amsId} name={displayName} version={imageVersion} />
+                            <strong>{displayName}</strong>
+                          </div>
+                        </td>
+                        <td>
+                          <strong>{ams.amsCode || (amsId ? `#${amsId}` : '—')}</strong>
+                        </td>
+                        <td>
+                          <div>{ams.emailAddress || '—'}</div>
+                          <small>{ams.mobileNumber || '—'}</small>
+                        </td>
+                        <td>{genderLabel}</td>
+                        <td>{ams.branch || ams.cityName || '—'}</td>
+                        <td>
+                          <span className={`status ${ams.isActive !== false ? 'active' : 'inactive'}`}>
+                            {ams.isActive !== false ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="action-buttons">
+                            <button
+                              type="button"
+                              className="details-button"
+                              onClick={() => handleOpenAmsDetails(ams)}
+                            >
+                              <Eye size={15} /> View
+                            </button>
+                            <button
+                              type="button"
+                              className="details-button edit-button"
+                              onClick={() => navigate(`/edit-ams/${amsId}`)}
+                            >
+                              <Pencil size={15} /> Edit
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td className="empty-table" colSpan="7">
+                      {searchQuery ? 'No matching area specialists found.' : meta.emptyText}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {roleKey === 'customer' && (
+            <table>
+              <thead>
+                <tr>
+                  <th>App / Customer ID</th>
+                  <th>Customer</th>
+                  <th>Loan Purpose</th>
+                  <th>Expected Amount</th>
+                  <th>Agent / RM</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td className="empty-table" colSpan="7">Loading live customer records…</td></tr>
+                ) : visibleRecords.length ? (
+                  visibleRecords.map((customer) => (
+                    <tr key={customer.id}>
+                      <td><strong>#{customer.id}</strong></td>
+                      <td>
+                        <div className="agent-name">
+                          <span>{initials(customer.customerName)}</span>
+                          <div>
+                            <strong>{customer.customerName}</strong>
+                            <small>{customer.mobile}</small>
+                          </div>
+                        </div>
+                      </td>
+                      <td>{customer.loanPurpose || '—'}</td>
+                      <td>{formatAmount(customer.amount)}</td>
+                      <td>
+                        <div>{customer.agentName || '—'}</div>
+                        <small>{customer.rmName || '—'}</small>
+                      </td>
+                      <td>
+                        <span className={`status ${String(customer.status || 'new').toLowerCase().replace(/\s+/g, '-')}`}>
+                          {customer.status}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="details-button"
+                          onClick={() => setSelectedApplication(customer)}
+                        >
+                          <Eye size={15} /> View details
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="empty-table" colSpan="7">
+                      {searchQuery ? 'No matching customer records found.' : meta.emptyText}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
-      </section>
 
-      {error && <div className="dashboard-error" role="status">{error}</div>}
+        {/* Client-side Pagination Footer */}
+        {totalRecords > 0 && (
+          <div className="people-dir-pagination-bar">
+            <span className="people-dir-pagination-info">
+              Showing {startIndex + 1}–{endIndex} of {totalRecords} records
+            </span>
+            <div className="people-dir-pagination-controls">
+              <button
+                type="button"
+                className="people-dir-page-btn"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                aria-label="Previous page"
+              >
+                <ChevronLeft size={16} /> Previous
+              </button>
 
-      {/* 5 Top Summary Cards */}
-      <section className="stat-grid">
-        {stats.map(([Icon, color, label, value, note]) => (
-          <div className="stat-card" key={label}>
-            <div className={`stat-icon ${color}`}><Icon size={20} /></div>
-            <div>
-              <span>{label}</span>
-              <strong>{value}</strong>
-              <small className={label === 'Total applications' ? 'neutral' : ''}>
-                <ArrowUpRight size={13} /> {note}
-              </small>
+              <div className="people-dir-page-numbers">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    className={`people-dir-page-number ${pageNum === currentPage ? 'active' : ''}`}
+                    onClick={() => setCurrentPage(pageNum)}
+                    aria-label={`Go to page ${pageNum}`}
+                    aria-current={pageNum === currentPage ? 'page' : undefined}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                className="people-dir-page-btn"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                aria-label="Next page"
+              >
+                Next <ChevronRight size={16} />
+              </button>
             </div>
           </div>
-        ))}
-      </section>
+        )}
+      </div>
 
-      {/* People & Access Section - 5 Compact Role Summary Cards */}
-      <section className="people-workspace">
-        <div className="workspace-heading">
-          <div>
-            <span className="section-kicker">People & access</span>
-            <h2>Manage your lending team</h2>
-            <p>Keep every role visible, easy to scan, and one click away from its next action.</p>
-          </div>
-          <button className="primary-button workspace-add-button" onClick={() => navigate('/create-user')}>
-            <Plus size={17} /> Add user
-          </button>
-        </div>
-
-        <div className="people-role-card-grid">
-          {/* 1. AGENTS */}
-          <button
-            type="button"
-            className="people-role-card people-role-card-agent"
-            onClick={() => navigate('/agents')}
-          >
-            <div className="people-role-card-top">
-              <div className="people-role-header-left">
-                <div className="people-role-icon blue">
-                  <BriefcaseBusiness size={18} />
-                </div>
-                <h3 className="people-role-title">Agents</h3>
-              </div>
-              <span className="people-role-badge">{agents.length}</span>
-            </div>
-            <div className="people-role-card-body">
-              <p className="people-role-desc">Field agents sourcing applications</p>
-            </div>
-            <div className="people-role-card-footer">
-              <span>View directory</span>
-              <ArrowRight size={14} />
-            </div>
-          </button>
-
-          {/* 2. RELATIONSHIP MANAGERS */}
-          <button
-            type="button"
-            className="people-role-card people-role-card-rm"
-            onClick={() => navigate('/relationship-managers')}
-          >
-            <div className="people-role-card-top">
-              <div className="people-role-header-left">
-                <div className="people-role-icon green">
-                  <Users size={18} />
-                </div>
-                <h3 className="people-role-title">Relationship managers</h3>
-              </div>
-              <span className="people-role-badge">{rms.length}</span>
-            </div>
-            <div className="people-role-card-body">
-              <p className="people-role-desc">Own agent coverage and regional teams</p>
-            </div>
-            <div className="people-role-card-footer">
-              <span>View directory</span>
-              <ArrowRight size={14} />
-            </div>
-          </button>
-
-          {/* 3. BACK OFFICE */}
-          <button
-            type="button"
-            className="people-role-card people-role-card-back-office"
-            onClick={() => navigate('/back-office')}
-          >
-            <div className="people-role-card-top">
-              <div className="people-role-header-left">
-                <div className="people-role-icon teal">
-                  <Building2 size={18} />
-                </div>
-                <h3 className="people-role-title">Back office</h3>
-              </div>
-              <span className="people-role-badge">{backOfficeList.length}</span>
-            </div>
-            <div className="people-role-card-body">
-              <p className="people-role-desc">Support operations and branch verification</p>
-            </div>
-            <div className="people-role-card-footer">
-              <span>View directory</span>
-              <ArrowRight size={14} />
-            </div>
-          </button>
-
-          {/* 4. AMS */}
-          <button
-            type="button"
-            className="people-role-card people-role-card-ams"
-            onClick={() => navigate('/ams')}
-          >
-            <div className="people-role-card-top">
-              <div className="people-role-header-left">
-                <div className="people-role-icon purple">
-                  <ShieldCheck size={18} />
-                </div>
-                <h3 className="people-role-title">AMS</h3>
-              </div>
-              <span className="people-role-badge">{amsList.length}</span>
-            </div>
-            <div className="people-role-card-body">
-              <p className="people-role-desc">Cover districts and local operations</p>
-            </div>
-            <div className="people-role-card-footer">
-              <span>View directory</span>
-              <ArrowRight size={14} />
-            </div>
-          </button>
-
-          {/* 5. CUSTOMERS */}
-          <button
-            type="button"
-            className="people-role-card people-role-card-customer"
-            onClick={() => navigate('/customers')}
-          >
-            <div className="people-role-card-top">
-              <div className="people-role-header-left">
-                <div className="people-role-icon orange">
-                  <FileText size={18} />
-                </div>
-                <h3 className="people-role-title">Customers</h3>
-              </div>
-              <span className="people-role-badge">{applications.length}</span>
-            </div>
-            <div className="people-role-card-body">
-              <p className="people-role-desc">Network customer and application records</p>
-            </div>
-            <div className="people-role-card-footer">
-              <span>View directory</span>
-              <ArrowRight size={14} />
-            </div>
-          </button>
-        </div>
-      </section>
-
-      {/* RM / Agent Details Modal */}
+      {/* RM / Agent / Back Office Details Modal */}
       {selectedPerson && (
         <div
           className="person-dialog-backdrop"
@@ -1110,7 +1381,7 @@ export function Dashboard() {
             >
               <X size={18} />
             </button>
-            <MasterAvatar
+            <DirectoryAvatar
               role={
                 selectedPerson.type === 'Relationship manager' || selectedPerson.type === 'RM'
                   ? 'RM'
@@ -1304,7 +1575,19 @@ export function Dashboard() {
               <button className="masters-btn-secondary" onClick={() => setSelectedPerson(null)}>
                 Close
               </button>
-              <button className="primary-button" onClick={() => openEdit(selectedPerson)}>
+              <button
+                className="primary-button"
+                onClick={() => {
+                  setSelectedPerson(null);
+                  if (selectedPerson.type === 'Agent') {
+                    navigate(`/edit-agent/${selectedPerson.id}`);
+                  } else if (selectedPerson.type === 'Back Office') {
+                    navigate(`/edit-back-office/${selectedPerson.id}`);
+                  } else {
+                    navigate(`/edit-relationship-manager/${selectedPerson.id}`);
+                  }
+                }}
+              >
                 <Pencil size={16} /> Edit {selectedPerson.type === 'Agent' ? 'agent' : selectedPerson.type === 'Back Office' ? 'back office' : 'RM'}
               </button>
             </div>
@@ -1312,7 +1595,7 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Application Details Modal */}
+      {/* Customer / Application Details Modal */}
       {selectedApplication && (
         <div
           className="person-dialog-backdrop"
@@ -1421,7 +1704,7 @@ export function Dashboard() {
 
             {/* Modal Header */}
             <div className="ams-modal-header">
-              <MasterAvatar
+              <DirectoryAvatar
                 role="AMS"
                 id={selectedAms.amsId || selectedAms.id}
                 name={selectedAms.fullName}
@@ -1662,7 +1945,14 @@ export function Dashboard() {
               <button className="masters-btn-secondary" onClick={() => setSelectedAms(null)}>
                 Close
               </button>
-              <button className="primary-button" onClick={() => openEditAms(selectedAms)}>
+              <button
+                className="primary-button"
+                onClick={() => {
+                  const targetId = selectedAms.id || selectedAms.amsId || selectedAms.AmsId;
+                  setSelectedAms(null);
+                  navigate(`/edit-ams/${targetId}`);
+                }}
+              >
                 <Pencil size={16} /> Edit AMS
               </button>
             </div>
@@ -1745,11 +2035,11 @@ export function Dashboard() {
                     className="ams-doc-image"
                     onError={(e) => {
                       e.currentTarget.style.display = 'none';
-                      const errBox = document.getElementById('ams-doc-img-error');
+                      const errBox = document.getElementById('dir-doc-img-error');
                       if (errBox) errBox.style.display = 'flex';
                     }}
                   />
-                  <div id="ams-doc-img-error" className="ams-doc-error-box" style={{ display: 'none' }}>
+                  <div id="dir-doc-img-error" className="ams-doc-error-box" style={{ display: 'none' }}>
                     <p>Unable to load image preview directly.</p>
                     {previewDoc.url && (
                       <a
@@ -1771,3 +2061,5 @@ export function Dashboard() {
     </div>
   );
 }
+
+export default PeopleDirectoryPage;

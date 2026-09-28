@@ -52,6 +52,7 @@ import BackOfficeCreate from './pages/BackOffice/BackOfficeCreate';
 import CreateUser from './pages/CreateUser/CreateUser';
 import AMSDashboard from './pages/AMSDashboard/AMSDashboard';
 import { Application360 } from './pages/Application360/Application360';
+import { PeopleDirectoryPage } from './pages/PeopleDirectory/PeopleDirectoryPage';
 
 const routerBasename = (() => {
   const configuredBase = import.meta.env.BASE_URL?.replace(/\/$/, '') || '/';
@@ -80,6 +81,11 @@ function App() {
           <Route path="/" element={<AppLayout />}>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
+            <Route path="agents" element={<PeopleDirectoryPage roleKey="agent" />} />
+            <Route path="relationship-managers" element={<PeopleDirectoryPage roleKey="rm" />} />
+            <Route path="back-office" element={<PeopleDirectoryPage roleKey="backOffice" />} />
+            <Route path="ams" element={<PeopleDirectoryPage roleKey="ams" />} />
+            <Route path="customers" element={<PeopleDirectoryPage roleKey="customer" />} />
             <Route path="application-360" element={<Application360 />} />
             <Route path="ams-dashboard" element={<AMSDashboard />} />
             <Route path="create-user" element={<CreateUser />} />
