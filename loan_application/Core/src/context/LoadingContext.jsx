@@ -31,6 +31,7 @@ export const LoadingProvider = ({ children }) => {
   const simulationIntervalRef = useRef(null);
   const completionTimerRef = useRef(null);
   const isMountedRef = useRef(true);
+  const isOpenRef = useRef(false);
   const nextTokenCounter = useRef(1);
 
   // Unmount Safety Cleanup
@@ -241,6 +242,7 @@ export const LoadingProvider = ({ children }) => {
       if (antiFlickerTimerRef.current) clearTimeout(antiFlickerTimerRef.current);
       antiFlickerTimerRef.current = setTimeout(() => {
         if (isMountedRef.current && activeTokensRef.current.size > 0) {
+          isOpenRef.current = true;
           setIsOpen(true);
         }
       }, ANTI_FLICKER_DELAY);
@@ -298,7 +300,7 @@ export const LoadingProvider = ({ children }) => {
 
     // If operation completed before the 200ms anti-flicker window expired:
     // Close cleanly with ZERO flicker (overlay was never rendered)
-    if (!isOpen) {
+    if (!isOpenRef.current) {
       setProgressState(null);
       setSubMessageState(null);
       return;
@@ -310,12 +312,13 @@ export const LoadingProvider = ({ children }) => {
     if (completionTimerRef.current) clearTimeout(completionTimerRef.current);
     completionTimerRef.current = setTimeout(() => {
       if (isMountedRef.current && activeTokensRef.current.size === 0) {
+        isOpenRef.current = false;
         setIsOpen(false);
         setProgressState(null);
         setSubMessageState(null);
       }
     }, COMPLETION_HOLD_TIME);
-  }, [clearSimulation, ensureSimulationRunning, getTopToken, isOpen]);
+  }, [clearSimulation, ensureSimulationRunning, getTopToken]);
 
   /**
    * withLoading Helper
