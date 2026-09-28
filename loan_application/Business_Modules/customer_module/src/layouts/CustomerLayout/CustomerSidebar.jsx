@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { ROUTES } from '../../config/routeConfig';
 import { LayoutDashboard, CreditCard, History, User, LogOut, HeadphonesIcon } from 'lucide-react';
-import logoImg from '../../../../../Core/Logo_img/Logo.png';
+import logoImg from '../../../../../Core/src/assets/branding/Logo.png';
 
 export default function CustomerSidebar() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);

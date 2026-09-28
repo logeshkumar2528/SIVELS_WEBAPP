@@ -8,7 +8,7 @@ import {
   Headphones,
 } from 'lucide-react'
 import { useAuth } from '../../../../../../Core/src/context/AuthContext'
-import logo from '../../../../../../Core/Logo_img/Logo.png'
+import logo from '../../../../../../Core/src/assets/branding/Logo.png'
 import './Sidebar.css'
 
 const menuItems = [

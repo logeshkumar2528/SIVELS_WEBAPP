@@ -13,7 +13,7 @@ import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
 import { isApplicantDocumentTuple } from '../KycDocuments/kycDocumentState';
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import './PdfView.css';
-import LogoImage from '../../../../../Core/Logo_img/Logo.png';
+import LogoImage from '../../../../../Core/src/assets/branding/Logo.png';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 

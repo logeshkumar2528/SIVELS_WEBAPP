@@ -26,7 +26,7 @@ import {
   Mail,
   Camera,
 } from 'lucide-react';
-import logoImg from '../../../../Core/Logo_img/Logo.png';
+import logoImg from '../../../../Core/src/assets/branding/Logo.png';
 import { getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
 import { getAllRelationshipManagers } from '../../api/rmApi';
 import { getAllAgents } from '../../api/agentApi';

@@ -1,6 +1,6 @@
 import React from 'react';
 import './LighthouseLoader.css';
-import lighthouseEmblem from '../../../../../Logo_img/Logo.png';
+import lighthouseEmblem from '../../../../assets/branding/Logo.png';
 
 /**
  * LighthouseLoader

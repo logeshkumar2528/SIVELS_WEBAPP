@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
 import iconMap from '../../config/iconMap';
-import logoImg from '../../../../../../Core/Logo_img/Logo.png';
+import logoImg from '../../../../../../Core/src/assets/branding/Logo.png';
 import Modal from '../Modal/Modal';
 import './Sidebar.css';
 
