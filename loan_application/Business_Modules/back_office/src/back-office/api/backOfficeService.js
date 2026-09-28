@@ -373,6 +373,58 @@ export const backOfficeService = {
     return unwrapResponse(response);
   },
 
+  saveBankingDetails: async (applicationProductDetailsId, payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.BANKING_DETAILS(applicationProductDetailsId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  saveBankingMonthlyDetails: async (applicationBankingDetailsId, payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.BANKING_MONTHLY_DETAILS(applicationBankingDetailsId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  getBankingAnalysis: async (applicationProductDetailsId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.BANKING_ANALYSIS(applicationProductDetailsId)
+    );
+    return unwrapResponse(response);
+  },
+
+  getBankingDetails: async (applicationProductDetailsId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.BANKING_DETAILS_READ(applicationProductDetailsId)
+    );
+    return unwrapResponse(response);
+  },
+
+  getBankingMonthlyDetails: async (applicationBankingDetailsId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.BANKING_MONTHLY_DETAILS_READ(applicationBankingDetailsId)
+    );
+    return unwrapResponse(response);
+  },
+
+  saveBankingEligibility: async (applicationProductDetailsId, payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.BANKING_ELIGIBILITY(applicationProductDetailsId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  getBankingEligibilityAnalysis: async (applicationProductDetailsId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.BANKING_ELIGIBILITY_ANALYSIS(applicationProductDetailsId)
+    );
+    return unwrapResponse(response);
+  },
+
   /* ==========================================
      8c. LOAN OBLIGATIONS APIs (Step 10 RTR Common Sheet)
   ========================================== */

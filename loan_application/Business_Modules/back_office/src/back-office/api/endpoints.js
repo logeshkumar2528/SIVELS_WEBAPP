@@ -91,6 +91,22 @@ export const BACK_OFFICE_ENDPOINTS = {
   CALCULATION_ASSESSMENT_RECOMMENDATION: (loanEligibilityAssessmentId) =>
     `/calculation/assessments/${encodeURIComponent(loanEligibilityAssessmentId)}/recommendation`,
 
+  // Banking analysis and eligibility APIs
+  BANKING_DETAILS: (applicationProductDetailsId) =>
+    `/application/${encodeURIComponent(applicationProductDetailsId)}/banking`,
+  BANKING_MONTHLY_DETAILS: (applicationBankingDetailsId) =>
+    `/application/banking/${encodeURIComponent(applicationBankingDetailsId)}/monthly`,
+  BANKING_ANALYSIS: (applicationProductDetailsId) =>
+    `/application/${encodeURIComponent(applicationProductDetailsId)}/banking/analysis`,
+  BANKING_DETAILS_READ: (applicationProductDetailsId) =>
+    `/application/${encodeURIComponent(applicationProductDetailsId)}/banking`,
+  BANKING_MONTHLY_DETAILS_READ: (applicationBankingDetailsId) =>
+    `/application/banking/${encodeURIComponent(applicationBankingDetailsId)}/monthly`,
+  BANKING_ELIGIBILITY: (applicationProductDetailsId) =>
+    `/application/${encodeURIComponent(applicationProductDetailsId)}/eligibility`,
+  BANKING_ELIGIBILITY_ANALYSIS: (applicationProductDetailsId) =>
+    `/application/${encodeURIComponent(applicationProductDetailsId)}/eligibility/analysis`,
+
   // RTR (Repayment Track Record) Calculation APIs
   CALCULATION_RTR_LOANS: '/calculation/rtr/loans',
   CALCULATION_RTR_LOAN_BY_ID: (id) =>
