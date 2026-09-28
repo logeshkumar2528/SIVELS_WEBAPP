@@ -4,15 +4,17 @@ import {
   Plus,
   Search,
   Eye,
+  Edit2,
+  Trash2,
   Clock,
   RefreshCw,
   CheckCircle2,
   RotateCcw,
+  Calendar,
 } from 'lucide-react'
 import Pagination from '../../components/Pagination/Pagination'
 import ViewCustomerModal from '../../components/ViewCustomerModal/ViewCustomerModal'
 import CustomSelect from '../AddCustomer/CustomSelect'
-import DatePicker from '../../components/DatePicker/DatePicker'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
 import { masterService } from '../../../../../../Core/src/services/masterService'
 import {
@@ -21,6 +23,7 @@ import {
   selectLatestUpdatedCustomerPhotoRejection,
 } from '../../../../../../Core/src/utils/documentTypeHelper'
 import { formatDateTime } from '../../../../../../Core/src/utils/dateHelper'
+import { getApiErrorMessage } from '../../../../../../Core/src/utils/apiErrorHandler'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
 import { normalizeApplicationStatus } from '../../../../../rm_modules/src/utils/rmContext'
@@ -34,6 +37,17 @@ const STATUS_OPTIONS = [
   { value: 'Returned', label: 'Returned' },
   { value: 'Logged to HO', label: 'Logged to HO' },
 ]
+
+const getStatusType = (status) => {
+  const s = String(status ?? '').toLowerCase()
+  if (s.includes('pending')) return 'pending-rm'
+  if (s.includes('review')) return 'under-review'
+  if (s.includes('return') || s.includes('reject')) return 'returned-rm'
+  if (s.includes('approve') || s.includes('success') || s.includes('logged to ho')) return 'approved-rm'
+  if (s.includes('submit')) return 'submitted'
+  if (s.includes('draft') || s.includes('new')) return 'new-rm'
+  return 'default'
+}
 
 function SubmissionHistory() {
   const navigate = useNavigate()
@@ -52,13 +66,27 @@ function SubmissionHistory() {
   const [customerPhotos, setCustomerPhotos] = useState({})
   const photoUrlsRef = useRef({})
 
-  // Filter States
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedStatus, setSelectedStatus] = useState('All Status')
-  const [selectedDate, setSelectedDate] = useState({ startDate: '', endDate: '' })
+  // Filter States (Draft vs Applied)
+  const [draftSearch, setDraftSearch] = useState('')
+  const [draftStatus, setDraftStatus] = useState('All Status')
+  const [draftFromDate, setDraftFromDate] = useState('')
+  const [draftToDate, setDraftToDate] = useState('')
+  const [dateRangeError, setDateRangeError] = useState('')
+
+  const [appliedFilters, setAppliedFilters] = useState({
+    search: '',
+    status: 'All Status',
+    fromDate: '',
+    toDate: '',
+  })
 
   // View Customer Drawer State
   const [selectedCustomer, setSelectedCustomer] = useState(null)
+
+  // Delete Customer Modal State
+  const [customerToDelete, setCustomerToDelete] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState(null)
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1)
@@ -104,11 +132,6 @@ function SubmissionHistory() {
       isMounted = false
     }
   }, [])
-
-  // Auto-reset to page 1 whenever any filter changes
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [searchTerm, selectedStatus, selectedDate])
 
   const fetchSubmissions = async () => {
     setLoading(true)
@@ -156,19 +179,21 @@ function SubmissionHistory() {
     }
   }, [agentId, loadingAgent])
 
-  // Filter Logic
+  // Filter Logic based strictly on appliedFilters
   const filteredSubmissions = useMemo(() => {
     return submissions.filter((item) => {
+      const searchTrimmed = (appliedFilters.search || '').trim().toLowerCase()
       const matchesSearch =
-        (item.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.mobileNumber || '').includes(searchTerm)
+        !searchTrimmed ||
+        (item.fullName || '').toLowerCase().includes(searchTrimmed) ||
+        (item.mobileNumber || '').includes(searchTrimmed)
 
       const matchesStatus =
-        selectedStatus === 'All Status' || String(item.status ?? '') === selectedStatus
+        appliedFilters.status === 'All Status' ||
+        getStatusType(item.status) === getStatusType(appliedFilters.status)
 
       let matchesDate = true
-      if (selectedDate && (selectedDate.startDate || selectedDate.endDate)) {
-        const { startDate, endDate } = selectedDate
+      if (appliedFilters.fromDate || appliedFilters.toDate) {
         if (item.createdAt) {
           let itemDateStr = ''
           if (typeof item.createdAt === 'string') {
@@ -177,12 +202,13 @@ function SubmissionHistory() {
             itemDateStr = item.createdAt.toISOString().split('T')[0]
           }
 
-          if (startDate && endDate) {
-            matchesDate = Boolean(itemDateStr) && itemDateStr >= startDate && itemDateStr <= endDate
-          } else if (startDate) {
-            matchesDate = Boolean(itemDateStr) && itemDateStr >= startDate
-          } else if (endDate) {
-            matchesDate = Boolean(itemDateStr) && itemDateStr <= endDate
+          const { fromDate, toDate } = appliedFilters
+          if (fromDate && toDate) {
+            matchesDate = Boolean(itemDateStr) && itemDateStr >= fromDate && itemDateStr <= toDate
+          } else if (fromDate) {
+            matchesDate = Boolean(itemDateStr) && itemDateStr >= fromDate
+          } else if (toDate) {
+            matchesDate = Boolean(itemDateStr) && itemDateStr <= toDate
           }
         } else {
           matchesDate = false
@@ -191,7 +217,7 @@ function SubmissionHistory() {
 
       return matchesSearch && matchesStatus && matchesDate
     })
-  }, [submissions, searchTerm, selectedStatus, selectedDate])
+  }, [submissions, appliedFilters])
 
   const totalItems = filteredSubmissions.length
 
@@ -340,22 +366,79 @@ function SubmissionHistory() {
     setCustomerPhotos((prev) => ({ ...prev, [custId]: null }))
   }
 
-  const handleResetFilters = () => {
-    setSearchTerm('')
-    setSelectedStatus('All Status')
-    setSelectedDate({ startDate: '', endDate: '' })
+  const handleEditCustomer = (customer) => {
+    const custId = customer.agentCustomerId || customer.AgentCustomerId || customer.id
+    if (!custId) return
+    navigate(`/Agent/add-customer?id=${custId}&mode=edit`, {
+      state: { customerId: custId, mode: 'edit' }
+    })
+  }
+
+  const handleOpenDeleteModal = (customer) => {
+    setCustomerToDelete(customer)
+    setDeleteError(null)
+  }
+
+  const handleCloseDeleteModal = () => {
+    if (!isDeleting) {
+      setCustomerToDelete(null)
+      setDeleteError(null)
+    }
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!customerToDelete) return
+    const custId = customerToDelete.agentCustomerId || customerToDelete.AgentCustomerId || customerToDelete.id
+    if (!custId) return
+
+    setIsDeleting(true)
+    setDeleteError(null)
+    try {
+      await agentCustomerService.deleteCustomer(custId, Number(agentId))
+      setCustomerToDelete(null)
+      await fetchSubmissions()
+    } catch (err) {
+      console.error('Failed to delete customer', err)
+      const errInfo = getApiErrorMessage(err)
+      const errMsg =
+        errInfo?.global ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to delete customer. Please try again.'
+      setDeleteError(errMsg)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleSearch = () => {
+    if (draftFromDate && draftToDate && draftFromDate > draftToDate) {
+      setDateRangeError('From Date cannot be after To Date.')
+      return
+    }
+    setDateRangeError('')
+    setAppliedFilters({
+      search: draftSearch,
+      status: draftStatus,
+      fromDate: draftFromDate,
+      toDate: draftToDate,
+    })
     setCurrentPage(1)
   }
 
-  const getStatusType = (status) => {
-    const s = String(status ?? '').toLowerCase()
-    if (s.includes('pending')) return 'pending-rm'
-    if (s.includes('review')) return 'under-review'
-    if (s.includes('return') || s.includes('reject')) return 'returned-rm'
-    if (s.includes('approve') || s.includes('success') || s.includes('logged to ho')) return 'approved-rm'
-    if (s.includes('submit')) return 'submitted'
-    if (s.includes('draft')) return 'pending-rm'
-    return 'default'
+  const handleResetFilters = () => {
+    setDraftSearch('')
+    setDraftStatus('All Status')
+    setDraftFromDate('')
+    setDraftToDate('')
+    setDateRangeError('')
+    setAppliedFilters({
+      search: '',
+      status: 'All Status',
+      fromDate: '',
+      toDate: '',
+    })
+    setCurrentPage(1)
   }
 
   const renderStatusBadge = (status) => {
@@ -421,30 +504,60 @@ function SubmissionHistory() {
               type="text"
               className="filter-search-input"
               placeholder="Search by name or mobile number..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              value={draftSearch}
+              onChange={(e) => setDraftSearch(e.target.value)}
             />
           </div>
 
-          <div className="filter-date-box">
-            <DatePicker
-              value={selectedDate}
-              onChange={(date) => setSelectedDate(date)}
-              placeholder="Select Date Range"
+          <label htmlFor="submission-from-date" className="filter-unified-date-box">
+            <Calendar size={14} strokeWidth={1.8} className="filter-date-icon" />
+            <span className="filter-date-prefix">From Date:</span>
+            <input
+              id="submission-from-date"
+              type="date"
+              className="filter-date-input"
+              value={draftFromDate}
+              onChange={(e) => {
+                setDraftFromDate(e.target.value)
+                if (dateRangeError) setDateRangeError('')
+              }}
+              aria-label="From Date"
+              title="From Date"
             />
-          </div>
+          </label>
+
+          <label htmlFor="submission-to-date" className="filter-unified-date-box">
+            <Calendar size={14} strokeWidth={1.8} className="filter-date-icon" />
+            <span className="filter-date-prefix">To Date:</span>
+            <input
+              id="submission-to-date"
+              type="date"
+              className="filter-date-input"
+              value={draftToDate}
+              onChange={(e) => {
+                setDraftToDate(e.target.value)
+                if (dateRangeError) setDateRangeError('')
+              }}
+              aria-label="To Date"
+              title="To Date"
+            />
+          </label>
 
           <div className="filter-status-box">
             <CustomSelect
               name="status"
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
+              value={draftStatus}
+              onChange={(e) => setDraftStatus(e.target.value)}
               options={STATUS_OPTIONS}
               placeholder="All Status"
             />
           </div>
 
-          <button type="button" className="btn-reset-link" onClick={handleResetFilters}>
+          <button type="button" className="btn-search-filter" onClick={handleSearch}>
+            <Search size={15} strokeWidth={2} /> Search
+          </button>
+
+          <button type="button" className="btn-reset-filter" onClick={handleResetFilters}>
             Reset
           </button>
 
@@ -456,6 +569,12 @@ function SubmissionHistory() {
             <Plus size={16} strokeWidth={2.2} /> Add New Customer
           </button>
         </div>
+
+        {dateRangeError && (
+          <div className="filter-date-error-row">
+            <span className="filter-date-error-text">{dateRangeError}</span>
+          </div>
+        )}
 
         {/* Data Table Area */}
         {loading ? (
@@ -500,19 +619,30 @@ function SubmissionHistory() {
                       <td className="index-col">{(currentPage - 1) * pageSize + idx + 1}</td>
                       <td>
                         <div className="history-customer-cell">
-                          {photoUrl ? (
-                            <img
-                              src={photoUrl}
-                              alt={item.fullName || 'Customer'}
-                              className="history-avatar history-avatar-img"
-                              onError={() => handleImageError(custId)}
-                            />
-                          ) : (
-                            <div className={`history-avatar avatar--${initial.match(/[A-M]/) ? 'P' : 'R'}`}>
-                              {initial}
-                            </div>
-                          )}
-                          {item.fullName}
+                          <button
+                            type="button"
+                            className="history-avatar-btn"
+                            onClick={() => setSelectedCustomer(item)}
+                            title="View customer details"
+                            aria-label={`View details for ${item.fullName || 'Customer'}`}
+                          >
+                            {photoUrl ? (
+                              <img
+                                src={photoUrl}
+                                alt={item.fullName || 'Customer'}
+                                className="history-avatar history-avatar-img"
+                                onError={() => handleImageError(custId)}
+                              />
+                            ) : (
+                              <div className={`history-avatar avatar--${initial.match(/[A-M]/) ? 'P' : 'R'}`}>
+                                {initial}
+                              </div>
+                            )}
+                            <span className="history-avatar-hover-overlay" aria-hidden="true">
+                              <Eye size={14} strokeWidth={2} />
+                            </span>
+                          </button>
+                          <span>{item.fullName}</span>
                         </div>
                       </td>
                       <td>{item.mobileNumber}</td>
@@ -525,9 +655,32 @@ function SubmissionHistory() {
                             type="button"
                             className="btn-view-details"
                             onClick={() => setSelectedCustomer(item)}
+                            title="View customer details"
                           >
                             <Eye size={15} strokeWidth={1.8} /> View Details
                           </button>
+                          {getStatusType(item.status) === 'new-rm' && (
+                            <>
+                              <button
+                                type="button"
+                                className="btn-edit-customer"
+                                onClick={() => handleEditCustomer(item)}
+                                title="Edit customer details"
+                                aria-label={`Edit ${item.fullName || 'Customer'}`}
+                              >
+                                <Edit2 size={14} strokeWidth={1.8} /> Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-delete-customer"
+                                onClick={() => handleOpenDeleteModal(item)}
+                                title="Delete customer application"
+                                aria-label={`Delete ${item.fullName || 'Customer'}`}
+                              >
+                                <Trash2 size={14} strokeWidth={1.8} /> Delete
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -561,6 +714,60 @@ function SubmissionHistory() {
           customer={selectedCustomer}
           onClose={() => setSelectedCustomer(null)}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {customerToDelete && (
+        <div
+          className="history-delete-modal-backdrop"
+          onClick={handleCloseDeleteModal}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-modal-title"
+        >
+          <div
+            className="history-delete-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="history-delete-modal-header">
+              <div className="history-delete-modal-icon">
+                <Trash2 size={20} />
+              </div>
+              <h3 id="delete-modal-title" className="history-delete-modal-title">
+                Delete Customer Application
+              </h3>
+            </div>
+
+            {deleteError && (
+              <div className="history-delete-modal-error">
+                {deleteError}
+              </div>
+            )}
+
+            <p className="history-delete-modal-message">
+              Are you sure you want to delete customer <strong>"{customerToDelete?.fullName || 'this customer'}"</strong>? This action cannot be undone.
+            </p>
+
+            <div className="history-delete-modal-actions">
+              <button
+                type="button"
+                className="history-delete-modal-btn-cancel"
+                onClick={handleCloseDeleteModal}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="history-delete-modal-btn-confirm"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

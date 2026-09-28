@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { LayoutDashboard, FileText, Clock, CheckCircle, XCircle, UserCircle, LogOut } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { clearCreditManagerAuth } from '../auth/authStorage';
-import logoImg from '../../../../Core/Logo_img/Logo.png';
+import logoImg from '../../../../Core/src/assets/branding/Logo.png';
 import './Sidebar.css';
 
 const Sidebar = () => {

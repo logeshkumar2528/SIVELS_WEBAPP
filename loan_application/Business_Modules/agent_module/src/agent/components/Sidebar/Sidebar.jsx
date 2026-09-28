@@ -2,19 +2,17 @@ import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
-  UserPlus,
   History,
   UserCircle,
   LogOut,
   Headphones,
 } from 'lucide-react'
 import { useAuth } from '../../../../../../Core/src/context/AuthContext'
-import logo from '../../../../../../Core/Logo_img/Logo.png'
+import logo from '../../../../../../Core/src/assets/branding/Logo.png'
 import './Sidebar.css'
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, route: '/Agent/dashboard', badgeKey: null },
-  { id: 'add-customer', label: 'Add Customer', icon: UserPlus, route: '/Agent/add-customer', badgeKey: null },
   { id: 'submission-history', label: 'Submission History', icon: History, route: '/Agent/submission-history', badgeKey: 'submissionHistory' },
 ]
 

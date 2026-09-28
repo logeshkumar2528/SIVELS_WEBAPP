@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import {
   User,
   FileText,
@@ -23,12 +23,19 @@ import CustomSelect from './CustomSelect'
 import './AddCustomer.css'
 import { masterService } from '../../../../../../Core/src/services/masterService'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
+import { useLoading } from '../../../../../../Core/src/context/LoadingContext'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { getApiErrorMessage } from '../../../../../../Core/src/utils/apiErrorHandler'
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../../Core/src/utils/amountHelper'
 
 function AddCustomer() {
   const navigate = useNavigate()
+  const { withLoading } = useLoading()
+  const [searchParams] = useSearchParams()
+  const location = useLocation()
+  const editCustomerId = searchParams.get('id') || location.state?.customerId || null
+  const mode = searchParams.get('mode') || location.state?.mode || null
+  const isEditMode = Boolean(editCustomerId && (mode === 'edit' || searchParams.has('id')))
 
   // Asynchronously resolve the true agentId based on logged-in user
   const { agentId, loadingAgent } = useAgentIdentity()
@@ -44,13 +51,16 @@ function AddCustomer() {
   
   // Loading States
   const [loadingMasters, setLoadingMasters] = useState(true)
+  const [loadingCustomer, setLoadingCustomer] = useState(false)
   const [loadingMapping, setLoadingMapping] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [globalError, setGlobalError] = useState(null)
   const [fieldErrors, setFieldErrors] = useState({})
 
-  // Document Mapping State
+  // Document Mapping & Existing Documents State
   const [documentMappings, setDocumentMappings] = useState([])
+  const [existingCustomerDocs, setExistingCustomerDocs] = useState([])
+  const [loadedEmploymentTypeId, setLoadedEmploymentTypeId] = useState(null)
 
   // Form State
   const [formData, setFormData] = useState({
@@ -71,6 +81,9 @@ function AddCustomer() {
 
   // Modal Full Image Preview State
   const [modalImage, setModalImage] = useState(null)
+
+  // Confirmation Modal State
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
 
   // Submitted Popup Success State
   const [submittedData, setSubmittedData] = useState(null)
@@ -126,6 +139,73 @@ function AddCustomer() {
     fetchMasters()
   }, [])
 
+  // In Edit Mode -> Fetch Existing Customer Data & Documents
+  useEffect(() => {
+    if (!isEditMode || !editCustomerId) return
+
+    let isMounted = true
+    const loadCustomerData = async () => {
+      setLoadingCustomer(true)
+      setGlobalError(null)
+      try {
+        await withLoading(async () => {
+          const [custRes, docsRes] = await Promise.all([
+            agentCustomerService.getCustomerById(editCustomerId),
+            agentCustomerService.getDocumentsByCustomerId(editCustomerId).catch(() => [])
+          ])
+
+          const extractArray = (res) => {
+            if (Array.isArray(res)) return res
+            if (res && typeof res === 'object') {
+              if (Array.isArray(res.data)) return res.data
+              if (Array.isArray(res.items)) return res.items
+              if (Array.isArray(res.result)) return res.result
+              if (Array.isArray(res.list)) return res.list
+            }
+            return []
+          }
+
+          const customer = custRes?.data || custRes
+          const docList = extractArray(docsRes)
+
+          if (isMounted && customer) {
+            const empTypeId = customer.employmentTypeId ? String(customer.employmentTypeId) : ''
+            setLoadedEmploymentTypeId(empTypeId)
+            setFormData({
+              fullName: customer.fullName || '',
+              mobileNumber: customer.mobileNumber || '',
+              email: customer.email || '',
+              employmentTypeId: empTypeId,
+              loanProductId: customer.loanProductId ? String(customer.loanProductId) : '',
+              expectedAmount: customer.expectedLoanAmount ? formatIndianAmount(customer.expectedLoanAmount, true, 2) : '',
+              remarks: customer.remarks || '',
+            })
+
+            const uploadedIds = docList.map(d => Number(d.documentTypeId || d.DocumentTypeId)).filter(Boolean)
+            setUploadedDocuments(uploadedIds)
+            setExistingCustomerDocs(docList)
+          }
+        }, { message: 'Loading customer details...' })
+      } catch (err) {
+        console.error('Failed to load customer details for edit', err)
+        if (isMounted) {
+          const errMsg = getApiErrorMessage(err)?.global || 'Unable to load customer details. Please try again.'
+          setGlobalError(errMsg)
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingCustomer(false)
+        }
+      }
+    }
+
+    loadCustomerData()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isEditMode, editCustomerId, withLoading])
+
   // When Employment Type Changes -> Load Document Mappings
   useEffect(() => {
     if (!formData.employmentTypeId) {
@@ -174,9 +254,15 @@ function AddCustomer() {
         }, [])
 
         setDocumentMappings(resolvedMappings)
-        setSelectedFiles({})
-        setPreviews({})
-        setUploadedDocuments([])
+
+        // Preserve uploaded documents if in edit mode and employmentTypeId matches loaded customer type
+        if (isEditMode && String(formData.employmentTypeId) === String(loadedEmploymentTypeId)) {
+          // Keep existing uploadedDocuments from customer fetch
+        } else {
+          setSelectedFiles({})
+          setPreviews({})
+          setUploadedDocuments([])
+        }
       } catch (err) {
         setGlobalError("Unable to load required documents. Please try selecting the Employment Type again.")
         setDocumentMappings([])
@@ -189,7 +275,7 @@ function AddCustomer() {
     if (documentTypes.length > 0) {
       loadMapping()
     }
-  }, [formData.employmentTypeId, documentTypes])
+  }, [formData.employmentTypeId, documentTypes, isEditMode, loadedEmploymentTypeId])
 
   // Manage Preview Object URLs
   useEffect(() => {
@@ -418,109 +504,161 @@ function AddCustomer() {
       return
     }
 
+    // Validation succeeded: Show confirmation modal before calling API
+    setShowConfirmModal(true)
+  }
+
+  const handleConfirmSave = async () => {
+    setShowConfirmModal(false)
     setSubmitting(true)
+    setGlobalError(null)
+
+    let processedEmail = null
+    if (formData.email && formData.email.trim() !== '') {
+      processedEmail = formData.email.trim()
+    }
 
     try {
-      let agentCustomerId = createdCustomerId;
+      await withLoading(async () => {
+        let agentCustomerId = isEditMode ? editCustomerId : createdCustomerId
 
-      // 1. Create Customer (only if not already created)
-      if (!agentCustomerId) {
-        const customerPayload = {
-          agentId: Number(agentId),
-          fullName: formData.fullName,
-          mobileNumber: formData.mobileNumber,
-          email: processedEmail,
-          employmentTypeId: Number(formData.employmentTypeId),
-          loanProductId: Number(formData.loanProductId),
-          expectedLoanAmount: parseAmountToNumber(formData.expectedAmount),
-          remarks: formData.remarks,
-          status: 0,
-          isActive: true,
-          createdBy: Number(agentId) // using agentId as createdBy
-        }
+        // 1. Create or Update Customer
+        if (isEditMode) {
+          const updatePayload = {
+            agentCustomerId: Number(editCustomerId),
+            fullName: formData.fullName.trim(),
+            mobileNumber: formData.mobileNumber.trim(),
+            email: processedEmail,
+            employmentTypeId: Number(formData.employmentTypeId),
+            loanProductId: Number(formData.loanProductId),
+            expectedLoanAmount: parseAmountToNumber(formData.expectedAmount),
+            remarks: formData.remarks.trim(),
+            modifiedBy: Number(agentId)
+          }
 
-        const createResponse = await agentCustomerService.createCustomer(customerPayload)
-        agentCustomerId = createResponse?.agentCustomerId || createResponse?.id || createResponse?.data?.agentCustomerId || createResponse?.data?.id
-        
-        if (!agentCustomerId) {
-          throw new Error('Failed to retrieve Customer ID from server.')
-        }
-        setCreatedCustomerId(agentCustomerId)
-      }
+          await agentCustomerService.updateCustomer(editCustomerId, updatePayload)
+        } else {
+          // Create Customer (only if not already created)
+          if (!agentCustomerId) {
+            const customerPayload = {
+              agentId: Number(agentId),
+              fullName: formData.fullName.trim(),
+              mobileNumber: formData.mobileNumber.trim(),
+              email: processedEmail,
+              employmentTypeId: Number(formData.employmentTypeId),
+              loanProductId: Number(formData.loanProductId),
+              expectedLoanAmount: parseAmountToNumber(formData.expectedAmount),
+              remarks: formData.remarks.trim(),
+              status: 0,
+              isActive: true,
+              createdBy: Number(agentId) // using agentId as createdBy
+            }
 
-      // 2. Upload Documents sequentially to track failures correctly
-      const failedUploads = []
-      const successfulUploads = []
-      
-      for (const docTypeIdStr of Object.keys(selectedFiles)) {
-        const docTypeId = Number(docTypeIdStr)
-        const filesData = selectedFiles[docTypeIdStr]
-        const filesArray = Array.isArray(filesData) ? filesData : [filesData]
-        
-        for (let i = 0; i < filesArray.length; i++) {
-          const file = filesArray[i]
-          const docFormData = new FormData()
-          docFormData.append('file', file)
-          docFormData.append('agentCustomerId', String(agentCustomerId))
-          docFormData.append('documentTypeId', String(docTypeId))
-          docFormData.append('createdBy', String(agentId))
-          
-          try {
-            await agentCustomerService.uploadDocument(docFormData)
-            successfulUploads.push({ docTypeId, index: i, isMultiple: Array.isArray(filesData) })
-          } catch (err) {
-            failedUploads.push(file.name)
+            const createResponse = await agentCustomerService.createCustomer(customerPayload)
+            agentCustomerId =
+              createResponse?.agentCustomerId ||
+              createResponse?.id ||
+              createResponse?.data?.agentCustomerId ||
+              createResponse?.data?.id
+
+            if (!agentCustomerId) {
+              throw new Error('Failed to retrieve Customer ID from server.')
+            }
+            setCreatedCustomerId(agentCustomerId)
           }
         }
-      }
 
-      // Remove successful uploads from state
-      if (successfulUploads.length > 0) {
-        // Mark documents as uploaded so they bypass validation on retry
-        setUploadedDocuments(prev => {
-          const newDocIds = successfulUploads.map(u => u.docTypeId)
-          return Array.from(new Set([...prev, ...newDocIds]))
-        })
+        // 2. Upload Documents sequentially to track failures correctly
+        const failedUploads = []
+        const successfulUploads = []
 
-        setSelectedFiles(prev => {
-          const newFiles = { ...prev }
-          // Process in reverse to avoid index shifting if multiple files per docType
-          for (let i = successfulUploads.length - 1; i >= 0; i--) {
-            const { docTypeId, index, isMultiple } = successfulUploads[i]
-            if (isMultiple && Array.isArray(newFiles[docTypeId])) {
-              newFiles[docTypeId] = newFiles[docTypeId].filter((_, idx) => idx !== index)
-              if (newFiles[docTypeId].length === 0) {
-                delete newFiles[docTypeId]
-              }
-            } else {
-              delete newFiles[docTypeId]
+        for (const docTypeIdStr of Object.keys(selectedFiles)) {
+          const docTypeId = Number(docTypeIdStr)
+          const filesData = selectedFiles[docTypeIdStr]
+          if (!filesData) continue
+          const filesArray = Array.isArray(filesData) ? filesData : [filesData]
+
+          for (let i = 0; i < filesArray.length; i++) {
+            const file = filesArray[i]
+            const docFormData = new FormData()
+            docFormData.append('file', file)
+            docFormData.append('agentCustomerId', String(agentCustomerId))
+            docFormData.append('documentTypeId', String(docTypeId))
+            docFormData.append('createdBy', String(agentId))
+
+            try {
+              await agentCustomerService.uploadDocument(docFormData)
+              successfulUploads.push({ docTypeId, index: i, isMultiple: Array.isArray(filesData) })
+            } catch (err) {
+              failedUploads.push(file.name)
             }
           }
-          return newFiles
-        })
-      }
+        }
 
-      if (failedUploads.length > 0) {
-        setGlobalError(`Customer created successfully, but some documents failed to upload: ${failedUploads.join(', ')}. Please retry submitting the remaining documents.`)
-        window.scrollTo(0, 0)
-        return // Do not show success screen yet
-      }
+        // Remove successful uploads from state
+        if (successfulUploads.length > 0) {
+          // Mark documents as uploaded so they bypass validation on retry
+          setUploadedDocuments((prev) => {
+            const newDocIds = successfulUploads.map((u) => u.docTypeId)
+            return Array.from(new Set([...prev, ...newDocIds]))
+          })
 
-      // 3. Success UI
-      const now = new Date()
-      const formattedDateTime = now.toLocaleString('en-IN', {
-        day: '2-digit', month: 'short', year: 'numeric',
-        hour: 'numeric', minute: '2-digit', hour12: true
+          setSelectedFiles((prev) => {
+            const newFiles = { ...prev }
+            // Process in reverse to avoid index shifting if multiple files per docType
+            for (let i = successfulUploads.length - 1; i >= 0; i--) {
+              const { docTypeId, index, isMultiple } = successfulUploads[i]
+              if (isMultiple && Array.isArray(newFiles[docTypeId])) {
+                newFiles[docTypeId] = newFiles[docTypeId].filter((_, idx) => idx !== index)
+                if (newFiles[docTypeId].length === 0) {
+                  delete newFiles[docTypeId]
+                }
+              } else {
+                delete newFiles[docTypeId]
+              }
+            }
+            return newFiles
+          })
+        }
+
+        if (failedUploads.length > 0) {
+          setGlobalError(
+            isEditMode
+              ? `Customer updated successfully, but some documents failed to upload: ${failedUploads.join(', ')}. Please retry uploading the remaining documents.`
+              : `Customer created successfully, but some documents failed to upload: ${failedUploads.join(', ')}. Please retry submitting the remaining documents.`
+          )
+          window.scrollTo(0, 0)
+          return // Do not show success screen yet
+        }
+
+        // 3. Success Handling
+        if (isEditMode) {
+          navigate('/Agent/submission-history')
+        } else {
+          const now = new Date()
+          const formattedDateTime = now.toLocaleString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+          })
+
+          setSubmittedData({
+            customerName: formData.fullName,
+            mobileNumber: formData.mobileNumber,
+            submissionDate: formattedDateTime,
+            referenceId: `REF${agentCustomerId}`,
+          })
+        }
+      }, {
+        message: isEditMode
+          ? 'Saving customer changes...'
+          : 'Creating customer application...'
       })
-      
-      setSubmittedData({
-        customerName: formData.fullName,
-        mobileNumber: formData.mobileNumber,
-        submissionDate: formattedDateTime,
-        referenceId: `REF${agentCustomerId}`,
-      })
-
     } catch (err) {
+      console.error('Failed to save customer', err)
       const apiError = getApiErrorMessage(err)
       if (apiError.fields) {
         setFieldErrors(apiError.fields)
@@ -532,6 +670,10 @@ function AddCustomer() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const handleCancelConfirm = () => {
+    setShowConfirmModal(false)
   }
 
   const handleResetForm = () => {
@@ -553,7 +695,11 @@ function AddCustomer() {
   }
 
   const handleCancel = () => {
-    navigate('/Agent/dashboard')
+    if (isEditMode) {
+      navigate('/Agent/submission-history')
+    } else {
+      navigate('/Agent/dashboard')
+    }
   }
 
   // Map API values for CustomSelect options
@@ -582,6 +728,16 @@ function AddCustomer() {
       : loanProducts.length === 0 
         ? 'No loan products available' 
         : 'Select product'
+
+  if (loadingCustomer) {
+    return (
+      <div className="add-customer">
+        <div className="add-customer-card" style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>
+          <p>Loading customer details...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="add-customer">
@@ -790,13 +946,16 @@ function AddCustomer() {
                   </p>
                 )}
 
-                {documentMappings.map(mapping => {
+                {documentMappings.map((mapping) => {
                   const docName = mapping.documentTypeName || 'Document'
                   const isMultiple = docName.toLowerCase().includes('other')
                   const files = selectedFiles[mapping.documentTypeId]
-                  const hasFile = isMultiple ? (files && files.length > 0) : !!files
+                  const hasFile = isMultiple ? files && files.length > 0 : Boolean(files)
                   const IconComponent = getDocumentIcon(docName)
-                  const isUploaded = uploadedDocuments.includes(mapping.documentTypeId)
+                  const isUploaded = uploadedDocuments.includes(Number(mapping.documentTypeId))
+                  const existingDoc = existingCustomerDocs.find(
+                    (d) => Number(d.documentTypeId || d.DocumentTypeId) === Number(mapping.documentTypeId)
+                  )
 
                   return (
                     <div key={mapping.documentTypeId} className={`document-upload-card ${hasFile || isUploaded ? 'has-file' : ''}`}>
@@ -820,24 +979,31 @@ function AddCustomer() {
                         </div>
                       </div>
 
-                      {isUploaded ? (
-                        <div className="file-preview-box" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <CheckCircle2 size={18} color="#16A34A" />
-                            <div className="file-preview-details" style={{ margin: 0 }}>
-                              <span className="file-preview-name" style={{ color: '#166534', fontWeight: 600 }}>Successfully Uploaded</span>
-                            </div>
-                          </div>
-                        </div>
-                      ) : hasFile ? (
+                      {hasFile ? (
                         isMultiple ? (
                           <div className="file-preview-box" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px' }}>
                             {files.map((file, index) => (
-                              <div key={index} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '4px', border: '1px solid #E2E8E5', borderRadius: '4px' }}>
+                              <div
+                                key={index}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  width: '100%',
+                                  padding: '4px',
+                                  border: '1px solid #E2E8E5',
+                                  borderRadius: '4px',
+                                }}
+                              >
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                   <FileText size={14} color="#1A7A3C" />
                                   <div className="file-preview-details" style={{ margin: 0 }}>
-                                    <span className="file-preview-name" style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+                                    <span
+                                      className="file-preview-name"
+                                      style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                    >
+                                      {file.name}
+                                    </span>
                                   </div>
                                 </div>
                                 <button
@@ -879,35 +1045,54 @@ function AddCustomer() {
                             )}
                           </div>
                         )
+                      ) : isUploaded ? (
+                        <div className="file-preview-box" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+                            <CheckCircle2 size={18} color="#16A34A" style={{ flexShrink: 0 }} />
+                            <div className="file-preview-details" style={{ margin: 0 }}>
+                              <span className="file-preview-name" style={{ color: '#166534', fontWeight: 600 }}>
+                                {existingDoc?.fileName || existingDoc?.documentName || 'Successfully Uploaded'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
                       ) : null}
 
-                      {!isUploaded && (
-                        <div className="file-actions-row">
-                          <label className={`file-upload-btn ${submitting ? 'disabled' : ''}`}>
-                            <Upload size={13} strokeWidth={2} />
-                            <span>{hasFile ? (isMultiple ? 'Add More' : 'Change') : (isMultiple ? 'Choose Files' : 'Upload Document')}</span>
-                            <input
-                              type="file"
-                              multiple={isMultiple}
-                              className="file-input-hidden"
-                              accept=".pdf,.jpg,.jpeg,.png"
-                              onChange={(e) => handleFileChange(e, mapping.documentTypeId, isMultiple)}
-                              disabled={submitting}
-                            />
-                          </label>
-                          {hasFile && !isMultiple && (
-                            <button
-                              type="button"
-                              className="file-remove-btn"
-                              onClick={() => handleRemoveFile(mapping.documentTypeId)}
-                              disabled={submitting}
-                            >
-                              <Trash2 size={13} />
-                              <span>Remove</span>
-                            </button>
-                          )}
-                        </div>
-                      )}
+                      <div className="file-actions-row">
+                        <label className={`file-upload-btn ${submitting ? 'disabled' : ''}`}>
+                          <Upload size={13} strokeWidth={2} />
+                          <span>
+                            {hasFile
+                              ? isMultiple
+                                ? 'Add More'
+                                : 'Change'
+                              : isUploaded
+                              ? 'Replace Document'
+                              : isMultiple
+                              ? 'Choose Files'
+                              : 'Upload Document'}
+                          </span>
+                          <input
+                            type="file"
+                            multiple={isMultiple}
+                            className="file-input-hidden"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(e) => handleFileChange(e, mapping.documentTypeId, isMultiple)}
+                            disabled={submitting}
+                          />
+                        </label>
+                        {hasFile && !isMultiple && (
+                          <button
+                            type="button"
+                            className="file-remove-btn"
+                            onClick={() => handleRemoveFile(mapping.documentTypeId)}
+                            disabled={submitting}
+                          >
+                            <Trash2 size={13} />
+                            <span>Remove</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
@@ -922,12 +1107,61 @@ function AddCustomer() {
             <X size={15} strokeWidth={2} /> Cancel
           </button>
           <button type="submit" className="btn-submit" disabled={submitting}>
-            {submitting ? 'Saving Customer...' : (
-              <>Save & Continue to Documents <ArrowRight size={15} strokeWidth={2} /></>
-            )}
+            {submitting ? (isEditMode ? 'Updating Customer...' : 'Saving Customer...') : (isEditMode ? 'Update Customer' : 'Save')}
           </button>
         </div>
       </form>
+
+      {showConfirmModal && (
+        <div
+          className="agent-confirm-modal-backdrop"
+          onClick={() => !submitting && setShowConfirmModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-modal-title"
+        >
+          <div
+            className="agent-confirm-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="agent-confirm-modal-header">
+              <div className="agent-confirm-modal-icon">
+                <User size={20} />
+              </div>
+              <h3 id="confirm-modal-title" className="agent-confirm-modal-title">
+                {isEditMode ? 'Confirm Customer Update' : 'Confirm Customer Creation'}
+              </h3>
+            </div>
+            <p className="agent-confirm-modal-message">
+              Are you sure you want to {isEditMode ? 'update' : 'create'} customer "{formData.fullName?.trim() || 'this customer'}"?
+            </p>
+            <div className="agent-confirm-modal-actions">
+              <button
+                type="button"
+                className="agent-confirm-modal-btn-cancel"
+                onClick={handleCancelConfirm}
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="agent-confirm-modal-btn-confirm"
+                onClick={handleConfirmSave}
+                disabled={submitting}
+              >
+                {submitting
+                  ? isEditMode
+                    ? 'Updating...'
+                    : 'Creating...'
+                  : isEditMode
+                  ? 'Yes, Update Customer'
+                  : 'Yes, Create Customer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modalImage && (
         <div className="image-modal-backdrop" onClick={() => setModalImage(null)}>

@@ -29,7 +29,7 @@ import {
   Hash,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import logoImg from '../../../../Core/Logo_img/Logo.png'
+import logoImg from '../../../../Core/src/assets/branding/Logo.png'
 import './CompanyInfo.css'
 
 function CompanyInfo() {
