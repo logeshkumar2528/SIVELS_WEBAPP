@@ -12404,3 +12404,366 @@
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   INCOME METHOD DEDICATED FULL-WORKSPACE STYLES (STEP 11)
+══════════════════════════════════════════════════════════════════════════ */
+.bo-cv-elig-deck--income-workspace {
+  gap: 18px;
+}
+
+.bo-cv-income-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  padding-bottom: 80px;
+}
+
+/* ── Income Method Header ── */
+.bo-cv-income-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 24px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.bo-cv-income-header-left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+
+.bo-cv-income-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid #cbdad5;
+  background: #f8fbf9;
+  color: #0f7a4c;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.bo-cv-income-back-btn:hover {
+  background: #e8f4ee;
+  border-color: #0f7a4c;
+  color: #0a5c39;
+  transform: translateX(-2px);
+}
+
+.bo-cv-income-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bo-cv-income-title-block .bo-cv-elig-kicker {
+  align-self: flex-start;
+  margin-bottom: 2px;
+  background: #e8f4ee;
+  color: #0f7a4c;
+  border: 1px solid rgba(15, 122, 76, 0.2);
+}
+
+.bo-cv-income-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: #0b2f22;
+  letter-spacing: -0.02em;
+}
+
+.bo-cv-income-sub {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.bo-cv-income-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.bo-cv-income-applicant-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bo-cv-income-context-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #334155;
+  font-weight: 600;
+}
+
+.bo-cv-income-context-pill.is-amount {
+  background: #f0faf5;
+  border-color: rgba(15, 122, 76, 0.25);
+  color: #0f7a4c;
+  font-weight: 700;
+}
+
+/* ── Applicant Selection Bar ── */
+.bo-cv-income-applicant-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+}
+
+.bo-cv-income-bar-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+/* ── Section Blocks ── */
+.bo-cv-income-section {
+  padding: 22px 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+}
+
+.bo-cv-income-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #edf2f0;
+  margin-bottom: 18px;
+}
+
+.bo-cv-income-section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.bo-cv-income-section-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #f0faf5;
+  color: #0f7a4c;
+  border: 1px solid rgba(15, 122, 76, 0.2);
+  font-size: 14px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.bo-cv-income-section-num.is-result {
+  background: #0f7a4c;
+  color: #ffffff;
+  border-color: #0f7a4c;
+}
+
+.bo-cv-income-section-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+  color: #0b2f22;
+  letter-spacing: -0.01em;
+}
+
+.bo-cv-income-section-sub {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.bo-cv-income-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 15px;
+  border-radius: 10px;
+  border: 1px solid #0f7a4c;
+  background: #f0faf5;
+  color: #0f7a4c;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bo-cv-income-add-btn:hover:not(:disabled) {
+  background: #0f7a4c;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(15, 122, 76, 0.2);
+}
+
+.bo-cv-income-add-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Section 06: Calculation Action Bar ── */
+.bo-cv-income-section--calc-action {
+  padding: 18px 24px;
+}
+
+.bo-cv-income-calc-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.bo-cv-income-calc-bar-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.bo-cv-income-calc-bar-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+  color: #0b2f22;
+  letter-spacing: -0.01em;
+}
+
+.bo-cv-income-calc-bar-sub {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* ── Section 07: Exact 4 + 4 Result KPI Cards ── */
+.bo-cv-income-results-container {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.bo-cv-income-results-container .bo-cv-result-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.bo-cv-income-results-container .bo-cv-result-metric-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 88px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  box-sizing: border-box;
+}
+
+.bo-cv-income-results-container .bo-cv-result-metric-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bo-cv-income-results-container .bo-cv-result-metric-val {
+  font-size: 15px;
+  font-weight: 750;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
+.bo-cv-income-results-container .bo-cv-result-metric-sub {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Responsive Breakpoints ── */
+@media (max-width: 1024px) {
+  .bo-cv-income-results-container .bo-cv-result-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .bo-cv-income-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .bo-cv-income-header-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .bo-cv-income-calc-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .bo-cv-income-calc-bar .bo-cv-calculate-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .bo-cv-income-results-container .bo-cv-result-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bo-cv-income-section-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+}
+
+
