@@ -2023,6 +2023,7 @@ export default function CustomerVerification() {
   const [calcWorkspaceOpen, setCalcWorkspaceOpen] = useState(false);
   const [bankingWorkspaceOpen, setBankingWorkspaceOpen] = useState(false);
   const [rtrWorkspaceOpen, setRtrWorkspaceOpen] = useState(false);
+  const [normalIncomeWorkspaceOpen, setNormalIncomeWorkspaceOpen] = useState(false);
   const [rtrCalculatedTrigger, setRtrCalculatedTrigger] = useState(0);
   const [calcSheetTab, setCalcSheetTab] = useState('inputs'); // inputs | settings | results
   const [proposedLoanOpen, setProposedLoanOpen] = useState(false);
@@ -5254,9 +5255,11 @@ export default function CustomerVerification() {
         // Re-fetch all assessments so cache and history stay 100% in sync
         await fetchApplicationAssessments(calculationAppProdId);
 
-        // Keep calculator open on Results tab for faster review
-        setCalcSheetTab('results');
-        setCalcWorkspaceOpen(true);
+        // Keep calculator open on Results tab for faster review (only for legacy modal, e.g. INCOME)
+        if (selectedMethodCode !== 'NORMAL_INCOME' && selectedMethodCode !== 'RTR') {
+          setCalcSheetTab('results');
+          setCalcWorkspaceOpen(true);
+        }
       } else {
         throw new Error('Calculation engine returned an unexpected response structure.');
       }
@@ -12874,6 +12877,1402 @@ export default function CustomerVerification() {
                   onBack={() => setBankingWorkspaceOpen(false)}
                 />
               </div>
+            ) : selectedMethodCode === 'NORMAL_INCOME' && normalIncomeWorkspaceOpen ? (
+              <div className="bo-cv-elig-deck bo-cv-elig-deck--normal-workspace">
+                <div className="bo-cv-normal-workspace">
+                  {/* ── Normal Income Workspace Header ── */}
+                  <header className="bo-cv-normal-header">
+                    <div className="bo-cv-normal-header-left">
+                      <button
+                        type="button"
+                        className="bo-cv-normal-back-btn"
+                        onClick={() => setNormalIncomeWorkspaceOpen(false)}
+                      >
+                        {ArrowLeftIcon ? <ArrowLeftIcon size={16} /> : '←'}
+                        <span>Back to Eligibility Assessment</span>
+                      </button>
+                      <div className="bo-cv-normal-title-block">
+                        <span className="bo-cv-elig-kicker">STEP 11 · NORMAL INCOME METHOD</span>
+                        <h2 className="bo-cv-normal-title">Normal Income Eligibility Assessment</h2>
+                        <p className="bo-cv-normal-sub">
+                          Business financials &amp; other income based assessment for applicant.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="bo-cv-normal-header-right">
+                      <div className="bo-cv-normal-applicant-context">
+                        <span className="bo-cv-normal-context-pill">
+                          {UserIcon && <UserIcon size={12} />}
+                          <strong>{selectedApplicant?.name || 'Applicant'}</strong>
+                          <small>({selectedApplicant?.isMain ? 'Main' : selectedApplicant?.label})</small>
+                        </span>
+                        <span className="bo-cv-normal-context-pill is-amount">
+                          Req {formatCurrency(appDetails.loanAmount)}
+                        </span>
+                      </div>
+                    </div>
+                  </header>
+
+                  {/* ── Applicant Selection Rail (if multiple) ── */}
+                  {allApplicants.length > 1 && (
+                    <div className="bo-cv-normal-applicant-bar">
+                      <span className="bo-cv-normal-bar-label">Applicant Profile:</span>
+                      <div className="bo-cv-elig-person-rail" role="tablist" aria-label="Normal Income Applicants">
+                        {allApplicants.map((app) => {
+                          const isSelected = app.sequence === selectedApplicantSequence;
+                          return (
+                            <button
+                              key={`normal-app-tab-${app.sequence}`}
+                              type="button"
+                              role="tab"
+                              aria-selected={isSelected}
+                              className={`bo-cv-elig-person-chip ${isSelected ? 'is-active' : ''} ${app.isMain ? 'is-main' : ''}`}
+                              onClick={() => setSelectedApplicantSequence(app.sequence)}
+                            >
+                              <span className="bo-cv-elig-person-avatar">
+                                {UserIcon && <UserIcon size={14} />}
+                              </span>
+                              <span className="bo-cv-elig-person-meta">
+                                <strong>{app.name}</strong>
+                                <small>{app.isMain ? 'Main Applicant' : app.label}</small>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── 01 — PRIMARY BUSINESS INCOME ── */}
+                  <section className="bo-cv-normal-section" aria-label="01 Primary Business Income">
+                    <div className="bo-cv-normal-section-head">
+                      <div className="bo-cv-normal-section-title-wrap">
+                        <span className="bo-cv-normal-section-num">01</span>
+                        <div>
+                          <h3 className="bo-cv-normal-section-title">Primary Business Income</h3>
+                          <p className="bo-cv-normal-section-sub">
+                            Enter financial year financials (PAT, Depreciation, Partner Salary, Related Party Interest).
+                          </p>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {normalIncomeMetrics.latestRow ? (
+                          <span className="bo-cv-salary-count-badge" style={{ background: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0' }}>
+                            Latest Year: {normalIncomeMetrics.latestRow.financialYear || 'Selected'} ({formatCurrency(normalIncomeMetrics.latestPrimaryBusinessIncome)})
+                          </span>
+                        ) : (
+                          <span className="bo-cv-salary-count-badge" style={{ background: '#fffbeb', color: '#b45309', borderColor: '#fde68a' }}>
+                            No Latest Year Designated
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          className="bo-cv-normal-add-btn"
+                          onClick={handleAddNormalIncomeRow}
+                          disabled={normalIncomeSaving}
+                        >
+                          {PlusIcon ? <PlusIcon size={14} /> : '+'}
+                          <span>Add Financial Year</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Loading State */}
+                    {normalIncomeLoading ? (
+                      <div className="bo-cv-assess-loading-box">
+                        <div className="bo-cv-loading-spinner" />
+                        <span>Loading Normal Income records...</span>
+                      </div>
+                    ) : normalIncomeError ? (
+                      <div className="bo-cv-assess-error-box">
+                        <div className="bo-cv-assess-error-msg">
+                          {AlertTriangleIcon && <AlertTriangleIcon size={16} />}
+                          <span>{normalIncomeError}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="bo-btn bo-btn--outline bo-btn--sm"
+                          onClick={() => fetchNormalIncomeRecords(calculationAppProdId, selectedApplicantSequence)}
+                        >
+                          {RefreshCwIcon && <RefreshCwIcon size={12} />}
+                          <span>Retry</span>
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {/* Notification Banner */}
+                    {normalIncomeBanner && (
+                      <div className={`bo-cv-salary-banner is-${normalIncomeBanner.type}`} style={{ marginBottom: '14px' }}>
+                        <div className="bo-cv-salary-banner-icon">
+                          {normalIncomeBanner.type === 'success' && (CheckCircleIcon ? <CheckCircleIcon size={16} /> : '✓')}
+                          {normalIncomeBanner.type === 'error' && (AlertTriangleIcon ? <AlertTriangleIcon size={16} /> : '⚠️')}
+                          {normalIncomeBanner.type === 'warning' && (AlertCircleIcon ? <AlertCircleIcon size={16} /> : 'ℹ️')}
+                          {normalIncomeBanner.type === 'info' && (InfoIcon ? <InfoIcon size={16} /> : 'ℹ️')}
+                        </div>
+                        <div className="bo-cv-salary-banner-msg">{normalIncomeBanner.message}</div>
+                      </div>
+                    )}
+
+                    {/* Primary Business Income Table */}
+                    <div className="bo-cv-salary-table-wrapper">
+                      <table className="bo-cv-salary-table" aria-label="Primary Business Income Table">
+                        <thead>
+                          <tr>
+                            <th style={{ minWidth: '130px' }}>Financial Year</th>
+                            <th style={{ minWidth: '120px', textAlign: 'center' }}>Considered Year</th>
+                            <th className="th-num" style={{ minWidth: '130px' }}>PAT (₹)</th>
+                            <th className="th-num" style={{ minWidth: '130px' }}>Depreciation (₹)</th>
+                            <th className="th-num" style={{ minWidth: '140px' }}>Salary to Partners (₹)</th>
+                            <th className="th-num" style={{ minWidth: '140px' }}>Related Party Interest (₹)</th>
+                            <th className="th-num" style={{ minWidth: '150px' }}>Primary Business Income (₹)</th>
+                            <th className="th-action" style={{ minWidth: '60px', textAlign: 'center' }}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {normalIncomeRows.length === 0 ? (
+                            <tr>
+                              <td colSpan={8} style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>
+                                No financial years configured. Click &quot;Add Financial Year&quot; above to enter year-wise business figures.
+                              </td>
+                            </tr>
+                          ) : (
+                            normalIncomeRows.map((row, idx) => {
+                              const isDraft = !row.isPersisted || !row.applicationNormalIncomeDetailsId;
+                              const isLatest = Boolean(row.isLatestFinancialYear);
+                              const computedIncome =
+                                (Number(row.pat) || 0) +
+                                (Number(row.depreciation) || 0) +
+                                (Number(row.salaryToPartners) || 0) +
+                                (Number(row.interestToRelatedParties) || 0);
+
+                              return (
+                                <tr
+                                  key={row.id || `ws-normal-inc-row-${idx}`}
+                                  className={isLatest ? 'is-rtr-selected-row' : ''}
+                                >
+                                  <td>
+                                    <input
+                                      type="text"
+                                      placeholder="e.g. 2025-26"
+                                      className="bo-cv-salary-input"
+                                      value={row.financialYear || ''}
+                                      onChange={(e) => handleNormalIncomeRowChange(idx, 'financialYear', e.target.value)}
+                                      disabled={normalIncomeSaving}
+                                      style={{ textAlign: 'left', fontWeight: 600 }}
+                                      aria-label={`Financial Year for Row ${idx + 1}`}
+                                    />
+                                  </td>
+                                  <td style={{ textAlign: 'center' }}>
+                                    <button
+                                      type="button"
+                                      className={`bo-cv-latest-year-btn ${isLatest ? 'is-active' : ''}`}
+                                      onClick={() => handleSetLatestFinancialYear(idx)}
+                                      disabled={normalIncomeSaving}
+                                      title={isLatest ? 'Currently designated latest considered financial year' : 'Click to set as latest financial year'}
+                                    >
+                                      {isLatest ? 'Latest Year ✓' : 'Set Latest'}
+                                    </button>
+                                  </td>
+                                  <td className="td-num">
+                                    <input
+                                      type="number"
+                                      step="1000"
+                                      placeholder="0"
+                                      className="bo-cv-salary-input"
+                                      value={row.pat === 0 ? '0' : row.pat || ''}
+                                      onChange={(e) => handleNormalIncomeRowChange(idx, 'pat', e.target.value)}
+                                      disabled={normalIncomeSaving}
+                                      aria-label={`Profit After Tax for Row ${idx + 1}`}
+                                    />
+                                  </td>
+                                  <td className="td-num">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1000"
+                                      placeholder="0"
+                                      className="bo-cv-salary-input"
+                                      value={row.depreciation === 0 ? '0' : row.depreciation || ''}
+                                      onChange={(e) => handleNormalIncomeRowChange(idx, 'depreciation', e.target.value)}
+                                      disabled={normalIncomeSaving}
+                                      aria-label={`Depreciation for Row ${idx + 1}`}
+                                    />
+                                  </td>
+                                  <td className="td-num">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1000"
+                                      placeholder="0"
+                                      className="bo-cv-salary-input"
+                                      value={row.salaryToPartners === 0 ? '0' : row.salaryToPartners || ''}
+                                      onChange={(e) => handleNormalIncomeRowChange(idx, 'salaryToPartners', e.target.value)}
+                                      disabled={normalIncomeSaving}
+                                      aria-label={`Salary to Partners for Row ${idx + 1}`}
+                                    />
+                                  </td>
+                                  <td className="td-num">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1000"
+                                      placeholder="0"
+                                      className="bo-cv-salary-input"
+                                      value={row.interestToRelatedParties === 0 ? '0' : row.interestToRelatedParties || ''}
+                                      onChange={(e) => handleNormalIncomeRowChange(idx, 'interestToRelatedParties', e.target.value)}
+                                      disabled={normalIncomeSaving}
+                                      aria-label={`Interest to Related Parties for Row ${idx + 1}`}
+                                    />
+                                  </td>
+                                  <td className="td-num">
+                                    <div className="bo-cv-salary-readonly-val" style={{ fontWeight: 700, color: isLatest ? '#047857' : '#334155' }}>
+                                      {formatCurrency(row.primaryIncome != null && !row.isModified ? row.primaryIncome : computedIncome)}
+                                    </div>
+                                  </td>
+                                  <td className="td-action" style={{ textAlign: 'center' }}>
+                                    {isDraft ? (
+                                      <button
+                                        type="button"
+                                        className="bo-cv-loan-row-remove-btn"
+                                        title="Remove unsaved draft financial year"
+                                        aria-label={`Remove draft financial year ${idx + 1}`}
+                                        onClick={() => handleRemoveNormalIncomeDraftRow(idx)}
+                                        disabled={normalIncomeSaving}
+                                      >
+                                        {XIcon ? <XIcon size={13} /> : '✕'}
+                                      </button>
+                                    ) : (
+                                      <span className="bo-cv-salary-readonly-val" style={{ color: '#94a3b8' }}>
+                                        —
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="bo-cv-salary-action-bar" style={{ marginTop: '10px' }}>
+                      <div className="bo-cv-salary-action-hint">
+                        <span className="bo-cv-salary-hint-dot" />
+                        <span>
+                          <strong>Formula:</strong> Primary Business Income = PAT + Depreciation + Salary to Partners + Interest to Related Parties. Automatically validated and persisted on calculation.
+                        </span>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* ── 02 — OTHER INCOME STREAMS ── */}
+                  <section className="bo-cv-normal-section" aria-label="02 Other Income Streams">
+                    <div className="bo-cv-normal-section-head">
+                      <div className="bo-cv-normal-section-title-wrap">
+                        <span className="bo-cv-normal-section-num">02</span>
+                        <div>
+                          <h3 className="bo-cv-normal-section-title">Other Income Streams</h3>
+                          <p className="bo-cv-normal-section-sub">
+                            Include House Property, Agriculture, or Other Sources.
+                          </p>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {normalIncomeMetrics.totalConsideredOtherIncome > 0 && (
+                          <span className="bo-cv-salary-count-badge" style={{ background: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0' }}>
+                            Considered Other Income: {formatCurrency(normalIncomeMetrics.totalConsideredOtherIncome)}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          className="bo-cv-normal-add-btn"
+                          onClick={handleAddNormalOtherIncomeRow}
+                          disabled={normalIncomeSaving}
+                        >
+                          {PlusIcon ? <PlusIcon size={14} /> : '+'}
+                          <span>Add Other Income</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="bo-cv-salary-table-wrapper">
+                      <table className="bo-cv-salary-table" aria-label="Other Income Streams Table">
+                        <thead>
+                          <tr>
+                            <th style={{ minWidth: '220px' }}>Income Stream Type</th>
+                            <th className="th-num" style={{ minWidth: '160px' }}>Annual Income Amount (₹)</th>
+                            <th className="th-num" style={{ minWidth: '130px' }}>Consideration %</th>
+                            <th className="th-num" style={{ minWidth: '160px' }}>Considered Income (₹)</th>
+                            <th className="th-action" style={{ minWidth: '60px', textAlign: 'center' }}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {normalOtherIncomeRows.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>
+                                No other income streams added. Click &quot;Add Other Income&quot; to include House Property, Agriculture, or Other Sources.
+                              </td>
+                            </tr>
+                          ) : (
+                            normalOtherIncomeRows.map((row, idx) => {
+                              const isDraft = !row.isPersisted || !row.applicationNormalOtherIncomeDetailsId;
+                              const amt = Number(row.annualIncomeAmount) || 0;
+                              const pct =
+                                row.considerationPercentage !== '' && !isNaN(Number(row.considerationPercentage))
+                                  ? Number(row.considerationPercentage)
+                                  : 100;
+                              const computedConsidered = Math.round((amt * pct) / 100);
+
+                              return (
+                                <tr key={row.id || `ws-normal-other-row-${idx}`}>
+                                  <td>
+                                    <select
+                                      className="bo-cv-salary-input"
+                                      value={row.incomeType || 'HOUSE_PROPERTY'}
+                                      onChange={(e) => handleNormalOtherIncomeRowChange(idx, 'incomeType', e.target.value)}
+                                      disabled={normalIncomeSaving}
+                                      style={{ textAlign: 'left' }}
+                                      aria-label={`Income Type for Row ${idx + 1}`}
+                                    >
+                                      <option value="HOUSE_PROPERTY">House Property</option>
+                                      <option value="AGRICULTURE">Agriculture Income</option>
+                                      <option value="OTHER_SOURCES">Income from Other Sources</option>
+                                    </select>
+                                  </td>
+                                  <td className="td-num">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1000"
+                                      placeholder="0"
+                                      className="bo-cv-salary-input"
+                                      value={row.annualIncomeAmount === 0 ? '0' : row.annualIncomeAmount || ''}
+                                      onChange={(e) => handleNormalOtherIncomeRowChange(idx, 'annualIncomeAmount', e.target.value)}
+                                      disabled={normalIncomeSaving}
+                                      aria-label={`Annual Income Amount for Row ${idx + 1}`}
+                                    />
+                                  </td>
+                                  <td className="td-num">
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        step="1"
+                                        placeholder="100"
+                                        className="bo-cv-salary-input"
+                                        style={{ width: '60px', textAlign: 'right' }}
+                                        value={row.considerationPercentage === 0 ? '0' : row.considerationPercentage || ''}
+                                        onChange={(e) => handleNormalOtherIncomeRowChange(idx, 'considerationPercentage', e.target.value)}
+                                        disabled={normalIncomeSaving}
+                                        aria-label={`Consideration Percentage for Row ${idx + 1}`}
+                                      />
+                                      <span style={{ fontSize: '12px', color: '#64748b' }}>%</span>
+                                    </div>
+                                  </td>
+                                  <td className="td-num">
+                                    <div className="bo-cv-salary-readonly-val" style={{ fontWeight: 700, color: '#047857' }}>
+                                      {formatCurrency(
+                                        row.consideredIncomeAmount != null && !row.isModified
+                                          ? row.consideredIncomeAmount
+                                          : computedConsidered
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="td-action" style={{ textAlign: 'center' }}>
+                                    {isDraft ? (
+                                      <button
+                                        type="button"
+                                        className="bo-cv-loan-row-remove-btn"
+                                        title="Remove unsaved draft other income row"
+                                        aria-label={`Remove draft other income row ${idx + 1}`}
+                                        onClick={() => handleRemoveNormalOtherIncomeDraftRow(idx)}
+                                        disabled={normalIncomeSaving}
+                                      >
+                                        {XIcon ? <XIcon size={13} /> : '✕'}
+                                      </button>
+                                    ) : (
+                                      <span className="bo-cv-salary-readonly-val" style={{ color: '#94a3b8' }}>
+                                        —
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+
+                  {/* ── 03 — SALARY REFERENCE & EVALUATION SUMMARY ── */}
+                  <section className="bo-cv-normal-section" aria-label="03 Salary Reference and Evaluation Summary">
+                    <div className="bo-cv-normal-section-head">
+                      <div className="bo-cv-normal-section-title-wrap">
+                        <span className="bo-cv-normal-section-num">03</span>
+                        <div>
+                          <h3 className="bo-cv-normal-section-title">Salary Reference &amp; Evaluation Summary</h3>
+                          <p className="bo-cv-normal-section-sub">
+                            Salary income reference under 60% policy rule &amp; estimated monthly evaluation.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Salary Reference Card */}
+                    <div className="bo-cv-normal-salary-ref-card">
+                      <div className="bo-cv-normal-salary-ref-header">
+                        <div className="bo-cv-rm-income-ref-title-group">
+                          <span className="bo-cv-rm-income-ref-title">Salary Income Reference (ApplicationSalaryIncomeDetails)</span>
+                          <span className="bo-cv-rm-income-ref-badge">Reference Only &bull; 60% Rule</span>
+                        </div>
+                        <span className="bo-cv-rm-income-ref-sub">
+                          Captured from verified salary records and existing salary-income engine. Read-only in Normal Income assessment.
+                        </span>
+                      </div>
+
+                      <div className="bo-cv-rm-income-ref-grid">
+                        <div className="bo-cv-rm-income-ref-cell">
+                          <span className="bo-cv-rm-income-ref-label">Annual Salary Income</span>
+                          <strong className="bo-cv-rm-income-ref-val">
+                            {formatCurrency(normalIncomeMetrics.annualSalary)}
+                          </strong>
+                        </div>
+
+                        <div className="bo-cv-rm-income-ref-cell">
+                          <span className="bo-cv-rm-income-ref-label">Salary Consideration Policy</span>
+                          <strong className="bo-cv-rm-income-ref-val" style={{ color: '#047857' }}>
+                            60% (Fixed Rule)
+                          </strong>
+                        </div>
+
+                        <div className="bo-cv-rm-income-ref-cell is-net">
+                          <span className="bo-cv-rm-income-ref-label">Considered Salary Component (60%)</span>
+                          <strong className="bo-cv-rm-income-ref-val is-net-val">
+                            {formatCurrency(normalIncomeMetrics.consideredSalaryComponent)}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Live Preview Evaluation Summary */}
+                    <div className="bo-cv-salary-summary-card" style={{ marginTop: '16px' }}>
+                      <div className="bo-cv-salary-summary-header">
+                        <h4 className="bo-cv-salary-summary-title">Normal Income Evaluation Summary</h4>
+                        <span className="bo-cv-salary-summary-count" style={{ background: '#f8fafc', color: '#475569', borderColor: '#cbd5e1' }}>
+                          Estimated Preview (Non-Authoritative)
+                        </span>
+                      </div>
+                      <div className="bo-cv-salary-summary-grid">
+                        <div className="bo-cv-salary-summary-item">
+                          <span className="bo-cv-salary-summary-label">Latest Primary Business Income</span>
+                          <strong className="bo-cv-salary-summary-val">
+                            {formatCurrency(normalIncomeMetrics.latestPrimaryBusinessIncome)}
+                          </strong>
+                          <span className="bo-cv-salary-summary-sub">
+                            {normalIncomeMetrics.latestRow?.financialYear ? `FY ${normalIncomeMetrics.latestRow.financialYear}` : 'No latest year designated'}
+                          </span>
+                        </div>
+
+                        <div className="bo-cv-salary-summary-item">
+                          <span className="bo-cv-salary-summary-label">Considered Other Income</span>
+                          <strong className="bo-cv-salary-summary-val">
+                            {formatCurrency(normalIncomeMetrics.totalConsideredOtherIncome)}
+                          </strong>
+                          <span className="bo-cv-salary-summary-sub">
+                            Across {normalOtherIncomeRows.length} {normalOtherIncomeRows.length === 1 ? 'stream' : 'streams'}
+                          </span>
+                        </div>
+
+                        <div className="bo-cv-salary-summary-item">
+                          <span className="bo-cv-salary-summary-label">Considered Salary Component</span>
+                          <strong className="bo-cv-salary-summary-val">
+                            {formatCurrency(normalIncomeMetrics.consideredSalaryComponent)}
+                          </strong>
+                          <span className="bo-cv-salary-summary-sub">
+                            Salary @ 60% policy rule
+                          </span>
+                        </div>
+
+                        <div className="bo-cv-salary-summary-item is-average" style={{ background: '#ecfdf5', borderColor: '#a7f3d0' }}>
+                          <span className="bo-cv-salary-summary-label" style={{ color: '#065f46' }}>Estimated Eligible Monthly Income</span>
+                          <strong className="bo-cv-salary-summary-val is-engine" style={{ color: '#047857' }}>
+                            {formatCurrency(normalIncomeMetrics.estimatedEligibleMonthlyIncome)}
+                          </strong>
+                          <span className="bo-cv-salary-summary-sub" style={{ color: '#065f46' }}>
+                            Est. EMI: {formatCurrency(normalIncomeMetrics.estimatedEligibleEMI)} (Eligible Income − Obligation)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* ── 04 — PROPOSED LOAN & ELIGIBILITY SETTINGS ── */}
+                  <section className="bo-cv-normal-section" aria-label="04 Proposed Loan & Eligibility Settings">
+                    <div className="bo-cv-normal-section-head">
+                      <div className="bo-cv-normal-section-title-wrap">
+                        <span className="bo-cv-normal-section-num">04</span>
+                        <div>
+                          <h3 className="bo-cv-normal-section-title">Proposed Loan &amp; Eligibility Settings</h3>
+                          <p className="bo-cv-normal-section-sub">
+                            Review requested loan amount, proposed interest rate, tenure, and policy benchmark.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bo-cv-calc-settings-grid">
+                      {/* 1. Requested Loan Amount (Read-Only) */}
+                      <div className="bo-cv-calc-setting-card">
+                        <div className="bo-cv-calc-setting-header">
+                          <span className="bo-cv-calc-setting-label">Requested Loan Amount</span>
+                          <span className="bo-cv-readonly-tag">Read-Only</span>
+                        </div>
+                        <div className="bo-cv-calc-setting-value bo-cv-amount-val">
+                          {formatCurrency(appDetails.loanAmount)}
+                        </div>
+                        <span className="bo-cv-calc-setting-hint">
+                          Loaded directly from Application Product Details.
+                        </span>
+                      </div>
+
+                      {/* 2. ROI (% p.a.) with Override */}
+                      <div className="bo-cv-calc-setting-card">
+                        <div className="bo-cv-calc-setting-header">
+                          <span className="bo-cv-calc-setting-label">Interest Rate (ROI % p.a.)</span>
+                          <button
+                            type="button"
+                            className="bo-cv-setting-action-btn"
+                            onClick={() =>
+                              updateCurrentCalcSettings((prev) => ({
+                                ...prev,
+                                isEditingRoi: !prev.isEditingRoi,
+                                manualRoiInput:
+                                  !prev.isEditingRoi && prev.manualRoiInput === ''
+                                    ? resolvedAppRoi != null
+                                      ? String(resolvedAppRoi)
+                                      : ''
+                                    : prev.manualRoiInput,
+                              }))
+                            }
+                          >
+                            {currentCalcSettings.isEditingRoi ? 'Use Application ROI' : 'Override ROI'}
+                          </button>
+                        </div>
+
+                        {currentCalcSettings.isEditingRoi ? (
+                          <div className="bo-cv-setting-override-row">
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="1"
+                              max="100"
+                              className="bo-cv-setting-input"
+                              placeholder={resolvedAppRoi != null ? String(resolvedAppRoi) : 'e.g. 10.5'}
+                              value={currentCalcSettings.manualRoiInput}
+                              onChange={(e) =>
+                                updateCurrentCalcSettings((prev) => ({ ...prev, manualRoiInput: e.target.value }))
+                              }
+                              aria-label="Manual ROI Override"
+                            />
+                            <span className="bo-cv-setting-unit">% p.a.</span>
+                          </div>
+                        ) : (
+                          <div className="bo-cv-calc-setting-value">
+                            {resolvedAppRoi != null ? `${resolvedAppRoi}% p.a.` : 'Not Specified'}
+                          </div>
+                        )}
+
+                        <span className="bo-cv-calc-setting-hint">
+                          {currentCalcSettings.isEditingRoi && currentCalcSettings.manualRoiInput !== ''
+                            ? `Calculation override: ${currentCalcSettings.manualRoiInput}% (App ROI: ${resolvedAppRoi ?? '—'}%)`
+                            : 'Using Application ROI (No override applied)'}
+                        </span>
+                      </div>
+
+                      {/* 3. Tenure (Months) with Override */}
+                      <div className="bo-cv-calc-setting-card">
+                        <div className="bo-cv-calc-setting-header">
+                          <span className="bo-cv-calc-setting-label">Loan Tenure (Months)</span>
+                          <button
+                            type="button"
+                            className="bo-cv-setting-action-btn"
+                            onClick={() =>
+                              updateCurrentCalcSettings((prev) => ({
+                                ...prev,
+                                isEditingTenure: !prev.isEditingTenure,
+                                manualTenureInput:
+                                  !prev.isEditingTenure && prev.manualTenureInput === ''
+                                    ? resolvedAppTenure != null
+                                      ? String(resolvedAppTenure)
+                                      : ''
+                                    : prev.manualTenureInput,
+                              }))
+                            }
+                          >
+                            {currentCalcSettings.isEditingTenure ? 'Use Application Tenure' : 'Override Tenure'}
+                          </button>
+                        </div>
+
+                        {currentCalcSettings.isEditingTenure ? (
+                          <div className="bo-cv-setting-override-row">
+                            <input
+                              type="number"
+                              step="1"
+                              min="1"
+                              max="360"
+                              className="bo-cv-setting-input"
+                              placeholder={resolvedAppTenure != null ? String(resolvedAppTenure) : 'e.g. 24'}
+                              value={currentCalcSettings.manualTenureInput}
+                              onChange={(e) =>
+                                updateCurrentCalcSettings((prev) => ({ ...prev, manualTenureInput: e.target.value }))
+                              }
+                              aria-label="Manual Tenure Override"
+                            />
+                            <span className="bo-cv-setting-unit">Months</span>
+                          </div>
+                        ) : (
+                          <div className="bo-cv-calc-setting-value">
+                            {resolvedAppTenure != null ? `${resolvedAppTenure} Months` : 'Not Specified'}
+                          </div>
+                        )}
+
+                        <span className="bo-cv-calc-setting-hint">
+                          {currentCalcSettings.isEditingTenure && currentCalcSettings.manualTenureInput !== ''
+                            ? `Calculation override: ${currentCalcSettings.manualTenureInput} Months (App Tenure: ${resolvedAppTenure ?? '—'} M)`
+                            : 'Using Application Loan Tenure (No override applied)'}
+                        </span>
+                      </div>
+
+                      {/* 4. Policy FOIR Limit with Override */}
+                      <div className="bo-cv-calc-setting-card">
+                        <div className="bo-cv-calc-setting-header">
+                          <span className="bo-cv-calc-setting-label">Policy FOIR Limit</span>
+                          <button
+                            type="button"
+                            className="bo-cv-setting-action-btn"
+                            onClick={() =>
+                              updateCurrentCalcSettings((prev) => ({
+                                ...prev,
+                                isEditingFoir: !prev.isEditingFoir,
+                                manualFoirInput:
+                                  !prev.isEditingFoir && prev.manualFoirInput === ''
+                                    ? basePolicyFoir != null
+                                      ? String(basePolicyFoir)
+                                      : ''
+                                    : prev.manualFoirInput,
+                              }))
+                            }
+                          >
+                            {currentCalcSettings.isEditingFoir ? 'Use Policy FOIR' : 'Override FOIR'}
+                          </button>
+                        </div>
+
+                        {currentCalcSettings.isEditingFoir ? (
+                          <div className="bo-cv-setting-override-row">
+                            <input
+                              type="number"
+                              step="0.5"
+                              min="0.1"
+                              max="100"
+                              className="bo-cv-setting-input"
+                              placeholder={basePolicyFoir != null ? String(basePolicyFoir) : 'e.g. 70'}
+                              value={currentCalcSettings.manualFoirInput}
+                              onChange={(e) =>
+                                updateCurrentCalcSettings((prev) => ({ ...prev, manualFoirInput: e.target.value }))
+                              }
+                              aria-label="Manual Policy FOIR"
+                            />
+                            <span className="bo-cv-setting-unit">%</span>
+                          </div>
+                        ) : (
+                          <div className="bo-cv-calc-setting-value bo-cv-foir-val">
+                            {basePolicyFoir != null ? `${basePolicyFoir}%` : 'Policy FOIR from Master (Auto)'}
+                          </div>
+                        )}
+
+                        <span className="bo-cv-calc-setting-hint">
+                          {currentCalcSettings.isEditingFoir && currentCalcSettings.manualFoirInput !== ''
+                            ? `Override: ${currentCalcSettings.manualFoirInput}% • Applied FOIR: ${currentCalcSettings.manualFoirInput}% (Base Policy FOIR: ${basePolicyFoir != null ? `${basePolicyFoir}%` : 'Policy FOIR from Master'})`
+                            : `Applied FOIR: ${basePolicyFoir != null ? `${basePolicyFoir}%` : 'Policy FOIR from Master'} (Using Policy Benchmark from FOIR Master for ${selectedEmploymentTypeName || 'applicant'})`}
+                        </span>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* ── 05 — EXISTING ACTIVE DEBT OBLIGATIONS ── */}
+                  <section className="bo-cv-normal-section" aria-label="05 Existing Active Debt Obligations">
+                    <div className="bo-cv-normal-section-head">
+                      <div className="bo-cv-normal-section-title-wrap">
+                        <span className="bo-cv-normal-section-num">05</span>
+                        <div>
+                          <h3 className="bo-cv-normal-section-title">Existing Active Obligations &amp; Policy Benchmark</h3>
+                          <p className="bo-cv-normal-section-sub">
+                            Review active customer debt commitments and authoritative policy FOIR thresholds prior to calculation for {selectedApplicant?.name || 'Selected Applicant'}.
+                          </p>
+                        </div>
+                      </div>
+                      {!isAddingLoan && (
+                        <button
+                          type="button"
+                          className="bo-cv-normal-add-btn"
+                          onClick={() => {
+                            setIsAddingLoan(true);
+                            setLoanBanner(null);
+                          }}
+                          disabled={loanSaving}
+                        >
+                          {PlusIcon ? <PlusIcon size={14} /> : '+'}
+                          <span>Add Loan</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Add Active Loan Inline Form */}
+                    {isAddingLoan && (
+                      <div className="bo-cv-loan-add-card" style={{ marginBottom: '16px' }}>
+                        <div className="bo-cv-loan-add-header">
+                          <div className="bo-cv-loan-add-title-row">
+                            {LandmarkIcon && <LandmarkIcon size={18} />}
+                            <h5>Add Active Loan Obligation &mdash; {selectedApplicant?.name || 'Applicant'}</h5>
+                          </div>
+                          <button
+                            type="button"
+                            className="bo-cv-loan-close-btn"
+                            onClick={() => {
+                              setIsAddingLoan(false);
+                              setLoanBanner(null);
+                            }}
+                            disabled={loanSaving}
+                            aria-label="Close Add Loan Form"
+                          >
+                            {XIcon ? <XIcon size={16} /> : '✕'}
+                          </button>
+                        </div>
+
+                        {loanBanner && (
+                          <div className={`bo-cv-salary-banner is-${loanBanner.type}`}>
+                            <div className="bo-cv-salary-banner-icon">
+                              {loanBanner.type === 'success' && (CheckCircleIcon ? <CheckCircleIcon size={16} /> : '✓')}
+                              {loanBanner.type === 'error' && (AlertTriangleIcon ? <AlertTriangleIcon size={16} /> : '⚠️')}
+                              {loanBanner.type === 'warning' && (AlertCircleIcon ? <AlertCircleIcon size={16} /> : 'ℹ️')}
+                              {loanBanner.type === 'info' && (InfoIcon ? <InfoIcon size={16} /> : 'ℹ️')}
+                            </div>
+                            <div className="bo-cv-salary-banner-msg">{loanBanner.message}</div>
+                          </div>
+                        )}
+
+                        <div className="bo-cv-loan-add-grid">
+                          <div className="bo-cv-loan-form-group">
+                            <label className="bo-cv-loan-label">Lender / Bank <span className="req">*</span></label>
+                            <select
+                              className="bo-cv-loan-select"
+                              value={newLoanDraft.bankId}
+                              onChange={(e) => setNewLoanDraft((prev) => ({ ...prev, bankId: e.target.value }))}
+                              disabled={loanSaving}
+                            >
+                              <option value="">Select Bank</option>
+                              {masterBanks.map((b) => (
+                                <option key={`loan-bank-opt-ws-${b.bankId}`} value={b.bankId}>
+                                  {b.bankName || b.bankCode}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="bo-cv-loan-form-group">
+                            <label className="bo-cv-loan-label">Loan Type <span className="req">*</span></label>
+                            <select
+                              className="bo-cv-loan-select"
+                              value={newLoanDraft.loanType}
+                              onChange={(e) => setNewLoanDraft((prev) => ({ ...prev, loanType: e.target.value }))}
+                              disabled={loanSaving}
+                            >
+                              <option value="HOME LOAN">Home Loan</option>
+                              <option value="PERSONAL LOAN">Personal Loan</option>
+                              <option value="VEHICLE LOAN">Vehicle Loan</option>
+                              <option value="BUSINESS LOAN">Business Loan</option>
+                              <option value="GOLD LOAN">Gold Loan</option>
+                              <option value="EDUCATION LOAN">Education Loan</option>
+                              <option value="OTHER">Other Facility</option>
+                            </select>
+                          </div>
+
+                          <div className="bo-cv-loan-form-group">
+                            <label className="bo-cv-loan-label">Total Loan Amount (₹) <span className="req">*</span></label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1000"
+                              placeholder="e.g. 50000"
+                              className="bo-cv-loan-input"
+                              value={newLoanDraft.totalLoanAmount}
+                              onChange={(e) => setNewLoanDraft((prev) => ({ ...prev, totalLoanAmount: e.target.value }))}
+                              disabled={loanSaving}
+                            />
+                          </div>
+
+                          <div className="bo-cv-loan-form-group">
+                            <label className="bo-cv-loan-label">Total Outstanding (₹) <span className="req">*</span></label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1000"
+                              placeholder="e.g. 25000"
+                              className="bo-cv-loan-input"
+                              value={newLoanDraft.totalOutstanding}
+                              onChange={(e) => setNewLoanDraft((prev) => ({ ...prev, totalOutstanding: e.target.value }))}
+                              disabled={loanSaving}
+                            />
+                          </div>
+
+                          <div className="bo-cv-loan-form-group">
+                            <label className="bo-cv-loan-label">Monthly EMI (₹) <span className="req">*</span></label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="100"
+                              placeholder="e.g. 5000"
+                              className="bo-cv-loan-input"
+                              value={newLoanDraft.emiAmount}
+                              onChange={(e) => setNewLoanDraft((prev) => ({ ...prev, emiAmount: e.target.value }))}
+                              disabled={loanSaving}
+                            />
+                          </div>
+
+                          <div className="bo-cv-loan-form-group">
+                            <label className="bo-cv-loan-label">Status</label>
+                            <select
+                              className="bo-cv-loan-select"
+                              value={newLoanDraft.status}
+                              onChange={(e) => setNewLoanDraft((prev) => ({ ...prev, status: e.target.value }))}
+                              disabled={loanSaving}
+                            >
+                              <option value="Active">Active</option>
+                              <option value="Closed">Closed</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="bo-cv-loan-add-actions">
+                          <button
+                            type="button"
+                            className="bo-btn bo-btn--outline bo-btn--sm"
+                            onClick={() => {
+                              setIsAddingLoan(false);
+                              setLoanBanner(null);
+                            }}
+                            disabled={loanSaving}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="bo-btn bo-btn--primary bo-btn--sm"
+                            onClick={handleSaveActiveLoan}
+                            disabled={loanSaving}
+                          >
+                            {loanSaving ? (
+                              <>
+                                <span className="bo-cv-btn-spinner" />
+                                <span>Saving Loan...</span>
+                              </>
+                            ) : (
+                              <>
+                                {CheckCircleIcon && <CheckCircleIcon size={14} />}
+                                <span>Save Active Loan</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Active Loans Table */}
+                    <div className="bo-cv-obligations-card">
+                      <div className="bo-cv-obligations-header">
+                        <h4 className="bo-cv-obligations-title">
+                          Declared Active Debt Obligations &mdash; {selectedApplicant?.name || 'Applicant'}
+                        </h4>
+                        <span className="bo-cv-obligations-count-pill">
+                          {selectedApplicantActiveLoans.length} {selectedApplicantActiveLoans.length === 1 ? 'Active Facility' : 'Active Facilities'}
+                        </span>
+                      </div>
+
+                      {loanBanner && !isAddingLoan && (
+                        <div className={`bo-cv-salary-banner is-${loanBanner.type}`} style={{ margin: '12px 18px 0 18px' }}>
+                          <div className="bo-cv-salary-banner-icon">
+                            {loanBanner.type === 'success' && (CheckCircleIcon ? <CheckCircleIcon size={16} /> : '✓')}
+                            {loanBanner.type === 'error' && (AlertTriangleIcon ? <AlertTriangleIcon size={16} /> : '⚠️')}
+                            {loanBanner.type === 'warning' && (AlertCircleIcon ? <AlertCircleIcon size={16} /> : 'ℹ️')}
+                            {loanBanner.type === 'info' && (InfoIcon ? <InfoIcon size={16} /> : 'ℹ️')}
+                          </div>
+                          <div className="bo-cv-salary-banner-msg">{loanBanner.message}</div>
+                        </div>
+                      )}
+
+                      {loansLoading ? (
+                        <div className="bo-cv-assess-loading-box" style={{ padding: '24px' }}>
+                          <div className="bo-cv-loading-spinner" />
+                          <span>Loading active debt facilities from backend...</span>
+                        </div>
+                      ) : selectedApplicantActiveLoans.length > 0 ? (
+                        <div className="bo-cv-salary-table-wrapper bo-cv-obligations-table-wrap">
+                          <table className="bo-cv-salary-table bo-cv-obligations-table">
+                            <thead>
+                              <tr>
+                                <th>Lender / Bank</th>
+                                <th>Loan Type</th>
+                                <th className="th-num">Total Loan</th>
+                                <th className="th-num">Outstanding</th>
+                                <th className="th-num">Monthly EMI</th>
+                                <th className="th-status">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedApplicantActiveLoans.map((loan, lIdx) => (
+                                <tr key={loan.applicationBankActiveLoanDetailsId || lIdx}>
+                                  <td><strong>{loan.bankName || 'State Bank of India'}</strong></td>
+                                  <td>{loan.loanType || 'Loan Facility'}</td>
+                                  <td className="td-num">{formatCurrency(loan.totalLoanAmount)}</td>
+                                  <td className="td-num">{formatCurrency(loan.totalOutstanding)}</td>
+                                  <td className="td-num"><strong>{formatCurrency(loan.emiAmount)}</strong></td>
+                                  <td className="td-status">
+                                    <span className="bo-cv-salary-status-badge is-saved">
+                                      {loan.status || 'Active'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="bo-cv-obligations-empty">
+                          <span>No active loan obligations found for {selectedApplicant?.name || 'this applicant'}.</span>
+                        </div>
+                      )}
+
+                      <div className="bo-cv-obligation-summary-strip">
+                        <div className="bo-cv-obligation-summary-hint">
+                          <span className="bo-cv-salary-hint-dot" />
+                          <span>
+                            <strong>Note:</strong> Informational summary from active verified records. Authoritative existing EMI is evaluated server-side by the calculation engine.
+                          </span>
+                        </div>
+                        <div className="bo-cv-obligation-summary-total">
+                          <span>Total Existing Monthly EMI:</span>
+                          <strong>{formatCurrency(totalDeclaredMonthlyEmi)}</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Existing Monthly Obligation Override Card */}
+                    <div className="bo-cv-calc-settings-grid" style={{ marginTop: '16px' }}>
+                      <div className="bo-cv-calc-setting-card">
+                        <div className="bo-cv-calc-setting-header">
+                          <span className="bo-cv-calc-setting-label">Existing Monthly Obligation</span>
+                          <button
+                            type="button"
+                            className="bo-cv-setting-action-btn"
+                            onClick={() =>
+                              updateCurrentCalcSettings((prev) => ({
+                                ...prev,
+                                isEditingObligation: !prev.isEditingObligation,
+                                manualObligationInput:
+                                  !prev.isEditingObligation && prev.manualObligationInput === ''
+                                    ? totalDeclaredMonthlyEmi > 0
+                                      ? String(totalDeclaredMonthlyEmi)
+                                      : ''
+                                    : prev.manualObligationInput,
+                              }))
+                            }
+                          >
+                            {currentCalcSettings.isEditingObligation ? 'Use Calculated EMI' : 'Override Obligation'}
+                          </button>
+                        </div>
+
+                        {currentCalcSettings.isEditingObligation ? (
+                          <div className="bo-cv-setting-override-row">
+                            <span className="bo-cv-setting-currency-symbol">₹</span>
+                            <input
+                              type="number"
+                              step="100"
+                              min="0"
+                              className="bo-cv-setting-input is-amount"
+                              placeholder={String(totalDeclaredMonthlyEmi || 0)}
+                              value={currentCalcSettings.manualObligationInput}
+                              onChange={(e) =>
+                                updateCurrentCalcSettings((prev) => ({ ...prev, manualObligationInput: e.target.value }))
+                              }
+                              aria-label="Manual Existing Monthly Obligation"
+                            />
+                          </div>
+                        ) : (
+                          <div className="bo-cv-calc-setting-value bo-cv-amount-val">
+                            {formatCurrency(totalDeclaredMonthlyEmi)}
+                          </div>
+                        )}
+
+                        <span className="bo-cv-calc-setting-hint">
+                          {currentCalcSettings.isEditingObligation && currentCalcSettings.manualObligationInput !== ''
+                            ? `Override: ${formatCurrency(currentCalcSettings.manualObligationInput)} • Applied Obligation: ${formatCurrency(currentCalcSettings.manualObligationInput)} (Calculated EMI: ${formatCurrency(totalDeclaredMonthlyEmi)})`
+                            : `Applied Obligation: ${formatCurrency(totalDeclaredMonthlyEmi)} (Derived from active loan facilities)`}
+                        </span>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* ── 06 — CALCULATE NORMAL INCOME ELIGIBILITY ── */}
+                  <section className="bo-cv-normal-section bo-cv-normal-section--calc-action" aria-label="06 Calculate Normal Income Eligibility">
+                    {/* Pre-Calculation Verified Parameters Snapshot */}
+                    <div className="bo-cv-calc-pre-summary" style={{ marginBottom: '16px' }}>
+                      <div className="bo-cv-calc-pre-badge">
+                        <span className="bo-cv-calc-pre-label">Pre-Calculation Verified Parameters:</span>
+                      </div>
+                      <div className="bo-cv-calc-pre-items">
+                        <div className="bo-cv-calc-pre-item">
+                          <span className="bo-cv-calc-pre-item-label">Method:</span>
+                          <strong>Normal Income</strong>
+                        </div>
+                        <span className="bo-cv-calc-pre-dot">•</span>
+                        <div className="bo-cv-calc-pre-item">
+                          <span className="bo-cv-calc-pre-item-label">Applicant:</span>
+                          <strong>{selectedApplicant?.name || 'Applicant'}</strong>
+                        </div>
+                        <span className="bo-cv-calc-pre-dot">•</span>
+                        <div className="bo-cv-calc-pre-item">
+                          <span className="bo-cv-calc-pre-item-label">Requested:</span>
+                          <strong>{formatCurrency(appDetails.loanAmount)}</strong>
+                        </div>
+                        <span className="bo-cv-calc-pre-dot">•</span>
+                        <div className="bo-cv-calc-pre-item">
+                          <span className="bo-cv-calc-pre-item-label">ROI:</span>
+                          <strong>
+                            {currentCalcSettings.isEditingRoi && currentCalcSettings.manualRoiInput !== ''
+                              ? `${currentCalcSettings.manualRoiInput}% (Override)`
+                              : resolvedAppRoi != null
+                              ? `${resolvedAppRoi}% p.a.`
+                              : '—'}
+                          </strong>
+                        </div>
+                        <span className="bo-cv-calc-pre-dot">•</span>
+                        <div className="bo-cv-calc-pre-item">
+                          <span className="bo-cv-calc-pre-item-label">Tenure:</span>
+                          <strong>
+                            {currentCalcSettings.isEditingTenure && currentCalcSettings.manualTenureInput !== ''
+                              ? `${currentCalcSettings.manualTenureInput} M (Override)`
+                              : resolvedAppTenure != null
+                              ? `${resolvedAppTenure} Months`
+                              : '—'}
+                          </strong>
+                        </div>
+                        <span className="bo-cv-calc-pre-dot">•</span>
+                        <div className="bo-cv-calc-pre-item">
+                          <span className="bo-cv-calc-pre-item-label">Existing EMI:</span>
+                          <strong>
+                            {currentCalcSettings.isEditingObligation && currentCalcSettings.manualObligationInput !== ''
+                              ? `${formatCurrency(currentCalcSettings.manualObligationInput)} (Override)`
+                              : formatCurrency(totalDeclaredMonthlyEmi)}
+                          </strong>
+                        </div>
+                        <span className="bo-cv-calc-pre-dot">•</span>
+                        <div className="bo-cv-calc-pre-item">
+                          <span className="bo-cv-calc-pre-item-label">Policy FOIR:</span>
+                          <strong>
+                            {currentCalcSettings.isEditingFoir && currentCalcSettings.manualFoirInput !== ''
+                              ? `${currentCalcSettings.manualFoirInput}% (Override)`
+                              : basePolicyFoir != null
+                              ? `${basePolicyFoir}%`
+                              : 'Policy FOIR from Master'}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bo-cv-normal-calc-bar">
+                      <div className="bo-cv-normal-calc-bar-info">
+                        <span className="bo-cv-normal-section-num">06</span>
+                        <div>
+                          <h3 className="bo-cv-normal-calc-bar-title">Calculate Normal Income Eligibility</h3>
+                          <p className="bo-cv-normal-calc-bar-sub">
+                            Run the SIVELS calculation engine for {selectedApplicant?.name || 'Applicant'} based on verified financial figures, other income, and proposed parameters.
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="bo-btn bo-btn--primary bo-cv-calculate-btn"
+                        onClick={handleCalculateEligibility}
+                        disabled={
+                          calculating ||
+                          !calculationAppProdId ||
+                          !selectedEmploymentIncomeDetailsId
+                        }
+                      >
+                        {calculating ? (
+                          <>
+                            <span className="bo-cv-btn-spinner" />
+                            <span>Calculating Eligibility...</span>
+                          </>
+                        ) : (
+                          <>
+                            {ShieldCheckIcon && <ShieldCheckIcon size={16} />}
+                            <span>Calculate Eligibility</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {calcBanner && (
+                      <div className={`bo-cv-salary-banner is-${calcBanner.type}`} style={{ marginTop: '14px' }}>
+                        <div className="bo-cv-salary-banner-icon">
+                          {calcBanner.type === 'success' && (CheckCircleIcon ? <CheckCircleIcon size={16} /> : '✓')}
+                          {calcBanner.type === 'error' && (AlertTriangleIcon ? <AlertTriangleIcon size={16} /> : '⚠️')}
+                          {calcBanner.type === 'warning' && (AlertCircleIcon ? <AlertCircleIcon size={16} /> : 'ℹ️')}
+                          {calcBanner.type === 'info' && (InfoIcon ? <InfoIcon size={16} /> : 'ℹ️')}
+                        </div>
+                        <div className="bo-cv-salary-banner-msg">{calcBanner.message}</div>
+                      </div>
+                    )}
+                  </section>
+
+                  {/* ── 07 — NORMAL INCOME ELIGIBILITY RESULT ── */}
+                  <section className="bo-cv-normal-section" aria-label="07 Normal Income Eligibility Result">
+                    <div className="bo-cv-normal-section-head">
+                      <div className="bo-cv-normal-section-title-wrap">
+                        <span className="bo-cv-normal-section-num is-result">07</span>
+                        <div>
+                          <h3 className="bo-cv-normal-section-title">Normal Income Eligibility Assessment Result</h3>
+                          <p className="bo-cv-normal-section-sub">
+                            Authoritative decision engine output for {selectedApplicant?.name || 'Applicant'} &bull; Normal Income.
+                          </p>
+                        </div>
+                      </div>
+                      {currentAssessment && (
+                        <div className="bo-cv-result-header-badges">
+                          <span className="bo-cv-result-method-badge">Normal Income</span>
+                          <span
+                            className={`bo-cv-result-status-badge ${
+                              String(currentAssessment.status || '').toLowerCase().includes('eligible')
+                                ? 'is-eligible'
+                                : 'is-shortfall'
+                            }`}
+                          >
+                            {currentAssessment.status || 'Calculated'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {currentAssessment ? (
+                      <div className="bo-cv-normal-results-container">
+                        {/* Hero Card: Maximum Eligible Loan Amount */}
+                        <div className="bo-cv-result-hero-card">
+                          <div className="bo-cv-result-hero-main">
+                            <span className="bo-cv-result-hero-label">Maximum Eligible Loan Amount</span>
+                            <div className="bo-cv-result-hero-amount">
+                              {formatCurrency(currentAssessment.maximumEligibleLoanAmount)}
+                            </div>
+                            <div className="bo-cv-result-hero-sub-row">
+                              <div className="bo-cv-result-hero-sub-item">
+                                <span>Requested: </span>
+                                <strong>{formatCurrency(currentAssessment.requestedLoanAmount)}</strong>
+                              </div>
+                              {currentCalcSettings.recommendedLoanAmount || currentAssessment.recommendedLoanAmount ? (
+                                <>
+                                  <div className="bo-cv-result-hero-sub-divider">•</div>
+                                  <div className="bo-cv-result-hero-sub-item">
+                                    <span>Recommended: </span>
+                                    <strong>
+                                      {formatCurrency(
+                                        currentCalcSettings.recommendedLoanAmount || currentAssessment.recommendedLoanAmount
+                                      )}
+                                    </strong>
+                                  </div>
+                                </>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="bo-cv-result-hero-status-box">
+                            <span className="bo-cv-result-hero-status-label">Assessment Status</span>
+                            <strong
+                              className={`bo-cv-result-hero-status-val ${
+                                String(currentAssessment.status || '').toLowerCase().includes('eligible')
+                                  ? 'is-eligible'
+                                  : 'is-shortfall'
+                              }`}
+                            >
+                              {currentAssessment.status || 'Calculated'}
+                            </strong>
+                          </div>
+                        </div>
+
+                        {/* Result Metrics Grid (8 cards) */}
+                        <div className="bo-cv-result-metrics-grid">
+                          {/* 1. Eligible Monthly Income */}
+                          <div className="bo-cv-result-metric-card">
+                            <span className="bo-cv-result-metric-label">Eligible Monthly Income</span>
+                            <strong className="bo-cv-result-metric-val">
+                              {currentAssessment.totalConsideredIncome != null
+                                ? formatCurrency(currentAssessment.totalConsideredIncome)
+                                : 'Not Applicable'}
+                            </strong>
+                            <span className="bo-cv-result-metric-sub">Evaluated monthly income from business &amp; other sources</span>
+                          </div>
+
+                          {/* 2. Existing Monthly EMI */}
+                          <div className="bo-cv-result-metric-card">
+                            <span className="bo-cv-result-metric-label">Existing Monthly EMI</span>
+                            <strong className="bo-cv-result-metric-val">
+                              {currentAssessment.existingEMI != null ? formatCurrency(currentAssessment.existingEMI) : '₹0'}
+                            </strong>
+                            <span className="bo-cv-result-metric-sub">Active debt obligations</span>
+                          </div>
+
+                          {/* 3. Policy FOIR Applied */}
+                          <div className="bo-cv-result-metric-card">
+                            <span className="bo-cv-result-metric-label">Policy FOIR Applied</span>
+                            <strong className="bo-cv-result-metric-val bo-cv-foir-val">
+                              {currentAssessment.foirPercentApplied != null ? `${currentAssessment.foirPercentApplied}%` : '—'}
+                            </strong>
+                            <span className="bo-cv-result-metric-sub">Underwriting policy cap</span>
+                          </div>
+
+                          {/* 4. Eligible Monthly EMI */}
+                          <div className="bo-cv-result-metric-card">
+                            <span className="bo-cv-result-metric-label">Eligible Monthly EMI</span>
+                            <strong className="bo-cv-result-metric-val">
+                              {currentAssessment.eligibleEMI != null ? formatCurrency(currentAssessment.eligibleEMI) : '—'}
+                            </strong>
+                            <span className="bo-cv-result-metric-sub">Net repayment capacity</span>
+                          </div>
+
+                          {/* 5. Proposed ROI */}
+                          <div className="bo-cv-result-metric-card">
+                            <span className="bo-cv-result-metric-label">Proposed ROI</span>
+                            <strong className="bo-cv-result-metric-val">
+                              {currentAssessment.proposedROI != null ? `${currentAssessment.proposedROI}% p.a.` : '—'}
+                            </strong>
+                            <span className="bo-cv-result-metric-sub">Annual interest rate applied</span>
+                          </div>
+
+                          {/* 6. Proposed Tenure */}
+                          <div className="bo-cv-result-metric-card">
+                            <span className="bo-cv-result-metric-label">Proposed Tenure</span>
+                            <strong className="bo-cv-result-metric-val">
+                              {currentAssessment.proposedTenureMonths != null ? `${currentAssessment.proposedTenureMonths} Months` : '—'}
+                            </strong>
+                            <span className="bo-cv-result-metric-sub">Amortization duration</span>
+                          </div>
+
+                          {/* 7. EMI Factor */}
+                          <div className="bo-cv-result-metric-card">
+                            <span className="bo-cv-result-metric-label">EMI Factor</span>
+                            <strong className="bo-cv-result-metric-val">
+                              {currentAssessment.emiFactor != null
+                                ? Number(currentAssessment.emiFactor).toLocaleString('en-IN', { maximumFractionDigits: 2 })
+                                : '—'}
+                            </strong>
+                            <span className="bo-cv-result-metric-sub">Per lakh factor coefficient</span>
+                          </div>
+
+                          {/* 8. Actual Calculated FOIR */}
+                          <div className="bo-cv-result-metric-card">
+                            <span className="bo-cv-result-metric-label">Actual Calculated FOIR</span>
+                            {(() => {
+                              const income = Number(currentAssessment.totalConsideredIncome) || 0;
+                              const existingEmi = Number(currentAssessment.existingEMI) || 0;
+                              const loanAmount = Number(
+                                currentAssessment.recommendedLoanAmount ??
+                                currentAssessment.requestedLoanAmount ??
+                                0
+                              );
+                              const emiFactor = Number(currentAssessment.emiFactor) || 0;
+                              const proposedEmi = (loanAmount * emiFactor) / 100000;
+                              const calculatedFoir = income > 0
+                                ? ((existingEmi + proposedEmi) / income) * 100
+                                : null;
+                              return (
+                                <strong
+                                  className={`bo-cv-result-metric-val ${
+                                    currentAssessment.foirPercentApplied != null &&
+                                    calculatedFoir != null &&
+                                    calculatedFoir > Number(currentAssessment.foirPercentApplied)
+                                      ? 'is-over-foir'
+                                      : ''
+                                  }`}
+                                >
+                                  {calculatedFoir != null ? `${calculatedFoir.toFixed(2)}%` : '—'}
+                                </strong>
+                              );
+                            })()}
+                            <span className="bo-cv-result-metric-sub">Combined obligation / income</span>
+                          </div>
+                        </div>
+
+                        <div className="bo-cv-proposed-loan-recommendation">
+                          <div>
+                            <span>Post-assessment decision</span>
+                            <h4>Recommended Loan Amount (₹)</h4>
+                            <p>Enter an amount after reviewing the calculated Normal Income eligibility.</p>
+                          </div>
+                          <input
+                            type="number"
+                            min="0"
+                            value={currentCalcSettings.recommendedLoanAmount || ''}
+                            onChange={(e) =>
+                              updateCurrentCalcSettings((prev) => ({
+                                ...prev,
+                                recommendedLoanAmount: e.target.value,
+                              }))
+                            }
+                            aria-label="Recommended Loan Amount"
+                          />
+                        </div>
+
+                        {/* Metadata Footer */}
+                        <div className="bo-cv-result-footer">
+                          <div className="bo-cv-result-footer-left">
+                            <span className="bo-cv-result-version-pill">
+                              Assessment #{currentAssessment.loanEligibilityAssessmentId}
+                            </span>
+                            <span className="bo-cv-result-time">
+                              Calculated:{' '}
+                              {currentAssessment.calculatedAt || currentAssessment.createdAt
+                                ? new Date(currentAssessment.calculatedAt || currentAssessment.createdAt).toLocaleString('en-IN')
+                                : '—'}
+                            </span>
+                            {currentAssessment.calculatedByUserId && (
+                              <span className="bo-cv-result-user">
+                                User #{currentAssessment.calculatedByUserId}
+                              </span>
+                            )}
+                          </div>
+                          <div className="bo-cv-result-footer-right">
+                            {currentAssessment.isCurrent && (
+                              <span className="bo-cv-current-active-tag">Current Active Assessment ✓</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bo-cv-rtr-empty-state">
+                        <div className="bo-cv-rtr-empty-icon">
+                          {BarChartIcon && <BarChartIcon size={22} />}
+                        </div>
+                        <h4>No Normal Income eligibility calculation available yet</h4>
+                        <p>
+                          Enter financial year figures, verify proposed loan parameters, and click <strong>Calculate Eligibility</strong> above to generate authoritative results.
+                        </p>
+                      </div>
+                    )}
+                  </section>
+                </div>
+              </div>
             ) : (
               <div className="bo-cv-elig-deck">
                 {/* Hero */}
@@ -12887,39 +14286,43 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                   <div className="bo-cv-elig-hero-cta">
-                    <button
-                      type="button"
-                      className="bo-cv-elig-primary-btn"
-                      onClick={() => {
-                        if (selectedMethodCode === 'BANKING') {
-                          setBankingWorkspaceOpen(true);
-                        } else if (selectedMethodCode === 'RTR') {
-                          setRtrWorkspaceOpen(true);
-                        } else {
-                          openCalcWorkspace('inputs');
-                        }
-                      }}
-                    >
-                      {selectedMethodCode === 'BANKING' ? (
-                        BuildingIcon && <BuildingIcon size={17} />
-                      ) : selectedMethodCode === 'RTR' ? (
-                        CreditCardIcon && <CreditCardIcon size={17} />
-                      ) : (
-                        CalculatorIcon && <CalculatorIcon size={17} />
-                      )}
-                      <span>
-                        {selectedMethodCode === 'BANKING'
-                          ? 'Open Banking Workspace'
-                          : selectedMethodCode === 'RTR'
-                          ? 'Open RTR Workspace'
-                          : 'Open Calculator'}
-                      </span>
-                    </button>
-                    <span className="bo-cv-elig-hero-hint">
-                      {selectedMethodCode === 'BANKING' || selectedMethodCode === 'RTR'
-                        ? 'Full workspace view'
-                        : 'Popup workspace · Esc to close'}
-                    </span>
+                    {selectedMethodCode !== 'NORMAL_INCOME' && (
+                      <>
+                        <button
+                          type="button"
+                          className="bo-cv-elig-primary-btn"
+                          onClick={() => {
+                            if (selectedMethodCode === 'BANKING') {
+                              setBankingWorkspaceOpen(true);
+                            } else if (selectedMethodCode === 'RTR') {
+                              setRtrWorkspaceOpen(true);
+                            } else {
+                              openCalcWorkspace('inputs');
+                            }
+                          }}
+                        >
+                          {selectedMethodCode === 'BANKING' ? (
+                            BuildingIcon && <BuildingIcon size={17} />
+                          ) : selectedMethodCode === 'RTR' ? (
+                            CreditCardIcon && <CreditCardIcon size={17} />
+                          ) : (
+                            CalculatorIcon && <CalculatorIcon size={17} />
+                          )}
+                          <span>
+                            {selectedMethodCode === 'BANKING'
+                              ? 'Open Banking Workspace'
+                              : selectedMethodCode === 'RTR'
+                              ? 'Open RTR Workspace'
+                              : 'Open Calculator'}
+                          </span>
+                        </button>
+                        <span className="bo-cv-elig-hero-hint">
+                          {selectedMethodCode === 'BANKING' || selectedMethodCode === 'RTR'
+                            ? 'Full workspace view'
+                            : 'Popup workspace · Esc to close'}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </header>
 
@@ -12986,12 +14389,19 @@ export default function CustomerVerification() {
                                 if (nextCode === 'BANKING') {
                                   setBankingWorkspaceOpen(true);
                                   setRtrWorkspaceOpen(false);
+                                  setNormalIncomeWorkspaceOpen(false);
                                 } else if (nextCode === 'RTR') {
                                   setRtrWorkspaceOpen(true);
                                   setBankingWorkspaceOpen(false);
+                                  setNormalIncomeWorkspaceOpen(false);
+                                } else if (nextCode === 'NORMAL_INCOME') {
+                                  setNormalIncomeWorkspaceOpen(true);
+                                  setBankingWorkspaceOpen(false);
+                                  setRtrWorkspaceOpen(false);
                                 } else {
                                   setBankingWorkspaceOpen(false);
                                   setRtrWorkspaceOpen(false);
+                                  setNormalIncomeWorkspaceOpen(false);
                                 }
                               }}
                               disabled={methodsLoading}
@@ -13186,8 +14596,12 @@ export default function CustomerVerification() {
                         type="button"
                         className="bo-cv-elig-secondary-btn"
                         onClick={() => {
-                          if (selectedMethodCode === 'RTR') {
+                          if (selectedMethodCode === 'BANKING') {
+                            setBankingWorkspaceOpen(true);
+                          } else if (selectedMethodCode === 'RTR') {
                             setRtrWorkspaceOpen(true);
+                          } else if (selectedMethodCode === 'NORMAL_INCOME') {
+                            setNormalIncomeWorkspaceOpen(true);
                           } else {
                             openCalcWorkspace('results');
                           }
@@ -13200,8 +14614,12 @@ export default function CustomerVerification() {
                         type="button"
                         className="bo-cv-elig-ghost-btn"
                         onClick={() => {
-                          if (selectedMethodCode === 'RTR') {
+                          if (selectedMethodCode === 'BANKING') {
+                            setBankingWorkspaceOpen(true);
+                          } else if (selectedMethodCode === 'RTR') {
                             setRtrWorkspaceOpen(true);
+                          } else if (selectedMethodCode === 'NORMAL_INCOME') {
+                            setNormalIncomeWorkspaceOpen(true);
                           } else {
                             openCalcWorkspace('settings');
                           }
@@ -13220,21 +14638,29 @@ export default function CustomerVerification() {
                     <div className="bo-cv-elig-launch-copy">
                       <h3>No calculation yet for this applicant</h3>
                       <p>
-                        Open the calculator sheet to enter{' '}
                         {selectedMethodCode === 'NORMAL_INCOME'
-                          ? 'financial year figures'
-                          : 'salary & income rows'}
-                        , adjust settings, and run eligibility in one place.
+                          ? 'Click the Normal Income card above to open the dedicated workspace, enter financial year figures, adjust settings, and run eligibility.'
+                          : 'Open the calculator sheet to enter salary & income rows, adjust settings, and run eligibility in one place.'}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      className="bo-cv-elig-primary-btn"
-                      onClick={() => openCalcWorkspace('inputs')}
-                    >
-                      {ExpandIcon && <ExpandIcon size={16} />}
-                      <span>Start in Calculator</span>
-                    </button>
+                    {selectedMethodCode !== 'NORMAL_INCOME' && (
+                      <button
+                        type="button"
+                        className="bo-cv-elig-primary-btn"
+                        onClick={() => {
+                          if (selectedMethodCode === 'BANKING') {
+                            setBankingWorkspaceOpen(true);
+                          } else if (selectedMethodCode === 'RTR') {
+                            setRtrWorkspaceOpen(true);
+                          } else {
+                            openCalcWorkspace('inputs');
+                          }
+                        }}
+                      >
+                        {ExpandIcon && <ExpandIcon size={16} />}
+                        <span>Start in Calculator</span>
+                      </button>
+                    )}
                   </section>
                 )}
 
