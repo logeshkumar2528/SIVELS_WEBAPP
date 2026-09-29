@@ -17,6 +17,7 @@ import {
   resolveLatestCoApplicantAadhaar,
   loadApplicantAadhaarUrl,
   loadCoApplicantAadhaarUrl,
+  splitFullName,
 } from '../applicationWizard/flowUtils';
 import Modal from '../../components/Modal/Modal';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
@@ -42,14 +43,6 @@ function isValidDate(value) {
   return !Number.isNaN(parsed.getTime()) && parsed <= new Date();
 }
 
-function splitFullName(value = '') {
-  const parts = String(value).trim().split(/\s+/).filter(Boolean);
-  return {
-    firstName: parts[0] || '',
-    middleName: parts.length > 2 ? parts.slice(1, -1).join(' ') : '',
-    lastName: parts.length > 1 ? parts[parts.length - 1] : '',
-  };
-}
 
 function composeFullName(person = {}) {
   return [person.firstName, person.middleName, person.lastName]
@@ -205,16 +198,29 @@ function buildPersonalInformationState(appData) {
       }
     : savedApplicant;
 
-  const applicantNameParts = splitFullName(rawCustomerName || '');
-  const initialFirstName = cleanApplicantRow.firstName || applicantNameParts.firstName || rawCustomerName || '';
+  const hasSavedStructuredName =
+    (cleanApplicantRow.firstName !== undefined && cleanApplicantRow.firstName !== null && String(cleanApplicantRow.firstName).trim() !== '') ||
+    (cleanApplicantRow.middleName !== undefined && cleanApplicantRow.middleName !== null && String(cleanApplicantRow.middleName).trim() !== '') ||
+    (cleanApplicantRow.lastName !== undefined && cleanApplicantRow.lastName !== null && String(cleanApplicantRow.lastName).trim() !== '');
+
+  let initialFirstName = cleanApplicantRow.firstName || '';
+  let initialMiddleName = cleanApplicantRow.middleName || '';
+  let initialLastName = cleanApplicantRow.lastName || '';
+
+  if (!hasSavedStructuredName && rawCustomerName) {
+    const split = splitFullName(rawCustomerName);
+    initialFirstName = split.firstName;
+    initialMiddleName = split.middleName;
+    initialLastName = split.lastName;
+  }
 
   const applicant = createEmptyPerson({
     personalInformationId: cleanApplicantRow.personalInformationId || null,
     relationshipWithApplicant: cleanApplicantRow.relationshipWithApplicant || 'SELF',
     title: cleanApplicantRow.title ?? '',
     firstName: initialFirstName,
-    middleName: cleanApplicantRow.middleName || applicantNameParts.middleName || '',
-    lastName: cleanApplicantRow.lastName || applicantNameParts.lastName || '',
+    middleName: initialMiddleName,
+    lastName: initialLastName,
     fatherOrSpouseName: cleanApplicantRow.fatherOrSpouseName || '',
     mothersMaidenName: cleanApplicantRow.mothersMaidenName || '',
     dateOfBirth: cleanApplicantRow.dateOfBirth || cleanApplicantRow.dob || '',
@@ -332,7 +338,7 @@ function PersonCard({
   maritalStatusOptions = [],
   religionOptions = [],
   isLoadingMasters = false,
-  isCoApplicant = false
+  isCoApplicant = false,
 }) {
   const handleChange = (field, value) => onChange(field, value);
 
@@ -635,7 +641,6 @@ export default function CustomerRegistration() {
           const record = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
           if (active && record) {
             const custName = record.fullName || record.customerName || '';
-            const parts = splitFullName(custName);
             saveApplication(appId, {
               agentCustomerId: record.agentCustomerId || record.AgentCustomerId || appId,
               customerName: custName,
@@ -646,20 +651,13 @@ export default function CustomerRegistration() {
             });
             if (!hasUserEditedRef.current) {
               setForm((prev) => {
-                const currentFirstName = prev.applicant.firstName;
-                if (!currentFirstName || currentFirstName === 'Anil') {
-                  return {
-                    ...prev,
-                    applicant: {
-                      ...prev.applicant,
-                      firstName: parts.firstName || custName || prev.applicant.firstName,
-                      middleName: parts.middleName || prev.applicant.middleName,
-                      lastName: parts.lastName || prev.applicant.lastName,
-                      mobileNo: record.mobileNumber || record.mobile || prev.applicant.mobileNo,
-                    }
-                  };
-                }
-                return prev;
+                return {
+                  ...prev,
+                  applicant: {
+                    ...prev.applicant,
+                    mobileNo: record.mobileNumber || record.mobile || prev.applicant.mobileNo,
+                  }
+                };
               });
             }
           }
