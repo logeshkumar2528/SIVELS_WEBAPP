@@ -18,6 +18,7 @@ import iconMap from '../../config/iconMap';
 import { ROUTES, buildRoute } from '../../config/routeConfig';
 import { useAgentDetailData } from '../../hooks/useAgentDetailData';
 import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
+import { isWithinDateRange } from '../../../../../../Core/src/utils/dateHelper';
 import './AgentDetail.css';
 
 function BoAvatar({ role, id, name, fallbackInitials, className }) {
@@ -120,13 +121,16 @@ export default function AgentDetail() {
   // 1. Fetch Real Agent Profile and Sourced Customers from Live Backend APIs
   const { agent, customers, loading, error, refetch } = useAgentDetailData(agentId);
 
-  // 2. Search Term State
+  // 2. Search & Date Filter States
   const [searchTerm, setSearchTerm] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   // 3. Icons
   const UserCheckIcon = iconMap['UserCheck'] || iconMap['Users'];
   const FileTextIcon = iconMap['FileText'];
   const SearchIcon = iconMap['Search'];
+  const CalendarIcon = iconMap['Calendar'];
   const PhoneIcon = iconMap['Phone'] || iconMap['Contact'];
   const MailIcon = iconMap['Mail'];
   const MapPinIcon = iconMap['MapPin'] || iconMap['Building2'];
@@ -163,31 +167,37 @@ export default function AgentDetail() {
   // 5. Filtered Customer List (Sorted Newest-First)
   const filteredCustomers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    const list = term
-      ? customers.filter((c) => {
-          const customerName = (c.customerName || c.name || c.fullName || '').toLowerCase();
-          const appNo = String(c.appId || (c.applicationNo && !c.applicationNo.startsWith('APP-') ? c.applicationNo : '')).toLowerCase();
-          const loanType = (c.loanType || c.loanPurpose || '').toLowerCase();
-          const mobile = String(c.mobile || '');
 
-          return (
-            customerName.includes(term) ||
-            appNo.includes(term) ||
-            loanType.includes(term) ||
-            mobile.includes(term)
-          );
-        })
-      : customers;
+    return customers
+      .filter((c) => {
+        // Optional Custom Date Range Filter (Unrestricted when fromDate and toDate are empty)
+        const appDate = c.createdAt || c.appliedDate;
+        const matchesDate = isWithinDateRange(appDate, fromDate, toDate);
+        if (!matchesDate) return false;
 
-    return [...list].sort((a, b) => {
-      const timeA = new Date(a.createdAt || a.appliedDate || 0).getTime() || 0;
-      const timeB = new Date(b.createdAt || b.appliedDate || 0).getTime() || 0;
-      if (timeA !== timeB) return timeB - timeA;
-      const idA = Number(a.agentCustomerId ?? a.id ?? 0) || 0;
-      const idB = Number(b.agentCustomerId ?? b.id ?? 0) || 0;
-      return idB - idA;
-    });
-  }, [customers, searchTerm]);
+        if (!term) return true;
+
+        const customerName = (c.customerName || c.name || c.fullName || '').toLowerCase();
+        const appNo = String(c.appId || (c.applicationNo && !c.applicationNo.startsWith('APP-') ? c.applicationNo : '')).toLowerCase();
+        const loanType = (c.loanType || c.loanPurpose || '').toLowerCase();
+        const mobile = String(c.mobile || '');
+
+        return (
+          customerName.includes(term) ||
+          appNo.includes(term) ||
+          loanType.includes(term) ||
+          mobile.includes(term)
+        );
+      })
+      .sort((a, b) => {
+        const timeA = new Date(a.createdAt || a.appliedDate || 0).getTime() || 0;
+        const timeB = new Date(b.createdAt || b.appliedDate || 0).getTime() || 0;
+        if (timeA !== timeB) return timeB - timeA;
+        const idA = Number(a.agentCustomerId ?? a.id ?? 0) || 0;
+        const idB = Number(b.agentCustomerId ?? b.id ?? 0) || 0;
+        return idB - idA;
+      });
+  }, [customers, searchTerm, fromDate, toDate]);
 
   // 6. Loading State View
   if (loading) {
@@ -392,16 +402,60 @@ export default function AgentDetail() {
             </div>
           </div>
 
-          <div className="bo-search-box bo-search-box--compact">
-            {SearchIcon && <SearchIcon size={15} className="bo-search-icon" />}
-            <input
-              type="text"
-              placeholder="Search customer, app no or product..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="bo-search-input"
-              aria-label="Search agent customers"
-            />
+          <div className="bo-agent-table-controls">
+            <div className="bo-search-box bo-search-box--compact">
+              {SearchIcon && <SearchIcon size={15} className="bo-search-icon" />}
+              <input
+                type="text"
+                placeholder="Search customer, app no or product..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="bo-search-input"
+                aria-label="Search agent customers"
+              />
+            </div>
+
+            {/* Optional Unified Date Range Controls */}
+            <label className="bo-agent-unified-date-box">
+              {CalendarIcon && <CalendarIcon size={14} className="bo-agent-date-icon" />}
+              <span className="bo-agent-date-prefix">From Date:</span>
+              <input
+                type="date"
+                value={fromDate}
+                max={toDate || undefined}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="bo-agent-date-input"
+                aria-label="From Date"
+              />
+            </label>
+
+            <label className="bo-agent-unified-date-box">
+              {CalendarIcon && <CalendarIcon size={14} className="bo-agent-date-icon" />}
+              <span className="bo-agent-date-prefix">To Date:</span>
+              <input
+                type="date"
+                value={toDate}
+                min={fromDate || undefined}
+                onChange={(e) => setToDate(e.target.value)}
+                className="bo-agent-date-input"
+                aria-label="To Date"
+              />
+            </label>
+
+            {(searchTerm || fromDate || toDate) && (
+              <button
+                type="button"
+                className="bo-agent-btn-reset-filter"
+                onClick={() => {
+                  setSearchTerm('');
+                  setFromDate('');
+                  setToDate('');
+                }}
+                title="Reset all filters"
+              >
+                Reset
+              </button>
+            )}
           </div>
         </div>
 
@@ -494,8 +548,8 @@ export default function AgentDetail() {
               {filteredCustomers.length === 0 && (
                 <tr>
                   <td colSpan={8} className="bo-empty-table-cell">
-                    {searchTerm
-                      ? `No customers found matching "${searchTerm}".`
+                    {searchTerm || fromDate || toDate
+                      ? `No customers found matching the active search or date filters.`
                       : `No customer applications are currently associated with Agent ${agent.name || agent.code || agentId}.`}
                   </td>
                 </tr>

@@ -24,6 +24,7 @@ import axiosInstance from '../../../../../Core/src/api/axiosInstance';
 import { getCurrentRMContext, normalizeApplicationStatus } from '../../utils/rmContext';
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import { resolveVerificationIdByCodeOrName } from '../../../../../Core/src/utils/verificationHelper';
+import { matchesListingDateCriteria } from '../../utils/dateHelper';
 import { ROUTES } from '../../config/routeConfig';
 import './CustomerSubmissionHistory.css';
 
@@ -67,7 +68,8 @@ export default function CustomerSubmissionHistory() {
   // Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('All Status');
-  const [selectedDate, setSelectedDate] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   // View Customer Drawer State
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -360,20 +362,31 @@ export default function CustomerSubmissionHistory() {
 
   // Filter Logic
   const filteredSubmissions = useMemo(() => {
+    const searchTrimmed = searchTerm.trim();
+    const searchLower = searchTrimmed.toLowerCase();
+    const searchActive = searchTrimmed.length > 0;
+
     return submissions.filter((item) => {
-      const nameMatch = (item.fullName || '').toLowerCase().includes(searchTerm.toLowerCase());
-      const mobileMatch = (item.mobileNumber || '').includes(searchTerm);
-      const matchesSearch = !searchTerm.trim() || nameMatch || mobileMatch;
+      const matchesDate = matchesListingDateCriteria({
+        dateValue: item.createdAt,
+        searchActive,
+        fromDate,
+        toDate,
+      });
+      if (!matchesDate) return false;
+
+      if (searchActive) {
+        const nameMatch = (item.fullName || '').toLowerCase().includes(searchLower);
+        const mobileMatch = (item.mobileNumber || '').includes(searchTrimmed);
+        if (!nameMatch && !mobileMatch) return false;
+      }
 
       const matchesStatus =
         selectedStatus === 'All Status' || String(item.status ?? '').toLowerCase() === selectedStatus.toLowerCase();
 
-      const itemDate = item.createdAt ? String(item.createdAt).substring(0, 10) : '';
-      const matchesDate = !selectedDate || itemDate === selectedDate;
-
-      return matchesSearch && matchesStatus && matchesDate;
+      return matchesStatus;
     });
-  }, [submissions, searchTerm, selectedStatus, selectedDate]);
+  }, [submissions, searchTerm, selectedStatus, fromDate, toDate]);
 
   const totalRecords = filteredSubmissions.length;
   const totalPages = Math.ceil(totalRecords / pageSize) || 1;
@@ -387,7 +400,8 @@ export default function CustomerSubmissionHistory() {
   const handleResetFilters = () => {
     setSearchTerm('');
     setSelectedStatus('All Status');
-    setSelectedDate('');
+    setFromDate('');
+    setToDate('');
     setCurrentPage(1);
   };
 
@@ -505,15 +519,28 @@ export default function CustomerSubmissionHistory() {
             />
           </div>
 
-          <div className="rm-csh-date-box">
-            <DatePicker
-              value={selectedDate}
-              onChange={(date) => {
-                setSelectedDate(date);
-                setCurrentPage(1);
-              }}
-              placeholder="Select Date Range"
-            />
+          <div className="rm-csh-date-group">
+            <div className="rm-csh-date-box">
+              <DatePicker
+                value={fromDate}
+                max={toDate || undefined}
+                onChange={(date) => {
+                  setFromDate(date);
+                  setCurrentPage(1);
+                }}
+                placeholder="From Date"
+              />
+            </div>
+            <div className="rm-csh-date-box">
+              <DatePicker
+                value={toDate}
+                onChange={(date) => {
+                  setToDate(date);
+                  setCurrentPage(1);
+                }}
+                placeholder="To Date"
+              />
+            </div>
           </div>
 
           <div className="rm-csh-status-box">

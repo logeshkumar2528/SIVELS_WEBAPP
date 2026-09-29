@@ -17,6 +17,7 @@ import iconMap from '../../config/iconMap';
 import { buildRoute } from '../../config/routeConfig';
 import { useCustomerQueue } from '../../hooks/useCustomerQueue';
 import Pagination from '../../components/Pagination/Pagination';
+import { matchesListingDateCriteria } from '../../../../../../Core/src/utils/dateHelper';
 import './SubmitToCredit.css';
 
 function formatCurrency(amount) {
@@ -69,6 +70,8 @@ export default function SubmitToCredit() {
   const [rmFilter, setRmFilter] = useState('All');
   const [agentFilter, setAgentFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -76,6 +79,7 @@ export default function SubmitToCredit() {
 
   // Icons
   const SearchIcon = iconMap['Search'];
+  const CalendarIcon = iconMap['Calendar'];
   const FileTextIcon = iconMap['FileText'];
   const ArrowRightIcon = iconMap['ArrowRight'];
   const RefreshCwIcon = iconMap['RefreshCw'];
@@ -106,18 +110,32 @@ export default function SubmitToCredit() {
   // Reset page on filter change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, districtFilter, rmFilter, agentFilter, statusFilter]);
+  }, [searchTerm, districtFilter, rmFilter, agentFilter, statusFilter, fromDate, toDate]);
 
   // Filtering on verified applications queue (Sorted Newest-First)
   const filteredCustomers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
+    const searchActive = term.length > 0;
 
     return readyCustomers
       .filter((c) => {
+        const appDate = c.createdAt || c.appliedDate;
+        const matchesDate = matchesListingDateCriteria({
+          dateValue: appDate,
+          searchActive,
+          fromDate,
+          toDate,
+        });
+        if (!matchesDate) return false;
+
         const matchDistrict = districtFilter === 'All' || (c.districtName && c.districtName.toLowerCase() === districtFilter.toLowerCase());
         const matchRM = rmFilter === 'All' || (c.rmName && c.rmName.toLowerCase() === rmFilter.toLowerCase());
         const matchAgent = agentFilter === 'All' || (c.agentName && c.agentName.toLowerCase() === agentFilter.toLowerCase());
         const matchStatus = statusFilter === 'All' || getStatusInfo(c.status).label.toLowerCase() === statusFilter.toLowerCase();
+
+        if (!matchDistrict || !matchRM || !matchAgent || !matchStatus) return false;
+
+        if (!searchActive) return true;
 
         const custName = String(c.customerName || c.fullName || '').toLowerCase();
         const mobile = String(c.mobile || c.mobileNumber || '');
@@ -128,7 +146,7 @@ export default function SubmitToCredit() {
           mobile.includes(term) ||
           appNo.includes(term);
 
-        return matchDistrict && matchRM && matchAgent && matchStatus && matchSearch;
+        return matchSearch;
       })
       .sort((a, b) => {
         const timeA = new Date(a.createdAt || a.appliedDate || 0).getTime() || 0;
@@ -138,7 +156,7 @@ export default function SubmitToCredit() {
         const idB = Number(b.agentCustomerId ?? b.id ?? 0) || 0;
         return idB - idA;
       });
-  }, [readyCustomers, districtFilter, rmFilter, agentFilter, statusFilter, searchTerm]);
+  }, [readyCustomers, districtFilter, rmFilter, agentFilter, statusFilter, searchTerm, fromDate, toDate]);
 
   // Pagination Slice
   const paginatedCustomers = useMemo(() => {
@@ -155,24 +173,34 @@ export default function SubmitToCredit() {
 
   return (
     <div className="stc-page-container">
-      {/* Search & Dynamic Filter Controls */}
+      {/* Search & Dynamic Filter Controls (Two-Tier Standard) */}
       <div className="stc-controls-card">
-        <div className="stc-filters-row">
+        {/* Tier 1: Search + Results Count */}
+        <div className="stc-filter-row-top">
           <div className="stc-search-bar">
-            {SearchIcon && <SearchIcon size={16} style={{ color: '#94a3b8' }} />}
+            {SearchIcon && <SearchIcon size={16} className="stc-search-icon" />}
             <input
               type="text"
               placeholder="Search by customer name, mobile, application ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="stc-search-input"
+              aria-label="Search applications"
             />
           </div>
 
+          <div className="stc-count-badge">
+            Showing <strong>{filteredCustomers.length}</strong> of {readyCustomers.length} Verified Applications
+          </div>
+        </div>
+
+        {/* Tier 2: Dynamic Multi-Dimensional Dropdowns & Unified Date Controls */}
+        <div className="stc-filter-row-bottom">
           <div className="stc-select-wrap">
             <select
               value={districtFilter}
               onChange={(e) => setDistrictFilter(e.target.value)}
+              className="stc-filter-select"
               aria-label="Filter by District"
             >
               <option value="All">All Districts</option>
@@ -186,6 +214,7 @@ export default function SubmitToCredit() {
             <select
               value={rmFilter}
               onChange={(e) => setRmFilter(e.target.value)}
+              className="stc-filter-select"
               aria-label="Filter by Relationship Manager"
             >
               <option value="All">All RMs</option>
@@ -199,6 +228,7 @@ export default function SubmitToCredit() {
             <select
               value={agentFilter}
               onChange={(e) => setAgentFilter(e.target.value)}
+              className="stc-filter-select"
               aria-label="Filter by Agent"
             >
               <option value="All">All Agents</option>
@@ -212,6 +242,7 @@ export default function SubmitToCredit() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
+              className="stc-filter-select"
               aria-label="Filter by Status"
             >
               <option value="All">All Statuses</option>
@@ -221,9 +252,51 @@ export default function SubmitToCredit() {
             </select>
           </div>
 
-          <div className="stc-count-badge">
-            Showing <strong>{filteredCustomers.length}</strong> of {readyCustomers.length} Verified Applications
-          </div>
+          {/* Unified Date Range Controls */}
+          <label className="stc-unified-date-box">
+            {CalendarIcon && <CalendarIcon size={14} className="stc-date-icon" />}
+            <span className="stc-date-prefix">From Date:</span>
+            <input
+              type="date"
+              value={fromDate}
+              max={toDate || undefined}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="stc-date-input"
+              aria-label="From Date"
+            />
+          </label>
+
+          <label className="stc-unified-date-box">
+            {CalendarIcon && <CalendarIcon size={14} className="stc-date-icon" />}
+            <span className="stc-date-prefix">To Date:</span>
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate || undefined}
+              onChange={(e) => setToDate(e.target.value)}
+              className="stc-date-input"
+              aria-label="To Date"
+            />
+          </label>
+
+          {(searchTerm || fromDate || toDate || districtFilter !== 'All' || rmFilter !== 'All' || agentFilter !== 'All' || statusFilter !== 'All') && (
+            <button
+              type="button"
+              className="stc-btn-reset-filter"
+              onClick={() => {
+                setSearchTerm('');
+                setFromDate('');
+                setToDate('');
+                setDistrictFilter('All');
+                setRmFilter('All');
+                setAgentFilter('All');
+                setStatusFilter('All');
+              }}
+              title="Reset all filters"
+            >
+              Reset
+            </button>
+          )}
         </div>
       </div>
 

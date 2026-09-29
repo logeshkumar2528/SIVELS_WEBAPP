@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Eye, Pencil } from 'lucide-react';
+import { FileText, Eye, Pencil, Calendar } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import DataTable from '../../components/DataTable/DataTable';
 import StatusBadge from '../../components/StatusBadge/StatusBadge';
@@ -9,8 +9,7 @@ import Button from '../../components/Button/Button';
 import Pagination from '../../components/Pagination/Pagination';
 import Select from '../../components/Select/Select';
 import Modal from '../../components/Modal/Modal';
-import { ROUTES } from '../../config/routeConfig';
-import { formatDate } from '../../utils/dateHelper';
+import { formatDate, matchesListingDateCriteria } from '../../utils/dateHelper';
 import {
   buildAllowedAgentIdSet,
   filterAgentsForRm,
@@ -181,6 +180,8 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
 export default function NewApplications({ initialFilter = 'All' }) {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [statusFilter, setStatusFilter] = useState(initialFilter);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(7);
@@ -208,6 +209,8 @@ export default function NewApplications({ initialFilter = 'All' }) {
     setStatusFilter(initialFilter);
     setCurrentPage(1);
     setSearchTerm('');
+    setFromDate('');
+    setToDate('');
   }, [initialFilter]);
 
   const loadApplications = useCallback(async () => {
@@ -722,15 +725,30 @@ export default function NewApplications({ initialFilter = 'All' }) {
   };
 
   const filteredData = useMemo(() => {
+    const searchTrimmed = searchTerm.trim();
+    const searchLower = searchTrimmed.toLowerCase();
+    const searchActive = searchTrimmed.length > 0;
+
     return applications
       .filter((app) => {
+        const appDate = app.rawCreatedAt || app.createdAt || app.createdDate;
+        const matchesDate = matchesListingDateCriteria({
+          dateValue: appDate,
+          searchActive,
+          fromDate,
+          toDate,
+        });
+        if (!matchesDate) return false;
+
         const matchesSearch =
-          app.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (app.customerCode && app.customerCode.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (app.appId && app.appId.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (app.displayId && app.displayId.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          app.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          app.mobile.includes(searchTerm);
+          !searchActive ||
+          app.customerName.toLowerCase().includes(searchLower) ||
+          (app.customerCode && app.customerCode.toLowerCase().includes(searchLower)) ||
+          (app.appId && app.appId.toLowerCase().includes(searchLower)) ||
+          (app.displayId && app.displayId.toLowerCase().includes(searchLower)) ||
+          app.id.toLowerCase().includes(searchLower) ||
+          app.mobile.includes(searchTrimmed);
+
         const matchesStatus = statusFilter === 'All' || app.status === statusFilter;
         return matchesSearch && matchesStatus;
       })
@@ -742,7 +760,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
         const idB = Number(b.agentCustomerId ?? b.id ?? 0) || 0;
         return idB - idA;
       });
-  }, [applications, searchTerm, statusFilter]);
+  }, [applications, searchTerm, statusFilter, fromDate, toDate]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
 
@@ -934,19 +952,55 @@ export default function NewApplications({ initialFilter = 'All' }) {
             {SearchIcon && <SearchIcon size={16} className="search-icon" />}
             <input
               type="text"
-              className="form-input"
               placeholder="Search by ID, Customer or Mobile..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
             />
           </div>
 
-          <div className="flex-align-center gap-3">
-            {FilterIcon && <FilterIcon size={16} className="text-muted" />}
-            <div style={{ width: '180px' }}>
+          <div className="flex-align-center gap-2" style={{ flexWrap: 'wrap' }}>
+            <label className="filter-unified-date-box">
+              <Calendar size={14} className="filter-date-icon" />
+              <span className="filter-date-prefix">From Date:</span>
+              <input
+                type="date"
+                className="filter-date-input"
+                value={fromDate}
+                max={toDate || undefined}
+                onChange={(e) => {
+                  setFromDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                aria-label="From Date"
+              />
+            </label>
+
+            <label className="filter-unified-date-box">
+              <Calendar size={14} className="filter-date-icon" />
+              <span className="filter-date-prefix">To Date:</span>
+              <input
+                type="date"
+                className="filter-date-input"
+                value={toDate}
+                min={fromDate || undefined}
+                onChange={(e) => {
+                  setToDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                aria-label="To Date"
+              />
+            </label>
+
+            <div style={{ width: '160px' }}>
               <Select
                 value={statusFilter}
-                onChange={(val) => setStatusFilter(val)}
+                onChange={(val) => {
+                  setStatusFilter(val);
+                  setCurrentPage(1);
+                }}
                 options={[
                   { value: 'All', label: 'All Statuses' },
                   { value: 'New', label: 'New' },
@@ -958,6 +1012,22 @@ export default function NewApplications({ initialFilter = 'All' }) {
                 placeholder={null}
               />
             </div>
+
+            {(searchTerm || fromDate || toDate || statusFilter !== 'All') && (
+              <button
+                type="button"
+                className="btn-reset-filter"
+                onClick={() => {
+                  setSearchTerm('');
+                  setFromDate('');
+                  setToDate('');
+                  setStatusFilter('All');
+                  setCurrentPage(1);
+                }}
+              >
+                Reset
+              </button>
+            )}
           </div>
         </div>
 
