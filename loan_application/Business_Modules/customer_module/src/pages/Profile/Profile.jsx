@@ -17,9 +17,7 @@ export default function Profile() {
 
   const email = customerData?.email || 'arjunkumar@email.com';
 
-  const customerId = customerData?.agentCustomerId
-    ? `CUS${String(customerData.agentCustomerId).padStart(6, '0')}`
-    : 'CUS2025001234';
+  const customerId = customerData?.customerCode || customerData?.CustomerCode || '—';
 
   const employmentValues = [
     ['Employment Type', customerData?.employmentTypeName || 'Salaried'],

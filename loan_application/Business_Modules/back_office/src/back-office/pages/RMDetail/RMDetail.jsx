@@ -228,7 +228,7 @@ export default function RMDetail() {
           <div className="bo-rm-profile-details">
             <div className="bo-rm-tag-row">
               <span className="bo-kicker-tag">RELATIONSHIP MANAGER</span>
-              <span className="bo-code-badge">{rm.code || rm.employeeCode || `RM-${rmId}`}</span>
+              <span className="bo-code-badge">{rm.code || rm.employeeCode || rm.rmCode || '—'}</span>
               <span
                 className={`bo-status-pill ${
                   rm.status === 'Active' || rm.status === 'On track' ? 'is-success' : 'is-warning'
@@ -328,7 +328,7 @@ export default function RMDetail() {
               {filteredAgents.map((ag) => {
                 const targetAgentId = ag.agentId || ag.id;
                 const agentName = ag.name || ag.fullName || '—';
-                const agentCode = ag.code || ag.agentCode || (ag.id ? `AGT-${ag.id}` : '—');
+                const agentCode = ag.code || ag.agentCode || '—';
                 const mobile = ag.mobile ? `+91 ${ag.mobile}` : '—';
                 const email = ag.email || '—';
 

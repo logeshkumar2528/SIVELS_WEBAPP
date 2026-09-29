@@ -30,7 +30,6 @@ import {
 } from '../../api/agentApi';
 import { getProfileImageUrl } from '../../utils/profileImageHelper';
 import { getFileUrl, isPdfFile, getAadhaarPath, getPanPath, getProfilePath, getDocumentUrl } from '../Dashboard/Dashboard';
-import { generateUserCode } from '../../utils/codeGenerator';
 import '../RelationshipManager/RelationshipManagerCreate.css';
 import './AgentCreate.css';
 
@@ -320,13 +319,10 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
   };
 
   const handleInputChange = (field, value) => {
-    setFormData((prev) => {
-      const next = { ...prev, [field]: value };
-      if (!isEditMode && (field === 'fullName' || field === 'dateOfBirth' || field === 'mobileNumber')) {
-        next.agentCode = generateUserCode(next.fullName, next.dateOfBirth, next.mobileNumber);
-      }
-      return next;
-    });
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
   };
 
   const getAuthHeaders = () => {
@@ -463,8 +459,7 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
 
   const buildPayload = () => ({
     ...(existingAgent || {}),
-    ...(isEditMode ? { agentId: Number(editAgentId) } : {}),
-    ...(formData.agentCode ? { agentCode: formData.agentCode } : {}),
+    ...(isEditMode ? { agentId: Number(editAgentId), agentCode: formData.agentCode || existingAgent?.agentCode } : {}),
     fullName: formData.fullName.trim(),
     dateOfBirth: formData.dateOfBirth,
     genderId: Number(formData.genderId || 0),
@@ -654,11 +649,12 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
                   type="text"
                   className="agent-input rm-code-input agent-input-readonly"
                   value={formData.agentCode || ''}
+                  placeholder={!isEditMode ? 'Auto-generated on creation' : ''}
                   readOnly
                   disabled
                 />
                 <small className="rm-field-hint">
-                  {isEditMode ? 'System code' : 'Generated automatically'}
+                  {isEditMode ? 'System code' : 'Auto-generated on creation'}
                 </small>
               </div>
 

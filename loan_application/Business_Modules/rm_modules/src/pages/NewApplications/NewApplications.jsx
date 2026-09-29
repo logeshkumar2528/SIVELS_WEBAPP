@@ -148,10 +148,13 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
   }
 
   const officialAppId = item.appId || item.AppId || item.App_Id || null;
+  const rawCustomerCode = item.customerCode || item.CustomerCode || '';
+  const customerCode = rawCustomerCode ? String(rawCustomerCode).trim() : 'N/A';
 
   return {
     id: String(applicationId),
     appId: officialAppId,
+    customerCode,
     displayId: officialAppId || buildApplicationDisplayId(item, 'N/A'),
     customerName: item.fullName || item.customerName || '',
     mobile: normalizeMobile(item.mobileNumber || item.mobile || ''),
@@ -723,6 +726,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
       .filter((app) => {
         const matchesSearch =
           app.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (app.customerCode && app.customerCode.toLowerCase().includes(searchTerm.toLowerCase())) ||
           (app.appId && app.appId.toLowerCase().includes(searchTerm.toLowerCase())) ||
           (app.displayId && app.displayId.toLowerCase().includes(searchTerm.toLowerCase())) ||
           app.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -782,7 +786,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
 
   const columns = [
     { key: 'sno', label: 'S.NO' },
-    { key: 'displayId', label: 'APP ID' },
+    { key: 'customerCode', label: 'CUSTOMER CODE' },
     { key: 'customerName', label: 'CUSTOMER NAME' },
     { key: 'mobile', label: 'MOBILE' },
     { key: 'loanType', label: 'LOAN PURPOSE' },

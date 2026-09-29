@@ -311,7 +311,7 @@ export default function AgentDetail() {
           <div className="bo-agent-profile-details">
             <div className="bo-agent-tag-row">
               <span className="bo-kicker-tag">FIELD AGENT</span>
-              <span className="bo-code-badge">{agent.code || agent.agentCode || `AGT-${agentId}`}</span>
+              <span className="bo-code-badge">{agent.code || agent.agentCode || '—'}</span>
               <span
                 className={`bo-status-pill ${
                   agent.status === 'Active' ? 'is-success' : 'is-warning'

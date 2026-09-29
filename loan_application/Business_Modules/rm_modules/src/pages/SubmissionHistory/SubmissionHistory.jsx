@@ -32,6 +32,8 @@ function mapSubmission(record, agentsById = {}, rmsById = {}) {
   const id = record.applicationId || record.applicationNumber || record.agentCustomerId || record.customerId;
   const officialAppId = record.appId || record.AppId || record.App_Id || null;
   const displayAppId = officialAppId || buildApplicationDisplayId(record, 'N/A');
+  const rawCustomerCode = record.customerCode || record.CustomerCode || '';
+  const customerCode = rawCustomerCode ? String(rawCustomerCode).trim() : 'N/A';
   const submittedRaw = record.submittedAt || record.SubmittedAt || record.createdAt || record.CreatedAt || record.createdDate || '';
   const ownership = resolveApplicationOwnership(record, agentsById, rmsById);
   const agent = ownership.agentId ? (agentsById[String(ownership.agentId)] || {}) : {};
@@ -40,6 +42,7 @@ function mapSubmission(record, agentsById = {}, rmsById = {}) {
   return {
     internalId: String(id),
     appId: officialAppId,
+    customerCode,
     id: displayAppId,
     customerName: record.fullName || record.FullName || record.customerName || 'Unknown',
     mobile: record.mobileNumber || record.MobileNumber || record.mobile || 'N/A',
@@ -182,7 +185,7 @@ export default function SubmissionHistory() {
   const filteredData = useMemo(() => {
     const searchLower = searchTerm.trim().toLowerCase();
     return submissions
-      .filter((row) => [row.customerName, row.appId, row.id, row.mobile, row.loanType, row.branch]
+      .filter((row) => [row.customerName, row.customerCode, row.appId, row.id, row.mobile, row.loanType, row.branch]
         .some((value) => value && String(value).toLowerCase().includes(searchLower)))
       .sort((a, b) => getDateTimestamp(b.submittedAt) - getDateTimestamp(a.submittedAt));
   }, [submissions, searchTerm]);
@@ -203,9 +206,9 @@ export default function SubmissionHistory() {
   const columns = [
     { key: 'sno', label: 'S.NO' },
     {
-      key: 'id',
-      label: 'APP ID',
-      render: (row) => <span className="sh-app-id" title={row.id}>{row.id}</span>,
+      key: 'customerCode',
+      label: 'CUSTOMER CODE',
+      render: (row) => <span className="sh-app-id" title={row.customerCode}>{row.customerCode}</span>,
     },
     {
       key: 'customerName',

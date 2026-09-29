@@ -884,7 +884,7 @@ export default function PdfView() {
               if (matched) {
                 resolvedOwnership = {
                   name: matched.fullName || matched.name || '',
-                  employeeId: matched.rmCode || matched.employeeId || `RM${String(matched.rmId).padStart(4, '0')}`,
+                  employeeId: matched.rmCode || matched.RmCode || matched.RMCode || matched.employeeId || '',
                   customerSource: currentCust?.customerSource || '',
                   agentName: currentCust?.agentName || '',
                   agentId: currentCust?.agentId ?? null,
@@ -1782,7 +1782,8 @@ export default function PdfView() {
   const resolvedEmployeeId =
     liveRM?.employeeId ||
     appData.rmCode ||
-    (ownership.rmId ? (String(ownership.rmId).startsWith('RM') ? String(ownership.rmId) : `RM${ownership.rmId}`) : '') ||
+    appData.RmCode ||
+    appData.RMCode ||
     '-';
 
   // Resolved Agent / Sourcing Info
@@ -1796,8 +1797,9 @@ export default function PdfView() {
 
   const resolvedAgentCode =
     appData.agentCode ||
+    appData.AgentCode ||
     liveCustomer?.agentCode ||
-    (ownership.agentId ? (String(ownership.agentId).startsWith('AG') ? String(ownership.agentId) : `AG${ownership.agentId}`) : '') ||
+    liveCustomer?.AgentCode ||
     '-';
 
   const resolvedSourceType = isAgentCreated ? 'Field Agent' : 'RM';

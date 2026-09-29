@@ -98,12 +98,12 @@
 
 .rm-submission-history-table .data-table-th:nth-child(2),
 .rm-submission-history-table .data-table-cell:nth-child(2) {
-  width: 8%;
+  width: 11%;
 }
 
 .rm-submission-history-table .data-table-th:nth-child(3),
 .rm-submission-history-table .data-table-cell:nth-child(3) {
-  width: 18%;
+  width: 15%;
 }
 
 .rm-submission-history-table .data-table-th:nth-child(4),
