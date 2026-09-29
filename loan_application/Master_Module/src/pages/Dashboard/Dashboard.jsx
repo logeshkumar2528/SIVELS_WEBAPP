@@ -3,11 +3,15 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
   AlertCircle,
+  ArrowLeft,
+  ArrowRight,
   ArrowUpRight,
   BriefcaseBusiness,
   Building2,
   Camera,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Eye,
   FileText,
   LoaderCircle,
@@ -949,181 +953,7 @@ export function Dashboard() {
         ))}
       </section>
 
-      {/* Applications Table */}
-      <section className="content-card agent-card">
-        <div className="card-heading">
-          <div>
-            <h2>Applications</h2>
-            <p>Live application list with full customer, agent, and RM details.</p>
-          </div>
-          <div className="application-filters">
-            <div className="search-box">
-              <Search size={17} />
-              <input
-                aria-label="Search applications"
-                placeholder="Search apps, customers, agents..."
-                value={applicationQuery}
-                onChange={(event) => setApplicationQuery(event.target.value)}
-              />
-            </div>
-            <select
-              className="status-filter"
-              aria-label="Filter application status"
-              value={applicationStatusFilter}
-              onChange={(event) => setApplicationStatusFilter(event.target.value)}
-            >
-              <option value="All">All statuses</option>
-              <option value="New">New</option>
-              <option value="Pending">Pending</option>
-              <option value="Under Review">Under Review</option>
-              <option value="Approved">Approved</option>
-              <option value="Returned">Returned</option>
-              <option value="Disbursed">Disbursed</option>
-            </select>
-          </div>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>App ID</th>
-                <th>Customer</th>
-                <th>Loan</th>
-                <th>Agent / RM</th>
-                <th>Submitted</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td className="empty-table" colSpan="7">Loading live applications…</td></tr>
-              ) : filteredApplications.length ? (
-                filteredApplications.map((application) => (
-                  <tr key={application.id}>
-                    <td><strong>#{application.id}</strong></td>
-                    <td>
-                      <div className="agent-name">
-                        <span>{initials(application.customerName)}</span>
-                        <div>
-                          <strong>{application.customerName}</strong>
-                          <small>{application.mobile}</small>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div>{application.loanPurpose}</div>
-                      <small>{formatAmount(application.amount)}</small>
-                    </td>
-                    <td>
-                      <div>{application.agentName}</div>
-                      <small>{application.rmName}</small>
-                    </td>
-                    <td>
-                      <div>{formatDateTimeFriendly(application.createdAt)}</div>
-                      <small>Updated {formatWhen(application.updatedAt)}</small>
-                    </td>
-                    <td>
-                      <span className={`status ${application.status.toLowerCase().replace(/\s+/g, '-')}`}>
-                        {application.status}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        className="details-button"
-                        onClick={() => setSelectedApplication(application)}
-                      >
-                        <Eye size={15} /> View details
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr><td className="empty-table" colSpan="7">No matching applications found.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Agents Table */}
-      <section className="content-card agent-card">
-        <div className="card-heading">
-          <div>
-            <h2>Agents</h2>
-            <p>Live agents and their relationship-manager assignments.</p>
-          </div>
-          <div className="search-box">
-            <Search size={17} />
-            <input
-              aria-label="Search agents"
-              placeholder="Search agents..."
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </div>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Agent</th>
-                <th>Contact</th>
-                <th>Assigned RM</th>
-                <th>Applications</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td className="empty-table" colSpan="6">Loading live agent data…</td></tr>
-              ) : filteredAgents.length ? (
-                filteredAgents.map((agent) => (
-                  <tr key={agent.id || agent.name}>
-                    <td>
-                      <div className="agent-name">
-                        <MasterAvatar role="Agent" id={agent.id} name={agent.name} version={imageVersion} />
-                        <strong>{agent.name}</strong>
-                      </div>
-                    </td>
-                    <td>
-                      <div>{agent.email || '—'}</div>
-                      <small>{agent.phone || '—'}</small>
-                    </td>
-                    <td>{agent.rm}</td>
-                    <td><strong>{agent.applications}</strong></td>
-                    <td>
-                      <span className={`status ${agent.status.toLowerCase().replace(/\s+/g, '-')}`}>
-                        {agent.status}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="action-buttons">
-                        <button
-                          className="details-button"
-                          onClick={() => handleOpenPersonDetails(agent, 'Agent')}
-                        >
-                          <Eye size={15} /> View
-                        </button>
-                        <button
-                          className="details-button edit-button"
-                          onClick={() => navigate(`/edit-agent/${agent.id}`)}
-                        >
-                          <Pencil size={15} /> Edit
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr><td className="empty-table" colSpan="6">No matching agents found.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
+      {/* People & Access Section - 5 Compact Role Summary Cards */}
       <section className="people-workspace">
         <div className="workspace-heading">
           <div>
@@ -1136,100 +966,126 @@ export function Dashboard() {
           </button>
         </div>
 
-        <div className="role-card-grid">
-          <section className="role-card role-card-rm">
-            <div className="role-card-heading">
-              <div className="role-card-icon"><Activity size={18} /></div>
-              <div>
-                <h3>Relationship managers</h3>
-                <p>Own agent coverage and performance.</p>
+        <div className="people-role-card-grid">
+          {/* 1. AGENTS */}
+          <button
+            type="button"
+            className="people-role-card people-role-card-agent"
+            onClick={() => navigate('/agents')}
+          >
+            <div className="people-role-card-top">
+              <div className="people-role-header-left">
+                <div className="people-role-icon blue">
+                  <BriefcaseBusiness size={18} />
+                </div>
+                <h3 className="people-role-title">Agents</h3>
               </div>
-              <span className="role-count">{rms.length}</span>
+              <span className="people-role-badge">{agents.length}</span>
             </div>
-            {loading ? <p className="role-empty">Loading managers…</p> : coverage.length ? (
-              <div className="role-list">
-                {coverage.map((rm) => (
-                  <div className="role-user-row" key={rm.id || rm.name}>
-                    <button className="role-user-main" onClick={() => handleOpenPersonDetails(rm, 'Relationship manager')}>
-                      <MasterAvatar role="RM" id={rm.id} name={rm.name} className="role-avatar" version={imageVersion} />
-                      <span className="role-user-copy">
-                        <strong>{rm.name}</strong>
-                        <small>{rm.agents} {rm.agents === 1 ? 'agent' : 'agents'} assigned</small>
-                      </span>
-                    </button>
-                    <span className="role-progress"><i style={{ width: `${(rm.agents / maxCoverage) * 100}%` }} /></span>
-                    <div className="role-row-actions">
-                      <button className="icon-action view-action" aria-label={`View ${rm.name}`} onClick={() => handleOpenPersonDetails(rm, 'Relationship manager')}><Eye size={15} /></button>
-                      <button className="icon-action" aria-label={`Edit ${rm.name}`} onClick={() => navigate(`/edit-relationship-manager/${rm.id}`)}><Pencil size={15} /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : <div className="role-empty-state"><strong>No managers yet</strong><span>Add a relationship manager to assign agents.</span><button onClick={() => navigate('/create-user')}><Plus size={15} /> Add manager</button></div>}
-          </section>
+            <div className="people-role-card-body">
+              <p className="people-role-desc">Field agents sourcing applications</p>
+            </div>
+            <div className="people-role-card-footer">
+              <span>View directory</span>
+              <ArrowRight size={14} />
+            </div>
+          </button>
 
-          <section className="role-card role-card-back-office">
-            <div className="role-card-heading">
-              <div className="role-card-icon"><Building2 size={18} /></div>
-              <div>
-                <h3>Back office</h3>
-                <p>Support operations from every branch.</p>
+          {/* 2. RELATIONSHIP MANAGERS */}
+          <button
+            type="button"
+            className="people-role-card people-role-card-rm"
+            onClick={() => navigate('/relationship-managers')}
+          >
+            <div className="people-role-card-top">
+              <div className="people-role-header-left">
+                <div className="people-role-icon green">
+                  <Users size={18} />
+                </div>
+                <h3 className="people-role-title">Relationship managers</h3>
               </div>
-              <span className="role-count">{backOfficeList.length}</span>
+              <span className="people-role-badge">{rms.length}</span>
             </div>
-            {loading ? <p className="role-empty">Loading officers…</p> : backOfficeList.length ? (
-              <div className="role-list">
-                {backOfficeList.map((backOffice) => {
-                  const displayName = backOffice.name || 'Unnamed officer';
-                  const boId = backOffice.id || backOffice.backOfficeId;
-                  return (
-                    <div className="role-user-row" key={backOffice.id || backOffice.backOfficeCode || displayName}>
-                      <button className="role-user-main" onClick={() => handleOpenPersonDetails(backOffice, 'Back Office')}>
-                        <MasterAvatar role="BackOffice" id={boId} name={displayName} className="role-avatar" version={imageVersion} />
-                        <span className="role-user-copy"><strong>{displayName}</strong><small>{backOffice.branch || backOffice.backOfficeCode || 'Operations team'}</small></span>
-                      </button>
-                      <div className="role-row-actions">
-                        <button className="icon-action view-action" aria-label={`View ${displayName}`} onClick={() => handleOpenPersonDetails(backOffice, 'Back Office')}><Eye size={15} /></button>
-                        <button className="icon-action" aria-label={`Edit ${displayName}`} onClick={() => openEditBackOffice(backOffice)}><Pencil size={15} /></button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : <div className="role-empty-state"><strong>No officers yet</strong><span>Add a back office user to support operations.</span><button onClick={() => navigate('/create-user')}><Plus size={15} /> Add officer</button></div>}
-          </section>
+            <div className="people-role-card-body">
+              <p className="people-role-desc">Own agent coverage and regional teams</p>
+            </div>
+            <div className="people-role-card-footer">
+              <span>View directory</span>
+              <ArrowRight size={14} />
+            </div>
+          </button>
 
-          <section className="role-card role-card-ams">
-            <div className="role-card-heading">
-              <div className="role-card-icon"><ShieldCheck size={18} /></div>
-              <div>
-                <h3>Area specialists</h3>
-                <p>Cover districts and local operations.</p>
+          {/* 3. BACK OFFICE */}
+          <button
+            type="button"
+            className="people-role-card people-role-card-back-office"
+            onClick={() => navigate('/back-office')}
+          >
+            <div className="people-role-card-top">
+              <div className="people-role-header-left">
+                <div className="people-role-icon teal">
+                  <Building2 size={18} />
+                </div>
+                <h3 className="people-role-title">Back office</h3>
               </div>
-              <span className="role-count">{amsList.length}</span>
+              <span className="people-role-badge">{backOfficeList.length}</span>
             </div>
-            {loading ? <p className="role-empty">Loading specialists…</p> : amsList.length ? (
-              <div className="role-list">
-                {amsList.map((ams) => {
-                  const displayName = ams.fullName || 'Unnamed specialist';
-                  const genderLabel = ams.genderName || (ams.genderId === 1 ? 'Male' : ams.genderId === 2 ? 'Female' : ams.genderId === 3 ? 'Other' : 'Specialist');
-                  const amsId = ams.id || ams.amsId;
-                  return (
-                    <div className="role-user-row" key={ams.id || ams.amsCode || displayName}>
-                      <button className="role-user-main" onClick={() => handleOpenAmsDetails(ams)}>
-                        <MasterAvatar role="AMS" id={amsId} name={displayName} className="role-avatar" version={imageVersion} />
-                        <span className="role-user-copy"><strong>{displayName}</strong><small>{genderLabel}</small></span>
-                      </button>
-                      <div className="role-row-actions">
-                        <button className="icon-action view-action" aria-label={`View ${displayName}`} onClick={() => handleOpenAmsDetails(ams)}><Eye size={15} /></button>
-                        <button className="icon-action" aria-label={`Edit ${displayName}`} onClick={() => openEditAms(ams)}><Pencil size={15} /></button>
-                      </div>
-                    </div>
-                  );
-                })}
+            <div className="people-role-card-body">
+              <p className="people-role-desc">Support operations and branch verification</p>
+            </div>
+            <div className="people-role-card-footer">
+              <span>View directory</span>
+              <ArrowRight size={14} />
+            </div>
+          </button>
+
+          {/* 4. AMS */}
+          <button
+            type="button"
+            className="people-role-card people-role-card-ams"
+            onClick={() => navigate('/ams')}
+          >
+            <div className="people-role-card-top">
+              <div className="people-role-header-left">
+                <div className="people-role-icon purple">
+                  <ShieldCheck size={18} />
+                </div>
+                <h3 className="people-role-title">AMS</h3>
               </div>
-            ) : <div className="role-empty-state"><strong>No specialists yet</strong><span>Add an AMS to manage local districts.</span><button onClick={() => navigate('/create-user')}><Plus size={15} /> Add specialist</button></div>}
-          </section>
+              <span className="people-role-badge">{amsList.length}</span>
+            </div>
+            <div className="people-role-card-body">
+              <p className="people-role-desc">Cover districts and local operations</p>
+            </div>
+            <div className="people-role-card-footer">
+              <span>View directory</span>
+              <ArrowRight size={14} />
+            </div>
+          </button>
+
+          {/* 5. CUSTOMERS */}
+          <button
+            type="button"
+            className="people-role-card people-role-card-customer"
+            onClick={() => navigate('/customers')}
+          >
+            <div className="people-role-card-top">
+              <div className="people-role-header-left">
+                <div className="people-role-icon orange">
+                  <FileText size={18} />
+                </div>
+                <h3 className="people-role-title">Customers</h3>
+              </div>
+              <span className="people-role-badge">{applications.length}</span>
+            </div>
+            <div className="people-role-card-body">
+              <p className="people-role-desc">Network customer and application records</p>
+            </div>
+            <div className="people-role-card-footer">
+              <span>View directory</span>
+              <ArrowRight size={14} />
+            </div>
+          </button>
         </div>
       </section>
 

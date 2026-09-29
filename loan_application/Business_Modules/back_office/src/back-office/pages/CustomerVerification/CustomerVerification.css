@@ -9186,44 +9186,6 @@
   animation: boCvPanelFadeIn 0.22s ease-out;
 }
 
-.bo-cv-elig-hero {
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 22px 24px;
-  border-radius: 20px;
-  border: 1px solid var(--elig-line);
-  background:
-    linear-gradient(125deg, #0d3d2c 0%, #0f7a4c 48%, #1a8f5c 100%);
-  color: #ffffff;
-  box-shadow: 0 16px 36px rgba(11, 47, 34, 0.22);
-}
-
-.bo-cv-elig-hero-mesh {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 88% 18%, rgba(255, 255, 255, 0.22) 0%, transparent 36%),
-    radial-gradient(circle at 12% 80%, rgba(0, 0, 0, 0.18) 0%, transparent 40%),
-    repeating-linear-gradient(
-      115deg,
-      transparent 0,
-      transparent 14px,
-      rgba(255, 255, 255, 0.04) 14px,
-      rgba(255, 255, 255, 0.04) 15px
-    );
-  pointer-events: none;
-}
-
-.bo-cv-elig-hero-copy,
-.bo-cv-elig-hero-cta {
-  position: relative;
-  z-index: 1;
-}
-
 .bo-cv-elig-kicker {
   display: inline-block;
   margin-bottom: 8px;
@@ -9236,35 +9198,6 @@
   color: rgba(255, 255, 255, 0.92);
   background: rgba(255, 255, 255, 0.14);
   border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.bo-cv-elig-hero-title {
-  margin: 0 0 6px;
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
-}
-
-.bo-cv-elig-hero-sub {
-  margin: 0;
-  max-width: 52ch;
-  font-size: 13.5px;
-  line-height: 1.5;
-  color: rgba(255, 255, 255, 0.86);
-}
-
-.bo-cv-elig-hero-cta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.bo-cv-elig-hero-hint {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.72);
 }
 
 .bo-cv-elig-primary-btn {
@@ -9475,8 +9408,26 @@
 
 .bo-cv-elig-ribbon-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
+}
+
+@media (max-width: 1100px) {
+  .bo-cv-elig-ribbon-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .bo-cv-elig-ribbon-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 440px) {
+  .bo-cv-elig-ribbon-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .bo-cv-elig-metric {
@@ -9506,235 +9457,9 @@
   overflow-wrap: anywhere;
 }
 
-.bo-cv-elig-metric.is-accent {
-  background: linear-gradient(180deg, #ffffff 0%, var(--elig-mist) 100%);
-  border-color: var(--elig-line);
-}
-
-.bo-cv-elig-metric.is-accent strong {
-  color: var(--elig-moss-deep);
-  font-size: 14px;
-}
-
 .bo-cv-elig-mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   letter-spacing: 0.02em;
-}
-
-.bo-cv-elig-spotlight {
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 22px 24px;
-  border-radius: 18px;
-  border: 1px solid rgba(15, 122, 76, 0.28);
-  background:
-    linear-gradient(135deg, #0b3d2a 0%, #116b45 55%, #178a56 100%);
-  color: #ffffff;
-  box-shadow: 0 14px 30px rgba(11, 61, 42, 0.2);
-}
-
-.bo-cv-elig-spotlight-glow {
-  position: absolute;
-  width: 220px;
-  height: 220px;
-  right: -40px;
-  top: -80px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.22) 0%, transparent 70%);
-  pointer-events: none;
-  animation: boCvCalcHubPulse 5s ease-in-out infinite;
-}
-
-.bo-cv-elig-spotlight-main,
-.bo-cv-elig-spotlight-actions {
-  position: relative;
-  z-index: 1;
-}
-
-.bo-cv-elig-spotlight-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.82);
-}
-
-.bo-cv-elig-live-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #86efac;
-  box-shadow: 0 0 0 0 rgba(134, 239, 172, 0.7);
-  animation: boCvEligPulse 1.8s ease-out infinite;
-}
-
-@keyframes boCvEligPulse {
-  0% { box-shadow: 0 0 0 0 rgba(134, 239, 172, 0.55); }
-  70% { box-shadow: 0 0 0 10px rgba(134, 239, 172, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(134, 239, 172, 0); }
-}
-
-.bo-cv-elig-spotlight-amount {
-  font-size: clamp(28px, 4vw, 40px);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.05;
-  font-variant-numeric: tabular-nums;
-}
-
-.bo-cv-elig-spotlight-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-  font-size: 12.5px;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.bo-cv-elig-spotlight-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.bo-cv-elig-launch {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px 22px;
-  border-radius: 18px;
-  border: 1px dashed rgba(15, 122, 76, 0.35);
-  background:
-    linear-gradient(180deg, #ffffff 0%, var(--elig-mist) 100%);
-}
-
-.bo-cv-elig-launch-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  color: var(--elig-moss);
-  background: #ffffff;
-  border: 1px solid var(--elig-line);
-  box-shadow: 0 6px 14px rgba(15, 122, 76, 0.1);
-  flex-shrink: 0;
-}
-
-.bo-cv-elig-launch-copy {
-  flex: 1;
-  min-width: 0;
-}
-
-.bo-cv-elig-launch-copy h3 {
-  margin: 0 0 4px;
-  font-size: 16px;
-  font-weight: 750;
-  color: var(--elig-ink);
-}
-
-.bo-cv-elig-launch-copy p {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.45;
-  color: #4a6358;
-}
-
-.bo-cv-elig-launch .bo-cv-elig-primary-btn {
-  color: #ffffff;
-  background: linear-gradient(135deg, var(--elig-moss) 0%, var(--elig-moss-deep) 100%);
-  box-shadow: 0 8px 18px rgba(15, 122, 76, 0.28);
-}
-
-.bo-cv-elig-rec-dock {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px 18px;
-  border-radius: 16px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
-}
-
-.bo-cv-elig-rec-dock-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.bo-cv-elig-rec-dock-sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: #64748b;
-  line-height: 1.4;
-}
-
-.bo-cv-elig-rec-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-}
-
-.bo-cv-elig-rec-field {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.bo-cv-elig-rec-field > span {
-  font-size: 12px;
-  font-weight: 650;
-  color: #475569;
-}
-
-.bo-cv-elig-rec-input-wrap {
-  display: flex;
-  align-items: center;
-  border: 1px solid #cbd5e1;
-  border-radius: 12px;
-  background: #ffffff;
-  overflow: hidden;
-}
-
-.bo-cv-elig-rec-input-wrap .bo-cv-rec-currency-symbol {
-  padding: 0 0 0 14px;
-  color: #64748b;
-  font-weight: 700;
-}
-
-.bo-cv-elig-rec-input-wrap .bo-cv-rec-input {
-  border: none;
-  box-shadow: none;
-  flex: 1;
-  min-width: 0;
-  padding: 12px 14px;
-  font-size: 15px;
-  font-weight: 650;
-}
-
-.bo-cv-elig-rec-input-wrap:focus-within {
-  border-color: var(--elig-moss);
-  box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.12);
-}
-
-.bo-cv-elig-rec-save {
-  color: #ffffff;
-  background: linear-gradient(135deg, var(--elig-moss) 0%, var(--elig-moss-deep) 100%);
-  box-shadow: 0 8px 16px rgba(15, 122, 76, 0.22);
-  white-space: nowrap;
 }
 
 /* Calculator popup sheet — tabbed workspace */
@@ -12041,3 +11766,1100 @@
     gap: 10px;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   NORMAL INCOME DEDICATED FULL-WORKSPACE STYLES (STEP 11)
+══════════════════════════════════════════════════════════════════════════ */
+.bo-cv-elig-deck--normal-workspace {
+  gap: 18px;
+}
+
+.bo-cv-normal-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  padding-bottom: 80px;
+}
+
+/* ── Normal Income Header ── */
+.bo-cv-normal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 24px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.bo-cv-normal-header-left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+
+.bo-cv-normal-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid #cbdad5;
+  background: #f8fbf9;
+  color: #0f7a4c;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.bo-cv-normal-back-btn:hover {
+  background: #e8f4ee;
+  border-color: #0f7a4c;
+  color: #0a5c39;
+  transform: translateX(-2px);
+}
+
+.bo-cv-normal-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bo-cv-normal-title-block .bo-cv-elig-kicker {
+  align-self: flex-start;
+  margin-bottom: 2px;
+  background: #e8f4ee;
+  color: #0f7a4c;
+  border: 1px solid rgba(15, 122, 76, 0.2);
+}
+
+.bo-cv-normal-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: #0b2f22;
+  letter-spacing: -0.02em;
+}
+
+.bo-cv-normal-sub {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.bo-cv-normal-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.bo-cv-normal-applicant-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bo-cv-normal-context-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #334155;
+  font-weight: 600;
+}
+
+.bo-cv-normal-context-pill.is-amount {
+  background: #f0faf5;
+  border-color: rgba(15, 122, 76, 0.25);
+  color: #0f7a4c;
+  font-weight: 700;
+}
+
+/* ── Applicant Selection Bar ── */
+.bo-cv-normal-applicant-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+}
+
+.bo-cv-normal-bar-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+/* ── Section Blocks ── */
+.bo-cv-normal-section {
+  padding: 22px 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+}
+
+.bo-cv-normal-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #edf2f0;
+  margin-bottom: 18px;
+}
+
+.bo-cv-normal-section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.bo-cv-normal-section-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #f0faf5;
+  color: #0f7a4c;
+  border: 1px solid rgba(15, 122, 76, 0.2);
+  font-size: 14px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.bo-cv-normal-section-num.is-result {
+  background: #0f7a4c;
+  color: #ffffff;
+  border-color: #0f7a4c;
+}
+
+.bo-cv-normal-section-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+  color: #0b2f22;
+  letter-spacing: -0.01em;
+}
+
+.bo-cv-normal-section-sub {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.bo-cv-normal-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 15px;
+  border-radius: 10px;
+  border: 1px solid #0f7a4c;
+  background: #f0faf5;
+  color: #0f7a4c;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bo-cv-normal-add-btn:hover:not(:disabled) {
+  background: #0f7a4c;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(15, 122, 76, 0.2);
+}
+
+.bo-cv-normal-add-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Section 06: Calculation Action Bar ── */
+.bo-cv-normal-section--calc-action {
+  padding: 18px 24px;
+}
+
+.bo-cv-normal-calc-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.bo-cv-normal-calc-bar-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.bo-cv-normal-calc-bar-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+  color: #0b2f22;
+  letter-spacing: -0.01em;
+}
+
+.bo-cv-normal-calc-bar-sub {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* ── Section 07: Exact 4 + 4 Result KPI Cards ── */
+.bo-cv-normal-results-container {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.bo-cv-normal-results-container .bo-cv-result-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.bo-cv-normal-results-container .bo-cv-result-metric-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 88px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  box-sizing: border-box;
+}
+
+.bo-cv-normal-results-container .bo-cv-result-metric-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bo-cv-normal-results-container .bo-cv-result-metric-val {
+  font-size: 15px;
+  font-weight: 750;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
+.bo-cv-normal-results-container .bo-cv-result-metric-sub {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Responsive Breakpoints ── */
+@media (max-width: 1024px) {
+  .bo-cv-normal-results-container .bo-cv-result-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .bo-cv-normal-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .bo-cv-normal-header-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .bo-cv-normal-calc-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .bo-cv-normal-calc-bar .bo-cv-calculate-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .bo-cv-normal-results-container .bo-cv-result-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bo-cv-normal-section-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   INCOME METHOD DEDICATED FULL-WORKSPACE STYLES (STEP 11)
+══════════════════════════════════════════════════════════════════════════ */
+.bo-cv-elig-deck--income-workspace {
+  gap: 18px;
+}
+
+.bo-cv-income-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  padding-bottom: 80px;
+}
+
+/* ── Income Method Header ── */
+.bo-cv-income-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 24px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.bo-cv-income-header-left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+
+.bo-cv-income-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid #cbdad5;
+  background: #f8fbf9;
+  color: #0f7a4c;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.bo-cv-income-back-btn:hover {
+  background: #e8f4ee;
+  border-color: #0f7a4c;
+  color: #0a5c39;
+  transform: translateX(-2px);
+}
+
+.bo-cv-income-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bo-cv-income-title-block .bo-cv-elig-kicker {
+  align-self: flex-start;
+  margin-bottom: 2px;
+  background: #e8f4ee;
+  color: #0f7a4c;
+  border: 1px solid rgba(15, 122, 76, 0.2);
+}
+
+.bo-cv-income-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: #0b2f22;
+  letter-spacing: -0.02em;
+}
+
+.bo-cv-income-sub {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.bo-cv-income-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.bo-cv-income-applicant-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bo-cv-income-context-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #334155;
+  font-weight: 600;
+}
+
+.bo-cv-income-context-pill.is-amount {
+  background: #f0faf5;
+  border-color: rgba(15, 122, 76, 0.25);
+  color: #0f7a4c;
+  font-weight: 700;
+}
+
+/* ── Applicant Selection Bar ── */
+.bo-cv-income-applicant-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+}
+
+.bo-cv-income-bar-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+/* ── Section Blocks ── */
+.bo-cv-income-section {
+  padding: 22px 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+}
+
+.bo-cv-income-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #edf2f0;
+  margin-bottom: 18px;
+}
+
+.bo-cv-income-section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.bo-cv-income-section-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #f0faf5;
+  color: #0f7a4c;
+  border: 1px solid rgba(15, 122, 76, 0.2);
+  font-size: 14px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.bo-cv-income-section-num.is-result {
+  background: #0f7a4c;
+  color: #ffffff;
+  border-color: #0f7a4c;
+}
+
+.bo-cv-income-section-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+  color: #0b2f22;
+  letter-spacing: -0.01em;
+}
+
+.bo-cv-income-section-sub {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.bo-cv-income-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 15px;
+  border-radius: 10px;
+  border: 1px solid #0f7a4c;
+  background: #f0faf5;
+  color: #0f7a4c;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bo-cv-income-add-btn:hover:not(:disabled) {
+  background: #0f7a4c;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(15, 122, 76, 0.2);
+}
+
+.bo-cv-income-add-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Section 02: Other Income Table & Input Layout (Income Method) ── */
+.bo-cv-income-section .bo-cv-salary-table {
+  min-width: 600px;
+  width: 100%;
+}
+
+.bo-cv-income-section .bo-cv-salary-table th.th-income-name,
+.bo-cv-income-section .bo-cv-salary-table td.td-income-name {
+  min-width: 280px;
+  width: auto;
+  text-align: left;
+}
+
+.bo-cv-income-section .bo-cv-salary-table td.td-income-name input.bo-cv-salary-input,
+.bo-cv-income-section .bo-cv-salary-input--name {
+  max-width: 100% !important;
+  width: 100% !important;
+  text-align: left !important;
+}
+
+.bo-cv-income-section .bo-cv-salary-table th.th-num,
+.bo-cv-income-section .bo-cv-salary-table td.td-num {
+  width: 160px;
+  min-width: 160px;
+}
+
+.bo-cv-income-section .bo-cv-salary-table th.th-pct,
+.bo-cv-income-section .bo-cv-salary-table td.td-pct {
+  width: 140px;
+  min-width: 140px;
+}
+
+.bo-cv-income-section .bo-cv-salary-input--amount {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+/* ── Section 04: Baseline Cards Grid (Income Method) ── */
+.bo-cv-income-baseline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.bo-cv-income-baseline-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bo-cv-income-baseline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #0f7a4c;
+  display: inline-block;
+}
+
+.bo-cv-income-baseline-title {
+  font-size: 12.5px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #1e293b;
+}
+
+.bo-cv-income-baseline-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f7a4c;
+  background: #eaf5ee;
+  border: 1px solid #a8d5b5;
+  padding: 3px 9px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+
+.bo-cv-income-baseline-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.bo-cv-income-baseline-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 84px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+}
+
+.bo-cv-income-baseline-card:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+}
+
+.bo-cv-income-baseline-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bo-cv-income-baseline-val {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.bo-cv-income-baseline-val.is-accent {
+  color: #0f7a4c;
+}
+
+.bo-cv-income-baseline-val.bo-cv-foir-val {
+  color: #0f7a4c;
+}
+
+.bo-cv-income-baseline-sub {
+  font-size: 11.5px;
+  color: #64748b;
+  line-height: 1.3;
+}
+
+.bo-cv-income-calc-settings-divider {
+  display: flex;
+  align-items: center;
+  margin-bottom: 14px;
+  padding-top: 10px;
+  border-top: 1px solid #edf2f0;
+}
+
+.bo-cv-income-settings-divider-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #475569;
+}
+
+.bo-cv-income-section .bo-cv-calc-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+/* ── Section 06: Calculation Action Bar ── */
+.bo-cv-income-section--calc-action {
+  padding: 18px 24px;
+}
+
+.bo-cv-income-calc-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.bo-cv-income-calc-bar-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.bo-cv-income-calc-bar-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+  color: #0b2f22;
+  letter-spacing: -0.01em;
+}
+
+.bo-cv-income-calc-bar-sub {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* ── Section 07: Exact 4 + 4 Result KPI Cards ── */
+.bo-cv-income-results-container {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.bo-cv-income-results-container .bo-cv-result-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.bo-cv-income-results-container .bo-cv-result-metric-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 88px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  box-sizing: border-box;
+}
+
+.bo-cv-income-results-container .bo-cv-result-metric-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bo-cv-income-results-container .bo-cv-result-metric-val {
+  font-size: 15px;
+  font-weight: 750;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
+.bo-cv-income-results-container .bo-cv-result-metric-sub {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Responsive Breakpoints ── */
+@media (max-width: 1024px) {
+  .bo-cv-income-baseline-grid,
+  .bo-cv-income-section .bo-cv-calc-settings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bo-cv-income-results-container .bo-cv-result-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .bo-cv-income-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .bo-cv-income-header-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .bo-cv-income-calc-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .bo-cv-income-calc-bar .bo-cv-calculate-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .bo-cv-income-baseline-grid,
+  .bo-cv-income-section .bo-cv-calc-settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bo-cv-income-results-container .bo-cv-result-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bo-cv-income-section-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RECOMMENDED LOAN AMOUNT TABLE / CARD (INCOME & NORMAL INCOME WORKSPACES)
+══════════════════════════════════════════════════════════════════════════ */
+.bo-cv-rec-card {
+  margin-top: 20px;
+  padding: 20px 22px;
+  border-radius: 14px;
+  background: #f8fbf9;
+  border: 1.5px solid #b9dfc7;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 2px 10px rgba(15, 122, 76, 0.04);
+}
+
+.bo-cv-rec-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.bo-cv-rec-card-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bo-cv-rec-card-badge {
+  align-self: flex-start;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #0f7a4c;
+  background: #e1f5eb;
+  border: 1px solid rgba(15, 122, 76, 0.25);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.bo-cv-rec-card-title {
+  margin: 2px 0 0;
+  font-size: 16px;
+  font-weight: 750;
+  color: #0b2f22;
+  letter-spacing: -0.01em;
+}
+
+.bo-cv-rec-card-sub {
+  margin: 0;
+  font-size: 12.5px;
+  color: #56806b;
+  line-height: 1.4;
+}
+
+.bo-cv-rec-saved-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #ffffff;
+  border: 1px solid #a8d5b5;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #334155;
+  flex-shrink: 0;
+}
+
+.bo-cv-rec-saved-badge span {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.bo-cv-rec-saved-badge strong {
+  color: #0f7a4c;
+  font-weight: 800;
+  font-size: 13.5px;
+}
+
+.bo-cv-rec-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid #cbdad5;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02);
+}
+
+.bo-cv-rec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+  min-width: 680px;
+}
+
+.bo-cv-rec-table thead th {
+  background: #f1f8f4;
+  color: #234e3b;
+  font-weight: 750;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 10px 14px;
+  border-bottom: 2px solid #cbdad5;
+  white-space: nowrap;
+}
+
+.bo-cv-rec-table thead th .req {
+  color: #dc2626;
+  margin-left: 2px;
+}
+
+.bo-cv-rec-table thead th.th-action,
+.bo-cv-rec-table tbody td.td-action {
+  text-align: right;
+  width: 190px;
+  min-width: 190px;
+}
+
+.bo-cv-rec-table tbody td {
+  padding: 12px 14px;
+  vertical-align: middle;
+  border-bottom: none;
+}
+
+.bo-cv-rec-static-val {
+  font-size: 15px;
+  font-weight: 750;
+  color: #1e293b;
+}
+
+.bo-cv-rec-static-val.is-max-eligible {
+  color: #0f7a4c;
+  font-weight: 800;
+}
+
+.bo-cv-rec-input-group {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  width: 100%;
+  max-width: 220px;
+}
+
+.bo-cv-rec-currency-prefix {
+  position: absolute;
+  left: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f7a4c;
+  pointer-events: none;
+}
+
+.bo-cv-rec-table-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 10px 0 24px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  color: #0b2f22;
+  border: 1.5px solid #9bcbae;
+  border-radius: 8px;
+  background: #ffffff;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.bo-cv-rec-table-input:focus {
+  outline: none;
+  border-color: #0f7a4c;
+  box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.15);
+}
+
+.bo-cv-rec-table-input:disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+  border-color: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.bo-cv-rec-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 16px;
+  font-size: 12.5px;
+  font-weight: 700;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .bo-cv-rec-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+

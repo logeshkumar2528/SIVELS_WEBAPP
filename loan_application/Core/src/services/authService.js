@@ -3,12 +3,13 @@ import axiosInstance from '../api/axiosInstance';
 export const authService = {
   // ──────────────────────────────────────────────────────────────────────────
   // SEND OTP  →  POST /MobileOtp/send-mobile-otp
-  // Payload: { phoneNumber: "9876543210" }
+  // Payload: { phoneNumber: "9876543210", purpose: "Login" }
   // ──────────────────────────────────────────────────────────────────────────
   sendOtp: async (phoneNumber) => {
     try {
       const response = await axiosInstance.post('/MobileOtp/send-mobile-otp', {
         phoneNumber,
+        purpose: 'Login',
       });
 
       return response.data;
@@ -27,7 +28,6 @@ export const authService = {
 
   // ──────────────────────────────────────────────────────────────────────────
   // VERIFY MOBILE OTP  →  POST /MobileOtp/verify-mobile-otp
-  // Payload: { mobileNumber: "9345638127", otp: "580232" }
   // ──────────────────────────────────────────────────────────────────────────
   verifyMobileOtp: async (mobileNumberOrPayload, maybeOtp) => {
     let mobileNumber = '';
@@ -47,6 +47,7 @@ export const authService = {
       const response = await axiosInstance.post('/MobileOtp/verify-mobile-otp', {
         mobileNumber: String(mobileNumber).trim(),
         otp: String(otp).trim(),
+        purpose: 'Login',
       });
       const data = response.data;
 

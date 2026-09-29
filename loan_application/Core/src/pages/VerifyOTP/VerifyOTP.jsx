@@ -138,33 +138,47 @@ export default function VerifyOTP() {
 
     try {
       await withLoading(async () => {
-        // 1. Verify OTP via API (POST /MobileOtp/verify-mobile-otp) or development fallback
+        // 1. Verify OTP via API (POST /MobileOtp/verify-mobile-otp) or Master test login
         let result = null;
         let verificationSuccessful = false;
+        let verificationError = null;
 
-        try {
-          result = await authService.verifyMobileOtp(cleanMobile, enteredOtp);
-        } catch (apiErr) {
-          console.warn('[VerifyOTP] Backend OTP API notice:', apiErr?.message || apiErr);
-        }
+        const isMasterTestLogin = cleanMobile === '9345638126' && enteredOtp === '123456';
 
-        const isLoginSuccessfulMessage =
-          typeof result?.message === 'string' &&
-          result.message.trim().toLowerCase() === 'login successful';
-
-        const isBackendSuccess =
-          result?.success === true ||
-          result?.isSuccess === true ||
-          result?.data?.success === true ||
-          isLoginSuccessfulMessage;
-
-        const isTestOtp = enteredOtp === '123456';
-        if (isBackendSuccess || isTestOtp) {
+        if (isMasterTestLogin) {
           verificationSuccessful = true;
+        } else {
+          try {
+            result = await authService.verifyMobileOtp(cleanMobile, enteredOtp);
+            const isLoginSuccessfulMessage =
+              typeof result?.message === 'string' &&
+              result.message.trim().toLowerCase() === 'login successful';
+
+            const isBackendSuccess =
+              result?.success === true ||
+              result?.isSuccess === true ||
+              result?.data?.success === true ||
+              isLoginSuccessfulMessage;
+
+            if (isBackendSuccess) {
+              verificationSuccessful = true;
+            } else {
+              verificationError =
+                result?.message ||
+                result?.error ||
+                result?.title ||
+                'Invalid OTP. Please check the code and try again.';
+            }
+          } catch (apiErr) {
+            console.warn('[VerifyOTP] Backend OTP API notice:', apiErr?.message || apiErr);
+            verificationError =
+              apiErr?.message ||
+              'Invalid OTP. Please check the code and try again.';
+          }
         }
 
         if (!verificationSuccessful) {
-          const errMsg = result?.message || result?.error || 'Invalid OTP. Please check the code and try again.';
+          const errMsg = verificationError || 'Invalid OTP. Please check the code and try again.';
           setErrorMessage(errMsg);
           showToast('error', 'Invalid OTP', errMsg);
           return;
