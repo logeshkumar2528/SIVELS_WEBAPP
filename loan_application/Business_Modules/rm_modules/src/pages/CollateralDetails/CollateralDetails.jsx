@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Home, UserCheck, MapPin, IndianRupee, AlertCircle, RefreshCw } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
@@ -245,6 +245,8 @@ function CollateralForm({
 export default function CollateralDetails() {
   const navigate = useNavigate();
   const { applicationId } = useParams();
+  const [searchParams] = useSearchParams();
+  const isViewMode = searchParams.get('mode') === 'view';
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
   const [form, setForm] = useState(() => {
@@ -526,6 +528,11 @@ export default function CollateralDetails() {
   };
 
   const handleContinue = async () => {
+    if (isViewMode) {
+      navigate(`${ROUTES.SCHEDULE_CHARGES.replace(':applicationId', appId)}?mode=view`);
+      return;
+    }
+
     if (collateralRequired) {
       const nextErrors = {};
       const p1Errors = validateProperty(form.propertyOne, true);
@@ -683,7 +690,7 @@ export default function CollateralDetails() {
   };
 
   const handleBack = () => {
-    navigate(ROUTES.REFERENCES.replace(':applicationId', appId));
+    navigate(isViewMode ? `${ROUTES.REFERENCES.replace(':applicationId', appId)}?mode=view` : ROUTES.REFERENCES.replace(':applicationId', appId));
   };
 
   return (
@@ -704,10 +711,10 @@ export default function CollateralDetails() {
       title="Step 8: Collateral Details"
       subtitle="Capture property details only when the selected loan product requires collateral."
       backLabel="Back to References"
-      continueLabel="Save & Continue"
+      continueLabel={isViewMode ? 'Next' : 'Save & Continue'}
       onBack={handleBack}
       onContinue={handleContinue}
-      onStepClick={(step) => navigate(step.route.replace(':applicationId', appId))}
+      onStepClick={(step) => navigate(isViewMode ? `${step.route.replace(':applicationId', appId)}?mode=view` : step.route.replace(':applicationId', appId))}
       headerAction={
         <Button
           variant="secondary"
@@ -765,34 +772,36 @@ export default function CollateralDetails() {
               Collateral details are required for this loan product{matchedCollateral?.productName ? ` (${matchedCollateral.productName})` : ''}.
             </span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', alignItems: 'start' }}>
-            <CollateralForm 
-              title="Property 1 Details" 
-              value={form.propertyOne} 
-              onChange={(field, val) => updateField('propertyOne', field, val)} 
-              errors={Object.fromEntries(
-                Object.entries(errors)
-                  .filter(([k]) => k.startsWith('propertyOne.'))
-                  .map(([k, v]) => [k.replace('propertyOne.', ''), v])
-              )}
-              propertyOptions={propertyOptions}
-              usageOptions={usageOptions}
-              isLoadingMasters={isLoadingMasters}
-            />
-            <CollateralForm 
-              title="Property 2 Details" 
-              value={form.propertyTwo} 
-              onChange={(field, val) => updateField('propertyTwo', field, val)} 
-              errors={Object.fromEntries(
-                Object.entries(errors)
-                  .filter(([k]) => k.startsWith('propertyTwo.'))
-                  .map(([k, v]) => [k.replace('propertyTwo.', ''), v])
-              )}
-              propertyOptions={propertyOptions}
-              usageOptions={usageOptions}
-              isLoadingMasters={isLoadingMasters}
-            />
-          </div>
+          <fieldset disabled={isViewMode} style={{ border: 'none', padding: 0, margin: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', alignItems: 'start' }}>
+              <CollateralForm 
+                title="Property 1 Details" 
+                value={form.propertyOne} 
+                onChange={(field, val) => updateField('propertyOne', field, val)} 
+                errors={Object.fromEntries(
+                  Object.entries(errors)
+                    .filter(([k]) => k.startsWith('propertyOne.'))
+                    .map(([k, v]) => [k.replace('propertyOne.', ''), v])
+                )}
+                propertyOptions={propertyOptions}
+                usageOptions={usageOptions}
+                isLoadingMasters={isLoadingMasters}
+              />
+              <CollateralForm 
+                title="Property 2 Details" 
+                value={form.propertyTwo} 
+                onChange={(field, val) => updateField('propertyTwo', field, val)} 
+                errors={Object.fromEntries(
+                  Object.entries(errors)
+                    .filter(([k]) => k.startsWith('propertyTwo.'))
+                    .map(([k, v]) => [k.replace('propertyTwo.', ''), v])
+                )}
+                propertyOptions={propertyOptions}
+                usageOptions={usageOptions}
+                isLoadingMasters={isLoadingMasters}
+              />
+            </div>
+          </fieldset>
         </>
       )}
     </WizardSectionLayout>

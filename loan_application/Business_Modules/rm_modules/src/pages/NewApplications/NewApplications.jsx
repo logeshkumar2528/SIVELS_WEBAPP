@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FileText, Eye, Pencil } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import DataTable from '../../components/DataTable/DataTable';
 import StatusBadge from '../../components/StatusBadge/StatusBadge';
@@ -18,6 +19,7 @@ import {
   resolveApiArray,
 } from '../../utils/rmContext';
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
+import rmCustomerService from '../../services/rmCustomerService';
 import './NewApplications.css';
 import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
 import { resolveDocumentTypeId, validateApplicantDocumentFile } from '../../../../../Core/src/utils/documentTypeHelper';
@@ -180,6 +182,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(7);
   const [applications, setApplications] = useState([]);
+  const [verificationStatusByApp, setVerificationStatusByApp] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [errorPopup, setErrorPopup] = useState('');
   const pageSizeOptions = [7, 10, 15, 20];
@@ -357,9 +360,52 @@ export default function NewApplications({ initialFilter = 'All' }) {
         );
         return fresh || prev;
       });
+
+      // Fetch Back Office Step Verification records ONLY for Logged to HO applications
+      const loggedToHoApps = mapped.filter(
+        (a) => a.status === 'Logged to HO' || a.rawStatus === 2 || a.rawStatus === '2'
+      );
+
+      if (loggedToHoApps.length > 0) {
+        const verifResults = await Promise.allSettled(
+          loggedToHoApps.map(async (app) => {
+            const prodId = app.applicationProductDetailsId;
+            const appKey = String(app.agentCustomerId || app.id);
+            if (!prodId) {
+              return { appKey, status: 'error', hasActiveVerification: true };
+            }
+            try {
+              const res = await rmCustomerService.getStepVerificationsByApplication(prodId);
+              const records = Array.isArray(res) ? res : (res?.value || res?.data || []);
+              const activeRecords = records.filter((r) => r && r.isActive !== false);
+              return {
+                appKey,
+                status: 'loaded',
+                hasActiveVerification: activeRecords.length > 0,
+              };
+            } catch {
+              return { appKey, status: 'error', hasActiveVerification: true };
+            }
+          })
+        );
+
+        const verifMap = {};
+        verifResults.forEach((r) => {
+          if (r.status === 'fulfilled' && r.value) {
+            verifMap[r.value.appKey] = {
+              status: r.value.status,
+              hasActiveVerification: r.value.hasActiveVerification,
+            };
+          }
+        });
+        setVerificationStatusByApp(verifMap);
+      } else {
+        setVerificationStatusByApp({});
+      }
     } catch (error) {
       console.error('Failed to fetch applications or rejections:', error);
       setApplications([]);
+      setVerificationStatusByApp({});
       setErrorPopup('Unable to load live applications for this RM. Please try again.');
     } finally {
       setIsLoading(false);
@@ -710,6 +756,30 @@ export default function NewApplications({ initialFilter = 'All' }) {
     }));
   }, [filteredData, currentPage, pageSize]);
 
+  const getCanEdit = useCallback((row) => {
+    // Only status 2 / 'Logged to HO' can ever be edited
+    const isLoggedToHo = row.status === 'Logged to HO' || row.rawStatus === 2 || row.rawStatus === '2';
+    if (!isLoggedToHo) return false;
+
+    // Status >= 3 is always hidden
+    const numStatus = Number(row.rawStatus ?? row.status);
+    if (!isNaN(numStatus) && numStatus >= 3) return false;
+    if (row.status === 'Under Review' || row.status === 'Approved' || row.status === 'Rejected') return false;
+
+    // If applicationProductDetailsId is missing, cannot verify -> fail closed (hide edit)
+    const appProdId = row.applicationProductDetailsId;
+    if (!appProdId) return false;
+
+    const key = String(row.agentCustomerId || row.id);
+    const verifState = verificationStatusByApp[key];
+
+    // Must be positively loaded with zero active verification records (fail-closed on loading/error/undefined)
+    if (!verifState || verifState.status !== 'loaded') return false;
+    if (verifState.hasActiveVerification === true) return false;
+
+    return true;
+  }, [verificationStatusByApp]);
+
   const columns = [
     { key: 'sno', label: 'S.NO' },
     { key: 'displayId', label: 'APP ID' },
@@ -735,55 +805,105 @@ export default function NewApplications({ initialFilter = 'All' }) {
       key: 'action',
       label: 'ACTIONS',
       render: (row) => {
-        let btnText = 'Verify Now';
-        if (row.status === 'Logged to HO') btnText = 'View Details';
-        if (row.status === 'Returned') btnText = 'Review Return';
         const applicationId = row.agentCustomerId || row.id;
 
-        const handleActionClick = async () => {
-          if (row.status === 'Returned') {
-            setSelectedReturnApp(row);
-            setSelectedFiles({});
-            setRejectionFeedback({});
-            return;
-          }
+        if (row.status === 'Returned') {
+          return (
+            <div className="new-apps-actions-cell">
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => {
+                  setSelectedReturnApp(row);
+                  setSelectedFiles({});
+                  setRejectionFeedback({});
+                }}
+              >
+                Review Return
+              </Button>
+            </div>
+          );
+        }
 
-          if (row.status === 'New' || btnText === 'Verify Now') {
-            try {
-              const getRes = await fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`);
-              if (getRes.ok) {
-                const data = await getRes.json();
-                const cust = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
-                if (cust && Number(cust.status ?? cust.Status ?? 0) === 0) {
-                  const payload = {
-                    ...cust,
-                    status: 1,
-                  };
-                  const putRes = await fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                  });
-                  if (!putRes.ok && putRes.status !== 204) {
-                    console.error(`Failed to update status to Pending (${putRes.status})`);
-                  }
-                }
-              }
-            } catch (err) {
-              console.error('Failed to update status to Pending:', err);
-            }
-          }
-          navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId));
-        };
+        if (row.status === 'Logged to HO' || row.rawStatus === 2 || row.rawStatus === '2') {
+          const canEdit = getCanEdit(row);
+          return (
+            <div className="new-apps-actions-cell" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <Button
+                size="sm"
+                variant="secondary"
+                title="View Form"
+                aria-label="View Form"
+                className="new-apps-action-btn"
+                onClick={() => navigate(ROUTES.APPLICATION_PDF_VIEW.replace(':applicationId', applicationId), {
+                  state: {
+                    returnTo: ROUTES.APPROVED_APPLICATIONS,
+                  },
+                })}
+              >
+                <FileText size={16} />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                title="View Details"
+                aria-label="View Details"
+                className="new-apps-action-btn"
+                onClick={() => navigate(`${ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId)}?mode=view`)}
+              >
+                <Eye size={16} />
+              </Button>
+              {canEdit && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  title="Edit Application"
+                  aria-label="Edit Application"
+                  className="new-apps-action-btn"
+                  onClick={() => navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId))}
+                >
+                  <Pencil size={16} />
+                </Button>
+              )}
+            </div>
+          );
+        }
 
         return (
           <div className="new-apps-actions-cell">
             <Button
               size="sm"
-              variant={row.status === 'Returned' ? 'primary' : 'primary'}
-              onClick={handleActionClick}
+              variant="primary"
+              onClick={async () => {
+                if (row.status === 'New') {
+                  try {
+                    const getRes = await fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`);
+                    if (getRes.ok) {
+                      const data = await getRes.json();
+                      const cust = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
+                      if (cust && Number(cust.status ?? cust.Status ?? 0) === 0) {
+                        const payload = {
+                          ...cust,
+                          status: 1,
+                        };
+                        const putRes = await fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(payload),
+                        });
+                        if (!putRes.ok && putRes.status !== 204) {
+                          console.error(`Failed to update status to Pending (${putRes.status})`);
+                        }
+                      }
+                    }
+                  } catch (err) {
+                    console.error('Failed to update status to Pending:', err);
+                  }
+                }
+                navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId));
+              }}
             >
-              {btnText}
+              Verify Now
             </Button>
           </div>
         );

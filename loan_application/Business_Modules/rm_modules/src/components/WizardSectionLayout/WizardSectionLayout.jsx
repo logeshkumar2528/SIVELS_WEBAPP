@@ -2,7 +2,7 @@ import Button from '../Button/Button';
 import InfoBar from '../InfoBar/InfoBar';
 import WizardProgress from '../WizardProgress/WizardProgress';
 import iconMap from '../../config/iconMap';
-import { useLocation, matchPath } from 'react-router-dom';
+import { useLocation, matchPath, useSearchParams } from 'react-router-dom';
 import { useMemo, useEffect, useState } from 'react';
 import { buildApplicationDisplayId, resolveApplicantName } from '../../pages/applicationWizard/flowUtils';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
@@ -47,6 +47,8 @@ export default function WizardSectionLayout({
   const ArrowLeftIcon = iconMap['ArrowLeft'];
   const ClockIcon = iconMap['Clock'];
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const isViewMode = searchParams.get('mode') === 'view';
   const { saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
 
   const applicantName = useMemo(() => resolveApplicantName(appData), [appData]);
@@ -149,7 +151,7 @@ export default function WizardSectionLayout({
                 iconPosition="right"
                 onClick={onContinue}
               >
-                {continueLabel}
+                {(isViewMode && continueLabel === 'Save & Continue') ? 'Next' : continueLabel}
               </Button>
             )}
           </div>

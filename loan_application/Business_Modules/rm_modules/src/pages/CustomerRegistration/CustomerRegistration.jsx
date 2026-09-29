@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { User, Users, FileText, Calendar, Phone, Mail, UserCheck } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import InfoBar from '../../components/InfoBar/InfoBar';
@@ -589,6 +589,8 @@ function PersonCard({
 export default function CustomerRegistration() {
   const navigate = useNavigate();
   const { applicationId } = useParams();
+  const [searchParams] = useSearchParams();
+  const isViewMode = searchParams.get('mode') === 'view';
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildPersonalInformationState(getApplication(appId)));
@@ -843,6 +845,10 @@ export default function CustomerRegistration() {
   };
 
   const handleSaveAndContinue = async () => {
+    if (isViewMode) {
+      navigate(`${ROUTES.ADDRESS_DETAILS.replace(':applicationId', appId)}?mode=view`);
+      return;
+    }
     const validationErrors = validateForm();
     setErrors(validationErrors);
 
@@ -1089,7 +1095,7 @@ export default function CustomerRegistration() {
   };
 
   const handleBack = () => {
-    navigate(ROUTES.KYC_DOCUMENTS.replace(':applicationId', appId));
+    navigate(isViewMode ? `${ROUTES.KYC_DOCUMENTS.replace(':applicationId', appId)}?mode=view` : ROUTES.KYC_DOCUMENTS.replace(':applicationId', appId));
   };
 
   const applicant = form.applicant;
@@ -1219,6 +1225,7 @@ export default function CustomerRegistration() {
 
       <div className="panel cr-form-card">
         <div className="cr-form-body">
+          <fieldset disabled={isViewMode} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <PersonCard
             heading="Applicant Information"
             person={applicant}
@@ -1270,6 +1277,7 @@ export default function CustomerRegistration() {
               isCoApplicant
             />
           ))}
+          </fieldset>
         </div>
 
         <div className="cr-form-footer">
@@ -1293,7 +1301,7 @@ export default function CustomerRegistration() {
               iconPosition="right"
               onClick={handleSaveAndContinue}
             >
-              Save & Continue
+              {isViewMode ? 'Next' : 'Save & Continue'}
             </Button>
           </div>
         </div>

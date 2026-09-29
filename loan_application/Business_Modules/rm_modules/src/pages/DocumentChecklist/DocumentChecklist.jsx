@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { FileText, IndianRupee, IdCard, Briefcase, Landmark, Home, CheckCircle2, RefreshCw } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
@@ -181,6 +181,8 @@ function ChecklistItem({ item, onChange }) {
 export default function DocumentChecklist() {
   const navigate = useNavigate();
   const { applicationId } = useParams();
+  const [searchParams] = useSearchParams();
+  const isViewMode = searchParams.get('mode') === 'view';
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const appData = getApplication(appId);
@@ -296,12 +298,16 @@ export default function DocumentChecklist() {
   };
 
   const handleContinue = () => {
+    if (isViewMode) {
+      navigate(`${ROUTES.DECLARATION.replace(':applicationId', appId)}?mode=view`);
+      return;
+    }
     saveApplication(appId, buildSectionUpdate(appData, 'documentChecklist', form));
     navigate(ROUTES.DECLARATION.replace(':applicationId', appId));
   };
 
   const handleBack = () => {
-    navigate(ROUTES.SCHEDULE_CHARGES.replace(':applicationId', appId));
+    navigate(isViewMode ? `${ROUTES.SCHEDULE_CHARGES.replace(':applicationId', appId)}?mode=view` : ROUTES.SCHEDULE_CHARGES.replace(':applicationId', appId));
   };
 
   return (
@@ -313,10 +319,10 @@ export default function DocumentChecklist() {
       title="Step 10: Document Checklist"
       subtitle="Verify that all required documents have been collected."
       backLabel="Back to Schedule of Charges"
-      continueLabel="Save & Continue"
+      continueLabel={isViewMode ? 'Next' : 'Save & Continue'}
       onBack={handleBack}
       onContinue={handleContinue}
-      onStepClick={(step) => navigate(step.route.replace(':applicationId', appId))}
+      onStepClick={(step) => navigate(isViewMode ? `${step.route.replace(':applicationId', appId)}?mode=view` : step.route.replace(':applicationId', appId))}
       headerAction={
         <Button
           variant="secondary"
@@ -344,15 +350,19 @@ export default function DocumentChecklist() {
             </span>
           )}
         </div>
-        <div className="aw-mini-card__body" style={{ padding: 0, display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
-          {form.items.map((item, index) => (
-            <div key={item.name} style={{ borderRight: index % 2 === 0 ? '1px solid var(--color-border-light)' : 'none' }}>
-              <ChecklistItem
-                item={item}
-                onChange={(field, value) => updateItem(index, field, value)}
-              />
+        <div className="aw-mini-card__body" style={{ padding: 0 }}>
+          <fieldset disabled={isViewMode} style={{ border: 'none', padding: 0, margin: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+              {form.items.map((item, index) => (
+                <div key={item.name} style={{ borderRight: index % 2 === 0 ? '1px solid var(--color-border-light)' : 'none' }}>
+                  <ChecklistItem
+                    item={item}
+                    onChange={(field, value) => updateItem(index, field, value)}
+                  />
+                </div>
+              ))}
             </div>
-          ))}
+          </fieldset>
         </div>
       </div>
     </WizardSectionLayout>

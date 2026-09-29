@@ -43,7 +43,21 @@ export default function DatePicker({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [rect, setRect] = useState(null);
+  const [isFieldsetDisabled, setIsFieldsetDisabled] = useState(false);
   const triggerRef = useRef(null);
+
+  const checkFieldsetDisabled = () => {
+    if (triggerRef.current) {
+      return Boolean(triggerRef.current.closest('fieldset:disabled, fieldset[disabled]'));
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    setIsFieldsetDisabled(checkFieldsetDisabled());
+  });
+
+  const effectivelyDisabled = Boolean(disabled || isFieldsetDisabled || checkFieldsetDisabled());
   
   // Date states for the calendar view
   const initialDate = value && !isNaN(new Date(value).getTime()) ? new Date(value) : new Date();
@@ -76,7 +90,10 @@ export default function DatePicker({
   }, [isOpen]);
 
   const handleToggle = () => {
-    if (disabled) return;
+    if (disabled || checkFieldsetDisabled()) {
+      if (isOpen) setIsOpen(false);
+      return;
+    }
     if (!isOpen && triggerRef.current) {
       const r = triggerRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - r.bottom;
@@ -119,6 +136,7 @@ export default function DatePicker({
   };
 
   const handleDateSelect = (day) => {
+    if (disabled || checkFieldsetDisabled()) return;
     const selected = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
     // Format as YYYY-MM-DD for standard input values
     const offset = selected.getTimezoneOffset();
@@ -128,11 +146,13 @@ export default function DatePicker({
   };
 
   const handleClear = () => {
+    if (disabled || checkFieldsetDisabled()) return;
     onChange('');
     setIsOpen(false);
   };
 
   const handleToday = () => {
+    if (disabled || checkFieldsetDisabled()) return;
     const today = new Date();
     const offset = today.getTimezoneOffset();
     today.setMinutes(today.getMinutes() - offset);
@@ -202,11 +222,20 @@ export default function DatePicker({
   };
 
   return (
-    <div className={`aw-datepicker-container ${disabled ? 'is-disabled' : ''}`}>
+    <div className={`aw-datepicker-container ${effectivelyDisabled ? 'is-disabled' : ''}`}>
       <div 
         ref={triggerRef}
-        className={`aw-datepicker-trigger ${error ? 'has-error' : ''} ${isOpen ? 'is-open' : ''} has-icon ${className}`}
+        className={`aw-datepicker-trigger ${error ? 'has-error' : ''} ${isOpen ? 'is-open' : ''} ${effectivelyDisabled ? 'is-disabled' : ''} has-icon ${className}`}
         onClick={handleToggle}
+        tabIndex={effectivelyDisabled ? -1 : 0}
+        aria-disabled={effectivelyDisabled}
+        onKeyDown={(e) => {
+          if (effectivelyDisabled) return;
+          if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            handleToggle();
+          }
+        }}
       >
         <CalendarIcon className="aw-datepicker-icon" size={14} />
         <span className={`aw-datepicker-value ${!value ? 'is-placeholder' : ''}`}>
@@ -214,7 +243,7 @@ export default function DatePicker({
         </span>
       </div>
 
-      {isOpen && rect && createPortal(
+      {isOpen && !effectivelyDisabled && rect && createPortal(
         <div 
           className={`aw-datepicker-dropdown ${rect.openUp ? 'open-up' : 'open-down'}`}
           style={{

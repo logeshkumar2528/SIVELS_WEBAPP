@@ -15,7 +15,21 @@ export default function Select({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [rect, setRect] = useState(null);
+  const [isFieldsetDisabled, setIsFieldsetDisabled] = useState(false);
   const triggerRef = useRef(null);
+
+  const checkFieldsetDisabled = () => {
+    if (triggerRef.current) {
+      return Boolean(triggerRef.current.closest('fieldset:disabled, fieldset[disabled]'));
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    setIsFieldsetDisabled(checkFieldsetDisabled());
+  });
+
+  const effectivelyDisabled = Boolean(disabled || isFieldsetDisabled || checkFieldsetDisabled());
 
   const selectedOption = options.find(
     (opt) =>
@@ -59,7 +73,10 @@ export default function Select({
   }, [isOpen]);
 
   const handleToggle = () => {
-    if (disabled) return;
+    if (disabled || checkFieldsetDisabled()) {
+      if (isOpen) setIsOpen(false);
+      return;
+    }
     if (!isOpen && triggerRef.current) {
       const r = triggerRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - r.bottom;
@@ -83,8 +100,19 @@ export default function Select({
     <>
       <div 
         ref={triggerRef}
-        className={`aw-custom-select-trigger ${error ? 'has-error' : ''} ${isOpen ? 'is-open' : ''} ${icon ? 'has-icon' : ''} ${disabled ? 'is-disabled' : ''} ${className}`}
+        className={`aw-custom-select-trigger ${error ? 'has-error' : ''} ${isOpen ? 'is-open' : ''} ${icon ? 'has-icon' : ''} ${effectivelyDisabled ? 'is-disabled' : ''} ${className}`}
         onClick={handleToggle}
+        tabIndex={effectivelyDisabled ? -1 : 0}
+        role="combobox"
+        aria-expanded={isOpen}
+        aria-disabled={effectivelyDisabled}
+        onKeyDown={(e) => {
+          if (effectivelyDisabled) return;
+          if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            handleToggle();
+          }
+        }}
       >
         {icon && <span className="aw-custom-select-icon">{icon}</span>}
         <span className={`aw-custom-select-value ${!selectedOption ? 'is-placeholder' : ''}`}>
@@ -93,7 +121,7 @@ export default function Select({
         <ChevronDown className={`aw-custom-select-chevron ${isOpen ? 'open' : ''}`} size={16} />
       </div>
 
-      {isOpen && rect && createPortal(
+      {isOpen && !effectivelyDisabled && rect && createPortal(
         <div 
           className={`aw-custom-select-dropdown ${rect.openUp ? 'open-up' : 'open-down'}`}
           style={{
@@ -111,6 +139,7 @@ export default function Select({
               <li 
                 className={`aw-custom-select-option ${value === '' ? 'selected' : ''} placeholder-option`}
                 onClick={() => {
+                  if (disabled || checkFieldsetDisabled()) return;
                   onChange('');
                   setIsOpen(false);
                 }}
@@ -125,6 +154,7 @@ export default function Select({
                   key={index} 
                   className={`aw-custom-select-option ${isSelected ? 'selected' : ''}`}
                   onClick={() => {
+                    if (disabled || checkFieldsetDisabled()) return;
                     onChange(option.value);
                     setIsOpen(false);
                   }}
