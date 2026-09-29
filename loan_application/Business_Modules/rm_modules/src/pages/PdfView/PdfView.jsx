@@ -64,7 +64,7 @@ function isObsoleteMock(val) {
 
 export default function PdfView() {
   const params = useParams();
-  const { withLoading } = useLoading();
+  const { showLoader, hideLoader, withLoading } = useLoading();
   const applicationId = params.applicationId || params.customerId;
   const navigate = useNavigate();
   const location = useLocation();
@@ -72,6 +72,7 @@ export default function PdfView() {
   const appData = applications[applicationId] || getApplication(applicationId) || {};
   const applicationDisplayId = buildApplicationDisplayId(appData, applicationId);
   const pdfRef = useRef();
+  const prepTokenRef = useRef(null);
 
   const [liveCustomer, setLiveCustomer] = useState(null);
   const [liveRM, setLiveRM] = useState(null);
@@ -1067,6 +1068,30 @@ export default function PdfView() {
   const [errorPopup, setErrorPopup] = useState(null);
 
   const isPdfMediaReady = !isMetadataLoading && !isDocsDownloading && !isCoPhotosLoading && !isApplicantPhotoLoading;
+
+  // Global preparation loader lifecycle: displays existing Sivels global loader while documents/media prepare
+  useEffect(() => {
+    if (!isPdfMediaReady) {
+      if (!prepTokenRef.current) {
+        prepTokenRef.current = showLoader({
+          message: 'Preparing application documents...',
+          subMessage: 'Loading application details and verified attachments',
+        });
+      }
+    } else {
+      if (prepTokenRef.current) {
+        hideLoader(prepTokenRef.current);
+        prepTokenRef.current = null;
+      }
+    }
+
+    return () => {
+      if (prepTokenRef.current) {
+        hideLoader(prepTokenRef.current);
+        prepTokenRef.current = null;
+      }
+    };
+  }, [isPdfMediaReady, showLoader, hideLoader]);
 
   // Shared helper to generate jsPDF instance from DOM
   const generatePdfInstance = async () => {
