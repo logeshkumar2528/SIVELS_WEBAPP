@@ -15,7 +15,6 @@ import {
 import { masterService } from '../../../../Core/src/services/masterService';
 import { getBankBranches } from '../../api/masters/bankBranchApi';
 import { getCurrentUserId } from '../../utils/authHelper';
-import { generateUserCode } from '../../utils/codeGenerator';
 import { DocumentPreviewModal, DocumentUploadCard, fetchDocumentBlobUrl, isPdfUrl } from '../../components/DocumentUpload/DocumentUploadSection';
 import { getProfileImageUrl } from '../../utils/profileImageHelper';
 import { getFileUrl, isPdfFile, getAadhaarPath, getPanPath, getProfilePath, getDocumentUrl } from '../Dashboard/Dashboard';
@@ -302,9 +301,6 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
   const update = (key, value) => {
     setForm((current) => {
       const next = { ...current, [key]: value };
-      if (!isEditMode && (key === 'fullName' || key === 'dateOfBirth' || key === 'mobileNumber')) {
-        next.backOfficeCode = generateUserCode(next.fullName, next.dateOfBirth, next.mobileNumber);
-      }
       if (key === 'stateId') {
         next.cityId = '';
         next.districtId = '';
@@ -316,6 +312,7 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
   };
 
   const validateField = (key, value = form[key]) => {
+    if (key === 'backOfficeCode' && !isEditMode) return '';
     const text = String(value || '').trim();
     let message = '';
     const today = new Date().toISOString().slice(0, 10);
@@ -342,7 +339,7 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
 
   const validateForm = () => {
     const requiredKeys = [
-      'backOfficeCode',
+      ...(isEditMode ? ['backOfficeCode'] : []),
       'fullName',
       'dateOfBirth',
       'genderId',
@@ -407,7 +404,7 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
 
     try {
       const payload = {
-        backOfficeCode: form.backOfficeCode.trim(),
+        backOfficeCode: isEditMode ? form.backOfficeCode.trim() : 'TEMP',
         fullName: form.fullName.trim(),
         dateOfBirth: form.dateOfBirth,
         genderId: Number(form.genderId || 0),
@@ -527,15 +524,16 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
         <input
           className={`form-input ${key === 'backOfficeCode' ? 'rm-code-input' : ''} ${type === 'date' ? 'rm-date-input' : ''} ${fieldErrors[key] ? 'rm-invalid' : ''}`}
           type={type}
-          value={form[key]}
+          value={key === 'backOfficeCode' && !isEditMode ? '' : form[key]}
+          placeholder={key === 'backOfficeCode' && !isEditMode ? 'Auto-generated on creation' : ''}
           onBlur={() => validateField(key)}
           onChange={(event) => update(key, event.target.value)}
           disabled={saving || loadingRecord || key === 'backOfficeCode' || (!isEditMode && key === 'dateJoined')}
           readOnly={key === 'backOfficeCode' || (!isEditMode && key === 'dateJoined')}
-          required={key !== 'emailAddress'}
+          required={key !== 'emailAddress' && key !== 'backOfficeCode'}
         />
       )}
-      {key === 'backOfficeCode' && <small className="rm-field-hint">{isEditMode ? 'System code' : 'Generated automatically'}</small>}
+      {key === 'backOfficeCode' && <small className="rm-field-hint">{isEditMode ? 'System code' : 'Auto-generated on creation'}</small>}
       {key === 'dateJoined' && !isEditMode && <small className="rm-field-hint">Set automatically on creation</small>}
       {fieldErrors[key] && <small className="rm-validation-error">{fieldErrors[key]}</small>}
     </label>

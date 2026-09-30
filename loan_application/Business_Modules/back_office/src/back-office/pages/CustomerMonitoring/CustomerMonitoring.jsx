@@ -17,6 +17,7 @@ import iconMap from '../../config/iconMap';
 import { buildRoute } from '../../config/routeConfig';
 import { useCustomerQueue } from '../../hooks/useCustomerQueue';
 import Pagination from '../../components/Pagination/Pagination';
+import { matchesListingDateCriteria } from '../../../../../../Core/src/utils/dateHelper';
 import './CustomerMonitoring.css';
 
 /**
@@ -95,6 +96,8 @@ export default function CustomerMonitoring() {
 
   // 2. Filter & Search State
   const [searchTerm, setSearchTerm] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [districtFilter, setDistrictFilter] = useState('All');
   const [rmFilter, setRmFilter] = useState('All');
   const [agentFilter, setAgentFilter] = useState('All');
@@ -111,6 +114,7 @@ export default function CustomerMonitoring() {
   const ArrowRightIcon = iconMap['ArrowRight'];
   const AlertTriangleIcon = iconMap['AlertTriangle'] || iconMap['AlertCircle'];
   const RefreshCwIcon = iconMap['RefreshCw'] || iconMap['RotateCcw'];
+  const CalendarIcon = iconMap['Calendar'] || iconMap['Clock'];
 
   // 5. Dynamic Dropdown Options Derived from Real Customers List
   const districtOptions = useMemo(() => {
@@ -136,14 +140,25 @@ export default function CustomerMonitoring() {
   // 6. Reset Page to 1 When Search or Filters Change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, districtFilter, rmFilter, agentFilter, statusFilter]);
+  }, [searchTerm, districtFilter, rmFilter, agentFilter, statusFilter, fromDate, toDate]);
 
   // 7. Multi-Dimensional Search & Filtering Logic (Sorted Newest-First)
   const filteredCustomers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
+    const searchActive = term.length > 0;
 
     return customers
       .filter((c) => {
+        // Date Filter
+        const appDate = c.createdAt || c.appliedDate;
+        const matchesDate = matchesListingDateCriteria({
+          dateValue: appDate,
+          searchActive,
+          fromDate,
+          toDate,
+        });
+        if (!matchesDate) return false;
+
         // District Filter
         const matchDistrict =
           districtFilter === 'All' ||
@@ -168,8 +183,10 @@ export default function CustomerMonitoring() {
           statusFilter === 'All' ||
           statusLabel.toLowerCase() === statusFilter.toLowerCase();
 
+        if (!matchDistrict || !matchRM || !matchAgent || !matchStatus) return false;
+
         // Search Query
-        if (!term) return matchDistrict && matchRM && matchAgent && matchStatus;
+        if (!searchActive) return true;
 
         const customerName = (c.customerName || c.name || '').toLowerCase();
         const mobile = String(c.mobile || '');
@@ -188,7 +205,7 @@ export default function CustomerMonitoring() {
           district.includes(term) ||
           loanType.includes(term);
 
-        return matchDistrict && matchRM && matchAgent && matchStatus && matchSearch;
+        return matchSearch;
       })
       .sort((a, b) => {
         const timeA = new Date(a.createdAt || a.appliedDate || 0).getTime() || 0;
@@ -198,7 +215,7 @@ export default function CustomerMonitoring() {
         const idB = Number(b.agentCustomerId ?? b.id ?? 0) || 0;
         return idB - idA;
       });
-  }, [customers, districtFilter, rmFilter, agentFilter, statusFilter, searchTerm]);
+  }, [customers, districtFilter, rmFilter, agentFilter, statusFilter, searchTerm, fromDate, toDate]);
 
   // 8. Sliced Paginated Slice
   const paginatedCustomers = useMemo(() => {
@@ -216,24 +233,31 @@ export default function CustomerMonitoring() {
 
   return (
     <div className="bo-page-container">
-      {/* Multi-Dimensional Filter Control Bar */}
+      {/* Multi-Dimensional Filter Control Bar (Two-Tier Standard) */}
       <div className="bo-customer-filter-panel">
-        <div className="bo-search-box">
-          {SearchIcon && <SearchIcon size={16} className="bo-search-icon" />}
-          <input
-            type="text"
-            placeholder="Search customer, app no, agent, RM or district..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="bo-search-input"
-            aria-label="Search applications"
-          />
+        {/* Tier 1: Search + Results Count */}
+        <div className="bo-filter-row-top">
+          <div className="bo-search-box">
+            {SearchIcon && <SearchIcon size={16} className="bo-search-icon" />}
+            <input
+              type="text"
+              placeholder="Search customer, app no, agent, RM or district..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="bo-search-input"
+              aria-label="Search applications"
+            />
+          </div>
+
+          <span className="bo-customer-count-badge">
+            Showing <strong>{filteredCustomers.length}</strong> Applications
+          </span>
         </div>
 
-        <div className="bo-customer-filter-group">
+        {/* Tier 2: Dynamic Multi-Dimensional Dropdowns & Date Controls */}
+        <div className="bo-filter-row-bottom">
           {/* District Dropdown */}
           <div className="bo-select-wrap">
-            {FilterIcon && <FilterIcon size={13} className="bo-filter-icon" />}
             <select
               value={districtFilter}
               onChange={(e) => setDistrictFilter(e.target.value)}
@@ -309,9 +333,51 @@ export default function CustomerMonitoring() {
             </select>
           </div>
 
-          <span className="bo-customer-count-badge">
-            Showing <strong>{filteredCustomers.length}</strong> Applications
-          </span>
+          {/* Date Range Inputs */}
+          <label className="bo-unified-date-box">
+            {CalendarIcon && <CalendarIcon size={14} className="bo-date-icon" />}
+            <span className="bo-date-prefix">From Date:</span>
+            <input
+              type="date"
+              value={fromDate}
+              max={toDate || undefined}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="bo-date-input"
+              aria-label="From Date"
+            />
+          </label>
+
+          <label className="bo-unified-date-box">
+            {CalendarIcon && <CalendarIcon size={14} className="bo-date-icon" />}
+            <span className="bo-date-prefix">To Date:</span>
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate || undefined}
+              onChange={(e) => setToDate(e.target.value)}
+              className="bo-date-input"
+              aria-label="To Date"
+            />
+          </label>
+
+          {(searchTerm || fromDate || toDate || districtFilter !== 'All' || rmFilter !== 'All' || agentFilter !== 'All' || statusFilter !== 'All') && (
+            <button
+              type="button"
+              className="bo-btn-reset-filter"
+              onClick={() => {
+                setSearchTerm('');
+                setFromDate('');
+                setToDate('');
+                setDistrictFilter('All');
+                setRmFilter('All');
+                setAgentFilter('All');
+                setStatusFilter('All');
+                setCurrentPage(1);
+              }}
+            >
+              Reset
+            </button>
+          )}
         </div>
       </div>
 

@@ -229,6 +229,32 @@ export const rmCustomerService = {
       throw err;
     }
   },
+
+  /**
+   * Retrieve step verifications for an application to determine whether Back Office verification has started.
+   * @param {string|number} applicationProductDetailsId
+   */
+  getStepVerificationsByApplication: async (applicationProductDetailsId) => {
+    try {
+      const response = await axiosInstance.get(
+        `/BackOfficeStepVerification/application/${encodeURIComponent(applicationProductDetailsId)}`,
+        {
+          validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
+        }
+      );
+      if (response.status === 404) {
+        return [];
+      }
+      const data = response.data;
+      if (Array.isArray(data)) return data;
+      return data?.value || data?.data || data?.items || [];
+    } catch (err) {
+      if (err?.response?.status === 404 || err?.status === 404) {
+        return [];
+      }
+      throw err;
+    }
+  },
 };
 
 export default rmCustomerService;

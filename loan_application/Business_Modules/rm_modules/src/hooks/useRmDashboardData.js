@@ -31,7 +31,7 @@ const EMPTY_DASHBOARD = {
   inProgressCount: 0,
   approvedLoansCount: 0,
   submissionHistoryCount: 0,
-  rmProfile: { rmCode: 'RM0001', fullName: 'Relationship Manager', branch: 'Branch Details & Targets' },
+  rmProfile: { rmCode: '—', fullName: 'Relationship Manager', branch: 'Branch Details & Targets' },
 };
 
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
@@ -63,10 +63,13 @@ const mapApplication = (item, index, agentsById = {}, rmsById = {}, rejections =
 
   const ownership = resolveApplicationOwnership(item, agentsById, rmsById);
   const officialAppId = item.appId || item.AppId || item.App_Id || null;
+  const rawCustomerCode = item.customerCode || item.CustomerCode || '';
+  const customerCode = rawCustomerCode ? String(rawCustomerCode).trim() : 'N/A';
 
   return {
     id: String(applicationId),
     appId: officialAppId,
+    customerCode,
     displayId: officialAppId || buildApplicationDisplayId(item, applicationId),
     customerName: item.fullName || item.customerName || 'Unknown Customer',
     mobile: String(item.mobileNumber || item.mobile || ''),
@@ -251,7 +254,10 @@ export function useRmDashboardData() {
         const rmProfile = {
           rmCode:
             matchedRm?.rmCode ||
-            `RM${String(rmContext.rmId).padStart(4, '0')}`,
+            matchedRm?.RmCode ||
+            matchedRm?.RMCode ||
+            rmContext.rmCode ||
+            '—',
           fullName:
             matchedRm?.fullName ||
             rmContext.fullName ||

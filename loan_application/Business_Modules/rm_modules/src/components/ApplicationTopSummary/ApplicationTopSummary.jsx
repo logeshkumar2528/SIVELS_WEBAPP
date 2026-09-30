@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { resolveApplicantName, buildApplicationDisplayId } from '../../pages/applicationWizard/flowUtils';
+import { resolveApplicantName } from '../../pages/applicationWizard/flowUtils';
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import { formatDate } from '../../utils/dateHelper';
 import './ApplicationTopSummary.css';
@@ -13,10 +13,19 @@ export default function ApplicationTopSummary({
   const resolvedApplicantName = useMemo(() => resolveApplicantName(appData), [appData]);
   const applicantDisplay = isHydrating && resolvedApplicantName === 'Applicant' ? 'Loading...' : resolvedApplicantName;
 
-  // 2. Application Display ID
-  const applicationDisplayId = useMemo(() => {
-    return buildApplicationDisplayId(appData, appId) || appId || '—';
-  }, [appData, appId]);
+  // 2. Customer Code Display
+  const customerCodeDisplay = useMemo(() => {
+    const rawCode =
+      appData?.customer?.customerCode ||
+      appData?.customer?.CustomerCode ||
+      appData?.customerCode ||
+      appData?.CustomerCode ||
+      appData?.raw?.customer?.customerCode ||
+      appData?.raw?.customer?.CustomerCode ||
+      '';
+    const trimmed = String(rawCode).trim();
+    return trimmed || '—';
+  }, [appData]);
 
   // 3. Branch
   const branchDisplay = useMemo(() => {
@@ -67,9 +76,7 @@ export default function ApplicationTopSummary({
       appData?.employeeId ||
       '';
     const rawRmId = ownership.rmId || appData?.rmId || appData?.RmId || appData?.RMId;
-    const resolvedRmCode = rawRmCode
-      ? String(rawRmCode).trim()
-      : (rawRmId ? (String(rawRmId).startsWith('RM') ? String(rawRmId) : `RM${rawRmId}`) : '');
+    const resolvedRmCode = rawRmCode ? String(rawRmCode).trim() : '';
 
     let finalRm = '—';
     if (rawRmName && resolvedRmCode) {
@@ -95,9 +102,7 @@ export default function ApplicationTopSummary({
         '';
       const rawAgentCode = appData?.agentCode || appData?.AgentCode || '';
       const rawAgentId = ownership.agentId || appData?.agentId || appData?.AgentId;
-      const resolvedAgentCode = rawAgentCode
-        ? String(rawAgentCode).trim()
-        : (rawAgentId ? (String(rawAgentId).startsWith('AG') ? String(rawAgentId) : `AG${rawAgentId}`) : '');
+      const resolvedAgentCode = rawAgentCode ? String(rawAgentCode).trim() : '';
 
       if (rawAgentName && resolvedAgentCode) {
         finalAgent = `${rawAgentName} | ${resolvedAgentCode}`;
@@ -119,8 +124,8 @@ export default function ApplicationTopSummary({
         <span className="aw-summary-value highlight" title={applicantDisplay}>{applicantDisplay}</span>
       </div>
       <div className="aw-summary-cell">
-        <span className="aw-summary-label">App ID :</span>
-        <span className="aw-summary-value" title={applicationDisplayId}>{applicationDisplayId}</span>
+        <span className="aw-summary-label">Customer Code :</span>
+        <span className="aw-summary-value" title={customerCodeDisplay}>{customerCodeDisplay}</span>
       </div>
       <div className="aw-summary-cell">
         <span className="aw-summary-label">Branch :</span>

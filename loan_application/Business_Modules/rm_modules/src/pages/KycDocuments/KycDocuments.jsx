@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   FileText,
   UserCheck,
@@ -415,6 +415,7 @@ function KycCard({
   onReplacePersistedSlot,
   employmentTypeDocMappings = [],
   coApplicantEmploymentTypeId = null,
+  isReadOnly = false,
 }) {
   const [otpStep, setOtpStep] = useState(person.verificationStatus === 'Verified' ? 'verified' : 'idle');
   const [otpValue, setOtpValue] = useState('');
@@ -676,10 +677,10 @@ function KycCard({
                 placeholder={otpStep === 'otp_sent' ? 'Enter OTP' : ''}
                 inputMode="numeric"
                 maxLength={otpStep === 'otp_sent' ? 6 : 4}
-                disabled={otpStep === 'verified'}
+                disabled={otpStep === 'verified' || isReadOnly}
                 style={{
                   paddingRight:
-                    otpStep !== 'verified' && (isAadhaarComplete || otpStep === 'otp_sent') ? '76px' : '12px',
+                    !isReadOnly && otpStep !== 'verified' && (isAadhaarComplete || otpStep === 'otp_sent') ? '76px' : '12px',
                 }}
                 onChange={(e) => {
                   if (otpStep === 'otp_sent') {
@@ -693,7 +694,7 @@ function KycCard({
                   }
                 }}
               />
-              {otpStep === 'idle' && isAadhaarComplete && (
+              {otpStep === 'idle' && isAadhaarComplete && !isReadOnly && (
                 <button
                   type="button"
                   onClick={handleSendOtp}
@@ -716,7 +717,7 @@ function KycCard({
                   Send OTP
                 </button>
               )}
-              {otpStep === 'otp_sent' && (
+              {otpStep === 'otp_sent' && !isReadOnly && (
                 <button
                   type="button"
                   onClick={handleVerifyOtp}
@@ -753,6 +754,7 @@ function KycCard({
                 className={`form-input aw-input aw-input--with-icon ${errors.panCardNo ? 'aw-input--invalid' : ''}`}
                 value={person.panCardNo}
                 maxLength={10}
+                disabled={isReadOnly}
                 onChange={(e) => onChange('panCardNo', e.target.value.toUpperCase())}
                 placeholder="ABCDE1234F"
               />
@@ -767,6 +769,7 @@ function KycCard({
                 type="text"
                 className={`form-input aw-input ${errors.identityDocumentNo ? 'aw-input--invalid' : ''}`}
                 value={person.identityDocumentNo}
+                disabled={isReadOnly}
                 onChange={(e) => onChange('identityDocumentNo', e.target.value)}
                 placeholder="Enter Document Number"
               />
@@ -782,7 +785,7 @@ function KycCard({
                 onChange={(val) => onChange('verificationStatus', val)}
                 placeholder={isLoadingMasters ? 'Loading...' : 'Select status'}
                 options={verificationOptions}
-                disabled={isLoadingMasters}
+                disabled={isLoadingMasters || isReadOnly}
                 icon={<UserCheck size={14} />}
               />
             </div>
@@ -816,7 +819,7 @@ function KycCard({
                 onChange={handleDocumentTypeChange}
                 options={documentTypeOptions}
                 placeholder={isLoadingMasters ? 'Loading...' : 'Select document type'}
-                disabled={isLoadingMasters}
+                disabled={isLoadingMasters || isReadOnly}
                 className={errors.identityDocumentType ? 'aw-input--invalid' : ''}
               />
             </div>
@@ -833,6 +836,7 @@ function KycCard({
                   step="1"
                   className={`form-input aw-input ${countError || errors.numberOfDocuments ? 'aw-input--invalid' : ''}`}
                   aria-label="Number of documents"
+                  disabled={isReadOnly}
                   value={person.numberOfDocuments !== undefined && person.numberOfDocuments !== null ? person.numberOfDocuments : 0}
                   onChange={(e) => handleNumberOfDocumentsChange(e.target.value)}
                 />
@@ -918,16 +922,18 @@ function KycCard({
                               <Download size={12} />
                               <span>Download</span>
                             </button>
-                            <button
-                              type="button"
-                              className="co-doc-btn co-doc-btn--replace"
-                              onClick={() => fileInputRefs.current[slotIdx]?.click()}
-                              disabled={replacingSlot === slotIdx}
-                              title="Replace document"
-                            >
-                              <RefreshCw size={12} className={replacingSlot === slotIdx ? 'aw-spin' : ''} />
-                              <span>{replacingSlot === slotIdx ? 'Replacing...' : 'Replace'}</span>
-                            </button>
+                            {!isReadOnly && (
+                              <button
+                                type="button"
+                                className="co-doc-btn co-doc-btn--replace"
+                                onClick={() => fileInputRefs.current[slotIdx]?.click()}
+                                disabled={replacingSlot === slotIdx}
+                                title="Replace document"
+                              >
+                                <RefreshCw size={12} className={replacingSlot === slotIdx ? 'aw-spin' : ''} />
+                                <span>{replacingSlot === slotIdx ? 'Replacing...' : 'Replace'}</span>
+                              </button>
+                            )}
                             <input
                               ref={(el) => {
                                 fileInputRefs.current[slotIdx] = el;
@@ -940,7 +946,7 @@ function KycCard({
                             />
                           </div>
                         </div>
-                      ) : (
+                      ) : !isReadOnly ? (
                         <div className="kyc-file-input-wrapper">
                           <input
                             ref={(el) => {
@@ -953,7 +959,7 @@ function KycCard({
                             onChange={(e) => handleSlotFileChange(slotIdx, e)}
                           />
                         </div>
-                      )}
+                      ) : null}
                       {slotError[slotIdx] && (
                         <span className="aw-field-error" style={{ marginTop: '4px', display: 'block' }}>
                           {slotError[slotIdx]}
@@ -992,17 +998,19 @@ function KycCard({
               {/* 1. Aadhaar */}
               <div className="co-doc-col">
                 <label className="form-label">Aadhaar</label>
-                <input
-                  ref={(el) => {
-                    docInputRefs.current.aadhaar = el;
-                  }}
-                  type="file"
-                  style={coApplicantDocs?.aadhaar || coApplicantPersistedDocs?.aadhaar?.exists ? { display: 'none' } : undefined}
-                  className={!coApplicantDocs?.aadhaar && !coApplicantPersistedDocs?.aadhaar?.exists ? "form-input aw-input kyc-compact-file-input" : undefined}
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  aria-label="Upload Co-Applicant Aadhaar"
-                  onChange={(e) => handleDocChange('aadhaar', e)}
-                />
+                {!isReadOnly && (
+                  <input
+                    ref={(el) => {
+                      docInputRefs.current.aadhaar = el;
+                    }}
+                    type="file"
+                    style={coApplicantDocs?.aadhaar || coApplicantPersistedDocs?.aadhaar?.exists ? { display: 'none' } : undefined}
+                    className={!coApplicantDocs?.aadhaar && !coApplicantPersistedDocs?.aadhaar?.exists ? "form-input aw-input kyc-compact-file-input" : undefined}
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    aria-label="Upload Co-Applicant Aadhaar"
+                    onChange={(e) => handleDocChange('aadhaar', e)}
+                  />
+                )}
 
                 {/* Local fresh file selected */}
                 {coApplicantDocs?.aadhaar && (
@@ -1030,24 +1038,28 @@ function KycCard({
                         <Eye size={12} />
                         <span>View</span>
                       </button>
-                      <button
-                        type="button"
-                        className="co-doc-btn co-doc-btn--replace"
-                        onClick={() => docInputRefs.current.aadhaar?.click()}
-                        title="Replace Aadhaar document"
-                      >
-                        <RefreshCw size={12} />
-                        <span>Replace</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDocRemove('aadhaar')}
-                        className="co-doc-btn co-doc-btn--remove"
-                        title="Clear selection"
-                        aria-label="Clear Aadhaar selection"
-                      >
-                        <X size={14} />
-                      </button>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          className="co-doc-btn co-doc-btn--replace"
+                          onClick={() => docInputRefs.current.aadhaar?.click()}
+                          title="Replace Aadhaar document"
+                        >
+                          <RefreshCw size={12} />
+                          <span>Replace</span>
+                        </button>
+                      )}
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={() => handleDocRemove('aadhaar')}
+                          className="co-doc-btn co-doc-btn--remove"
+                          title="Clear selection"
+                          aria-label="Clear Aadhaar selection"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1078,15 +1090,17 @@ function KycCard({
                         <Eye size={12} />
                         <span>View</span>
                       </button>
-                      <button
-                        type="button"
-                        className="co-doc-btn co-doc-btn--replace"
-                        onClick={() => docInputRefs.current.aadhaar?.click()}
-                        title="Replace Aadhaar document"
-                      >
-                        <RefreshCw size={12} />
-                        <span>Replace</span>
-                      </button>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          className="co-doc-btn co-doc-btn--replace"
+                          onClick={() => docInputRefs.current.aadhaar?.click()}
+                          title="Replace Aadhaar document"
+                        >
+                          <RefreshCw size={12} />
+                          <span>Replace</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1095,17 +1109,19 @@ function KycCard({
               {/* 2. PAN Card */}
               <div className="co-doc-col">
                 <label className="form-label">PAN Card</label>
-                <input
-                  ref={(el) => {
-                    docInputRefs.current.pan = el;
-                  }}
-                  type="file"
-                  style={coApplicantDocs?.pan || coApplicantPersistedDocs?.pan?.exists ? { display: 'none' } : undefined}
-                  className={!coApplicantDocs?.pan && !coApplicantPersistedDocs?.pan?.exists ? "form-input aw-input kyc-compact-file-input" : undefined}
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  aria-label="Upload Co-Applicant PAN Card"
-                  onChange={(e) => handleDocChange('pan', e)}
-                />
+                {!isReadOnly && (
+                  <input
+                    ref={(el) => {
+                      docInputRefs.current.pan = el;
+                    }}
+                    type="file"
+                    style={coApplicantDocs?.pan || coApplicantPersistedDocs?.pan?.exists ? { display: 'none' } : undefined}
+                    className={!coApplicantDocs?.pan && !coApplicantPersistedDocs?.pan?.exists ? "form-input aw-input kyc-compact-file-input" : undefined}
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    aria-label="Upload Co-Applicant PAN Card"
+                    onChange={(e) => handleDocChange('pan', e)}
+                  />
+                )}
 
                 {/* Local fresh file selected */}
                 {coApplicantDocs?.pan && (
@@ -1133,24 +1149,28 @@ function KycCard({
                         <Eye size={12} />
                         <span>View</span>
                       </button>
-                      <button
-                        type="button"
-                        className="co-doc-btn co-doc-btn--replace"
-                        onClick={() => docInputRefs.current.pan?.click()}
-                        title="Replace PAN Card document"
-                      >
-                        <RefreshCw size={12} />
-                        <span>Replace</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDocRemove('pan')}
-                        className="co-doc-btn co-doc-btn--remove"
-                        title="Clear selection"
-                        aria-label="Clear PAN Card selection"
-                      >
-                        <X size={14} />
-                      </button>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          className="co-doc-btn co-doc-btn--replace"
+                          onClick={() => docInputRefs.current.pan?.click()}
+                          title="Replace PAN Card document"
+                        >
+                          <RefreshCw size={12} />
+                          <span>Replace</span>
+                        </button>
+                      )}
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={() => handleDocRemove('pan')}
+                          className="co-doc-btn co-doc-btn--remove"
+                          title="Clear selection"
+                          aria-label="Clear PAN Card selection"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1181,15 +1201,17 @@ function KycCard({
                         <Eye size={12} />
                         <span>View</span>
                       </button>
-                      <button
-                        type="button"
-                        className="co-doc-btn co-doc-btn--replace"
-                        onClick={() => docInputRefs.current.pan?.click()}
-                        title="Replace PAN Card document"
-                      >
-                        <RefreshCw size={12} />
-                        <span>Replace</span>
-                      </button>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          className="co-doc-btn co-doc-btn--replace"
+                          onClick={() => docInputRefs.current.pan?.click()}
+                          title="Replace PAN Card document"
+                        >
+                          <RefreshCw size={12} />
+                          <span>Replace</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1198,17 +1220,19 @@ function KycCard({
               {/* 3. Profile Image */}
               <div className="co-doc-col">
                 <label className="form-label">Profile Image</label>
-                <input
-                  ref={(el) => {
-                    docInputRefs.current.profile = el;
-                  }}
-                  type="file"
-                  style={coApplicantDocs?.profile || coApplicantPersistedDocs?.profile?.exists ? { display: 'none' } : undefined}
-                  className={!coApplicantDocs?.profile && !coApplicantPersistedDocs?.profile?.exists ? "form-input aw-input kyc-compact-file-input" : undefined}
-                  accept=".jpg,.jpeg,.png"
-                  aria-label="Upload Co-Applicant Profile Image"
-                  onChange={(e) => handleDocChange('profile', e)}
-                />
+                {!isReadOnly && (
+                  <input
+                    ref={(el) => {
+                      docInputRefs.current.profile = el;
+                    }}
+                    type="file"
+                    style={coApplicantDocs?.profile || coApplicantPersistedDocs?.profile?.exists ? { display: 'none' } : undefined}
+                    className={!coApplicantDocs?.profile && !coApplicantPersistedDocs?.profile?.exists ? "form-input aw-input kyc-compact-file-input" : undefined}
+                    accept=".jpg,.jpeg,.png"
+                    aria-label="Upload Co-Applicant Profile Image"
+                    onChange={(e) => handleDocChange('profile', e)}
+                  />
+                )}
 
                 {/* Local fresh file selected */}
                 {coApplicantDocs?.profile && (
@@ -1236,24 +1260,28 @@ function KycCard({
                         <Eye size={12} />
                         <span>View</span>
                       </button>
-                      <button
-                        type="button"
-                        className="co-doc-btn co-doc-btn--replace"
-                        onClick={() => docInputRefs.current.profile?.click()}
-                        title="Replace Profile Image"
-                      >
-                        <RefreshCw size={12} />
-                        <span>Replace</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDocRemove('profile')}
-                        className="co-doc-btn co-doc-btn--remove"
-                        title="Clear selection"
-                        aria-label="Clear Profile Image selection"
-                      >
-                        <X size={14} />
-                      </button>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          className="co-doc-btn co-doc-btn--replace"
+                          onClick={() => docInputRefs.current.profile?.click()}
+                          title="Replace Profile Image"
+                        >
+                          <RefreshCw size={12} />
+                          <span>Replace</span>
+                        </button>
+                      )}
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={() => handleDocRemove('profile')}
+                          className="co-doc-btn co-doc-btn--remove"
+                          title="Clear selection"
+                          aria-label="Clear Profile Image selection"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1284,15 +1312,17 @@ function KycCard({
                         <Eye size={12} />
                         <span>View</span>
                       </button>
-                      <button
-                        type="button"
-                        className="co-doc-btn co-doc-btn--replace"
-                        onClick={() => docInputRefs.current.profile?.click()}
-                        title="Replace Profile Image"
-                      >
-                        <RefreshCw size={12} />
-                        <span>Replace</span>
-                      </button>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          className="co-doc-btn co-doc-btn--replace"
+                          onClick={() => docInputRefs.current.profile?.click()}
+                          title="Replace Profile Image"
+                        >
+                          <RefreshCw size={12} />
+                          <span>Replace</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1314,17 +1344,19 @@ function KycCard({
                     <span>Not required for this employment type</span>
                   </div>
                 ) : (
-                  <input
-                    ref={(el) => {
-                      docInputRefs.current.salarySlip = el;
-                    }}
-                    type="file"
-                    style={coApplicantDocs?.salarySlip || coApplicantPersistedDocs?.salarySlip?.exists ? { display: 'none' } : undefined}
-                    className={!coApplicantDocs?.salarySlip && !coApplicantPersistedDocs?.salarySlip?.exists ? "form-input aw-input kyc-compact-file-input" : undefined}
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    aria-label="Upload Co-Applicant Salary Slip"
-                    onChange={(e) => handleDocChange('salarySlip', e)}
-                  />
+                  !isReadOnly && (
+                    <input
+                      ref={(el) => {
+                        docInputRefs.current.salarySlip = el;
+                      }}
+                      type="file"
+                      style={coApplicantDocs?.salarySlip || coApplicantPersistedDocs?.salarySlip?.exists ? { display: 'none' } : undefined}
+                      className={!coApplicantDocs?.salarySlip && !coApplicantPersistedDocs?.salarySlip?.exists ? "form-input aw-input kyc-compact-file-input" : undefined}
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      aria-label="Upload Co-Applicant Salary Slip"
+                      onChange={(e) => handleDocChange('salarySlip', e)}
+                    />
+                  )
                 )}
 
                 {/* Local fresh file selected */}
@@ -1353,24 +1385,28 @@ function KycCard({
                         <Eye size={12} />
                         <span>View</span>
                       </button>
-                      <button
-                        type="button"
-                        className="co-doc-btn co-doc-btn--replace"
-                        onClick={() => docInputRefs.current.salarySlip?.click()}
-                        title="Replace Salary Slip"
-                      >
-                        <RefreshCw size={12} />
-                        <span>Replace</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDocRemove('salarySlip')}
-                        className="co-doc-btn co-doc-btn--remove"
-                        title="Clear selection"
-                        aria-label="Clear Salary Slip selection"
-                      >
-                        <X size={14} />
-                      </button>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          className="co-doc-btn co-doc-btn--replace"
+                          onClick={() => docInputRefs.current.salarySlip?.click()}
+                          title="Replace Salary Slip"
+                        >
+                          <RefreshCw size={12} />
+                          <span>Replace</span>
+                        </button>
+                      )}
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={() => handleDocRemove('salarySlip')}
+                          className="co-doc-btn co-doc-btn--remove"
+                          title="Clear selection"
+                          aria-label="Clear Salary Slip selection"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1401,15 +1437,17 @@ function KycCard({
                         <Eye size={12} />
                         <span>View</span>
                       </button>
-                      <button
-                        type="button"
-                        className="co-doc-btn co-doc-btn--replace"
-                        onClick={() => docInputRefs.current.salarySlip?.click()}
-                        title="Replace Salary Slip"
-                      >
-                        <RefreshCw size={12} />
-                        <span>Replace</span>
-                      </button>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          className="co-doc-btn co-doc-btn--replace"
+                          onClick={() => docInputRefs.current.salarySlip?.click()}
+                          title="Replace Salary Slip"
+                        >
+                          <RefreshCw size={12} />
+                          <span>Replace</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1418,17 +1456,19 @@ function KycCard({
               {/* 5. Bank Statement */}
               <div className="co-doc-col">
                 <label className="form-label">Bank Statement</label>
-                <input
-                  ref={(el) => {
-                    docInputRefs.current.bankStatement = el;
-                  }}
-                  type="file"
-                  style={coApplicantDocs?.bankStatement || coApplicantPersistedDocs?.bankStatement?.exists ? { display: 'none' } : undefined}
-                  className={!coApplicantDocs?.bankStatement && !coApplicantPersistedDocs?.bankStatement?.exists ? "form-input aw-input kyc-compact-file-input" : undefined}
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  aria-label="Upload Co-Applicant Bank Statement"
-                  onChange={(e) => handleDocChange('bankStatement', e)}
-                />
+                {!isReadOnly && (
+                  <input
+                    ref={(el) => {
+                      docInputRefs.current.bankStatement = el;
+                    }}
+                    type="file"
+                    style={coApplicantDocs?.bankStatement || coApplicantPersistedDocs?.bankStatement?.exists ? { display: 'none' } : undefined}
+                    className={!coApplicantDocs?.bankStatement && !coApplicantPersistedDocs?.bankStatement?.exists ? "form-input aw-input kyc-compact-file-input" : undefined}
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    aria-label="Upload Co-Applicant Bank Statement"
+                    onChange={(e) => handleDocChange('bankStatement', e)}
+                  />
+                )}
 
                 {/* Local fresh file selected */}
                 {coApplicantDocs?.bankStatement && (
@@ -1456,24 +1496,28 @@ function KycCard({
                         <Eye size={12} />
                         <span>View</span>
                       </button>
-                      <button
-                        type="button"
-                        className="co-doc-btn co-doc-btn--replace"
-                        onClick={() => docInputRefs.current.bankStatement?.click()}
-                        title="Replace Bank Statement"
-                      >
-                        <RefreshCw size={12} />
-                        <span>Replace</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDocRemove('bankStatement')}
-                        className="co-doc-btn co-doc-btn--remove"
-                        title="Clear selection"
-                        aria-label="Clear Bank Statement selection"
-                      >
-                        <X size={14} />
-                      </button>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          className="co-doc-btn co-doc-btn--replace"
+                          onClick={() => docInputRefs.current.bankStatement?.click()}
+                          title="Replace Bank Statement"
+                        >
+                          <RefreshCw size={12} />
+                          <span>Replace</span>
+                        </button>
+                      )}
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={() => handleDocRemove('bankStatement')}
+                          className="co-doc-btn co-doc-btn--remove"
+                          title="Clear selection"
+                          aria-label="Clear Bank Statement selection"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1504,15 +1548,17 @@ function KycCard({
                         <Eye size={12} />
                         <span>View</span>
                       </button>
-                      <button
-                        type="button"
-                        className="co-doc-btn co-doc-btn--replace"
-                        onClick={() => docInputRefs.current.bankStatement?.click()}
-                        title="Replace Bank Statement"
-                      >
-                        <RefreshCw size={12} />
-                        <span>Replace</span>
-                      </button>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          className="co-doc-btn co-doc-btn--replace"
+                          onClick={() => docInputRefs.current.bankStatement?.click()}
+                          title="Replace Bank Statement"
+                        >
+                          <RefreshCw size={12} />
+                          <span>Replace</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1528,6 +1574,8 @@ function KycCard({
 export default function KycDocuments() {
   const navigate = useNavigate();
   const { applicationId } = useParams();
+  const [searchParams] = useSearchParams();
+  const isViewMode = searchParams.get('mode') === 'view';
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildKycState(getApplication(appId)));
@@ -4029,6 +4077,10 @@ export default function KycDocuments() {
   };
 
   const handleContinue = async () => {
+    if (isViewMode) {
+      navigate(`${ROUTES.PERSONAL_INFORMATION.replace(':applicationId', appId)}?mode=view`);
+      return;
+    }
     if (savingRef.current) return;
     savingRef.current = true;
     setIsSaving(true);
@@ -4943,7 +4995,7 @@ export default function KycDocuments() {
   };
 
   const handleBack = () => {
-    navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', appId));
+    navigate(isViewMode ? `${ROUTES.APPLICATION_DETAILS.replace(':applicationId', appId)}?mode=view` : ROUTES.APPLICATION_DETAILS.replace(':applicationId', appId));
   };
 
   const viewingPersonTitle =
@@ -4971,10 +5023,10 @@ export default function KycDocuments() {
         title="Step 2: KYC Documents"
         subtitle="Capture Aadhaar, PAN and identity document details. Validate Aadhaar using OTP where required."
         backLabel="Back to Application Details"
-        continueLabel={isSaving ? 'Saving documents…' : 'Save & Continue'}
+        continueLabel={isViewMode ? 'Next' : isSaving ? 'Saving documents…' : 'Save & Continue'}
         onBack={handleBack}
         onContinue={handleContinue}
-        onStepClick={(step) => navigate(step.route.replace(':applicationId', appId))}
+        onStepClick={(step) => navigate(isViewMode ? `${step.route.replace(':applicationId', appId)}?mode=view` : step.route.replace(':applicationId', appId))}
         headerAction={
           <Button
             variant="secondary"
@@ -4994,6 +5046,7 @@ export default function KycDocuments() {
           title="Applicant KYC"
           person={form.applicant}
           isCoApplicant={false}
+          isReadOnly={isViewMode}
           applicantDocs={applicantDocs}
           applicantPersistedDocs={applicantPersistedDocs}
           agentSourceDocs={agentSourceDocs}
@@ -5022,6 +5075,7 @@ export default function KycDocuments() {
               title={`Co-Applicant ${index + 1} KYC`}
               person={person}
               isCoApplicant={true}
+              isReadOnly={isViewMode}
               coApplicantDocs={coApplicantDocs[index]}
               coApplicantPersistedDocs={coApplicantPersistedDocs[index]}
               onCoApplicantDocChange={(docType, file) => handleCoApplicantDocChange(index, docType, file)}

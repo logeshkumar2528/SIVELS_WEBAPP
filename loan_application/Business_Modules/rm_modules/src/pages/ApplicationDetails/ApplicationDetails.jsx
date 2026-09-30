@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
@@ -179,6 +179,8 @@ export default function ApplicationDetails() {
   const { applicationId: routeAppId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isViewMode = searchParams.get('mode') === 'view';
   const appId = routeAppId || location.state?.applicationId || '';
 
   const {
@@ -247,8 +249,8 @@ export default function ApplicationDetails() {
           const rawStatus = Number(record?.rawStatus ?? record?.status ?? record?.Status ?? 0);
           const currentStatus = normalizeApplicationStatus(record.status, record.statusName || record.StatusName);
 
-          // Update status to 1 (In Progress) if newly created (status 0)
-          if ((rawStatus === 0 || currentStatus === 'New' || record.status === 'Draft') && appId) {
+          // Update status to 1 (In Progress) if newly created (status 0) and not in view mode
+          if (!isViewMode && (rawStatus === 0 || currentStatus === 'New' || record.status === 'Draft') && appId) {
             try {
               await updateCustomerStatusToInProgress(baseUrl, appId, record);
               saveApplication(appId, { status: 'Pending', rawStatus: 1 });
@@ -798,6 +800,11 @@ export default function ApplicationDetails() {
   };
 
   const handleProceed = async () => {
+    if (isViewMode) {
+      navigate(`${ROUTES.KYC_DOCUMENTS.replace(':applicationId', appId)}?mode=view`);
+      return;
+    }
+
     const isRmSourced = Boolean(sourcingInfo.isRmSourced || displayRecord?.isRmSourced || appData.isRmSourced);
     const validationErrors = validateApplication(appData, requiresVariation, isRmSourced);
     setErrors(validationErrors);
@@ -1138,7 +1145,7 @@ export default function ApplicationDetails() {
   };
 
   const handleBack = () => {
-    navigate(ROUTES.NEW_APPLICATIONS);
+    navigate(isViewMode ? ROUTES.APPROVED_APPLICATIONS : ROUTES.NEW_APPLICATIONS);
   };
 
   const applicantName = resolveApplicantName({
@@ -1230,6 +1237,7 @@ export default function ApplicationDetails() {
         <section className="ad-workspace-compact" aria-label="Loan application workspace">
           <div className="panel ad-main-panel compact-panel">
             <div className="compact-panel-content">
+              <fieldset disabled={isViewMode} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div className="compact-section-title">Application Information</div>
               <div className="compact-form-row sourcing-details-row">
                 <div className="compact-field sourcing-field">
@@ -1483,6 +1491,7 @@ export default function ApplicationDetails() {
                   </div>
                 )}
               </div>
+              </fieldset>
             </div>
 
             <footer className="compact-action-bar" aria-label="Page actions">
@@ -1506,7 +1515,7 @@ export default function ApplicationDetails() {
                   iconPosition="right"
                   onClick={handleProceed}
                 >
-                  Save & Continue
+                  {isViewMode ? 'Next' : 'Save & Continue'}
                 </Button>
               </div>
             </footer>

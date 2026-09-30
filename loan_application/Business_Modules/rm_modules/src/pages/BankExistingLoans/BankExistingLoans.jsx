@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Building2, MapPin, CreditCard, Files, RefreshCw, Trash2, Plus } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
@@ -160,6 +160,7 @@ function PersonBankingSection({
   bankOptions = [],
   branchOptions = [],
   isLoadingMasters = false,
+  isReadOnly = false,
 }) {
   const primaryBank = banks[0] || {};
   const activeLoansCount = parseInt(primaryBank.noOfActiveLoans, 10) || 0;
@@ -179,16 +180,18 @@ function PersonBankingSection({
             <div className="aw-mini-card__title" style={{ fontSize: '13.5px', fontWeight: 600 }}>Bank Accounts</div>
             <div className="aw-mini-card__subtitle" style={{ fontSize: '11.5px', color: '#64748b', marginTop: '1px' }}>Capture primary bank and all additional bank accounts</div>
           </div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={onAddBank}
-            icon={<Plus size={13} />}
-            style={{ padding: '4px 10px', fontSize: '12px', height: '30px' }}
-          >
-            Add Bank
-          </Button>
+          {!isReadOnly && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={onAddBank}
+              icon={<Plus size={13} />}
+              style={{ padding: '4px 10px', fontSize: '12px', height: '30px' }}
+            >
+              Add Bank
+            </Button>
+          )}
         </div>
         <div className="aw-mini-card__body" style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px 16px' }}>
           {banks.map((bank, bIdx) => {
@@ -221,7 +224,7 @@ function PersonBankingSection({
                   <span style={{ fontSize: '12.5px', fontWeight: 700, color: isPrimary ? '#0369a1' : '#334155' }}>
                     {bankLabel}
                   </span>
-                  {!isPrimary && (
+                  {!isPrimary && !isReadOnly && (
                     <button
                       type="button"
                       onClick={() => onRemoveBank(bIdx)}
@@ -258,7 +261,7 @@ function PersonBankingSection({
                         }}
                         placeholder={isLoadingMasters ? "Loading..." : "Select Bank"}
                         options={bankOptions}
-                        disabled={isLoadingMasters}
+                        disabled={isReadOnly || isLoadingMasters}
                         icon={<Building2 size={13} />}
                       />
                     </div>
@@ -275,7 +278,7 @@ function PersonBankingSection({
                         onChange={(val) => onUpdateBank(bIdx, 'branch', val)}
                         placeholder={isLoadingMasters ? "Loading..." : "Select Branch"}
                         options={branchOptions.filter(b => !bank.bankName || b.raw.bankId === Number(bank.bankName))}
-                        disabled={isLoadingMasters || !bank.bankName}
+                        disabled={isReadOnly || isLoadingMasters || !bank.bankName}
                         icon={<MapPin size={13} />}
                       />
                     </div>
@@ -292,6 +295,7 @@ function PersonBankingSection({
                         placeholder="Enter Account Number"
                         value={bank.accountNumber}
                         onChange={(e) => onUpdateBank(bIdx, 'accountNumber', e.target.value)}
+                        disabled={isReadOnly}
                       />
                     </div>
                     {bErrors.accountNumber && <span className="aw-field-error" style={{ fontSize: '11px', marginTop: '2px' }}>{bErrors.accountNumber}</span>}
@@ -330,6 +334,7 @@ function PersonBankingSection({
                   placeholder="0"
                   value={primaryBank.noOfActiveLoans}
                   onChange={(e) => onUpdateBank(0, 'noOfActiveLoans', e.target.value)}
+                  disabled={isReadOnly}
                   style={{ paddingRight: activeLoansCount > 0 ? '55px' : '32px' }}
                 />
                 {activeLoansCount > 0 && (
@@ -379,6 +384,7 @@ function PersonBankingSection({
                   placeholder="0"
                   value={primaryBank.noOfActiveCreditCards}
                   onChange={(e) => onUpdateBank(0, 'noOfActiveCreditCards', e.target.value)}
+                  disabled={isReadOnly}
                   style={{ paddingRight: activeCardsCount > 0 ? '55px' : '32px' }}
                 />
                 {activeCardsCount > 0 && (
@@ -700,6 +706,8 @@ async function syncCreditCardsForBank(bankId, cardsToSave, activeCount, baseUrl,
 export default function BankExistingLoans() {
   const navigate = useNavigate();
   const { applicationId } = useParams();
+  const [searchParams] = useSearchParams();
+  const isViewMode = searchParams.get('mode') === 'view';
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildBankState(getApplication(appId)));
@@ -1683,6 +1691,11 @@ export default function BankExistingLoans() {
   };
 
   const handleContinue = async () => {
+    if (isViewMode) {
+      navigate(`${ROUTES.REFERENCES.replace(':applicationId', appId)}?mode=view`);
+      return;
+    }
+
     const validationErrors = validateForm();
     setErrors(validationErrors);
 
@@ -1984,7 +1997,7 @@ export default function BankExistingLoans() {
   };
 
   const handleBack = () => {
-    navigate(ROUTES.EMPLOYMENT_INCOME.replace(':applicationId', appId));
+    navigate(isViewMode ? `${ROUTES.EMPLOYMENT_INCOME.replace(':applicationId', appId)}?mode=view` : ROUTES.EMPLOYMENT_INCOME.replace(':applicationId', appId));
   };
 
   return (
@@ -2005,10 +2018,10 @@ export default function BankExistingLoans() {
         title="Step 6: Bank / Existing Loan Details"
         subtitle="Capture the applicant's primary bank, additional bank accounts, and existing liability details."
         backLabel="Back to Employment & Income"
-        continueLabel="Save & Continue"
+        continueLabel={isViewMode ? 'Next' : 'Save & Continue'}
         onBack={handleBack}
         onContinue={handleContinue}
-        onStepClick={(step) => navigate(step.route.replace(':applicationId', appId))}
+        onStepClick={(step) => navigate(isViewMode ? `${step.route.replace(':applicationId', appId)}?mode=view` : step.route.replace(':applicationId', appId))}
         headerAction={
           <Button
             variant="secondary"
@@ -2043,6 +2056,7 @@ export default function BankExistingLoans() {
           bankOptions={bankOptions}
           branchOptions={branchOptions}
           isLoadingMasters={isLoadingMasters}
+          isReadOnly={isViewMode}
         />
 
         {form.coApplicants.map((coApp, index) => (
@@ -2061,6 +2075,7 @@ export default function BankExistingLoans() {
               bankOptions={bankOptions}
               branchOptions={branchOptions}
               isLoadingMasters={isLoadingMasters}
+              isReadOnly={isViewMode}
             />
           </div>
         ))}
@@ -2130,6 +2145,7 @@ export default function BankExistingLoans() {
                               placeholder="e.g. HDFC Regalia" 
                               value={card.cardName || ''} 
                               onChange={(e) => updateCardDetail(i, 'cardName', e.target.value)} 
+                              disabled={isViewMode}
                             />
                           </div>
                           <div className="aw-field" style={{ marginBottom: 0 }}>
@@ -2142,6 +2158,7 @@ export default function BankExistingLoans() {
                               placeholder="1234 / Full Card Number" 
                               value={card.cardNumber || ''} 
                               onChange={(e) => updateCardDetail(i, 'cardNumber', e.target.value)} 
+                              disabled={isViewMode}
                             />
                           </div>
                         </div>
@@ -2153,12 +2170,20 @@ export default function BankExistingLoans() {
             })()
           )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #edf2f7' }}>
-            <Button variant="secondary" onClick={() => setViewingCardsFor(null)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={saveCardDetails}>
-              Done
-            </Button>
+            {isViewMode ? (
+              <Button variant="secondary" onClick={() => setViewingCardsFor(null)}>
+                Close
+              </Button>
+            ) : (
+              <>
+                <Button variant="secondary" onClick={() => setViewingCardsFor(null)}>
+                  Cancel
+                </Button>
+                <Button variant="primary" onClick={saveCardDetails}>
+                  Done
+                </Button>
+              </>
+            )}
           </div>
         </Modal>
 
@@ -2238,6 +2263,7 @@ export default function BankExistingLoans() {
                               placeholder="e.g. HDFC Bank, SBI, Bajaj" 
                               value={loan.bankName || ''} 
                               onChange={(e) => updateLoanDetail(i, 'bankName', e.target.value)} 
+                              disabled={isViewMode}
                             />
                           </div>
 
@@ -2251,6 +2277,7 @@ export default function BankExistingLoans() {
                               placeholder="e.g. Home Loan, Personal Loan" 
                               value={loan.loanType || ''} 
                               onChange={(e) => updateLoanDetail(i, 'loanType', e.target.value)} 
+                              disabled={isViewMode}
                             />
                           </div>
 
@@ -2265,6 +2292,7 @@ export default function BankExistingLoans() {
                               placeholder="₹ Total Amount" 
                               value={formatIndianAmount(loan.totalLoanAmount || '')} 
                               onChange={(e) => updateLoanDetail(i, 'totalLoanAmount', e.target.value)} 
+                              disabled={isViewMode}
                             />
                           </div>
 
@@ -2279,6 +2307,7 @@ export default function BankExistingLoans() {
                               placeholder="₹ Outstanding" 
                               value={formatIndianAmount(loan.totalOutstanding || '')} 
                               onChange={(e) => updateLoanDetail(i, 'totalOutstanding', e.target.value)} 
+                              disabled={isViewMode}
                             />
                           </div>
                         </div>
@@ -2296,6 +2325,7 @@ export default function BankExistingLoans() {
                               placeholder="₹ EMI" 
                               value={formatIndianAmount(loan.emiAmount || '')} 
                               onChange={(e) => updateLoanDetail(i, 'emiAmount', e.target.value)} 
+                              disabled={isViewMode}
                             />
                           </div>
 
@@ -2311,6 +2341,7 @@ export default function BankExistingLoans() {
                               placeholder="e.g. 240" 
                               value={loan.totalTenureMonths || ''} 
                               onChange={(e) => updateLoanDetail(i, 'totalTenureMonths', e.target.value)} 
+                              disabled={isViewMode}
                             />
                           </div>
 
@@ -2326,6 +2357,7 @@ export default function BankExistingLoans() {
                               placeholder="e.g. 180" 
                               value={loan.balanceTenureMonths || ''} 
                               onChange={(e) => updateLoanDetail(i, 'balanceTenureMonths', e.target.value)} 
+                              disabled={isViewMode}
                             />
                           </div>
                         </div>
@@ -2337,12 +2369,20 @@ export default function BankExistingLoans() {
             })()
           )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #edf2f7' }}>
-            <Button variant="secondary" onClick={() => setViewingLoansFor(null)} disabled={isSavingLoans}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={saveLoanDetails} disabled={isSavingLoans}>
-              {isSavingLoans ? 'Saving...' : 'Save Details'}
-            </Button>
+            {isViewMode ? (
+              <Button variant="secondary" onClick={() => setViewingLoansFor(null)}>
+                Close
+              </Button>
+            ) : (
+              <>
+                <Button variant="secondary" onClick={() => setViewingLoansFor(null)} disabled={isSavingLoans}>
+                  Cancel
+                </Button>
+                <Button variant="primary" onClick={saveLoanDetails} disabled={isSavingLoans}>
+                  {isSavingLoans ? 'Saving...' : 'Save Details'}
+                </Button>
+              </>
+            )}
           </div>
         </Modal>
       </WizardSectionLayout>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { CheckCircle, CreditCard } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
@@ -38,6 +38,8 @@ export default function ScheduleOfCharges() {
   const navigate = useNavigate();
   const location = useLocation();
   const { applicationId } = useParams();
+  const [searchParams] = useSearchParams();
+  const isViewMode = searchParams.get('mode') === 'view';
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const appData = getApplication(appId);
@@ -66,6 +68,7 @@ export default function ScheduleOfCharges() {
   }, []);
 
   const handlePayClick = () => {
+    if (isViewMode) return;
     setShowPaymentModal(true);
     setPaymentState('processing');
 
@@ -92,6 +95,10 @@ export default function ScheduleOfCharges() {
   };
 
   const handleContinue = () => {
+    if (isViewMode) {
+      navigate(`${ROUTES.DOCUMENT_CHECKLIST.replace(':applicationId', appId)}?mode=view`);
+      return;
+    }
     saveApplication(appId, buildSectionUpdate(appData, 'scheduleCharges', {
       ...form,
       adminFeePaid: isPaid,
@@ -100,6 +107,10 @@ export default function ScheduleOfCharges() {
   };
 
   const handleBack = () => {
+    if (isViewMode) {
+      navigate(`${ROUTES.COLLATERAL.replace(':applicationId', appId)}?mode=view`);
+      return;
+    }
     if (location.state?.fromReview || location.state?.returnTo) {
       navigate(ROUTES.APPLICATION_PDF_VIEW.replace(':applicationId', appId), {
         state: {
@@ -121,11 +132,11 @@ export default function ScheduleOfCharges() {
       activeStep={9}
       title="Step 9: Schedule of Charges"
       subtitle="Read-only charge matrix aligned to the PDF structure."
-      backLabel={location.state?.fromReview ? 'Back to PDF Review' : 'Back to Collateral'}
-      continueLabel="Save & Continue"
+      backLabel={location.state?.fromReview && !isViewMode ? 'Back to PDF Review' : 'Back to Collateral'}
+      continueLabel={isViewMode ? 'Next' : 'Save & Continue'}
       onBack={handleBack}
       onContinue={handleContinue}
-      onStepClick={(step) => navigate(step.route.replace(':applicationId', appId))}
+      onStepClick={(step) => navigate(isViewMode ? `${step.route.replace(':applicationId', appId)}?mode=view` : step.route.replace(':applicationId', appId))}
       headerAction={
         <Button
           variant="secondary"
@@ -133,7 +144,7 @@ export default function ScheduleOfCharges() {
           icon={ArrowLeftIcon ? <ArrowLeftIcon size={14} /> : null}
           onClick={handleBack}
         >
-          {location.state?.fromReview ? 'Back to PDF Review' : 'Back to Collateral'}
+          {location.state?.fromReview && !isViewMode ? 'Back to PDF Review' : 'Back to Collateral'}
         </Button>
       }
       showContinue
@@ -195,6 +206,23 @@ export default function ScheduleOfCharges() {
                           >
                             <CheckCircle size={13} />
                             Completed
+                          </span>
+                        ) : isViewMode ? (
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                              padding: '4px 12px',
+                              backgroundColor: '#f1f5f9',
+                              color: '#64748b',
+                              borderRadius: '999px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              border: '1px solid #e2e8f0',
+                            }}
+                          >
+                            Pending
                           </span>
                         ) : (
                           <button

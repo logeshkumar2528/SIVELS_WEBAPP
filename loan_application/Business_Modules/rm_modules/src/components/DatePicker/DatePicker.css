@@ -218,6 +218,25 @@
 }
 
 .aw-datepicker-container.is-disabled {
-  opacity: 0.6;
+  opacity: 0.85;
   pointer-events: none;
+}
+
+.aw-datepicker-trigger.is-disabled,
+fieldset:disabled .aw-datepicker-trigger {
+  cursor: not-allowed;
+  background: #f8fafc;
+  color: var(--color-text-primary, #0f172a);
+  border-color: var(--color-input-border, #cbd5e1);
+  pointer-events: none;
+}
+
+.aw-datepicker-trigger.is-disabled:hover,
+fieldset:disabled .aw-datepicker-trigger:hover {
+  border-color: var(--color-input-border, #cbd5e1);
+}
+
+.aw-datepicker-trigger.is-disabled .aw-datepicker-icon,
+fieldset:disabled .aw-datepicker-trigger .aw-datepicker-icon {
+  color: var(--color-text-muted, #94a3b8);
 }

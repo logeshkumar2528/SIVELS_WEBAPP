@@ -307,15 +307,47 @@ export function createAddressTemplate(overrides = {}) {
   };
 }
 
+/**
+ * Splits a full name string into structured firstName, middleName, and lastName.
+ *
+ * Rules:
+ * - 0 words / empty: { firstName: '', middleName: '', lastName: '' }
+ * - 1 word: { firstName: word1, middleName: '', lastName: '' }
+ * - 2 words: { firstName: word1, middleName: '', lastName: word2 }
+ * - 3+ words: { firstName: word1, middleName: words_between, lastName: last_word }
+ *
+ * @param {string} value - Raw full name
+ * @returns {{ firstName: string, middleName: string, lastName: string }}
+ */
+export function splitFullName(value = '') {
+  const parts = String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (parts.length === 0) {
+    return { firstName: '', middleName: '', lastName: '' };
+  }
+
+  if (parts.length === 1) {
+    return { firstName: parts[0], middleName: '', lastName: '' };
+  }
+
+  if (parts.length === 2) {
+    return { firstName: parts[0], middleName: '', lastName: parts[1] };
+  }
+
+  return {
+    firstName: parts[0],
+    middleName: parts.slice(1, -1).join(' '),
+    lastName: parts[parts.length - 1],
+  };
+}
+
 export function resolveApplicantName(appData = {}) {
   if (!appData) return 'Applicant';
 
-  const applicantDisplayName = String(appData.applicantDisplayName || '').trim();
-  if (applicantDisplayName && applicantDisplayName !== 'Applicant') {
-    return applicantDisplayName;
-  }
-
-  // Priority A: Structured Personal Information applicant name
+  // Priority 1: Structured Personal Information applicant name (Highest Priority)
   const personalApplicant =
     appData.registration?.personalInformation?.applicant ||
     appData.registration?.primaryApplicant ||
@@ -337,7 +369,13 @@ export function resolveApplicantName(appData = {}) {
     }
   }
 
-  // Priority B: Direct customer / applicant string fields
+  // Priority 2: Direct applicantDisplayName override
+  const applicantDisplayName = String(appData.applicantDisplayName || '').trim();
+  if (applicantDisplayName && applicantDisplayName !== 'Applicant') {
+    return applicantDisplayName;
+  }
+
+  // Priority 3: Direct customer / applicant string fields
   const directCustomerName = String(appData.customerName || '').trim();
   if (directCustomerName && directCustomerName !== 'Applicant') {
     return directCustomerName;
@@ -353,7 +391,7 @@ export function resolveApplicantName(appData = {}) {
     return directApplicantName;
   }
 
-  // Priority C: Final fallback (NEVER agentName)
+  // Priority 4: Final fallback (NEVER agentName)
   return 'Applicant';
 }
 

@@ -71,7 +71,7 @@ function formatCurrency(value) {
 }
 
 function makeAgentId(agent = {}, index = 0) {
-  return agent.agentCode || agent.agentId || `AGT-${String(index + 1).padStart(3, '0')}`;
+  return agent.agentCode || agent.AgentCode || '—';
 }
 
 function normalizeStatus(value, fallback = 'Inactive') {

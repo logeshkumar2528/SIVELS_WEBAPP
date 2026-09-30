@@ -18,7 +18,7 @@ const MyProfile = () => {
     ? (String(auth.mobileNumber).startsWith('+91') ? auth.mobileNumber : `+91 ${auth.mobileNumber}`)
     : '+91 90000 12345';
   const branch = auth?.branch || 'Main Branch';
-  const code = auth?.creditManagerCode || 'CM001';
+  const code = auth?.creditManagerCode || '—';
   const initials = getInitials(fullName);
 
   return (
