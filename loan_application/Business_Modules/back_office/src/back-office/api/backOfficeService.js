@@ -360,6 +360,13 @@ export const backOfficeService = {
     return unwrapResponse(response);
   },
 
+  deleteOtherIncome: async (applicationOtherIncomeDetailsId, modifiedBy) => {
+    const response = await axiosInstance.delete(
+      `${BACK_OFFICE_ENDPOINTS.CALCULATION_OTHER_INCOME_BY_ID(applicationOtherIncomeDetailsId)}?modifiedBy=${encodeURIComponent(modifiedBy)}`
+    );
+    return unwrapResponse(response);
+  },
+
   /**
    * Update recommended loan amount on an eligibility assessment (Company Recommendation).
    * @param {string|number} loanEligibilityAssessmentId
