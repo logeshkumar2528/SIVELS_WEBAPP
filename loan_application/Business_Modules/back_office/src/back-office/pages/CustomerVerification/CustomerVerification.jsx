@@ -10585,7 +10585,7 @@ export default function CustomerVerification() {
           <div className="bo-cv-lead-info">
             <h1 className="bo-cv-cust-title">{verificationData.customerName}</h1>
             <div className="bo-cv-meta-inline">
-              <span className="bo-cv-app-id">{verificationData.appId || (verificationData.applicationId && !verificationData.applicationId.startsWith('APP-') ? verificationData.applicationId : 'N/A')}</span>
+              <span className="bo-cv-app-id">{verificationData.customerCode || verificationData.customer?.customerCode || verificationData.customer?.CustomerCode || 'N/A'}</span>
               <span className="bo-cv-dot">&bull;</span>
               <span className="bo-cv-product-amount">
                 {appDetails.loanProduct} &bull; <strong>{formatCurrency(appDetails.loanAmount)}</strong>

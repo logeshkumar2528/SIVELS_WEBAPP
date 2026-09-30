@@ -146,6 +146,17 @@ export function mapApplicationFullDetails(response, extraDocs = []) {
 
   const aadhaarDisplay = aadhaarLast4 ? `XXXX-XXXX-${aadhaarLast4}` : (getValue(applicantKyc, 'aadhaarNumber', 'AadhaarNumber') || 'Not Available');
 
+  const rawCustomerCode = getValue(
+    customer,
+    'customerCode',
+    'CustomerCode',
+    'customer_code'
+  );
+  const cleanCustomerCode =
+    rawCustomerCode != null && String(rawCustomerCode).trim() !== ''
+      ? String(rawCustomerCode).trim()
+      : 'N/A';
+
   const rawAppId =
     getValue(customer, 'appId', 'AppId', 'App_Id') ||
     getValue(productDetails, 'appId', 'AppId', 'App_Id') ||
@@ -495,6 +506,7 @@ export function mapApplicationFullDetails(response, extraDocs = []) {
   return {
     customerId: String(agentCustomerId),
     agentCustomerId: agentCustomerId ? Number(agentCustomerId) : null,
+    customerCode: cleanCustomerCode,
     appId: cleanAppId,
     applicationId: cleanAppId || 'N/A',
     applicationNo: cleanAppId || 'N/A',
