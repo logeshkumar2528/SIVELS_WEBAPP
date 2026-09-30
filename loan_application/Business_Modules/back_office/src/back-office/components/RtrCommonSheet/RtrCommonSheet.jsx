@@ -131,7 +131,7 @@ export default function RtrCommonSheet({
     if (storedUserId != null && !isNaN(Number(storedUserId)) && Number(storedUserId) > 0) {
       return Number(storedUserId);
     }
-    return 1;
+    return null;
   }, [propUserId]);
 
   // Fetch status master once on mount
@@ -354,6 +354,10 @@ export default function RtrCommonSheet({
     setSaveSuccessMessage(null);
     try {
       const currentUserId = resolveCurrentUserId();
+      if (!currentUserId) {
+        setObligationsError('Unable to identify authenticated Back Office user. Please log in again.');
+        return;
+      }
       await backOfficeService.deleteLoanObligation(
         deleteConfirmRow.applicationLoanObligationDetailsId,
         currentUserId
@@ -476,6 +480,12 @@ export default function RtrCommonSheet({
         setObligationsError(`Please select Status (Live / Closed) for Row ${i + 1}.`);
         return;
       }
+    }
+
+    const currentUserId = resolveCurrentUserId();
+    if (!currentUserId) {
+      setObligationsError('Unable to identify authenticated Back Office user. Please log in again.');
+      return;
     }
 
     setObligationsSaving(true);

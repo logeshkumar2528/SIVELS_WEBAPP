@@ -263,8 +263,8 @@ export default function VerifyOTP() {
             isAuthenticated: true,
             backOfficeId: boId ? Number(boId) : null,
             id: boId ? Number(boId) : null,
-            name: boAccount?.fullName || boAccount?.name || 'Back Office Executive',
-            role: boAccount?.role || 'Operations Team',
+            name: boAccount?.fullName || boAccount?.name || '',
+            role: boAccount?.role || 'BackOffice',
             mobile: cleanMobile,
             loginTimestamp: new Date().toISOString(),
           }));
