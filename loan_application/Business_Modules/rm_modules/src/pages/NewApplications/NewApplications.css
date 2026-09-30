@@ -6,6 +6,55 @@
   margin-bottom: var(--spacing-4);
 }
 
+.new-apps-actions-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.new-apps-action-btn.btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #0F7A4C;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: all 180ms ease-in-out;
+  cursor: pointer;
+}
+
+.new-apps-action-btn.btn > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.new-apps-action-btn.btn:hover {
+  background-color: #f0fdf4;
+  border-color: #86efac;
+  color: #0F7A4C;
+  box-shadow: 0 2px 4px rgba(15, 122, 76, 0.12);
+  transform: translateY(-1px);
+}
+
+.new-apps-action-btn.btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.new-apps-action-btn.btn svg {
+  display: block;
+  flex-shrink: 0;
+}
+
 /* ── Returned Application Modal Styling ───────────────────────────── */
 .return-modal-header-info {
   background: #f8fafc;

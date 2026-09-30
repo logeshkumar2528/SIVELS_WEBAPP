@@ -15,7 +15,6 @@ import {
 import { getBankBranches } from '../../api/masters/bankBranchApi';
 import { masterService } from '../../../../Core/src/services/masterService';
 import { getCurrentUserId } from '../../utils/authHelper';
-import { generateUserCode } from '../../utils/codeGenerator';
 import { DocumentUploadCard, DocumentPreviewModal, fetchDocumentBlobUrl, isPdfUrl } from '../../components/DocumentUpload/DocumentUploadSection';
 import { getProfileImageUrl, getRmDocumentDownloadUrl, buildFileUrl, getDocumentUrl } from '../../utils/profileImageHelper';
 import { isPdfFile, getAadhaarPath, getPanPath, getProfilePath } from '../Dashboard/Dashboard';
@@ -296,18 +295,16 @@ export default function RelationshipManagerCreate() {
   };
 
   const update = (key, value) => {
-    setForm((current) => {
-      const next = { ...current, [key]: value };
-      if (!isEditMode && (key === 'fullName' || key === 'dateOfBirth' || key === 'mobileNumber')) {
-        next.rmCode = generateUserCode(next.fullName, next.dateOfBirth, next.mobileNumber);
-      }
-      return next;
-    });
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+    }));
     setError('');
     setFieldErrors((current) => ({ ...current, [key]: '' }));
   };
 
   const validateField = (key, value = form[key]) => {
+    if (key === 'rmCode' && !isEditMode) return '';
     const text = String(value || '').trim();
     let message = '';
     if (!text) message = 'This field is required.';
@@ -323,7 +320,22 @@ export default function RelationshipManagerCreate() {
 
   const submit = async (event) => {
     event.preventDefault();
-    const required = ['rmCode', 'fullName', 'dateOfBirth', 'genderId', 'address', 'stateId', 'cityId', 'pincode', 'mobileNumber', 'emailAddress', 'branch', 'dateJoined', 'accountNumber', 'ifscCode'];
+    const required = [
+      ...(isEditMode ? ['rmCode'] : []),
+      'fullName',
+      'dateOfBirth',
+      'genderId',
+      'address',
+      'stateId',
+      'cityId',
+      'pincode',
+      'mobileNumber',
+      'emailAddress',
+      'branch',
+      'dateJoined',
+      'accountNumber',
+      'ifscCode',
+    ];
     const validationErrors = required.map((key) => validateField(key)).filter(Boolean);
     if (validationErrors.length) {
       setError('Please correct the highlighted fields.');
@@ -331,7 +343,7 @@ export default function RelationshipManagerCreate() {
     }
     setSaving(true);
     try {
-      const payload = {
+      const basePayload = {
         ...(existingRecord || {}),
         ...form,
         genderId: Number(form.genderId),
@@ -345,9 +357,14 @@ export default function RelationshipManagerCreate() {
       let targetRmId = rmId || null;
 
       if (isEditMode) {
-        await updateRelationshipManager(rmId, { ...payload, rmId: Number(rmId) });
+        await updateRelationshipManager(rmId, {
+          ...basePayload,
+          rmId: Number(rmId),
+          rmCode: form.rmCode || existingRecord?.rmCode || '',
+        });
       } else {
-        const response = await createRelationshipManager(payload);
+        const { rmCode: _unusedRmCode, ...createPayload } = basePayload;
+        const response = await createRelationshipManager(createPayload);
         targetRmId = extractRmId(response);
       }
 
@@ -435,15 +452,16 @@ export default function RelationshipManagerCreate() {
         <input
           className={`form-input ${key === 'rmCode' ? 'rm-code-input' : ''} ${type === 'date' ? 'rm-date-input' : ''} ${fieldErrors[key] ? 'rm-invalid' : ''}`}
           type={type}
-          value={form[key]}
+          value={key === 'rmCode' && !isEditMode ? '' : form[key]}
+          placeholder={key === 'rmCode' && !isEditMode ? 'Auto-generated on creation' : ''}
           onBlur={() => validateField(key)}
           onChange={(event) => update(key, event.target.value)}
           disabled={saving || loadingRecord || key === 'rmCode' || (!isEditMode && key === 'dateJoined')}
           readOnly={key === 'rmCode' || (!isEditMode && key === 'dateJoined')}
-          required
+          required={key !== 'rmCode'}
         />
       )}
-      {key === 'rmCode' && <small className="rm-field-hint">{isEditMode ? 'System code' : 'Generated automatically'}</small>}
+      {key === 'rmCode' && <small className="rm-field-hint">{isEditMode ? 'System code' : 'Auto-generated on creation'}</small>}
       {key === 'dateJoined' && !isEditMode && <small className="rm-field-hint">Set automatically on creation</small>}
       {fieldErrors[key] && <small className="rm-validation-error">{fieldErrors[key]}</small>}
     </label>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { User, Users, Phone, MapPin } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
@@ -132,6 +132,8 @@ function ReferenceCard({
 export default function ReferenceDetails() {
   const navigate = useNavigate();
   const { applicationId } = useParams();
+  const [searchParams] = useSearchParams();
+  const isViewMode = searchParams.get('mode') === 'view';
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildReferenceState(getApplication(appId)));
@@ -191,6 +193,11 @@ export default function ReferenceDetails() {
   };
 
   const handleContinue = async () => {
+    if (isViewMode) {
+      navigate(`${ROUTES.COLLATERAL.replace(':applicationId', appId)}?mode=view`);
+      return;
+    }
+
     const nextErrors = {};
     const ref1Errors = validateReference(form.reference1);
     Object.entries(ref1Errors).forEach(([k, v]) => {
@@ -283,7 +290,7 @@ export default function ReferenceDetails() {
   };
 
   const handleBack = () => {
-    navigate(ROUTES.BANK_EXISTING_LOANS.replace(':applicationId', appId));
+    navigate(isViewMode ? `${ROUTES.BANK_EXISTING_LOANS.replace(':applicationId', appId)}?mode=view` : ROUTES.BANK_EXISTING_LOANS.replace(':applicationId', appId));
   };
 
   return (
@@ -304,10 +311,10 @@ export default function ReferenceDetails() {
       title="Step 7: Reference Details"
       subtitle="Capture two reference contacts exactly as required in the PDF."
       backLabel="Back to Banking"
-      continueLabel="Save & Continue"
+      continueLabel={isViewMode ? 'Next' : 'Save & Continue'}
       onBack={handleBack}
       onContinue={handleContinue}
-      onStepClick={(step) => navigate(step.route.replace(':applicationId', appId))}
+      onStepClick={(step) => navigate(isViewMode ? `${step.route.replace(':applicationId', appId)}?mode=view` : step.route.replace(':applicationId', appId))}
       headerAction={
         <Button
           variant="secondary"
@@ -319,32 +326,34 @@ export default function ReferenceDetails() {
         </Button>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <ReferenceCard
-          title="REFERENCE 1"
-          reference={form.reference1}
-          onChange={(field, value) => updateReference('reference1', field, value)}
-          errors={Object.fromEntries(
-            Object.entries(errors)
-              .filter(([k]) => k.startsWith('reference1.'))
-              .map(([k, v]) => [k.replace('reference1.', ''), v])
-          )}
-          relationshipOptions={relationshipOptions}
-          isLoadingMasters={isLoadingMasters}
-        />
-        <ReferenceCard
-          title="REFERENCE 2"
-          reference={form.reference2}
-          onChange={(field, value) => updateReference('reference2', field, value)}
-          errors={Object.fromEntries(
-            Object.entries(errors)
-              .filter(([k]) => k.startsWith('reference2.'))
-              .map(([k, v]) => [k.replace('reference2.', ''), v])
-          )}
-          relationshipOptions={relationshipOptions}
-          isLoadingMasters={isLoadingMasters}
-        />
-      </div>
+      <fieldset disabled={isViewMode} style={{ border: 'none', padding: 0, margin: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <ReferenceCard
+            title="REFERENCE 1"
+            reference={form.reference1}
+            onChange={(field, value) => updateReference('reference1', field, value)}
+            errors={Object.fromEntries(
+              Object.entries(errors)
+                .filter(([k]) => k.startsWith('reference1.'))
+                .map(([k, v]) => [k.replace('reference1.', ''), v])
+            )}
+            relationshipOptions={relationshipOptions}
+            isLoadingMasters={isLoadingMasters}
+          />
+          <ReferenceCard
+            title="REFERENCE 2"
+            reference={form.reference2}
+            onChange={(field, value) => updateReference('reference2', field, value)}
+            errors={Object.fromEntries(
+              Object.entries(errors)
+                .filter(([k]) => k.startsWith('reference2.'))
+                .map(([k, v]) => [k.replace('reference2.', ''), v])
+            )}
+            relationshipOptions={relationshipOptions}
+            isLoadingMasters={isLoadingMasters}
+          />
+        </div>
+      </fieldset>
     </WizardSectionLayout>
     </>
   );

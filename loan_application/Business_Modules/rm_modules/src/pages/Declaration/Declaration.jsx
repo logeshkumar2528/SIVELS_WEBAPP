@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PenTool, Calendar, User, Briefcase, UserCheck, Phone, CheckCircle } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
@@ -241,6 +241,8 @@ export default function Declaration() {
   const navigate = useNavigate();
   const { withLoading } = useLoading();
   const { applicationId } = useParams();
+  const [searchParams] = useSearchParams();
+  const isViewMode = searchParams.get('mode') === 'view';
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildDeclarationState(getApplication(appId)));
@@ -290,16 +292,18 @@ export default function Declaration() {
         const resolvedRmName = await fetchLiveRMNameFromApi();
 
         if (active) {
-          // Save in draft store
-          saveApplication(appId, {
-            agentCustomerId: customerRecord?.agentCustomerId || customerRecord?.AgentCustomerId || appId,
-            customerName: custName || appData.customerName,
-            loanProductDisplay: prodName,
-            loanType: prodName,
-            branch: customerRecord?.branch || appData.branch,
-            createdDate: customerRecord?.createdAt || customerRecord?.createdDate || appData.createdDate,
-            agentName: customerRecord?.agentName || appData.agentName,
-          });
+          if (!isViewMode) {
+            // Save in draft store
+            saveApplication(appId, {
+              agentCustomerId: customerRecord?.agentCustomerId || customerRecord?.AgentCustomerId || appId,
+              customerName: custName || appData.customerName,
+              loanProductDisplay: prodName,
+              loanType: prodName,
+              branch: customerRecord?.branch || appData.branch,
+              createdDate: customerRecord?.createdAt || customerRecord?.createdDate || appData.createdDate,
+              agentName: customerRecord?.agentName || appData.agentName,
+            });
+          }
 
           // Update form state with live API values
           const shouldOverwriteAck = isObsoleteMock(form.ackApplicantName) || !form.ackApplicantName || form.ackApplicantName === 'Muthu A';
@@ -317,7 +321,9 @@ export default function Declaration() {
           };
 
           setForm(next);
-          saveApplication(appId, buildSectionUpdate(getApplication(appId), 'declaration', next));
+          if (!isViewMode) {
+            saveApplication(appId, buildSectionUpdate(getApplication(appId), 'declaration', next));
+          }
         }
       } catch (err) {
         console.error('Error fetching live data for Declaration:', err);
@@ -329,11 +335,13 @@ export default function Declaration() {
     return () => {
       active = false;
     };
-  }, [appId]);
+  }, [appId, isViewMode]);
 
   const persist = (nextForm) => {
     setForm(nextForm);
-    saveApplication(appId, buildSectionUpdate(appData, 'declaration', nextForm));
+    if (!isViewMode) {
+      saveApplication(appId, buildSectionUpdate(appData, 'declaration', nextForm));
+    }
   };
 
   const validateDeclaration = () => {
@@ -394,6 +402,7 @@ export default function Declaration() {
   };
 
   const handleSubmit = () => {
+    if (isViewMode) return;
     const validationErrors = validateDeclaration();
     setErrors(validationErrors);
 
@@ -479,7 +488,7 @@ export default function Declaration() {
   };
 
   const handleBack = () => {
-    navigate(ROUTES.DOCUMENT_CHECKLIST.replace(':applicationId', appId));
+    navigate(isViewMode ? `${ROUTES.DOCUMENT_CHECKLIST.replace(':applicationId', appId)}?mode=view` : ROUTES.DOCUMENT_CHECKLIST.replace(':applicationId', appId));
   };
 
   const displayCustomerName = resolveApplicantName(appData);
@@ -502,10 +511,10 @@ export default function Declaration() {
       title="Step 11: Declaration"
       subtitle="Final review of declaration and acknowledgement of receipt."
       backLabel="Back to Checklist"
-      continueLabel="Review & Submit Application"
+      continueLabel={isViewMode ? 'Exit View' : 'Review & Submit Application'}
       onBack={handleBack}
-      onContinue={handleSubmit}
-      onStepClick={(step) => navigate(step.route.replace(':applicationId', appId))}
+      onContinue={isViewMode ? () => navigate(ROUTES.APPROVED_APPLICATIONS) : handleSubmit}
+      onStepClick={(step) => navigate(isViewMode ? `${step.route.replace(':applicationId', appId)}?mode=view` : step.route.replace(':applicationId', appId))}
       headerAction={
         <Button
           variant="secondary"
@@ -516,86 +525,39 @@ export default function Declaration() {
           Back to Checklist
         </Button>
       }
-      footerHint="This is the final section before review and submission."
+      footerHint={isViewMode ? 'Application view mode. Click Exit View to return to Logged to HO.' : 'This is the final section before review and submission.'}
     >
-      {/* SECTION 1: DECLARATION & APPLICANT SIGNATURE */}
-      <div className="aw-mini-card" style={{ marginBottom: '24px' }}>
-        <div className="aw-mini-card__header">
-          <div>
-            <div className="aw-mini-card__title">Declaration</div>
-            <div className="aw-mini-card__subtitle">Terms and conditions</div>
-          </div>
-        </div>
-        <div className="aw-mini-card__body">
-          <div
-            style={{
-              padding: '16px',
-              backgroundColor: '#fafcfb',
-              border: '1px solid var(--color-border-light)',
-              borderRadius: '8px',
-              fontSize: '12.5px',
-              color: 'var(--color-text-secondary)',
-              lineHeight: 1.6,
-              marginBottom: '24px',
-            }}
-          >
-            I/We declare that the information given in this application is true, correct and complete to the best of
-            my/our knowledge. I/We authorise Sivels Finance (a unit of Sivels Holding Pvt Ltd) and its representatives
-            to verify the details furnished, obtain credit bureau reports, and process my/our personal data for
-            evaluation, sanction and servicing of this loan, in accordance with applicable law. I/We understand that the
-            Admin Fee is non-refundable, and that submission of this form does not guarantee sanction of the loan applied
-            for.
-          </div>
-
-          {coApplicantCount === 0 ? (
-            <div className="aw-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
-              <div className="aw-field">
-                <label className="form-label">Signature of Applicant</label>
-                <div className="aw-input-wrapper">
-                  <PenTool className="aw-input-icon" size={14} />
-                  <input
-                    className={`form-input aw-input aw-input--with-icon ${errors.applicantSignature ? 'aw-input--invalid' : ''}`}
-                    value={form.applicantSignature}
-                    onChange={(e) => {
-                      persist({ ...form, applicantSignature: e.target.value });
-                      if (errors.applicantSignature) {
-                        setErrors((prev) => {
-                          const next = { ...prev };
-                          delete next.applicantSignature;
-                          return next;
-                        });
-                      }
-                    }}
-                    placeholder="Enter applicant signature"
-                  />
-                </div>
-                {errors.applicantSignature && <span className="aw-field-error">{errors.applicantSignature}</span>}
-              </div>
-              <div className="aw-field">
-                <label className="form-label">Date</label>
-                <div className="aw-input-wrapper">
-                  <Calendar className="aw-input-icon" size={14} />
-                  <input
-                    type="date"
-                    className={`form-input aw-input aw-input--with-icon ${errors.applicantDate ? 'aw-input--invalid' : ''}`}
-                    value={form.applicantDate}
-                    onChange={(e) => {
-                      persist({ ...form, applicantDate: e.target.value });
-                      if (errors.applicantDate) {
-                        setErrors((prev) => {
-                          const next = { ...prev };
-                          delete next.applicantDate;
-                          return next;
-                        });
-                      }
-                    }}
-                  />
-                </div>
-                {errors.applicantDate && <span className="aw-field-error">{errors.applicantDate}</span>}
-              </div>
+      <fieldset disabled={isViewMode} style={{ border: 'none', padding: 0, margin: 0 }}>
+        {/* SECTION 1: DECLARATION & APPLICANT SIGNATURE */}
+        <div className="aw-mini-card" style={{ marginBottom: '24px' }}>
+          <div className="aw-mini-card__header">
+            <div>
+              <div className="aw-mini-card__title">Declaration</div>
+              <div className="aw-mini-card__subtitle">Terms and conditions</div>
             </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          </div>
+          <div className="aw-mini-card__body">
+            <div
+              style={{
+                padding: '16px',
+                backgroundColor: '#fafcfb',
+                border: '1px solid var(--color-border-light)',
+                borderRadius: '8px',
+                fontSize: '12.5px',
+                color: 'var(--color-text-secondary)',
+                lineHeight: 1.6,
+                marginBottom: '24px',
+              }}
+            >
+              I/We declare that the information given in this application is true, correct and complete to the best of
+              my/our knowledge. I/We authorise Sivels Finance (a unit of Sivels Holding Pvt Ltd) and its representatives
+              to verify the details furnished, obtain credit bureau reports, and process my/our personal data for
+              evaluation, sanction and servicing of this loan, in accordance with applicable law. I/We understand that the
+              Admin Fee is non-refundable, and that submission of this form does not guarantee sanction of the loan applied
+              for.
+            </div>
+
+            {coApplicantCount === 0 ? (
               <div className="aw-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
                 <div className="aw-field">
                   <label className="form-label">Signature of Applicant</label>
@@ -642,40 +604,30 @@ export default function Declaration() {
                   {errors.applicantDate && <span className="aw-field-error">{errors.applicantDate}</span>}
                 </div>
               </div>
-
-              {form.coApplicants.map((coApp, index) => (
-                <div key={index} className="aw-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div className="aw-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
                   <div className="aw-field">
-                    <label className="form-label">
-                      Signature of Co-Applicant {index + 1}
-                    </label>
+                    <label className="form-label">Signature of Applicant</label>
                     <div className="aw-input-wrapper">
                       <PenTool className="aw-input-icon" size={14} />
                       <input
-                        className={`form-input aw-input aw-input--with-icon ${errors[`coApplicants.${index}.signature`] ? 'aw-input--invalid' : ''}`}
-                        value={coApp.signature}
+                        className={`form-input aw-input aw-input--with-icon ${errors.applicantSignature ? 'aw-input--invalid' : ''}`}
+                        value={form.applicantSignature}
                         onChange={(e) => {
-                          const updated = [...form.coApplicants];
-                          updated[index] = { ...updated[index], signature: e.target.value };
-                          persist({
-                            ...form,
-                            coApplicants: updated,
-                            coApplicantSignature: updated[0]?.signature || '',
-                          });
-                          if (errors[`coApplicants.${index}.signature`]) {
+                          persist({ ...form, applicantSignature: e.target.value });
+                          if (errors.applicantSignature) {
                             setErrors((prev) => {
                               const next = { ...prev };
-                              delete next[`coApplicants.${index}.signature`];
+                              delete next.applicantSignature;
                               return next;
                             });
                           }
                         }}
-                        placeholder="Enter co-applicant signature"
+                        placeholder="Enter applicant signature"
                       />
                     </div>
-                    {errors[`coApplicants.${index}.signature`] && (
-                      <span className="aw-field-error">{errors[`coApplicants.${index}.signature`]}</span>
-                    )}
+                    {errors.applicantSignature && <span className="aw-field-error">{errors.applicantSignature}</span>}
                   </div>
                   <div className="aw-field">
                     <label className="form-label">Date</label>
@@ -683,109 +635,168 @@ export default function Declaration() {
                       <Calendar className="aw-input-icon" size={14} />
                       <input
                         type="date"
-                        className={`form-input aw-input aw-input--with-icon ${errors[`coApplicants.${index}.date`] ? 'aw-input--invalid' : ''}`}
-                        value={coApp.date}
+                        className={`form-input aw-input aw-input--with-icon ${errors.applicantDate ? 'aw-input--invalid' : ''}`}
+                        value={form.applicantDate}
                         onChange={(e) => {
-                          const updated = [...form.coApplicants];
-                          updated[index] = { ...updated[index], date: e.target.value };
-                          persist({
-                            ...form,
-                            coApplicants: updated,
-                            coApplicantDate: updated[0]?.date || '',
-                          });
-                          if (errors[`coApplicants.${index}.date`]) {
+                          persist({ ...form, applicantDate: e.target.value });
+                          if (errors.applicantDate) {
                             setErrors((prev) => {
                               const next = { ...prev };
-                              delete next[`coApplicants.${index}.date`];
+                              delete next.applicantDate;
                               return next;
                             });
                           }
                         }}
                       />
                     </div>
-                    {errors[`coApplicants.${index}.date`] && (
-                      <span className="aw-field-error">{errors[`coApplicants.${index}.date`]}</span>
-                    )}
+                    {errors.applicantDate && <span className="aw-field-error">{errors.applicantDate}</span>}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* SECTION 2: ACKNOWLEDGEMENT OF RECEIPT (CUSTOMER COPY) */}
-      <div className="aw-mini-card">
-        <div className="aw-mini-card__header">
-          <div>
-            <div className="aw-mini-card__title">Acknowledgement of Receipt (Customer Copy)</div>
-            <div className="aw-mini-card__subtitle">To be filled by RM upon document collection</div>
+                {form.coApplicants.map((coApp, index) => (
+                  <div key={index} className="aw-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+                    <div className="aw-field">
+                      <label className="form-label">
+                        Signature of Co-Applicant {index + 1}
+                      </label>
+                      <div className="aw-input-wrapper">
+                        <PenTool className="aw-input-icon" size={14} />
+                        <input
+                          className={`form-input aw-input aw-input--with-icon ${errors[`coApplicants.${index}.signature`] ? 'aw-input--invalid' : ''}`}
+                          value={coApp.signature}
+                          onChange={(e) => {
+                            const updated = [...form.coApplicants];
+                            updated[index] = { ...updated[index], signature: e.target.value };
+                            persist({
+                              ...form,
+                              coApplicants: updated,
+                              coApplicantSignature: updated[0]?.signature || '',
+                            });
+                            if (errors[`coApplicants.${index}.signature`]) {
+                              setErrors((prev) => {
+                                const next = { ...prev };
+                                delete next[`coApplicants.${index}.signature`];
+                                return next;
+                              });
+                            }
+                          }}
+                          placeholder="Enter co-applicant signature"
+                        />
+                      </div>
+                      {errors[`coApplicants.${index}.signature`] && (
+                        <span className="aw-field-error">{errors[`coApplicants.${index}.signature`]}</span>
+                      )}
+                    </div>
+                    <div className="aw-field">
+                      <label className="form-label">Date</label>
+                      <div className="aw-input-wrapper">
+                        <Calendar className="aw-input-icon" size={14} />
+                        <input
+                          type="date"
+                          className={`form-input aw-input aw-input--with-icon ${errors[`coApplicants.${index}.date`] ? 'aw-input--invalid' : ''}`}
+                          value={coApp.date}
+                          onChange={(e) => {
+                            const updated = [...form.coApplicants];
+                            updated[index] = { ...updated[index], date: e.target.value };
+                            persist({
+                              ...form,
+                              coApplicants: updated,
+                              coApplicantDate: updated[0]?.date || '',
+                            });
+                            if (errors[`coApplicants.${index}.date`]) {
+                              setErrors((prev) => {
+                                const next = { ...prev };
+                                delete next[`coApplicants.${index}.date`];
+                                return next;
+                              });
+                            }
+                          }}
+                        />
+                      </div>
+                      {errors[`coApplicants.${index}.date`] && (
+                        <span className="aw-field-error">{errors[`coApplicants.${index}.date`]}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
-        <div className="aw-mini-card__body">
-          <div className="aw-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
-            <div className="aw-field">
-              <label className="form-label">Name of Applicant</label>
-              <div className="aw-input-wrapper">
-                <User className="aw-input-icon" size={14} />
-                <input
-                  className="form-input aw-input aw-input--with-icon"
-                  value={form.ackApplicantName}
-                  readOnly
-                  placeholder="Enter applicant name"
-                  onChange={(e) => persist({ ...form, ackApplicantName: e.target.value })}
-                />
-              </div>
-            </div>
 
-            <div className="aw-field">
-              <label className="form-label">Product Applied For</label>
-              <div className="aw-input-wrapper">
-                <Briefcase className="aw-input-icon" size={14} />
-                <input
-                  className="form-input aw-input aw-input--with-icon"
-                  value={form.ackProduct}
-                  readOnly
-                  placeholder="Enter product applied for"
-                  onChange={(e) => persist({ ...form, ackProduct: e.target.value })}
-                />
-              </div>
+        {/* SECTION 2: ACKNOWLEDGEMENT OF RECEIPT (CUSTOMER COPY) */}
+        <div className="aw-mini-card">
+          <div className="aw-mini-card__header">
+            <div>
+              <div className="aw-mini-card__title">Acknowledgement of Receipt (Customer Copy)</div>
+              <div className="aw-mini-card__subtitle">To be filled by RM upon document collection</div>
             </div>
-
-            <div className="aw-field">
-              <label className="form-label">Received By (RM Name & Sign)</label>
-              <div className="aw-input-wrapper">
-                <UserCheck className="aw-input-icon" size={14} />
-                <input
-                  className="form-input aw-input aw-input--with-icon"
-                  value={form.ackReceivedBy}
-                  readOnly
-                  placeholder="Enter RM Name & Sign"
-                  onChange={(e) => persist({ ...form, ackReceivedBy: e.target.value })}
-                />
+          </div>
+          <div className="aw-mini-card__body">
+            <div className="aw-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+              <div className="aw-field">
+                <label className="form-label">Name of Applicant</label>
+                <div className="aw-input-wrapper">
+                  <User className="aw-input-icon" size={14} />
+                  <input
+                    className="form-input aw-input aw-input--with-icon"
+                    value={form.ackApplicantName}
+                    readOnly
+                    placeholder="Enter applicant name"
+                    onChange={(e) => persist({ ...form, ackApplicantName: e.target.value })}
+                  />
+                </div>
               </div>
-            </div>
 
-            <div className="aw-field">
-              <label className="form-label">Date of Receipt</label>
-              <div className="aw-input-wrapper">
-                <Calendar className="aw-input-icon" size={14} />
-                <input
-                  type="date"
-                  className="form-input aw-input aw-input--with-icon"
-                  value={form.ackDate}
-                  readOnly
-                  onChange={(e) => persist({ ...form, ackDate: e.target.value })}
-                />
+              <div className="aw-field">
+                <label className="form-label">Product Applied For</label>
+                <div className="aw-input-wrapper">
+                  <Briefcase className="aw-input-icon" size={14} />
+                  <input
+                    className="form-input aw-input aw-input--with-icon"
+                    value={form.ackProduct}
+                    readOnly
+                    placeholder="Enter product applied for"
+                    onChange={(e) => persist({ ...form, ackProduct: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="aw-field">
+                <label className="form-label">Received By (RM Name & Sign)</label>
+                <div className="aw-input-wrapper">
+                  <UserCheck className="aw-input-icon" size={14} />
+                  <input
+                    className="form-input aw-input aw-input--with-icon"
+                    value={form.ackReceivedBy}
+                    readOnly
+                    placeholder="Enter RM Name & Sign"
+                    onChange={(e) => persist({ ...form, ackReceivedBy: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="aw-field">
+                <label className="form-label">Date of Receipt</label>
+                <div className="aw-input-wrapper">
+                  <Calendar className="aw-input-icon" size={14} />
+                  <input
+                    type="date"
+                    className="form-input aw-input aw-input--with-icon"
+                    value={form.ackDate}
+                    readOnly
+                    onChange={(e) => persist({ ...form, ackDate: e.target.value })}
+                  />
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </fieldset>
 
       {/* CONFIRMATION / SUBMISSION MODAL */}
       <Modal
-        show={showSubmitModal}
+        show={!isViewMode && showSubmitModal}
         onHide={() => {
           if (otpStep !== 'success') setShowSubmitModal(false);
         }}

@@ -61,14 +61,6 @@ export const NAV_ITEMS = [
     badgeKey: 'customerSubmissionHistory',
     section:  'APPLICATIONS',
   },
-  {
-    id:       'submission-history',
-    label:    'Submission History',
-    icon:     'History',
-    route:    ROUTES.SUBMISSION_HISTORY,
-    badgeKey: 'submissionHistory',
-    section:  'APPLICATIONS',
-  },
 
   {
     id:       'my-agents',

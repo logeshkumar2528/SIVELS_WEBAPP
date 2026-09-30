@@ -160,18 +160,24 @@
   display: flex;
   align-items: center;
   width: 100%;
-  max-width: 360px;
+  max-width: 320px;
 }
 
 .search-box .search-icon {
   position: absolute;
-  left: var(--spacing-3);
+  left: 12px;
   color: var(--color-text-muted);
   pointer-events: none;
 }
 
 .search-box input {
-  padding-left: var(--spacing-8);
+  width: 100%;
+  height: 38px;
+  padding: 0 12px 0 34px;
+  border: 1px solid #D5DDE5;
+  border-radius: 8px;
+  font-size: 13px;
+  box-sizing: border-box;
 }
 
 /* Filter bar */
@@ -179,10 +185,91 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--spacing-4);
+  gap: var(--spacing-3, 8px);
   flex-wrap: wrap;
-  padding: var(--spacing-4);
+  padding: 12px 16px;
   border-bottom: 1px solid var(--color-border-light);
+}
+
+/* Unified Date Filter Controls */
+.filter-unified-date-box {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid #D5DDE5;
+  border-radius: 8px;
+  background-color: #FFFFFF;
+  cursor: pointer;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.filter-unified-date-box:hover {
+  border-color: #A8B2BF;
+}
+
+.filter-unified-date-box:focus-within {
+  border-color: var(--color-primary, #1A7A3C);
+  box-shadow: 0 0 0 3px rgba(26, 122, 60, 0.12);
+}
+
+.filter-date-icon {
+  color: var(--color-text-muted, #64748B);
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.filter-date-prefix {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.filter-unified-date-box .filter-date-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-primary, #0F172A);
+  width: 110px;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.btn-reset-filter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 14px;
+  background-color: #F8FAFC;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.04));
+  transition: background-color var(--transition-fast, 150ms ease), border-color var(--transition-fast, 150ms ease), color var(--transition-fast, 150ms ease);
+  white-space: nowrap;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.btn-reset-filter:hover {
+  background-color: #E2E8F0;
+  border-color: #94A3B8;
+  color: #0F172A;
 }
 
 /* New Applications table — keep columns from squeezing on mid-width screens. */
@@ -216,6 +303,7 @@
 }
 
 .rm-new-applications-table .data-table-cell {
+  padding: 8px 6px;
   vertical-align: middle;
   font-size: 12px;
   color: var(--color-text-primary, #0f172a);
@@ -235,7 +323,7 @@
 
 .rm-new-applications-table .data-table-th:nth-child(2),
 .rm-new-applications-table .data-table-cell:nth-child(2) {
-  width: 7% !important;
+  width: 11% !important;
   white-space: nowrap;
 }
 
@@ -248,32 +336,35 @@
 
 .rm-new-applications-table .data-table-th:nth-child(4),
 .rm-new-applications-table .data-table-cell:nth-child(4) {
-  width: 10% !important;
+  width: 8.5% !important;
   white-space: nowrap;
 }
 
 .rm-new-applications-table .data-table-th:nth-child(5),
 .rm-new-applications-table .data-table-cell:nth-child(5) {
-  width: 11% !important;
+  width: 14.5% !important;
   font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rm-new-applications-table .data-table-th:nth-child(6),
 .rm-new-applications-table .data-table-cell:nth-child(6) {
-  width: 9% !important;
+  width: 9.5% !important;
   font-weight: 600;
   white-space: nowrap;
 }
 
 .rm-new-applications-table .data-table-th:nth-child(7),
 .rm-new-applications-table .data-table-cell:nth-child(7) {
-  width: 10% !important;
+  width: 8.5% !important;
   font-size: 11.5px;
 }
 
 .rm-new-applications-table .data-table-th:nth-child(8),
 .rm-new-applications-table .data-table-cell:nth-child(8) {
-  width: 9% !important;
+  width: 7.5% !important;
   font-size: 11px;
   color: #64748b;
   white-space: nowrap;
@@ -281,13 +372,13 @@
 
 .rm-new-applications-table .data-table-th:nth-child(9),
 .rm-new-applications-table .data-table-cell:nth-child(9) {
-  width: 13% !important;
+  width: 11% !important;
   text-align: center;
 }
 
 .rm-new-applications-table .data-table-th:nth-child(10),
 .rm-new-applications-table .data-table-cell:nth-child(10) {
-  width: 13% !important;
+  width: 11.5% !important;
   text-align: center;
 }
 

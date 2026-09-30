@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FileText, Eye, Pencil, Calendar } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import DataTable from '../../components/DataTable/DataTable';
 import StatusBadge from '../../components/StatusBadge/StatusBadge';
@@ -9,7 +10,7 @@ import Pagination from '../../components/Pagination/Pagination';
 import Select from '../../components/Select/Select';
 import Modal from '../../components/Modal/Modal';
 import { ROUTES } from '../../config/routeConfig';
-import { formatDate } from '../../utils/dateHelper';
+import { formatDate, matchesListingDateCriteria } from '../../utils/dateHelper';
 import {
   buildAllowedAgentIdSet,
   filterAgentsForRm,
@@ -18,6 +19,7 @@ import {
   resolveApiArray,
 } from '../../utils/rmContext';
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
+import rmCustomerService from '../../services/rmCustomerService';
 import './NewApplications.css';
 import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
 import { resolveDocumentTypeId, validateApplicantDocumentFile } from '../../../../../Core/src/utils/documentTypeHelper';
@@ -146,10 +148,13 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
   }
 
   const officialAppId = item.appId || item.AppId || item.App_Id || null;
+  const rawCustomerCode = item.customerCode || item.CustomerCode || '';
+  const customerCode = rawCustomerCode ? String(rawCustomerCode).trim() : 'N/A';
 
   return {
     id: String(applicationId),
     appId: officialAppId,
+    customerCode,
     displayId: officialAppId || buildApplicationDisplayId(item, 'N/A'),
     customerName: item.fullName || item.customerName || '',
     mobile: normalizeMobile(item.mobileNumber || item.mobile || ''),
@@ -176,10 +181,13 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
 export default function NewApplications({ initialFilter = 'All' }) {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [statusFilter, setStatusFilter] = useState(initialFilter);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(7);
   const [applications, setApplications] = useState([]);
+  const [verificationStatusByApp, setVerificationStatusByApp] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [errorPopup, setErrorPopup] = useState('');
   const pageSizeOptions = [7, 10, 15, 20];
@@ -202,6 +210,8 @@ export default function NewApplications({ initialFilter = 'All' }) {
     setStatusFilter(initialFilter);
     setCurrentPage(1);
     setSearchTerm('');
+    setFromDate('');
+    setToDate('');
   }, [initialFilter]);
 
   const loadApplications = useCallback(async () => {
@@ -357,9 +367,52 @@ export default function NewApplications({ initialFilter = 'All' }) {
         );
         return fresh || prev;
       });
+
+      // Fetch Back Office Step Verification records ONLY for Logged to HO applications
+      const loggedToHoApps = mapped.filter(
+        (a) => a.status === 'Logged to HO' || a.rawStatus === 2 || a.rawStatus === '2'
+      );
+
+      if (loggedToHoApps.length > 0) {
+        const verifResults = await Promise.allSettled(
+          loggedToHoApps.map(async (app) => {
+            const prodId = app.applicationProductDetailsId;
+            const appKey = String(app.agentCustomerId || app.id);
+            if (!prodId) {
+              return { appKey, status: 'error', hasActiveVerification: true };
+            }
+            try {
+              const res = await rmCustomerService.getStepVerificationsByApplication(prodId);
+              const records = Array.isArray(res) ? res : (res?.value || res?.data || []);
+              const activeRecords = records.filter((r) => r && r.isActive !== false);
+              return {
+                appKey,
+                status: 'loaded',
+                hasActiveVerification: activeRecords.length > 0,
+              };
+            } catch {
+              return { appKey, status: 'error', hasActiveVerification: true };
+            }
+          })
+        );
+
+        const verifMap = {};
+        verifResults.forEach((r) => {
+          if (r.status === 'fulfilled' && r.value) {
+            verifMap[r.value.appKey] = {
+              status: r.value.status,
+              hasActiveVerification: r.value.hasActiveVerification,
+            };
+          }
+        });
+        setVerificationStatusByApp(verifMap);
+      } else {
+        setVerificationStatusByApp({});
+      }
     } catch (error) {
       console.error('Failed to fetch applications or rejections:', error);
       setApplications([]);
+      setVerificationStatusByApp({});
       setErrorPopup('Unable to load live applications for this RM. Please try again.');
     } finally {
       setIsLoading(false);
@@ -673,14 +726,30 @@ export default function NewApplications({ initialFilter = 'All' }) {
   };
 
   const filteredData = useMemo(() => {
+    const searchTrimmed = searchTerm.trim();
+    const searchLower = searchTrimmed.toLowerCase();
+    const searchActive = searchTrimmed.length > 0;
+
     return applications
       .filter((app) => {
+        const appDate = app.rawCreatedAt || app.createdAt || app.createdDate;
+        const matchesDate = matchesListingDateCriteria({
+          dateValue: appDate,
+          searchActive,
+          fromDate,
+          toDate,
+        });
+        if (!matchesDate) return false;
+
         const matchesSearch =
-          app.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (app.appId && app.appId.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (app.displayId && app.displayId.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          app.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          app.mobile.includes(searchTerm);
+          !searchActive ||
+          app.customerName.toLowerCase().includes(searchLower) ||
+          (app.customerCode && app.customerCode.toLowerCase().includes(searchLower)) ||
+          (app.appId && app.appId.toLowerCase().includes(searchLower)) ||
+          (app.displayId && app.displayId.toLowerCase().includes(searchLower)) ||
+          app.id.toLowerCase().includes(searchLower) ||
+          app.mobile.includes(searchTrimmed);
+
         const matchesStatus = statusFilter === 'All' || app.status === statusFilter;
         return matchesSearch && matchesStatus;
       })
@@ -692,7 +761,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
         const idB = Number(b.agentCustomerId ?? b.id ?? 0) || 0;
         return idB - idA;
       });
-  }, [applications, searchTerm, statusFilter]);
+  }, [applications, searchTerm, statusFilter, fromDate, toDate]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
 
@@ -710,9 +779,33 @@ export default function NewApplications({ initialFilter = 'All' }) {
     }));
   }, [filteredData, currentPage, pageSize]);
 
+  const getCanEdit = useCallback((row) => {
+    // Only status 2 / 'Logged to HO' can ever be edited
+    const isLoggedToHo = row.status === 'Logged to HO' || row.rawStatus === 2 || row.rawStatus === '2';
+    if (!isLoggedToHo) return false;
+
+    // Status >= 3 is always hidden
+    const numStatus = Number(row.rawStatus ?? row.status);
+    if (!isNaN(numStatus) && numStatus >= 3) return false;
+    if (row.status === 'Under Review' || row.status === 'Approved' || row.status === 'Rejected') return false;
+
+    // If applicationProductDetailsId is missing, cannot verify -> fail closed (hide edit)
+    const appProdId = row.applicationProductDetailsId;
+    if (!appProdId) return false;
+
+    const key = String(row.agentCustomerId || row.id);
+    const verifState = verificationStatusByApp[key];
+
+    // Must be positively loaded with zero active verification records (fail-closed on loading/error/undefined)
+    if (!verifState || verifState.status !== 'loaded') return false;
+    if (verifState.hasActiveVerification === true) return false;
+
+    return true;
+  }, [verificationStatusByApp]);
+
   const columns = [
     { key: 'sno', label: 'S.NO' },
-    { key: 'displayId', label: 'APP ID' },
+    { key: 'customerCode', label: 'CUSTOMER CODE' },
     { key: 'customerName', label: 'CUSTOMER NAME' },
     { key: 'mobile', label: 'MOBILE' },
     { key: 'loanType', label: 'LOAN PURPOSE' },
@@ -735,55 +828,105 @@ export default function NewApplications({ initialFilter = 'All' }) {
       key: 'action',
       label: 'ACTIONS',
       render: (row) => {
-        let btnText = 'Verify Now';
-        if (row.status === 'Logged to HO') btnText = 'View Details';
-        if (row.status === 'Returned') btnText = 'Review Return';
         const applicationId = row.agentCustomerId || row.id;
 
-        const handleActionClick = async () => {
-          if (row.status === 'Returned') {
-            setSelectedReturnApp(row);
-            setSelectedFiles({});
-            setRejectionFeedback({});
-            return;
-          }
+        if (row.status === 'Returned') {
+          return (
+            <div className="new-apps-actions-cell">
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => {
+                  setSelectedReturnApp(row);
+                  setSelectedFiles({});
+                  setRejectionFeedback({});
+                }}
+              >
+                Review Return
+              </Button>
+            </div>
+          );
+        }
 
-          if (row.status === 'New' || btnText === 'Verify Now') {
-            try {
-              const getRes = await fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`);
-              if (getRes.ok) {
-                const data = await getRes.json();
-                const cust = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
-                if (cust && Number(cust.status ?? cust.Status ?? 0) === 0) {
-                  const payload = {
-                    ...cust,
-                    status: 1,
-                  };
-                  const putRes = await fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                  });
-                  if (!putRes.ok && putRes.status !== 204) {
-                    console.error(`Failed to update status to Pending (${putRes.status})`);
-                  }
-                }
-              }
-            } catch (err) {
-              console.error('Failed to update status to Pending:', err);
-            }
-          }
-          navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId));
-        };
+        if (row.status === 'Logged to HO' || row.rawStatus === 2 || row.rawStatus === '2') {
+          const canEdit = getCanEdit(row);
+          return (
+            <div className="new-apps-actions-cell" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <Button
+                size="sm"
+                variant="secondary"
+                title="View Form"
+                aria-label="View Form"
+                className="new-apps-action-btn"
+                onClick={() => navigate(ROUTES.APPLICATION_PDF_VIEW.replace(':applicationId', applicationId), {
+                  state: {
+                    returnTo: ROUTES.APPROVED_APPLICATIONS,
+                  },
+                })}
+              >
+                <FileText size={16} />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                title="View Details"
+                aria-label="View Details"
+                className="new-apps-action-btn"
+                onClick={() => navigate(`${ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId)}?mode=view`)}
+              >
+                <Eye size={16} />
+              </Button>
+              {canEdit && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  title="Edit Application"
+                  aria-label="Edit Application"
+                  className="new-apps-action-btn"
+                  onClick={() => navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId))}
+                >
+                  <Pencil size={16} />
+                </Button>
+              )}
+            </div>
+          );
+        }
 
         return (
           <div className="new-apps-actions-cell">
             <Button
               size="sm"
-              variant={row.status === 'Returned' ? 'primary' : 'primary'}
-              onClick={handleActionClick}
+              variant="primary"
+              onClick={async () => {
+                if (row.status === 'New') {
+                  try {
+                    const getRes = await fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`);
+                    if (getRes.ok) {
+                      const data = await getRes.json();
+                      const cust = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
+                      if (cust && Number(cust.status ?? cust.Status ?? 0) === 0) {
+                        const payload = {
+                          ...cust,
+                          status: 1,
+                        };
+                        const putRes = await fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(payload),
+                        });
+                        if (!putRes.ok && putRes.status !== 204) {
+                          console.error(`Failed to update status to Pending (${putRes.status})`);
+                        }
+                      }
+                    }
+                  } catch (err) {
+                    console.error('Failed to update status to Pending:', err);
+                  }
+                }
+                navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId));
+              }}
             >
-              {btnText}
+              Verify Now
             </Button>
           </div>
         );
@@ -810,19 +953,55 @@ export default function NewApplications({ initialFilter = 'All' }) {
             {SearchIcon && <SearchIcon size={16} className="search-icon" />}
             <input
               type="text"
-              className="form-input"
               placeholder="Search by ID, Customer or Mobile..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
             />
           </div>
 
-          <div className="flex-align-center gap-3">
-            {FilterIcon && <FilterIcon size={16} className="text-muted" />}
-            <div style={{ width: '180px' }}>
+          <div className="flex-align-center gap-2" style={{ flexWrap: 'wrap' }}>
+            <label className="filter-unified-date-box">
+              <Calendar size={14} className="filter-date-icon" />
+              <span className="filter-date-prefix">From Date:</span>
+              <input
+                type="date"
+                className="filter-date-input"
+                value={fromDate}
+                max={toDate || undefined}
+                onChange={(e) => {
+                  setFromDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                aria-label="From Date"
+              />
+            </label>
+
+            <label className="filter-unified-date-box">
+              <Calendar size={14} className="filter-date-icon" />
+              <span className="filter-date-prefix">To Date:</span>
+              <input
+                type="date"
+                className="filter-date-input"
+                value={toDate}
+                min={fromDate || undefined}
+                onChange={(e) => {
+                  setToDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                aria-label="To Date"
+              />
+            </label>
+
+            <div style={{ width: '160px' }}>
               <Select
                 value={statusFilter}
-                onChange={(val) => setStatusFilter(val)}
+                onChange={(val) => {
+                  setStatusFilter(val);
+                  setCurrentPage(1);
+                }}
                 options={[
                   { value: 'All', label: 'All Statuses' },
                   { value: 'New', label: 'New' },
@@ -834,6 +1013,22 @@ export default function NewApplications({ initialFilter = 'All' }) {
                 placeholder={null}
               />
             </div>
+
+            {(searchTerm || fromDate || toDate || statusFilter !== 'All') && (
+              <button
+                type="button"
+                className="btn-reset-filter"
+                onClick={() => {
+                  setSearchTerm('');
+                  setFromDate('');
+                  setToDate('');
+                  setStatusFilter('All');
+                  setCurrentPage(1);
+                }}
+              >
+                Reset
+              </button>
+            )}
           </div>
         </div>
 

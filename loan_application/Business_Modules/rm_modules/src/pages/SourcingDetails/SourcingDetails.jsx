@@ -120,8 +120,10 @@ export default function SourcingDetails() {
             const resolvedName = resolvedRM.fullName || resolvedRM.name || '';
             const resolvedCode =
               resolvedRM.rmCode ||
+              resolvedRM.RmCode ||
+              resolvedRM.RMCode ||
               resolvedRM.employeeId ||
-              (resolvedRM.rmId ? `RM${String(resolvedRM.rmId).padStart(4, '0')}` : '');
+              '';
 
             if (resolvedName) {
               const updates = {

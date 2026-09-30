@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Building2, Briefcase, UserCog, GraduationCap, Factory, Clock, IndianRupee } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
@@ -311,6 +311,8 @@ function EmploymentCard({
 export default function EmploymentIncome() {
   const navigate = useNavigate();
   const { applicationId } = useParams();
+  const [searchParams] = useSearchParams();
+  const isViewMode = searchParams.get('mode') === 'view';
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildEmploymentState(getApplication(appId)));
@@ -481,6 +483,10 @@ export default function EmploymentIncome() {
   };
 
   const handleContinue = async () => {
+    if (isViewMode) {
+      navigate(`${ROUTES.BANK_EXISTING_LOANS.replace(':applicationId', appId)}?mode=view`);
+      return;
+    }
     const nextErrors = {};
     const applicantErrors = validateEmployment(form.applicant);
     Object.entries(applicantErrors).forEach(([field, message]) => {
@@ -633,7 +639,7 @@ export default function EmploymentIncome() {
   };
 
   const handleBack = () => {
-    navigate(ROUTES.ADDRESS_DETAILS.replace(':applicationId', appId));
+    navigate(isViewMode ? `${ROUTES.ADDRESS_DETAILS.replace(':applicationId', appId)}?mode=view` : ROUTES.ADDRESS_DETAILS.replace(':applicationId', appId));
   };
 
   return (
@@ -654,10 +660,10 @@ export default function EmploymentIncome() {
         title="Step 5: Employment & Income Details"
         subtitle="Capture applicant and co-applicant employment profile and income details."
         backLabel="Back to Address Details"
-        continueLabel="Save & Continue"
+        continueLabel={isViewMode ? 'Next' : 'Save & Continue'}
         onBack={handleBack}
         onContinue={handleContinue}
-        onStepClick={(step) => navigate(step.route.replace(':applicationId', appId))}
+        onStepClick={(step) => navigate(isViewMode ? `${step.route.replace(':applicationId', appId)}?mode=view` : step.route.replace(':applicationId', appId))}
         headerAction={
           <Button
             variant="secondary"
@@ -679,6 +685,7 @@ export default function EmploymentIncome() {
         }
         footerHint={`Employment and income data is stored for ${activeCount > 1 ? `${activeCount} applicant records` : 'the applicant record'} on the same application.`}
       >
+        <fieldset disabled={isViewMode} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
         <EmploymentCard
           title="Applicant Employment & Income"
           person={form.applicant}
@@ -711,6 +718,7 @@ export default function EmploymentIncome() {
             isLoadingMasters={isLoadingMasters}
           />
         ))}
+        </fieldset>
       </WizardSectionLayout>
 
       <Modal 

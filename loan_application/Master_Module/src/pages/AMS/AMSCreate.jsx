@@ -16,7 +16,6 @@ import {
 import { getBankBranches } from '../../api/masters/bankBranchApi';
 import { masterService } from '../../../../Core/src/services/masterService';
 import { getCurrentUserId } from '../../utils/authHelper';
-import { generateUserCode } from '../../utils/codeGenerator';
 import { DocumentUploadCard, DocumentPreviewModal, fetchDocumentBlobUrl, isPdfUrl } from '../../components/DocumentUpload/DocumentUploadSection';
 import { getProfileImageUrl } from '../../utils/profileImageHelper';
 import { getFileUrl, isPdfFile, getAadhaarPath, getPanPath, getDocumentUrl } from '../Dashboard/Dashboard';
@@ -501,13 +500,10 @@ export default function AMSCreate() {
   };
 
   const update = (key, value) => {
-    setForm((current) => {
-      const next = { ...current, [key]: value };
-      if (!isEditMode && (key === 'fullName' || key === 'dateOfBirth' || key === 'mobileNumber')) {
-        next.amsCode = generateUserCode(next.fullName, next.dateOfBirth, next.mobileNumber);
-      }
-      return next;
-    });
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+    }));
     setFieldErrors((current) => ({ ...current, [key]: '' }));
   };
 
@@ -534,6 +530,7 @@ export default function AMSCreate() {
   };
 
   const validateField = (key, value = form[key]) => {
+    if (key === 'amsCode' && !isEditMode) return '';
     const text = String(value || '').trim();
     let message = '';
     const today = new Date().toISOString().slice(0, 10);
@@ -560,7 +557,7 @@ export default function AMSCreate() {
 
   const validateAll = () => {
     const requiredKeys = [
-      'amsCode',
+      ...(isEditMode ? ['amsCode'] : []),
       'fullName',
       'dateOfBirth',
       'genderId',
@@ -601,7 +598,7 @@ export default function AMSCreate() {
     setSaving(true);
     try {
       const payload = {
-        amsCode: form.amsCode.trim(),
+        amsCode: isEditMode ? form.amsCode.trim() : 'TEMP',
         fullName: form.fullName.trim(),
         dateOfBirth: form.dateOfBirth,
         genderId: Number(form.genderId),
@@ -792,13 +789,14 @@ export default function AMSCreate() {
               type === 'date' ? 'rm-date-input' : ''
             } ${isInvalid ? 'rm-invalid' : ''}`}
             type={type}
-            value={form[key]}
+            value={key === 'amsCode' && !isEditMode ? '' : form[key]}
+            placeholder={key === 'amsCode' && !isEditMode ? 'Auto-generated on creation' : ''}
             onChange={(event) => update(key, event.target.value)}
             onBlur={() => validateField(key)}
             readOnly={key === 'amsCode' || key === 'dateJoined'}
           />
         )}
-        {key === 'amsCode' && <small className="rm-field-hint">Generated automatically</small>}
+        {key === 'amsCode' && <small className="rm-field-hint">{isEditMode ? 'System code' : 'Auto-generated on creation'}</small>}
         {key === 'dateJoined' && <small className="rm-field-hint">Set automatically on creation</small>}
         {isInvalid && <span className="rm-validation-error">{fieldErrors[key]}</span>}
       </label>

@@ -288,7 +288,7 @@ export default function DistrictDetail() {
               {filteredRMs.map((rm) => {
                 const targetRmId = rm.rmId || rm.id;
                 const rmName = rm.name || rm.fullName || '—';
-                const rmCode = rm.code || rm.employeeCode || (rm.id ? `RM-${rm.id}` : '—');
+                const rmCode = rm.code || rm.employeeCode || rm.rmCode || '—';
                 const mobile = rm.mobile ? `+91 ${rm.mobile}` : '—';
                 const email = rm.email || '—';
                 const branch = rm.branch || '—';

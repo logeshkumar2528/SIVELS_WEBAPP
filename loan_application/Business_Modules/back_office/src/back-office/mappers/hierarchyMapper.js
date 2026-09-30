@@ -97,7 +97,7 @@ export function mapRM(rm) {
   const targetAchievement = getValue(rm, 'targetAchievement', 'TargetAchievement') || 0;
 
   const idStr = id != null ? String(id) : '';
-  const code = employeeCode || (idStr ? `RM-${idStr.padStart(3, '0')}` : '');
+  const code = employeeCode || '—';
 
   return {
     id: idStr,
@@ -156,7 +156,7 @@ export function mapAgent(agent) {
   );
 
   const idStr = id != null ? String(id) : '';
-  const code = agentCode || (idStr ? `AGT-${idStr.padStart(3, '0')}` : '');
+  const code = agentCode || '—';
 
   return {
     id: idStr,
@@ -334,7 +334,7 @@ export function mapBackOfficeProfile(raw) {
   );
 
   const idStr = backOfficeId != null ? String(backOfficeId) : '';
-  const employeeCode = backOfficeCode || (idStr ? `BO-${idStr.padStart(3, '0')}` : 'Not Available');
+  const employeeCode = backOfficeCode || 'Not Available';
 
   const fullName = getValue(
     source,

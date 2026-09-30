@@ -279,7 +279,7 @@ export default function AgentMonitoring() {
                 {filteredAgents.map((ag) => {
                   const targetAgentId = ag.agentId || ag.id;
                   const agentName = ag.name || ag.fullName || '—';
-                  const agentCode = ag.code || ag.agentCode || (ag.id ? `AGT-${ag.id}` : '—');
+                  const agentCode = ag.code || ag.agentCode || '—';
                   const mobile = ag.mobile ? `+91 ${ag.mobile}` : '—';
                   const rmName = ag.rmName || 'Assigned RM';
                   const districtName = ag.districtName || '—';

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MapPin, Map, Building2, Hash, HelpCircle } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
@@ -218,6 +218,8 @@ function AddressCard({
 export default function AddressDetails() {
   const navigate = useNavigate();
   const { applicationId } = useParams();
+  const [searchParams] = useSearchParams();
+  const isViewMode = searchParams.get('mode') === 'view';
   const appId = applicationId;
   const { getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildAddressState(getApplication(appId)));
@@ -415,6 +417,10 @@ export default function AddressDetails() {
   };
 
   const handleContinue = async () => {
+    if (isViewMode) {
+      navigate(`${ROUTES.EMPLOYMENT_INCOME.replace(':applicationId', appId)}?mode=view`);
+      return;
+    }
     const validationErrors = validateForm();
     setErrors(validationErrors);
 
@@ -658,7 +664,7 @@ export default function AddressDetails() {
   };
 
   const handleBack = () => {
-    navigate(ROUTES.PERSONAL_INFORMATION.replace(':applicationId', appId));
+    navigate(isViewMode ? `${ROUTES.PERSONAL_INFORMATION.replace(':applicationId', appId)}?mode=view` : ROUTES.PERSONAL_INFORMATION.replace(':applicationId', appId));
   };
 
   return (
@@ -679,10 +685,10 @@ export default function AddressDetails() {
       title="Step 4: Address Details"
       subtitle="Capture the applicant and co-applicant address information exactly as shown in the loan application form."
       backLabel="Back to Personal Information"
-      continueLabel="Save & Continue"
+      continueLabel={isViewMode ? 'Next' : 'Save & Continue'}
       onBack={handleBack}
       onContinue={handleContinue}
-      onStepClick={(step) => navigate(step.route.replace(':applicationId', appId))}
+      onStepClick={(step) => navigate(isViewMode ? `${step.route.replace(':applicationId', appId)}?mode=view` : step.route.replace(':applicationId', appId))}
       headerAction={
         <Button
           variant="secondary"
@@ -704,7 +710,7 @@ export default function AddressDetails() {
       }
       footerHint={`Address details are stored against the same application ID. ${activeCount > 1 ? `${activeCount} applicant records are linked.` : 'Only the applicant record is linked.'}`}
     >
-
+      <fieldset disabled={isViewMode} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <AddressCard
         title="Applicant Address"
         address={form.applicant}
@@ -735,6 +741,7 @@ export default function AddressDetails() {
           isLoadingMasters={isLoadingMasters}
         />
       ))}
+      </fieldset>
     </WizardSectionLayout>
 
       <Modal 

@@ -16,7 +16,7 @@
   box-sizing: border-box;
 }
 
-/* ── Search & Filter Controls ── */
+/* ── Search & Filter Controls (Two-Tier Standard) ── */
 .stc-controls-card {
   background: #ffffff;
   border-radius: 10px;
@@ -25,61 +25,173 @@
   border: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+
+.stc-filter-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .stc-search-bar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #f8fafc;
-  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  border: 1px solid #D5DDE5;
   border-radius: 8px;
-  padding: 0.625rem 0.875rem;
+  height: 38px;
+  padding: 0 12px;
   width: 100%;
-  max-width: 480px;
+  max-width: 360px;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stc-search-bar:focus-within {
+  border-color: #00593b;
+  box-shadow: 0 0 0 3px rgba(0, 89, 59, 0.1);
+}
+
+.stc-search-icon {
+  color: #64748b;
+  flex-shrink: 0;
+  pointer-events: none;
 }
 
 .stc-search-input {
   border: none;
   background: transparent;
   width: 100%;
-  font-size: 0.875rem;
+  font-size: 13px;
   color: #1e293b;
   outline: none;
+  padding: 0;
+  margin: 0;
 }
 
-.stc-filters-row {
+.stc-filter-row-bottom {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
+  gap: 8px;
 }
 
-.stc-select-wrap select {
-  padding: 0.5rem 2rem 0.5rem 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background: #ffffff;
-  font-size: 0.825rem;
+.stc-select-wrap select,
+.stc-select-wrap select.stc-filter-select {
+  height: 38px;
+  padding: 0 28px 0 10px;
+  border: 1px solid #D5DDE5;
+  border-radius: 8px;
+  background-color: #ffffff;
+  font-size: 13px;
   color: #334155;
   font-weight: 500;
   cursor: pointer;
   outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.stc-select-wrap select:focus {
+.stc-select-wrap select:focus,
+.stc-select-wrap select.stc-filter-select:focus {
   border-color: #00593b;
+  box-shadow: 0 0 0 3px rgba(0, 89, 59, 0.1);
+}
+
+/* Unified Date Filter Controls (Submit to Credit) */
+.stc-unified-date-box {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid #D5DDE5;
+  border-radius: 8px;
+  background-color: #FFFFFF;
+  cursor: pointer;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stc-unified-date-box:hover {
+  border-color: #A8B2BF;
+}
+
+.stc-unified-date-box:focus-within {
+  border-color: #00593b;
+  box-shadow: 0 0 0 3px rgba(0, 89, 59, 0.1);
+}
+
+.stc-unified-date-box .stc-date-icon {
+  color: #64748B;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.stc-unified-date-box .stc-date-prefix {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.stc-unified-date-box .stc-date-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  font-size: 12px;
+  color: #0F172A;
+  width: 110px;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.stc-btn-reset-filter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 14px;
+  background-color: #F8FAFC;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.stc-btn-reset-filter:hover {
+  background-color: #E2E8F0;
+  border-color: #94A3B8;
+  color: #0F172A;
 }
 
 .stc-count-badge {
-  margin-left: auto;
-  font-size: 0.825rem;
-  color: #64748b;
+  font-size: 13px;
+  color: #475569;
   background: #f1f5f9;
-  padding: 0.4rem 0.75rem;
+  padding: 6px 12px;
   border-radius: 6px;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 /* ── Queue Table ── */

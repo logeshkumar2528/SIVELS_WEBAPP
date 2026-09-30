@@ -22,7 +22,7 @@ import {
   selectLatestCustomerPhotoDoc,
   selectLatestUpdatedCustomerPhotoRejection,
 } from '../../../../../../Core/src/utils/documentTypeHelper'
-import { formatDateTime } from '../../../../../../Core/src/utils/dateHelper'
+import { formatDateTime, matchesListingDateCriteria } from '../../../../../../Core/src/utils/dateHelper'
 import { getApiErrorMessage } from '../../../../../../Core/src/utils/apiErrorHandler'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
@@ -181,41 +181,32 @@ function SubmissionHistory() {
 
   // Filter Logic based strictly on appliedFilters
   const filteredSubmissions = useMemo(() => {
+    const searchTrimmed = (appliedFilters.search || '').trim().toLowerCase()
+    const searchActive = searchTrimmed.length > 0
+    const fromDate = appliedFilters.fromDate || ''
+    const toDate = appliedFilters.toDate || ''
+
     return submissions.filter((item) => {
-      const searchTrimmed = (appliedFilters.search || '').trim().toLowerCase()
-      const matchesSearch =
-        !searchTrimmed ||
-        (item.fullName || '').toLowerCase().includes(searchTrimmed) ||
-        (item.mobileNumber || '').includes(searchTrimmed)
+      const matchesDate = matchesListingDateCriteria({
+        dateValue: item.createdAt,
+        searchActive,
+        fromDate,
+        toDate,
+      })
+      if (!matchesDate) return false
+
+      if (searchActive) {
+        const matchesSearch =
+          (item.fullName || '').toLowerCase().includes(searchTrimmed) ||
+          (item.mobileNumber || '').includes(searchTrimmed)
+        if (!matchesSearch) return false
+      }
 
       const matchesStatus =
         appliedFilters.status === 'All Status' ||
         getStatusType(item.status) === getStatusType(appliedFilters.status)
 
-      let matchesDate = true
-      if (appliedFilters.fromDate || appliedFilters.toDate) {
-        if (item.createdAt) {
-          let itemDateStr = ''
-          if (typeof item.createdAt === 'string') {
-            itemDateStr = item.createdAt.split('T')[0].substring(0, 10)
-          } else if (item.createdAt instanceof Date) {
-            itemDateStr = item.createdAt.toISOString().split('T')[0]
-          }
-
-          const { fromDate, toDate } = appliedFilters
-          if (fromDate && toDate) {
-            matchesDate = Boolean(itemDateStr) && itemDateStr >= fromDate && itemDateStr <= toDate
-          } else if (fromDate) {
-            matchesDate = Boolean(itemDateStr) && itemDateStr >= fromDate
-          } else if (toDate) {
-            matchesDate = Boolean(itemDateStr) && itemDateStr <= toDate
-          }
-        } else {
-          matchesDate = false
-        }
-      }
-
-      return matchesSearch && matchesStatus && matchesDate
+      return matchesStatus
     })
   }, [submissions, appliedFilters])
 
@@ -517,6 +508,7 @@ function SubmissionHistory() {
               type="date"
               className="filter-date-input"
               value={draftFromDate}
+              max={draftToDate || undefined}
               onChange={(e) => {
                 setDraftFromDate(e.target.value)
                 if (dateRangeError) setDateRangeError('')
@@ -534,6 +526,7 @@ function SubmissionHistory() {
               type="date"
               className="filter-date-input"
               value={draftToDate}
+              min={draftFromDate || undefined}
               onChange={(e) => {
                 setDraftToDate(e.target.value)
                 if (dateRangeError) setDateRangeError('')

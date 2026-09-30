@@ -11,6 +11,7 @@ import {
   mergeApplicantArrays,
   KNOWN_DB_ID_FIELDS,
   resolveApplicantName,
+  splitFullName,
 } from '../pages/applicationWizard/flowUtils';
 import { toIstDateInput } from '../utils/dateHelper';
 import { resolveApplicationOwnership } from '../utils/ownershipHelper';
@@ -1124,9 +1125,25 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     const personalInformationId = rawPersId ?? rawDraftPersId ?? fallbackDraftPersId ?? null;
     const relationshipWithApplicant = persRow.relationshipId ?? persRow.RelationshipId ?? persRow.relationshipWithApplicant ?? persRow.RelationshipWithApplicant ?? draftPers.relationshipWithApplicant ?? (isPrimary ? 'SELF' : '');
     const title = persRow.titleId ?? persRow.TitleId ?? persRow.title ?? persRow.Title ?? draftPers.title ?? '';
-    const firstName = persRow.firstName ?? persRow.FirstName ?? (isPrimary ? (defaultName || draftPers.firstName || '') : (draftPers.firstName || ''));
-    const middleName = persRow.middleName ?? persRow.MiddleName ?? draftPers.middleName ?? '';
-    const lastName = persRow.lastName ?? persRow.LastName ?? draftPers.lastName ?? '';
+    const rawFirst = persRow.firstName ?? persRow.FirstName ?? draftPers.firstName;
+    const rawMiddle = persRow.middleName ?? persRow.MiddleName ?? draftPers.middleName;
+    const rawLast = persRow.lastName ?? persRow.LastName ?? draftPers.lastName;
+
+    const hasSavedStructuredName =
+      (rawFirst !== undefined && rawFirst !== null && String(rawFirst).trim() !== '') ||
+      (rawMiddle !== undefined && rawMiddle !== null && String(rawMiddle).trim() !== '') ||
+      (rawLast !== undefined && rawLast !== null && String(rawLast).trim() !== '');
+
+    let firstName = rawFirst ?? '';
+    let middleName = rawMiddle ?? '';
+    let lastName = rawLast ?? '';
+
+    if (!hasSavedStructuredName && isPrimary && defaultName) {
+      const split = splitFullName(defaultName);
+      firstName = split.firstName;
+      middleName = split.middleName;
+      lastName = split.lastName;
+    }
     const fatherOrSpouseName = persRow.fatherSpouseName ?? persRow.FatherSpouseName ?? persRow.fatherOrSpouseName ?? persRow.FatherOrSpouseName ?? draftPers.fatherOrSpouseName ?? '';
     const mothersMaidenName = persRow.mothersMaidenName ?? persRow.MothersMaidenName ?? draftPers.mothersMaidenName ?? '';
     const rawDob = persRow.dateOfBirth ?? persRow.DateOfBirth ?? draftPers.dateOfBirth;

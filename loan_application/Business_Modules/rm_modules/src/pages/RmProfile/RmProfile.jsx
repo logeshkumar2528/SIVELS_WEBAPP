@@ -16,7 +16,7 @@ function normalizePhone(phone = '') {
 
 function buildFallbackProfile(currentUser = {}) {
   return {
-    employeeId: currentUser.rmCode || currentUser.employeeId || 'RM0001',
+    employeeId: currentUser.rmCode || currentUser.RmCode || currentUser.RMCode || currentUser.employeeId || '—',
     name: currentUser.fullName || currentUser.name || 'Relationship Manager',
     role: currentUser.role || 'Relationship Manager',
     email: currentUser.emailAddress || currentUser.email || '',
@@ -171,7 +171,7 @@ export default function RmProfile() {
           const resolvedId = Number(match.rmId || match.RMId || currentRmId) || null;
           setActiveRmId(resolvedId);
           const name = match.fullName || currentUser?.fullName || currentUser?.name || 'Relationship Manager';
-          const employeeId = match.rmCode || `RM${String(match.rmId || currentRmId || 1).padStart(4, '0')}`;
+          const employeeId = match.rmCode || match.RmCode || match.RMCode || match.employeeId || '—';
           const location = [match.branch, match.cityName, match.stateName].filter(Boolean).join(', ');
 
           setProfile({

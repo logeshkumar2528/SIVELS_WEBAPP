@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, Pencil } from 'lucide-react';
+import { Eye, Pencil, Calendar } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import DataTable from '../../components/DataTable/DataTable';
 import StatusBadge from '../../components/StatusBadge/StatusBadge';
 import Button from '../../components/Button/Button';
 import Pagination from '../../components/Pagination/Pagination';
 import { ROUTES } from '../../config/routeConfig';
-import { formatDate, formatTime, getDateTimestamp } from '../../utils/dateHelper';
+import { formatDate, formatTime, getDateTimestamp, matchesListingDateCriteria } from '../../utils/dateHelper';
 import {
   buildAllowedAgentIdSet,
   filterAgentsForRm,
@@ -32,6 +32,8 @@ function mapSubmission(record, agentsById = {}, rmsById = {}) {
   const id = record.applicationId || record.applicationNumber || record.agentCustomerId || record.customerId;
   const officialAppId = record.appId || record.AppId || record.App_Id || null;
   const displayAppId = officialAppId || buildApplicationDisplayId(record, 'N/A');
+  const rawCustomerCode = record.customerCode || record.CustomerCode || '';
+  const customerCode = rawCustomerCode ? String(rawCustomerCode).trim() : 'N/A';
   const submittedRaw = record.submittedAt || record.SubmittedAt || record.createdAt || record.CreatedAt || record.createdDate || '';
   const ownership = resolveApplicationOwnership(record, agentsById, rmsById);
   const agent = ownership.agentId ? (agentsById[String(ownership.agentId)] || {}) : {};
@@ -40,6 +42,7 @@ function mapSubmission(record, agentsById = {}, rmsById = {}) {
   return {
     internalId: String(id),
     appId: officialAppId,
+    customerCode,
     id: displayAppId,
     customerName: record.fullName || record.FullName || record.customerName || 'Unknown',
     mobile: record.mobileNumber || record.MobileNumber || record.mobile || 'N/A',
@@ -58,6 +61,8 @@ export default function SubmissionHistory() {
   const navigate = useNavigate();
   const [submissions, setSubmissions] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(7);
   const [isLoading, setIsLoading] = useState(true);
@@ -180,12 +185,29 @@ export default function SubmissionHistory() {
   }, []);
 
   const filteredData = useMemo(() => {
-    const searchLower = searchTerm.trim().toLowerCase();
+    const searchTrimmed = searchTerm.trim();
+    const searchLower = searchTrimmed.toLowerCase();
+    const searchActive = searchTrimmed.length > 0;
+
     return submissions
-      .filter((row) => [row.customerName, row.appId, row.id, row.mobile, row.loanType, row.branch]
-        .some((value) => value && String(value).toLowerCase().includes(searchLower)))
+      .filter((row) => {
+        const matchesDate = matchesListingDateCriteria({
+          dateValue: row.submittedAt,
+          searchActive,
+          fromDate,
+          toDate,
+        });
+        if (!matchesDate) return false;
+
+        if (searchActive) {
+          const matchesSearch = [row.customerName, row.customerCode, row.appId, row.id, row.mobile, row.loanType, row.branch]
+            .some((value) => value && String(value).toLowerCase().includes(searchLower));
+          if (!matchesSearch) return false;
+        }
+        return true;
+      })
       .sort((a, b) => getDateTimestamp(b.submittedAt) - getDateTimestamp(a.submittedAt));
-  }, [submissions, searchTerm]);
+  }, [submissions, searchTerm, fromDate, toDate]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
 
@@ -203,9 +225,9 @@ export default function SubmissionHistory() {
   const columns = [
     { key: 'sno', label: 'S.NO' },
     {
-      key: 'id',
-      label: 'APP ID',
-      render: (row) => <span className="sh-app-id" title={row.id}>{row.id}</span>,
+      key: 'customerCode',
+      label: 'CUSTOMER CODE',
+      render: (row) => <span className="sh-app-id" title={row.customerCode}>{row.customerCode}</span>,
     },
     {
       key: 'customerName',
@@ -286,7 +308,6 @@ export default function SubmissionHistory() {
             {SearchIcon && <SearchIcon size={16} className="search-icon" />}
             <input
               type="text"
-              className="form-input"
               placeholder="Search by ID, Customer or Mobile..."
               value={searchTerm}
               onChange={(event) => {
@@ -294,6 +315,55 @@ export default function SubmissionHistory() {
                 setCurrentPage(1);
               }}
             />
+          </div>
+
+          <div className="flex-align-center gap-2" style={{ flexWrap: 'wrap' }}>
+            <label className="filter-unified-date-box">
+              <Calendar size={14} className="filter-date-icon" />
+              <span className="filter-date-prefix">From Date:</span>
+              <input
+                type="date"
+                className="filter-date-input"
+                value={fromDate}
+                max={toDate || undefined}
+                onChange={(e) => {
+                  setFromDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                aria-label="From Date"
+              />
+            </label>
+
+            <label className="filter-unified-date-box">
+              <Calendar size={14} className="filter-date-icon" />
+              <span className="filter-date-prefix">To Date:</span>
+              <input
+                type="date"
+                className="filter-date-input"
+                value={toDate}
+                min={fromDate || undefined}
+                onChange={(e) => {
+                  setToDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                aria-label="To Date"
+              />
+            </label>
+
+            {(searchTerm || fromDate || toDate) && (
+              <button
+                type="button"
+                className="btn-reset-filter"
+                onClick={() => {
+                  setSearchTerm('');
+                  setFromDate('');
+                  setToDate('');
+                  setCurrentPage(1);
+                }}
+              >
+                Reset
+              </button>
+            )}
           </div>
         </div>
         <div className="listing-table-flex">

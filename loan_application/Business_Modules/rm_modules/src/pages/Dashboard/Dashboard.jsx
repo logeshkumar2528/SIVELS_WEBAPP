@@ -65,7 +65,7 @@ export default function Dashboard() {
     inProgressCount = 0,
     approvedLoansCount = 0,
     submissionHistoryCount = 0,
-    rmProfile = { rmCode: 'RM0001', fullName: 'Relationship Manager', branch: 'Branch Details & Targets' },
+    rmProfile = { rmCode: '—', fullName: 'Relationship Manager', branch: 'Branch Details & Targets' },
     isLoading,
     error,
   } = useRmDashboardData();
@@ -150,7 +150,11 @@ export default function Dashboard() {
   ];
 
   const columns = [
-    { key: 'displayId', label: 'APP ID' },
+    {
+      key: 'customerCode',
+      label: 'CUSTOMER CODE',
+      render: (row) => row.customerCode || 'N/A',
+    },
     { key: 'customerName', label: 'CUSTOMER' },
     { key: 'mobile', label: 'MOBILE' },
     { key: 'loanType', label: 'PURPOSE' },
