@@ -5479,6 +5479,10 @@
   max-width: 50px;
 }
 
+.bo-cv-normal-income-type-input {
+  max-width: 200px;
+}
+
 .bo-cv-salary-input:focus {
   outline: none;
   border-color: #0f7a4c;
@@ -6070,6 +6074,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-height: 28px;
 }
 
 .bo-cv-calc-setting-label {
@@ -6122,6 +6127,16 @@
 .bo-cv-setting-action-btn:hover {
   background: #eaf5ee;
   text-decoration: underline;
+}
+
+.bo-cv-setting-action-label {
+  flex: 0 0 auto;
+  color: #0f7a4c;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+  text-align: right;
 }
 
 .bo-cv-calc-setting-value {
@@ -6899,7 +6914,7 @@
 
 .bo-cv-salary-summary-strip-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -6910,6 +6925,7 @@
 }
 
 .bo-cv-summary-strip-cell {
+  min-width: 0;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -9795,6 +9811,10 @@
 .bo-cv-proposed-loan-recommendation h4 { margin: 4px 0; color: #0b2f22; font-size: 17px; }
 .bo-cv-proposed-loan-recommendation p { margin: 0; color: #668477; font-size: 12px; }
 .bo-cv-proposed-loan-recommendation input { width: 220px; height: 44px; padding: 0 13px; border: 1px solid #9bcbae; border-radius: 9px; background: #fff; color: #0b2f22; font: 700 17px inherit; }
+.bo-cv-proposed-loan-recommendation .bo-cv-rec-field-hint { display: block; margin-top: 6px; color: #23704d; font-size: 12px; font-weight: 700; letter-spacing: normal; text-transform: none; text-align: right; }
+.bo-cv-rtr-recommended-emi { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 8px; color: #23704d; font-size: 13px; }
+.bo-cv-rtr-recommended-emi span { color: #56806b; font-size: 12px; font-weight: 700; letter-spacing: normal; text-transform: none; }
+.bo-cv-rtr-recommended-emi strong { color: #087f4f; font-size: 15px; }
 @media (max-width: 680px) { .bo-cv-proposed-loan-inline-heading, .bo-cv-proposed-loan-inline-fields { grid-template-columns: 1fr; display: grid; } }
 @media (max-width: 680px) {
   .bo-cv-proposed-loan-backdrop { padding: 12px; }
@@ -10890,8 +10910,17 @@
   width: 100%;
   border-collapse: collapse;
   min-width: 760px;
+  table-layout: fixed;
   font-size: 13px;
 }
+
+.bo-cv-banking-summary .bo-cv-banking-col-sno { width: 6%; }
+.bo-cv-banking-summary .bo-cv-banking-col-bank { width: 12%; }
+.bo-cv-banking-summary .bo-cv-banking-col-account { width: 18%; }
+.bo-cv-banking-summary .bo-cv-banking-col-credit { width: 27%; }
+.bo-cv-banking-summary .bo-cv-banking-col-abb { width: 13%; }
+.bo-cv-banking-summary .bo-cv-banking-col-percent { width: 10%; }
+.bo-cv-banking-summary .bo-cv-banking-col-ratio { width: 8%; }
 
 .bo-cv-banking-summary th,
 .bo-cv-banking-summary td {
@@ -10923,11 +10952,15 @@
   background: #f8fafc;
 }
 
-.bo-cv-banking-summary .bo-cv-banking-total th {
+.bo-cv-banking-summary .bo-cv-banking-total td {
   color: #0f7a4c;
   background: #f0faf5;
   font-weight: 750;
   border-top: 2px solid #cbdad5;
+}
+
+.bo-cv-banking-summary .bo-cv-banking-total td:first-child {
+  text-align: left;
 }
 
 /* ── Inputs Card & Actions ── */
@@ -12441,7 +12474,7 @@
 
 .bo-cv-income-baseline-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 20px;
 }
@@ -12516,6 +12549,16 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+
+.bo-cv-normal-rm-proposed-heading {
+  margin: 4px 0 10px;
+}
+
+.bo-cv-normal-overrides-heading {
+  margin: 18px 0 10px;
+  padding-top: 16px;
+  border-top: 1px solid #edf2f0;
 }
 
 /* ── Section 06: Calculation Action Bar ── */
@@ -12775,7 +12818,7 @@
 
 .bo-cv-rec-table thead th.th-action,
 .bo-cv-rec-table tbody td.td-action {
-  text-align: right;
+  text-align: center;
   width: 190px;
   min-width: 190px;
 }
@@ -12797,6 +12840,16 @@
   font-weight: 800;
 }
 
+.bo-cv-rec-table td .bo-cv-rec-field-hint {
+  display: block;
+  margin-top: 4px;
+  color: #56806b;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 .bo-cv-rec-input-group {
   display: inline-flex;
   align-items: center;
@@ -12808,6 +12861,8 @@
 .bo-cv-rec-currency-prefix {
   position: absolute;
   left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 14px;
   font-weight: 700;
   color: #0f7a4c;
@@ -12847,9 +12902,9 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 38px;
-  padding: 0 16px;
-  font-size: 12.5px;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 11.5px;
   font-weight: 700;
   border-radius: 8px;
   white-space: nowrap;
@@ -12860,6 +12915,19 @@
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+/* Normal Income: keep the manually entered stream type readable. */
+.bo-cv-salary-table .bo-cv-normal-income-type-input {
+  display: block;
+  width: 100% !important;
+  min-width: 180px;
+  max-width: 220px !important;
+}
+
+.bo-cv-salary-table .bo-cv-normal-income-type-cell {
+  width: 220px;
+  min-width: 220px;
 }
 
 
