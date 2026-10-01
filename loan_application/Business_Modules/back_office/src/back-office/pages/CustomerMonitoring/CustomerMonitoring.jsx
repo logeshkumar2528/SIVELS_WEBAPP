@@ -425,7 +425,7 @@ export default function CustomerMonitoring() {
               <table className="bo-table">
                 <thead>
                   <tr>
-                    <th>App No &amp; Date</th>
+                    <th>Customer Code &amp; Date</th>
                     <th>Customer Name</th>
                     <th>Loan Product</th>
                     <th>Amount</th>
@@ -438,7 +438,6 @@ export default function CustomerMonitoring() {
                 <tbody>
                   {paginatedCustomers.map((c) => {
                     const statusInfo = getStatusInfo(c.status);
-                    const appNo = c.appId || (c.applicationNo && c.applicationNo !== 'N/A' && !c.applicationNo.startsWith('APP-') ? c.applicationNo : 'N/A');
                     const appliedDate = c.appliedDate || (c.createdAt ? String(c.createdAt).slice(0, 10) : '—');
                     const customerName = c.name || c.customerName || c.fullName || '—';
                     const mobile = c.mobile ? `+91 ${c.mobile}` : '—';
@@ -452,7 +451,7 @@ export default function CustomerMonitoring() {
                       <tr key={c.id || c.agentCustomerId}>
                         <td>
                           <div className="bo-app-no-cell">
-                            <strong>{appNo}</strong>
+                            <strong>{c.customerCode || 'N/A'}</strong>
                             <small>{appliedDate}</small>
                           </div>
                         </td>

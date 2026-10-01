@@ -11,6 +11,7 @@ import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSect
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { useLoading } from '../../../../../Core/src/context/LoadingContext';
 import { buildApplicationDisplayId, buildSectionUpdate, getSectionState, getApplicantCount, createArray, resolveApplicantName } from '../applicationWizard/flowUtils';
+import { getCurrentRMContext } from '../../utils/rmContext';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
@@ -381,7 +382,65 @@ export default function Declaration() {
     );
   };
 
+  const finalizeSubmit = async () => {
+    if (isFinalizing) return;
+    setIsFinalizing(true);
+
+    try {
+      await withLoading(async () => {
+        const rmContext = getCurrentRMContext();
+        const modifiedBy = Number(rmContext?.rmId);
+        if (!Number.isFinite(modifiedBy) || modifiedBy <= 0) {
+          throw new Error('Unable to identify the authenticated RM. Please log in again.');
+        }
+
+        const agentCustomerId = Number(appId);
+        if (!Number.isFinite(agentCustomerId) || agentCustomerId <= 0) {
+          throw new Error('Invalid customer ID for final submission.');
+        }
+
+        const payload = {
+          agentCustomerId,
+          status: 2,
+          modifiedBy,
+        };
+
+        const putRes = await fetch(`${API_BASE}/AgentAddCustomer/${agentCustomerId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!putRes.ok) {
+          let errorMessage = `Failed to update application status to Logged to HO (${putRes.status})`;
+          try {
+            const errorData = await putRes.json();
+            if (errorData?.message) {
+              errorMessage = errorData.message;
+            }
+          } catch {
+            // Keep fallback message if response body is not JSON
+          }
+          throw new Error(errorMessage);
+        }
+
+        saveApplication(appId, { status: 'Logged to HO' });
+        setOtpStep('success');
+      }, { message: 'Submitting application...' });
+    } catch (err) {
+      console.error('Error finalizing application submission:', err);
+      setErrorPopup({
+        title: 'Could not complete application',
+        message: err.message || 'The application could not be completed. Please try again.',
+        variant: 'error',
+      });
+    } finally {
+      setIsFinalizing(false);
+    }
+  };
+
   const handleVerifyPerson = (personId) => {
+    let shouldFinalize = false;
     setVerificationList((prev) => {
       const nextList = prev.map((item) => {
         if (item.id === personId) {
@@ -394,11 +453,15 @@ export default function Declaration() {
 
       const allVerified = nextList.length > 0 && nextList.every((item) => item.isVerified);
       if (allVerified) {
-        setOtpStep('success');
+        shouldFinalize = true;
       }
 
       return nextList;
     });
+
+    if (shouldFinalize) {
+      finalizeSubmit();
+    }
   };
 
   const handleSubmit = () => {
@@ -420,71 +483,6 @@ export default function Declaration() {
     const latestData = getApplication(appId) || appData;
     setVerificationList(buildVerificationList(latestData));
     setShowSubmitModal(true);
-  };
-
-  const finalizeSubmit = async () => {
-    if (isFinalizing) return;
-    setIsFinalizing(true);
-
-    try {
-      await withLoading(async () => {
-        // 1. Fetch latest customer record to ensure full payload
-        let customerRecord = null;
-        const getRes = await fetch(`${API_BASE}/AgentAddCustomer/${appId}`);
-        if (getRes.ok) {
-          const data = await getRes.json();
-          customerRecord = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
-        }
-
-        if (!customerRecord) {
-          throw new Error('Unable to retrieve customer record for status update.');
-        }
-
-        // 2. Build full payload with status: 2 (Logged to HO / Completed)
-        const rawAgentId = customerRecord.agentId !== undefined ? customerRecord.agentId : customerRecord.AgentId;
-        const resolvedAgentId = (rawAgentId === null || rawAgentId === undefined || rawAgentId === '')
-          ? null
-          : Number(rawAgentId);
-
-        const payload = {
-          agentCustomerId: Number(customerRecord.agentCustomerId || customerRecord.AgentCustomerId || appId),
-          agentId: resolvedAgentId,
-          fullName: customerRecord.fullName || customerRecord.FullName || customerRecord.customerName || appData.customerName || '',
-          mobileNumber: customerRecord.mobileNumber || customerRecord.MobileNumber || customerRecord.mobile || appData.mobile || '',
-          email: customerRecord.email || customerRecord.Email || customerRecord.emailAddress || appData.email || '',
-          employmentTypeId: Number(customerRecord.employmentTypeId ?? customerRecord.EmploymentTypeId ?? 1),
-          loanPurposeId: Number(customerRecord.loanPurposeId ?? customerRecord.LoanPurposeId ?? 1),
-          expectedLoanAmount: Number(customerRecord.expectedLoanAmount ?? customerRecord.ExpectedLoanAmount ?? 0),
-          remarks: customerRecord.remarks || customerRecord.Remarks || '',
-          status: 2,
-          isActive: customerRecord.isActive !== undefined ? customerRecord.isActive : (customerRecord.IsActive !== undefined ? customerRecord.IsActive : true),
-        };
-
-        // 3. Send PUT request
-        const putRes = await fetch(`${API_BASE}/AgentAddCustomer/${appId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-
-        if (!putRes.ok) {
-          throw new Error(`Failed to update application status to Logged to HO (${putRes.status})`);
-        }
-
-        saveApplication(appId, { status: 'Logged to HO' });
-        setShowSubmitModal(false);
-        navigate(ROUTES.APPROVED_APPLICATIONS);
-      }, { message: 'Submitting application...' });
-    } catch (err) {
-      console.error('Error finalizing application submission:', err);
-      setErrorPopup({
-        title: 'Could not complete application',
-        message: err.message || 'The application could not be completed. Please try again.',
-        variant: 'error',
-      });
-    } finally {
-      setIsFinalizing(false);
-    }
   };
 
   const handleBack = () => {
@@ -823,10 +821,12 @@ export default function Declaration() {
               <Button
                 variant="primary"
                 style={{ width: '100%', justifyContent: 'center' }}
-                onClick={finalizeSubmit}
-                disabled={isFinalizing}
+                onClick={() => {
+                  setShowSubmitModal(false);
+                  navigate(ROUTES.APPROVED_APPLICATIONS);
+                }}
               >
-                {isFinalizing ? 'Completing...' : 'Continue'}
+                Continue
               </Button>
             </div>
           ) : (
@@ -834,9 +834,16 @@ export default function Declaration() {
               <span style={{ fontSize: '12px', color: '#64748b' }}>
                 {verificationList.filter((p) => p.isVerified).length} of {verificationList.length} verified
               </span>
-              <Button variant="secondary" onClick={() => setShowSubmitModal(false)}>
-                Cancel
-              </Button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Button variant="secondary" onClick={() => setShowSubmitModal(false)}>
+                  Cancel
+                </Button>
+                {verificationList.length > 0 && verificationList.every((p) => p.isVerified) && (
+                  <Button variant="primary" onClick={finalizeSubmit} disabled={isFinalizing}>
+                    {isFinalizing ? 'Submitting...' : 'Submit Application'}
+                  </Button>
+                )}
+              </div>
             </div>
           )
         }

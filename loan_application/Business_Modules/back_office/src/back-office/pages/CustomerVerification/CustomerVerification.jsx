@@ -5610,7 +5610,14 @@ export default function CustomerVerification() {
       return;
     }
 
-    const currentUserId = resolveAuthenticatedUserId() || 1;
+    const currentUserId = resolveAuthenticatedUserId();
+    if (!currentUserId) {
+      setLoanBanner({
+        type: 'error',
+        message: 'Unable to resolve authenticated Back Office user ID. Please log out and re-login.',
+      });
+      return;
+    }
 
     setLoanSaving(true);
     try {
@@ -8475,14 +8482,49 @@ export default function CustomerVerification() {
     }
 
     const boAuth = getBackOfficeAuth();
-    const backOfficeId = Number(boAuth?.id || boAuth?.backOfficeId || localStorage.getItem('backOfficeId') || 4);
+    const backOfficeId = Number(
+      boAuth?.id ||
+      boAuth?.backOfficeId ||
+      localStorage.getItem('backOfficeId')
+    );
+
+    if (!backOfficeId || Number.isNaN(backOfficeId)) {
+      setStepFeedback((prev) => ({
+        ...prev,
+        [stepNum]: {
+          type: 'error',
+          message:
+            'Unable to identify authenticated Back Office user. Please log in again.',
+        },
+      }));
+      return;
+    }
     const rmId = Number(
       verificationData?.rmId ||
       verificationData?.customer?.rmId ||
-      verificationData?.application?.rmId ||
+      verificationData?.customer?.RmId ||
+      verificationData?.customer?.RMId ||
+      verificationData?.raw?.rmId ||
+      verificationData?.raw?.RmId ||
+      verificationData?.raw?.RMId ||
       verificationData?.raw?.customer?.rmId ||
-      20
+      verificationData?.raw?.customer?.RmId ||
+      verificationData?.raw?.customer?.RMId ||
+      verificationData?.application?.rmId ||
+      0
     );
+
+    if (!rmId || Number.isNaN(rmId) || rmId <= 0) {
+      setStepFeedback((prev) => ({
+        ...prev,
+        [stepNum]: {
+          type: 'error',
+          message:
+            'Unable to identify the assigned Relationship Manager for this application. Cannot return document to RM.',
+        },
+      }));
+      return;
+    }
     const appProdId = Number(
       resolvedAppProdId ||
       calculationAppProdId ||
@@ -8737,7 +8779,23 @@ export default function CustomerVerification() {
   const handleVerifyRejection = async (rejectionId, stepLabel, stepNum, applicantSequence = null) => {
     if (!rejectionId) return;
     const boAuth = getBackOfficeAuth();
-    const backOfficeId = Number(boAuth?.id || boAuth?.backOfficeId || localStorage.getItem('backOfficeId') || 4);
+    const backOfficeId = Number(
+      boAuth?.id ||
+      boAuth?.backOfficeId ||
+      localStorage.getItem('backOfficeId')
+    );
+
+    if (!backOfficeId || Number.isNaN(backOfficeId)) {
+      setStepFeedback((prev) => ({
+        ...prev,
+        [stepNum]: {
+          type: 'error',
+          message:
+            'Unable to identify authenticated Back Office user. Please log in again.',
+        },
+      }));
+      return;
+    }
 
     setIsVerifyingRejection(true);
     try {
@@ -8839,13 +8897,20 @@ export default function CustomerVerification() {
       return;
     }
 
-    const appProdId =
+    const appProdId = Number(
+      resolvedAppProdId ||
+      calculationAppProdId ||
+      verificationData?.applicationProductDetailsId ||
       verificationData?.application?.applicationProductDetailsId ||
+      verificationData?.application?.ApplicationProductDetailsId ||
       verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
       verificationData?.raw?.productDetails?.applicationProductDetailsId ||
-      verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId;
+      verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
+      verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId ||
+      0
+    );
 
-    if (!appProdId) {
+    if (!appProdId || Number.isNaN(appProdId) || appProdId <= 0) {
       setter((prev) => ({
         ...prev,
         error: 'Application Product Details ID is missing. Cannot upload document.',
@@ -8871,11 +8936,29 @@ export default function CustomerVerification() {
     }
 
     const rmId = Number(
+      verificationData?.rmId ||
       verificationData?.customer?.rmId ||
-      verificationData?.application?.rmId ||
+      verificationData?.customer?.RmId ||
+      verificationData?.customer?.RMId ||
+      verificationData?.raw?.rmId ||
+      verificationData?.raw?.RmId ||
+      verificationData?.raw?.RMId ||
       verificationData?.raw?.customer?.rmId ||
-      20
+      verificationData?.raw?.customer?.RmId ||
+      verificationData?.raw?.customer?.RMId ||
+      verificationData?.application?.rmId ||
+      0
     );
+
+    if (!rmId || Number.isNaN(rmId) || rmId <= 0) {
+      setter((prev) => ({
+        ...prev,
+        error:
+          'Unable to identify the assigned Relationship Manager for this application. Cannot attach document.',
+      }));
+      e.target.value = '';
+      return;
+    }
 
     let docType = 'LEGAL_OPINION';
     let docTitle = 'Legal Opinion Report';
@@ -10650,7 +10733,7 @@ export default function CustomerVerification() {
           <div className="bo-cv-lead-info">
             <h1 className="bo-cv-cust-title">{verificationData.customerName}</h1>
             <div className="bo-cv-meta-inline">
-              <span className="bo-cv-app-id">{verificationData.appId || (verificationData.applicationId && !verificationData.applicationId.startsWith('APP-') ? verificationData.applicationId : 'N/A')}</span>
+              <span className="bo-cv-app-id">{verificationData.customerCode || verificationData.customer?.customerCode || verificationData.customer?.CustomerCode || 'N/A'}</span>
               <span className="bo-cv-dot">&bull;</span>
               <span className="bo-cv-product-amount">
                 {appDetails.loanProduct} &bull; <strong>{formatCurrency(appDetails.loanAmount)}</strong>

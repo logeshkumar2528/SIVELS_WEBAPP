@@ -1,22 +1,11 @@
 /**
  * authStorage.js
  * --------------------
- * Lightweight frontend-only dummy authentication management for Back Office.
- * Uses targeted localStorage key ('backOfficeAuth') so other modules are NEVER affected.
- *
- * Dummy Credentials:
- *   Mobile: 1234567890
- *   OTP:    123456
+ * Authentication session management for Back Office.
+ * Manages dedicated localStorage key ('backOfficeAuth') and coordinates session retrieval.
  */
 
 export const BACK_OFFICE_AUTH_KEY = 'backOfficeAuth';
-
-export const DUMMY_CREDENTIALS = {
-  mobile: '1234567890',
-  otp: '123456',
-  name: 'Back Office Executive',
-  role: 'Operations Team',
-};
 
 /**
  * Retrieve current Back Office auth state.
@@ -31,9 +20,9 @@ export function getBackOfficeAuth() {
         const boId = bo.backOfficeId || bo.id || bo.userId || localStorage.getItem('backOfficeId') || null;
         return {
           isAuthenticated: true,
-          name: bo.fullName || bo.name || DUMMY_CREDENTIALS.name,
-          role: bo.role || DUMMY_CREDENTIALS.role,
-          mobile: bo.mobileNumber || bo.mobile || DUMMY_CREDENTIALS.mobile,
+          name: bo.fullName || bo.name || '',
+          role: bo.role || '',
+          mobile: bo.mobileNumber || bo.mobile || '',
           id: boId,
           backOfficeId: boId,
           employeeCode: bo.employeeCode || bo.backOfficeCode || '',
@@ -69,9 +58,9 @@ export function getBackOfficeAuth() {
         const boId = user.backOfficeId || user.userId || user.id || localStorage.getItem('backOfficeId') || null;
         return {
           isAuthenticated: true,
-          name: user.fullName || user.name || DUMMY_CREDENTIALS.name,
-          role: user.role || DUMMY_CREDENTIALS.role,
-          mobile: user.mobileNumber || user.mobile || DUMMY_CREDENTIALS.mobile,
+          name: user.fullName || user.name || '',
+          role: user.role || '',
+          mobile: user.mobileNumber || user.mobile || '',
           id: boId,
           backOfficeId: boId,
           loginTimestamp: new Date().toISOString(),
@@ -95,9 +84,9 @@ export function setBackOfficeAuth(authData) {
     const numId = boId != null && !isNaN(Number(boId)) && Number(boId) > 0 ? Number(boId) : null;
     const payload = {
       isAuthenticated: true,
-      name: authData?.name || authData?.fullName || DUMMY_CREDENTIALS.name,
-      role: authData?.role || DUMMY_CREDENTIALS.role,
-      mobile: authData?.mobile || authData?.mobileNumber || DUMMY_CREDENTIALS.mobile,
+      name: authData?.name || authData?.fullName || '',
+      role: authData?.role || '',
+      mobile: authData?.mobile || authData?.mobileNumber || '',
       id: numId,
       backOfficeId: numId,
       loginTimestamp: new Date().toISOString(),
@@ -143,78 +132,4 @@ export function removeBackOfficeAuth() {
  */
 export function isBackOfficeAuthenticated() {
   return Boolean(getBackOfficeAuth()?.isAuthenticated);
-}
-
-/**
- * Validate Mobile Number step (Step 1).
- */
-export function validateMobileNumber(mobile) {
-  const cleanMobile = String(mobile || '').replace(/\D/g, '');
-
-  if (!cleanMobile) {
-    return {
-      success: false,
-      message: 'Please enter your mobile number',
-    };
-  }
-
-  if (cleanMobile.length !== 10) {
-    return {
-      success: false,
-      message: 'Please enter a valid 10-digit mobile number',
-    };
-  }
-
-  if (cleanMobile !== DUMMY_CREDENTIALS.mobile) {
-    return {
-      success: false,
-      message: 'No account found with this mobile number',
-    };
-  }
-
-  return {
-    success: true,
-  };
-}
-
-/**
- * Validate OTP step (Step 2).
- */
-export function validateOtp(otp, mobile = DUMMY_CREDENTIALS.mobile) {
-  const cleanOtp = String(otp || '').replace(/\D/g, '');
-
-  if (!cleanOtp) {
-    return {
-      success: false,
-      message: 'Please enter the 6-digit OTP',
-    };
-  }
-
-  if (cleanOtp.length < 6) {
-    return {
-      success: false,
-      message: 'Please enter all 6 digits of the OTP',
-    };
-  }
-
-  if (cleanOtp !== DUMMY_CREDENTIALS.otp) {
-    return {
-      success: false,
-      message: 'Invalid OTP. Please try again.',
-    };
-  }
-
-  const user = {
-    isAuthenticated: true,
-    name: DUMMY_CREDENTIALS.name,
-    role: DUMMY_CREDENTIALS.role,
-    mobile: mobile || DUMMY_CREDENTIALS.mobile,
-  };
-
-  setBackOfficeAuth(user);
-
-  return {
-    success: true,
-    user,
-  };
 }
