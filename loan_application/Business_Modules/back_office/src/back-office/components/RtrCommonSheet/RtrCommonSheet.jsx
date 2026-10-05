@@ -103,6 +103,10 @@ export default function RtrCommonSheet({
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusError, setStatusError] = useState(null);
 
+  // Backend RTR Summary State
+  const [backendSummary, setBackendSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
   // CRUD Operation States
   const [obligationsLoading, setObligationsLoading] = useState(false);
   const [obligationsSaving, setObligationsSaving] = useState(false);
@@ -317,10 +321,57 @@ export default function RtrCommonSheet({
     }
   }, [applicationProductDetailsId, applicantSequence, activeStatuses]);
 
-  // Trigger hydration on mount and when applicationProductDetailsId changes
+  // GET hydration: fetch authoritative RTR loan obligations summary & proposed loan
+  const fetchSummary = useCallback(async () => {
+    if (!applicationProductDetailsId || Number(applicationProductDetailsId) <= 0) {
+      return;
+    }
+    setSummaryLoading(true);
+    try {
+      const res = await backOfficeService.getLoanObligationsSummary(
+        Number(applicationProductDetailsId),
+        Number(applicantSequence || 0)
+      );
+      const summaryData = (res && typeof res === 'object') ? res : null;
+      if (summaryData) {
+        setBackendSummary(summaryData);
+        setSummary((prev) => ({
+          ...prev,
+          proposedLoanAmount:
+            summaryData.proposedLoanAmount != null
+              ? String(summaryData.proposedLoanAmount)
+              : prev.proposedLoanAmount,
+          proposedLoanTenor:
+            summaryData.proposedTenureMonths != null
+              ? String(summaryData.proposedTenureMonths)
+              : prev.proposedLoanTenor,
+          proposedLoanRoi:
+            summaryData.proposedROI != null
+              ? String(summaryData.proposedROI)
+              : prev.proposedLoanRoi,
+          proposedLoanEmi:
+            summaryData.proposedEMI != null
+              ? String(summaryData.proposedEMI)
+              : prev.proposedLoanEmi,
+        }));
+      }
+    } catch (err) {
+      // 404 is expected when proposed loan has not been created yet; treat as normal empty state
+      if (err?.response?.status === 404) {
+        setBackendSummary(null);
+      } else {
+        console.error('Failed to load RTR loan obligations summary:', err);
+      }
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, [applicationProductDetailsId, applicantSequence]);
+
+  // Trigger hydration on mount and when applicationProductDetailsId / applicantSequence changes
   useEffect(() => {
     fetchObligations();
-  }, [fetchObligations]);
+    fetchSummary();
+  }, [fetchObligations, fetchSummary]);
 
   // Update Summary field
   const handleSummaryChange = (field, value) => {
@@ -364,7 +415,7 @@ export default function RtrCommonSheet({
       );
       setDeleteConfirmRow(null);
       setSaveSuccessMessage('Obligation record deleted successfully.');
-      await fetchObligations();
+      await Promise.all([fetchObligations(), fetchSummary()]);
     } catch (err) {
       console.error('Failed to delete obligation record:', err);
       const errMsg =
@@ -468,8 +519,13 @@ export default function RtrCommonSheet({
     }
 
     const meaningfulRows = rows.filter((r) => !isRowBlank(r));
-    if (meaningfulRows.length === 0) {
-      setObligationsError('No obligation details to save. Please enter obligation information.');
+    const hasProposedData =
+      (summary.proposedLoanAmount !== '' && summary.proposedLoanAmount != null) ||
+      (summary.proposedLoanTenor !== '' && summary.proposedLoanTenor != null) ||
+      (summary.proposedLoanRoi !== '' && summary.proposedLoanRoi != null);
+
+    if (meaningfulRows.length === 0 && !hasProposedData) {
+      setObligationsError('No obligation or proposed loan details to save. Please enter details.');
       return;
     }
 
@@ -494,8 +550,10 @@ export default function RtrCommonSheet({
 
     let createdCount = 0;
     let updatedCount = 0;
+    let proposedSaved = false;
 
     try {
+      // 1. Save meaningful obligation facility rows
       for (const row of meaningfulRows) {
         if (!row.applicationLoanObligationDetailsId) {
           const payload = toPayload(row, false);
@@ -511,10 +569,37 @@ export default function RtrCommonSheet({
         }
       }
 
-      setSaveSuccessMessage(
-        `Obligations saved successfully (${createdCount} created, ${updatedCount} updated).`
-      );
-      await fetchObligations();
+      // 2. Save proposed loan parameters if entered
+      if (hasProposedData) {
+        const parseNumOrZero = (v) => {
+          if (v === '' || v == null) return 0;
+          const n = Number(v);
+          return isNaN(n) ? 0 : n;
+        };
+
+        const proposedPayload = {
+          applicationProductDetailsId: Number(applicationProductDetailsId),
+          applicantSequence: Number(applicantSequence || 0),
+          proposedLoanAmount: parseNumOrZero(summary.proposedLoanAmount),
+          proposedROI: parseNumOrZero(summary.proposedLoanRoi),
+          proposedTenureMonths: parseNumOrZero(summary.proposedLoanTenor),
+          createdBy: currentUserId,
+        };
+        await backOfficeService.saveProposedLoan(proposedPayload);
+        proposedSaved = true;
+      }
+
+      const messageParts = [];
+      if (createdCount > 0 || updatedCount > 0) {
+        messageParts.push(`Obligations saved (${createdCount} created, ${updatedCount} updated)`);
+      }
+      if (proposedSaved) {
+        messageParts.push('Proposed loan details saved');
+      }
+      setSaveSuccessMessage(`${messageParts.join(', ')} successfully.`);
+
+      // 3. Refresh obligations and summary
+      await Promise.all([fetchObligations(), fetchSummary()]);
     } catch (err) {
       console.error('Failed to save obligations:', err);
       const errMsg =
@@ -652,6 +737,7 @@ export default function RtrCommonSheet({
                     className="bo-rtr-input bo-rtr-input--compact"
                     value={summary.proposedLoanAmount}
                     onChange={(e) => handleSummaryChange('proposedLoanAmount', e.target.value)}
+                    disabled={obligationsSaving}
                   />
                 </label>
                 <label className="bo-rtr-compact-field">
@@ -662,6 +748,7 @@ export default function RtrCommonSheet({
                     className="bo-rtr-input bo-rtr-input--compact"
                     value={summary.proposedLoanTenor}
                     onChange={(e) => handleSummaryChange('proposedLoanTenor', e.target.value)}
+                    disabled={obligationsSaving}
                   />
                 </label>
                 <label className="bo-rtr-compact-field">
@@ -673,16 +760,18 @@ export default function RtrCommonSheet({
                     className="bo-rtr-input bo-rtr-input--compact"
                     value={summary.proposedLoanRoi}
                     onChange={(e) => handleSummaryChange('proposedLoanRoi', e.target.value)}
+                    disabled={obligationsSaving}
                   />
                 </label>
                 <label className="bo-rtr-compact-field">
                   <span className="bo-rtr-compact-label">EMI (In Rs.)</span>
                   <input
                     type="number"
-                    placeholder="Enter EMI"
+                    step="0.01"
+                    placeholder="Auto-calculated"
                     className="bo-rtr-input bo-rtr-input--compact"
                     value={summary.proposedLoanEmi}
-                    onChange={(e) => handleSummaryChange('proposedLoanEmi', e.target.value)}
+                    readOnly
                   />
                 </label>
               </div>

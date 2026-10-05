@@ -490,6 +490,32 @@ export const backOfficeService = {
   },
 
   /**
+   * Upsert Proposed Loan parameters for an application product & applicant sequence.
+   * POST /api/calculation/loan-obligations/proposed
+   * @param {object} payload - { applicationProductDetailsId, applicantSequence, proposedLoanAmount, proposedROI, proposedTenureMonths, createdBy }
+   */
+  saveProposedLoan: async (payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.LOAN_OBLIGATIONS_PROPOSED,
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve authoritative RTR loan obligations summary including live, closure, excluded totals, and proposed loan.
+   * GET /api/calculation/loan-obligations/summary/{applicationProductDetailsId}/{applicantSequence}
+   * @param {string|number} applicationProductDetailsId
+   * @param {string|number} applicantSequence
+   */
+  getLoanObligationsSummary: async (applicationProductDetailsId, applicantSequence = 0) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.LOAN_OBLIGATIONS_SUMMARY(applicationProductDetailsId, applicantSequence)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
    * Retrieve active banks from Bank Master.
    */
   getActiveBanks: async () => {
