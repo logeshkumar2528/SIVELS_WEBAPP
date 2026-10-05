@@ -12735,7 +12735,6 @@ export default function CustomerVerification() {
                       <label className="bo-cv-pd-field bo-cv-pd-field--narrative">
                         <span className="bo-cv-pd-field-label">
                           <span className="bo-cv-pd-field-num">7</span> Applicant Profile
-                          <em className="bo-cv-pd-char-hint">Maximum 1,000 characters</em>
                         </span>
                         <textarea
                           rows={4}
@@ -12744,13 +12743,11 @@ export default function CustomerVerification() {
                           value={sheet.applicantProfile}
                           onChange={(e) => updateRecommendationSheet(sheet.id, 'applicantProfile', e.target.value)}
                         />
-                        <small className="bo-cv-pd-char-counter">{(sheet.applicantProfile || '').length}/1000</small>
                       </label>
 
                       <label className="bo-cv-pd-field bo-cv-pd-field--narrative">
                         <span className="bo-cv-pd-field-label">
                           <span className="bo-cv-pd-field-num">8</span> Co-Applicant Profile
-                          <em className="bo-cv-pd-char-hint">Maximum 1,000 characters</em>
                         </span>
                         <textarea
                           rows={4}
@@ -12759,7 +12756,6 @@ export default function CustomerVerification() {
                           value={sheet.coApplicantProfile}
                           onChange={(e) => updateRecommendationSheet(sheet.id, 'coApplicantProfile', e.target.value)}
                         />
-                        <small className="bo-cv-pd-char-counter">{(sheet.coApplicantProfile || '').length}/1000</small>
                       </label>
                     </div>
 
