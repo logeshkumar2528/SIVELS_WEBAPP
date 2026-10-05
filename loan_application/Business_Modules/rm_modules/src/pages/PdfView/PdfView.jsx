@@ -17,7 +17,7 @@ import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import { getCurrentRMContext } from '../../utils/rmContext';
 import { rmCustomerService } from '../../services/rmCustomerService';
 import './PdfView.css';
-import LogoImage from '../../../../../Core/src/assets/branding/Logo.png';
+import LogoImage from '../../../../../Core/src/assets/branding/SivelsFinanceLogo.jpg';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 

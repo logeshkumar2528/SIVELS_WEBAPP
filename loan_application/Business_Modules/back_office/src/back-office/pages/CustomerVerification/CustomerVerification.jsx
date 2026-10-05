@@ -6,7 +6,7 @@
  * Route: /backoffice/customers/:customerId/verify
  *
  * Architecture:
- * - 14-Step Underwriting Verification Workflow (Sidebar: 01–14).
+ * - 15-Step Underwriting Verification Workflow (Sidebar: 01–15).
  * - Step 01: View Form (Direct embedded PdfView with ApplicationDraftProvider).
  * - Step 02: Document Verification (Applicant & Co-Applicant KYC documents).
  * - Step 03: Property FI (Field Investigation placeholder).
@@ -17,10 +17,11 @@
  * - Step 08: CIBIL Check (Preserved Credit Bureau verification simulation + Manual CIBIL PAN Upload).
  * - Step 09: Health Check (Standalone active master health-check verification table).
  * - Step 10: PD Verification (Personal Discussion mode selector from dynamic PDVerificationTypeMaster & PD Sheet).
- * - Step 11: RTR Common Sheet (Obligation assessment).
- * - Step 12: Eligibility Assessment (Methodology & multi-applicant credit assessment engine).
- * - Step 13: Recommendation Sheet (Credit underwriter recommendation placeholder).
- * - Step 14: Final Action (Application disposition & workflow history).
+ * - Step 11: Asset Base (Property and asset portfolio records).
+ * - Step 12: RTR Common Sheet (Obligation assessment).
+ * - Step 13: Eligibility Assessment (Methodology & multi-applicant credit assessment engine).
+ * - Step 14: Recommendation Sheet (Credit underwriter recommendation placeholder).
+ * - Step 15: Final Action (Application disposition & workflow history).
  * - Single-fetch shared data and VerificationStepModal are preserved in code for easy inspection.
  */
 
@@ -33,6 +34,7 @@ import { useVerificationWorkspace } from '../../hooks/useVerificationWorkspace';
 import backOfficeService from '../../api/backOfficeService';
 import { getBackOfficeAuth } from '../../auth/authStorage';
 import VerificationStepModal from '../../components/Verification/VerificationStepModal';
+import AssetBase from '../../components/AssetBase/AssetBase';
 import RtrCommonSheet from '../../components/RtrCommonSheet/RtrCommonSheet';
 import PdfView from '../../../../../rm_modules/src/pages/PdfView/PdfView';
 import { ApplicationDraftProvider } from '../../../../../rm_modules/src/state/ApplicationDraftContext';
@@ -216,7 +218,7 @@ const INITIAL_STEP_VERIFICATIONS = {
 };
 
 /**
- * 14-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
+ * 15-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
  */
 const VERIFICATION_WORKFLOW_STEPS = [
   { id: 1, number: 1, visibleNum: '01', title: 'View Form', subtitle: 'Application form', group: 'FORM REVIEW' },
@@ -229,14 +231,15 @@ const VERIFICATION_WORKFLOW_STEPS = [
   { id: 13, number: 13, visibleNum: '08', title: 'CIBIL Check', subtitle: 'Credit Bureau & PAN', group: 'CREDIT & ASSESSMENT' },
   { id: 19, number: 19, visibleNum: '09', title: 'Health Check', subtitle: 'Health verification', group: 'CREDIT & ASSESSMENT' },
   { id: 14, number: 14, visibleNum: '10', title: 'PD Verification', subtitle: 'Personal discussion', group: 'CREDIT & ASSESSMENT' },
-  { id: 15, number: 15, visibleNum: '11', title: 'RTR Common Sheet', subtitle: 'Obligation assessment', group: 'CREDIT & ASSESSMENT' },
-  { id: 16, number: 16, visibleNum: '12', title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
-  { id: 17, number: 17, visibleNum: '13', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
-  { id: 18, number: 18, visibleNum: '14', title: 'Final Action', subtitle: 'Return to RM / Credit Manager', group: 'FINAL ACTION' },
+  { id: 20, number: 20, visibleNum: '11', title: 'Asset Base', subtitle: 'Property & asset portfolio', group: 'CREDIT & ASSESSMENT' },
+  { id: 15, number: 15, visibleNum: '12', title: 'RTR Common Sheet', subtitle: 'Obligation assessment', group: 'CREDIT & ASSESSMENT' },
+  { id: 16, number: 16, visibleNum: '13', title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
+  { id: 17, number: 17, visibleNum: '14', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
+  { id: 18, number: 18, visibleNum: '15', title: 'Final Action', subtitle: 'Return to RM / Credit Manager', group: 'FINAL ACTION' },
 ];
 
 /**
- * Visible Step (1–14) to Internal Step ID Mapping
+ * Visible Step (1–15) to Internal Step ID Mapping
  */
 const VISIBLE_TO_INTERNAL_STEP = {
   1: 1,
@@ -249,14 +252,15 @@ const VISIBLE_TO_INTERNAL_STEP = {
   8: 13,
   9: 19,
   10: 14,
-  11: 15,
-  12: 16,
-  13: 17,
-  14: 18,
+  11: 20,
+  12: 15,
+  13: 16,
+  14: 17,
+  15: 18,
 };
 
 /**
- * Internal Step ID to Visible Step (1–14) Mapping
+ * Internal Step ID to Visible Step (1–15) Mapping
  */
 const INTERNAL_TO_VISIBLE_STEP = {
   1: 1,
@@ -274,16 +278,17 @@ const INTERNAL_TO_VISIBLE_STEP = {
   13: 8,
   19: 9,
   14: 10,
-  15: 11,
-  16: 12,
-  17: 13,
-  18: 14,
+  20: 11,
+  15: 12,
+  16: 13,
+  17: 14,
+  18: 15,
 };
 
 function resolveInternalStepFromQuery(stepParam) {
   if (stepParam == null || stepParam === '') return 1;
   const parsed = Number(stepParam);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 14) {
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 15) {
     return 1;
   }
   return VISIBLE_TO_INTERNAL_STEP[parsed] ?? 1;
@@ -11107,13 +11112,13 @@ export default function CustomerVerification() {
           </aside>
         )}
 
-        {/* ── 14-STEP VERIFICATION WORKFLOW SIDEBAR (SIVELS FINANCE) ── */}
-        <aside className="bo-cv-left-sidebar" aria-label="14-Step Underwriting Verification Workflow">
+        {/* ── 15-STEP VERIFICATION WORKFLOW SIDEBAR (SIVELS FINANCE) ── */}
+        <aside className="bo-cv-left-sidebar" aria-label="15-Step Underwriting Verification Workflow">
           <div className="bo-cv-sidebar-header">
             <div className="bo-cv-sidebar-heading-row">
               <div>
                 <h2 className="bo-cv-sidebar-title">Verification Steps</h2>
-                <span className="bo-cv-sidebar-subtitle">14-Step Workflow</span>
+                <span className="bo-cv-sidebar-subtitle">15-Step Workflow</span>
               </div>
               <span className="bo-cv-step-count">{VERIFICATION_WORKFLOW_STEPS.length}</span>
             </div>
@@ -12941,7 +12946,19 @@ export default function CustomerVerification() {
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
-              STEP 10: RTR COMMON SHEET
+              STEP 11: ASSET BASE
+          ══════════════════════════════════════════════════════════════════ */}
+          {activeStep === 20 && (
+            <AssetBase
+              applicationProductDetailsId={resolvedAppProdId}
+              agentCustomerId={resolvedTargetCustomerId}
+              applicantSequence={0}
+              currentUserId={getAuthenticatedBackOfficeId()}
+            />
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              STEP 12: RTR COMMON SHEET
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 15 && (
             <RtrCommonSheet
