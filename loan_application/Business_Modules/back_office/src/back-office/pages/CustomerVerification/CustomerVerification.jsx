@@ -6,7 +6,7 @@
  * Route: /backoffice/customers/:customerId/verify
  *
  * Architecture:
- * - 11-Step Underwriting Verification Workflow (Sidebar: 01–11).
+ * - 14-Step Underwriting Verification Workflow (Sidebar: 01–14).
  * - Step 01: View Form (Direct embedded PdfView with ApplicationDraftProvider).
  * - Step 02: Document Verification (Applicant & Co-Applicant KYC documents).
  * - Step 03: Property FI (Field Investigation placeholder).
@@ -15,10 +15,12 @@
  * - Step 06: Legal Opinion (File upload dropzone with <= 150 MB validation, View, Download, Remove).
  * - Step 07: Technical Value (File upload dropzone with <= 150 MB validation, View, Download, Remove).
  * - Step 08: CIBIL Check (Preserved Credit Bureau verification simulation + Manual CIBIL PAN Upload).
- * - Step 09: PD Verification (Personal Discussion mode selector from dynamic PDVerificationTypeMaster).
- * - Step 10: RTR Common Sheet (Obligation assessment).
- * - Step 11: Eligibility Assessment (Methodology & multi-applicant credit assessment engine).
- * - Step 12: Recommendation Sheet (Credit underwriter recommendation placeholder).
+ * - Step 09: Health Check (Standalone active master health-check verification table).
+ * - Step 10: PD Verification (Personal Discussion mode selector from dynamic PDVerificationTypeMaster & PD Sheet).
+ * - Step 11: RTR Common Sheet (Obligation assessment).
+ * - Step 12: Eligibility Assessment (Methodology & multi-applicant credit assessment engine).
+ * - Step 13: Recommendation Sheet (Credit underwriter recommendation placeholder).
+ * - Step 14: Final Action (Application disposition & workflow history).
  * - Single-fetch shared data and VerificationStepModal are preserved in code for easy inspection.
  */
 
@@ -214,7 +216,7 @@ const INITIAL_STEP_VERIFICATIONS = {
 };
 
 /**
- * 13-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
+ * 14-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
  */
 const VERIFICATION_WORKFLOW_STEPS = [
   { id: 1, number: 1, visibleNum: '01', title: 'View Form', subtitle: 'Application form', group: 'FORM REVIEW' },
@@ -225,15 +227,16 @@ const VERIFICATION_WORKFLOW_STEPS = [
   { id: 11, number: 11, visibleNum: '06', title: 'Legal Opinion', subtitle: 'Legal report upload', group: 'CREDIT & ASSESSMENT' },
   { id: 12, number: 12, visibleNum: '07', title: 'Technical Value', subtitle: 'Valuation report upload', group: 'CREDIT & ASSESSMENT' },
   { id: 13, number: 13, visibleNum: '08', title: 'CIBIL Check', subtitle: 'Credit Bureau & PAN', group: 'CREDIT & ASSESSMENT' },
-  { id: 14, number: 14, visibleNum: '09', title: 'PD Verification', subtitle: 'Personal discussion', group: 'CREDIT & ASSESSMENT' },
-  { id: 15, number: 15, visibleNum: '10', title: 'RTR Common Sheet', subtitle: 'Obligation assessment', group: 'CREDIT & ASSESSMENT' },
-  { id: 16, number: 16, visibleNum: '11', title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
-  { id: 17, number: 17, visibleNum: '12', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
-  { id: 18, number: 18, visibleNum: '13', title: 'Final Action', subtitle: 'Return to RM / Credit Manager', group: 'FINAL ACTION' },
+  { id: 19, number: 19, visibleNum: '09', title: 'Health Check', subtitle: 'Health verification', group: 'CREDIT & ASSESSMENT' },
+  { id: 14, number: 14, visibleNum: '10', title: 'PD Verification', subtitle: 'Personal discussion', group: 'CREDIT & ASSESSMENT' },
+  { id: 15, number: 15, visibleNum: '11', title: 'RTR Common Sheet', subtitle: 'Obligation assessment', group: 'CREDIT & ASSESSMENT' },
+  { id: 16, number: 16, visibleNum: '12', title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
+  { id: 17, number: 17, visibleNum: '13', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
+  { id: 18, number: 18, visibleNum: '14', title: 'Final Action', subtitle: 'Return to RM / Credit Manager', group: 'FINAL ACTION' },
 ];
 
 /**
- * Visible Step (1–13) to Internal Step ID Mapping
+ * Visible Step (1–14) to Internal Step ID Mapping
  */
 const VISIBLE_TO_INTERNAL_STEP = {
   1: 1,
@@ -244,15 +247,16 @@ const VISIBLE_TO_INTERNAL_STEP = {
   6: 11,
   7: 12,
   8: 13,
-  9: 14,
-  10: 15,
-  11: 16,
-  12: 17,
-  13: 18,
+  9: 19,
+  10: 14,
+  11: 15,
+  12: 16,
+  13: 17,
+  14: 18,
 };
 
 /**
- * Internal Step ID to Visible Step (1–13) Mapping
+ * Internal Step ID to Visible Step (1–14) Mapping
  */
 const INTERNAL_TO_VISIBLE_STEP = {
   1: 1,
@@ -268,17 +272,18 @@ const INTERNAL_TO_VISIBLE_STEP = {
   11: 6,
   12: 7,
   13: 8,
-  14: 9,
-  15: 10,
-  16: 11,
-  17: 12,
-  18: 13,
+  19: 9,
+  14: 10,
+  15: 11,
+  16: 12,
+  17: 13,
+  18: 14,
 };
 
 function resolveInternalStepFromQuery(stepParam) {
   if (stepParam == null || stepParam === '') return 1;
   const parsed = Number(stepParam);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 13) {
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 14) {
     return 1;
   }
   return VISIBLE_TO_INTERNAL_STEP[parsed] ?? 1;
@@ -5908,14 +5913,12 @@ export default function CustomerVerification() {
     };
   }, [activeStep, calculationAppProdId]);
 
-  // Shared "Comments on other health checks" — particulars from GET /api/health-check-types
+  // Standalone Step 09 "Health Check" — particulars from GET /api/health-check-types
   const [healthCheckTypes, setHealthCheckTypes] = useState([]);
   const [healthCheckTypesLoading, setHealthCheckTypesLoading] = useState(false);
   const [healthCheckTypesError, setHealthCheckTypesError] = useState(null);
   const [healthChecksByStep, setHealthChecksByStep] = useState({
-    8: {},
-    9: {},
-    10: {},
+    19: {},
   });
   const [findingsModal, setFindingsModal] = useState({
     open: false,
@@ -5941,7 +5944,7 @@ export default function CustomerVerification() {
   }, []);
 
   useEffect(() => {
-    if (activeStep === 8 || activeStep === 9 || activeStep === 10) {
+    if (activeStep === 19) {
       fetchHealthCheckTypes();
     }
   }, [activeStep, fetchHealthCheckTypes]);
@@ -5997,14 +6000,14 @@ export default function CustomerVerification() {
   const renderHealthChecksChecklist = (step = activeStep) => {
     const stepChecks = healthChecksByStep[step] || {};
     return (
-      <section className="bo-cv-health-checks" aria-label="Comments on other health checks">
+      <section className="bo-cv-health-checks" aria-label="Health Check">
         <div className="bo-cv-health-checks-card">
           <div className="bo-cv-health-checks-head">
             <div className="bo-cv-health-checks-head-icon" aria-hidden="true">
               {ShieldCheckIcon ? <ShieldCheckIcon size={18} /> : <span>✓</span>}
             </div>
             <div className="bo-cv-health-checks-head-copy">
-              <h3 className="bo-cv-health-checks-title">Comments on other health checks</h3>
+              <h3 className="bo-cv-health-checks-title">Health Check Particulars</h3>
               <p className="bo-cv-health-checks-subtitle">
                 Capture Yes/No, date, and findings for each active master health check type.
               </p>
@@ -11104,13 +11107,13 @@ export default function CustomerVerification() {
           </aside>
         )}
 
-        {/* ── 13-STEP VERIFICATION WORKFLOW SIDEBAR (SIVELS FINANCE) ── */}
-        <aside className="bo-cv-left-sidebar" aria-label="13-Step Underwriting Verification Workflow">
+        {/* ── 14-STEP VERIFICATION WORKFLOW SIDEBAR (SIVELS FINANCE) ── */}
+        <aside className="bo-cv-left-sidebar" aria-label="14-Step Underwriting Verification Workflow">
           <div className="bo-cv-sidebar-header">
             <div className="bo-cv-sidebar-heading-row">
               <div>
                 <h2 className="bo-cv-sidebar-title">Verification Steps</h2>
-                <span className="bo-cv-sidebar-subtitle">13-Step Workflow</span>
+                <span className="bo-cv-sidebar-subtitle">14-Step Workflow</span>
               </div>
               <span className="bo-cv-step-count">{VERIFICATION_WORKFLOW_STEPS.length}</span>
             </div>
@@ -11202,7 +11205,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 01 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 01 of 14</span>
               </div>
 
               <div className="bo-cv-view-form-embed-wrapper">
@@ -11244,7 +11247,7 @@ export default function CustomerVerification() {
                   </div>
                 </div>
                 <div className="bo-cv-doc-header-right">
-                  <span className="bo-cv-step-tag-pill">Step 02 of 12</span>
+                  <span className="bo-cv-step-tag-pill">Step 02 of 14</span>
                 </div>
               </div>
 
@@ -11685,7 +11688,7 @@ export default function CustomerVerification() {
                     <p className="bo-cv-step-panel-desc">Property Field Investigation details and collateral valuation.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 03 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 03 of 14</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -11696,8 +11699,6 @@ export default function CustomerVerification() {
                 <h3>Property FI — implementation pending</h3>
                 <p>Property field investigation module integration is scheduled for future underwriting release.</p>
               </div>
-
-              {renderHealthChecksChecklist(8)}
             </div>
           )}
 
@@ -11714,7 +11715,7 @@ export default function CustomerVerification() {
                     <p className="bo-cv-step-panel-desc">Workplace and business establishment field investigation.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 04 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 04 of 14</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -11725,8 +11726,6 @@ export default function CustomerVerification() {
                 <h3>Office FI — implementation pending</h3>
                 <p>Office field investigation module integration is scheduled for future underwriting release.</p>
               </div>
-
-              {renderHealthChecksChecklist(9)}
             </div>
           )}
 
@@ -11743,7 +11742,7 @@ export default function CustomerVerification() {
                     <p className="bo-cv-step-panel-desc">Physical residence field verification and neighbor check.</p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 05 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 05 of 14</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -11754,8 +11753,6 @@ export default function CustomerVerification() {
                 <h3>Residence FI — implementation pending</h3>
                 <p>Residence field investigation module integration is scheduled for future underwriting release.</p>
               </div>
-
-              {renderHealthChecksChecklist(10)}
             </div>
           )}
 
@@ -11774,7 +11771,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 06 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 06 of 14</span>
               </div>
 
               <div className="bo-cv-upload-container">
@@ -11916,7 +11913,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 07 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 07 of 14</span>
               </div>
 
               <div className="bo-cv-upload-container">
@@ -12058,7 +12055,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 08 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 08 of 14</span>
               </div>
 
               {/* Manual CIBIL PAN Card Upload Reference Section */}
@@ -12592,13 +12589,35 @@ export default function CustomerVerification() {
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
-              STEP 14: PD SHEET (STEP 09)
+              STEP 19: HEALTH CHECK (STEP 09)
+          ══════════════════════════════════════════════════════════════════ */}
+          {activeStep === 19 && (
+            <div className="bo-cv-step-panel">
+              <div className="bo-cv-step-panel-header">
+                <div className="bo-cv-step-header-left">
+                  <div className="bo-cv-step-badge-num">09</div>
+                  <div>
+                    <h2 className="bo-cv-step-panel-title">Health Check</h2>
+                    <p className="bo-cv-step-panel-desc">
+                      Capture Yes/No, date of check, and underwriting findings for active master health check types.
+                    </p>
+                  </div>
+                </div>
+                <span className="bo-cv-step-tag-pill">Step 09 of 14</span>
+              </div>
+
+              {renderHealthChecksChecklist(19)}
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              STEP 14: PD SHEET (STEP 10)
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 14 && (
             <div className="bo-cv-step-panel bo-cv-pd-sheet-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">09</div>
+                  <div className="bo-cv-step-badge-num">10</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">PD Sheet</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -12606,7 +12625,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 09 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 10 of 14</span>
               </div>
 
               {/* Compact Top Header: PD Mode | Applicant */}
@@ -19618,13 +19637,13 @@ export default function CustomerVerification() {
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
-              STEP 12: RECOMMENDATION SHEET (CREDIT RECOMMENDATION PLACEHOLDER)
+              STEP 13: RECOMMENDATION SHEET (CREDIT RECOMMENDATION PLACEHOLDER)
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 17 && (
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">12</div>
+                  <div className="bo-cv-step-badge-num">13</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Recommendation Sheet</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -19632,7 +19651,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 12 of 13</span>
+                <span className="bo-cv-step-tag-pill">Step 13 of 14</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -19647,13 +19666,13 @@ export default function CustomerVerification() {
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
-              STEP 13: FINAL APPLICATION ACTION (APPLICATION WORKFLOW)
+              STEP 14: FINAL APPLICATION ACTION (APPLICATION WORKFLOW)
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 18 && (
             <div className="bo-cv-step-panel bo-cv-workflow-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">13</div>
+                  <div className="bo-cv-step-badge-num">14</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Final Application Action &amp; Disposition</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -19661,7 +19680,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 13 of 13</span>
+                <span className="bo-cv-step-tag-pill">Step 14 of 14</span>
               </div>
 
               {/* Action Feedback Banner */}
