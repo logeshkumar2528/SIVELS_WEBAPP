@@ -182,4 +182,12 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/ApplicationPdAssessment/byapplication/${encodeURIComponent(applicationProductDetailsId)}`,
   PD_ASSESSMENT_BY_CUSTOMER: (agentCustomerId) =>
     `/ApplicationPdAssessment/bycustomer/${encodeURIComponent(agentCustomerId)}`,
+
+  // Application Workflow APIs (Step 13: Final Application Actions)
+  APPLICATION_WORKFLOW_RETURN_TO_RM: (agentCustomerId) =>
+    `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/return-to-rm`,
+  APPLICATION_WORKFLOW_SEND_TO_CREDIT: (agentCustomerId) =>
+    `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/send-to-credit-manager`,
+  APPLICATION_WORKFLOW_HISTORY: (agentCustomerId) =>
+    `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/history`,
 };

@@ -35,6 +35,7 @@ import RtrCommonSheet from '../../components/RtrCommonSheet/RtrCommonSheet';
 import PdfView from '../../../../../rm_modules/src/pages/PdfView/PdfView';
 import { ApplicationDraftProvider } from '../../../../../rm_modules/src/state/ApplicationDraftContext';
 import { resolveDocumentTypeId, validateApplicantDocumentFile, getDocumentApplicability } from '../../../../../../Core/src/utils/documentTypeHelper';
+import { isApplicationUnderwritingReady } from '../../utils/readinessHelper';
 import './CustomerVerification.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -213,7 +214,7 @@ const INITIAL_STEP_VERIFICATIONS = {
 };
 
 /**
- * 12-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
+ * 13-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
  */
 const VERIFICATION_WORKFLOW_STEPS = [
   { id: 1, number: 1, visibleNum: '01', title: 'View Form', subtitle: 'Application form', group: 'FORM REVIEW' },
@@ -228,10 +229,11 @@ const VERIFICATION_WORKFLOW_STEPS = [
   { id: 15, number: 15, visibleNum: '10', title: 'RTR Common Sheet', subtitle: 'Obligation assessment', group: 'CREDIT & ASSESSMENT' },
   { id: 16, number: 16, visibleNum: '11', title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
   { id: 17, number: 17, visibleNum: '12', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
+  { id: 18, number: 18, visibleNum: '13', title: 'Final Action', subtitle: 'Return to RM / Credit Manager', group: 'FINAL ACTION' },
 ];
 
 /**
- * Visible Step (1–12) to Internal Step ID Mapping
+ * Visible Step (1–13) to Internal Step ID Mapping
  */
 const VISIBLE_TO_INTERNAL_STEP = {
   1: 1,
@@ -246,10 +248,11 @@ const VISIBLE_TO_INTERNAL_STEP = {
   10: 15,
   11: 16,
   12: 17,
+  13: 18,
 };
 
 /**
- * Internal Step ID to Visible Step (1–12) Mapping
+ * Internal Step ID to Visible Step (1–13) Mapping
  */
 const INTERNAL_TO_VISIBLE_STEP = {
   1: 1,
@@ -269,12 +272,13 @@ const INTERNAL_TO_VISIBLE_STEP = {
   15: 10,
   16: 11,
   17: 12,
+  18: 13,
 };
 
 function resolveInternalStepFromQuery(stepParam) {
   if (stepParam == null || stepParam === '') return 1;
   const parsed = Number(stepParam);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 12) {
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 13) {
     return 1;
   }
   return VISIBLE_TO_INTERNAL_STEP[parsed] ?? 1;
@@ -5746,6 +5750,35 @@ export default function CustomerVerification() {
   const [pdAssessmentId, setPdAssessmentId] = useState(null);
   const [pdAssessmentLoading, setPdAssessmentLoading] = useState(false);
 
+  // 12d. Step 13 Application Workflow States (Return to RM / Send to Credit Manager)
+  const [returnToRmModal, setReturnToRmModal] = useState({
+    open: false,
+    remarks: '',
+    error: null,
+    isSubmitting: false,
+  });
+  const [sendToCreditModal, setSendToCreditModal] = useState({
+    open: false,
+    remarks: '',
+    error: null,
+    isSubmitting: false,
+  });
+  const [workflowHistory, setWorkflowHistory] = useState([]);
+  const [isFetchingWorkflowHistory, setIsFetchingWorkflowHistory] = useState(false);
+  const [workflowHistoryError, setWorkflowHistoryError] = useState(null);
+  const [workflowActionFeedback, setWorkflowActionFeedback] = useState(null);
+  const [step13Readiness, setStep13Readiness] = useState({
+    isReady: false,
+    isEvaluating: false,
+    evaluated: false,
+    stepVerifsCount: 0,
+    hasLegal: false,
+    hasTechnical: false,
+    hasCibil: false,
+    hasEligibility: false,
+    unresolvedRejectionsCount: 0,
+  });
+
   // PD assessment values for the current application.
   const createRecommendationSheet = () => ({
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -6185,9 +6218,10 @@ export default function CustomerVerification() {
 
   // Send to Credit Officer action handler (PD Assessment Save/Update)
   const handleSendToCreditOfficer = async () => {
-    const trimmed = finalRemarks.trim();
-    if (!trimmed) {
-      setFinalRemarksError('Remarks for Credit Officer are required.');
+    const sheet = recommendationSheets[0] || {};
+    const recommendationVal = (sheet.recommendation || '').trim();
+    if (!recommendationVal) {
+      setFinalRemarksError('Recommendation is required before sending to Credit Officer.');
       setFinalRemarksBanner(null);
       return;
     }
@@ -6222,7 +6256,6 @@ export default function CustomerVerification() {
     setIsSendingToCreditOfficer(true);
     setFinalRemarksBanner(null);
 
-    const sheet = recommendationSheets[0] || {};
     const payload = {
       applicationProductDetailsId: Number(calculationAppProdId),
       dateOfPdVisit: sheet.pdVisitDate || null,
@@ -6238,8 +6271,8 @@ export default function CustomerVerification() {
       legalTechnicalReview: sheet.legalAndTechnical?.trim() || '',
       strengths: sheet.strengths?.trim() || '',
       concerns: sheet.concerns?.trim() || '',
-      recommendation: sheet.recommendation?.trim() || '',
-      finalRemarks: trimmed,
+      recommendation: recommendationVal,
+      finalRemarks: recommendationVal,
       sanctionConditions: (sheet.otherSanctionConditions || [])
         .map((c) => String(c || '').trim())
         .filter(Boolean)
@@ -6295,6 +6328,7 @@ export default function CustomerVerification() {
   const handleViewForm = () => {
     navigateToStep(1);
   };
+
   // ----------------------------------------------------
   // Document Resolution & Preview Loader (Old vs New & Dynamic Master)
   // ----------------------------------------------------
@@ -6705,6 +6739,255 @@ export default function CustomerVerification() {
       fetchStepVerifications(resolvedAppProdId);
     }
   }, [resolvedAppProdId, fetchStepVerifications]);
+
+  // ----------------------------------------------------
+  // Step 13 Application Workflow Handlers & History Fetch
+  // ----------------------------------------------------
+  const resolvedTargetCustomerId = Number(
+    customerId ||
+    verificationData?.customerId ||
+    verificationData?.agentCustomerId ||
+    verificationData?.raw?.customer?.agentCustomerId ||
+    verificationData?.raw?.customer?.AgentCustomerId ||
+    0
+  );
+
+  const fetchWorkflowHistory = useCallback(async () => {
+    const custId = resolvedTargetCustomerId;
+    if (!custId || custId <= 0) return;
+
+    setIsFetchingWorkflowHistory(true);
+    setWorkflowHistoryError(null);
+    try {
+      const res = await backOfficeService.getApplicationWorkflowHistory(custId);
+      const list = Array.isArray(res) ? res : (res?.value || res?.data || res?.items || []);
+      setWorkflowHistory(list);
+    } catch (err) {
+      console.warn('[CustomerVerification] Failed to fetch workflow history:', err);
+      if (err?.response?.status !== 404) {
+        setWorkflowHistoryError(err?.response?.data?.message || err?.message || 'Failed to load workflow history.');
+      }
+      setWorkflowHistory([]);
+    } finally {
+      setIsFetchingWorkflowHistory(false);
+    }
+  }, [resolvedTargetCustomerId]);
+
+  const evaluateStep13Readiness = useCallback(async () => {
+    const appProdId = resolvedAppProdId;
+    if (!appProdId || appProdId <= 0) return;
+
+    setStep13Readiness((prev) => ({ ...prev, isEvaluating: true }));
+    try {
+      const [stepVerifsRes, appDocsRes, assessmentsRes, rejectionsRes] = await Promise.allSettled([
+        backOfficeService.getStepVerificationsByApplication(appProdId),
+        backOfficeService.getApplicationDocuments(appProdId),
+        backOfficeService.getAssessmentsByApplication(appProdId),
+        backOfficeService.getDocumentRejectionsByApplication(appProdId),
+      ]);
+
+      const stepVerifs = stepVerifsRes.status === 'fulfilled' ? (Array.isArray(stepVerifsRes.value) ? stepVerifsRes.value : (stepVerifsRes.value?.value || stepVerifsRes.value?.data || [])) : [];
+      const appDocs = appDocsRes.status === 'fulfilled' ? (Array.isArray(appDocsRes.value) ? appDocsRes.value : (appDocsRes.value?.value || appDocsRes.value?.data || [])) : [];
+      const assessments = assessmentsRes.status === 'fulfilled' ? (Array.isArray(assessmentsRes.value) ? assessmentsRes.value : (assessmentsRes.value?.value || assessmentsRes.value?.data || [])) : [];
+      const rejections = rejectionsRes.status === 'fulfilled' ? (Array.isArray(rejectionsRes.value) ? rejectionsRes.value : (rejectionsRes.value?.value || rejectionsRes.value?.data || [])) : [];
+
+      const rawCustomer = verificationData?.raw?.customer || verificationData?.customer || {};
+      const rawCust = Array.isArray(rawCustomer) ? rawCustomer[0] : rawCustomer;
+      const currentStatus = Number(
+        rawCust?.status ??
+        rawCust?.applicationStatus ??
+        verificationData?.status ??
+        verificationData?.applicationStatus ??
+        2
+      );
+
+      const customerObj = {
+        ...verificationData,
+        status: currentStatus,
+      };
+
+      const isReady = isApplicationUnderwritingReady({
+        customer: customerObj,
+        stepVerifications: stepVerifs,
+        applicationDocuments: appDocs,
+        assessments,
+        rejections,
+      });
+
+      // Individual breakdown checks for UI display
+      const activeVerifs = stepVerifs.filter((v) => v && v.isActive !== false && Boolean(v.isVerified));
+      const primaryDocCodes = new Set(
+        activeVerifs.filter((v) => Number(v.applicantSequence || 0) === 0).map((v) => String(v.stepCode || '').trim().toUpperCase())
+      );
+      const REQUIRED_DOCS = ['PROFILE_IMAGE', 'AADHAAR', 'PAN', 'SALARY_SLIP', 'BANK_STATEMENT', 'ZIP_ARCHIVE'];
+      const docsCount = REQUIRED_DOCS.filter((c) => primaryDocCodes.has(c)).length;
+
+      const activeAppDocs = appDocs.filter((d) => d && d.isActive !== false);
+      const hasLegal = activeAppDocs.some((d) => String(d.documentType || '').trim().toUpperCase() === 'LEGAL_OPINION');
+      const hasTechnical = activeAppDocs.some((d) => String(d.documentType || '').trim().toUpperCase() === 'TECHNICAL_VALUATION');
+      const hasCibil = activeAppDocs.some((d) => {
+        const dt = String(d.documentType || '').trim().toUpperCase();
+        return dt === 'CIBIL_REPORT' || dt === 'MANUAL_CIBIL_PAN';
+      });
+
+      const activeAssessments = assessments.filter((a) => a && a.isActive !== false);
+      const hasEligibility = activeAssessments.some((a) => {
+        const maxAmount = Number(a.maximumEligibleLoanAmount || a.finalLoanEligibility || 0);
+        const eligibleEmi = Number(a.eligibleEMI || a.maxEmi || 0);
+        const hasCalculatedAt = Boolean(a.calculatedAt || a.calculatedDate);
+        const statusText = String(a.status || '').trim().toLowerCase();
+        const hasCalculatedStatus = ['eligible', 'calculated', 'ineligible', 'completed'].includes(statusText);
+        return maxAmount > 0 || eligibleEmi > 0 || (hasCalculatedStatus && hasCalculatedAt);
+      });
+
+      const activeUnresolved = rejections.filter((r) => r && r.isActive !== false && r.status !== 'Verified' && r.status !== 'Resolved');
+
+      setStep13Readiness({
+        isReady,
+        isEvaluating: false,
+        evaluated: true,
+        stepVerifsCount: docsCount,
+        hasLegal,
+        hasTechnical,
+        hasCibil,
+        hasEligibility,
+        unresolvedRejectionsCount: activeUnresolved.length,
+      });
+    } catch (err) {
+      console.warn('[CustomerVerification] Failed to evaluate readiness:', err);
+      setStep13Readiness((prev) => ({ ...prev, isEvaluating: false, evaluated: true }));
+    }
+  }, [resolvedAppProdId, verificationData]);
+
+  // Trigger history and readiness fetch when Step 13 (activeStep === 18) opens
+  useEffect(() => {
+    if (activeStep === 18) {
+      fetchWorkflowHistory();
+      evaluateStep13Readiness();
+    }
+  }, [activeStep, fetchWorkflowHistory, evaluateStep13Readiness]);
+
+  const handleOpenReturnToRmModal = () => {
+    setReturnToRmModal({
+      open: true,
+      remarks: '',
+      error: null,
+      isSubmitting: false,
+    });
+  };
+
+  const handleCloseReturnToRmModal = () => {
+    if (!returnToRmModal.isSubmitting) {
+      setReturnToRmModal({ open: false, remarks: '', error: null, isSubmitting: false });
+    }
+  };
+
+  const handleConfirmReturnToRm = async () => {
+    const trimmed = (returnToRmModal.remarks || '').trim();
+    if (!trimmed) {
+      setReturnToRmModal((prev) => ({ ...prev, error: 'Return remarks are mandatory. Please provide correction instructions for the RM.' }));
+      return;
+    }
+
+    const custId = resolvedTargetCustomerId;
+    if (!custId || custId <= 0) {
+      setReturnToRmModal((prev) => ({ ...prev, error: 'Customer ID not found. Unable to return application.' }));
+      return;
+    }
+
+    const backOfficeId = getAuthenticatedBackOfficeId();
+    if (!backOfficeId) {
+      setReturnToRmModal((prev) => ({ ...prev, error: 'Unable to identify the authenticated Back Office operator. Please login again.' }));
+      return;
+    }
+
+    setReturnToRmModal((prev) => ({ ...prev, isSubmitting: true, error: null }));
+    try {
+      const payload = {
+        performedByUserId: backOfficeId,
+        performedByRole: 'BackOffice',
+        remarks: trimmed,
+      };
+      await backOfficeService.returnApplicationToRM(custId, payload);
+
+      setReturnToRmModal({ open: false, remarks: '', error: null, isSubmitting: false });
+      setWorkflowActionFeedback({
+        type: 'success',
+        message: `Application #${custId} has been successfully returned to the Relationship Manager. Status transitioned from Logged to HO (2) to Returned to RM (6).`,
+      });
+
+      await fetchWorkflowHistory();
+    } catch (err) {
+      console.error('[CustomerVerification] Failed to return application to RM:', err);
+      const msg = err?.response?.data?.message || err?.response?.data?.title || err?.message || 'Failed to return application to RM.';
+      setReturnToRmModal((prev) => ({ ...prev, isSubmitting: false, error: msg }));
+    }
+  };
+
+  const handleOpenSendToCreditModal = () => {
+    setSendToCreditModal({
+      open: true,
+      remarks: '',
+      error: null,
+      isSubmitting: false,
+    });
+  };
+
+  const handleCloseSendToCreditModal = () => {
+    if (!sendToCreditModal.isSubmitting) {
+      setSendToCreditModal({ open: false, remarks: '', error: null, isSubmitting: false });
+    }
+  };
+
+  const handleConfirmSendToCredit = async () => {
+    const trimmed = (sendToCreditModal.remarks || '').trim();
+    if (!trimmed) {
+      setSendToCreditModal((prev) => ({ ...prev, error: 'Underwriter recommendation remarks are mandatory.' }));
+      return;
+    }
+
+    const custId = resolvedTargetCustomerId;
+    if (!custId || custId <= 0) {
+      setSendToCreditModal((prev) => ({ ...prev, error: 'Customer ID not found. Unable to send application to Credit Manager.' }));
+      return;
+    }
+
+    const backOfficeId = getAuthenticatedBackOfficeId();
+    if (!backOfficeId) {
+      setSendToCreditModal((prev) => ({ ...prev, error: 'Unable to identify the authenticated Back Office operator. Please login again.' }));
+      return;
+    }
+
+    if (!step13Readiness.isReady) {
+      setSendToCreditModal((prev) => ({
+        ...prev,
+        error: 'Cannot forward to Credit Manager: Mandatory underwriting verification requirements are not yet complete.',
+      }));
+      return;
+    }
+
+    setSendToCreditModal((prev) => ({ ...prev, isSubmitting: true, error: null }));
+    try {
+      const payload = {
+        performedByUserId: backOfficeId,
+        performedByRole: 'BackOffice',
+        remarks: trimmed,
+      };
+      await backOfficeService.sendApplicationToCreditManager(custId, payload);
+
+      setSendToCreditModal({ open: false, remarks: '', error: null, isSubmitting: false });
+      setWorkflowActionFeedback({
+        type: 'success',
+        message: `Application #${custId} has been successfully submitted to Credit Manager. Status transitioned from Logged to HO (2) to Sent to Credit Manager (3: Under Review).`,
+      });
+
+      await fetchWorkflowHistory();
+    } catch (err) {
+      console.error('[CustomerVerification] Failed to send application to Credit Manager:', err);
+      const msg = err?.response?.data?.message || err?.response?.data?.title || err?.message || 'Failed to send application to Credit Manager.';
+      setSendToCreditModal((prev) => ({ ...prev, isSubmitting: false, error: msg }));
+    }
+  };
 
   // ----------------------------------------------------
   // Step-Level Unresolved Rejection Detection Helpers (Rule 1)
@@ -10821,13 +11104,13 @@ export default function CustomerVerification() {
           </aside>
         )}
 
-        {/* ── 11-STEP VERIFICATION WORKFLOW SIDEBAR (SIVELS FINANCE) ── */}
-        <aside className="bo-cv-left-sidebar" aria-label="11-Step Underwriting Verification Workflow">
+        {/* ── 13-STEP VERIFICATION WORKFLOW SIDEBAR (SIVELS FINANCE) ── */}
+        <aside className="bo-cv-left-sidebar" aria-label="13-Step Underwriting Verification Workflow">
           <div className="bo-cv-sidebar-header">
             <div className="bo-cv-sidebar-heading-row">
               <div>
                 <h2 className="bo-cv-sidebar-title">Verification Steps</h2>
-                <span className="bo-cv-sidebar-subtitle">11-Step Underwriting</span>
+                <span className="bo-cv-sidebar-subtitle">13-Step Workflow</span>
               </div>
               <span className="bo-cv-step-count">{VERIFICATION_WORKFLOW_STEPS.length}</span>
             </div>
@@ -12309,27 +12592,28 @@ export default function CustomerVerification() {
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
-              STEP 14: PD VERIFICATION
+              STEP 14: PD SHEET (STEP 09)
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 14 && (
-            <div className="bo-cv-step-panel">
+            <div className="bo-cv-step-panel bo-cv-pd-sheet-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
                   <div className="bo-cv-step-badge-num">09</div>
                   <div>
-                    <h2 className="bo-cv-step-panel-title">Personal Discussion (PD) Verification</h2>
+                    <h2 className="bo-cv-step-panel-title">PD Sheet</h2>
                     <p className="bo-cv-step-panel-desc">
-                      Configure and record personal discussion verification mode with the applicant.
+                      Record personal discussion findings, borrower profiles, and credit underwriting observations.
                     </p>
                   </div>
                 </div>
                 <span className="bo-cv-step-tag-pill">Step 09 of 12</span>
               </div>
 
-              <div className="bo-cv-pd-container">
-                <div className="bo-cv-pd-select-card">
-                  <label htmlFor="bo-cv-pd-type-select" className="bo-cv-pd-select-label">
-                    SELECT PD VERIFICATION MODE
+              {/* Compact Top Header: PD Mode | Applicant */}
+              <div className="bo-cv-pd-top-bar">
+                <div className="bo-cv-pd-top-col">
+                  <label htmlFor="bo-cv-pd-type-select" className="bo-cv-pd-top-label">
+                    PD Mode
                   </label>
                   <select
                     id="bo-cv-pd-type-select"
@@ -12351,46 +12635,292 @@ export default function CustomerVerification() {
                     )}
                   </select>
                   {pdVerificationTypesError && (
-                    <div style={{ fontSize: '12px', color: '#dc2626', marginTop: '6px' }}>
-                      {pdVerificationTypesError}
-                    </div>
+                    <div className="bo-cv-pd-type-error">{pdVerificationTypesError}</div>
                   )}
                 </div>
 
-                {/* Dynamic PD Verification Mode Panel */}
-                {selectedPdType && (
-                  <div className="bo-cv-pd-result-panel">
-                    <div className="bo-cv-pd-result-header">
-                      <div className="bo-cv-pd-mode-icon">
-                        {PhoneIcon && <PhoneIcon size={24} />}
-                      </div>
-                      <div>
-                        <h3>{selectedPdType.pdVerificationTypeName} selected</h3>
-                        <p>
-                          Personal discussion verification session for applicant #{verificationData.customerId}.
-                        </p>
+                <div className="bo-cv-pd-top-col">
+                  <span className="bo-cv-pd-top-label">Applicant</span>
+                  <div className="bo-cv-pd-applicant-display">
+                    {applicantName}
+                  </div>
+                </div>
+              </div>
+
+              {/* Continuous 14-Field PD Sheet Form */}
+              <section className="bo-cv-pd-sheet-body" aria-label="PD Sheet Details">
+                {recommendationSheets.map((sheet) => (
+                  <div className="bo-cv-pd-fields-container" key={sheet.id}>
+                    {/* 1. Date of PD Visit & 2. PD Done By (2-column row) */}
+                    <div className="bo-cv-pd-grid bo-cv-pd-grid--2col">
+                      <label className="bo-cv-pd-field">
+                        <span className="bo-cv-pd-field-label">
+                          <span className="bo-cv-pd-field-num">1</span> Date of PD Visit
+                        </span>
+                        <input
+                          type="date"
+                          value={sheet.pdVisitDate}
+                          onChange={(e) => updateRecommendationSheet(sheet.id, 'pdVisitDate', e.target.value)}
+                        />
+                      </label>
+
+                      <label className="bo-cv-pd-field">
+                        <span className="bo-cv-pd-field-label">
+                          <span className="bo-cv-pd-field-num">2</span> PD Done By
+                        </span>
+                        <input
+                          type="text"
+                          readOnly
+                          className="bo-cv-pd-readonly-input"
+                          value={getBackOfficeAuth()?.name || ''}
+                        />
+                      </label>
+                    </div>
+
+                    {/* 3. Address Where PD Was Conducted (Full width) */}
+                    <label className="bo-cv-pd-field bo-cv-pd-field--full">
+                      <span className="bo-cv-pd-field-label">
+                        <span className="bo-cv-pd-field-num">3</span> Address Where PD Was Conducted
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="Enter discussion / visit address"
+                        value={sheet.pdAddress}
+                        onChange={(e) => updateRecommendationSheet(sheet.id, 'pdAddress', e.target.value)}
+                      />
+                    </label>
+
+                    {/* 4. Personal Discussion / Site Visit & 5. End Use of the Loan (2-column row) */}
+                    <div className="bo-cv-pd-grid bo-cv-pd-grid--2col">
+                      <label className="bo-cv-pd-field">
+                        <span className="bo-cv-pd-field-label">
+                          <span className="bo-cv-pd-field-num">4</span> Personal Discussion / Site Visit
+                        </span>
+                        <input
+                          type="text"
+                          placeholder="Enter visit details"
+                          value={sheet.personalDiscussionSiteVisit}
+                          onChange={(e) => updateRecommendationSheet(sheet.id, 'personalDiscussionSiteVisit', e.target.value)}
+                        />
+                      </label>
+
+                      <label className="bo-cv-pd-field">
+                        <span className="bo-cv-pd-field-label">
+                          <span className="bo-cv-pd-field-num">5</span> End Use of the Loan
+                        </span>
+                        <input
+                          type="text"
+                          placeholder="Describe intended use"
+                          value={sheet.endUse}
+                          onChange={(e) => updateRecommendationSheet(sheet.id, 'endUse', e.target.value)}
+                        />
+                      </label>
+                    </div>
+
+                    {/* 6. Disbursement Transaction (Full width) */}
+                    <label className="bo-cv-pd-field bo-cv-pd-field--full">
+                      <span className="bo-cv-pd-field-label">
+                        <span className="bo-cv-pd-field-num">6</span> Disbursement Transaction
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="Enter transaction details"
+                        value={sheet.disbursementTransaction}
+                        onChange={(e) => updateRecommendationSheet(sheet.id, 'disbursementTransaction', e.target.value)}
+                      />
+                    </label>
+
+                    {/* 7. Applicant Profile & 8. Co-Applicant Profile (2-column row) */}
+                    <div className="bo-cv-pd-grid bo-cv-pd-grid--2col">
+                      <label className="bo-cv-pd-field bo-cv-pd-field--narrative">
+                        <span className="bo-cv-pd-field-label">
+                          <span className="bo-cv-pd-field-num">7</span> Applicant Profile
+                          <em className="bo-cv-pd-char-hint">Maximum 1,000 characters</em>
+                        </span>
+                        <textarea
+                          rows={4}
+                          maxLength={1000}
+                          placeholder="Summarize applicant background, income and repayment capacity."
+                          value={sheet.applicantProfile}
+                          onChange={(e) => updateRecommendationSheet(sheet.id, 'applicantProfile', e.target.value)}
+                        />
+                        <small className="bo-cv-pd-char-counter">{(sheet.applicantProfile || '').length}/1000</small>
+                      </label>
+
+                      <label className="bo-cv-pd-field bo-cv-pd-field--narrative">
+                        <span className="bo-cv-pd-field-label">
+                          <span className="bo-cv-pd-field-num">8</span> Co-Applicant Profile
+                          <em className="bo-cv-pd-char-hint">Maximum 1,000 characters</em>
+                        </span>
+                        <textarea
+                          rows={4}
+                          maxLength={1000}
+                          placeholder="Summarize co-applicant background and financial position."
+                          value={sheet.coApplicantProfile}
+                          onChange={(e) => updateRecommendationSheet(sheet.id, 'coApplicantProfile', e.target.value)}
+                        />
+                        <small className="bo-cv-pd-char-counter">{(sheet.coApplicantProfile || '').length}/1000</small>
+                      </label>
+                    </div>
+
+                    {/* 9. About Bureau Report of Applicant & Co-Applicant (Full width) */}
+                    <label className="bo-cv-pd-field bo-cv-pd-field--full">
+                      <span className="bo-cv-pd-field-label">
+                        <span className="bo-cv-pd-field-num">9</span> About Bureau Report of Applicant &amp; Co-Applicant
+                      </span>
+                      <textarea
+                        rows={3}
+                        placeholder="Enter bureau observations for applicant & co-applicant"
+                        value={sheet.bureauReport}
+                        onChange={(e) => updateRecommendationSheet(sheet.id, 'bureauReport', e.target.value)}
+                      />
+                    </label>
+
+                    {/* 10. About Proposed Collateral (Including Legal and Technical) */}
+                    <div className="bo-cv-pd-field bo-cv-pd-field--full bo-cv-pd-collateral-group">
+                      <span className="bo-cv-pd-field-label">
+                        <span className="bo-cv-pd-field-num">10</span> About Proposed Collateral (Including Legal and Technical)
+                      </span>
+                      <div className="bo-cv-pd-collateral-subfields">
+                        <label className="bo-cv-pd-subfield">
+                          <span className="bo-cv-pd-subfield-label">Proposed Collateral Details</span>
+                          <textarea
+                            rows={3}
+                            placeholder="Enter proposed collateral details"
+                            value={sheet.proposedCollateral}
+                            onChange={(e) => updateRecommendationSheet(sheet.id, 'proposedCollateral', e.target.value)}
+                          />
+                        </label>
+                        <label className="bo-cv-pd-subfield">
+                          <span className="bo-cv-pd-subfield-label">Legal &amp; Technical Review</span>
+                          <textarea
+                            rows={3}
+                            placeholder="Enter legal and technical review findings"
+                            value={sheet.legalAndTechnical}
+                            onChange={(e) => updateRecommendationSheet(sheet.id, 'legalAndTechnical', e.target.value)}
+                          />
+                        </label>
                       </div>
                     </div>
-                    <div className="bo-cv-pd-details-grid">
-                      <div className="bo-cv-pd-detail-item">
-                        <small>Applicant</small>
-                        <strong>{verificationData.customerName}</strong>
+
+                    {/* 11. Strengths & 12. Concerns (If Any) (2-column row) */}
+                    <div className="bo-cv-pd-grid bo-cv-pd-grid--2col">
+                      <label className="bo-cv-pd-field">
+                        <span className="bo-cv-pd-field-label">
+                          <span className="bo-cv-pd-field-num">11</span> Strengths
+                        </span>
+                        <textarea
+                          rows={3}
+                          placeholder="Enter key applicant / deal strengths"
+                          value={sheet.strengths}
+                          onChange={(e) => updateRecommendationSheet(sheet.id, 'strengths', e.target.value)}
+                        />
+                      </label>
+
+                      <label className="bo-cv-pd-field">
+                        <span className="bo-cv-pd-field-label">
+                          <span className="bo-cv-pd-field-num">12</span> Concerns (If Any)
+                        </span>
+                        <textarea
+                          rows={3}
+                          placeholder="Enter underwriting concerns or risks observed"
+                          value={sheet.concerns}
+                          onChange={(e) => updateRecommendationSheet(sheet.id, 'concerns', e.target.value)}
+                        />
+                      </label>
+                    </div>
+
+                    {/* 13. Recommendation (Full width) */}
+                    <label className="bo-cv-pd-field bo-cv-pd-field--full">
+                      <span className="bo-cv-pd-field-label">
+                        <span className="bo-cv-pd-field-num">13</span> Recommendation
+                      </span>
+                      <textarea
+                        rows={3}
+                        placeholder="Enter credit recommendation notes"
+                        value={sheet.recommendation}
+                        onChange={(e) => {
+                          updateRecommendationSheet(sheet.id, 'recommendation', e.target.value);
+                          if (finalRemarksError && e.target.value.trim()) {
+                            setFinalRemarksError('');
+                          }
+                          if (finalRemarksBanner) {
+                            setFinalRemarksBanner(null);
+                          }
+                        }}
+                      />
+                    </label>
+
+                    {/* 14. Case Specific Sanction Condition */}
+                    <div className="bo-cv-pd-field bo-cv-pd-field--full bo-cv-pd-condition-group">
+                      <div className="bo-cv-pd-condition-header">
+                        <span className="bo-cv-pd-field-label">
+                          <span className="bo-cv-pd-field-num">14</span> Case Specific Sanction Condition
+                        </span>
+                        <button
+                          type="button"
+                          className="bo-cv-rec-condition-add"
+                          onClick={() => addSanctionCondition(sheet.id)}
+                          aria-label="Add sanction condition point"
+                        >
+                          {PlusIcon && <PlusIcon size={14} />} <span>Add Condition</span>
+                        </button>
                       </div>
-                      <div className="bo-cv-pd-detail-item">
-                        <small>Contact Mobile</small>
-                        <strong>{verificationData.personalInformation?.mobile ? `+91 ${verificationData.personalInformation.mobile}` : 'Available'}</strong>
-                      </div>
-                      <div className="bo-cv-pd-detail-item">
-                        <small>Session Type</small>
-                        <span className="bo-cv-pill-verified">{selectedPdType.pdVerificationTypeName}</span>
-                      </div>
-                      <div className="bo-cv-pd-detail-item">
-                        <small>Verification Status</small>
-                        <span className="bo-cv-pill-fetching">Ready for Underwriter Connection</span>
+                      <div className="bo-cv-rec-condition-list">
+                        {sheet.otherSanctionConditions.map((condition, conditionIndex) => (
+                          <div className="bo-cv-rec-condition-row" key={`${sheet.id}-condition-${conditionIndex}`}>
+                            <span className="bo-cv-rec-condition-number">{conditionIndex + 1}</span>
+                            <textarea
+                              rows={2}
+                              placeholder={`Enter condition ${conditionIndex + 1}`}
+                              value={condition}
+                              onChange={(e) => updateSanctionCondition(sheet.id, conditionIndex, e.target.value)}
+                              aria-label={`Sanction condition ${conditionIndex + 1}`}
+                            />
+                            <button
+                              type="button"
+                              className="bo-cv-rec-condition-remove"
+                              onClick={() => removeSanctionCondition(sheet.id, conditionIndex)}
+                              disabled={sheet.otherSanctionConditions.length === 1}
+                              aria-label={`Remove sanction condition ${conditionIndex + 1}`}
+                              title={sheet.otherSanctionConditions.length === 1 ? 'At least one condition point is required' : 'Remove this condition'}
+                            >
+                              {MinusIcon && <MinusIcon size={15} />}
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
+                ))}
+              </section>
+
+              {/* Bottom Action Area */}
+              <div className="bo-cv-pd-footer">
+                {finalRemarksError && (
+                  <div className="bo-cv-final-remarks-error">
+                    {AlertCircleIcon && <AlertCircleIcon size={14} />}
+                    <span>{finalRemarksError}</span>
+                  </div>
                 )}
+
+                {finalRemarksBanner && (
+                  <div className={`bo-cv-final-remarks-banner bo-cv-final-remarks-banner--${finalRemarksBanner.type}`}>
+                    {finalRemarksBanner.type === 'info' && InfoIcon && <InfoIcon size={16} />}
+                    {finalRemarksBanner.type === 'error' && AlertCircleIcon && <AlertCircleIcon size={16} />}
+                    <span>{finalRemarksBanner.message}</span>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  className="bo-btn bo-btn--primary bo-cv-btn-send-credit-officer"
+                  onClick={handleSendToCreditOfficer}
+                  disabled={isSendingToCreditOfficer}
+                >
+                  {SendIcon && <SendIcon size={15} />}
+                  <span>{isSendingToCreditOfficer ? 'Sending...' : 'Send to Credit Officer'}</span>
+                </button>
               </div>
             </div>
           )}
@@ -19091,193 +19621,6 @@ export default function CustomerVerification() {
             )
           )}
 
-          {/* PD field assessment is shown directly below the selected PD mode. */}
-          {activeStep === 14 && (
-            <>
-              <div className="bo-cv-step-panel bo-cv-pd-assessment-panel">
-                <div className="bo-cv-step-panel-header">
-                  <div className="bo-cv-step-header-left">
-                    <div className="bo-cv-step-badge-num">09</div>
-                    <div>
-                      <h2 className="bo-cv-step-panel-title">PD Field Assessment</h2>
-                      <p className="bo-cv-step-panel-desc">
-                        Record the personal discussion findings and underwriting observations for this application.
-                      </p>
-                    </div>
-                  </div>
-                  <span className="bo-cv-step-tag-pill">Step 09 of 12</span>
-                </div>
-
-                <section className="bo-cv-recommendation-sheet" aria-label="Credit recommendation assessment">
-                  {recommendationSheets.map((sheet) => (
-                    <article className="bo-cv-pd-form" key={sheet.id}>
-                      <div className="bo-cv-pd-form-section-head">
-                        <div className="bo-cv-pd-form-section-number">1</div>
-                        <div><h3>Visit details</h3><p>Capture the personal discussion and end-use information.</p></div>
-                      </div>
-
-                      <div className="bo-cv-rec-fields-grid">
-                        <label className="bo-cv-rec-field">
-                          <span>Date of PD visit</span>
-                          <input type="date" value={sheet.pdVisitDate} onChange={(e) => updateRecommendationSheet(sheet.id, 'pdVisitDate', e.target.value)} />
-                        </label>
-                        <label className="bo-cv-rec-field">
-                          <span>End-use categorization</span>
-                          <input type="text" placeholder="e.g. Business expansion" value={sheet.endUseCategory} onChange={(e) => updateRecommendationSheet(sheet.id, 'endUseCategory', e.target.value)} />
-                        </label>
-                        <label className="bo-cv-rec-field bo-cv-rec-field--wide">
-                          <span>Address where PD was conducted</span>
-                          <input type="text" placeholder="Enter discussion / visit address" value={sheet.pdAddress} onChange={(e) => updateRecommendationSheet(sheet.id, 'pdAddress', e.target.value)} />
-                        </label>
-                        <label className="bo-cv-rec-field">
-                          <span>Personal discussion / site visit</span>
-                          <input type="text" placeholder="Enter visit details" value={sheet.personalDiscussionSiteVisit} onChange={(e) => updateRecommendationSheet(sheet.id, 'personalDiscussionSiteVisit', e.target.value)} />
-                        </label>
-                        <label className="bo-cv-rec-field">
-                          <span>End use</span>
-                          <input type="text" placeholder="Describe intended use" value={sheet.endUse} onChange={(e) => updateRecommendationSheet(sheet.id, 'endUse', e.target.value)} />
-                        </label>
-                        <label className="bo-cv-rec-field">
-                          <span>Disbursement transaction</span>
-                          <input type="text" placeholder="Enter transaction details" value={sheet.disbursementTransaction} onChange={(e) => updateRecommendationSheet(sheet.id, 'disbursementTransaction', e.target.value)} />
-                        </label>
-                      </div>
-
-                      <div className="bo-cv-pd-form-section-head">
-                        <div className="bo-cv-pd-form-section-number">2</div>
-                        <div><h3>Applicant profiles</h3><p>Write a brief profile for the applicant and co-applicant.</p></div>
-                      </div>
-                      <div className="bo-cv-rec-narratives-grid">
-                        {[
-                          ['applicantProfile', 'Applicant profile', 'Summarize applicant background, income and repayment capacity.'],
-                          ['coApplicantProfile', 'Co-applicant profile', 'Summarize co-applicant background and financial position.'],
-                        ].map(([field, label, placeholder]) => (
-                          <label className="bo-cv-rec-field bo-cv-rec-field--narrative" key={field}>
-                            <span>{label} <em>Maximum 1,000 characters</em></span>
-                            <textarea rows={5} maxLength={1000} placeholder={placeholder} value={sheet[field]} onChange={(e) => updateRecommendationSheet(sheet.id, field, e.target.value)} />
-                            <small>{sheet[field].length}/1000</small>
-                          </label>
-                        ))}
-                      </div>
-
-                      <div className="bo-cv-pd-form-section-head">
-                        <div className="bo-cv-pd-form-section-number">3</div>
-                        <div><h3>Credit review and recommendation</h3><p>Record the key findings and any conditions for sanction.</p></div>
-                      </div>
-                      <div className="bo-cv-rec-findings-grid">
-                        {[
-                          ['bureauReport', 'Bureau report — applicant & co-applicant'],
-                          ['proposedCollateral', 'Proposed collateral'],
-                          ['legalAndTechnical', 'Legal and technical review'],
-                          ['strengths', 'Strengths'],
-                          ['concerns', 'Concerns, if any'],
-                          ['recommendation', 'Recommendation'],
-                        ].map(([field, label]) => (
-                          <label className="bo-cv-rec-field bo-cv-rec-field--narrative" key={field}>
-                            <span>{label}</span>
-                            <textarea rows={3} placeholder={`Enter ${label.toLowerCase()}`} value={sheet[field]} onChange={(e) => updateRecommendationSheet(sheet.id, field, e.target.value)} />
-                          </label>
-                        ))}
-                        <div className="bo-cv-rec-field bo-cv-rec-field--narrative bo-cv-rec-condition-field">
-                          <div className="bo-cv-rec-condition-label-row">
-                            <span>Other specified sanction conditions</span>
-                            <button
-                              type="button"
-                              className="bo-cv-rec-condition-add"
-                              onClick={() => addSanctionCondition(sheet.id)}
-                              aria-label="Add sanction condition point"
-                            >
-                              {PlusIcon && <PlusIcon size={14} />} <span>Add point</span>
-                            </button>
-                          </div>
-                          <div className="bo-cv-rec-condition-list">
-                            {sheet.otherSanctionConditions.map((condition, conditionIndex) => (
-                              <div className="bo-cv-rec-condition-row" key={`${sheet.id}-condition-${conditionIndex}`}>
-                                <span className="bo-cv-rec-condition-number">{conditionIndex + 1}</span>
-                                <textarea
-                                  rows={3}
-                                  placeholder="Enter sanction condition"
-                                  value={condition}
-                                  onChange={(e) => updateSanctionCondition(sheet.id, conditionIndex, e.target.value)}
-                                  aria-label={`Sanction condition ${conditionIndex + 1}`}
-                                />
-                                <button
-                                  type="button"
-                                  className="bo-cv-rec-condition-remove"
-                                  onClick={() => removeSanctionCondition(sheet.id, conditionIndex)}
-                                  disabled={sheet.otherSanctionConditions.length === 1}
-                                  aria-label={`Remove sanction condition ${conditionIndex + 1}`}
-                                  title={sheet.otherSanctionConditions.length === 1 ? 'At least one condition point is required' : 'Remove this point'}
-                                >
-                                  {MinusIcon && <MinusIcon size={15} />}
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </section>
-              </div>
-
-              {/* Final Remarks & Forwarding Panel strictly inside Step 15 */}
-              <section className="bo-cv-final-remarks-panel" aria-labelledby="bo-cv-final-remarks-heading">
-                <div className="bo-cv-final-remarks-header">
-                  <h3 id="bo-cv-final-remarks-heading" className="bo-cv-final-remarks-title">
-                    FINAL REMARKS
-                  </h3>
-                </div>
-
-                <div className="bo-cv-final-remarks-body">
-                  <textarea
-                    id="bo-cv-final-remarks-input"
-                    className={`bo-cv-final-remarks-textarea ${finalRemarksError ? 'is-invalid' : ''}`}
-                    rows={4}
-                    placeholder="Enter remarks for Credit Officer..."
-                    value={finalRemarks}
-                    onChange={(e) => {
-                      setFinalRemarks(e.target.value);
-                      if (finalRemarksError && e.target.value.trim()) {
-                        setFinalRemarksError('');
-                      }
-                      if (finalRemarksBanner) {
-                        setFinalRemarksBanner(null);
-                      }
-                    }}
-                  />
-
-                  {finalRemarksError && (
-                    <div className="bo-cv-final-remarks-error">
-                      {AlertCircleIcon && <AlertCircleIcon size={14} />}
-                      <span>{finalRemarksError}</span>
-                    </div>
-                  )}
-
-                  {finalRemarksBanner && (
-                    <div className={`bo-cv-final-remarks-banner bo-cv-final-remarks-banner--${finalRemarksBanner.type}`}>
-                      {finalRemarksBanner.type === 'info' && InfoIcon && <InfoIcon size={16} />}
-                      {finalRemarksBanner.type === 'error' && AlertCircleIcon && <AlertCircleIcon size={16} />}
-                      <span>{finalRemarksBanner.message}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="bo-cv-final-remarks-footer">
-                  <button
-                    type="button"
-                    className="bo-btn bo-btn--primary bo-cv-btn-send-credit-officer"
-                    onClick={handleSendToCreditOfficer}
-                    disabled={isSendingToCreditOfficer}
-                  >
-                    {SendIcon && <SendIcon size={15} />}
-                    <span>{isSendingToCreditOfficer ? 'Sending...' : 'Send to Credit Officer'}</span>
-                  </button>
-                </div>
-              </section>
-            </>
-          )}
-
           {/* ══════════════════════════════════════════════════════════════════
               STEP 12: RECOMMENDATION SHEET (CREDIT RECOMMENDATION PLACEHOLDER)
           ══════════════════════════════════════════════════════════════════ */}
@@ -19293,7 +19636,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 12 of 12</span>
+                <span className="bo-cv-step-tag-pill">Step 12 of 13</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -19303,6 +19646,484 @@ export default function CustomerVerification() {
                 <span className="bo-cv-placeholder-badge">CREDIT RECOMMENDATION</span>
                 <h3>Credit Recommendation Sheet</h3>
                 <p>Final credit underwriter recommendation and approval decision summary.</p>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              STEP 13: FINAL APPLICATION ACTION (APPLICATION WORKFLOW)
+          ══════════════════════════════════════════════════════════════════ */}
+          {activeStep === 18 && (
+            <div className="bo-cv-step-panel bo-cv-workflow-panel">
+              <div className="bo-cv-step-panel-header">
+                <div className="bo-cv-step-header-left">
+                  <div className="bo-cv-step-badge-num">13</div>
+                  <div>
+                    <h2 className="bo-cv-step-panel-title">Final Application Action &amp; Disposition</h2>
+                    <p className="bo-cv-step-panel-desc">
+                      Execute application-level workflow action: return to Relationship Manager for corrections or submit to Credit Manager.
+                    </p>
+                  </div>
+                </div>
+                <span className="bo-cv-step-tag-pill">Step 13 of 13</span>
+              </div>
+
+              {/* Action Feedback Banner */}
+              {workflowActionFeedback && (
+                <div
+                  className={`bo-cv-action-feedback-banner bo-cv-action-feedback-banner--${workflowActionFeedback.type}`}
+                  style={{
+                    margin: '16px 0',
+                    padding: '14px 18px',
+                    borderRadius: '8px',
+                    backgroundColor: workflowActionFeedback.type === 'success' ? '#ecfdf5' : '#fef2f2',
+                    border: `1px solid ${workflowActionFeedback.type === 'success' ? '#a7f3d0' : '#fecaca'}`,
+                    color: workflowActionFeedback.type === 'success' ? '#065f46' : '#991b1b',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    fontSize: '0.9rem',
+                    fontWeight: 500,
+                  }}
+                >
+                  {workflowActionFeedback.type === 'success' ? (
+                    CheckCircleIcon ? <CheckCircleIcon size={20} /> : <span>✓</span>
+                  ) : (
+                    AlertCircleIcon ? <AlertCircleIcon size={20} /> : <span>⚠</span>
+                  )}
+                  <span>{workflowActionFeedback.message}</span>
+                </div>
+              )}
+
+              {/* Underwriting Readiness Summary Card */}
+              <div
+                className="bo-cv-readiness-summary-card"
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  padding: '20px',
+                  marginBottom: '24px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600, color: '#0f172a' }}>
+                      Underwriting &amp; Verification Readiness Assessment
+                    </h3>
+                    <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#64748b' }}>
+                      Verification checks evaluated by readiness engine before enabling submission to Credit Manager.
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <button
+                      type="button"
+                      onClick={evaluateStep13Readiness}
+                      disabled={step13Readiness.isEvaluating}
+                      style={{
+                        background: '#f8fafc',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '6px',
+                        padding: '6px 12px',
+                        fontSize: '0.8rem',
+                        fontWeight: 500,
+                        color: '#475569',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      {RefreshCwIcon && <RefreshCwIcon size={13} className={step13Readiness.isEvaluating ? 'bo-spin' : ''} />}
+                      <span>{step13Readiness.isEvaluating ? 'Re-evaluating...' : 'Refresh Status'}</span>
+                    </button>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 14px',
+                        borderRadius: '20px',
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
+                        backgroundColor: step13Readiness.isReady ? '#dcfce7' : '#fef3c7',
+                        color: step13Readiness.isReady ? '#15803d' : '#b45309',
+                        border: `1px solid ${step13Readiness.isReady ? '#86efac' : '#fde68a'}`,
+                      }}
+                    >
+                      {step13Readiness.isReady ? (
+                        <>✓ Underwriting Complete &amp; Credit Ready</>
+                      ) : (
+                        <>⏳ Underwriting In Progress</>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Readiness Criteria Grid */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '12px',
+                    marginTop: '12px',
+                  }}
+                >
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>KYC Document Matrix</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
+                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                        {step13Readiness.stepVerifsCount}/6 Core KYC
+                      </strong>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.stepVerifsCount >= 6 ? '#16a34a' : '#ea580c' }}>
+                        {step13Readiness.stepVerifsCount >= 6 ? '✓ Verified' : 'Incomplete'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Legal Opinion Report</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
+                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                        {step13Readiness.hasLegal ? 'Uploaded' : 'Missing'}
+                      </strong>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.hasLegal ? '#16a34a' : '#ea580c' }}>
+                        {step13Readiness.hasLegal ? '✓ Ready' : 'Pending'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Technical Valuation</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
+                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                        {step13Readiness.hasTechnical ? 'Uploaded' : 'Missing'}
+                      </strong>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.hasTechnical ? '#16a34a' : '#ea580c' }}>
+                        {step13Readiness.hasTechnical ? '✓ Ready' : 'Pending'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>CIBIL / Credit Bureau</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
+                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                        {step13Readiness.hasCibil ? 'Available' : 'Missing'}
+                      </strong>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.hasCibil ? '#16a34a' : '#ea580c' }}>
+                        {step13Readiness.hasCibil ? '✓ Ready' : 'Pending'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Eligibility Assessment</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
+                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                        {step13Readiness.hasEligibility ? 'Calculated' : 'Pending'}
+                      </strong>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.hasEligibility ? '#16a34a' : '#ea580c' }}>
+                        {step13Readiness.hasEligibility ? '✓ Complete' : 'Pending'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Document Rejections</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
+                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                        {step13Readiness.unresolvedRejectionsCount} Unresolved
+                      </strong>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.unresolvedRejectionsCount === 0 ? '#16a34a' : '#dc2626' }}>
+                        {step13Readiness.unresolvedRejectionsCount === 0 ? '✓ None Active' : 'Must Resolve'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dual Action Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '28px' }}>
+                {/* Card 1: Return to RM */}
+                <div
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #fde68a',
+                    borderTop: '4px solid #f59e0b',
+                    borderRadius: '10px',
+                    padding: '24px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    boxShadow: '0 2px 4px rgba(245, 158, 11, 0.08)',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '8px',
+                          backgroundColor: '#fef3c7',
+                          color: '#d97706',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {RotateCcwIcon ? <RotateCcwIcon size={20} /> : <span>↩</span>}
+                      </div>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#92400e' }}>
+                          Return Application to RM
+                        </h4>
+                        <span style={{ fontSize: '0.75rem', color: '#b45309', fontWeight: 500 }}>
+                          Status Transition: 2 (Logged to HO) → 6 (Returned to RM)
+                        </span>
+                      </div>
+                    </div>
+                    <p style={{ fontSize: '0.84rem', color: '#475569', lineHeight: 1.5, margin: '0 0 16px' }}>
+                      Remand the complete application back to the Relationship Manager for corrections, missing documents, or applicant data rectifications. Editing access will be re-enabled for the RM. Mandatory remarks required.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenReturnToRmModal}
+                    style={{
+                      background: '#d97706',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '12px 18px',
+                      fontSize: '0.9rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      transition: 'background 0.2s',
+                    }}
+                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#b45309')}
+                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#d97706')}
+                  >
+                    {RotateCcwIcon ? <RotateCcwIcon size={16} /> : <span>↩</span>}
+                    <span>Return to Relationship Manager</span>
+                  </button>
+                </div>
+
+                {/* Card 2: Send to Credit Manager */}
+                <div
+                  style={{
+                    background: '#ffffff',
+                    border: step13Readiness.isReady ? '1px solid #86efac' : '1px solid #e2e8f0',
+                    borderTop: `4px solid ${step13Readiness.isReady ? '#16a34a' : '#94a3b8'}`,
+                    borderRadius: '10px',
+                    padding: '24px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    boxShadow: step13Readiness.isReady ? '0 2px 4px rgba(22, 163, 74, 0.08)' : '0 1px 3px rgba(0,0,0,0.05)',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '8px',
+                          backgroundColor: step13Readiness.isReady ? '#dcfce7' : '#f1f5f9',
+                          color: step13Readiness.isReady ? '#16a34a' : '#64748b',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {SendIcon ? <SendIcon size={20} /> : <span>➤</span>}
+                      </div>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: step13Readiness.isReady ? '#14532d' : '#334155' }}>
+                          Send to Credit Manager
+                        </h4>
+                        <span style={{ fontSize: '0.75rem', color: step13Readiness.isReady ? '#15803d' : '#64748b', fontWeight: 500 }}>
+                          Status Transition: 2 (Logged to HO) → 3 (Under Review)
+                        </span>
+                      </div>
+                    </div>
+                    <p style={{ fontSize: '0.84rem', color: '#475569', lineHeight: 1.5, margin: '0 0 16px' }}>
+                      Forward fully verified and underwritten application file to Credit Manager for credit sanction assessment. Requires 6/6 KYC documents, Legal, Technical, CIBIL, and Eligibility completion.
+                    </p>
+                    {!step13Readiness.isReady && (
+                      <div
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          backgroundColor: '#fef3c7',
+                          color: '#92400e',
+                          fontSize: '0.78rem',
+                          marginBottom: '16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        {AlertTriangleIcon ? <AlertTriangleIcon size={14} /> : <span>⚠</span>}
+                        <span>Cannot submit: Complete required underwriting steps before forwarding.</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenSendToCreditModal}
+                    disabled={!step13Readiness.isReady}
+                    style={{
+                      background: step13Readiness.isReady ? '#059669' : '#cbd5e1',
+                      color: step13Readiness.isReady ? '#ffffff' : '#64748b',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '12px 18px',
+                      fontSize: '0.9rem',
+                      fontWeight: 600,
+                      cursor: step13Readiness.isReady ? 'pointer' : 'not-allowed',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      transition: 'background 0.2s',
+                    }}
+                    onMouseOver={(e) => {
+                      if (step13Readiness.isReady) e.currentTarget.style.backgroundColor = '#047857';
+                    }}
+                    onMouseOut={(e) => {
+                      if (step13Readiness.isReady) e.currentTarget.style.backgroundColor = '#059669';
+                    }}
+                  >
+                    {CheckCircleIcon ? <CheckCircleIcon size={16} /> : <span>✓</span>}
+                    <span>Send to Credit Manager</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Workflow History Section */}
+              <div
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  padding: '24px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600, color: '#0f172a' }}>
+                      Application Workflow History &amp; Audit Trail
+                    </h3>
+                    <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#64748b' }}>
+                      Log of all application returns, resubmissions, and credit manager handoffs for Customer #{resolvedTargetCustomerId}.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchWorkflowHistory}
+                    disabled={isFetchingWorkflowHistory}
+                    style={{
+                      background: '#f8fafc',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '6px',
+                      padding: '6px 12px',
+                      fontSize: '0.8rem',
+                      fontWeight: 500,
+                      color: '#475569',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    {RefreshCwIcon && <RefreshCwIcon size={13} className={isFetchingWorkflowHistory ? 'bo-spin' : ''} />}
+                    <span>{isFetchingWorkflowHistory ? 'Refreshing...' : 'Refresh History'}</span>
+                  </button>
+                </div>
+
+                {workflowHistoryError && (
+                  <div style={{ padding: '10px 14px', borderRadius: '6px', backgroundColor: '#fef2f2', color: '#b91c1c', fontSize: '0.82rem', marginBottom: '14px' }}>
+                    {workflowHistoryError}
+                  </div>
+                )}
+
+                {isFetchingWorkflowHistory ? (
+                  <div style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '0.88rem' }}>
+                    Loading workflow transition logs...
+                  </div>
+                ) : workflowHistory.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '36px 20px', border: '1px dashed #cbd5e1', borderRadius: '8px', color: '#64748b' }}>
+                    <div style={{ fontSize: '1.4rem', marginBottom: '6px' }}>📋</div>
+                    <strong style={{ fontSize: '0.9rem', color: '#334155' }}>No Previous Workflow Transitions</strong>
+                    <p style={{ margin: '4px 0 0', fontSize: '0.82rem' }}>
+                      This application has not undergone any returns or handoffs yet. Actions taken above will appear here in chronological order.
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {workflowHistory.map((item, idx) => {
+                      const actionType = String(item.actionType || item.ActionType || '').toLowerCase();
+                      const isReturn = actionType.includes('return') || item.nextStatus === 6;
+                      const isCredit = actionType.includes('credit') || item.nextStatus === 3;
+                      const isResubmit = actionType.includes('resubmit') || item.nextStatus === 2;
+                      const role = item.performedByRole || item.PerformedByRole || 'BackOffice';
+                      const actorId = item.performedByUserId || item.PerformedByUserId || item.performedByName || 'Operator';
+                      const remarks = item.remarks || item.Remarks || '—';
+                      const createdDate = item.createdDate || item.CreatedDate || item.createdAt || item.CreatedAt;
+
+                      return (
+                        <div
+                          key={item.workflowTransitionId || item.id || idx}
+                          style={{
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px',
+                            padding: '16px',
+                            backgroundColor: isReturn ? '#fffbeb' : isCredit ? '#f0fdf4' : '#f8fafc',
+                            borderLeft: `4px solid ${isReturn ? '#f59e0b' : isCredit ? '#10b981' : '#3b82f6'}`,
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span
+                                style={{
+                                  padding: '4px 10px',
+                                  borderRadius: '12px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 700,
+                                  backgroundColor: isReturn ? '#fef3c7' : isCredit ? '#dcfce7' : '#dbeafe',
+                                  color: isReturn ? '#b45309' : isCredit ? '#15803d' : '#1d4ed8',
+                                }}
+                              >
+                                {isReturn ? '↩ Returned to RM (2 → 6)' : isCredit ? '✓ Sent to Credit Manager (2 → 3)' : isResubmit ? '⚡ Resubmitted to BO (6 → 2)' : (item.actionType || 'Workflow Action')}
+                              </span>
+                              <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                by <strong>{role}</strong> (ID: {actorId})
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                              {createdDate ? new Date(createdDate).toLocaleString() : '—'}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#334155', lineHeight: 1.5, background: '#ffffff', padding: '10px 14px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                            <span style={{ fontWeight: 600, color: '#475569', marginRight: '6px' }}>Remarks:</span>
+                            {remarks}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -19624,6 +20445,194 @@ export default function CustomerVerification() {
                 disabled={deleteDocModal.isDeleting}
               >
                 {deleteDocModal.isDeleting ? 'Deleting...' : 'Delete Document'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Return to RM Confirmation Modal (Step 13) ── */}
+      {returnToRmModal.open && (
+        <div
+          className="bo-cv-confirm-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bo-cv-return-rm-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !returnToRmModal.isSubmitting) {
+              handleCloseReturnToRmModal();
+            }
+          }}
+        >
+          <div className="bo-cv-confirm-modal-card">
+            <div className="bo-cv-confirm-modal-header">
+              <div className="bo-cv-confirm-modal-icon-badge" style={{ background: '#fef3c7', color: '#d97706', borderColor: '#fde68a' }}>
+                {RotateCcwIcon ? <RotateCcwIcon size={20} /> : <span>↩</span>}
+              </div>
+              <div className="bo-cv-confirm-modal-title-group">
+                <h3 id="bo-cv-return-rm-modal-title" className="bo-cv-confirm-modal-title">
+                  Return Application to RM
+                </h3>
+                <p className="bo-cv-confirm-modal-subtitle">
+                  Customer #{resolvedTargetCustomerId} — Status will transition from Logged to HO (2) to Returned to RM (6)
+                </p>
+              </div>
+              <button
+                type="button"
+                className="bo-cv-confirm-modal-close"
+                onClick={handleCloseReturnToRmModal}
+                disabled={returnToRmModal.isSubmitting}
+                aria-label="Close modal"
+              >
+                {XIcon ? <XIcon size={16} /> : <span>×</span>}
+              </button>
+            </div>
+
+            <div className="bo-cv-confirm-modal-body">
+              <p className="bo-cv-confirm-modal-question">
+                Are you sure you want to return this application to the Relationship Manager for correction?
+              </p>
+
+              <div className="bo-cv-confirm-remarks-block">
+                <label className="bo-cv-confirm-remarks-label" htmlFor="return-rm-modal-remarks">
+                  Return Instructions / Remarks <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <textarea
+                  id="return-rm-modal-remarks"
+                  className={`bo-cv-confirm-remarks-textarea ${returnToRmModal.error ? 'is-invalid' : ''}`}
+                  value={returnToRmModal.remarks}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setReturnToRmModal((prev) => ({
+                      ...prev,
+                      remarks: val,
+                      error: val.trim() ? null : prev.error,
+                    }));
+                  }}
+                  placeholder="Enter detailed correction instructions for the RM (e.g. correct income in Step 4, re-upload clear Aadhaar document)..."
+                  rows={4}
+                  autoFocus
+                  disabled={returnToRmModal.isSubmitting}
+                />
+                {returnToRmModal.error && (
+                  <div className="bo-cv-confirm-remarks-error" style={{ color: '#dc2626', fontSize: '0.8rem', marginTop: '4px' }}>
+                    {returnToRmModal.error}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bo-cv-confirm-modal-footer">
+              <button
+                type="button"
+                className="bo-cv-confirm-btn-cancel"
+                onClick={handleCloseReturnToRmModal}
+                disabled={returnToRmModal.isSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="bo-cv-confirm-btn-reject"
+                style={{ backgroundColor: '#d97706', borderColor: '#b45309' }}
+                onClick={handleConfirmReturnToRm}
+                disabled={returnToRmModal.isSubmitting}
+              >
+                {returnToRmModal.isSubmitting ? 'Returning to RM...' : 'Confirm Return to RM'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Send to Credit Manager Confirmation Modal (Step 13) ── */}
+      {sendToCreditModal.open && (
+        <div
+          className="bo-cv-confirm-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bo-cv-send-credit-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !sendToCreditModal.isSubmitting) {
+              handleCloseSendToCreditModal();
+            }
+          }}
+        >
+          <div className="bo-cv-confirm-modal-card">
+            <div className="bo-cv-confirm-modal-header">
+              <div className="bo-cv-confirm-modal-icon-badge" style={{ background: '#dcfce7', color: '#15803d', borderColor: '#86efac' }}>
+                {SendIcon ? <SendIcon size={20} /> : <span>➤</span>}
+              </div>
+              <div className="bo-cv-confirm-modal-title-group">
+                <h3 id="bo-cv-send-credit-modal-title" className="bo-cv-confirm-modal-title">
+                  Send Application to Credit Manager
+                </h3>
+                <p className="bo-cv-confirm-modal-subtitle">
+                  Customer #{resolvedTargetCustomerId} — Status will transition from Logged to HO (2) to Sent to Credit Manager (3)
+                </p>
+              </div>
+              <button
+                type="button"
+                className="bo-cv-confirm-modal-close"
+                onClick={handleCloseSendToCreditModal}
+                disabled={sendToCreditModal.isSubmitting}
+                aria-label="Close modal"
+              >
+                {XIcon ? <XIcon size={16} /> : <span>×</span>}
+              </button>
+            </div>
+
+            <div className="bo-cv-confirm-modal-body">
+              <p className="bo-cv-confirm-modal-question">
+                Confirm submission of this application to Credit Manager for final appraisal and sanction?
+              </p>
+
+              <div className="bo-cv-confirm-remarks-block">
+                <label className="bo-cv-confirm-remarks-label" htmlFor="send-credit-modal-remarks">
+                  Underwriter Recommendation Notes <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <textarea
+                  id="send-credit-modal-remarks"
+                  className={`bo-cv-confirm-remarks-textarea ${sendToCreditModal.error ? 'is-invalid' : ''}`}
+                  value={sendToCreditModal.remarks}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSendToCreditModal((prev) => ({
+                      ...prev,
+                      remarks: val,
+                      error: val.trim() ? null : prev.error,
+                    }));
+                  }}
+                  placeholder="Enter underwriter recommendation summary, approved loan terms, or risk notes for Credit Committee..."
+                  rows={4}
+                  autoFocus
+                  disabled={sendToCreditModal.isSubmitting}
+                />
+                {sendToCreditModal.error && (
+                  <div className="bo-cv-confirm-remarks-error" style={{ color: '#dc2626', fontSize: '0.8rem', marginTop: '4px' }}>
+                    {sendToCreditModal.error}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bo-cv-confirm-modal-footer">
+              <button
+                type="button"
+                className="bo-cv-confirm-btn-cancel"
+                onClick={handleCloseSendToCreditModal}
+                disabled={sendToCreditModal.isSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="bo-cv-btn-save-remarks"
+                style={{ backgroundColor: '#059669', borderColor: '#047857' }}
+                onClick={handleConfirmSendToCredit}
+                disabled={sendToCreditModal.isSubmitting}
+              >
+                {sendToCreditModal.isSubmitting ? 'Submitting to Credit...' : 'Confirm Send to Credit Manager'}
               </button>
             </div>
           </div>

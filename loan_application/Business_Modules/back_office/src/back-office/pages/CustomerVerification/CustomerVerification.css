@@ -3215,24 +3215,42 @@
   color: #64748b;
 }
 
-/* ── Step 12: Personal Discussion (PD) Verification ──────────────────────── */
-.bo-cv-pd-container {
+/* ── Step 09 (Internal Step 14): PD Sheet ─────────────────────────────────── */
+.bo-cv-pd-sheet-panel {
+  border-color: #cfe5d7;
+  border-top: 4px solid #0f7a4c;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  background: #ffffff;
 }
 
-.bo-cv-pd-select-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px 20px;
+.bo-cv-pd-sheet-panel > .bo-cv-step-panel-header {
+  padding: 20px 24px 16px;
+  background: linear-gradient(115deg, #f2faf5 0%, #ffffff 62%);
+  border-bottom: 1px solid #e8eeea;
+}
+
+/* Compact Top Area: PD Mode | Applicant */
+.bo-cv-pd-top-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  padding: 16px 24px;
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-bottom: 1px solid #e2e8f0;
+  align-items: center;
 }
 
-.bo-cv-pd-select-label {
+.bo-cv-pd-top-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bo-cv-pd-top-label {
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
@@ -3242,94 +3260,264 @@
 
 .bo-cv-pd-dropdown {
   width: 100%;
-  max-width: 320px;
-  padding: 9px 14px;
-  font-size: 14px;
+  max-width: 340px;
+  height: 38px;
+  box-sizing: border-box;
+  padding: 8px 34px 8px 12px;
+  font-size: 13px;
   font-weight: 600;
   color: #0f172a;
-  background: #ffffff;
+  background-color: #ffffff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 14px 14px;
   border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  border-radius: 7px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
   font-family: inherit;
+  line-height: 1.4;
+}
+
+.bo-cv-pd-dropdown:hover:not(:disabled) {
+  border-color: #94a3b8;
 }
 
 .bo-cv-pd-dropdown:focus {
   outline: none;
-  border-color: var(--color-primary, #0f7a4c);
+  border-color: #0f7a4c;
   box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.12);
 }
 
-.bo-cv-pd-result-panel {
+.bo-cv-pd-dropdown:disabled {
+  background-color: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.bo-cv-pd-type-error {
+  font-size: 12px;
+  color: #dc2626;
+  margin-top: 4px;
+}
+
+.bo-cv-pd-applicant-display {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  max-width: 340px;
+  height: 38px;
+  box-sizing: border-box;
+  padding: 8px 12px;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 22px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+/* Continuous 14-Field PD Sheet Body */
+.bo-cv-pd-sheet-body {
+  padding: 24px;
+  background: #ffffff;
+}
+
+.bo-cv-pd-fields-container {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  gap: 16px;
 }
 
-.bo-cv-pd-result-header {
+.bo-cv-pd-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.bo-cv-pd-grid--2col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.bo-cv-pd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.bo-cv-pd-field--full {
+  width: 100%;
+}
+
+.bo-cv-pd-field--narrative {
+  position: relative;
+}
+
+.bo-cv-pd-field-label {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
 }
 
-.bo-cv-pd-mode-icon {
-  width: 46px;
-  height: 46px;
-  border-radius: 10px;
-  background: var(--color-primary-light, #eaf5ee);
-  color: var(--color-primary, #0f7a4c);
-  display: flex;
+.bo-cv-pd-field-num {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #eaf5ee;
+  color: #0f7a4c;
+  font-size: 11px;
+  font-weight: 800;
   flex-shrink: 0;
 }
 
-.bo-cv-pd-result-header h3 {
-  font-size: 16px;
-  font-weight: 700;
+.bo-cv-pd-char-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  font-style: normal;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+.bo-cv-pd-char-counter {
+  align-self: flex-end;
+  color: #94a3b8;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.bo-cv-pd-field input,
+.bo-cv-pd-field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  padding: 9px 12px;
   color: #0f172a;
-  margin: 0 0 2px 0;
-}
-
-.bo-cv-pd-result-header p {
+  background: #ffffff;
+  font: inherit;
   font-size: 13px;
-  color: #64748b;
-  margin: 0;
+  line-height: 1.45;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.bo-cv-pd-details-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 14px;
+.bo-cv-pd-field textarea {
+  min-height: 80px;
+  resize: vertical;
 }
 
-.bo-cv-pd-detail-item {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+.bo-cv-pd-field input:focus,
+.bo-cv-pd-field textarea:focus {
+  outline: none;
+  border-color: #0f7a4c;
+  box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.12);
+}
+
+.bo-cv-pd-field input::placeholder,
+.bo-cv-pd-field textarea::placeholder {
+  color: #94a3b8;
+}
+
+.bo-cv-pd-readonly-input {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  font-weight: 600;
+  cursor: default;
+}
+
+/* Item 10: Proposed Collateral & Legal/Technical Subfields */
+.bo-cv-pd-collateral-group {
+  padding: 14px;
+  background: #f8fbf9;
+  border: 1px solid #dce8e0;
   border-radius: 8px;
-  padding: 14px 16px;
+}
+
+.bo-cv-pd-collateral-subfields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.bo-cv-pd-subfield {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
-.bo-cv-pd-detail-item small {
+.bo-cv-pd-subfield-label {
   font-size: 11px;
   font-weight: 700;
+  color: #475569;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #64748b;
 }
 
-.bo-cv-pd-detail-item strong {
-  font-size: 14px;
+.bo-cv-pd-subfield textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  padding: 8px 11px;
   color: #0f172a;
+  background: #ffffff;
+  font: inherit;
+  font-size: 13px;
+  min-height: 76px;
+  resize: vertical;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bo-cv-pd-subfield textarea:focus {
+  outline: none;
+  border-color: #0f7a4c;
+  box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.12);
+}
+
+/* Item 14: Sanction Condition Group */
+.bo-cv-pd-condition-group {
+  padding: 14px;
+  background: #f8fbf9;
+  border: 1px solid #dce8e0;
+  border-radius: 8px;
+}
+
+.bo-cv-pd-condition-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+/* Bottom Action Footer */
+.bo-cv-pd-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 24px 24px;
+  background: #ffffff;
+  border-top: 1px solid #e8eeea;
+}
+
+@media (max-width: 768px) {
+  .bo-cv-pd-top-bar {
+    grid-template-columns: 1fr;
+  }
+  .bo-cv-pd-grid--2col,
+  .bo-cv-pd-collateral-subfields {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ── Step 14: Eligibility Fit ────────────────────────────────────────────── */
@@ -4251,97 +4439,7 @@
   .bo-cv-rec-findings-grid { padding: 14px; }
 }
 
-/* ── Simplified PD assessment form ───────────────────────────────── */
-.bo-cv-pd-assessment-panel > .bo-cv-recommendation-sheet {
-  padding: 0;
-  background: #ffffff;
-}
 
-.bo-cv-pd-form {
-  background: #ffffff;
-  border: 0;
-}
-
-.bo-cv-pd-form-section-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 20px 24px 0;
-}
-
-.bo-cv-pd-form-section-head:not(:first-child) {
-  border-top: 1px solid #e8eeea;
-  padding-top: 20px;
-}
-
-.bo-cv-pd-form-section-number {
-  flex: 0 0 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: #eaf5ee;
-  color: #0f7a4c;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.bo-cv-pd-form-section-head h3 {
-  margin: 1px 0 3px;
-  color: #1e293b;
-  font-size: 14px;
-  font-weight: 750;
-}
-
-.bo-cv-pd-form-section-head p {
-  margin: 0;
-  color: #64748b;
-  font-size: 12px;
-}
-
-.bo-cv-pd-form .bo-cv-rec-fields-grid,
-.bo-cv-pd-form .bo-cv-rec-narratives-grid,
-.bo-cv-pd-form .bo-cv-rec-findings-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px 20px;
-  padding: 16px 24px 22px 58px;
-  border-bottom: 0;
-  background: #ffffff;
-}
-
-.bo-cv-pd-form .bo-cv-rec-field--wide { grid-column: auto; }
-.bo-cv-pd-form .bo-cv-rec-condition-field { grid-column: 1 / -1; }
-.bo-cv-pd-form .bo-cv-rec-field > span { font-size: 12px; color: #334155; }
-.bo-cv-pd-form .bo-cv-rec-field input,
-.bo-cv-pd-form .bo-cv-rec-field textarea { background: #ffffff; border-color: #d6e0da; }
-.bo-cv-pd-form .bo-cv-rec-field input:hover,
-.bo-cv-pd-form .bo-cv-rec-field textarea:hover { border-color: #aebfb5; }
-.bo-cv-pd-form .bo-cv-rec-field textarea { min-height: 92px; }
-.bo-cv-pd-form .bo-cv-rec-narratives-grid textarea { min-height: 120px; }
-
-.bo-cv-pd-form .bo-cv-rec-condition-field {
-  padding: 14px;
-  border: 1px solid #dce8e0;
-  border-radius: 9px;
-  background: #f8fbf9;
-}
-
-@media (max-width: 900px) {
-  .bo-cv-pd-form .bo-cv-rec-fields-grid,
-  .bo-cv-pd-form .bo-cv-rec-narratives-grid,
-  .bo-cv-pd-form .bo-cv-rec-findings-grid { grid-template-columns: 1fr; padding-left: 24px; }
-  .bo-cv-pd-form .bo-cv-rec-condition-field { grid-column: auto; }
-}
-
-@media (max-width: 560px) {
-  .bo-cv-pd-assessment-panel > .bo-cv-step-panel-header,
-  .bo-cv-pd-form-section-head { padding-left: 16px; padding-right: 16px; }
-  .bo-cv-pd-form .bo-cv-rec-fields-grid,
-  .bo-cv-pd-form .bo-cv-rec-narratives-grid,
-  .bo-cv-pd-form .bo-cv-rec-findings-grid { padding: 14px 16px 20px; }
-  .bo-cv-rec-condition-label-row { align-items: flex-start; flex-direction: column; }
-}
 
 /* ── Comments on other health checks (FI checklist) ──────────────── */
 .bo-cv-health-checks {
@@ -12929,5 +13027,17 @@
   width: 220px;
   min-width: 220px;
 }
+
+/* Step 13 Application Workflow & Disposition Styles */
+.bo-spin {
+  animation: boCvSpin 0.8s linear infinite;
+}
+
+.bo-cv-workflow-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 
 

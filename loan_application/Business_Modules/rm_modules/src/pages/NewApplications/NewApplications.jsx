@@ -164,8 +164,9 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
     createdDate: formatDate(item.createdAt || item.createdDate),
     createdAt: item.createdAt || item.createdDate || item.CreatedAt || item.CreatedDate || null,
     rawCreatedAt: item.createdAt || item.createdDate || item.CreatedAt || item.CreatedDate || item.submittedAt || item.SubmittedAt || null,
+    rawStatusCode: Number(item.status ?? item.Status ?? 0),
     status: normalizedStatus,
-    rawStatus: normalizedStatus,
+    rawStatus: Number(item.status ?? item.Status ?? 0) || normalizedStatus,
     agentCustomerId: item.agentCustomerId || item.customerId || null,
     applicationProductDetailsId:
       matchedProduct?.applicationProductDetailsId ||
@@ -831,6 +832,56 @@ export default function NewApplications({ initialFilter = 'All' }) {
         const applicationId = row.agentCustomerId || row.id;
 
         if (row.status === 'Returned') {
+          const isAppLevelReturn = Number(row.rawStatusCode ?? row.rawStatus) === 6;
+          const hasDocRejections = Array.isArray(row.rejections) && row.rejections.length > 0;
+
+          // CASE B: raw status === 6 AND no document rejections
+          if (isAppLevelReturn && !hasDocRejections) {
+            return (
+              <div className="new-apps-actions-cell">
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => {
+                    navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId));
+                  }}
+                >
+                  Correct Application
+                </Button>
+              </div>
+            );
+          }
+
+          // CASE C: raw status === 6 AND document rejections also exist
+          if (isAppLevelReturn && hasDocRejections) {
+            return (
+              <div className="new-apps-actions-cell" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => {
+                    navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId));
+                  }}
+                >
+                  Correct Application
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  title="Review & Replace Rejected Documents"
+                  onClick={() => {
+                    setSelectedReturnApp(row);
+                    setSelectedFiles({});
+                    setRejectionFeedback({});
+                  }}
+                >
+                  Review Documents
+                </Button>
+              </div>
+            );
+          }
+
+          // CASE A: status !== 6 AND document rejections exist (preserve existing Review Return behavior)
           return (
             <div className="new-apps-actions-cell">
               <Button

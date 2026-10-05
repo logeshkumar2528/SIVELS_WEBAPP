@@ -23,6 +23,7 @@ import Modal from '../../components/Modal/Modal';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { formatDateTime, toIstDateInput } from '../../utils/dateHelper';
 import ApplicationTopSummary from '../../components/ApplicationTopSummary/ApplicationTopSummary';
+import { getCurrentRMContext } from '../../utils/rmContext';
 import './CustomerRegistration.css';
 
 function digitsOnly(value) {
@@ -1067,6 +1068,95 @@ export default function CustomerRegistration() {
       };
 
       setForm(finalForm);
+
+      // Synchronize Primary Applicant Name to AgentAddCustomer (Primary Applicant Only)
+      const rmContext = getCurrentRMContext();
+      const modifiedBy = Number(rmContext?.rmId);
+      if (!Number.isFinite(modifiedBy) || modifiedBy <= 0) {
+        setErrorPopup({
+          title: 'Authentication Error',
+          message: 'Unable to identify the authenticated Relationship Manager session. Please log in again to sync application records.',
+          variant: 'error',
+        });
+        return;
+      }
+
+      const primaryApplicant = allPersons[0] || form.applicant;
+      const applicantFullName = composeFullName(primaryApplicant);
+      if (!applicantFullName) {
+        setErrorPopup({
+          title: 'Validation Error',
+          message: 'Primary applicant full name could not be resolved.',
+          variant: 'validation',
+        });
+        return;
+      }
+
+      let baseCust = null;
+      try {
+        const custRes = await fetch(`${baseUrl}/AgentAddCustomer/${appId}`, { headers: authHeaders });
+        if (!custRes.ok) {
+          setErrorPopup({
+            title: 'Customer Master Sync Failed',
+            message: `Personal Information was saved, but failed to retrieve customer master record (${custRes.status}). Please try saving again.`,
+            variant: 'error',
+          });
+          return;
+        }
+        const custData = await custRes.json();
+        baseCust = Array.isArray(custData) ? custData[0] : (custData?.value ? (Array.isArray(custData.value) ? custData.value[0] : custData.value) : custData);
+      } catch (getErr) {
+        console.error('Error fetching customer record for name sync:', getErr);
+        setErrorPopup({
+          title: 'Customer Master Sync Failed',
+          message: 'Personal Information was saved, but a network error occurred while retrieving customer master record. Please try saving again.',
+          variant: 'error',
+        });
+        return;
+      }
+
+      if (!baseCust || typeof baseCust !== 'object') {
+        setErrorPopup({
+          title: 'Customer Master Sync Failed',
+          message: 'Personal Information was saved, but customer master record was not found for synchronization. Please try saving again.',
+          variant: 'error',
+        });
+        return;
+      }
+
+      const syncPayload = {
+        ...baseCust,
+        agentCustomerId: Number(appId),
+        fullName: applicantFullName,
+        modifiedBy,
+      };
+
+      try {
+        const syncRes = await fetch(`${baseUrl}/AgentAddCustomer/${appId}`, {
+          method: 'PUT',
+          headers: authHeaders,
+          body: JSON.stringify(syncPayload),
+        });
+
+        if (!syncRes.ok && syncRes.status !== 204) {
+          const errText = await syncRes.text().catch(() => '');
+          console.error(`Customer master sync failed (${syncRes.status}):`, errText);
+          setErrorPopup({
+            title: 'Customer Master Sync Failed',
+            message: `Personal Information was saved, but failed to update customer master name (${syncRes.status}). Please try saving again.`,
+            variant: 'error',
+          });
+          return;
+        }
+      } catch (putErr) {
+        console.error('Error updating customer record for name sync:', putErr);
+        setErrorPopup({
+          title: 'Customer Master Sync Failed',
+          message: 'Personal Information was saved, but a network error occurred while updating customer master name. Please try saving again.',
+          variant: 'error',
+        });
+        return;
+      }
 
       saveApplication(appId, {
         ...buildRegistrationPayload(finalForm, appData, applicantHeaderName),

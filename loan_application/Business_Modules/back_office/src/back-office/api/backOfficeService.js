@@ -1053,6 +1053,47 @@ export const backOfficeService = {
     );
     return unwrapResponse(response);
   },
+
+  /* ==========================================
+     14. APPLICATION WORKFLOW APIs (STEP 13)
+  ========================================== */
+
+  /**
+   * Return application to Relationship Manager (Status 2 -> 6).
+   * @param {string|number} agentCustomerId
+   * @param {object} payload - { performedByUserId, performedByRole: "BackOffice", remarks }
+   */
+  returnApplicationToRM: async (agentCustomerId, payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_WORKFLOW_RETURN_TO_RM(agentCustomerId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Send application to Credit Manager (Status 2 -> 3).
+   * @param {string|number} agentCustomerId
+   * @param {object} payload - { performedByUserId, performedByRole: "BackOffice", remarks }
+   */
+  sendApplicationToCreditManager: async (agentCustomerId, payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_WORKFLOW_SEND_TO_CREDIT(agentCustomerId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Get application workflow transition history.
+   * @param {string|number} agentCustomerId
+   */
+  getApplicationWorkflowHistory: async (agentCustomerId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_WORKFLOW_HISTORY(agentCustomerId)
+    );
+    return unwrapResponse(response);
+  },
 };
 
 export default backOfficeService;
