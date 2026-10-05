@@ -44,6 +44,7 @@ import { RTRNormMaster } from './pages/masters/RTRNormMaster/RTRNormMaster';
 import { RTRLoanStatus } from './pages/masters/RTRLoanStatus/RTRLoanStatus';
 import { HealthCheckType } from './pages/masters/HealthCheckType/HealthCheckType';
 import { ProofMaster } from './pages/masters/ProofMaster/ProofMaster';
+import { MortgageStatus } from './pages/masters/MortgageStatus/MortgageStatus';
 import { CompanyConfiguration } from './features/company/CompanyConfiguration';
 import AgentCreate from './pages/Agent/AgentCreate';
 import RelationshipManagerCreate from './pages/RelationshipManager/RelationshipManagerCreate';
@@ -138,6 +139,7 @@ function App() {
               <Route path="rtr-loan-status" element={<RTRLoanStatus />} />
               <Route path="health-check-type" element={<HealthCheckType />} />
               <Route path="proof-master" element={<ProofMaster />} />
+              <Route path="mortgage-status" element={<MortgageStatus />} />
             </Route>
           </Route>
         </Routes>
