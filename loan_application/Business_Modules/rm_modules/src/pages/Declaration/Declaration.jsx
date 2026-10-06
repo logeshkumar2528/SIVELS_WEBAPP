@@ -12,6 +12,7 @@ import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { useLoading } from '../../../../../Core/src/context/LoadingContext';
 import { getCurrentRMContext } from '../../utils/rmContext';
 import { buildApplicationDisplayId, buildSectionUpdate, getSectionState, getApplicantCount, createArray, resolveApplicantName } from '../applicationWizard/flowUtils';
+import { getCurrentRMContext } from '../../utils/rmContext';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
@@ -382,7 +383,65 @@ export default function Declaration() {
     );
   };
 
+  const finalizeSubmit = async () => {
+    if (isFinalizing) return;
+    setIsFinalizing(true);
+
+    try {
+      await withLoading(async () => {
+        const rmContext = getCurrentRMContext();
+        const modifiedBy = Number(rmContext?.rmId);
+        if (!Number.isFinite(modifiedBy) || modifiedBy <= 0) {
+          throw new Error('Unable to identify the authenticated RM. Please log in again.');
+        }
+
+        const agentCustomerId = Number(appId);
+        if (!Number.isFinite(agentCustomerId) || agentCustomerId <= 0) {
+          throw new Error('Invalid customer ID for final submission.');
+        }
+
+        const payload = {
+          agentCustomerId,
+          status: 2,
+          modifiedBy,
+        };
+
+        const putRes = await fetch(`${API_BASE}/AgentAddCustomer/${agentCustomerId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!putRes.ok) {
+          let errorMessage = `Failed to update application status to Logged to HO (${putRes.status})`;
+          try {
+            const errorData = await putRes.json();
+            if (errorData?.message) {
+              errorMessage = errorData.message;
+            }
+          } catch {
+            // Keep fallback message if response body is not JSON
+          }
+          throw new Error(errorMessage);
+        }
+
+        saveApplication(appId, { status: 'Logged to HO' });
+        setOtpStep('success');
+      }, { message: 'Submitting application...' });
+    } catch (err) {
+      console.error('Error finalizing application submission:', err);
+      setErrorPopup({
+        title: 'Could not complete application',
+        message: err.message || 'The application could not be completed. Please try again.',
+        variant: 'error',
+      });
+    } finally {
+      setIsFinalizing(false);
+    }
+  };
+
   const handleVerifyPerson = (personId) => {
+    let shouldFinalize = false;
     setVerificationList((prev) => {
       const nextList = prev.map((item) => {
         if (item.id === personId) {
@@ -395,11 +454,15 @@ export default function Declaration() {
 
       const allVerified = nextList.length > 0 && nextList.every((item) => item.isVerified);
       if (allVerified) {
-        setOtpStep('success');
+        shouldFinalize = true;
       }
 
       return nextList;
     });
+
+    if (shouldFinalize) {
+      finalizeSubmit();
+    }
   };
 
   const handleSubmit = () => {
@@ -825,10 +888,12 @@ export default function Declaration() {
               <Button
                 variant="primary"
                 style={{ width: '100%', justifyContent: 'center' }}
-                onClick={finalizeSubmit}
-                disabled={isFinalizing}
+                onClick={() => {
+                  setShowSubmitModal(false);
+                  navigate(ROUTES.APPROVED_APPLICATIONS);
+                }}
               >
-                {isFinalizing ? 'Completing...' : 'Continue'}
+                Continue
               </Button>
             </div>
           ) : (
@@ -836,9 +901,16 @@ export default function Declaration() {
               <span style={{ fontSize: '12px', color: '#64748b' }}>
                 {verificationList.filter((p) => p.isVerified).length} of {verificationList.length} verified
               </span>
-              <Button variant="secondary" onClick={() => setShowSubmitModal(false)}>
-                Cancel
-              </Button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Button variant="secondary" onClick={() => setShowSubmitModal(false)}>
+                  Cancel
+                </Button>
+                {verificationList.length > 0 && verificationList.every((p) => p.isVerified) && (
+                  <Button variant="primary" onClick={finalizeSubmit} disabled={isFinalizing}>
+                    {isFinalizing ? 'Submitting...' : 'Submit Application'}
+                  </Button>
+                )}
+              </div>
             </div>
           )
         }

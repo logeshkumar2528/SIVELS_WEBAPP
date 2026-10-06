@@ -1792,6 +1792,8 @@ export default function PdfView() {
     '';
 
   const resolvedApplicantName = customerDisplayName || 'Applicant';
+  const resolvedCustomerCode =
+    String(liveCustomer?.customerCode || liveCustomer?.CustomerCode || '').trim() || 'N/A';
   const resolvedApplicantDisplayId = applicationDisplayId || buildApplicationDisplayId(appData, applicationId) || applicationId || '-';
 
   const loanAmount = appData.loanAmount || liveCustomer?.expectedLoanAmount || '';
@@ -2244,8 +2246,8 @@ export default function PdfView() {
               <div className="pdf-summary-name" title={resolvedApplicantName}>
                 {resolvedApplicantName}
               </div>
-              <div className="pdf-summary-id" title={`ID: ${resolvedApplicantDisplayId}`}>
-                ID: {resolvedApplicantDisplayId}
+              <div className="pdf-summary-id" title={`ID: ${resolvedCustomerCode}`}>
+                ID: {resolvedCustomerCode}
               </div>
             </div>
 
