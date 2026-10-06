@@ -5312,11 +5312,9 @@ export default function CustomerVerification() {
           ? Number(currentCalcSettings.recommendedLoanAmount)
           : finalRecommendedAmount,
         restrictOtherIncomeToSalary: selectedMethodCode === 'INCOME'
-          ? Boolean(currentCalcSettings.restrictOtherIncomeToSalary)
+          ? (currentCalcSettings.restrictOtherIncomeToSalary !== false)
           : false,
-        considerOtherIncome: selectedMethodCode === 'INCOME'
-          ? (currentCalcSettings.considerOtherIncome !== false)
-          : true,
+        considerOtherIncome: true,
         pdDocumentPath: resolvedPdDocumentPath || null,
         calculatedByUserId: Number(auth.userId),
         calculatedByBackOfficeId: Number(auth.backOfficeId),
@@ -15287,30 +15285,28 @@ export default function CustomerVerification() {
                     </div>
                   </section>
 
-                  {/* ── Total Other Income to be Considered (Toggle & Constraint Preview) ── */}
-                  <section className="bo-cv-income-section bo-cv-income-consideration-section" aria-label="Total Other Income Consideration">
-                    <div className="bo-cv-income-section-head" style={{ marginBottom: 0, paddingBottom: 0, borderBottom: 'none' }}>
-                      <div className="bo-cv-income-section-title-wrap">
-                        <div>
-                          <h3 className="bo-cv-income-section-title">Total Other Income to be Considered</h3>
-                          <p className="bo-cv-income-section-sub">
-                            Include eligible additional income streams in the FOIR &amp; loan eligibility calculation.
-                          </p>
-                        </div>
+                  {/* ── Other Income Calculation Control ── */}
+                  <section className="bo-cv-income-section bo-cv-income-consideration-section" aria-label="Other Income Calculation Control">
+                    <div className="bo-cv-income-control-card">
+                      <div className="bo-cv-income-control-info">
+                        <h4 className="bo-cv-income-control-title">Restrict Other Income to maximum 100% of Salaried Income</h4>
+                        <p className="bo-cv-income-control-desc">
+                          Cap eligible additional income at total salaried income ({formatCurrency(liveSalaryAverage)}).
+                        </p>
                       </div>
                       <div className="bo-cv-toggle-container">
-                        <div className="bo-cv-toggle-btn-group" role="group" aria-label="Consider Other Income in Calculation">
+                        <div className="bo-cv-toggle-btn-group" role="group" aria-label="Restrict Other Income to maximum 100% of Salaried Income">
                           <button
                             type="button"
-                            className={`bo-cv-toggle-btn ${currentCalcSettings.considerOtherIncome !== false ? 'is-active' : ''}`}
-                            onClick={() => updateCurrentCalcSettings({ considerOtherIncome: true })}
+                            className={`bo-cv-toggle-btn ${currentCalcSettings.restrictOtherIncomeToSalary !== false ? 'is-active is-yes' : ''}`}
+                            onClick={() => updateCurrentCalcSettings({ restrictOtherIncomeToSalary: true })}
                           >
                             YES
                           </button>
                           <button
                             type="button"
-                            className={`bo-cv-toggle-btn ${currentCalcSettings.considerOtherIncome === false ? 'is-active is-no' : ''}`}
-                            onClick={() => updateCurrentCalcSettings({ considerOtherIncome: false })}
+                            className={`bo-cv-toggle-btn ${currentCalcSettings.restrictOtherIncomeToSalary === false ? 'is-active is-no' : ''}`}
+                            onClick={() => updateCurrentCalcSettings({ restrictOtherIncomeToSalary: false })}
                           >
                             NO
                           </button>
@@ -15320,20 +15316,19 @@ export default function CustomerVerification() {
 
                     <div className="bo-cv-consideration-info-strip" style={{ marginTop: '14px' }}>
                       <div className="bo-cv-consideration-stat">
-                        <span className="bo-cv-consideration-stat-label">Eligible Additional Income:</span>
+                        <span className="bo-cv-consideration-stat-label">Total Other Income:</span>
                         <strong className="bo-cv-consideration-stat-val">
-                          {currentCalcSettings.considerOtherIncome !== false
-                            ? (liveTotalOtherIncome > 0 ? formatCurrency(liveTotalOtherIncome) : '₹0')
-                            : '₹0 (Excluded by Selection)'}
+                          {liveTotalOtherIncome > 0
+                            ? formatCurrency(liveTotalOtherIncome)
+                            : '₹0'}
                         </strong>
                       </div>
                       <div className="bo-cv-consideration-hint">
                         <span className="bo-cv-salary-hint-dot" />
                         <span>
-                          Restricted to maximum 100% of Salaried Income ({formatCurrency(liveSalaryAverage)}).
-                          {currentCalcSettings.considerOtherIncome === false
-                            ? ' Currently excluded from calculation.'
-                            : ' Active additional income sources will be evaluated with their consideration percentages.'}
+                          {currentCalcSettings.restrictOtherIncomeToSalary !== false
+                            ? `Eligible Other Income will be capped at Salaried Income (${formatCurrency(liveSalaryAverage)}).`
+                            : 'Full Eligible Other Income will be considered without salary capping.'}
                         </span>
                       </div>
                     </div>
