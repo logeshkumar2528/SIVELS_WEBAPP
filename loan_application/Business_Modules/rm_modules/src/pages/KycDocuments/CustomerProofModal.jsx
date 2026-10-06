@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
+  Check,
   CheckCircle2,
   Download,
   Eye,
@@ -139,8 +140,9 @@ function normalizeProofRecord(row) {
 
 /**
  * Customer Proof upload/list modal for one applicant and one verification type
- * (e.g. Aadhaar or PAN). Holds its own state so the identity document flows on
- * the KYC page are never affected.
+ * (e.g. Aadhaar or PAN, taken from the KYC card). Several proofs of one category
+ * can be selected and uploaded together. Holds its own state so the identity
+ * document flows on the KYC page are never affected.
  *
  * context: {
  *   applicationId, applicationProductDetailsId, applicantSequence,
@@ -172,10 +174,12 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
   const [proofError, setProofError] = useState('');
 
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
-  const [selectedProofId, setSelectedProofId] = useState('');
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedProofIds, setSelectedProofIds] = useState([]);
+  const [filesByProof, setFilesByProof] = useState({});
+  const [proofErrors, setProofErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadingProofId, setUploadingProofId] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const [savedProofs, setSavedProofs] = useState([]);
@@ -190,7 +194,6 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
   const [rowError, setRowError] = useState({ id: null, message: '' });
   const [successMessage, setSuccessMessage] = useState('');
 
-  const fileInputRef = useRef(null);
   const replaceInputRef = useRef(null);
   const uploadingRef = useRef(false);
   const proofRequestRef = useRef(0);
@@ -228,6 +231,10 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
   const proofOptions = useMemo(
     () => (proofsByCategory[selectedCategoryId] || []).filter((p) => p.isActive).map(({ value, label }) => ({ value, label })),
     [proofsByCategory, selectedCategoryId]
+  );
+  const selectedProofOptions = useMemo(
+    () => proofOptions.filter((p) => selectedProofIds.some((id) => sameValue(id, p.value))),
+    [proofOptions, selectedProofIds]
   );
 
   const categoryName = useCallback(
@@ -330,15 +337,15 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
     if (!isResolvingCustomer) loadSavedProofs(agentCustomerId);
   }, [isResolvingCustomer, agentCustomerId, loadSavedProofs]);
 
-  const clearFileInput = () => {
-    setSelectedFile(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+  const clearSelection = () => {
+    setSelectedProofIds([]);
+    setFilesByProof({});
+    setProofErrors({});
   };
 
   const handleCategoryChange = async (value) => {
     setSelectedCategoryId(value);
-    setSelectedProofId('');
-    clearFileInput();
+    clearSelection();
     setFormError('');
     setProofError('');
     setSuccessMessage('');
@@ -358,25 +365,45 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
     }
   };
 
-  const handleProofChange = (value) => {
-    setSelectedProofId(value);
-    clearFileInput();
+  const toggleProof = (proofId) => {
+    if (isUploading) return;
+    const key = String(proofId);
+    setSelectedProofIds((prev) => (
+      prev.some((id) => sameValue(id, proofId)) ? prev.filter((id) => !sameValue(id, proofId)) : [...prev, proofId]
+    ));
+    setFilesByProof((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setProofErrors((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
     setFormError('');
     setSuccessMessage('');
   };
 
-  const handleFileChange = (event) => {
+  const handleProofFileChange = (proofId, event) => {
+    const key = String(proofId);
     const file = event.target.files?.[0] || null;
+    event.target.value = '';
     setSuccessMessage('');
     if (!file) return;
     const { valid, error } = validateApplicantDocumentFile(file);
-    if (!valid) {
-      setFormError(error);
-      clearFileInput();
-      return;
-    }
-    setFormError('');
-    setSelectedFile(file);
+    setProofErrors((prev) => ({ ...prev, [key]: valid ? '' : error }));
+    if (!valid) return;
+    setFilesByProof((prev) => ({ ...prev, [key]: file }));
+  };
+
+  const removeProofFile = (proofId) => {
+    const key = String(proofId);
+    setFilesByProof((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
   };
 
   const contextError = () => {
@@ -410,33 +437,50 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
     const missing = contextError();
     if (missing) return setFormError(missing);
     if (!selectedCategoryId) return setFormError('Please select a proof category.');
-    if (!selectedProofId) return setFormError('Please select a proof.');
-    if (!selectedFile) return setFormError('Please choose a file to upload.');
+    if (selectedProofIds.length === 0) return setFormError('Please select at least one proof.');
+    const withoutFile = selectedProofIds.filter((id) => !filesByProof[String(id)]);
+    if (withoutFile.length > 0) {
+      const names = withoutFile.map((id) => proofName(selectedCategoryId, id) || 'Proof').join(', ');
+      return setFormError(`Please choose a file for: ${names}.`);
+    }
 
     uploadingRef.current = true;
     setFormError('');
     setIsUploading(true);
-    setUploadProgress(0);
-    const label = proofName(selectedCategoryId, selectedProofId) || 'Proof';
-    try {
-      const created = await rmCustomerService.uploadApplicationCustomerProof(
-        buildFormData({ documentTypeId: selectedCategoryId, proofId: selectedProofId, file: selectedFile }),
-        { onUploadProgress: trackProgress }
-      );
-      if (!mountedRef.current) return;
-      const record = created && typeof created === 'object' ? normalizeProofRecord(created) : null;
-      if (record && hasValue(record.id)) {
-        setSavedProofs((prev) => [record, ...prev.filter((r) => !sameValue(r.id, record.id))]);
+    const uploaded = [];
+    const failed = [];
+    for (const proofId of selectedProofIds) {
+      const key = String(proofId);
+      const label = proofName(selectedCategoryId, proofId) || 'Proof';
+      setUploadingProofId(proofId);
+      setUploadProgress(0);
+      try {
+        await rmCustomerService.uploadApplicationCustomerProof(
+          buildFormData({ documentTypeId: selectedCategoryId, proofId, file: filesByProof[key] }),
+          { onUploadProgress: trackProgress }
+        );
+        uploaded.push({ proofId, label });
+      } catch (err) {
+        const message = await errorMessage(err, 'Upload failed.');
+        failed.push(label);
+        if (mountedRef.current) setProofErrors((prev) => ({ ...prev, [key]: message }));
       }
-      clearFileInput();
-      setSuccessMessage(`${label} uploaded successfully.`);
+    }
+    uploadingRef.current = false;
+    if (!mountedRef.current) return;
+
+    const uploadedIds = uploaded.map((u) => u.proofId);
+    const isUploadedId = (id) => uploadedIds.some((u) => sameValue(u, id));
+    setSelectedProofIds((prev) => prev.filter((id) => !isUploadedId(id)));
+    setFilesByProof((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => !isUploadedId(id))));
+    setUploadingProofId(null);
+    setIsUploading(false);
+    if (uploaded.length > 0) {
+      setSuccessMessage(`${uploaded.map((u) => u.label).join(', ')} uploaded successfully.`);
       loadSavedProofs(agentCustomerId);
-    } catch (err) {
-      const message = await errorMessage(err, 'Upload failed.');
-      if (mountedRef.current) setFormError(message);
-    } finally {
-      uploadingRef.current = false;
-      if (mountedRef.current) setIsUploading(false);
+    }
+    if (failed.length > 0) {
+      setFormError(`Could not upload: ${failed.join(', ')}. Check the message under each proof and try again.`);
     }
   };
 
@@ -580,8 +624,10 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
     if (!isBusy) onClose();
   };
 
-  const proofAlreadyUploaded = selectedProofId
-    && savedProofs.some((r) => sameValue(r.proofId, selectedProofId) && sameValue(r.documentTypeId, selectedCategoryId));
+  const isProofUploaded = (proofId) => savedProofs.some(
+    (r) => sameValue(r.proofId, proofId) && sameValue(r.documentTypeId, selectedCategoryId)
+  );
+  const readyCount = selectedProofIds.filter((id) => filesByProof[String(id)]).length;
 
   const displayName = applicantName && applicantName !== applicantRole
     ? `${applicantName} (${applicantRole})`
@@ -653,22 +699,37 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
               )}
             </div>
 
-            <div className="aw-field">
-              <label className="form-label">Proof</label>
-              <div className="aw-input-wrapper">
-                <Select
-                  value={selectedProofId}
-                  onChange={handleProofChange}
-                  options={proofOptions}
-                  placeholder={
-                    !selectedCategoryId ? 'Select a category first'
-                      : isLoadingProofs ? 'Loading proofs...'
-                        : proofOptions.length === 0 ? 'No proofs available'
-                          : 'Select proof'
-                  }
-                  disabled={!selectedCategoryId || isLoadingProofs || isUploading || proofOptions.length === 0}
-                />
-              </div>
+            <div className="aw-field cp-field-full">
+              <label className="form-label">
+                Proof <span className="cp-hint">(select one or more)</span>
+              </label>
+              {!selectedCategoryId ? (
+                <span className="cp-hint">Select a category first.</span>
+              ) : isLoadingProofs ? (
+                <span className="cp-hint">Loading proofs...</span>
+              ) : proofOptions.length > 0 && (
+                <div className="cp-chip-group" role="group" aria-label="Proofs">
+                  {proofOptions.map((proof) => {
+                    const isSelected = selectedProofIds.some((id) => sameValue(id, proof.value));
+                    const isUploaded = isProofUploaded(proof.value);
+                    return (
+                      <button
+                        key={proof.value}
+                        type="button"
+                        aria-pressed={isSelected}
+                        className={`cp-chip ${isSelected ? 'is-selected' : ''} ${isUploaded ? 'is-uploaded' : ''}`}
+                        onClick={() => toggleProof(proof.value)}
+                        disabled={isUploading || isUploaded}
+                        title={isUploaded ? 'Already uploaded. Use Replace below to update the file.' : proof.label}
+                      >
+                        {(isSelected || isUploaded) && <Check size={13} />}
+                        {proof.label}
+                        {isUploaded && <span className="cp-chip-tag">Uploaded</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               {proofError && (
                 <span className="aw-field-error">
                   {proofError}{' '}
@@ -684,48 +745,76 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
           </div>
         )}
 
-        {selectedProofId && (
-          <div className="cp-upload-row">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={ACCEPTED_FILE_TYPES}
-              className="cp-file-input"
-              id="cp-file-input"
-              onChange={handleFileChange}
-              disabled={isUploading}
-            />
-            <label htmlFor="cp-file-input" className={`cp-file-picker ${isUploading ? 'is-disabled' : ''}`}>
-              <Paperclip size={14} />
-              <span>{selectedFile ? 'Change file' : 'Choose file'}</span>
-            </label>
-            <div className="cp-file-name" title={selectedFile?.name}>
-              {selectedFile ? (
-                <>
-                  <FileText size={14} />
-                  <span className="cp-file-name-text">{selectedFile.name}</span>
-                  <span className="cp-file-size">{formatFileSize(selectedFile.size)}</span>
-                </>
-              ) : (
-                <span className="cp-hint">PDF, JPG, JPEG or PNG</span>
-              )}
-            </div>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Upload size={14} />}
-              onClick={handleUpload}
-              disabled={isUploading || !selectedFile || missingContext.length > 0 || isResolvingCustomer}
-            >
-              {isUploading ? `Uploading${uploadProgress ? ` ${uploadProgress}%` : '...'}` : 'Upload'}
-            </Button>
-          </div>
-        )}
+        {selectedProofOptions.length > 0 && (
+          <div className="cp-upload-list">
+            {selectedProofOptions.map((proof) => {
+              const key = String(proof.value);
+              const file = filesByProof[key];
+              const inputId = `cp-file-input-${key}`;
+              const isRowUploading = isUploading && sameValue(uploadingProofId, proof.value);
+              return (
+                <div key={key} className="cp-upload-item">
+                  <div className="cp-upload-row">
+                    <span className="cp-upload-label" title={proof.label}>{proof.label}</span>
+                    <input
+                      type="file"
+                      accept={ACCEPTED_FILE_TYPES}
+                      className="cp-file-input"
+                      id={inputId}
+                      onChange={(event) => handleProofFileChange(proof.value, event)}
+                      disabled={isUploading}
+                    />
+                    <label htmlFor={inputId} className={`cp-file-picker ${isUploading ? 'is-disabled' : ''}`}>
+                      <Paperclip size={14} />
+                      <span>{file ? 'Change file' : 'Choose file'}</span>
+                    </label>
+                    <div className="cp-file-name" title={file?.name}>
+                      {file ? (
+                        <>
+                          <FileText size={14} />
+                          <span className="cp-file-name-text">{file.name}</span>
+                          <span className="cp-file-size">
+                            {isRowUploading ? `Uploading${uploadProgress ? ` ${uploadProgress}%` : '...'}` : formatFileSize(file.size)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="cp-hint">PDF, JPG, JPEG or PNG</span>
+                      )}
+                    </div>
+                    {file && !isUploading && (
+                      <button
+                        type="button"
+                        className="cp-icon-btn"
+                        onClick={() => removeProofFile(proof.value)}
+                        aria-label={`Remove file for ${proof.label}`}
+                        title="Remove file"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  {proofErrors[key] && <span className="aw-field-error">{proofErrors[key]}</span>}
+                </div>
+              );
+            })}
 
-        {proofAlreadyUploaded && !isUploading && (
-          <span className="cp-hint cp-hint--warn">
-            This proof is already uploaded for {verificationTypeName || verificationTypeCode}. Use Replace below to update the existing file.
-          </span>
+            <div className="cp-upload-actions">
+              <span className="cp-hint">
+                {readyCount} of {selectedProofOptions.length} file{selectedProofOptions.length > 1 ? 's' : ''} ready
+              </span>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Upload size={14} />}
+                onClick={handleUpload}
+                disabled={isUploading || readyCount === 0 || missingContext.length > 0 || isResolvingCustomer}
+              >
+                {isUploading
+                  ? 'Uploading...'
+                  : `Upload ${selectedProofOptions.length > 1 ? `${selectedProofOptions.length} Documents` : 'Document'}`}
+              </Button>
+            </div>
+          </div>
         )}
 
         {formError && (

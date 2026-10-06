@@ -351,10 +351,119 @@
   color: var(--color-text-muted, #64748b);
 }
 
-.cp-proof-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.cp-field-full {
+  grid-column: 1 / -1;
+}
+
+.cp-chip-group {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.cp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.cp-chip:hover:not(:disabled) {
+  border-color: var(--color-primary, #0F7A4C);
+  color: var(--color-primary, #0F7A4C);
+}
+
+.cp-chip.is-selected {
+  color: var(--color-primary, #0F7A4C);
+  background-color: #eaf5ee;
+  border-color: var(--color-primary, #0F7A4C);
+  font-weight: 600;
+}
+
+.cp-chip.is-uploaded {
+  color: #64748b;
+  background-color: #f1f5f9;
+  border-style: dashed;
+}
+
+.cp-chip:disabled {
+  cursor: not-allowed;
+}
+
+.cp-chip:disabled:not(.is-uploaded) {
+  opacity: 0.6;
+}
+
+.cp-chip:focus-visible {
+  outline: 2px solid var(--color-primary, #0F7A4C);
+  outline-offset: 2px;
+}
+
+.cp-chip-tag {
+  padding: 1px 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #0F7A4C;
+  background-color: #dcfce7;
+  border-radius: 4px;
+}
+
+.cp-upload-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cp-upload-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cp-upload-label {
+  flex: 0 0 160px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.cp-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: #64748b;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.cp-icon-btn:hover {
+  color: #b91c1c;
+  background-color: #fee2e2;
+}
+
+.cp-upload-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 @media (max-width: 640px) {
@@ -374,6 +483,10 @@
   .cp-file-name {
     flex-basis: 100%;
     order: 2;
+  }
+
+  .cp-upload-label {
+    flex-basis: 100%;
   }
 
   .cp-upload-row .btn,

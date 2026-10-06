@@ -200,6 +200,16 @@ const CUSTOMER_PROOF_VERIFICATION_TYPES = KYC_CATEGORIES
   .filter((category) => category.key === 'aadhaar' || category.key === 'pan')
   .map(({ code, name }) => ({ code, name }));
 
+// Picks the verification type matching the card's selected identity document,
+// falling back to the first type so the modal always opens with one selected.
+function resolveCustomerProofVerification(identityDocumentType, documentTypeOptions = []) {
+  const selected = documentTypeOptions.find((option) => String(option?.value) === String(identityDocumentType));
+  const text = String(selected?.label ?? identityDocumentType ?? '').trim();
+  const category = text ? normalizeToCanonicalCategory(text) : '';
+  return CUSTOMER_PROOF_VERIFICATION_TYPES.find((type) => normalizeToCanonicalCategory(type.code) === category)
+    || CUSTOMER_PROOF_VERIFICATION_TYPES[0];
+}
+
 function personName(person) {
   if (!person || typeof person !== 'object') return '';
   const parts = [
@@ -833,28 +843,23 @@ function KycCard({
           {onOpenCustomerProof && (
             <div className="aw-field">
               <label className="form-label">Customer Proof</label>
-              <div className="cp-proof-actions">
-                {CUSTOMER_PROOF_VERIFICATION_TYPES.map((type) => (
-                  <Button
-                    key={type.code}
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => onOpenCustomerProof(type)}
-                    icon={<FileCheck size={14} />}
-                    title={`Customer Proof for ${type.name}`}
-                    style={{
-                      width: '100%',
-                      height: '38px',
-                      justifyContent: 'center',
-                      background: '#f8fafc',
-                      border: '1px dashed #cbd5e1',
-                      color: '#0f172a',
-                    }}
-                  >
-                    {type.name}
-                  </Button>
-                ))}
-              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => onOpenCustomerProof(resolveCustomerProofVerification(person.identityDocumentType, documentTypeOptions))}
+                icon={<FileCheck size={14} />}
+                title="Upload customer proofs"
+                style={{
+                  width: '100%',
+                  height: '38px',
+                  justifyContent: 'center',
+                  background: '#f8fafc',
+                  border: '1px dashed #cbd5e1',
+                  color: '#0f172a',
+                }}
+              >
+                Customer Proof
+              </Button>
             </div>
           )}
 
