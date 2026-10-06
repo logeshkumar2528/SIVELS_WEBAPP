@@ -820,25 +820,27 @@ function KycCard({
             </div>
           </div>
 
-          <div className="aw-field">
-            <label className="form-label">Attached Documents</label>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={onViewDocuments}
-              icon={<ImageIcon size={14} />}
-              style={{
-                width: '100%',
-                height: '38px',
-                justifyContent: 'center',
-                background: '#f8fafc',
-                border: '1px dashed #cbd5e1',
-                color: '#0f172a',
-              }}
-            >
-              View Documents
-            </Button>
-          </div>
+          {onViewDocuments && (
+            <div className="aw-field">
+              <label className="form-label">Attached Documents</label>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onViewDocuments}
+                icon={<ImageIcon size={14} />}
+                style={{
+                  width: '100%',
+                  height: '38px',
+                  justifyContent: 'center',
+                  background: '#f8fafc',
+                  border: '1px dashed #cbd5e1',
+                  color: '#0f172a',
+                }}
+              >
+                View Documents
+              </Button>
+            </div>
+          )}
 
           {onOpenCustomerProof && (
             <div className="aw-field">
@@ -5160,7 +5162,6 @@ export default function KycDocuments() {
               onViewPersistedDoc={handleViewPersistedDoc}
               onReplacePersistedSlot={(slotIdx, file) => handleReplacePersistedManualSlot('coApplicants', index, slotIdx, file)}
               onChange={(field, value) => updatePerson('coApplicants', field, value, index)}
-              onViewDocuments={() => handleOpenDocsModal(index)}
               onOpenCustomerProof={(verification) => setCustomerProofFor({ target: index, verification })}
               documentTypeOptions={documentTypeOptions}
               verificationOptions={verificationOptions}
