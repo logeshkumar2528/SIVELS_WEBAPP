@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { MasterModal } from '../../../components/masters/MasterModal/MasterModal';
 import { updateMapping, createMapping } from '../../../api/masters/employmentTypeDocumentMappingApi';
-import { getDocumentTypes } from '../../../api/masters/documentTypeApi';
 import { getCurrentUserId } from '../../../utils/authHelper';
 import { getErrorMessage } from '../../../utils/errorHelper';
 import { MasterStatusCheckbox } from '../../../components/masters/MasterStatusCheckbox/MasterStatusCheckbox';
 import './EmploymentTypeDocumentMapping.css';
+
+const hasValue = (value) => value !== undefined && value !== null && value !== '';
 
 export function EmploymentTypeDocumentMappingForm({ 
   isOpen, 
@@ -15,19 +16,19 @@ export function EmploymentTypeDocumentMappingForm({
   initialData, 
   existingMappings, 
   selectedEmploymentTypeId,
-  employmentTypes
+  employmentTypes,
+  customerDocumentTypes = []
 }) {
-  const [documentTypeId, setDocumentTypeId] = useState('');
+  const [customerDocumentTypeId, setCustomerDocumentTypeId] = useState('');
   const [isMandatory, setIsMandatory] = useState(false);
   const [isActive, setIsActive] = useState(true);
-  
-  const [documentTypes, setDocumentTypes] = useState([]);
-  const [isLoadingDocs, setIsLoadingDocs] = useState(false);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
   const isEdit = Boolean(initialData);
+  const hasSavedCategory = isEdit && hasValue(initialData.customerDocumentTypeId);
+  const activeCategories = customerDocumentTypes.filter((c) => c.isActive);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -35,28 +36,11 @@ export function EmploymentTypeDocumentMappingForm({
     if (isEdit) {
       setIsMandatory(initialData.isMandatory !== false);
       setIsActive(initialData.isActive !== false);
-      setDocumentTypeId(initialData.documentTypeId);
+      setCustomerDocumentTypeId(hasValue(initialData.customerDocumentTypeId) ? String(initialData.customerDocumentTypeId) : '');
     } else {
       setIsMandatory(false); // Optional by default
       setIsActive(true); // Active by default
-      setDocumentTypeId('');
-      
-      // Fetch document types for creation
-      const fetchDocs = async () => {
-        setIsLoadingDocs(true);
-        try {
-          const response = await getDocumentTypes();
-          const docs = Array.isArray(response) ? response : (response.data || response.value || []);
-          setDocumentTypes(docs.filter(d => d.isActive !== false));
-        } catch (err) {
-          console.error('Failed to load document types:', err);
-          toast.error('Failed to load document types');
-        } finally {
-          setIsLoadingDocs(false);
-        }
-      };
-      
-      fetchDocs();
+      setCustomerDocumentTypeId('');
     }
     setError(null);
   }, [isOpen, initialData, isEdit]);
@@ -66,28 +50,25 @@ export function EmploymentTypeDocumentMappingForm({
     
     setError(null);
 
-    // Validation
-    if (!isEdit) {
-      if (!selectedEmploymentTypeId) {
-        setError('Employment Type is required.');
-        return;
-      }
-      if (!documentTypeId) {
-        setError('Document Type is required.');
-        return;
-      }
-      
-      // Check duplicate
-      const isDuplicate = existingMappings?.some(
-        mapping => String(mapping.documentTypeId) === String(documentTypeId) && mapping.isActive
-      );
-      
-      if (isDuplicate) {
-        const msg = 'This document is already mapped to this employment type.';
-        setError(msg);
-        toast.error(msg);
-        return;
-      }
+    if (!isEdit && !selectedEmploymentTypeId) {
+      setError('Employment Type is required.');
+      return;
+    }
+    if (!customerDocumentTypeId) {
+      setError('Customer Document Category is required.');
+      return;
+    }
+
+    const isDuplicate = existingMappings?.some(
+      mapping => String(mapping.customerDocumentTypeId) === String(customerDocumentTypeId)
+        && mapping.isActive
+        && String(mapping.employmentTypeDocumentMappingId) !== String(initialData?.employmentTypeDocumentMappingId)
+    );
+    if (isDuplicate) {
+      const msg = 'This customer document category is already mapped to this employment type.';
+      setError(msg);
+      toast.error(msg);
+      return;
     }
 
     setIsSubmitting(true);
@@ -97,7 +78,8 @@ export function EmploymentTypeDocumentMappingForm({
         const payload = {
           employmentTypeDocumentMappingId: initialData.employmentTypeDocumentMappingId,
           employmentTypeId: initialData.employmentTypeId,
-          documentTypeId: initialData.documentTypeId,
+          customerDocumentTypeId: Number(customerDocumentTypeId),
+          documentTypeId: hasValue(initialData.documentTypeId) ? Number(initialData.documentTypeId) : null,
           isMandatory,
           isActive,
           modifiedBy: Number(getCurrentUserId()) || 1
@@ -108,7 +90,7 @@ export function EmploymentTypeDocumentMappingForm({
       } else {
         const payload = {
           employmentTypeId: Number(selectedEmploymentTypeId),
-          documentTypeId: Number(documentTypeId),
+          customerDocumentTypeId: Number(customerDocumentTypeId),
           isMandatory,
           isActive,
           createdBy: Number(getCurrentUserId()) || 1
@@ -135,6 +117,12 @@ export function EmploymentTypeDocumentMappingForm({
     ? initialData.employmentTypeName 
     : employmentTypes?.find(e => String(e.employmentTypeId) === String(selectedEmploymentTypeId))?.employmentTypeName || '';
 
+  const savedCategoryName = hasSavedCategory
+    ? customerDocumentTypes.find(c => String(c.customerDocumentTypeId) === String(initialData.customerDocumentTypeId))?.documentTypeName
+      || initialData.customerDocumentTypeName
+      || `Category #${initialData.customerDocumentTypeId}`
+    : '';
+
   return (
     <MasterModal 
       isOpen={isOpen} 
@@ -154,35 +142,35 @@ export function EmploymentTypeDocumentMappingForm({
         </div>
         
         <div className="form-group">
-          <label htmlFor="documentTypeId" className="form-label">
-            Document Type <span className="text-danger">*</span>
+          <label htmlFor="customerDocumentTypeId" className="form-label">
+            Customer Document Category <span className="text-danger">*</span>
           </label>
-          {isEdit ? (
+          {hasSavedCategory ? (
             <input
               type="text"
               className="form-input"
-              value={initialData.documentTypeName || ''}
+              value={savedCategoryName}
               disabled
             />
           ) : (
             <select
-              id="documentTypeId"
-              name="documentTypeId"
-              className={`form-input ${error && error.includes('Document') ? 'form-input-error' : ''}`}
-              value={documentTypeId}
+              id="customerDocumentTypeId"
+              name="customerDocumentTypeId"
+              className={`form-input ${error && error.includes('Category') ? 'form-input-error' : ''}`}
+              value={customerDocumentTypeId}
               onChange={(e) => {
-                setDocumentTypeId(e.target.value);
+                setCustomerDocumentTypeId(e.target.value);
                 if (error) setError(null);
               }}
-              disabled={isSubmitting || isLoadingDocs}
+              disabled={isSubmitting}
               required
             >
               <option value="">
-                {isLoadingDocs ? 'Loading documents...' : 'Select Document Type'}
+                {activeCategories.length === 0 ? 'No active categories configured' : 'Select Customer Document Category'}
               </option>
-              {documentTypes.map((doc) => (
-                <option key={doc.documentTypeId} value={doc.documentTypeId}>
-                  {doc.documentTypeName} ({doc.documentTypeCode})
+              {activeCategories.map((category) => (
+                <option key={category.customerDocumentTypeId} value={category.customerDocumentTypeId}>
+                  {category.documentTypeName}{category.documentTypeCode ? ` (${category.documentTypeCode})` : ''}
                 </option>
               ))}
             </select>

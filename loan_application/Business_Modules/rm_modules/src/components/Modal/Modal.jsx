@@ -1,9 +1,10 @@
-import { memo, useEffect } from 'react';
+import { memo, useEffect, useId } from 'react';
 import iconMap from '../../config/iconMap';
 import './Modal.css';
 
 const Modal = memo(function Modal({ show, onHide, title, children, footer, size = 'md', className = '' }) {
   const XIcon = iconMap['X'];
+  const titleId = useId();
 
   useEffect(() => {
     if (show) {
@@ -19,16 +20,17 @@ const Modal = memo(function Modal({ show, onHide, title, children, footer, size 
   if (!show) return null;
 
   return (
-    <div className="modal-backdrop" onClick={onHide} aria-hidden="true">
+    <div className="modal-backdrop" onClick={onHide}>
       <div
         className={`modal-container modal-container--${size} ${className}`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
       >
         {title && (
           <div className="modal-header">
-            <h3 className="modal-title">{title}</h3>
+            <h3 id={titleId} className="modal-title">{title}</h3>
             <button type="button" className="modal-close-btn" onClick={onHide} aria-label="Close modal">
               {XIcon && <XIcon size={18} />}
             </button>

@@ -227,6 +227,7 @@ export function selectLatestCustomerPhotoDoc(docList = [], photoDocTypeId = null
 
     const name = String(
       doc.documentTypeName ||
+      doc.customerDocumentTypeName ||
       doc.documentName ||
       doc.name ||
       doc.rejectedDocumentType ||

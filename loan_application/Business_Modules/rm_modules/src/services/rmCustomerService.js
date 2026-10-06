@@ -296,5 +296,10 @@ export const rmCustomerService = {
   },
 };
 
+function toList(data) {
+  if (Array.isArray(data)) return data;
+  return data?.data || data?.value || data?.items || [];
+}
+
 export default rmCustomerService;
 

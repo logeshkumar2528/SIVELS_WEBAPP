@@ -74,7 +74,7 @@ export const authService = {
 
   // ──────────────────────────────────────────────────────────────────────────
   // LOGIN  →  POST /api/user/login
-  // baseURL is already "http://localhost:5118/api", so endpoint = "/user/login"
+  // baseURL is already "https://fusiontecsoftware.com/sivels/api", so endpoint = "/user/login"
   // ──────────────────────────────────────────────────────────────────────────
   login: async (mobileNumber) => {
     try {

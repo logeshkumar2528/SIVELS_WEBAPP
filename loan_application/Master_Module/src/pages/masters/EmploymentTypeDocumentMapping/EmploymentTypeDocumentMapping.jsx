@@ -1,15 +1,39 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { RefreshCw, Link } from 'lucide-react';
 import { MasterTable } from '../../../components/masters/MasterTable/MasterTable';
 import { MasterStatusBadge } from '../../../components/masters/MasterStatusBadge/MasterStatusBadge';
 import { getEmploymentTypes } from '../../../api/masters/employmentTypeApi';
 import { getMappingsByEmploymentType } from '../../../api/masters/employmentTypeDocumentMappingApi';
+import { getCustomerDocumentTypes } from '../../../api/masters/customerDocumentTypeApi';
 import { formatDateTime } from '../../../utils/dateHelper';
 import { EmploymentTypeDocumentMappingForm } from './EmploymentTypeDocumentMappingForm';
 import './EmploymentTypeDocumentMapping.css';
 
+const toList = (response) => (Array.isArray(response) ? response : (response?.data || response?.value || []));
+
+const normalizeCategory = (row) => ({
+  customerDocumentTypeId: row.customerDocumentTypeId ?? row.CustomerDocumentTypeId,
+  documentTypeCode: row.documentTypeCode ?? row.DocumentTypeCode ?? '',
+  documentTypeName: row.documentTypeName ?? row.DocumentTypeName ?? '',
+  isActive: (row.isActive ?? row.IsActive) !== false,
+});
+
+const normalizeMapping = (row) => ({
+  ...row,
+  employmentTypeDocumentMappingId: row.employmentTypeDocumentMappingId ?? row.EmploymentTypeDocumentMappingId,
+  employmentTypeId: row.employmentTypeId ?? row.EmploymentTypeId,
+  customerDocumentTypeId: row.customerDocumentTypeId ?? row.CustomerDocumentTypeId ?? null,
+  customerDocumentTypeName: row.customerDocumentTypeName ?? row.CustomerDocumentTypeName ?? '',
+  documentTypeId: row.documentTypeId ?? row.DocumentTypeId ?? null,
+  documentTypeName: row.documentTypeName ?? row.DocumentTypeName ?? '',
+  isMandatory: (row.isMandatory ?? row.IsMandatory) === true,
+  isActive: (row.isActive ?? row.IsActive) !== false,
+  createdAt: row.createdAt ?? row.CreatedAt,
+  modifiedAt: row.modifiedAt ?? row.ModifiedAt,
+});
+
 const COLUMNS = [
-  { key: 'documentTypeName', label: 'Document' },
+  { key: 'customerDocumentTypeName', label: 'Customer Document Category', render: (row) => row.customerDocumentTypeName || '—' },
   { 
     key: 'isMandatory', 
     label: 'Mandatory',
@@ -39,8 +63,9 @@ const COLUMNS = [
 export function EmploymentTypeDocumentMapping() {
   const [employmentTypes, setEmploymentTypes] = useState([]);
   const [selectedEmploymentTypeId, setSelectedEmploymentTypeId] = useState('');
+  const [customerDocumentTypes, setCustomerDocumentTypes] = useState([]);
   
-  const [data, setData] = useState([]);
+  const [rawData, setRawData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
   
@@ -61,13 +86,30 @@ export function EmploymentTypeDocumentMapping() {
         console.error('Failed to load employment types', err);
       }
     };
+    const fetchCategories = async () => {
+      try {
+        const response = await getCustomerDocumentTypes();
+        if (isMounted) setCustomerDocumentTypes(toList(response).map(normalizeCategory));
+      } catch (err) {
+        console.error('Failed to load customer document categories', err);
+      }
+    };
     fetchEmpTypes();
+    fetchCategories();
     return () => { isMounted = false; };
   }, []);
 
+  const data = useMemo(() => rawData.map((mapping) => {
+    if (mapping.customerDocumentTypeName || mapping.customerDocumentTypeId === null) return mapping;
+    const category = customerDocumentTypes.find(
+      (c) => String(c.customerDocumentTypeId) === String(mapping.customerDocumentTypeId)
+    );
+    return category ? { ...mapping, customerDocumentTypeName: category.documentTypeName } : mapping;
+  }), [rawData, customerDocumentTypes]);
+
   const fetchMappings = async (empTypeId) => {
     if (!empTypeId) {
-      setData([]);
+      setRawData([]);
       return;
     }
     
@@ -75,12 +117,11 @@ export function EmploymentTypeDocumentMapping() {
     setIsError(false);
     try {
       const response = await getMappingsByEmploymentType(empTypeId);
-      const records = Array.isArray(response) ? response : (response.data || response.value || []);
-      setData(records);
+      setRawData(toList(response).map(normalizeMapping));
     } catch (error) {
       console.error('Failed to fetch mappings:', error);
       setIsError(true);
-      setData([]);
+      setRawData([]);
     } finally {
       setIsLoading(false);
     }
@@ -196,6 +237,7 @@ export function EmploymentTypeDocumentMapping() {
         existingMappings={data}
         selectedEmploymentTypeId={selectedEmploymentTypeId}
         employmentTypes={employmentTypes}
+        customerDocumentTypes={customerDocumentTypes}
       />
     </div>
   );

@@ -33,7 +33,9 @@ function ViewCustomerModal({ customer, onClose }) {
     active.forEach((doc) => {
       const key = doc.documentTypeId
         ? String(doc.documentTypeId)
-        : String(doc.documentTypeName || doc.documentName || 'other').trim().toLowerCase()
+        : doc.customerDocumentTypeId
+          ? `customer_${doc.customerDocumentTypeId}`
+          : String(doc.documentTypeName || doc.documentName || 'other').trim().toLowerCase()
       if (!grouped[key]) grouped[key] = []
       grouped[key].push(doc)
     })
@@ -392,7 +394,7 @@ function ViewCustomerModal({ customer, onClose }) {
       if (isImage) {
         setModalImage({
           src: url,
-          title: getDocumentName(doc.documentTypeId, doc.documentName || doc.documentTypeName || fileName)
+          title: getDocumentName(doc.documentTypeId, doc.documentName || doc.documentTypeName || doc.customerDocumentTypeName || fileName)
         });
       } else {
         window.open(url, '_blank');
@@ -552,7 +554,7 @@ function ViewCustomerModal({ customer, onClose }) {
                   <div style={{ color: '#64748b', fontSize: '13px' }}>No documents uploaded.</div>
                 ) : activeDocTab === 'original' ? (
                   originalDocs.map((doc, idx) => {
-                    const docName = getDocumentName(doc.documentTypeId, doc.documentName || doc.documentTypeName)
+                    const docName = getDocumentName(doc.documentTypeId, doc.documentName || doc.documentTypeName || doc.customerDocumentTypeName)
                     const IconComp = getDocumentIcon(docName)
                     return (
                       <div className="drawer-doc-card" key={doc.id || doc.agentCustomerDocumentId || idx}>
@@ -590,7 +592,7 @@ function ViewCustomerModal({ customer, onClose }) {
                     </div>
                   ) : (
                     updatedDocs.map((doc, idx) => {
-                      const docName = getDocumentName(doc.documentTypeId, doc.documentName || doc.documentTypeName)
+                      const docName = getDocumentName(doc.documentTypeId, doc.documentName || doc.documentTypeName || doc.customerDocumentTypeName)
                       const IconComp = getDocumentIcon(docName)
                       return (
                         <div className="drawer-doc-card" key={doc.id || doc.agentCustomerDocumentId || idx}>

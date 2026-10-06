@@ -10,6 +10,7 @@ import { Title } from './pages/masters/Title/Title';
 import { Relationship } from './pages/masters/Relationship/Relationship';
 import { SourcingChannel } from './pages/masters/SourcingChannel/SourcingChannel';
 import { DocumentType } from './pages/masters/DocumentType/DocumentType';
+import { CustomerDocumentType } from './pages/masters/CustomerDocumentType/CustomerDocumentType';
 import { StatusRole } from './pages/masters/StatusRole/StatusRole';
 import { Status } from './pages/masters/Status/Status';
 import { LoanType } from './pages/masters/LoanType/LoanType';
@@ -105,6 +106,7 @@ function App() {
               <Route path="relationship" element={<Relationship />} />
               <Route path="sourcing-channel" element={<SourcingChannel />} />
               <Route path="document-type" element={<DocumentType />} />
+              <Route path="customer-document-type" element={<CustomerDocumentType />} />
               <Route path="status-role" element={<StatusRole />} />
               <Route path="status" element={<Status />} />
               <Route path="loan-type" element={<LoanType />} />

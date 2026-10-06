@@ -36,6 +36,8 @@ import { getBackOfficeAuth } from '../../auth/authStorage';
 import VerificationStepModal from '../../components/Verification/VerificationStepModal';
 import AssetBase from '../../components/AssetBase/AssetBase';
 import RtrCommonSheet from '../../components/RtrCommonSheet/RtrCommonSheet';
+import CustomerDocumentsPanel from '../../components/CustomerDocuments/CustomerDocumentsPanel';
+import { FolderOpen } from 'lucide-react';
 import PdfView from '../../../../../rm_modules/src/pages/PdfView/PdfView';
 import { ApplicationDraftProvider } from '../../../../../rm_modules/src/state/ApplicationDraftContext';
 import { resolveDocumentTypeId, validateApplicantDocumentFile, getDocumentApplicability } from '../../../../../../Core/src/utils/documentTypeHelper';
@@ -1206,6 +1208,9 @@ export default function CustomerVerification() {
 
   // 3. Preserved Legacy 8-Step Modal State (View-only inspection)
   const [selectedStepNumber, setSelectedStepNumber] = useState(null);
+
+  // Combined applicant / co-applicant documents (AgentCustomerDocument + CustomerDocumentProof)
+  const [isDocumentsPanelOpen, setIsDocumentsPanelOpen] = useState(false);
 
   // 4. Document Previews Cache & Blob Management
   const [docPreviews, setDocPreviews] = useState({});
@@ -6344,7 +6349,9 @@ export default function CustomerVerification() {
   const isMatchingApplicantDoc = useCallback((doc, stepNumOrCode, masterMap) => {
     if (!doc) return false;
     const typeId = Number(doc.documentTypeId || doc.DocumentTypeId);
-    const typeName = String(doc.documentTypeName || doc.DocumentTypeName || '').trim().toLowerCase();
+    const typeName = String(
+      doc.documentTypeName || doc.DocumentTypeName || doc.customerDocumentTypeName || doc.CustomerDocumentTypeName || ''
+    ).trim().toLowerCase();
     const fileName = String(doc.fileName || doc.FileName || doc.name || '').trim().toLowerCase();
 
     const master = masterMap?.[typeId];
@@ -11048,6 +11055,16 @@ export default function CustomerVerification() {
 
         {/* Right: Verification status summary badges */}
         <div className="bo-cv-header-right">
+          <button
+            type="button"
+            className="bo-cdp-header-btn"
+            onClick={() => setIsDocumentsPanelOpen(true)}
+            title="View all applicant and co-applicant documents"
+          >
+            <FolderOpen size={14} />
+            <span>All Documents</span>
+          </button>
+
           <div className="bo-cv-status-badge-item">
             <span className="bo-cv-status-lbl">Application:</span>
             <span className={statusInfo.className}>{statusInfo.label}</span>
@@ -21134,6 +21151,30 @@ export default function CustomerVerification() {
         </div>
       )}
 
+      <CustomerDocumentsPanel
+        open={isDocumentsPanelOpen}
+        onClose={() => setIsDocumentsPanelOpen(false)}
+        agentCustomerId={verificationData?.customerId || verificationData?.agentCustomerId || customerId}
+        applicationProductDetailsId={resolvedAppProdId || null}
+        rmId={
+          verificationData?.rmId ||
+          verificationData?.customer?.rmId ||
+          verificationData?.application?.rmId ||
+          verificationData?.raw?.customer?.rmId ||
+          verificationData?.raw?.productDetails?.[0]?.rmId ||
+          verificationData?.raw?.productDetails?.rmId ||
+          null
+        }
+        backOfficeId={getAuthenticatedBackOfficeId()}
+        applicants={[
+          { sequence: 0, name: verificationData?.customerName || '' },
+          ...coApplicants.map((co) => ({ sequence: co.sequence, name: co.name })),
+        ]}
+        onChanged={() => {
+          fetchApplicationRejections();
+          fetchAllCustomerDocs();
+        }}
+      />
     </div>
   );
 }
