@@ -50,6 +50,7 @@ const MASTERS_MENU = [
   { label: 'RTR Loan Status', path: '/masters/rtr-loan-status', icon: FileSpreadsheet },
   { label: 'Health Check Type', path: '/masters/health-check-type', icon: Activity },
   { label: 'Proof Master', path: '/masters/proof-master', icon: FileCheck },
+  { label: 'Mortgage Status', path: '/masters/mortgage-status', icon: ShieldCheck },
   { label: 'Company Configuration', path: '/company', icon: Building2 }
 ];
 

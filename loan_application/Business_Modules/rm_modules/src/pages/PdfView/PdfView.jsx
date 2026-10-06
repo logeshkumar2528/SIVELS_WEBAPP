@@ -1,19 +1,23 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { CheckCircle, AlertCircle } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import { ROUTES } from '../../config/routeConfig';
 import { getApplicantCount } from '../applicationWizard/flowUtils';
 import Button from '../../components/Button/Button';
+import Modal from '../../components/Modal/Modal';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { useLoading } from '../../../../../Core/src/context/LoadingContext';
 import { formatDateTime, toIstDateInput } from '../../utils/dateHelper';
 import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
 import { isApplicantDocumentTuple } from '../KycDocuments/kycDocumentState';
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
+import { getCurrentRMContext } from '../../utils/rmContext';
+import { rmCustomerService } from '../../services/rmCustomerService';
 import './PdfView.css';
-import LogoImage from '../../../../../Core/src/assets/branding/Logo.png';
+import LogoImage from '../../../../../Core/src/assets/branding/SivelsFinanceLogo.jpg';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
@@ -68,11 +72,20 @@ export default function PdfView() {
   const applicationId = params.applicationId || params.customerId;
   const navigate = useNavigate();
   const location = useLocation();
-  const { applications, getApplication, loadApplicationFromBackend } = useApplicationDraftStore();
+  const { applications, getApplication, loadApplicationFromBackend, saveApplication } = useApplicationDraftStore();
   const appData = applications[applicationId] || getApplication(applicationId) || {};
   const applicationDisplayId = buildApplicationDisplayId(appData, applicationId);
   const pdfRef = useRef();
   const prepTokenRef = useRef(null);
+
+  // Status 6 (Returned to RM) resubmission state
+  const [showResubmitModal, setShowResubmitModal] = useState(false);
+  const [resubmitRemarks, setResubmitRemarks] = useState('');
+  const [resubmitError, setResubmitError] = useState(null);
+  const [isResubmitting, setIsResubmitting] = useState(false);
+  const [resubmitSuccess, setResubmitSuccess] = useState(false);
+  const [workflowHistory, setWorkflowHistory] = useState([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const [liveCustomer, setLiveCustomer] = useState(null);
   const [liveRM, setLiveRM] = useState(null);
@@ -2148,8 +2161,218 @@ export default function PdfView() {
 
   const isReviewMode = Boolean(location.state?.reviewMode);
 
+  // Status-6 detection with priority:
+  // 1. liveCustomer.status / liveCustomer.Status
+  // 2. appData.rawStatusCode
+  // 3. appData.rawStatus
+  // 4. appData.status === 'Returned'
+  const rawBackendStatus =
+    liveCustomer?.status !== undefined && liveCustomer?.status !== null
+      ? Number(liveCustomer.status)
+      : (liveCustomer?.Status !== undefined && liveCustomer?.Status !== null
+          ? Number(liveCustomer.Status)
+          : (appData.rawStatusCode !== undefined && appData.rawStatusCode !== null
+              ? Number(appData.rawStatusCode)
+              : (appData.rawStatus !== undefined && appData.rawStatus !== null
+                  ? Number(appData.rawStatus)
+                  : (appData.status === 'Returned' ? 6 : null))));
+
+  const isReturnedApplication = rawBackendStatus === 6;
+
+  // Load workflow history only for returned application
+  useEffect(() => {
+    if (isReturnedApplication && applicationId && workflowHistory.length === 0 && !isLoadingHistory) {
+      let active = true;
+      setIsLoadingHistory(true);
+      rmCustomerService.getApplicationWorkflowHistory(applicationId)
+        .then((history) => {
+          if (active && Array.isArray(history)) {
+            setWorkflowHistory(history);
+          }
+        })
+        .catch((err) => {
+          console.error('Error fetching workflow history in PdfView:', err);
+        })
+        .finally(() => {
+          if (active) setIsLoadingHistory(false);
+        });
+      return () => {
+        active = false;
+      };
+    }
+  }, [isReturnedApplication, applicationId, workflowHistory.length, isLoadingHistory]);
+
+  const latestReturnRemark = useMemo(() => {
+    if (!Array.isArray(workflowHistory) || workflowHistory.length === 0) return null;
+    const returnedItems = workflowHistory.filter(
+      (item) =>
+        String(item.actionType || item.ActionType || '').toLowerCase().includes('return') ||
+        Number(item.toStatus || item.ToStatus) === 6
+    );
+    if (returnedItems.length === 0) {
+      for (let i = workflowHistory.length - 1; i >= 0; i--) {
+        if (workflowHistory[i]?.remarks || workflowHistory[i]?.Remarks) {
+          return workflowHistory[i];
+        }
+      }
+      return null;
+    }
+
+    returnedItems.sort((a, b) => {
+      const idA = Number(a.applicationWorkflowHistoryId ?? a.historyId ?? a.HistoryId ?? 0);
+      const idB = Number(b.applicationWorkflowHistoryId ?? b.historyId ?? b.HistoryId ?? 0);
+      if (idA && idB && idA !== idB) return idB - idA;
+
+      const timeA = new Date(a.createdAt || a.CreatedAt || 0).getTime();
+      const timeB = new Date(b.createdAt || b.CreatedAt || 0).getTime();
+      return timeB - timeA;
+    });
+
+    return returnedItems[0] || null;
+  }, [workflowHistory]);
+
+  const resolvedReturnTargetPerson = useMemo(() => {
+    if (!latestReturnRemark) return null;
+    const rawSeq = latestReturnRemark.applicantSequence ?? latestReturnRemark.ApplicantSequence;
+    if (rawSeq === null || rawSeq === undefined || rawSeq === '') {
+      return null;
+    }
+
+    const seq = Number(rawSeq);
+    if (isNaN(seq)) return null;
+
+    if (seq === 0) {
+      const pers =
+        appData?.registration?.personalInformation?.applicant ||
+        appData?.sections?.personalInformation?.applicant ||
+        appData?.personalInformation?.applicant ||
+        appData?.raw?.personalInformation?.[0] ||
+        appData?.customer ||
+        {};
+      const nameParts = [
+        pers.firstName ?? pers.FirstName,
+        pers.middleName ?? pers.MiddleName,
+        pers.lastName ?? pers.LastName,
+      ].filter(Boolean).join(' ');
+      const name =
+        nameParts ||
+        pers.fullName ||
+        pers.FullName ||
+        pers.customerName ||
+        pers.CustomerName ||
+        appData?.customerName ||
+        resolveApplicantName(appData) ||
+        customerDisplayName ||
+        'Primary Applicant';
+      return `Primary Applicant — ${name}`;
+    }
+
+    const coList =
+      appData?.registration?.personalInformation?.coApplicants ||
+      appData?.sections?.personalInformation?.coApplicants ||
+      appData?.personalInformation?.coApplicants ||
+      (Array.isArray(appData?.raw?.personalInformation) ? appData.raw.personalInformation.slice(1) : []) ||
+      [];
+
+    let matchedCo = coList.find((co) => {
+      const coSeq = co?.applicantSequence ?? co?.ApplicantSequence ?? co?.sequence ?? co?.Sequence;
+      return coSeq !== undefined && coSeq !== null && Number(coSeq) === seq;
+    });
+
+    if (!matchedCo && coList[seq - 1]) {
+      matchedCo = coList[seq - 1];
+    }
+
+    if (matchedCo) {
+      const nameParts = [
+        matchedCo.firstName ?? matchedCo.FirstName,
+        matchedCo.middleName ?? matchedCo.MiddleName,
+        matchedCo.lastName ?? matchedCo.LastName,
+      ].filter(Boolean).join(' ');
+      const coName =
+        nameParts ||
+        matchedCo.fullName ||
+        matchedCo.FullName ||
+        matchedCo.name ||
+        matchedCo.customerName ||
+        `Co-Applicant ${seq}`;
+      return `Co-Applicant ${seq} — ${coName}`;
+    }
+
+    return `Co-Applicant ${seq}`;
+  }, [latestReturnRemark, appData, customerDisplayName]);
+
+  const handleOpenResubmitModal = () => {
+    setResubmitRemarks('');
+    setResubmitError(null);
+    setResubmitSuccess(false);
+    setShowResubmitModal(true);
+
+    if (applicationId && workflowHistory.length === 0 && !isLoadingHistory) {
+      setIsLoadingHistory(true);
+      rmCustomerService.getApplicationWorkflowHistory(applicationId)
+        .then((history) => {
+          if (Array.isArray(history)) setWorkflowHistory(history);
+        })
+        .catch((err) => console.error('Error fetching workflow history:', err))
+        .finally(() => setIsLoadingHistory(false));
+    }
+  };
+
+  const handleConfirmResubmit = async () => {
+    if (isResubmitting) return;
+
+    const trimmedRemarks = resubmitRemarks.trim();
+    if (!trimmedRemarks) {
+      setResubmitError('Correction remarks are mandatory for resubmitting to Back Office.');
+      return;
+    }
+
+    setResubmitError(null);
+    setIsResubmitting(true);
+
+    try {
+      const rmContext = getCurrentRMContext();
+      const performedByUserId = Number(rmContext?.rmId);
+      if (!Number.isFinite(performedByUserId) || performedByUserId <= 0) {
+        throw new Error('Unable to identify the authenticated RM. Please log in again.');
+      }
+
+      const agentCustomerId = Number(applicationId || appData?.agentCustomerId);
+      if (!Number.isFinite(agentCustomerId) || agentCustomerId <= 0) {
+        throw new Error('Invalid application ID for resubmission.');
+      }
+
+      const payload = {
+        performedByUserId,
+        performedByRole: 'RM',
+        remarks: trimmedRemarks,
+      };
+
+      await rmCustomerService.resubmitApplicationToBackOffice(agentCustomerId, payload);
+
+      // On successful 6 -> 2 transition:
+      saveApplication(applicationId, {
+        status: 'Logged to HO',
+        rawStatusCode: 2,
+        rawStatus: 2,
+      });
+      setResubmitSuccess(true);
+    } catch (err) {
+      console.error('Error resubmitting application to Back Office:', err);
+      const serverMsg =
+        err?.response?.data?.message ||
+        err?.response?.data?.title ||
+        err?.message ||
+        'Failed to resubmit application to Back Office. Please try again.';
+      setResubmitError(serverMsg);
+    } finally {
+      setIsResubmitting(false);
+    }
+  };
+
   const handleBack = () => {
-    if (isReviewMode) {
+    if (isReturnedApplication || isReviewMode) {
       navigate(location.state?.returnTo || ROUTES.COLLATERAL.replace(':applicationId', applicationId));
       return;
     }
@@ -2196,12 +2419,182 @@ export default function PdfView() {
         variant={errorPopup?.variant}
         onClose={() => setErrorPopup(null)}
       />
+
+      {/* RESUBMISSION MODAL (STATUS 6: RETURNED TO RM) */}
+      <Modal
+        show={showResubmitModal}
+        onHide={() => {
+          if (!isResubmitting && !resubmitSuccess) setShowResubmitModal(false);
+        }}
+        title={resubmitSuccess ? 'Application Resubmitted' : 'Resubmit Application to Back Office'}
+        size="md"
+        footer={
+          resubmitSuccess ? (
+            <div style={{ width: '100%' }}>
+              <Button
+                variant="primary"
+                style={{ width: '100%', justifyContent: 'center' }}
+                onClick={() => {
+                  setShowResubmitModal(false);
+                  navigate(ROUTES.APPROVED_APPLICATIONS);
+                }}
+              >
+                Go to Logged to HO Applications
+              </Button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', width: '100%' }}>
+              <Button
+                variant="secondary"
+                onClick={() => setShowResubmitModal(false)}
+                disabled={isResubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleConfirmResubmit}
+                disabled={isResubmitting || !resubmitRemarks.trim()}
+              >
+                {isResubmitting ? 'Resubmitting...' : 'Confirm Resubmission'}
+              </Button>
+            </div>
+          )
+        }
+      >
+        {resubmitSuccess ? (
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '16px 4px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: '140px',
+            }}
+          >
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                background: '#effaf2',
+                color: '#0F7A4C',
+                marginBottom: '16px',
+                flexShrink: 0,
+              }}
+            >
+              <CheckCircle size={24} />
+            </div>
+            <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', margin: '0 0 8px 0' }}>
+              Resubmitted Successfully
+            </h3>
+            <p style={{ color: '#64748b', fontSize: '13px', margin: 0, lineHeight: 1.5 }}>
+              Application <strong>{applicationDisplayId}</strong> for <strong>{customerDisplayName || resolvedApplicantName}</strong> has been resubmitted to Back Office (Status: Logged to HO).
+            </p>
+          </div>
+        ) : (
+          <div style={{ padding: '4px 0' }}>
+            <p
+              style={{
+                color: '#475569',
+                fontSize: '13px',
+                marginBottom: '16px',
+                lineHeight: '1.5',
+              }}
+            >
+              You are resubmitting application <strong>{applicationDisplayId}</strong> (<strong>{customerDisplayName || resolvedApplicantName}</strong>) to Back Office for verification.
+            </p>
+
+            {latestReturnRemark && (
+              <div
+                style={{
+                  padding: '12px 14px',
+                  backgroundColor: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '6px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                  <AlertCircle size={14} color="#dc2626" />
+                  <strong style={{ fontSize: '12.5px', color: '#991b1b' }}>
+                    Reason for Return from Back Office
+                  </strong>
+                </div>
+                {resolvedReturnTargetPerson && (
+                  <div style={{ fontSize: '12px', color: '#7f1d1d', lineHeight: 1.4 }}>
+                    <strong style={{ color: '#991b1b' }}>Correction For: </strong>
+                    <span>{resolvedReturnTargetPerson}</span>
+                  </div>
+                )}
+                <div style={{ fontSize: '12.5px', color: '#7f1d1d', lineHeight: 1.4 }}>
+                  {resolvedReturnTargetPerson && <strong style={{ color: '#991b1b' }}>Reason: </strong>}
+                  <span>{latestReturnRemark.remarks || latestReturnRemark.Remarks || latestReturnRemark.remark || 'Application returned for correction.'}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="aw-field" style={{ marginBottom: '12px' }}>
+              <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>
+                RM Correction Remarks <span style={{ color: '#dc2626' }}>*</span>
+              </label>
+              <textarea
+                className={`form-input aw-input ${resubmitError ? 'aw-input--invalid' : ''}`}
+                style={{
+                  width: '100%',
+                  minHeight: '90px',
+                  padding: '10px 12px',
+                  fontSize: '13px',
+                  lineHeight: '1.5',
+                  resize: 'vertical',
+                }}
+                rows={3}
+                placeholder="Enter details of corrections made before resubmitting to Back Office..."
+                value={resubmitRemarks}
+                onChange={(e) => {
+                  setResubmitRemarks(e.target.value);
+                  if (resubmitError) setResubmitError(null);
+                }}
+                disabled={isResubmitting}
+              />
+              <span style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                Mandatory: Describe the updates or corrections completed for this application.
+              </span>
+            </div>
+
+            {resubmitError && (
+              <div
+                style={{
+                  padding: '8px 12px',
+                  backgroundColor: '#fef2f2',
+                  border: '1px solid #fca5a5',
+                  borderRadius: '6px',
+                  color: '#b91c1c',
+                  fontSize: '12px',
+                  marginTop: '8px',
+                }}
+              >
+                {resubmitError}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
       <div className="pdf-controls">
         <Button
           variant="secondary"
           onClick={handleBack}
         >
-          {isReviewMode ? 'Back to Collateral' : 'Back to Application'}
+          {isReviewMode || isReturnedApplication ? 'Back to Collateral' : 'Back to Application'}
         </Button>
         <Button onClick={handleDownloadPdf} disabled={isGeneratingPdf || !isPdfMediaReady}>
           {isGeneratingPdf
@@ -2217,7 +2610,15 @@ export default function PdfView() {
         >
           Share
         </Button>
-        {isReviewMode && (
+        {isReturnedApplication ? (
+          <Button
+            variant="primary"
+            onClick={handleOpenResubmitModal}
+            disabled={isGeneratingPdf || !isPdfMediaReady}
+          >
+            Resubmit to Back Office
+          </Button>
+        ) : isReviewMode ? (
           <Button
             variant="primary"
             onClick={handleConfirmAndContinue}
@@ -2225,7 +2626,7 @@ export default function PdfView() {
           >
             Confirm & Continue to Charges
           </Button>
-        )}
+        ) : null}
       </div>
 
       <div className="pdf-container" ref={pdfRef}>

@@ -103,6 +103,10 @@ export default function RtrCommonSheet({
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusError, setStatusError] = useState(null);
 
+  // Backend RTR Summary State
+  const [backendSummary, setBackendSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
   // CRUD Operation States
   const [obligationsLoading, setObligationsLoading] = useState(false);
   const [obligationsSaving, setObligationsSaving] = useState(false);
@@ -317,10 +321,57 @@ export default function RtrCommonSheet({
     }
   }, [applicationProductDetailsId, applicantSequence, activeStatuses]);
 
-  // Trigger hydration on mount and when applicationProductDetailsId changes
+  // GET hydration: fetch authoritative RTR loan obligations summary & proposed loan
+  const fetchSummary = useCallback(async () => {
+    if (!applicationProductDetailsId || Number(applicationProductDetailsId) <= 0) {
+      return;
+    }
+    setSummaryLoading(true);
+    try {
+      const res = await backOfficeService.getLoanObligationsSummary(
+        Number(applicationProductDetailsId),
+        Number(applicantSequence || 0)
+      );
+      const summaryData = (res && typeof res === 'object') ? res : null;
+      if (summaryData) {
+        setBackendSummary(summaryData);
+        setSummary((prev) => ({
+          ...prev,
+          proposedLoanAmount:
+            summaryData.proposedLoanAmount != null
+              ? String(summaryData.proposedLoanAmount)
+              : prev.proposedLoanAmount,
+          proposedLoanTenor:
+            summaryData.proposedTenureMonths != null
+              ? String(summaryData.proposedTenureMonths)
+              : prev.proposedLoanTenor,
+          proposedLoanRoi:
+            summaryData.proposedROI != null
+              ? String(summaryData.proposedROI)
+              : prev.proposedLoanRoi,
+          proposedLoanEmi:
+            summaryData.proposedEMI != null
+              ? String(summaryData.proposedEMI)
+              : prev.proposedLoanEmi,
+        }));
+      }
+    } catch (err) {
+      // 404 is expected when proposed loan has not been created yet; treat as normal empty state
+      if (err?.response?.status === 404) {
+        setBackendSummary(null);
+      } else {
+        console.error('Failed to load RTR loan obligations summary:', err);
+      }
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, [applicationProductDetailsId, applicantSequence]);
+
+  // Trigger hydration on mount and when applicationProductDetailsId / applicantSequence changes
   useEffect(() => {
     fetchObligations();
-  }, [fetchObligations]);
+    fetchSummary();
+  }, [fetchObligations, fetchSummary]);
 
   // Update Summary field
   const handleSummaryChange = (field, value) => {
@@ -364,7 +415,7 @@ export default function RtrCommonSheet({
       );
       setDeleteConfirmRow(null);
       setSaveSuccessMessage('Obligation record deleted successfully.');
-      await fetchObligations();
+      await Promise.all([fetchObligations(), fetchSummary()]);
     } catch (err) {
       console.error('Failed to delete obligation record:', err);
       const errMsg =
@@ -468,8 +519,13 @@ export default function RtrCommonSheet({
     }
 
     const meaningfulRows = rows.filter((r) => !isRowBlank(r));
-    if (meaningfulRows.length === 0) {
-      setObligationsError('No obligation details to save. Please enter obligation information.');
+    const hasProposedData =
+      (summary.proposedLoanAmount !== '' && summary.proposedLoanAmount != null) ||
+      (summary.proposedLoanTenor !== '' && summary.proposedLoanTenor != null) ||
+      (summary.proposedLoanRoi !== '' && summary.proposedLoanRoi != null);
+
+    if (meaningfulRows.length === 0 && !hasProposedData) {
+      setObligationsError('No obligation or proposed loan details to save. Please enter details.');
       return;
     }
 
@@ -494,8 +550,10 @@ export default function RtrCommonSheet({
 
     let createdCount = 0;
     let updatedCount = 0;
+    let proposedSaved = false;
 
     try {
+      // 1. Save meaningful obligation facility rows
       for (const row of meaningfulRows) {
         if (!row.applicationLoanObligationDetailsId) {
           const payload = toPayload(row, false);
@@ -511,10 +569,37 @@ export default function RtrCommonSheet({
         }
       }
 
-      setSaveSuccessMessage(
-        `Obligations saved successfully (${createdCount} created, ${updatedCount} updated).`
-      );
-      await fetchObligations();
+      // 2. Save proposed loan parameters if entered
+      if (hasProposedData) {
+        const parseNumOrZero = (v) => {
+          if (v === '' || v == null) return 0;
+          const n = Number(v);
+          return isNaN(n) ? 0 : n;
+        };
+
+        const proposedPayload = {
+          applicationProductDetailsId: Number(applicationProductDetailsId),
+          applicantSequence: Number(applicantSequence || 0),
+          proposedLoanAmount: parseNumOrZero(summary.proposedLoanAmount),
+          proposedROI: parseNumOrZero(summary.proposedLoanRoi),
+          proposedTenureMonths: parseNumOrZero(summary.proposedLoanTenor),
+          createdBy: currentUserId,
+        };
+        await backOfficeService.saveProposedLoan(proposedPayload);
+        proposedSaved = true;
+      }
+
+      const messageParts = [];
+      if (createdCount > 0 || updatedCount > 0) {
+        messageParts.push(`Obligations saved (${createdCount} created, ${updatedCount} updated)`);
+      }
+      if (proposedSaved) {
+        messageParts.push('Proposed loan details saved');
+      }
+      setSaveSuccessMessage(`${messageParts.join(', ')} successfully.`);
+
+      // 3. Refresh obligations and summary
+      await Promise.all([fetchObligations(), fetchSummary()]);
     } catch (err) {
       console.error('Failed to save obligations:', err);
       const errMsg =
@@ -532,7 +617,7 @@ export default function RtrCommonSheet({
       {/* Panel Header */}
       <div className="bo-cv-step-panel-header">
         <div className="bo-cv-step-header-left">
-          <div className="bo-cv-step-badge-num">10</div>
+          <div className="bo-cv-step-badge-num">11</div>
           <div>
             <h2 className="bo-cv-step-panel-title">RTR Common Sheet</h2>
             <p className="bo-cv-step-panel-desc">
@@ -540,7 +625,7 @@ export default function RtrCommonSheet({
             </p>
           </div>
         </div>
-        <span className="bo-cv-step-tag-pill">Step 10 of 12</span>
+        <span className="bo-cv-step-tag-pill">Step 11 of 14</span>
       </div>
 
       <div className="bo-rtr-container">
@@ -553,27 +638,19 @@ export default function RtrCommonSheet({
                 <span className="bo-rtr-group-number">1</span>
                 <h4 className="bo-rtr-summary-title">Total Obligations - Live Loans</h4>
               </header>
-              <div className="bo-rtr-summary-fields">
-                <label className="bo-rtr-field-group">
-                  <span className="bo-rtr-field-label">POS (In Rs.)</span>
-                  <input
-                    type="number"
-                    readOnly
-                    className="bo-rtr-input"
-                    value={formatSummaryValue(obligationSummary.live.pos)}
-                    aria-label="Total live loan POS"
-                  />
-                </label>
-                <label className="bo-rtr-field-group">
-                  <span className="bo-rtr-field-label">EMI (In Rs.)</span>
-                  <input
-                    type="number"
-                    readOnly
-                    className="bo-rtr-input"
-                    value={formatSummaryValue(obligationSummary.live.emi)}
-                    aria-label="Total live loan EMI"
-                  />
-                </label>
+              <div className="bo-rtr-compact-stat-row">
+                <div className="bo-rtr-compact-stat">
+                  <span className="bo-rtr-compact-stat-label">POS (In Rs.)</span>
+                  <span className="bo-rtr-compact-stat-value">
+                    {formatSummaryValue(obligationSummary.live.pos)}
+                  </span>
+                </div>
+                <div className="bo-rtr-compact-stat">
+                  <span className="bo-rtr-compact-stat-label">EMI (In Rs.)</span>
+                  <span className="bo-rtr-compact-stat-value">
+                    {formatSummaryValue(obligationSummary.live.emi)}
+                  </span>
+                </div>
               </div>
             </article>
 
@@ -582,139 +659,119 @@ export default function RtrCommonSheet({
               <header className="bo-rtr-summary-card-header">
                 <span className="bo-rtr-group-number">2</span>
                 <h4 className="bo-rtr-summary-title">
-                  Closure within 12 months & Proposed BT & Proposed to be closed from Sivels Finance
+                  Closure within 12 months &amp; Proposed BT &amp; Proposed to be closed from Sivels Finance
                 </h4>
               </header>
-              <div className="bo-rtr-summary-fields">
-                <label className="bo-rtr-field-group">
-                  <span className="bo-rtr-field-label">POS (In Rs.)</span>
-                  <input
-                    type="number"
-                    readOnly
-                    className="bo-rtr-input"
-                    value={formatSummaryValue(obligationSummary.closure.pos)}
-                    aria-label="Closure obligations POS"
-                  />
-                </label>
-                <label className="bo-rtr-field-group">
-                  <span className="bo-rtr-field-label">EMI (In Rs.)</span>
-                  <input
-                    type="number"
-                    readOnly
-                    className="bo-rtr-input"
-                    value={formatSummaryValue(obligationSummary.closure.emi)}
-                    aria-label="Closure obligations EMI"
-                  />
-                </label>
+              <div className="bo-rtr-compact-stat-row">
+                <div className="bo-rtr-compact-stat">
+                  <span className="bo-rtr-compact-stat-label">POS (In Rs.)</span>
+                  <span className="bo-rtr-compact-stat-value">
+                    {formatSummaryValue(obligationSummary.closure.pos)}
+                  </span>
+                </div>
+                <div className="bo-rtr-compact-stat">
+                  <span className="bo-rtr-compact-stat-label">EMI (In Rs.)</span>
+                  <span className="bo-rtr-compact-stat-value">
+                    {formatSummaryValue(obligationSummary.closure.emi)}
+                  </span>
+                </div>
               </div>
             </article>
 
-            {/* 3. Details of Proposed Loan */}
-            <article className="bo-rtr-summary-card bo-rtr-summary-card--wide">
+            {/* 3. Total Obligations including Sivels Finance */}
+            <article className="bo-rtr-summary-card">
               <header className="bo-rtr-summary-card-header">
                 <span className="bo-rtr-group-number">3</span>
+                <h4 className="bo-rtr-summary-title">Total Obligations including Sivels Finance</h4>
+              </header>
+              <div className="bo-rtr-compact-stat-row">
+                <div className="bo-rtr-compact-stat">
+                  <span className="bo-rtr-compact-stat-label">POS (In Rs.)</span>
+                  <span className="bo-rtr-compact-stat-value">
+                    {formatSummaryValue(obligationSummary.withSivels.pos)}
+                  </span>
+                </div>
+                <div className="bo-rtr-compact-stat">
+                  <span className="bo-rtr-compact-stat-label">EMI (In Rs.)</span>
+                  <span className="bo-rtr-compact-stat-value">
+                    {formatSummaryValue(obligationSummary.withSivels.emi)}
+                  </span>
+                </div>
+              </div>
+            </article>
+
+            {/* 4. Personal Obligation not considered */}
+            <article className="bo-rtr-summary-card">
+              <header className="bo-rtr-summary-card-header">
+                <span className="bo-rtr-group-number">4</span>
+                <h4 className="bo-rtr-summary-title">Personal Obligation not considered</h4>
+              </header>
+              <div className="bo-rtr-compact-stat-row">
+                <div className="bo-rtr-compact-stat">
+                  <span className="bo-rtr-compact-stat-label">POS (In Rs.)</span>
+                  <span className="bo-rtr-compact-stat-value">
+                    {formatSummaryValue(obligationSummary.excluded.pos)}
+                  </span>
+                </div>
+                <div className="bo-rtr-compact-stat">
+                  <span className="bo-rtr-compact-stat-label">EMI (In Rs.)</span>
+                  <span className="bo-rtr-compact-stat-value">
+                    {formatSummaryValue(obligationSummary.excluded.emi)}
+                  </span>
+                </div>
+              </div>
+            </article>
+
+            {/* 5. Details of Proposed Loan */}
+            <article className="bo-rtr-summary-card bo-rtr-summary-card--wide">
+              <header className="bo-rtr-summary-card-header">
+                <span className="bo-rtr-group-number">5</span>
                 <h4 className="bo-rtr-summary-title">Details of Proposed Loan</h4>
               </header>
-              <div className="bo-rtr-summary-fields bo-rtr-summary-fields--quad">
-                <label className="bo-rtr-field-group">
-                  <span className="bo-rtr-field-label">Loan Amount (In Rs.)</span>
+              <div className="bo-rtr-proposed-grid">
+                <label className="bo-rtr-compact-field">
+                  <span className="bo-rtr-compact-label">Loan Amount (In Rs.)</span>
                   <input
                     type="number"
                     placeholder="Enter loan amount"
-                    className="bo-rtr-input"
+                    className="bo-rtr-input bo-rtr-input--compact"
                     value={summary.proposedLoanAmount}
                     onChange={(e) => handleSummaryChange('proposedLoanAmount', e.target.value)}
+                    disabled={obligationsSaving}
                   />
                 </label>
-                <label className="bo-rtr-field-group">
-                  <span className="bo-rtr-field-label">Tenor</span>
+                <label className="bo-rtr-compact-field">
+                  <span className="bo-rtr-compact-label">Tenor</span>
                   <input
                     type="number"
                     placeholder="Months"
-                    className="bo-rtr-input"
+                    className="bo-rtr-input bo-rtr-input--compact"
                     value={summary.proposedLoanTenor}
                     onChange={(e) => handleSummaryChange('proposedLoanTenor', e.target.value)}
+                    disabled={obligationsSaving}
                   />
                 </label>
-                <label className="bo-rtr-field-group">
-                  <span className="bo-rtr-field-label">ROI (%)</span>
+                <label className="bo-rtr-compact-field">
+                  <span className="bo-rtr-compact-label">ROI (%)</span>
                   <input
                     type="number"
                     step="0.01"
                     placeholder="e.g. 10.5"
-                    className="bo-rtr-input"
+                    className="bo-rtr-input bo-rtr-input--compact"
                     value={summary.proposedLoanRoi}
                     onChange={(e) => handleSummaryChange('proposedLoanRoi', e.target.value)}
+                    disabled={obligationsSaving}
                   />
                 </label>
-                <label className="bo-rtr-field-group">
-                  <span className="bo-rtr-field-label">EMI (In Rs.)</span>
+                <label className="bo-rtr-compact-field">
+                  <span className="bo-rtr-compact-label">EMI (In Rs.)</span>
                   <input
                     type="number"
-                    placeholder="Enter EMI"
-                    className="bo-rtr-input"
+                    step="0.01"
+                    placeholder="Auto-calculated"
+                    className="bo-rtr-input bo-rtr-input--compact"
                     value={summary.proposedLoanEmi}
-                    onChange={(e) => handleSummaryChange('proposedLoanEmi', e.target.value)}
-                  />
-                </label>
-              </div>
-            </article>
-
-            {/* 4. Total Obligations including Sivels Finance */}
-            <article className="bo-rtr-summary-card">
-              <header className="bo-rtr-summary-card-header">
-                <span className="bo-rtr-group-number">4</span>
-                <h4 className="bo-rtr-summary-title">Total Obligations including Sivels Finance</h4>
-              </header>
-              <div className="bo-rtr-summary-fields">
-                <label className="bo-rtr-field-group">
-                  <span className="bo-rtr-field-label">POS (In Rs.)</span>
-                  <input
-                    type="number"
                     readOnly
-                    className="bo-rtr-input"
-                    value={formatSummaryValue(obligationSummary.withSivels.pos)}
-                    aria-label="Total obligations including Sivels POS"
-                  />
-                </label>
-                <label className="bo-rtr-field-group">
-                  <span className="bo-rtr-field-label">EMI (In Rs.)</span>
-                  <input
-                    type="number"
-                    readOnly
-                    className="bo-rtr-input"
-                    value={formatSummaryValue(obligationSummary.withSivels.emi)}
-                    aria-label="Total obligations including Sivels EMI"
-                  />
-                </label>
-              </div>
-            </article>
-
-            {/* 5. Personal Obligation not considered */}
-            <article className="bo-rtr-summary-card">
-              <header className="bo-rtr-summary-card-header">
-                <span className="bo-rtr-group-number">5</span>
-                <h4 className="bo-rtr-summary-title">Personal Obligation not considered</h4>
-              </header>
-              <div className="bo-rtr-summary-fields">
-                <label className="bo-rtr-field-group">
-                  <span className="bo-rtr-field-label">POS (In Rs.)</span>
-                  <input
-                    type="number"
-                    readOnly
-                    className="bo-rtr-input"
-                    value={formatSummaryValue(obligationSummary.excluded.pos)}
-                    aria-label="Personal obligations not considered POS"
-                  />
-                </label>
-                <label className="bo-rtr-field-group">
-                  <span className="bo-rtr-field-label">EMI (In Rs.)</span>
-                  <input
-                    type="number"
-                    readOnly
-                    className="bo-rtr-input"
-                    value={formatSummaryValue(obligationSummary.excluded.emi)}
-                    aria-label="Personal obligations not considered EMI"
                   />
                 </label>
               </div>
@@ -722,7 +779,7 @@ export default function RtrCommonSheet({
           </div>
         </section>
 
-        {/* Obligation Facilities Section (Cards) */}
+        {/* Obligation Facilities Section (Horizontal Table) */}
         <section className="bo-rtr-facilities-section" aria-label="RTR Obligation Facilities">
           {/* Status Banners */}
           {saveSuccessMessage && (
@@ -784,45 +841,52 @@ export default function RtrCommonSheet({
             </div>
           </div>
 
-          {/* Facility Cards List */}
-          <div className="bo-rtr-cards-list">
-            {rows.map((row, idx) => (
-              <article key={row.id} className="bo-rtr-facility-card">
-                {/* Card Top Header */}
-                <header className="bo-rtr-card-header">
-                  <div className="bo-rtr-card-title-group">
-                    <span className="bo-rtr-card-badge">#{String(idx + 1).padStart(2, '0')}</span>
-                    <h4 className="bo-rtr-card-title">
-                      LOAN FACILITY #{String(idx + 1).padStart(2, '0')}
-                    </h4>
-                    {row.applicationLoanObligationDetailsId ? (
-                      <span className="bo-rtr-status-pill is-saved">Saved ✓</span>
-                    ) : (
-                      <span className="bo-rtr-status-pill is-draft">Draft</span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    className="bo-rtr-card-delete-btn"
-                    onClick={() => handleRemoveRow(row)}
-                    title={row.applicationLoanObligationDetailsId ? 'Delete saved obligation' : 'Remove draft row'}
-                    aria-label={`Delete facility ${idx + 1}`}
-                    disabled={obligationsSaving}
-                  >
-                    {Trash2Icon ? <Trash2Icon size={14} /> : <span>×</span>}
-                    <span>Delete</span>
-                  </button>
-                </header>
+          {/* Horizontal Responsive Table */}
+          <div className="bo-rtr-table-responsive">
+            <table className="bo-rtr-table">
+              <thead>
+                <tr>
+                  <th className="bo-rtr-th bo-rtr-th--status"># / Status</th>
+                  <th className="bo-rtr-th bo-rtr-th--borrower">Borrower Name</th>
+                  <th className="bo-rtr-th bo-rtr-th--bank">Bank / FI Name</th>
+                  <th className="bo-rtr-th bo-rtr-th--account">EMI Account</th>
+                  <th className="bo-rtr-th bo-rtr-th--product">Product</th>
+                  <th className="bo-rtr-th bo-rtr-th--status-sel">
+                    Status (Live / Closed) <span className="bo-rtr-req">*</span>
+                  </th>
+                  <th className="bo-rtr-th bo-rtr-th--num">Loan Amount (₹)</th>
+                  <th className="bo-rtr-th bo-rtr-th--num">EMI (₹)</th>
+                  <th className="bo-rtr-th bo-rtr-th--num">POS (₹)</th>
+                  <th className="bo-rtr-th bo-rtr-th--date">Start Date</th>
+                  <th className="bo-rtr-th bo-rtr-th--date">End Date</th>
+                  <th className="bo-rtr-th bo-rtr-th--num-sm">Tenor (Mo)</th>
+                  <th className="bo-rtr-th bo-rtr-th--num-sm">Paid Tenor</th>
+                  <th className="bo-rtr-th bo-rtr-th--num-sm">O/s Tenor</th>
+                  <th className="bo-rtr-th bo-rtr-th--cibil">Reflected in CIBIL</th>
+                  <th className="bo-rtr-th bo-rtr-th--foir">FOR (Y/N)</th>
+                  <th className="bo-rtr-th bo-rtr-th--bounce">Bounce (12m)</th>
+                  <th className="bo-rtr-th bo-rtr-th--dpd">DPD in CIBIL</th>
+                  <th className="bo-rtr-th bo-rtr-th--comment">Comment on RTR</th>
+                  <th className="bo-rtr-th bo-rtr-th--actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, idx) => (
+                  <tr key={row.id} className="bo-rtr-tr">
+                    {/* 1. # / Status */}
+                    <td className="bo-rtr-td bo-rtr-td--status">
+                      <div className="bo-rtr-cell-status-wrap">
+                        <span className="bo-rtr-row-num">#{String(idx + 1).padStart(2, '0')}</span>
+                        {row.applicationLoanObligationDetailsId ? (
+                          <span className="bo-rtr-status-pill is-saved">Saved ✓</span>
+                        ) : (
+                          <span className="bo-rtr-status-pill is-draft">Draft</span>
+                        )}
+                      </div>
+                    </td>
 
-                {/* Sub-Section 01: Borrower & Institution */}
-                <div className="bo-rtr-card-section">
-                  <div className="bo-rtr-card-section-heading">
-                    <span className="bo-rtr-card-section-num">01</span>
-                    <span className="bo-rtr-card-section-label">BORROWER &amp; INSTITUTION</span>
-                  </div>
-                  <div className="bo-rtr-card-grid bo-rtr-grid-2">
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">Name of Borrower</span>
+                    {/* 2. Borrower Name */}
+                    <td className="bo-rtr-td bo-rtr-td--borrower">
                       <input
                         type="text"
                         placeholder="Borrower name"
@@ -831,9 +895,10 @@ export default function RtrCommonSheet({
                         onChange={(e) => handleRowChange(row.id, 'borrowerName', e.target.value)}
                         disabled={obligationsSaving}
                       />
-                    </label>
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">Bank / FI Name</span>
+                    </td>
+
+                    {/* 3. Bank / FI Name */}
+                    <td className="bo-rtr-td bo-rtr-td--bank">
                       <input
                         type="text"
                         placeholder="Bank / FI name"
@@ -842,9 +907,10 @@ export default function RtrCommonSheet({
                         onChange={(e) => handleRowChange(row.id, 'bankName', e.target.value)}
                         disabled={obligationsSaving}
                       />
-                    </label>
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">Account from where EMI served</span>
+                    </td>
+
+                    {/* 4. EMI Account */}
+                    <td className="bo-rtr-td bo-rtr-td--account">
                       <input
                         type="text"
                         placeholder="Account number"
@@ -853,9 +919,10 @@ export default function RtrCommonSheet({
                         onChange={(e) => handleRowChange(row.id, 'emiAccount', e.target.value)}
                         disabled={obligationsSaving}
                       />
-                    </label>
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">Product</span>
+                    </td>
+
+                    {/* 5. Product */}
+                    <td className="bo-rtr-td bo-rtr-td--product">
                       <input
                         type="text"
                         placeholder="Product type"
@@ -864,21 +931,10 @@ export default function RtrCommonSheet({
                         onChange={(e) => handleRowChange(row.id, 'product', e.target.value)}
                         disabled={obligationsSaving}
                       />
-                    </label>
-                  </div>
-                </div>
+                    </td>
 
-                {/* Sub-Section 02: Financials & Classification */}
-                <div className="bo-rtr-card-section">
-                  <div className="bo-rtr-card-section-heading">
-                    <span className="bo-rtr-card-section-num">02</span>
-                    <span className="bo-rtr-card-section-label">FINANCIALS &amp; CLASSIFICATION</span>
-                  </div>
-                  <div className="bo-rtr-card-grid bo-rtr-grid-2">
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">
-                        Status (Live / Closed) <span className="bo-rtr-req">*</span>
-                      </span>
+                    {/* 6. Status (Live / Closed) * */}
+                    <td className="bo-rtr-td bo-rtr-td--status-sel">
                       <select
                         className="bo-rtr-select"
                         value={row.rtrLoanStatusId !== null && row.rtrLoanStatusId !== undefined ? row.rtrLoanStatusId : ''}
@@ -911,9 +967,10 @@ export default function RtrCommonSheet({
                           </>
                         )}
                       </select>
-                    </label>
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">Loan Amount (In Rs.)</span>
+                    </td>
+
+                    {/* 7. Loan Amount (₹) */}
+                    <td className="bo-rtr-td bo-rtr-td--num">
                       <input
                         type="number"
                         placeholder="0"
@@ -922,9 +979,10 @@ export default function RtrCommonSheet({
                         onChange={(e) => handleRowChange(row.id, 'loanAmount', e.target.value)}
                         disabled={obligationsSaving}
                       />
-                    </label>
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">EMI (In Rs.)</span>
+                    </td>
+
+                    {/* 8. EMI (₹) */}
+                    <td className="bo-rtr-td bo-rtr-td--num">
                       <input
                         type="number"
                         placeholder="0"
@@ -933,9 +991,10 @@ export default function RtrCommonSheet({
                         onChange={(e) => handleRowChange(row.id, 'emi', e.target.value)}
                         disabled={obligationsSaving}
                       />
-                    </label>
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">POS (In Rs.)</span>
+                    </td>
+
+                    {/* 9. POS (₹) */}
+                    <td className="bo-rtr-td bo-rtr-td--num">
                       <input
                         type="number"
                         placeholder="0"
@@ -944,19 +1003,10 @@ export default function RtrCommonSheet({
                         onChange={(e) => handleRowChange(row.id, 'pos', e.target.value)}
                         disabled={obligationsSaving}
                       />
-                    </label>
-                  </div>
-                </div>
+                    </td>
 
-                {/* Sub-Section 03: Tenure & Repayment */}
-                <div className="bo-rtr-card-section">
-                  <div className="bo-rtr-card-section-heading">
-                    <span className="bo-rtr-card-section-num">03</span>
-                    <span className="bo-rtr-card-section-label">TENURE &amp; REPAYMENT</span>
-                  </div>
-                  <div className="bo-rtr-card-grid bo-rtr-grid-2">
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">Start Date</span>
+                    {/* 10. Start Date */}
+                    <td className="bo-rtr-td bo-rtr-td--date">
                       <input
                         type="date"
                         className="bo-rtr-input bo-rtr-input-date"
@@ -964,9 +1014,10 @@ export default function RtrCommonSheet({
                         onChange={(e) => handleRowChange(row.id, 'startDate', e.target.value)}
                         disabled={obligationsSaving}
                       />
-                    </label>
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">End Date</span>
+                    </td>
+
+                    {/* 11. End Date */}
+                    <td className="bo-rtr-td bo-rtr-td--date">
                       <input
                         type="date"
                         className="bo-rtr-input bo-rtr-input-date"
@@ -974,11 +1025,10 @@ export default function RtrCommonSheet({
                         onChange={(e) => handleRowChange(row.id, 'endDate', e.target.value)}
                         disabled={obligationsSaving}
                       />
-                    </label>
-                  </div>
-                  <div className="bo-rtr-card-grid bo-rtr-grid-3 bo-rtr-grid-sub">
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">Tenor (In months)</span>
+                    </td>
+
+                    {/* 12. Tenor (Mo) */}
+                    <td className="bo-rtr-td bo-rtr-td--num-sm">
                       <input
                         type="number"
                         placeholder="0"
@@ -987,9 +1037,10 @@ export default function RtrCommonSheet({
                         onChange={(e) => handleRowChange(row.id, 'tenor', e.target.value)}
                         disabled={obligationsSaving}
                       />
-                    </label>
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">Paid Tenor</span>
+                    </td>
+
+                    {/* 13. Paid Tenor */}
+                    <td className="bo-rtr-td bo-rtr-td--num-sm">
                       <input
                         type="number"
                         placeholder="0"
@@ -998,9 +1049,10 @@ export default function RtrCommonSheet({
                         onChange={(e) => handleRowChange(row.id, 'paidTenor', e.target.value)}
                         disabled={obligationsSaving}
                       />
-                    </label>
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">O/s Tenor</span>
+                    </td>
+
+                    {/* 14. O/s Tenor */}
+                    <td className="bo-rtr-td bo-rtr-td--num-sm">
                       <input
                         type="number"
                         placeholder="0"
@@ -1009,19 +1061,10 @@ export default function RtrCommonSheet({
                         onChange={(e) => handleRowChange(row.id, 'outstandingTenor', e.target.value)}
                         disabled={obligationsSaving}
                       />
-                    </label>
-                  </div>
-                </div>
+                    </td>
 
-                {/* Sub-Section 04: Credit / RTR Evaluation */}
-                <div className="bo-rtr-card-section">
-                  <div className="bo-rtr-card-section-heading">
-                    <span className="bo-rtr-card-section-num">04</span>
-                    <span className="bo-rtr-card-section-label">CREDIT / RTR EVALUATION</span>
-                  </div>
-                  <div className="bo-rtr-card-grid bo-rtr-grid-2">
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">Reflected in CIBIL</span>
+                    {/* 15. Reflected in CIBIL */}
+                    <td className="bo-rtr-td bo-rtr-td--cibil">
                       <select
                         className="bo-rtr-select"
                         value={row.reflectedInCibil}
@@ -1032,9 +1075,10 @@ export default function RtrCommonSheet({
                         <option value="Yes">Yes</option>
                         <option value="No">No</option>
                       </select>
-                    </label>
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">FOR (Y/N)</span>
+                    </td>
+
+                    {/* 16. FOR (Y/N) */}
+                    <td className="bo-rtr-td bo-rtr-td--foir">
                       <select
                         className="bo-rtr-select"
                         value={row.forValue}
@@ -1045,9 +1089,10 @@ export default function RtrCommonSheet({
                         <option value="Yes">Yes</option>
                         <option value="No">No</option>
                       </select>
-                    </label>
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">No of bounce in Last 12 months</span>
+                    </td>
+
+                    {/* 17. Bounce (12m) */}
+                    <td className="bo-rtr-td bo-rtr-td--bounce">
                       <input
                         type="number"
                         placeholder="0"
@@ -1056,9 +1101,10 @@ export default function RtrCommonSheet({
                         onChange={(e) => handleRowChange(row.id, 'bounceCount', e.target.value)}
                         disabled={obligationsSaving}
                       />
-                    </label>
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">DPD's in CIBIL report</span>
+                    </td>
+
+                    {/* 18. DPD in CIBIL */}
+                    <td className="bo-rtr-td bo-rtr-td--dpd">
                       <input
                         type="text"
                         placeholder="DPD details"
@@ -1067,24 +1113,38 @@ export default function RtrCommonSheet({
                         onChange={(e) => handleRowChange(row.id, 'dpd', e.target.value)}
                         disabled={obligationsSaving}
                       />
-                    </label>
-                  </div>
-                  <div className="bo-rtr-card-grid bo-rtr-grid-1 bo-rtr-grid-sub">
-                    <label className="bo-rtr-field-group">
-                      <span className="bo-rtr-field-label">Comment on RTR</span>
+                    </td>
+
+                    {/* 19. Comment on RTR (Preserved Textarea Control) */}
+                    <td className="bo-rtr-td bo-rtr-td--comment">
                       <textarea
-                        rows={2}
-                        placeholder="Remarks / comments on repayment track record..."
-                        className="bo-rtr-textarea"
+                        rows={1}
+                        placeholder="Remarks / comments on RTR..."
+                        className="bo-rtr-textarea bo-rtr-table-textarea"
                         value={row.rtrComment}
                         onChange={(e) => handleRowChange(row.id, 'rtrComment', e.target.value)}
                         disabled={obligationsSaving}
                       />
-                    </label>
-                  </div>
-                </div>
-              </article>
-            ))}
+                    </td>
+
+                    {/* 20. Actions */}
+                    <td className="bo-rtr-td bo-rtr-td--actions">
+                      <button
+                        type="button"
+                        className="bo-rtr-row-delete-btn"
+                        onClick={() => handleRemoveRow(row)}
+                        title={row.applicationLoanObligationDetailsId ? 'Delete saved obligation' : 'Remove draft row'}
+                        aria-label={`Delete facility ${idx + 1}`}
+                        disabled={obligationsSaving}
+                      >
+                        {Trash2Icon ? <Trash2Icon size={14} /> : <span>×</span>}
+                        <span>Delete</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           {/* Section Footer / Bottom Action Bar */}

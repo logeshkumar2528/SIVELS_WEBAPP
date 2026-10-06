@@ -99,6 +99,7 @@ export function normalizeApplicationStatus(status, statusName = '') {
   if (namedStatus.includes('new') || namedStatus.includes('draft')) return 'New';
 
   const numericStatus = Number(status);
+  if (numericStatus === 6) return 'Returned';
   if (numericStatus === 2) return 'Logged to HO';
   if (numericStatus === 1) return 'Pending';
   if (numericStatus === 0) return 'New';

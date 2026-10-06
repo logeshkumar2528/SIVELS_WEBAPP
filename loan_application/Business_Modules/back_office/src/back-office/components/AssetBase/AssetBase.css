@@ -1,0 +1,514 @@
+/* ==========================================================================
+   Asset Base Styles (Back Office Customer Verification Step 11)
+   Prefix: .bo-ab-
+   ========================================================================== */
+
+.bo-ab-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 16px 20px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  font-family: inherit;
+  color: #1e293b;
+  min-width: 0;
+}
+
+/* ── Section Header ── */
+.bo-ab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bo-ab-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.bo-ab-subtitle {
+  margin: 2px 0 0;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.bo-ab-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Feedback Banners ── */
+.bo-ab-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.83rem;
+  font-weight: 500;
+}
+
+.bo-ab-alert-warning {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.bo-ab-alert-danger {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.bo-ab-alert-success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+.bo-ab-alert-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 4px 10px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  background: #ffffff;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.bo-ab-alert-retry:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
+.bo-ab-alert-close {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 2px;
+  display: inline-flex;
+  opacity: 0.7;
+}
+
+.bo-ab-alert-close:hover {
+  opacity: 1;
+}
+
+/* ── Table Wrapper (Self-Contained Horizontal Scroll) ── */
+.bo-ab-table-wrapper {
+  overflow-x: auto;
+  overflow-y: visible;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bo-ab-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  text-align: left;
+}
+
+.bo-ab-table thead th {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 600;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 10px 12px;
+  border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.bo-ab-table tbody tr {
+  border-bottom: 1px solid #f1f5f9;
+  transition: background-color 0.15s ease;
+}
+
+.bo-ab-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.bo-ab-row:hover {
+  background-color: #f8fafc;
+}
+
+.bo-ab-row--editing,
+.bo-ab-row--adding {
+  background-color: #f0f7ff;
+}
+
+.bo-ab-table tbody td {
+  padding: 8px 10px;
+  vertical-align: middle;
+  color: #1e293b;
+}
+
+.bo-ab-cell-index {
+  font-weight: 600;
+  color: #64748b;
+  text-align: center;
+}
+
+.bo-ab-cell-text {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bo-ab-cell-number {
+  font-weight: 600;
+  color: #0f766e;
+  font-family: 'Consolas', 'Courier New', monospace;
+  white-space: nowrap;
+}
+
+/* ── Badges ── */
+.bo-ab-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bo-ab-badge--property {
+  background: #e0e7ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+}
+
+.bo-ab-badge--status {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+
+/* ── Form Inputs Inside Table ── */
+.bo-ab-input,
+.bo-ab-select {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1e293b;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.bo-ab-input:focus,
+.bo-ab-select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.bo-ab-input--number {
+  font-family: 'Consolas', 'Courier New', monospace;
+}
+
+/* ── Actions Cell ── */
+.bo-ab-actions-cell {
+  white-space: nowrap;
+}
+
+.bo-ab-actions-group {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.bo-ab-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bo-ab-btn-icon--edit {
+  color: #2563eb;
+  background: #eff6ff;
+  border-color: #dbeafe;
+}
+
+.bo-ab-btn-icon--edit:hover:not(:disabled) {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.bo-ab-btn-icon--delete {
+  color: #dc2626;
+  background: #fef2f2;
+  border-color: #fee2e2;
+}
+
+.bo-ab-btn-icon--delete:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.bo-ab-btn-icon--save {
+  color: #16a34a;
+  background: #f0fdf4;
+  border-color: #dcfce7;
+}
+
+.bo-ab-btn-icon--save:hover:not(:disabled) {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.bo-ab-btn-icon--cancel {
+  color: #64748b;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.bo-ab-btn-icon--cancel:hover:not(:disabled) {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.bo-ab-btn-icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Buttons ── */
+.bo-ab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.bo-ab-btn-primary {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.bo-ab-btn-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.bo-ab-btn-secondary {
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+.bo-ab-btn-secondary:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.bo-ab-btn-danger {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.bo-ab-btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.bo-ab-btn-outline {
+  background: transparent;
+  color: #2563eb;
+  border-color: #93c5fd;
+}
+
+.bo-ab-btn-outline:hover:not(:disabled) {
+  background: #eff6ff;
+}
+
+.bo-ab-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Empty & Loading States ── */
+.bo-ab-empty-cell {
+  padding: 32px 16px !important;
+  text-align: center;
+}
+
+.bo-ab-loading-state,
+.bo-ab-no-data {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.bo-ab-no-data p {
+  margin: 0;
+}
+
+/* ── Total Market Value Bar ── */
+.bo-ab-total-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.bo-ab-total-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.bo-ab-total-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f766e;
+  font-family: 'Consolas', 'Courier New', monospace;
+}
+
+/* ── Modal Overlay & Card ── */
+.bo-ab-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+}
+
+.bo-ab-modal-card {
+  background: #ffffff;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 440px;
+  padding: 20px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: boAbFadeIn 0.2s ease-out;
+}
+
+.bo-ab-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bo-ab-modal-icon-danger {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #dc2626;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bo-ab-modal-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.bo-ab-modal-desc {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: #475569;
+}
+
+.bo-ab-modal-desc strong {
+  color: #0f172a;
+}
+
+.bo-ab-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+/* ── Animation ── */
+.bo-ab-spin {
+  animation: boAbSpin 1s linear infinite;
+}
+
+@keyframes boAbSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes boAbFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
