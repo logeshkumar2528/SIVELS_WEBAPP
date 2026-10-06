@@ -231,10 +231,13 @@ export function ProofMasterForm({ isOpen, onClose, onSuccess, initialData }) {
 
           <div className="form-group-checkbox">
             <MasterStatusCheckbox
-              name="isActive"
-              checked={formData.isActive}
-              onChange={handleChange}
-              label="Active Status"
+              isActive={formData.isActive}
+              onChange={(checked) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  isActive: checked,
+                }))
+              }
               disabled={isSubmitting}
             />
           </div>
