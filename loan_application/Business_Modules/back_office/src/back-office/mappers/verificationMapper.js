@@ -96,9 +96,24 @@ export function mapApplicationFullDetails(response, extraDocs = []) {
     getValue(applicantPers, 'agentCustomerId', 'AgentCustomerId') ||
     getValue(response, 'agentCustomerId', 'AgentCustomerId', 'customerId', 'CustomerId');
 
+  const applicantStructuredName = [
+    getValue(applicantPers, 'firstName', 'FirstName'),
+    getValue(applicantPers, 'middleName', 'MiddleName'),
+    getValue(applicantPers, 'lastName', 'LastName'),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
   const customerName =
-    getValue(customer, 'fullName', 'FullName', 'customerName', 'CustomerName') ||
-    getValue(applicantPers, 'firstName', 'FirstName') ||
+    applicantStructuredName ||
+    getValue(
+      customer,
+      'fullName',
+      'FullName',
+      'customerName',
+      'CustomerName'
+    ) ||
     'Not Available';
 
   const mobile =

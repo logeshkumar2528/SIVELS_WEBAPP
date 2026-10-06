@@ -24,6 +24,10 @@ export const BACK_OFFICE_ENDPOINTS = {
   PD_VERIFICATION_TYPES: '/PDVerificationTypeMaster',
   HEALTH_CHECK_TYPES: '/health-check-types',
   RTR_LOAN_STATUS_MASTER: '/rtr-loan-status-master',
+  PROPERTY_MASTER: '/PropertyMaster',
+  PROPERTY_MASTER_BY_ID: (id) => `/PropertyMaster/${encodeURIComponent(id)}`,
+  MORTGAGE_STATUS_MASTER: '/MortgageStatusMaster',
+  MORTGAGE_STATUS_MASTER_BY_ID: (id) => `/MortgageStatusMaster/${encodeURIComponent(id)}`,
 
   BANKS_ACTIVE: '/masters/bank/active',
   BANK_BRANCHES: '/BankBranch',
@@ -117,7 +121,7 @@ export const BACK_OFFICE_ENDPOINTS = {
   CALCULATION_RTR_ASSESSMENTS_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
     `/calculation/rtr/assessments/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
 
-  // Loan Obligations (Step 10 RTR Common Sheet)
+  // Loan Obligations (Step 11 RTR Common Sheet)
   LOAN_OBLIGATIONS: '/calculation/loan-obligations',
   LOAN_OBLIGATIONS_BY_APPLICANT: (applicationProductDetailsId, applicantSequence) =>
     `/calculation/loan-obligations/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
@@ -125,6 +129,18 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/calculation/loan-obligations/${encodeURIComponent(applicationLoanObligationDetailsId)}`,
   LOAN_OBLIGATION_DELETE: (applicationLoanObligationDetailsId, modifiedBy) =>
     `/calculation/loan-obligations/${encodeURIComponent(applicationLoanObligationDetailsId)}?modifiedBy=${encodeURIComponent(modifiedBy)}`,
+  LOAN_OBLIGATIONS_PROPOSED: '/calculation/loan-obligations/proposed',
+  LOAN_OBLIGATIONS_SUMMARY: (applicationProductDetailsId, applicantSequence) =>
+    `/calculation/loan-obligations/summary/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
+
+  // Application Asset Details (Step 11: Asset Base)
+  APPLICATION_ASSETS: '/ApplicationAssetDetails',
+  APPLICATION_ASSETS_BY_APPLICATION: (applicationProductDetailsId) =>
+    `/ApplicationAssetDetails/by-application/${encodeURIComponent(applicationProductDetailsId)}`,
+  APPLICATION_ASSET_BY_ID: (applicationAssetDetailsId) =>
+    `/ApplicationAssetDetails/${encodeURIComponent(applicationAssetDetailsId)}`,
+  APPLICATION_ASSET_DELETE: (applicationAssetDetailsId) =>
+    `/ApplicationAssetDetails/${encodeURIComponent(applicationAssetDetailsId)}`,
 
   // Normal Income Calculation APIs
   CALCULATION_NORMAL_INCOME_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
@@ -182,4 +198,12 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/ApplicationPdAssessment/byapplication/${encodeURIComponent(applicationProductDetailsId)}`,
   PD_ASSESSMENT_BY_CUSTOMER: (agentCustomerId) =>
     `/ApplicationPdAssessment/bycustomer/${encodeURIComponent(agentCustomerId)}`,
+
+  // Application Workflow APIs (Step 13: Final Application Actions)
+  APPLICATION_WORKFLOW_RETURN_TO_RM: (agentCustomerId) =>
+    `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/return-to-rm`,
+  APPLICATION_WORKFLOW_SEND_TO_CREDIT: (agentCustomerId) =>
+    `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/send-to-credit-manager`,
+  APPLICATION_WORKFLOW_HISTORY: (agentCustomerId) =>
+    `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/history`,
 };

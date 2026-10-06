@@ -490,6 +490,114 @@ export const backOfficeService = {
   },
 
   /**
+   * Upsert Proposed Loan parameters for an application product & applicant sequence.
+   * POST /api/calculation/loan-obligations/proposed
+   * @param {object} payload - { applicationProductDetailsId, applicantSequence, proposedLoanAmount, proposedROI, proposedTenureMonths, createdBy }
+   */
+  saveProposedLoan: async (payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.LOAN_OBLIGATIONS_PROPOSED,
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve authoritative RTR loan obligations summary including live, closure, excluded totals, and proposed loan.
+   * GET /api/calculation/loan-obligations/summary/{applicationProductDetailsId}/{applicantSequence}
+   * @param {string|number} applicationProductDetailsId
+   * @param {string|number} applicantSequence
+   */
+  getLoanObligationsSummary: async (applicationProductDetailsId, applicantSequence = 0) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.LOAN_OBLIGATIONS_SUMMARY(applicationProductDetailsId, applicantSequence)
+    );
+    return unwrapResponse(response);
+  },
+
+  /* ==========================================
+     PROPERTY & MORTGAGE STATUS MASTER APIs
+  ========================================== */
+
+  /**
+   * Retrieve all property types from Property Master.
+   */
+  getPropertyMaster: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.PROPERTY_MASTER);
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve all mortgage statuses from Mortgage Status Master.
+   */
+  getMortgageStatusMaster: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.MORTGAGE_STATUS_MASTER);
+    return unwrapResponse(response);
+  },
+
+  /* ==========================================
+     APPLICATION ASSET DETAILS (ASSET BASE) APIs
+  ========================================== */
+
+  /**
+   * Retrieve all asset details for an application.
+   * @param {string|number} applicationProductDetailsId
+   */
+  getApplicationAssets: async (applicationProductDetailsId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_ASSETS_BY_APPLICATION(applicationProductDetailsId)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Retrieve a single asset detail record by ID.
+   * @param {string|number} assetId
+   */
+  getApplicationAssetById: async (assetId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_ASSET_BY_ID(assetId)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Create a new asset detail record.
+   * @param {object} payload
+   */
+  createApplicationAsset: async (payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_ASSETS,
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Update an existing asset detail record.
+   * @param {string|number} assetId
+   * @param {object} payload
+   */
+  updateApplicationAsset: async (assetId, payload) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_ASSET_BY_ID(assetId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Soft-delete an asset detail record (IsActive = false).
+   * @param {string|number} assetId
+   */
+  deleteApplicationAsset: async (assetId) => {
+    const response = await axiosInstance.delete(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_ASSET_DELETE(assetId)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
    * Retrieve active banks from Bank Master.
    */
   getActiveBanks: async () => {
@@ -1050,6 +1158,47 @@ export const backOfficeService = {
     const response = await axiosInstance.put(
       BACK_OFFICE_ENDPOINTS.PD_ASSESSMENT_BY_ID(pdAssessmentId),
       payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /* ==========================================
+     14. APPLICATION WORKFLOW APIs (STEP 13)
+  ========================================== */
+
+  /**
+   * Return application to Relationship Manager (Status 2 -> 6).
+   * @param {string|number} agentCustomerId
+   * @param {object} payload - { performedByUserId, performedByRole: "BackOffice", remarks }
+   */
+  returnApplicationToRM: async (agentCustomerId, payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_WORKFLOW_RETURN_TO_RM(agentCustomerId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Send application to Credit Manager (Status 2 -> 3).
+   * @param {string|number} agentCustomerId
+   * @param {object} payload - { performedByUserId, performedByRole: "BackOffice", remarks }
+   */
+  sendApplicationToCreditManager: async (agentCustomerId, payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_WORKFLOW_SEND_TO_CREDIT(agentCustomerId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Get application workflow transition history.
+   * @param {string|number} agentCustomerId
+   */
+  getApplicationWorkflowHistory: async (agentCustomerId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_WORKFLOW_HISTORY(agentCustomerId)
     );
     return unwrapResponse(response);
   },

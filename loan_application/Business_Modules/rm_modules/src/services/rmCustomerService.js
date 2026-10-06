@@ -256,65 +256,43 @@ export const rmCustomerService = {
     }
   },
 
-  /* ==========================================
-     CUSTOMER PROOFS (ADDRESS / INCOME / DRIVING ...)
-  ========================================== */
-
-  getProofCategories: async () => {
-    const response = await axiosInstance.get('/DocumentTypeMaster');
-    return toList(response.data);
-  },
-
-  getProofsByCategory: async (documentTypeId) => {
-    const response = await axiosInstance.get('/proofmaster', {
-      params: { documentTypeId },
-    });
-    return toList(response.data);
+  /**
+   * Resubmit returned application back to Back Office (Status 6 -> 2)
+   * @param {string|number} agentCustomerId
+   * @param {{ performedByUserId: number, performedByRole: string, remarks: string }} payload
+   */
+  resubmitApplicationToBackOffice: async (agentCustomerId, payload) => {
+    const response = await axiosInstance.post(
+      `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/resubmit-to-back-office`,
+      payload
+    );
+    return response.data;
   },
 
   /**
-   * List uploaded customer proofs for an applicant context:
-   * { agentCustomerId, applicationProductDetailsId, applicantSequence, verificationTypeCode }.
-   * Callers must still filter the result because the backend may ignore unsupported params.
-   * Treats 404 as an empty list.
+   * Get application workflow history (returns array of workflow actions and remarks)
+   * @param {string|number} agentCustomerId
    */
-  getApplicationCustomerProofs: async (filters = {}) => {
-    const params = Object.fromEntries(
-      Object.entries(filters).filter(([, value]) => value !== null && value !== undefined && value !== '')
-    );
+  getApplicationWorkflowHistory: async (agentCustomerId) => {
     try {
-      const response = await axiosInstance.get('/customerdocumentproof', {
-        params,
-        validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
-      });
-      if (response.status === 404) return [];
-      return toList(response.data);
+      const response = await axiosInstance.get(
+        `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/history`,
+        {
+          validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
+        }
+      );
+      if (response.status === 404) {
+        return [];
+      }
+      const data = response.data;
+      if (Array.isArray(data)) return data;
+      return data?.value || data?.data || data?.items || [];
     } catch (err) {
-      if (err?.response?.status === 404 || err?.status === 404) return [];
+      if (err?.response?.status === 404 || err?.status === 404) {
+        return [];
+      }
       throw err;
     }
-  },
-
-  uploadApplicationCustomerProof: async (formData, { onUploadProgress } = {}) => {
-    const response = await axiosInstance.post('/customerdocumentproof', formData, { onUploadProgress });
-    return response.data;
-  },
-
-  replaceApplicationCustomerProof: async (id, formData, { onUploadProgress } = {}) => {
-    const response = await axiosInstance.put(`/customerdocumentproof/${encodeURIComponent(id)}`, formData, { onUploadProgress });
-    return response.data;
-  },
-
-  downloadApplicationCustomerProof: async (id) => {
-    const response = await axiosInstance.get(`/customerdocumentproof/${encodeURIComponent(id)}/download`, {
-      responseType: 'blob',
-    });
-    return { blob: response.data, contentType: response.headers?.['content-type'] || '' };
-  },
-
-  deleteApplicationCustomerProof: async (id) => {
-    const response = await axiosInstance.delete(`/customerdocumentproof/${encodeURIComponent(id)}`);
-    return response.data;
   },
 };
 

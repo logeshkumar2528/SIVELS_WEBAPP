@@ -41,7 +41,7 @@ function formatCurrency(amount) {
  */
 function getStatusInfo(status) {
   if (status === null || status === undefined) {
-    return { label: 'Pending', className: 'is-pending' };
+    return { label: 'RM Pending', className: 'is-pending' };
   }
 
   // Handle Numeric Status Codes
@@ -50,7 +50,7 @@ function getStatusInfo(status) {
       case 2:
         return { label: 'Logged to HO', className: 'is-review' };
       case 3:
-        return { label: 'Under Review', className: 'is-review' };
+        return { label: 'CM Pending', className: 'is-review' };
       case 4:
         return { label: 'Approved', className: 'is-approved' };
       case 5:
@@ -58,9 +58,11 @@ function getStatusInfo(status) {
       case 6:
         return { label: 'Returned', className: 'is-rejected' };
       case 1:
+        return { label: 'RM Pending', className: 'is-pending' };
       case 0:
+        return { label: 'New', className: 'is-pending' };
       default:
-        return { label: 'Pending', className: 'is-pending' };
+        return { label: 'RM Pending', className: 'is-pending' };
     }
   }
 
@@ -69,8 +71,8 @@ function getStatusInfo(status) {
   if (s === '2' || s.includes('logged to ho') || s.includes('submitted to ho') || s.includes('received')) {
     return { label: 'Logged to HO', className: 'is-review' };
   }
-  if (s === '3' || s.includes('review') || s.includes('verification')) {
-    return { label: 'Under Review', className: 'is-review' };
+  if (s === '3' || s.includes('cm pending') || s.includes('review') || s.includes('verification')) {
+    return { label: 'CM Pending', className: 'is-review' };
   }
   if (s === '4' || s.includes('approved')) {
     return { label: 'Approved', className: 'is-approved' };
@@ -78,11 +80,14 @@ function getStatusInfo(status) {
   if (s === '5' || s.includes('reject')) {
     return { label: 'Rejected', className: 'is-rejected' };
   }
-  if (s === '6' || s.includes('return')) {
+  if (s === '6' || s.includes('bo returned') || s.includes('return')) {
     return { label: 'Returned', className: 'is-rejected' };
   }
-  if (s === '0' || s === '1' || s.includes('pending') || s.includes('draft') || s.includes('new') || s.includes('sourced')) {
-    return { label: 'Pending', className: 'is-pending' };
+  if (s === '1' || s.includes('rm pending') || s.includes('pending') || s.includes('sourced')) {
+    return { label: 'RM Pending', className: 'is-pending' };
+  }
+  if (s === '0' || s.includes('draft') || s.includes('new')) {
+    return { label: 'New', className: 'is-pending' };
   }
 
   return { label: String(status), className: 'is-pending' };
@@ -324,10 +329,12 @@ export default function CustomerMonitoring() {
                 ))
               ) : (
                 <>
-                  <option value="Pending">Pending</option>
-                  <option value="Under Review">Under Review</option>
+                  <option value="RM Pending">RM Pending</option>
+                  <option value="Logged to HO">Logged to HO</option>
+                  <option value="CM Pending">CM Pending</option>
                   <option value="Approved">Approved</option>
                   <option value="Rejected">Rejected</option>
+                  <option value="Returned">Returned</option>
                 </>
               )}
             </select>

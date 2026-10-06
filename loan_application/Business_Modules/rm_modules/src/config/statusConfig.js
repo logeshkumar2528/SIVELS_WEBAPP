@@ -8,19 +8,19 @@ export const STATUS_CONFIG = {
     variant: 'new',
   },
   'Pending': {
-    label: 'Pending',
+    label: 'RM Pending',
     variant: 'review',
   },
   'Under Review': {
-    label: 'Under Review',
+    label: 'CM Pending',
     variant: 'review',
   },
   'Returned': {
-    label: 'Returned',
+    label: 'BO Returned',
     variant: 'returned',
   },
   'Approved': {
-    label: 'Logged to HO',
+    label: 'Approved',
     variant: 'approved',
   },
   'Logged to HO': {
