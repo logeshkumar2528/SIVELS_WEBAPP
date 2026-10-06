@@ -31,9 +31,9 @@ import './CustomerSubmissionHistory.css';
 const STATUS_OPTIONS = [
   { value: 'All Status', label: 'All Status' },
   { value: 'New', label: 'New' },
-  { value: 'Pending', label: 'Pending' },
-  { value: 'Under Review', label: 'Under Review' },
-  { value: 'Returned', label: 'Returned' },
+  { value: 'Pending', label: 'RM Pending' },
+  { value: 'Under Review', label: 'CM Pending' },
+  { value: 'Returned', label: 'BO Returned' },
   { value: 'Logged to HO', label: 'Logged to HO' },
 ];
 
@@ -422,7 +422,10 @@ export default function CustomerSubmissionHistory() {
 
   const renderStatusBadge = (status) => {
     const type = getStatusType(status);
-    const displayStatus = status || 'Unknown';
+    let displayStatus = status || 'Unknown';
+    if (status === 'Pending') displayStatus = 'RM Pending';
+    else if (status === 'Under Review') displayStatus = 'CM Pending';
+    else if (status === 'Returned') displayStatus = 'BO Returned';
 
     switch (type) {
       case 'pending-rm':

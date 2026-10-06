@@ -2209,16 +2209,98 @@ export default function PdfView() {
         String(item.actionType || item.ActionType || '').toLowerCase().includes('return') ||
         Number(item.toStatus || item.ToStatus) === 6
     );
-    if (returnedItems.length > 0) {
-      return returnedItems[returnedItems.length - 1];
-    }
-    for (let i = workflowHistory.length - 1; i >= 0; i--) {
-      if (workflowHistory[i]?.remarks || workflowHistory[i]?.Remarks) {
-        return workflowHistory[i];
+    if (returnedItems.length === 0) {
+      for (let i = workflowHistory.length - 1; i >= 0; i--) {
+        if (workflowHistory[i]?.remarks || workflowHistory[i]?.Remarks) {
+          return workflowHistory[i];
+        }
       }
+      return null;
     }
-    return null;
+
+    returnedItems.sort((a, b) => {
+      const idA = Number(a.applicationWorkflowHistoryId ?? a.historyId ?? a.HistoryId ?? 0);
+      const idB = Number(b.applicationWorkflowHistoryId ?? b.historyId ?? b.HistoryId ?? 0);
+      if (idA && idB && idA !== idB) return idB - idA;
+
+      const timeA = new Date(a.createdAt || a.CreatedAt || 0).getTime();
+      const timeB = new Date(b.createdAt || b.CreatedAt || 0).getTime();
+      return timeB - timeA;
+    });
+
+    return returnedItems[0] || null;
   }, [workflowHistory]);
+
+  const resolvedReturnTargetPerson = useMemo(() => {
+    if (!latestReturnRemark) return null;
+    const rawSeq = latestReturnRemark.applicantSequence ?? latestReturnRemark.ApplicantSequence;
+    if (rawSeq === null || rawSeq === undefined || rawSeq === '') {
+      return null;
+    }
+
+    const seq = Number(rawSeq);
+    if (isNaN(seq)) return null;
+
+    if (seq === 0) {
+      const pers =
+        appData?.registration?.personalInformation?.applicant ||
+        appData?.sections?.personalInformation?.applicant ||
+        appData?.personalInformation?.applicant ||
+        appData?.raw?.personalInformation?.[0] ||
+        appData?.customer ||
+        {};
+      const nameParts = [
+        pers.firstName ?? pers.FirstName,
+        pers.middleName ?? pers.MiddleName,
+        pers.lastName ?? pers.LastName,
+      ].filter(Boolean).join(' ');
+      const name =
+        nameParts ||
+        pers.fullName ||
+        pers.FullName ||
+        pers.customerName ||
+        pers.CustomerName ||
+        appData?.customerName ||
+        resolveApplicantName(appData) ||
+        customerDisplayName ||
+        'Primary Applicant';
+      return `Primary Applicant — ${name}`;
+    }
+
+    const coList =
+      appData?.registration?.personalInformation?.coApplicants ||
+      appData?.sections?.personalInformation?.coApplicants ||
+      appData?.personalInformation?.coApplicants ||
+      (Array.isArray(appData?.raw?.personalInformation) ? appData.raw.personalInformation.slice(1) : []) ||
+      [];
+
+    let matchedCo = coList.find((co) => {
+      const coSeq = co?.applicantSequence ?? co?.ApplicantSequence ?? co?.sequence ?? co?.Sequence;
+      return coSeq !== undefined && coSeq !== null && Number(coSeq) === seq;
+    });
+
+    if (!matchedCo && coList[seq - 1]) {
+      matchedCo = coList[seq - 1];
+    }
+
+    if (matchedCo) {
+      const nameParts = [
+        matchedCo.firstName ?? matchedCo.FirstName,
+        matchedCo.middleName ?? matchedCo.MiddleName,
+        matchedCo.lastName ?? matchedCo.LastName,
+      ].filter(Boolean).join(' ');
+      const coName =
+        nameParts ||
+        matchedCo.fullName ||
+        matchedCo.FullName ||
+        matchedCo.name ||
+        matchedCo.customerName ||
+        `Co-Applicant ${seq}`;
+      return `Co-Applicant ${seq} — ${coName}`;
+    }
+
+    return `Co-Applicant ${seq}`;
+  }, [latestReturnRemark, appData, customerDisplayName]);
 
   const handleOpenResubmitModal = () => {
     setResubmitRemarks('');
@@ -2436,16 +2518,26 @@ export default function PdfView() {
                   border: '1px solid #fecaca',
                   borderRadius: '6px',
                   marginBottom: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
                   <AlertCircle size={14} color="#dc2626" />
                   <strong style={{ fontSize: '12.5px', color: '#991b1b' }}>
                     Reason for Return from Back Office
                   </strong>
                 </div>
+                {resolvedReturnTargetPerson && (
+                  <div style={{ fontSize: '12px', color: '#7f1d1d', lineHeight: 1.4 }}>
+                    <strong style={{ color: '#991b1b' }}>Correction For: </strong>
+                    <span>{resolvedReturnTargetPerson}</span>
+                  </div>
+                )}
                 <div style={{ fontSize: '12.5px', color: '#7f1d1d', lineHeight: 1.4 }}>
-                  {latestReturnRemark.remarks || latestReturnRemark.Remarks || latestReturnRemark.remark || 'Application returned for correction.'}
+                  {resolvedReturnTargetPerson && <strong style={{ color: '#991b1b' }}>Reason: </strong>}
+                  <span>{latestReturnRemark.remarks || latestReturnRemark.Remarks || latestReturnRemark.remark || 'Application returned for correction.'}</span>
                 </div>
               </div>
             )}

@@ -34,29 +34,36 @@ function formatCurrency(amount) {
 
 function getStatusInfo(status) {
   if (status === null || status === undefined) {
-    return { label: 'Pending', className: 'stc-pill--pending' };
+    return { label: 'RM Pending', className: 'stc-pill--pending' };
   }
   if (typeof status === 'number') {
     switch (status) {
       case 2:
         return { label: 'Logged to HO', className: 'stc-pill--progress' };
       case 3:
-        return { label: 'Under Review', className: 'stc-pill--progress' };
+        return { label: 'CM Pending', className: 'stc-pill--progress' };
       case 4:
         return { label: 'Approved', className: 'stc-pill--verified' };
       case 5:
+        return { label: 'Rejected', className: 'stc-pill--pending' };
       case 6:
         return { label: 'Returned', className: 'stc-pill--pending' };
       case 1:
+        return { label: 'RM Pending', className: 'stc-pill--pending' };
       case 0:
+        return { label: 'New', className: 'stc-pill--pending' };
       default:
-        return { label: 'Pending', className: 'stc-pill--pending' };
+        return { label: 'RM Pending', className: 'stc-pill--pending' };
     }
   }
   const s = String(status).toLowerCase().trim();
   if (s === '2' || s.includes('logged to ho') || s.includes('received')) return { label: 'Logged to HO', className: 'stc-pill--progress' };
-  if (s === '3' || s.includes('review') || s.includes('verification')) return { label: 'Under Review', className: 'stc-pill--progress' };
+  if (s === '3' || s.includes('cm pending') || s.includes('review') || s.includes('verification')) return { label: 'CM Pending', className: 'stc-pill--progress' };
   if (s === '4' || s.includes('approved')) return { label: 'Approved', className: 'stc-pill--verified' };
+  if (s === '5' || s.includes('reject')) return { label: 'Rejected', className: 'stc-pill--pending' };
+  if (s === '6' || s.includes('bo returned') || s.includes('return')) return { label: 'Returned', className: 'stc-pill--pending' };
+  if (s === '1' || s.includes('rm pending') || s.includes('pending') || s.includes('sourced')) return { label: 'RM Pending', className: 'stc-pill--pending' };
+  if (s === '0' || s.includes('draft') || s.includes('new')) return { label: 'New', className: 'stc-pill--pending' };
   return { label: String(status), className: 'stc-pill--pending' };
 }
 

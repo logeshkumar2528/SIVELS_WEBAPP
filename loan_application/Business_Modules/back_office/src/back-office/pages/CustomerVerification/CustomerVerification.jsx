@@ -5766,6 +5766,7 @@ export default function CustomerVerification() {
     remarks: '',
     error: null,
     isSubmitting: false,
+    applicantSequence: null,
   });
   const [sendToCreditModal, setSendToCreditModal] = useState({
     open: false,
@@ -6881,16 +6882,28 @@ export default function CustomerVerification() {
       remarks: '',
       error: null,
       isSubmitting: false,
+      applicantSequence: coApplicants.length === 0 ? 0 : '',
     });
   };
 
   const handleCloseReturnToRmModal = () => {
     if (!returnToRmModal.isSubmitting) {
-      setReturnToRmModal({ open: false, remarks: '', error: null, isSubmitting: false });
+      setReturnToRmModal({ open: false, remarks: '', error: null, isSubmitting: false, applicantSequence: null });
     }
   };
 
   const handleConfirmReturnToRm = async () => {
+    if (coApplicants.length > 0) {
+      const rawSeq = returnToRmModal.applicantSequence;
+      if (rawSeq === null || rawSeq === undefined || rawSeq === '' || isNaN(Number(rawSeq))) {
+        setReturnToRmModal((prev) => ({
+          ...prev,
+          error: 'Please select the applicant to whom the correction applies.',
+        }));
+        return;
+      }
+    }
+
     const trimmed = (returnToRmModal.remarks || '').trim();
     if (!trimmed) {
       setReturnToRmModal((prev) => ({ ...prev, error: 'Return remarks are mandatory. Please provide correction instructions for the RM.' }));
@@ -6911,14 +6924,16 @@ export default function CustomerVerification() {
 
     setReturnToRmModal((prev) => ({ ...prev, isSubmitting: true, error: null }));
     try {
+      const resolvedApplicantSequence = coApplicants.length === 0 ? 0 : Number(returnToRmModal.applicantSequence);
       const payload = {
         performedByUserId: backOfficeId,
         performedByRole: 'BackOffice',
         remarks: trimmed,
+        applicantSequence: resolvedApplicantSequence,
       };
       await backOfficeService.returnApplicationToRM(custId, payload);
 
-      setReturnToRmModal({ open: false, remarks: '', error: null, isSubmitting: false });
+      setReturnToRmModal({ open: false, remarks: '', error: null, isSubmitting: false, applicantSequence: null });
       setWorkflowActionFeedback({
         type: 'success',
         message: `Application #${custId} has been successfully returned to the Relationship Manager. Status transitioned from Logged to HO (2) to Returned to RM (6).`,
@@ -20525,13 +20540,46 @@ export default function CustomerVerification() {
                 Are you sure you want to return this application to the Relationship Manager for correction?
               </p>
 
+              {coApplicants.length > 0 && (
+                <div className="bo-cv-confirm-remarks-block" style={{ marginBottom: '16px' }}>
+                  <label className="bo-cv-confirm-remarks-label" htmlFor="return-rm-modal-target">
+                    Correction For <span style={{ color: '#dc2626' }}>*</span>
+                  </label>
+                  <select
+                    id="return-rm-modal-target"
+                    className={`bo-cv-confirm-remarks-textarea ${returnToRmModal.error && (returnToRmModal.applicantSequence === '' || returnToRmModal.applicantSequence === null) ? 'is-invalid' : ''}`}
+                    style={{ height: '38px', padding: '6px 12px', fontSize: '0.875rem' }}
+                    value={returnToRmModal.applicantSequence ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setReturnToRmModal((prev) => ({
+                        ...prev,
+                        applicantSequence: val === '' ? '' : Number(val),
+                        error: null,
+                      }));
+                    }}
+                    disabled={returnToRmModal.isSubmitting}
+                  >
+                    <option value="">Select Applicant</option>
+                    <option value={0}>
+                      Primary Applicant — {verificationData?.customerName || 'Primary Applicant'}
+                    </option>
+                    {coApplicants.map((co) => (
+                      <option key={co.sequence} value={co.sequence}>
+                        Co-Applicant {co.sequence} — {co.name || `Co-Applicant ${co.sequence}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="bo-cv-confirm-remarks-block">
                 <label className="bo-cv-confirm-remarks-label" htmlFor="return-rm-modal-remarks">
                   Return Instructions / Remarks <span style={{ color: '#dc2626' }}>*</span>
                 </label>
                 <textarea
                   id="return-rm-modal-remarks"
-                  className={`bo-cv-confirm-remarks-textarea ${returnToRmModal.error ? 'is-invalid' : ''}`}
+                  className={`bo-cv-confirm-remarks-textarea ${returnToRmModal.error && !(coApplicants.length > 0 && (returnToRmModal.applicantSequence === '' || returnToRmModal.applicantSequence === null)) ? 'is-invalid' : ''}`}
                   value={returnToRmModal.remarks}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -20543,7 +20591,7 @@ export default function CustomerVerification() {
                   }}
                   placeholder="Enter detailed correction instructions for the RM (e.g. correct income in Step 4, re-upload clear Aadhaar document)..."
                   rows={4}
-                  autoFocus
+                  autoFocus={coApplicants.length === 0}
                   disabled={returnToRmModal.isSubmitting}
                 />
                 {returnToRmModal.error && (

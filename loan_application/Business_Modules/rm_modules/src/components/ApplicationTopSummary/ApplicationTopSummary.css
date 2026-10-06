@@ -1,3 +1,10 @@
+.aw-top-summary-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
 .aw-top-summary-card {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -40,6 +47,64 @@
   font-weight: 700;
 }
 
+/* Returned Application Guidance Banner */
+.aw-return-guidance-banner {
+  background-color: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 4px solid #d97706;
+  border-radius: 6px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-sizing: border-box;
+}
+
+.aw-return-guidance-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aw-return-guidance-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #b45309;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.aw-return-guidance-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.aw-return-guidance-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.aw-return-guidance-label {
+  font-weight: 600;
+  color: #78350f;
+  flex-shrink: 0;
+}
+
+.aw-return-guidance-target {
+  font-weight: 700;
+  color: #92400e;
+}
+
+.aw-return-guidance-reason {
+  color: #1e293b;
+  font-weight: 500;
+  word-break: break-word;
+}
+
 @media (max-width: 860px) {
   .aw-top-summary-card {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -51,5 +116,9 @@
   .aw-top-summary-card {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+  .aw-return-guidance-row {
+    flex-direction: column;
+    gap: 1px;
   }
 }

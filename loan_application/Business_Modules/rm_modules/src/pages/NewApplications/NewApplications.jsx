@@ -1056,10 +1056,10 @@ export default function NewApplications({ initialFilter = 'All' }) {
                 options={[
                   { value: 'All', label: 'All Statuses' },
                   { value: 'New', label: 'New' },
-                  { value: 'Pending', label: 'Pending' },
-                  { value: 'Under Review', label: 'Under Review' },
+                  { value: 'Pending', label: 'RM Pending' },
+                  { value: 'Under Review', label: 'CM Pending' },
                   { value: 'Logged to HO', label: 'Logged to HO' },
-                  { value: 'Returned', label: 'Returned' },
+                  { value: 'Returned', label: 'BO Returned' },
                 ]}
                 placeholder={null}
               />
