@@ -13534,5 +13534,330 @@
   gap: 16px;
 }
 
+/* Banking monthly statement: one compact row per month (12 rows per bank). */
+.bo-cv-banking-month-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #dbe5ee;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.bo-cv-banking-month-table {
+  width: 100%;
+  min-width: 1950px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.bo-cv-banking-month-table th,
+.bo-cv-banking-month-table td {
+  padding: 9px 7px;
+  border-right: 1px solid #7f8c99;
+  border-bottom: 1px solid #7f8c99;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.bo-cv-banking-month-table th:first-child,
+.bo-cv-banking-month-table td:first-child {
+  border-left: 1px solid #7f8c99;
+}
+
+.bo-cv-banking-month-table thead tr:first-child th {
+  border-top: 1px solid #7f8c99;
+}
+
+.bo-cv-banking-month-table th:first-child,
+.bo-cv-banking-month-table td:first-child {
+  width: 170px;
+  min-width: 170px;
+}
+
+.bo-cv-banking-month-table th {
+  color: #35516f;
+  font-size: 12px;
+  font-weight: 700;
+  background: #f1f5f9;
+  white-space: normal;
+  line-height: 1.2;
+  vertical-align: middle;
+}
+
+.bo-cv-banking-month-table th:nth-child(1),
+.bo-cv-banking-month-table td:nth-child(1) { width: 170px; }
+.bo-cv-banking-month-table th:nth-child(2),
+.bo-cv-banking-month-table td:nth-child(2) { width: 135px; }
+.bo-cv-banking-month-table th:nth-child(3),
+.bo-cv-banking-month-table td:nth-child(3) { width: 210px; }
+.bo-cv-banking-month-table th:nth-child(4),
+.bo-cv-banking-month-table td:nth-child(4) { width: 135px; }
+.bo-cv-banking-month-table th:nth-child(5),
+.bo-cv-banking-month-table td:nth-child(5),
+.bo-cv-banking-month-table th:nth-child(6),
+.bo-cv-banking-month-table td:nth-child(6) { width: 135px; }
+.bo-cv-banking-month-table th:nth-child(7),
+.bo-cv-banking-month-table td:nth-child(7),
+.bo-cv-banking-month-table th:nth-child(8),
+.bo-cv-banking-month-table td:nth-child(8) { width: 125px; }
+.bo-cv-banking-month-table th:nth-child(9),
+.bo-cv-banking-month-table td:nth-child(9),
+.bo-cv-banking-month-table th:nth-child(10),
+.bo-cv-banking-month-table td:nth-child(10),
+.bo-cv-banking-month-table th:nth-child(11),
+.bo-cv-banking-month-table td:nth-child(11) { width: 140px; }
+.bo-cv-banking-month-table th:nth-child(12),
+.bo-cv-banking-month-table td:nth-child(12),
+.bo-cv-banking-month-table th:nth-child(13),
+.bo-cv-banking-month-table td:nth-child(13) { width: 105px; }
+
+.bo-cv-banking-month-table td {
+  background: #fff;
+}
+
+.bo-cv-banking-month-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.bo-cv-banking-month-table input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 104px;
+  height: 38px;
+  padding: 8px 9px;
+  border: 1px solid #cbd8e3;
+  border-radius: 9px;
+  background: #fff;
+  color: #172b43;
+  font-size: 13px;
+}
+
+.bo-cv-banking-month-table td:first-child input {
+  min-width: 0;
+  width: 156px;
+  appearance: auto;
+  -webkit-appearance: auto;
+}
+
+.bo-cv-banking-month-table input:disabled {
+  color: #38546f;
+  background: #eef3f7;
+  opacity: 1;
+}
+
+.bo-cv-banking-month-table .bo-cv-banking-calculated-cell {
+  min-width: 82px;
+  color: #1d344d;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  background: #f1f5f9;
+}
+
+.bo-cv-banking-month-table .bo-cv-banking-summary-row th,
+.bo-cv-banking-month-table .bo-cv-banking-summary-row td {
+  color: #172b43;
+  font-weight: 700;
+  background: #dce3e8;
+  font-variant-numeric: tabular-nums;
+}
+
+.bo-cv-banking-month-table .bo-cv-banking-summary-row td {
+  text-align: right;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.bo-cv-banking-month-table tfoot th:first-child {
+  text-align: left;
+  white-space: nowrap;
+}
+
+.bo-cv-banking-month-table tfoot td[colspan] {
+  text-align: center;
+}
+
+/* Compact bank card spacing while keeping the table readable. */
+.bo-cv-banking-card {
+  padding: 14px 16px;
+  border-radius: 14px;
+}
+
+.bo-cv-banking-card .bo-cv-banking-card-head {
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+
+.bo-cv-banking-card .bo-cv-banking-section-block {
+  margin-bottom: 14px;
+}
+
+/* The final eligibility sheet is the single source of truth for these metrics. */
+.bo-cv-banking-card .bo-cv-banking-analysis-block,
+.bo-cv-banking-workspace > .bo-cv-banking-summary {
+  display: none;
+}
+
+/* Dense spreadsheet sizing: preserve all columns while reducing visual scale. */
+.bo-cv-banking-month-table {
+  min-width: 1500px;
+}
+
+.bo-cv-banking-month-table th,
+.bo-cv-banking-month-table td {
+  padding: 3px 4px;
+}
+
+.bo-cv-banking-month-table th {
+  font-size: 11px;
+}
+
+.bo-cv-banking-month-table th:first-child,
+.bo-cv-banking-month-table td:first-child,
+.bo-cv-banking-month-table th:nth-child(1),
+.bo-cv-banking-month-table td:nth-child(1) { width: 140px; min-width: 140px; }
+.bo-cv-banking-month-table th:nth-child(2),
+.bo-cv-banking-month-table td:nth-child(2) { width: 110px; }
+.bo-cv-banking-month-table th:nth-child(3),
+.bo-cv-banking-month-table td:nth-child(3) { width: 155px; }
+.bo-cv-banking-month-table th:nth-child(4),
+.bo-cv-banking-month-table td:nth-child(4) { width: 110px; }
+.bo-cv-banking-month-table th:nth-child(5),
+.bo-cv-banking-month-table td:nth-child(5),
+.bo-cv-banking-month-table th:nth-child(6),
+.bo-cv-banking-month-table td:nth-child(6) { width: 110px; }
+.bo-cv-banking-month-table th:nth-child(7),
+.bo-cv-banking-month-table td:nth-child(7),
+.bo-cv-banking-month-table th:nth-child(8),
+.bo-cv-banking-month-table td:nth-child(8) { width: 100px; }
+.bo-cv-banking-month-table th:nth-child(9),
+.bo-cv-banking-month-table td:nth-child(9),
+.bo-cv-banking-month-table th:nth-child(10),
+.bo-cv-banking-month-table td:nth-child(10),
+.bo-cv-banking-month-table th:nth-child(11),
+.bo-cv-banking-month-table td:nth-child(11) { width: 110px; }
+.bo-cv-banking-month-table th:nth-child(12),
+.bo-cv-banking-month-table td:nth-child(12),
+.bo-cv-banking-month-table th:nth-child(13),
+.bo-cv-banking-month-table td:nth-child(13) { width: 85px; }
+
+.bo-cv-banking-month-table input,
+.bo-cv-banking-month-table td:first-child input {
+  min-width: 0;
+  width: 100%;
+  height: 26px;
+  padding: 3px 6px;
+  border-radius: 7px;
+  font-size: 11px;
+}
+
+.bo-cv-banking-card {
+  padding: 10px 12px;
+}
+
+.bo-cv-banking-eligibility-sheet h4 {
+  margin-bottom: 4px;
+  text-align: center;
+}
+
+.bo-cv-banking-workspace.is-eligibility-only > *:not(.bo-cv-banking-results) {
+  display: none;
+}
+
+.bo-cv-banking-sheet-back {
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.bo-cv-banking-sheet-subtitle {
+  margin-bottom: 10px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.bo-cv-banking-result-layout {
+  display: block;
+}
+
+.bo-cv-banking-result-table-wrap {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+.bo-cv-banking-result-table {
+  width: 100%;
+  min-width: 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 10px;
+}
+
+.bo-cv-banking-result-table th,
+.bo-cv-banking-result-table td {
+  padding: 3px 3px;
+  border: 1px solid #64748b;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.bo-cv-banking-result-table th {
+  background: #d9dee3;
+  color: #172b43;
+  font-weight: 700;
+  text-align: center;
+  white-space: normal;
+}
+
+.bo-cv-banking-result-table tbody th,
+.bo-cv-banking-result-table tfoot th {
+  text-align: center;
+}
+
+.bo-cv-banking-result-table tfoot th,
+.bo-cv-banking-result-table tfoot td {
+  background: #d9dee3;
+  font-weight: 700;
+}
+
+.bo-cv-banking-eligibility-details {
+  width: 42%;
+  margin: 0 0 0 auto;
+  border: 1px solid #64748b;
+  background: #d9dee3;
+}
+
+.bo-cv-banking-eligibility-details div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 7px;
+  border-bottom: 1px solid #64748b;
+  color: #172b43;
+  font-size: 12px;
+}
+
+.bo-cv-banking-eligibility-details div:last-child {
+  border-bottom: 0;
+}
+
+.bo-cv-banking-eligibility-details span {
+  font-weight: 700;
+}
+
+.bo-cv-banking-eligibility-details strong {
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .bo-cv-banking-result-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .bo-cv-banking-eligibility-details {
+    width: 100%;
+  }
+}
+
 
 
