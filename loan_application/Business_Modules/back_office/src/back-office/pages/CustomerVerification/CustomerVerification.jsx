@@ -4805,8 +4805,9 @@ export default function CustomerVerification() {
         manualObligationInput: '',
         isEditingFoir: false,
         manualFoirInput: '',
-         manualAnnualSalaryIncome: '',
-         restrictOtherIncomeToSalary: true,
+        manualAnnualSalaryIncome: '',
+        restrictOtherIncomeToSalary: true,
+        considerOtherIncome: true,
         emiAmountFactor: '',
       }
     );
@@ -4825,8 +4826,9 @@ export default function CustomerVerification() {
           manualObligationInput: '',
           isEditingFoir: false,
           manualFoirInput: '',
-           manualAnnualSalaryIncome: '',
-           restrictOtherIncomeToSalary: true,
+          manualAnnualSalaryIncome: '',
+          restrictOtherIncomeToSalary: true,
+          considerOtherIncome: true,
           emiAmountFactor: '',
         };
         const nextSettings = typeof updater === 'function' ? updater(existing) : { ...existing, ...updater };
@@ -5312,6 +5314,9 @@ export default function CustomerVerification() {
         restrictOtherIncomeToSalary: selectedMethodCode === 'INCOME'
           ? Boolean(currentCalcSettings.restrictOtherIncomeToSalary)
           : false,
+        considerOtherIncome: selectedMethodCode === 'INCOME'
+          ? (currentCalcSettings.considerOtherIncome !== false)
+          : true,
         pdDocumentPath: resolvedPdDocumentPath || null,
         calculatedByUserId: Number(auth.userId),
         calculatedByBackOfficeId: Number(auth.backOfficeId),
@@ -14813,74 +14818,72 @@ export default function CustomerVerification() {
             ) : selectedMethodCode === 'INCOME' && incomeWorkspaceOpen ? (
               <div className="bo-cv-elig-deck bo-cv-elig-deck--income-workspace">
                 <div className="bo-cv-income-workspace">
-                  {/* ── Income Method Workspace Header ── */}
-                  <header className="bo-cv-income-header">
-                    <div className="bo-cv-income-header-left">
-                      <button
-                        type="button"
-                        className="bo-cv-income-back-btn"
-                        onClick={() => setIncomeWorkspaceOpen(false)}
-                      >
-                        {ArrowLeftIcon ? <ArrowLeftIcon size={16} /> : '←'}
-                        <span>Back to Eligibility Assessment</span>
-                      </button>
-                      <div className="bo-cv-income-title-block">
-                        <span className="bo-cv-elig-kicker">STEP 11 · INCOME METHOD</span>
+                  {/* ── CARD 1: HEADER + APPLICANT SELECTOR ── */}
+                  <div className="bo-cv-income-header-card">
+                    <div className="bo-cv-income-header-top">
+                      <div className="bo-cv-income-header-left">
+                        <button
+                          type="button"
+                          className="bo-cv-income-back-btn"
+                          onClick={() => setIncomeWorkspaceOpen(false)}
+                        >
+                          {ArrowLeftIcon ? <ArrowLeftIcon size={16} /> : '←'}
+                          <span>Back</span>
+                        </button>
+                      </div>
+                      <div className="bo-cv-income-header-center">
                         <h2 className="bo-cv-income-title">Income Method Assessment</h2>
-                        <p className="bo-cv-income-sub">
-                          Salary income breakdown &amp; additional income sources based eligibility assessment.
-                        </p>
+                        <span className="bo-cv-result-method-badge">Income Method</span>
+                      </div>
+                      <div className="bo-cv-income-header-right">
+                        <div className="bo-cv-income-applicant-context">
+                          <span className="bo-cv-income-context-pill">
+                            {UserIcon && <UserIcon size={12} />}
+                            <strong>{selectedApplicant?.name || 'Applicant'}</strong>
+                            <small>({selectedApplicant?.isMain ? 'Main' : selectedApplicant?.label})</small>
+                          </span>
+                          <span className="bo-cv-income-context-pill is-amount">
+                            Req {formatCurrency(appDetails.loanAmount)}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                    <div className="bo-cv-income-header-right">
-                      <div className="bo-cv-income-applicant-context">
-                        <span className="bo-cv-income-context-pill">
-                          {UserIcon && <UserIcon size={12} />}
-                          <strong>{selectedApplicant?.name || 'Applicant'}</strong>
-                          <small>({selectedApplicant?.isMain ? 'Main' : selectedApplicant?.label})</small>
-                        </span>
-                        <span className="bo-cv-income-context-pill is-amount">
-                          Req {formatCurrency(appDetails.loanAmount)}
-                        </span>
-                      </div>
-                    </div>
-                  </header>
 
-                  {/* ── Applicant Selection Rail (if multiple) ── */}
-                  {allApplicants.length > 1 && (
-                    <div className="bo-cv-income-applicant-bar">
-                      <span className="bo-cv-income-bar-label">Applicant Profile:</span>
-                      <div className="bo-cv-elig-person-rail" role="tablist" aria-label="Income Method Applicants">
-                        {allApplicants.map((app) => {
-                          const isSelected = app.sequence === selectedApplicantSequence;
-                          return (
-                            <button
-                              key={`income-app-tab-${app.sequence}`}
-                              type="button"
-                              role="tab"
-                              aria-selected={isSelected}
-                              className={`bo-cv-elig-person-chip ${isSelected ? 'is-active' : ''} ${app.isMain ? 'is-main' : ''}`}
-                              onClick={() => setSelectedApplicantSequence(app.sequence)}
-                            >
-                              <span className="bo-cv-elig-person-avatar">
-                                {UserIcon && <UserIcon size={14} />}
-                              </span>
-                              <span className="bo-cv-elig-person-meta">
-                                <strong>{app.name}</strong>
-                                <small>{app.isMain ? 'Main Applicant' : app.label}</small>
-                              </span>
-                            </button>
-                          );
-                        })}
+                    {/* Applicant Selector Row */}
+                    {allApplicants.length > 0 && (
+                      <div className="bo-cv-income-applicant-row">
+                        <span className="bo-cv-income-bar-label">APPLICANT</span>
+                        <div className="bo-cv-elig-person-rail" role="tablist" aria-label="Income Method Applicants">
+                          {allApplicants.map((app) => {
+                            const isSelected = app.sequence === selectedApplicantSequence;
+                            return (
+                              <button
+                                key={`income-app-tab-${app.sequence}`}
+                                type="button"
+                                role="tab"
+                                aria-selected={isSelected}
+                                className={`bo-cv-elig-person-chip ${isSelected ? 'is-active' : ''} ${app.isMain ? 'is-main' : ''}`}
+                                onClick={() => setSelectedApplicantSequence(app.sequence)}
+                              >
+                                <span className="bo-cv-elig-person-avatar">
+                                  {UserIcon && <UserIcon size={14} />}
+                                </span>
+                                <span className="bo-cv-elig-person-meta">
+                                  <strong>{app.name}</strong>
+                                  <small>{app.isMain ? 'Main Applicant' : app.label}</small>
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
-                  {/* ── 01 — MONTHLY SALARY BREAKDOWN ── */}
-                  <section className="bo-cv-income-section" aria-label="01 Monthly Salary Breakdown">
+                  {/* ── Monthly Salary Breakdown ── */}
+                  <section className="bo-cv-income-section" aria-label="Monthly Salary Breakdown">
                     <div className="bo-cv-income-section-head">
                       <div className="bo-cv-income-section-title-wrap">
-                        <span className="bo-cv-income-section-num">01</span>
                         <div>
                           <h3 className="bo-cv-income-section-title">Monthly Salary Breakdown</h3>
                           <p className="bo-cv-income-section-sub">
@@ -14952,22 +14955,22 @@ export default function CustomerVerification() {
                       </div>
                     )}
 
-                    {/* Manual Salary Breakdown Table */}
+                    {/* Manual Salary Breakdown Table (Fixed 100% Width) */}
                     <div className="bo-cv-salary-table-wrapper">
                       <table className="bo-cv-salary-table" aria-label="Manual Salary Income Breakdown">
                         <thead>
                           <tr>
-                            <th className="th-month">Month</th>
-                            <th className="th-num">Basic (₹)</th>
-                            <th className="th-num">HRA (₹)</th>
-                            <th className="th-num">CCA (₹)</th>
-                            <th className="th-num">TA (₹)</th>
-                            <th className="th-num">Incentive (₹)</th>
-                            <th className="th-num">Incentive Applied (%)</th>
-                            <th className="th-num">Deductions (₹)</th>
-                            <th className="th-num th-readonly">Considered Incentive (₹)</th>
-                            <th className="th-num th-readonly">Considered Income (₹)</th>
-                            {salaryRows.length > 3 && <th className="th-action">Action</th>}
+                            <th className="th-month" style={{ width: '10.5%' }}>Month</th>
+                            <th className="th-num" style={{ width: '9.5%' }}>Basic (₹)</th>
+                            <th className="th-num" style={{ width: '8.5%' }}>HRA (₹)</th>
+                            <th className="th-num" style={{ width: '8%' }}>CCA (₹)</th>
+                            <th className="th-num" style={{ width: '8%' }}>TA (₹)</th>
+                            <th className="th-num" style={{ width: '9.5%' }}>Incentive (₹)</th>
+                            <th className="th-num" style={{ width: '7.5%' }}>Inc %</th>
+                            <th className="th-num" style={{ width: '9%' }}>Deductions (₹)</th>
+                            <th className="th-num th-readonly" style={{ width: '13%' }}>Cons. Incentive (₹)</th>
+                            <th className="th-num th-readonly" style={{ width: '13%' }}>Cons. Income (₹)</th>
+                            {salaryRows.length > 3 && <th className="th-action" style={{ width: '3.5%' }}>Action</th>}
                           </tr>
                         </thead>
                         <tbody>
@@ -15123,14 +15126,12 @@ export default function CustomerVerification() {
                         </tbody>
                       </table>
                     </div>
-
                   </section>
 
-                  {/* ── 02 — OTHER INCOME ASSESSMENT ── */}
-                  <section className="bo-cv-income-section" aria-label="02 Other Income Assessment">
+                  {/* ── Other Income Assessment ── */}
+                  <section className="bo-cv-income-section" aria-label="Other Income Assessment">
                     <div className="bo-cv-income-section-head">
                       <div className="bo-cv-income-section-title-wrap">
-                        <span className="bo-cv-income-section-num">02</span>
                         <div>
                           <h3 className="bo-cv-income-section-title">Other Income Assessment</h3>
                           <p className="bo-cv-income-section-sub">
@@ -15176,13 +15177,13 @@ export default function CustomerVerification() {
                       </div>
                     ) : (
                       <div className="bo-cv-salary-table-wrapper" style={{ marginBottom: '14px' }}>
-                        <table className="bo-cv-salary-table" aria-label="Other Income Breakdown">
+                        <table className="bo-cv-salary-table bo-cv-other-income-table" aria-label="Other Income Breakdown">
                           <thead>
                             <tr>
-                              <th className="th-income-name" style={{ minWidth: '280px' }}>Income Name</th>
-                              <th className="th-num" style={{ minWidth: '160px', width: '160px' }}>Income Amount (₹)</th>
-                              <th className="th-pct th-num" style={{ minWidth: '140px', width: '140px' }}>Consideration %</th>
-                              <th className="th-action" style={{ width: '60px', minWidth: '60px' }}>Action</th>
+                              <th className="th-income-name" style={{ width: '44%' }}>Income Name</th>
+                              <th className="th-num" style={{ width: '26%' }}>Income Amount (₹)</th>
+                              <th className="th-pct th-num" style={{ width: '22%' }}>Consideration %</th>
+                              <th className="th-action" style={{ width: '8%' }}>Action</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -15196,7 +15197,6 @@ export default function CustomerVerification() {
                                     value={row.incomeName || ''}
                                     onChange={(e) => handleOtherIncomeRowChange(idx, 'incomeName', e.target.value)}
                                     disabled={otherIncomeSaving}
-                                    style={{ textAlign: 'left', width: '100%', maxWidth: '100%' }}
                                     aria-label={`Income Name for Row ${idx + 1}`}
                                   />
                                 </td>
@@ -15210,7 +15210,6 @@ export default function CustomerVerification() {
                                     value={row.incomeAmount === 0 ? '0' : row.incomeAmount || ''}
                                     onChange={(e) => handleOtherIncomeRowChange(idx, 'incomeAmount', e.target.value)}
                                     disabled={otherIncomeSaving}
-                                    style={{ width: '100%', maxWidth: '100%' }}
                                     aria-label={`Income Amount for Row ${idx + 1}`}
                                   />
                                 </td>
@@ -15250,11 +15249,10 @@ export default function CustomerVerification() {
                     )}
                   </section>
 
-                  {/* ── 03 — INCOME ASSESSMENT SUMMARY ── */}
-                  <section className="bo-cv-income-section" aria-label="03 Income Assessment Summary">
+                  {/* ── Income Assessment Summary ── */}
+                  <section className="bo-cv-income-section" aria-label="Income Assessment Summary">
                     <div className="bo-cv-income-section-head">
                       <div className="bo-cv-income-section-title-wrap">
-                        <span className="bo-cv-income-section-num">03</span>
                         <div>
                           <h3 className="bo-cv-income-section-title">Income Assessment Summary</h3>
                         </div>
@@ -15344,540 +15342,67 @@ export default function CustomerVerification() {
                     </div>
                   </section>
 
-                  {/* ── 04 — PROPOSED LOAN & ELIGIBILITY SETTINGS ── */}
-                  <section className="bo-cv-income-section" aria-label="04 Proposed Loan & Eligibility Settings">
-                    <div className="bo-cv-income-section-head">
+                  {/* ── Total Other Income to be Considered (Toggle & Constraint Preview) ── */}
+                  <section className="bo-cv-income-section bo-cv-income-consideration-section" aria-label="Total Other Income Consideration">
+                    <div className="bo-cv-income-section-head" style={{ marginBottom: 0, paddingBottom: 0, borderBottom: 'none' }}>
                       <div className="bo-cv-income-section-title-wrap">
-                        <span className="bo-cv-income-section-num">04</span>
                         <div>
-                          <h3 className="bo-cv-income-section-title">Proposed Loan &amp; Eligibility Settings</h3>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Baseline Header & Cards Grid */}
-                    <div className="bo-cv-income-baseline-header">
-                      <div className="bo-cv-income-baseline-title-wrap">
-                        <span className="bo-cv-income-baseline-dot" />
-                        <span className="bo-cv-income-baseline-title">RM Proposed</span>
-                      </div>
-                      <span className="bo-cv-income-baseline-badge">Product Configured</span>
-                    </div>
-
-                    <div className="bo-cv-income-baseline-grid">
-                      {/* Card 1: Requested Loan Amount */}
-                      <div className="bo-cv-income-baseline-card">
-                        <span className="bo-cv-income-baseline-label">Requested Loan Amount</span>
-                        <strong className="bo-cv-income-baseline-val is-accent">{formatCurrency(appDetails.loanAmount)}</strong>
-                      </div>
-
-                      {/* Card 2: Base Interest Rate */}
-                      <div className="bo-cv-income-baseline-card">
-                        <span className="bo-cv-income-baseline-label">Base Interest Rate</span>
-                        <strong className="bo-cv-income-baseline-val">
-                          {resolvedAppRoi != null ? `${resolvedAppRoi}% p.a.` : '—'}
-                        </strong>
-                      </div>
-
-                      {/* Card 3: Base Loan Tenure */}
-                      <div className="bo-cv-income-baseline-card">
-                        <span className="bo-cv-income-baseline-label">Base Loan Tenure</span>
-                        <strong className="bo-cv-income-baseline-val">
-                          {resolvedAppTenure != null ? `${resolvedAppTenure} Months` : '—'}
-                        </strong>
-                      </div>
-
-                      {/* Card 4: Base Policy FOIR */}
-                      <div className="bo-cv-income-baseline-card">
-                        <span className="bo-cv-income-baseline-label">Base Policy FOIR</span>
-                        <strong className="bo-cv-income-baseline-val bo-cv-foir-val">
-                          {basePolicyFoir != null ? `${basePolicyFoir}%` : 'Policy FOIR from Master'}
-                        </strong>
-                      </div>
-                    </div>
-
-                    <div className="bo-cv-income-calc-settings-divider">
-                      <span className="bo-cv-income-baseline-title-wrap">
-                        <span className="bo-cv-income-baseline-dot" />
-                        <span className="bo-cv-income-baseline-title">Back Office Overrides &amp; Benchmarks</span>
-                      </span>
-                    </div>
-
-                    {/* Benchmark Cards Grid */}
-                    <div className="bo-cv-calc-settings-grid">
-                      {/* 1. Interest Rate (ROI % p.a.) Card with Override */}
-                      <div className="bo-cv-calc-setting-card">
-                        <div className="bo-cv-calc-setting-header">
-                          <span className="bo-cv-calc-setting-label">Interest Rate (ROI % p.a.)</span>
-                          <span className="bo-cv-setting-action-label">RM proposed: {resolvedAppRoi != null ? `${resolvedAppRoi}%` : '—'}</span>
-                        </div>
-
-                        <>
-                          <div className="bo-cv-setting-override-row">
-                            <input
-                              type="number"
-                               step="0.01"
-                               min="0.1"
-                              className="bo-cv-setting-input"
-                              placeholder={resolvedAppRoi != null ? String(resolvedAppRoi) : 'e.g. 10.5'}
-                              value={currentCalcSettings.manualRoiInput || (resolvedAppRoi ?? '')}
-                              onFocus={() =>
-                                updateCurrentCalcSettings((prev) => ({
-                                  ...prev,
-                                  isEditingRoi: true,
-                                  manualRoiInput: prev.manualRoiInput || (resolvedAppRoi != null ? String(resolvedAppRoi) : ''),
-                                }))
-                              }
-                              onChange={(e) =>
-                                updateCurrentCalcSettings((prev) => ({ ...prev, isEditingRoi: true, manualRoiInput: e.target.value }))
-                              }
-                              aria-label="Manual Interest Rate"
-                            />
-                            <span className="bo-cv-setting-unit">% p.a.</span>
-                          </div>
-                        </>
-
-                      </div>
-
-                      {/* 2. Loan Tenure (Months) Card with Override */}
-                      <div className="bo-cv-calc-setting-card">
-                        <div className="bo-cv-calc-setting-header">
-                          <span className="bo-cv-calc-setting-label">Loan Tenure (Months)</span>
-                          <span className="bo-cv-setting-action-label">RM proposed: {resolvedAppTenure != null ? `${resolvedAppTenure} months` : '—'}</span>
-                        </div>
-
-                        <>
-                          <div className="bo-cv-setting-override-row">
-                            <input
-                              type="number"
-                               step="1"
-                               min="1"
-                              className="bo-cv-setting-input"
-                              placeholder={resolvedAppTenure != null ? String(resolvedAppTenure) : 'e.g. 120'}
-                              value={currentCalcSettings.manualTenureInput || (resolvedAppTenure ?? '')}
-                              onChange={(e) =>
-                                updateCurrentCalcSettings((prev) => ({ ...prev, isEditingTenure: true, manualTenureInput: e.target.value }))
-                              }
-                              aria-label="Manual Loan Tenure"
-                            />
-                            <span className="bo-cv-setting-unit">Months</span>
-                          </div>
-                        </>
-
-                      </div>
-
-                      {/* 3. Policy FOIR Limit Card with Override */}
-                      <div className="bo-cv-calc-setting-card">
-                        <div className="bo-cv-calc-setting-header">
-                          <span className="bo-cv-calc-setting-label">Policy FOIR Limit</span>
-                          <span className="bo-cv-setting-action-label">Policy baseline: {basePolicyFoir != null ? `${basePolicyFoir}%` : '—'}</span>
-                        </div>
-
-                        <>
-                          <div className="bo-cv-setting-override-row">
-                            <input
-                              type="number"
-                               step="0.5"
-                               min="0.1"
-                              className="bo-cv-setting-input"
-                              placeholder={basePolicyFoir != null ? String(basePolicyFoir) : 'e.g. 70'}
-                              value={currentCalcSettings.manualFoirInput || (basePolicyFoir ?? '')}
-                              onChange={(e) =>
-                                updateCurrentCalcSettings((prev) => ({ ...prev, isEditingFoir: true, manualFoirInput: e.target.value }))
-                              }
-                              aria-label="Manual Policy FOIR"
-                            />
-                            <span className="bo-cv-setting-unit">%</span>
-                          </div>
-                        </>
-
-                      </div>
-                    </div>
-                  </section>
-
-                  {false && (
-                  <>
-                  {/* ── 05 — EXISTING ACTIVE DEBT OBLIGATIONS ── */}
-                  <section className="bo-cv-income-section" aria-label="05 Existing Active Debt Obligations">
-                    <div className="bo-cv-income-section-head">
-                      <div className="bo-cv-income-section-title-wrap">
-                        <span className="bo-cv-income-section-num">05</span>
-                        <div>
-                          <h3 className="bo-cv-income-section-title">Existing Active Debt Obligations</h3>
+                          <h3 className="bo-cv-income-section-title">Total Other Income to be Considered</h3>
                           <p className="bo-cv-income-section-sub">
-                            Active verified debt facilities and monthly EMI obligation benchmark.
+                            Include eligible additional income streams in the FOIR &amp; loan eligibility calculation.
                           </p>
                         </div>
                       </div>
-                      {!isAddingLoan && (
-                        <button
-                          type="button"
-                          className="bo-cv-income-add-btn"
-                          onClick={() => {
-                            setIsAddingLoan(true);
-                            setLoanBanner(null);
-                          }}
-                        >
-                          {PlusIcon ? <PlusIcon size={14} /> : '+'}
-                          <span>Add Loan</span>
-                        </button>
-                      )}
+                      <div className="bo-cv-toggle-container">
+                        <div className="bo-cv-toggle-btn-group" role="group" aria-label="Consider Other Income in Calculation">
+                          <button
+                            type="button"
+                            className={`bo-cv-toggle-btn ${currentCalcSettings.considerOtherIncome !== false ? 'is-active' : ''}`}
+                            onClick={() => updateCurrentCalcSettings({ considerOtherIncome: true })}
+                          >
+                            YES
+                          </button>
+                          <button
+                            type="button"
+                            className={`bo-cv-toggle-btn ${currentCalcSettings.considerOtherIncome === false ? 'is-active is-no' : ''}`}
+                            onClick={() => updateCurrentCalcSettings({ considerOtherIncome: false })}
+                          >
+                            NO
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
-                    {/* Add Loan Inline Form */}
-                    {isAddingLoan && (
-                      <div className="bo-cv-abb-add-form-card" style={{ margin: '0 0 16px 0' }}>
-                        <div className="bo-cv-abb-form-header">
-                          <div className="bo-cv-abb-form-header-title">
-                            {CreditCardIcon && <CreditCardIcon size={18} />}
-                            <h5>Add Active Loan Facility</h5>
-                          </div>
-                          <button
-                            type="button"
-                            className="bo-cv-abb-form-close-btn"
-                            onClick={() => {
-                              setIsAddingLoan(false);
-                              setLoanBanner(null);
-                            }}
-                            disabled={loanSaving}
-                            aria-label="Close add loan form"
-                          >
-                            {XIcon ? <XIcon size={16} /> : '✕'}
-                          </button>
-                        </div>
-
-                        {loanBanner && (
-                          <div className={`bo-cv-salary-banner is-${loanBanner.type}`}>
-                            <div className="bo-cv-salary-banner-icon">
-                              {loanBanner.type === 'success' && (CheckCircleIcon ? <CheckCircleIcon size={16} /> : '✓')}
-                              {loanBanner.type === 'error' && (AlertTriangleIcon ? <AlertTriangleIcon size={16} /> : '⚠️')}
-                              {loanBanner.type === 'warning' && (AlertCircleIcon ? <AlertCircleIcon size={16} /> : 'ℹ️')}
-                              {loanBanner.type === 'info' && (InfoIcon ? <InfoIcon size={16} /> : 'ℹ️')}
-                            </div>
-                            <div className="bo-cv-salary-banner-msg">{loanBanner.message}</div>
-                          </div>
-                        )}
-
-                        <div className="bo-cv-abb-form-grid">
-                          <div className="bo-cv-abb-form-group">
-                            <label className="bo-cv-abb-label">Lender / Bank <span className="req">*</span></label>
-                            <select
-                              className="bo-cv-abb-select"
-                              value={newLoanDraft.bankId}
-                              onChange={(e) => setNewLoanDraft((p) => ({ ...p, bankId: e.target.value }))}
-                              disabled={loanSaving || mastersLoading}
-                            >
-                              <option value="">Select Bank</option>
-                              {masterBanks.map((b) => (
-                                <option key={`loan-bank-opt-${b.bankId}`} value={b.bankId}>
-                                  {b.bankName || b.bankCode}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div className="bo-cv-abb-form-group">
-                            <label className="bo-cv-abb-label">Loan Type <span className="req">*</span></label>
-                            <input
-                              type="text"
-                              className="bo-cv-abb-input"
-                              placeholder="e.g. Home Loan, Personal Loan"
-                              value={newLoanDraft.loanType}
-                              onChange={(e) => setNewLoanDraft((p) => ({ ...p, loanType: e.target.value }))}
-                              disabled={loanSaving}
-                            />
-                          </div>
-
-                          <div className="bo-cv-abb-form-group">
-                            <label className="bo-cv-abb-label">Total Loan Amount (₹) <span className="req">*</span></label>
-                            <input
-                              type="number"
-                              min="0"
-                              step="1000"
-                              className="bo-cv-abb-input"
-                              placeholder="e.g. 500000"
-                              value={newLoanDraft.totalLoanAmount}
-                              onChange={(e) => setNewLoanDraft((p) => ({ ...p, totalLoanAmount: e.target.value }))}
-                              disabled={loanSaving}
-                            />
-                          </div>
-
-                          <div className="bo-cv-abb-form-group">
-                            <label className="bo-cv-abb-label">Total Outstanding (₹) <span className="req">*</span></label>
-                            <input
-                              type="number"
-                              min="0"
-                              step="1000"
-                              className="bo-cv-abb-input"
-                              placeholder="e.g. 350000"
-                              value={newLoanDraft.totalOutstanding}
-                              onChange={(e) => setNewLoanDraft((p) => ({ ...p, totalOutstanding: e.target.value }))}
-                              disabled={loanSaving}
-                            />
-                          </div>
-
-                          <div className="bo-cv-abb-form-group">
-                            <label className="bo-cv-abb-label">Monthly EMI (₹) <span className="req">*</span></label>
-                            <input
-                              type="number"
-                              min="0"
-                              step="100"
-                              className="bo-cv-abb-input"
-                              placeholder="e.g. 12500"
-                              value={newLoanDraft.emiAmount}
-                              onChange={(e) => setNewLoanDraft((p) => ({ ...p, emiAmount: e.target.value }))}
-                              disabled={loanSaving}
-                            />
-                          </div>
-
-                          <div className="bo-cv-abb-form-group">
-                            <label className="bo-cv-abb-label">Status</label>
-                            <select
-                              className="bo-cv-abb-select"
-                              value={newLoanDraft.status}
-                              onChange={(e) => setNewLoanDraft((p) => ({ ...p, status: e.target.value }))}
-                              disabled={loanSaving}
-                            >
-                              <option value="Active">Active</option>
-                              <option value="Regular">Regular</option>
-                              <option value="Closed">Closed</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div className="bo-cv-abb-form-actions">
-                          <button
-                            type="button"
-                            className="bo-btn bo-btn--outline bo-btn--sm"
-                            onClick={() => {
-                              setIsAddingLoan(false);
-                              setLoanBanner(null);
-                            }}
-                            disabled={loanSaving}
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            className="bo-btn bo-btn--primary bo-btn--sm"
-                            onClick={handleSaveActiveLoan}
-                            disabled={loanSaving}
-                          >
-                            {loanSaving ? (
-                              <>
-                                <span className="bo-cv-btn-spinner" />
-                                <span>Saving Loan...</span>
-                              </>
-                            ) : (
-                              <>
-                                {CheckCircleIcon && <CheckCircleIcon size={14} />}
-                                <span>Save Active Loan</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
+                    <div className="bo-cv-consideration-info-strip" style={{ marginTop: '14px' }}>
+                      <div className="bo-cv-consideration-stat">
+                        <span className="bo-cv-consideration-stat-label">Eligible Additional Income:</span>
+                        <strong className="bo-cv-consideration-stat-val">
+                          {currentCalcSettings.considerOtherIncome !== false
+                            ? (liveTotalOtherIncome > 0 ? formatCurrency(liveTotalOtherIncome) : '₹0')
+                            : '₹0 (Excluded by Selection)'}
+                        </strong>
                       </div>
-                    )}
-
-                    {loanBanner && !isAddingLoan && (
-                      <div className={`bo-cv-salary-banner is-${loanBanner.type}`} style={{ marginBottom: '14px' }}>
-                        <div className="bo-cv-salary-banner-icon">
-                          {loanBanner.type === 'success' && (CheckCircleIcon ? <CheckCircleIcon size={16} /> : '✓')}
-                          {loanBanner.type === 'error' && (AlertTriangleIcon ? <AlertTriangleIcon size={16} /> : '⚠️')}
-                          {loanBanner.type === 'warning' && (AlertCircleIcon ? <AlertCircleIcon size={16} /> : 'ℹ️')}
-                          {loanBanner.type === 'info' && (InfoIcon ? <InfoIcon size={16} /> : 'ℹ️')}
-                        </div>
-                        <div className="bo-cv-salary-banner-msg">{loanBanner.message}</div>
-                      </div>
-                    )}
-
-                    {loansLoading ? (
-                      <div className="bo-cv-assess-loading-box" style={{ padding: '24px' }}>
-                        <div className="bo-cv-loading-spinner" />
-                        <span>Loading active debt facilities from backend...</span>
-                      </div>
-                    ) : selectedApplicantActiveLoans.length > 0 ? (
-                      <div className="bo-cv-salary-table-wrapper bo-cv-obligations-table-wrap">
-                        <table className="bo-cv-salary-table bo-cv-obligations-table">
-                          <thead>
-                            <tr>
-                              <th>Lender / Bank</th>
-                              <th>Loan Type</th>
-                              <th className="th-num">Total Loan</th>
-                              <th className="th-num">Outstanding</th>
-                              <th className="th-num">Monthly EMI</th>
-                              <th className="th-status">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {selectedApplicantActiveLoans.map((loan, lIdx) => (
-                              <tr key={loan.applicationBankActiveLoanDetailsId || lIdx}>
-                                <td><strong>{loan.bankName || 'State Bank of India'}</strong></td>
-                                <td>{loan.loanType || 'Loan Facility'}</td>
-                                <td className="td-num">{formatCurrency(loan.totalLoanAmount)}</td>
-                                <td className="td-num">{formatCurrency(loan.totalOutstanding)}</td>
-                                <td className="td-num"><strong>{formatCurrency(loan.emiAmount)}</strong></td>
-                                <td className="td-status">
-                                  <span className="bo-cv-salary-status-badge is-saved">
-                                    {loan.status || 'Active'}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="bo-cv-obligations-empty">
-                        <span>No active loan obligations found for {selectedApplicant?.name || 'this applicant'}.</span>
-                      </div>
-                    )}
-
-                    <div className="bo-cv-obligation-summary-strip">
-                      <div className="bo-cv-obligation-summary-hint">
+                      <div className="bo-cv-consideration-hint">
                         <span className="bo-cv-salary-hint-dot" />
                         <span>
-                          <strong>Note:</strong> Informational summary from active verified records. Authoritative existing EMI is evaluated server-side by the calculation engine.
-                        </span>
-                      </div>
-                      <div className="bo-cv-obligation-summary-total">
-                        <span>Total Existing Monthly EMI:</span>
-                        <strong>{formatCurrency(totalDeclaredMonthlyEmi)}</strong>
-                      </div>
-                    </div>
-
-                    {/* Existing Monthly Obligation Override Card */}
-                    <div className="bo-cv-calc-settings-grid" style={{ marginTop: '16px' }}>
-                      <div className="bo-cv-calc-setting-card">
-                        <div className="bo-cv-calc-setting-header">
-                          <span className="bo-cv-calc-setting-label">Existing Monthly Obligation</span>
-                          <button
-                            type="button"
-                            className="bo-cv-setting-action-btn"
-                            onClick={() =>
-                              updateCurrentCalcSettings((prev) => ({
-                                ...prev,
-                                isEditingObligation: !prev.isEditingObligation,
-                                manualObligationInput:
-                                  !prev.isEditingObligation && prev.manualObligationInput === ''
-                                    ? totalDeclaredMonthlyEmi > 0
-                                      ? String(totalDeclaredMonthlyEmi)
-                                      : ''
-                                    : prev.manualObligationInput,
-                              }))
-                            }
-                          >
-                            {currentCalcSettings.isEditingObligation ? 'Use Calculated EMI' : 'Override Obligation'}
-                          </button>
-                        </div>
-
-                        {currentCalcSettings.isEditingObligation ? (
-                          <div className="bo-cv-setting-override-row">
-                            <span className="bo-cv-setting-currency-symbol">₹</span>
-                            <input
-                              type="number"
-                              step="100"
-                              min="0"
-                              className="bo-cv-setting-input is-amount"
-                              placeholder={String(totalDeclaredMonthlyEmi || 0)}
-                              value={currentCalcSettings.manualObligationInput}
-                              onChange={(e) =>
-                                updateCurrentCalcSettings((prev) => ({ ...prev, manualObligationInput: e.target.value }))
-                              }
-                              aria-label="Manual Existing Monthly Obligation"
-                            />
-                          </div>
-                        ) : (
-                          <div className="bo-cv-calc-setting-value bo-cv-amount-val">
-                            {formatCurrency(totalDeclaredMonthlyEmi)}
-                          </div>
-                        )}
-
-                        <span className="bo-cv-calc-setting-hint">
-                          {currentCalcSettings.isEditingObligation && currentCalcSettings.manualObligationInput !== ''
-                            ? `Override: ${formatCurrency(currentCalcSettings.manualObligationInput)} • Applied Obligation: ${formatCurrency(currentCalcSettings.manualObligationInput)} (Calculated EMI: ${formatCurrency(totalDeclaredMonthlyEmi)})`
-                            : `Applied Obligation: ${formatCurrency(totalDeclaredMonthlyEmi)} (Derived from active loan facilities)`}
+                          Restricted to maximum 100% of Salaried Income ({formatCurrency(liveSalaryAverage)}).
+                          {currentCalcSettings.considerOtherIncome === false
+                            ? ' Currently excluded from calculation.'
+                            : ' Active additional income sources will be evaluated with their consideration percentages.'}
                         </span>
                       </div>
                     </div>
                   </section>
-                  </>
-                  )}
 
-                  {/* ── 06 — CALCULATE INCOME ELIGIBILITY ── */}
-                   <section className="bo-cv-income-section bo-cv-income-section--calc-action" aria-label="06 Calculate Income Eligibility">
-                     {false && (<>
-                     {/* Pre-Calculation Verified Parameters Snapshot */}
-                    <div className="bo-cv-calc-pre-summary" style={{ marginBottom: '16px' }}>
-                      <div className="bo-cv-calc-pre-badge">
-                        <span className="bo-cv-calc-pre-label">Pre-Calculation Verified Parameters:</span>
-                      </div>
-                      <div className="bo-cv-calc-pre-items">
-                        <div className="bo-cv-calc-pre-item">
-                          <span className="bo-cv-calc-pre-item-label">Method:</span>
-                          <strong>Income Method</strong>
-                        </div>
-                        <span className="bo-cv-calc-pre-dot">•</span>
-                        <div className="bo-cv-calc-pre-item">
-                          <span className="bo-cv-calc-pre-item-label">Applicant:</span>
-                          <strong>{selectedApplicant?.name || 'Applicant'}</strong>
-                        </div>
-                        <span className="bo-cv-calc-pre-dot">•</span>
-                        <div className="bo-cv-calc-pre-item">
-                          <span className="bo-cv-calc-pre-item-label">Requested:</span>
-                          <strong>{formatCurrency(appDetails.loanAmount)}</strong>
-                        </div>
-                        <span className="bo-cv-calc-pre-dot">•</span>
-                        <div className="bo-cv-calc-pre-item">
-                          <span className="bo-cv-calc-pre-item-label">ROI:</span>
-                          <strong>
-                            {currentCalcSettings.isEditingRoi && currentCalcSettings.manualRoiInput !== ''
-                              ? `${currentCalcSettings.manualRoiInput}% (Override)`
-                              : resolvedAppRoi != null
-                              ? `${resolvedAppRoi}% p.a.`
-                              : '—'}
-                          </strong>
-                        </div>
-                        <span className="bo-cv-calc-pre-dot">•</span>
-                        <div className="bo-cv-calc-pre-item">
-                          <span className="bo-cv-calc-pre-item-label">Tenure:</span>
-                          <strong>
-                            {currentCalcSettings.isEditingTenure && currentCalcSettings.manualTenureInput !== ''
-                              ? `${currentCalcSettings.manualTenureInput} M (Override)`
-                              : resolvedAppTenure != null
-                              ? `${resolvedAppTenure} Months`
-                              : '—'}
-                          </strong>
-                        </div>
-                        <span className="bo-cv-calc-pre-dot">•</span>
-                        <div className="bo-cv-calc-pre-item">
-                          <span className="bo-cv-calc-pre-item-label">Existing EMI:</span>
-                          <strong>
-                            {currentCalcSettings.isEditingObligation && currentCalcSettings.manualObligationInput !== ''
-                              ? `${formatCurrency(currentCalcSettings.manualObligationInput)} (Override)`
-                              : formatCurrency(totalDeclaredMonthlyEmi)}
-                          </strong>
-                        </div>
-                        <span className="bo-cv-calc-pre-dot">•</span>
-                        <div className="bo-cv-calc-pre-item">
-                          <span className="bo-cv-calc-pre-item-label">Policy FOIR:</span>
-                          <strong>
-                            {currentCalcSettings.isEditingFoir && currentCalcSettings.manualFoirInput !== ''
-                              ? `${currentCalcSettings.manualFoirInput}% (Override)`
-                              : basePolicyFoir != null
-                              ? `${basePolicyFoir}%`
-                              : 'Policy FOIR from Master'}
-                          </strong>
-                        </div>
-                      </div>
-                    </div>
-                    </>)}
-
-                     <div className="bo-cv-income-calc-bar">
+                  {/* ── Calculate Income Eligibility Action Bar ── */}
+                  <section className="bo-cv-income-section bo-cv-income-section--calc-action" aria-label="Calculate Income Eligibility">
+                    <div className="bo-cv-income-calc-bar">
                       <div className="bo-cv-income-calc-bar-info">
-                        <span className="bo-cv-income-section-num">06</span>
                         <div>
                           <h3 className="bo-cv-income-calc-bar-title">Calculate Income Eligibility</h3>
+                          <p className="bo-cv-income-calc-bar-sub">
+                            Run authoritative underwriting eligibility calculation for {selectedApplicant?.name || 'Applicant'}.
+                          </p>
                         </div>
                       </div>
 
@@ -15918,18 +15443,16 @@ export default function CustomerVerification() {
                     )}
                   </section>
 
-                  {/* ── 07 — INCOME ELIGIBILITY RESULT ── */}
-                  <section className="bo-cv-income-section" aria-label="07 Income Eligibility Result">
+                  {/* ── Income Eligibility Result ── */}
+                  <section className="bo-cv-income-section" aria-label="Income Eligibility Result">
                     <div className="bo-cv-income-section-head">
                       <div className="bo-cv-income-section-title-wrap">
-                        <span className="bo-cv-income-section-num is-result">07</span>
                         <div>
                           <h3 className="bo-cv-income-section-title">Income Eligibility Assessment Result</h3>
                         </div>
                       </div>
-                      {currentAssessment && (
+                      {currentAssessment?.status && (
                         <div className="bo-cv-result-header-badges">
-                          <span className="bo-cv-result-method-badge">Income Method</span>
                           <span
                             className={`bo-cv-result-status-badge ${
                               String(currentAssessment.status || '').toLowerCase().includes('eligible')
@@ -15937,7 +15460,7 @@ export default function CustomerVerification() {
                                 : 'is-shortfall'
                             }`}
                           >
-                            {currentAssessment.status || 'Calculated'}
+                            {currentAssessment.status}
                           </span>
                         </div>
                       )}
@@ -15945,300 +15468,81 @@ export default function CustomerVerification() {
 
                     {currentAssessment ? (
                       <div className="bo-cv-income-results-container">
-                        {/* Hero Card: Maximum Eligible Loan Amount */}
-                        <div className="bo-cv-result-hero-card">
-                          <div className="bo-cv-result-hero-main">
-                            <span className="bo-cv-result-hero-label">Maximum Eligible Loan Amount</span>
-                            <div className="bo-cv-result-hero-amount">
-                              {`₹${Number(currentAssessment.maximumEligibleLoanAmount).toFixed(2)} Lacs`}
-                            </div>
-                            <div className="bo-cv-result-hero-sub-row">
-                              {currentCalcSettings.recommendedLoanAmount || currentAssessment.recommendedLoanAmount ? (
-                                <>
-                                  <div className="bo-cv-result-hero-sub-item">
-                                    <span>Recommended: </span>
-                                    <strong>
-                                      {formatCurrency(
-                                        currentCalcSettings.recommendedLoanAmount || currentAssessment.recommendedLoanAmount
-                                      )}
-                                    </strong>
-                                  </div>
-                                </>
-                              ) : null}
-                            </div>
-                          </div>
-
-                          <div className="bo-cv-result-hero-status-box">
-                            <span className="bo-cv-result-hero-status-label">Assessment Status</span>
-                            <strong
-                              className={`bo-cv-result-hero-status-val ${
-                                String(currentAssessment.status || '').toLowerCase().includes('eligible')
-                                  ? 'is-eligible'
-                                  : 'is-shortfall'
-                              }`}
-                            >
-                              {currentAssessment.status || 'Calculated'}
-                            </strong>
-                          </div>
-                        </div>
-
-                        {/* Result Metrics Grid (8 cards) */}
-                        <div className="bo-cv-result-metrics-grid">
-                           {/* 1. Total monthly income before FOIR */}
-                          <div className="bo-cv-result-metric-card">
-                             <span className="bo-cv-result-metric-label">Total Monthly Income Before FOIR</span>
-                            <strong className="bo-cv-result-metric-val">
+                        {/* Excel-Style Single Result Table */}
+                        <div className="bo-cv-income-result-table" role="table" aria-label="Income Eligibility Assessment Result">
+                          <div className="bo-cv-income-result-row" role="row">
+                            <span className="bo-cv-income-result-label" role="rowheader">Total Monthly Income</span>
+                            <span className="bo-cv-income-result-val" role="cell">
                               {currentAssessment.totalConsideredIncome != null
                                 ? formatCurrency(currentAssessment.totalConsideredIncome)
-                                : 'Not Applicable'}
-                            </strong>
-                             <span className="bo-cv-result-metric-sub">Total annual income divided by 12</span>
+                                : '—'}
+                            </span>
                           </div>
 
-                          {currentAssessment.assessmentMethodId === 4 && <>
-                          {/* Backend-authoritative Normal Income components */}
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Primary Income</span>
-                            <strong className="bo-cv-result-metric-val">
-                              {currentAssessment.primaryIncome != null ? formatCurrency(currentAssessment.primaryIncome) : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">Annual business income</span>
+                          <div className="bo-cv-income-result-row" role="row">
+                            <span className="bo-cv-income-result-label" role="rowheader">Eligible Monthly EMI</span>
+                            <span className="bo-cv-income-result-val" role="cell">
+                              {currentAssessment.eligibleEMI != null
+                                ? formatCurrency(currentAssessment.eligibleEMI)
+                                : '—'}
+                            </span>
                           </div>
 
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Annual Salary Income</span>
-                            <strong className="bo-cv-result-metric-val">
-                              {currentAssessment.annualSalaryIncome != null ? formatCurrency(currentAssessment.annualSalaryIncome) : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">Salary income reference</span>
-                          </div>
-
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Considered Other Income</span>
-                            <strong className="bo-cv-result-metric-val">
-                              {currentAssessment.consideredOtherIncome != null ? formatCurrency(currentAssessment.consideredOtherIncome) : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">After consideration and restriction</span>
-                          </div>
-
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Total Annual Income</span>
-                            <strong className="bo-cv-result-metric-val">
-                              {currentAssessment.totalAnnualIncome != null ? formatCurrency(currentAssessment.totalAnnualIncome) : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">Primary + salary + other income</span>
-                          </div>
-
-                          </>}
-
-                          {/* 2. Existing Monthly EMI */}
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Existing Monthly EMI</span>
-                            <strong className="bo-cv-result-metric-val">
+                          <div className="bo-cv-income-result-row" role="row">
+                            <span className="bo-cv-income-result-label" role="rowheader">Existing Monthly Obligations</span>
+                            <span className="bo-cv-income-result-val" role="cell">
                               {currentAssessment.existingEMI != null ? formatCurrency(currentAssessment.existingEMI) : '₹0'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">Active debt obligations</span>
+                            </span>
                           </div>
 
-                          {/* 3. Policy FOIR Applied */}
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Policy FOIR Applied</span>
-                            <strong className="bo-cv-result-metric-val bo-cv-foir-val">
-                              {currentAssessment.primaryOtherIncomeFOIRPercent != null
-                                ? `${currentAssessment.primaryOtherIncomeFOIRPercent}% / ${currentAssessment.salaryIncomeFOIRPercent ?? '—'}%`
-                                : currentAssessment.foirPercentApplied != null
-                                ? `${currentAssessment.foirPercentApplied}%`
-                                : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">Primary/other FOIR / salary FOIR</span>
-                          </div>
-
-                          {/* 4. Eligible Monthly EMI */}
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Eligible Monthly EMI</span>
-                            <strong className="bo-cv-result-metric-val">
-                              {currentAssessment.eligibleEMI != null ? formatCurrency(currentAssessment.eligibleEMI) : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">Net repayment capacity</span>
-                          </div>
-
-                          {currentAssessment.assessmentMethodId !== 1 && <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Eligible Monthly Income</span>
-                            <strong className="bo-cv-result-metric-val">
-                              {currentAssessment.eligibleMonthlyIncome != null
-                                ? formatCurrency(currentAssessment.eligibleMonthlyIncome)
-                                : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">Before existing EMI</span>
-                          </div>}
-
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Net Serviceable Income</span>
-                            <strong className="bo-cv-result-metric-val">
+                          <div className="bo-cv-income-result-row" role="row">
+                            <span className="bo-cv-income-result-label" role="rowheader">Net Serviceable Income</span>
+                            <span className="bo-cv-income-result-val" role="cell">
                               {currentAssessment.netServiceableIncome != null
                                 ? formatCurrency(currentAssessment.netServiceableIncome)
                                 : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">After existing EMI</span>
+                            </span>
                           </div>
 
-                          {/* 5. Proposed ROI */}
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Proposed ROI</span>
-                            <strong className="bo-cv-result-metric-val">
-                              {currentAssessment.proposedROI != null ? `${currentAssessment.proposedROI}% p.a.` : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">Annual interest rate applied</span>
-                          </div>
-
-                          {/* 6. Proposed Tenure */}
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Proposed Tenure</span>
-                            <strong className="bo-cv-result-metric-val">
-                              {currentAssessment.proposedTenureMonths != null ? `${currentAssessment.proposedTenureMonths} Months` : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">Amortization duration</span>
-                          </div>
-
-                          {/* 7. EMI Factor */}
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">EMI Factor</span>
-                            <strong className="bo-cv-result-metric-val">
+                          <div className="bo-cv-income-result-row" role="row">
+                            <span className="bo-cv-income-result-label" role="rowheader">EMI Factor @ IRR / Tenor</span>
+                            <span className="bo-cv-income-result-val" role="cell">
                               {currentAssessment.emiFactor != null
                                 ? Number(currentAssessment.emiFactor).toLocaleString('en-IN', { maximumFractionDigits: 2 })
                                 : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">Per lakh factor coefficient</span>
+                            </span>
                           </div>
 
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Proposed EMI</span>
-                            <strong className="bo-cv-result-metric-val">
-                              {currentAssessment.proposedEMI != null ? formatCurrency(currentAssessment.proposedEMI) : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">For requested loan amount</span>
-                          </div>
-
-                          {/* 8. Actual Calculated FOIR */}
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Actual Calculated FOIR</span>
-                            <strong className="bo-cv-result-metric-val">
-                              {currentAssessment.actualFOIR != null
-                                ? `${(Number(currentAssessment.actualFOIR) * 100).toFixed(2)}%`
+                          <div className="bo-cv-income-result-row" role="row">
+                            <span className="bo-cv-income-result-label" role="rowheader">Loan Eligibility</span>
+                            <span className="bo-cv-income-result-val" role="cell">
+                              {currentAssessment.maximumEligibleLoanAmount != null
+                                ? (typeof currentAssessment.maximumEligibleLoanAmount === 'number'
+                                    ? `₹${Number(currentAssessment.maximumEligibleLoanAmount).toFixed(2)} Lacs`
+                                    : formatCurrency(currentAssessment.maximumEligibleLoanAmount))
                                 : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">Combined obligation / income</span>
-                          </div>
-                        </div>
-
-                        {/* Underwriting Recommendation & Decision Table */}
-                        <div className="bo-cv-rec-card">
-                          <div className="bo-cv-rec-card-header">
-                            <div className="bo-cv-rec-card-title-group">
-                              <h4 className="bo-cv-rec-card-title">Recommended Loan Amount</h4>
-                            </div>
-                            {currentAssessment?.recommendedLoanAmount != null && (
-                              <div className="bo-cv-rec-saved-badge">
-                                <span>Saved Recommendation:</span>
-                                <strong>{formatCurrency(currentAssessment.recommendedLoanAmount)}</strong>
-                              </div>
-                            )}
+                            </span>
                           </div>
 
-                          <div className="bo-cv-rec-table-wrapper">
-                            <table className="bo-cv-rec-table" aria-label="Recommended Loan Decision Comparison">
-                              <thead>
-                                <tr>
-                                  <th>Requested Loan Amount</th>
-                                  <th>Maximum Eligible Loan Amount</th>
-                                  <th>Recommended Loan Amount (₹) <span className="req">*</span></th>
-                                  <th>Recommended EMI (₹)</th>
-                                  <th className="th-action">Action</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                <tr>
-                                  <td className="td-val">
-                                    <span className="bo-cv-rec-static-val">
-                                      {currentAssessment?.requestedLoanAmount != null
-                                        ? formatCurrency(currentAssessment.requestedLoanAmount)
-                                        : appDetails?.loanAmount != null
-                                          ? formatCurrency(appDetails.loanAmount)
-                                          : '—'}
-                                    </span>
-                                  </td>
-                                  <td className="td-val">
-                                    <span className="bo-cv-rec-static-val is-max-eligible">
-                                      {currentAssessment?.maximumEligibleLoanAmount != null
-                                        ? `₹${Number(currentAssessment.maximumEligibleLoanAmount).toFixed(2)} Lacs`
-                                        : '—'}
-                                    </span>
-                                  </td>
-                                  <td className="td-input">
-                                    <div className="bo-cv-rec-input-group">
-                                      <span className="bo-cv-rec-currency-prefix">₹</span>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="5000"
-                                        placeholder="e.g. 200000"
-                                        className="bo-cv-rec-table-input"
-                                        value={currentCalcSettings.recommendedLoanAmount || ''}
-                                        onChange={(e) =>
-                                          updateCurrentCalcSettings((prev) => ({
-                                            ...prev,
-                                            recommendedLoanAmount: e.target.value,
-                                          }))
-                                        }
-                                        disabled={recommendationSaving || !currentAssessment?.loanEligibilityAssessmentId}
-                                        aria-label="Recommended Loan Amount Input"
-                                      />
-                                    </div>
-                                  </td>
-                                  <td className="td-val">
-                                    <span className="bo-cv-rec-static-val">
-                                      {currentCalcSettings.recommendedLoanAmount && currentAssessment?.emiFactor != null
-                                        ? formatCurrency((Number(currentCalcSettings.recommendedLoanAmount) / 100000) * Number(currentAssessment.emiFactor))
-                                        : '—'}
-                                    </span>
-                                    <span className="bo-cv-rec-field-hint">Recommended EMI</span>
-                                  </td>
-                                  <td className="td-action">
-                                    <button
-                                      type="button"
-                                      className="bo-btn bo-btn--primary bo-btn--sm bo-cv-rec-action-btn"
-                                      onClick={handleSaveRecommendation}
-                                      disabled={recommendationSaving || !currentAssessment?.loanEligibilityAssessmentId}
-                                    >
-                                      {recommendationSaving ? (
-                                        <>
-                                          <span className="bo-cv-btn-spinner" />
-                                          <span>Saving...</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          {SaveIcon ? <SaveIcon size={14} /> : (CheckCircleIcon ? <CheckCircleIcon size={14} /> : '✓')}
-                                          <span>Save Recommendation</span>
-                                        </>
-                                      )}
-                                    </button>
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
+                          <div className="bo-cv-income-result-row" role="row">
+                            <span className="bo-cv-income-result-label" role="rowheader">Proposed Loan Amount</span>
+                            <span className="bo-cv-income-result-val" role="cell">
+                              {currentAssessment.requestedLoanAmount != null
+                                ? formatCurrency(currentAssessment.requestedLoanAmount)
+                                : appDetails?.loanAmount != null
+                                ? formatCurrency(appDetails.loanAmount)
+                                : '—'}
+                            </span>
                           </div>
 
-                          {recommendationBanner && (
-                            <div className={`bo-cv-salary-banner is-${recommendationBanner.type}`} style={{ marginTop: '4px' }}>
-                              <div className="bo-cv-salary-banner-icon">
-                                {recommendationBanner.type === 'success' && (CheckCircleIcon ? <CheckCircleIcon size={16} /> : '✓')}
-                                {recommendationBanner.type === 'error' && (AlertTriangleIcon ? <AlertTriangleIcon size={16} /> : '⚠️')}
-                                {recommendationBanner.type === 'warning' && (AlertCircleIcon ? <AlertCircleIcon size={16} /> : 'ℹ️')}
-                                {recommendationBanner.type === 'info' && (InfoIcon ? <InfoIcon size={16} /> : 'ℹ️')}
-                              </div>
-                              <div className="bo-cv-salary-banner-msg">{recommendationBanner.message}</div>
-                            </div>
-                          )}
+                          <div className="bo-cv-income-result-row" role="row">
+                            <span className="bo-cv-income-result-label" role="rowheader">Actual FOIR</span>
+                            <span className="bo-cv-income-result-val" role="cell">
+                              {currentAssessment.actualFOIR != null
+                                ? `${Number(currentAssessment.actualFOIR).toFixed(2)}%`
+                                : '—'}
+                            </span>
+                          </div>
                         </div>
 
                         {/* Metadata Footer */}
@@ -16273,7 +15577,7 @@ export default function CustomerVerification() {
                         </div>
                         <h4>No Income eligibility calculation available yet</h4>
                         <p>
-                          Enter salary and other income details, verify proposed loan parameters, and click <strong>Calculate Eligibility</strong> above to generate authoritative results.
+                          Enter salary and other income details, verify parameters, and click <strong>Calculate Eligibility</strong> above to generate authoritative results.
                         </p>
                       </div>
                     )}
