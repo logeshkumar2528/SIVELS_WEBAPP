@@ -10,6 +10,7 @@ import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { useLoading } from '../../../../../Core/src/context/LoadingContext';
+import { getCurrentRMContext } from '../../utils/rmContext';
 import { buildApplicationDisplayId, buildSectionUpdate, getSectionState, getApplicantCount, createArray, resolveApplicantName } from '../applicationWizard/flowUtils';
 import { getCurrentRMContext } from '../../utils/rmContext';
 
@@ -483,6 +484,72 @@ export default function Declaration() {
     const latestData = getApplication(appId) || appData;
     setVerificationList(buildVerificationList(latestData));
     setShowSubmitModal(true);
+  };
+
+  const finalizeSubmit = async () => {
+    if (isFinalizing) return;
+    setIsFinalizing(true);
+
+    try {
+      await withLoading(async () => {
+        // 1. Fetch latest customer record to ensure full payload
+        let customerRecord = null;
+        const getRes = await fetch(`${API_BASE}/AgentAddCustomer/${appId}`);
+        if (getRes.ok) {
+          const data = await getRes.json();
+          customerRecord = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
+        }
+
+        if (!customerRecord) {
+          throw new Error('Unable to retrieve customer record for status update.');
+        }
+
+        // 2. Move status 1 -> 2 (Logged to HO). The backend only accepts this transition
+        // when the payload carries nothing but the status, so customer fields must not be sent.
+        const currentStatus = Number(customerRecord.status ?? customerRecord.Status);
+        if (currentStatus !== 2) {
+          const { rmId } = getCurrentRMContext();
+          const payload = {
+            agentCustomerId: Number(customerRecord.agentCustomerId || customerRecord.AgentCustomerId || appId),
+            status: 2,
+            ...(rmId ? { modifiedBy: rmId } : {}),
+          };
+
+          const token = localStorage.getItem('authToken');
+          const putRes = await fetch(`${API_BASE}/AgentAddCustomer/${appId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify(payload),
+          });
+
+          if (!putRes.ok) {
+            const errBody = await putRes.json().catch(() => null);
+            const backendMessage = errBody?.message || errBody?.Message;
+            throw new Error(
+              backendMessage
+                ? `Failed to update application status to Logged to HO: ${backendMessage}`
+                : `Failed to update application status to Logged to HO (${putRes.status})`
+            );
+          }
+        }
+
+        saveApplication(appId, { status: 'Logged to HO' });
+        setShowSubmitModal(false);
+        navigate(ROUTES.APPROVED_APPLICATIONS);
+      }, { message: 'Submitting application...' });
+    } catch (err) {
+      console.error('Error finalizing application submission:', err);
+      setErrorPopup({
+        title: 'Could not complete application',
+        message: err.message || 'The application could not be completed. Please try again.',
+        variant: 'error',
+      });
+    } finally {
+      setIsFinalizing(false);
+    }
   };
 
   const handleBack = () => {
