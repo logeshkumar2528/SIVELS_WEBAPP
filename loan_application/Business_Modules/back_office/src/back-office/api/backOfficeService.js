@@ -502,6 +502,14 @@ export const backOfficeService = {
     return unwrapResponse(response);
   },
 
+  /** Retrieve the active RTR proposed-loan record for an applicant. */
+  getProposedLoan: async (applicationProductDetailsId, applicantSequence = 0) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.LOAN_OBLIGATIONS_PROPOSED_BY_SEQ(applicationProductDetailsId, applicantSequence)
+    );
+    return unwrapResponse(response);
+  },
+
   /**
    * Retrieve authoritative RTR loan obligations summary including live, closure, excluded totals, and proposed loan.
    * GET /api/calculation/loan-obligations/summary/{applicationProductDetailsId}/{applicantSequence}

@@ -130,6 +130,8 @@ export const BACK_OFFICE_ENDPOINTS = {
   LOAN_OBLIGATION_DELETE: (applicationLoanObligationDetailsId, modifiedBy) =>
     `/calculation/loan-obligations/${encodeURIComponent(applicationLoanObligationDetailsId)}?modifiedBy=${encodeURIComponent(modifiedBy)}`,
   LOAN_OBLIGATIONS_PROPOSED: '/calculation/loan-obligations/proposed',
+  LOAN_OBLIGATIONS_PROPOSED_BY_SEQ: (applicationProductDetailsId, applicantSequence) =>
+    `/calculation/loan-obligations/proposed/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
   LOAN_OBLIGATIONS_SUMMARY: (applicationProductDetailsId, applicantSequence) =>
     `/calculation/loan-obligations/summary/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
 

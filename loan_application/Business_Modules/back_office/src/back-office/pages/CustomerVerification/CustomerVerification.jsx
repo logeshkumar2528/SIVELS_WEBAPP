@@ -1992,6 +1992,7 @@ export default function CustomerVerification() {
   const [proposedLoanSaving, setProposedLoanSaving] = useState(false);
   const [proposedLoanBanner, setProposedLoanBanner] = useState(null);
   const [proposedLoan, setProposedLoan] = useState({ manualROI: '', manualTenureMonths: '', recommendedLoanAmount: '' });
+  const [activeProposedLoan, setActiveProposedLoan] = useState(null);
   const calcSheetRef = useRef(null);
   const rtrResultSectionRef = useRef(null);
 
@@ -2042,6 +2043,8 @@ export default function CustomerVerification() {
           recommendedLoanAmount: saved.recommendedLoanAmount ?? previous.recommendedLoanAmount,
         }));
       }
+      const refreshedProposedLoan = await backOfficeService.getProposedLoan(calculationAppProdId, selectedApplicantSequence);
+      setActiveProposedLoan(refreshedProposedLoan || null);
       setProposedLoanBanner({ type: 'success', message: 'Proposed loan details saved successfully.' });
       setProposedLoanOpen(false);
     } catch (err) {
@@ -2290,6 +2293,14 @@ export default function CustomerVerification() {
       0
     );
   }, [verificationData]);
+
+  // The RTR result must use the active proposed-loan record, not the older assessment EMI factor.
+  useEffect(() => {
+    if (activeStep !== 16 || !calculationAppProdId || calculationAppProdId <= 0) return;
+    backOfficeService.getProposedLoan(calculationAppProdId, selectedApplicantSequence)
+      .then((record) => setActiveProposedLoan(record || null))
+      .catch(() => setActiveProposedLoan(null));
+  }, [activeStep, calculationAppProdId, selectedApplicantSequence, rtrCalculatedTrigger]);
 
   const calculationAgentCustId = useMemo(() => {
     const rawCustomer = verificationData?.raw?.customer || verificationData?.customer || {};
@@ -13406,7 +13417,9 @@ export default function CustomerVerification() {
                           <div className="bo-cv-rtr-result-row" role="row">
                             <span className="bo-cv-rtr-result-label" role="rowheader">EMI Factor @ IRR / Tenor</span>
                             <span className="bo-cv-rtr-result-val" role="cell">
-                              {currentRtrAssessment.emiAmountFactor != null ? String(currentRtrAssessment.emiAmountFactor) : '—'}
+                              {activeProposedLoan?.proposedEMI != null
+                                ? Number(activeProposedLoan.proposedEMI).toFixed(2)
+                                : '—'}
                             </span>
                           </div>
 
