@@ -5085,9 +5085,7 @@ export default function CustomerVerification() {
         if (rtrRecord && (rtrRecord.applicationRTRAssessmentId || rtrRecord.finalLoanEligibility != null)) {
           setCalcBanner({
             type: 'success',
-            message: `RTR Eligibility calculated successfully! Final Loan Eligibility: ${formatCurrency(
-              rtrRecord.finalLoanEligibility
-            )}${rtrRecord.applicableEMIMultiplier ? ` (Multiplier: ${rtrRecord.applicableEMIMultiplier}x)` : ''}.`,
+            message: 'Eligibility calculated successfully.',
           });
 
           // Re-fetch RTR assessments and RTR loans so evaluated flags (isSelectedForRTR) update in the UI
@@ -12990,77 +12988,73 @@ export default function CustomerVerification() {
             selectedMethodCode === 'RTR' && rtrWorkspaceOpen ? (
               <div className="bo-cv-elig-deck bo-cv-elig-deck--rtr-workspace">
                 <div className="bo-cv-rtr-workspace">
-                  {/* ── RTR Workspace Header ── */}
-                  <header className="bo-cv-rtr-header">
-                    <div className="bo-cv-rtr-header-left">
-                      <button
-                        type="button"
-                        className="bo-cv-rtr-back-btn"
-                        onClick={() => setRtrWorkspaceOpen(false)}
-                      >
-                        {ArrowLeftIcon ? <ArrowLeftIcon size={16} /> : '←'}
-                        <span>Back to Eligibility Assessment</span>
-                      </button>
-                      <div className="bo-cv-rtr-title-block">
-                        <span className="bo-cv-elig-kicker">STEP 11 · RTR METHOD</span>
+                  {/* ── CARD 1: HEADER + APPLICANT SELECTOR ── */}
+                  <div className="bo-cv-rtr-header-card">
+                    <div className="bo-cv-rtr-header-top">
+                      <div className="bo-cv-rtr-header-left">
+                        <button
+                          type="button"
+                          className="bo-cv-rtr-back-btn"
+                          onClick={() => setRtrWorkspaceOpen(false)}
+                        >
+                          {ArrowLeftIcon ? <ArrowLeftIcon size={16} /> : '←'}
+                          <span>Back</span>
+                        </button>
+                      </div>
+                      <div className="bo-cv-rtr-header-center">
                         <h2 className="bo-cv-rtr-title">RTR Eligibility Assessment</h2>
-                        <p className="bo-cv-rtr-sub">
-                          Repayment Track Record based assessment for active loan facilities.
-                        </p>
+                        <span className="bo-cv-result-method-badge">RTR Method</span>
+                      </div>
+                      <div className="bo-cv-rtr-header-right">
+                        <div className="bo-cv-rtr-applicant-context">
+                          <span className="bo-cv-rtr-context-pill">
+                            {UserIcon && <UserIcon size={12} />}
+                            <strong>{selectedApplicant?.name || 'Applicant'}</strong>
+                            <small>({selectedApplicant?.isMain ? 'Main' : selectedApplicant?.label})</small>
+                          </span>
+                          <span className="bo-cv-rtr-context-pill is-amount">
+                            Req {formatCurrency(appDetails.loanAmount)}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                    <div className="bo-cv-rtr-header-right">
-                      <div className="bo-cv-rtr-applicant-context">
-                        <span className="bo-cv-rtr-context-pill">
-                          {UserIcon && <UserIcon size={12} />}
-                          <strong>{selectedApplicant?.name || 'Applicant'}</strong>
-                          <small>({selectedApplicant?.isMain ? 'Main' : selectedApplicant?.label})</small>
-                        </span>
-                        <span className="bo-cv-rtr-context-pill is-amount">
-                          Req {formatCurrency(appDetails.loanAmount)}
-                        </span>
-                      </div>
-                    </div>
-                  </header>
 
-                  {/* ── Applicant Selection Rail (if multiple) ── */}
-                  {allApplicants.length > 1 && (
-                    <div className="bo-cv-rtr-applicant-bar">
-                      <span className="bo-cv-rtr-bar-label">Applicant Profile:</span>
-                      <div className="bo-cv-elig-person-rail" role="tablist" aria-label="RTR Applicants">
-                        {allApplicants.map((app) => {
-                          const isSelected = app.sequence === selectedApplicantSequence;
-                          return (
-                            <button
-                              key={`rtr-app-tab-${app.sequence}`}
-                              type="button"
-                              role="tab"
-                              aria-selected={isSelected}
-                              className={`bo-cv-elig-person-chip ${isSelected ? 'is-active' : ''} ${app.isMain ? 'is-main' : ''}`}
-                              onClick={() => setSelectedApplicantSequence(app.sequence)}
-                            >
-                              <span className="bo-cv-elig-person-avatar">
-                                {UserIcon && <UserIcon size={14} />}
-                              </span>
-                              <span className="bo-cv-elig-person-meta">
-                                <strong>{app.name}</strong>
-                                <small>{app.isMain ? 'Main Applicant' : app.label}</small>
-                              </span>
-                            </button>
-                          );
-                        })}
+                    {/* Applicant Selector Row */}
+                    {allApplicants.length > 0 && (
+                      <div className="bo-cv-rtr-applicant-row">
+                        <span className="bo-cv-rtr-bar-label">APPLICANT</span>
+                        <div className="bo-cv-elig-person-rail" role="tablist" aria-label="RTR Applicants">
+                          {allApplicants.map((app) => {
+                            const isSelected = app.sequence === selectedApplicantSequence;
+                            return (
+                              <button
+                                key={`rtr-app-tab-${app.sequence}`}
+                                type="button"
+                                role="tab"
+                                aria-selected={isSelected}
+                                className={`bo-cv-elig-person-chip ${isSelected ? 'is-active' : ''} ${app.isMain ? 'is-main' : ''}`}
+                                onClick={() => setSelectedApplicantSequence(app.sequence)}
+                              >
+                                <span className="bo-cv-elig-person-avatar">
+                                  {UserIcon && <UserIcon size={14} />}
+                                </span>
+                                <span className="bo-cv-elig-person-meta">
+                                  <strong>{app.name}</strong>
+                                  <small>{app.isMain ? 'Main Applicant' : app.label}</small>
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
-                  {/* ── 01 — LOAN FACILITIES ── */}
-                  <section className="bo-cv-rtr-section" aria-label="01 Loan Facilities">
+                  {/* ── CARD 2: LOAN FACILITIES ── */}
+                  <section className="bo-cv-rtr-section" aria-label="Loan Facilities">
                     <div className="bo-cv-rtr-section-head">
                       <div className="bo-cv-rtr-section-title-wrap">
-                        <span className="bo-cv-rtr-section-num">01</span>
-                        <div>
-                          <h3 className="bo-cv-rtr-section-title">Loan Facilities</h3>
-                        </div>
+                        <h3 className="bo-cv-rtr-section-title">Loan Facilities</h3>
                       </div>
                       <button
                         type="button"
@@ -13149,204 +13143,287 @@ export default function CustomerVerification() {
                         </button>
                       </div>
                     ) : (
-                      <div className="bo-cv-rtr-card-list">
-                        {rtrDraftLoans.map((row, idx) => {
-                          const loanPk = Number(row.applicationRTRLoanDetailsId);
-                          const isDraft =
-                            !row.isPersisted ||
-                            !row.applicationRTRLoanDetailsId ||
-                            Number(row.applicationRTRLoanDetailsId) === 0;
-                          const targetSelectedId =
-                            currentRtrAssessment?.selectedRTRLoanDetailsId != null
-                              ? Number(currentRtrAssessment.selectedRTRLoanDetailsId)
-                              : null;
-                          const isSelected =
-                            targetSelectedId != null && loanPk > 0
-                              ? loanPk === targetSelectedId
-                              : Boolean(row.isSelectedForRTR);
-                          return (
-                            <article
-                              key={row.id || `rtr-loan-row-${idx}`}
-                              className={`bo-cv-rtr-facility-card bo-cv-rtr-facility-card--compact ${isSelected ? 'is-selected' : ''} ${isDraft ? 'is-draft' : ''}`}
-                            >
-                              <div className="bo-cv-rtr-strip-top">
-                                <span className="bo-cv-rtr-facility-index">{idx + 1}</span>
-                                <label className="bo-cv-rtr-field bo-cv-rtr-field--lender" htmlFor={`rtr-ws-lender-${idx}`}>
-                                  <span>Lender / Bank</span>
-                                  <input
-                                    id={`rtr-ws-lender-${idx}`}
-                                    type="text"
-                                    placeholder="e.g. HDFC Bank"
-                                    className="bo-cv-rtr-field-input is-lender"
-                                    value={row.lenderName || ''}
-                                    onChange={(e) => handleRtrLoanRowChange(idx, 'lenderName', e.target.value)}
-                                    disabled={rtrLoansSaving}
-                                  />
-                                </label>
-                                <div className="bo-cv-rtr-facility-badges">
-                                  {isSelected && <span className="bo-cv-rtr-badge is-selected">Selected</span>}
-                                  {isDraft && <span className="bo-cv-rtr-badge is-draft">Draft</span>}
-                                  {isDraft && (
-                                    <button
-                                      type="button"
-                                      className="bo-cv-rtr-remove-btn"
-                                      title="Remove draft facility"
-                                      aria-label={`Remove draft loan facility ${idx + 1}`}
-                                      onClick={() => handleRemoveRtrDraftRow(idx)}
+                      <div className="bo-cv-rtr-matrix-wrapper">
+                        <table className="bo-cv-rtr-matrix-table" role="table" aria-label="Loan Facilities Matrix">
+                          <thead>
+                            <tr>
+                              <th className="bo-cv-rtr-matrix-corner-th" scope="col">
+                                <span>Field</span>
+                              </th>
+                              {rtrDraftLoans.map((row, idx) => {
+                                const loanPk = Number(row.applicationRTRLoanDetailsId);
+                                const isDraft =
+                                  !row.isPersisted ||
+                                  !row.applicationRTRLoanDetailsId ||
+                                  Number(row.applicationRTRLoanDetailsId) === 0;
+                                const targetSelectedId =
+                                  currentRtrAssessment?.selectedRTRLoanDetailsId != null
+                                    ? Number(currentRtrAssessment.selectedRTRLoanDetailsId)
+                                    : null;
+                                const isSelected =
+                                  targetSelectedId != null && loanPk > 0
+                                    ? loanPk === targetSelectedId
+                                    : Boolean(row.isSelectedForRTR);
+                                return (
+                                  <th
+                                    key={row.id || `rtr-col-head-${idx}`}
+                                    className={`bo-cv-rtr-matrix-col-th ${isSelected ? 'is-selected' : ''} ${isDraft ? 'is-draft' : ''}`}
+                                    scope="col"
+                                  >
+                                    <div className="bo-cv-rtr-matrix-th-content">
+                                      <div className="bo-cv-rtr-matrix-th-title">
+                                        <span className="bo-cv-rtr-matrix-facility-idx">{idx + 1}</span>
+                                        <strong>FACILITY {idx + 1}</strong>
+                                      </div>
+                                      <div className="bo-cv-rtr-facility-badges">
+                                        {isSelected && <span className="bo-cv-rtr-badge is-selected">Selected</span>}
+                                        {isDraft && <span className="bo-cv-rtr-badge is-draft">Draft</span>}
+                                        {isDraft && (
+                                          <button
+                                            type="button"
+                                            className="bo-cv-rtr-remove-btn"
+                                            title="Remove draft facility"
+                                            aria-label={`Remove draft loan facility ${idx + 1}`}
+                                            onClick={() => handleRemoveRtrDraftRow(idx)}
+                                            disabled={rtrLoansSaving}
+                                          >
+                                            {XIcon ? <XIcon size={14} /> : '✕'}
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </th>
+                                );
+                              })}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <th className="bo-cv-rtr-matrix-row-label" scope="row">
+                                <span>Lender / Bank</span>
+                              </th>
+                              {rtrDraftLoans.map((row, idx) => {
+                                const loanPk = Number(row.applicationRTRLoanDetailsId);
+                                const isSelected =
+                                  (currentRtrAssessment?.selectedRTRLoanDetailsId != null && loanPk > 0)
+                                    ? loanPk === Number(currentRtrAssessment.selectedRTRLoanDetailsId)
+                                    : Boolean(row.isSelectedForRTR);
+                                return (
+                                  <td key={`rtr-lender-${idx}`} className={`bo-cv-rtr-matrix-cell ${isSelected ? 'is-selected' : ''}`}>
+                                    <input
+                                      id={`rtr-ws-lender-${idx}`}
+                                      type="text"
+                                      placeholder="e.g. HDFC Bank"
+                                      className="bo-cv-rtr-matrix-input"
+                                      value={row.lenderName || ''}
+                                      onChange={(e) => handleRtrLoanRowChange(idx, 'lenderName', e.target.value)}
                                       disabled={rtrLoansSaving}
-                                    >
-                                      {XIcon ? <XIcon size={14} /> : '✕'}
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
+                                    />
+                                  </td>
+                                );
+                              })}
+                            </tr>
 
-                              <div className="bo-cv-rtr-facility-grid bo-cv-rtr-facility-grid--compact">
-                                <label className="bo-cv-rtr-field">
-                                  <span>Sanction (₹)</span>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="1000"
-                                    placeholder="0"
-                                    className="bo-cv-rtr-field-input"
-                                    value={row.sanctionAmount === 0 ? '0' : row.sanctionAmount || ''}
-                                    onChange={(e) => handleRtrLoanRowChange(idx, 'sanctionAmount', e.target.value)}
-                                    disabled={rtrLoansSaving}
-                                  />
-                                </label>
-                                <label className="bo-cv-rtr-field">
-                                  <span>POS (₹)</span>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="1000"
-                                    placeholder="0"
-                                    className="bo-cv-rtr-field-input"
-                                    value={row.currentPOS === 0 ? '0' : row.currentPOS || ''}
-                                    onChange={(e) => handleRtrLoanRowChange(idx, 'currentPOS', e.target.value)}
-                                    disabled={rtrLoansSaving}
-                                  />
-                                </label>
-                                <label className="bo-cv-rtr-field">
-                                  <span>EMI (₹)</span>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="500"
-                                    placeholder="0"
-                                    className="bo-cv-rtr-field-input"
-                                    value={row.emiAmount === 0 ? '0' : row.emiAmount || ''}
-                                    onChange={(e) => handleRtrLoanRowChange(idx, 'emiAmount', e.target.value)}
-                                    disabled={rtrLoansSaving}
-                                  />
-                                </label>
-                                <label className="bo-cv-rtr-field">
-                                  <span>EMI Start</span>
-                                  <input
-                                    type="date"
-                                    className="bo-cv-rtr-field-input"
-                                    value={row.emiStartDate || ''}
-                                    onChange={(e) => handleRtrLoanRowChange(idx, 'emiStartDate', e.target.value)}
-                                    disabled={rtrLoansSaving}
-                                  />
-                                </label>
-                                <label className="bo-cv-rtr-field is-compact">
-                                  <span>MOB</span>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="1"
-                                    placeholder="0"
-                                    className="bo-cv-rtr-field-input"
-                                    value={row.mob === 0 ? '0' : row.mob || ''}
-                                    onChange={(e) => handleRtrLoanRowChange(idx, 'mob', e.target.value)}
-                                    disabled={rtrLoansSaving}
-                                  />
-                                </label>
-                                <label className="bo-cv-rtr-field is-compact">
-                                  <span>OD</span>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="1"
-                                    placeholder="0"
-                                    className="bo-cv-rtr-field-input"
-                                    value={row.odCount === 0 ? '0' : row.odCount ?? 0}
-                                    onChange={(e) => handleRtrLoanRowChange(idx, 'odCount', e.target.value)}
-                                    disabled={rtrLoansSaving}
-                                  />
-                                </label>
-                                <label className="bo-cv-rtr-field is-compact">
-                                  <span>Bounce</span>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="1"
-                                    placeholder="0"
-                                    className="bo-cv-rtr-field-input"
-                                    value={row.bounceCount === 0 ? '0' : row.bounceCount ?? 0}
-                                    onChange={(e) => handleRtrLoanRowChange(idx, 'bounceCount', e.target.value)}
-                                    disabled={rtrLoansSaving}
-                                  />
-                                </label>
-                              </div>
-                            </article>
-                          );
-                        })}
+                            <tr>
+                              <th className="bo-cv-rtr-matrix-row-label" scope="row">
+                                <span>Sanction (₹)</span>
+                              </th>
+                              {rtrDraftLoans.map((row, idx) => {
+                                const loanPk = Number(row.applicationRTRLoanDetailsId);
+                                const isSelected =
+                                  (currentRtrAssessment?.selectedRTRLoanDetailsId != null && loanPk > 0)
+                                    ? loanPk === Number(currentRtrAssessment.selectedRTRLoanDetailsId)
+                                    : Boolean(row.isSelectedForRTR);
+                                return (
+                                  <td key={`rtr-sanction-${idx}`} className={`bo-cv-rtr-matrix-cell ${isSelected ? 'is-selected' : ''}`}>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1000"
+                                      placeholder="0"
+                                      className="bo-cv-rtr-matrix-input"
+                                      value={row.sanctionAmount === 0 ? '0' : row.sanctionAmount || ''}
+                                      onChange={(e) => handleRtrLoanRowChange(idx, 'sanctionAmount', e.target.value)}
+                                      disabled={rtrLoansSaving}
+                                    />
+                                  </td>
+                                );
+                              })}
+                            </tr>
+
+                            <tr>
+                              <th className="bo-cv-rtr-matrix-row-label" scope="row">
+                                <span>POS (₹)</span>
+                              </th>
+                              {rtrDraftLoans.map((row, idx) => {
+                                const loanPk = Number(row.applicationRTRLoanDetailsId);
+                                const isSelected =
+                                  (currentRtrAssessment?.selectedRTRLoanDetailsId != null && loanPk > 0)
+                                    ? loanPk === Number(currentRtrAssessment.selectedRTRLoanDetailsId)
+                                    : Boolean(row.isSelectedForRTR);
+                                return (
+                                  <td key={`rtr-pos-${idx}`} className={`bo-cv-rtr-matrix-cell ${isSelected ? 'is-selected' : ''}`}>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1000"
+                                      placeholder="0"
+                                      className="bo-cv-rtr-matrix-input"
+                                      value={row.currentPOS === 0 ? '0' : row.currentPOS || ''}
+                                      onChange={(e) => handleRtrLoanRowChange(idx, 'currentPOS', e.target.value)}
+                                      disabled={rtrLoansSaving}
+                                    />
+                                  </td>
+                                );
+                              })}
+                            </tr>
+
+                            <tr>
+                              <th className="bo-cv-rtr-matrix-row-label" scope="row">
+                                <span>EMI (₹)</span>
+                              </th>
+                              {rtrDraftLoans.map((row, idx) => {
+                                const loanPk = Number(row.applicationRTRLoanDetailsId);
+                                const isSelected =
+                                  (currentRtrAssessment?.selectedRTRLoanDetailsId != null && loanPk > 0)
+                                    ? loanPk === Number(currentRtrAssessment.selectedRTRLoanDetailsId)
+                                    : Boolean(row.isSelectedForRTR);
+                                return (
+                                  <td key={`rtr-emi-${idx}`} className={`bo-cv-rtr-matrix-cell ${isSelected ? 'is-selected' : ''}`}>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="500"
+                                      placeholder="0"
+                                      className="bo-cv-rtr-matrix-input"
+                                      value={row.emiAmount === 0 ? '0' : row.emiAmount || ''}
+                                      onChange={(e) => handleRtrLoanRowChange(idx, 'emiAmount', e.target.value)}
+                                      disabled={rtrLoansSaving}
+                                    />
+                                  </td>
+                                );
+                              })}
+                            </tr>
+
+                            <tr>
+                              <th className="bo-cv-rtr-matrix-row-label" scope="row">
+                                <span>EMI Start</span>
+                              </th>
+                              {rtrDraftLoans.map((row, idx) => {
+                                const loanPk = Number(row.applicationRTRLoanDetailsId);
+                                const isSelected =
+                                  (currentRtrAssessment?.selectedRTRLoanDetailsId != null && loanPk > 0)
+                                    ? loanPk === Number(currentRtrAssessment.selectedRTRLoanDetailsId)
+                                    : Boolean(row.isSelectedForRTR);
+                                return (
+                                  <td key={`rtr-start-${idx}`} className={`bo-cv-rtr-matrix-cell ${isSelected ? 'is-selected' : ''}`}>
+                                    <input
+                                      type="date"
+                                      className="bo-cv-rtr-matrix-input"
+                                      value={row.emiStartDate || ''}
+                                      onChange={(e) => handleRtrLoanRowChange(idx, 'emiStartDate', e.target.value)}
+                                      disabled={rtrLoansSaving}
+                                    />
+                                  </td>
+                                );
+                              })}
+                            </tr>
+
+                            <tr>
+                              <th className="bo-cv-rtr-matrix-row-label" scope="row">
+                                <span>MOB</span>
+                              </th>
+                              {rtrDraftLoans.map((row, idx) => {
+                                const loanPk = Number(row.applicationRTRLoanDetailsId);
+                                const isSelected =
+                                  (currentRtrAssessment?.selectedRTRLoanDetailsId != null && loanPk > 0)
+                                    ? loanPk === Number(currentRtrAssessment.selectedRTRLoanDetailsId)
+                                    : Boolean(row.isSelectedForRTR);
+                                return (
+                                  <td key={`rtr-mob-${idx}`} className={`bo-cv-rtr-matrix-cell ${isSelected ? 'is-selected' : ''}`}>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1"
+                                      placeholder="0"
+                                      className="bo-cv-rtr-matrix-input"
+                                      value={row.mob === 0 ? '0' : row.mob || ''}
+                                      onChange={(e) => handleRtrLoanRowChange(idx, 'mob', e.target.value)}
+                                      disabled={rtrLoansSaving}
+                                    />
+                                  </td>
+                                );
+                              })}
+                            </tr>
+
+                            <tr>
+                              <th className="bo-cv-rtr-matrix-row-label" scope="row">
+                                <span>OD</span>
+                              </th>
+                              {rtrDraftLoans.map((row, idx) => {
+                                const loanPk = Number(row.applicationRTRLoanDetailsId);
+                                const isSelected =
+                                  (currentRtrAssessment?.selectedRTRLoanDetailsId != null && loanPk > 0)
+                                    ? loanPk === Number(currentRtrAssessment.selectedRTRLoanDetailsId)
+                                    : Boolean(row.isSelectedForRTR);
+                                return (
+                                  <td key={`rtr-od-${idx}`} className={`bo-cv-rtr-matrix-cell ${isSelected ? 'is-selected' : ''}`}>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1"
+                                      placeholder="0"
+                                      className="bo-cv-rtr-matrix-input"
+                                      value={row.odCount === 0 ? '0' : row.odCount ?? 0}
+                                      onChange={(e) => handleRtrLoanRowChange(idx, 'odCount', e.target.value)}
+                                      disabled={rtrLoansSaving}
+                                    />
+                                  </td>
+                                );
+                              })}
+                            </tr>
+
+                            <tr>
+                              <th className="bo-cv-rtr-matrix-row-label" scope="row">
+                                <span>Bounce</span>
+                              </th>
+                              {rtrDraftLoans.map((row, idx) => {
+                                const loanPk = Number(row.applicationRTRLoanDetailsId);
+                                const isSelected =
+                                  (currentRtrAssessment?.selectedRTRLoanDetailsId != null && loanPk > 0)
+                                    ? loanPk === Number(currentRtrAssessment.selectedRTRLoanDetailsId)
+                                    : Boolean(row.isSelectedForRTR);
+                                return (
+                                  <td key={`rtr-bounce-${idx}`} className={`bo-cv-rtr-matrix-cell ${isSelected ? 'is-selected' : ''}`}>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1"
+                                      placeholder="0"
+                                      className="bo-cv-rtr-matrix-input"
+                                      value={row.bounceCount === 0 ? '0' : row.bounceCount ?? 0}
+                                      onChange={(e) => handleRtrLoanRowChange(idx, 'bounceCount', e.target.value)}
+                                      disabled={rtrLoansSaving}
+                                    />
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          </tbody>
+                        </table>
                       </div>
                     )}
                   </section>
 
-                  {/* ── 02 — DETAILS OF PROPOSED LOAN ── */}
-                  <section className="bo-cv-rtr-section" aria-label="02 Details of Proposed Loan">
+                  {/* ── CARD 3: RTR ELIGIBILITY + RESULT ── */}
+                  <section
+                    ref={rtrResultSectionRef}
+                    className="bo-cv-rtr-section"
+                    aria-label="RTR Eligibility and Result"
+                  >
                     <div className="bo-cv-rtr-section-head">
                       <div className="bo-cv-rtr-section-title-wrap">
-                        <span className="bo-cv-rtr-section-num">02</span>
-                        <div>
-                          <h3 className="bo-cv-rtr-section-title">Details of Proposed Loan</h3>
-                        </div>
-                      </div>
-                      <div className="bo-cv-proposed-loan-rm-values">
-                        RM values: ROI <strong>{resolvedAppRoi != null ? `${resolvedAppRoi}%` : '—'}</strong> · Tenure <strong>{resolvedAppTenure != null ? `${resolvedAppTenure} months` : '—'}</strong>
-                      </div>
-                    </div>
-                    <div className="bo-cv-rtr-proposed-grid">
-                      <label className="bo-cv-rtr-field">
-                        <span>Proposed ROI (%) <span className="req">*</span></span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="e.g. 12.5"
-                          className="bo-cv-rtr-field-input"
-                          value={proposedLoan.manualROI}
-                          onChange={(e) => setProposedLoan((p) => ({ ...p, manualROI: e.target.value }))}
-                        />
-                      </label>
-                      <label className="bo-cv-rtr-field">
-                        <span>Proposed Tenure (Months) <span className="req">*</span></span>
-                        <input
-                          type="number"
-                          min="1"
-                          max="360"
-                          placeholder="e.g. 24"
-                          className="bo-cv-rtr-field-input"
-                          value={proposedLoan.manualTenureMonths}
-                          onChange={(e) => setProposedLoan((p) => ({ ...p, manualTenureMonths: e.target.value }))}
-                        />
-                      </label>
-                    </div>
-                  </section>
-
-                  {/* ── 03 — CALCULATE RTR ELIGIBILITY ── */}
-                  <section className="bo-cv-rtr-section bo-cv-rtr-section--calc-action" aria-label="03 Calculate RTR Eligibility">
-                    <div className="bo-cv-rtr-calc-bar">
-                      <div className="bo-cv-rtr-calc-bar-info">
-                        <span className="bo-cv-rtr-section-num">03</span>
-                        <div>
-                          <h3 className="bo-cv-rtr-calc-bar-title">Calculate RTR Eligibility</h3>
-                        </div>
+                        <h3 className="bo-cv-rtr-section-title">RTR Eligibility</h3>
                       </div>
 
                       <button
@@ -13358,12 +13435,12 @@ export default function CustomerVerification() {
                         {calculating ? (
                           <>
                             <span className="bo-cv-btn-spinner" />
-                            <span>Calculating RTR Eligibility...</span>
+                            <span>Calculating...</span>
                           </>
                         ) : (
                           <>
                             {ShieldCheckIcon && <ShieldCheckIcon size={16} />}
-                            <span>Calculate RTR Eligibility</span>
+                            <span>Calculate Eligibility</span>
                           </>
                         )}
                       </button>
@@ -13377,159 +13454,61 @@ export default function CustomerVerification() {
                           {calcBanner.type === 'warning' && (AlertCircleIcon ? <AlertCircleIcon size={16} /> : 'ℹ️')}
                           {calcBanner.type === 'info' && (InfoIcon ? <InfoIcon size={16} /> : 'ℹ️')}
                         </div>
-                         <div className="bo-cv-salary-banner-msg">{calcBanner.message}</div>
-                         </div>
-                       )}
-                    </section>
-
-                  {/* ── 04 — RTR ELIGIBILITY RESULT ── */}
-                  <section
-                    ref={rtrResultSectionRef}
-                    className="bo-cv-rtr-section"
-                    aria-label="04 RTR Eligibility Result"
-                  >
-                    <div className="bo-cv-rtr-section-head">
-                      <div className="bo-cv-rtr-section-title-wrap">
-                        <span className="bo-cv-rtr-section-num is-result">04</span>
-                        <div>
-                          <h3 className="bo-cv-rtr-section-title">RTR Eligibility Assessment Result</h3>
-                        </div>
+                        <div className="bo-cv-salary-banner-msg">{calcBanner.message}</div>
                       </div>
-                      {currentRtrAssessment && (
-                        <div className="bo-cv-result-header-badges">
-                          <span className="bo-cv-result-method-badge">RTR Method</span>
-                          <span className="bo-cv-result-status-badge is-eligible">
-                            {Number(currentRtrAssessment.finalLoanEligibility) > 0 ? 'Eligible' : 'Calculated'}
-                          </span>
-                        </div>
-                      )}
-                    </div>
+                    )}
 
                     {currentRtrAssessment ? (
-                      <div className="bo-cv-rtr-results-container">
-                        {/* Hero Card: Final Loan Eligibility */}
-                        <div className="bo-cv-result-hero-card">
-                          <div className="bo-cv-result-hero-main">
-                            <span className="bo-cv-result-hero-label">Final Loan Eligibility</span>
-                            <div className="bo-cv-result-hero-amount">
-                              {formatCurrency(currentRtrAssessment.finalLoanEligibility)}
-                            </div>
-                          </div>
-
-                          <div className="bo-cv-result-hero-status-box">
-                            <span className="bo-cv-result-hero-status-label">Assessment Status</span>
-                            <strong className="bo-cv-result-hero-status-val is-eligible">
-                              {Number(currentRtrAssessment.finalLoanEligibility) > 0 ? 'Eligible' : 'Calculated'}
-                            </strong>
-                          </div>
-                        </div>
-
-                        {/* Result Metrics Grid (8 cards) */}
-                        <div className="bo-cv-result-metrics-grid">
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Assessed Income</span>
-                            <strong className="bo-cv-result-metric-val">
+                      <div className="bo-cv-rtr-results-container" style={{ marginTop: '16px' }}>
+                        {/* Excel-style RTR Result Table */}
+                        <div className="bo-cv-rtr-result-table" role="table" aria-label="RTR Eligibility Assessment Results">
+                          <div className="bo-cv-rtr-result-row" role="row">
+                            <span className="bo-cv-rtr-result-label" role="rowheader">Assessed Income</span>
+                            <span className="bo-cv-rtr-result-val" role="cell">
                               {currentRtrAssessment.assessedIncome != null ? formatCurrency(currentRtrAssessment.assessedIncome) : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">EMI × Multiplier evaluated capacity</span>
-                          </div>
-
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Final Loan Eligibility</span>
-                            <strong className="bo-cv-result-metric-val">
-                              {currentRtrAssessment.finalLoanEligibility != null ? formatCurrency(currentRtrAssessment.finalLoanEligibility) : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">Net computed loan ceiling</span>
-                          </div>
-
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Selected Facility</span>
-                            <strong className="bo-cv-result-metric-val">
-                              {selectedRtrLoan?.lenderName ||
-                                (currentRtrAssessment.selectedRTRLoanDetailsId
-                                  ? `RTR Loan ID: ${currentRtrAssessment.selectedRTRLoanDetailsId}`
-                                  : '—')}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">
-                              {currentRtrAssessment.selectedRTRLoanDetailsId
-                                ? `RTR Loan ID: ${currentRtrAssessment.selectedRTRLoanDetailsId}`
-                                : 'Norm matched facility'}
                             </span>
                           </div>
 
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Paid Amount (Sanction - POS)</span>
-                            <strong className="bo-cv-result-metric-val">
-                              {currentRtrAssessment.paidAmount != null ? formatCurrency(currentRtrAssessment.paidAmount) : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">Total principal repaid</span>
-                          </div>
-
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Applicable EMI Multiplier</span>
-                            <strong className="bo-cv-result-metric-val bo-cv-foir-val">
-                              {currentRtrAssessment.applicableEMIMultiplier != null ? `${currentRtrAssessment.applicableEMIMultiplier}x` : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">Norm multiplier applied</span>
-                          </div>
-
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Max Top-Up Amount</span>
-                            <strong className="bo-cv-result-metric-val">
-                              {currentRtrAssessment.maxTopUpAmount != null ? formatCurrency(currentRtrAssessment.maxTopUpAmount) : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">Based on norm top-up %</span>
-                          </div>
-
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">Benchmark Monthly EMI</span>
-                            <strong className="bo-cv-result-metric-val">
-                              {currentRtrAssessment.emiAmount != null ? formatCurrency(currentRtrAssessment.emiAmount) : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">Selected facility EMI</span>
-                          </div>
-
-                          <div className="bo-cv-result-metric-card">
-                            <span className="bo-cv-result-metric-label">EMI Amount Factor</span>
-                            <strong className="bo-cv-result-metric-val">
+                          <div className="bo-cv-rtr-result-row" role="row">
+                            <span className="bo-cv-rtr-result-label" role="rowheader">EMI Factor @ IRR / Tenor</span>
+                            <span className="bo-cv-rtr-result-val" role="cell">
                               {currentRtrAssessment.emiAmountFactor != null ? String(currentRtrAssessment.emiAmountFactor) : '—'}
-                            </strong>
-                            <span className="bo-cv-result-metric-sub">Underwriting tenure factor</span>
+                            </span>
                           </div>
-                        </div>
 
-                        {/* Recommended Loan Amount (Post-assessment decision) */}
-                        <div className="bo-cv-proposed-loan-recommendation">
-                          <div>
-                            <span>Post-assessment decision</span>
-                            <h4>Recommended Loan Amount (₹)</h4>
-                            <p>Enter an amount after reviewing the calculated RTR eligibility.</p>
+                          <div className="bo-cv-rtr-result-row" role="row">
+                            <span className="bo-cv-rtr-result-label" role="rowheader">Applicable EMI Multiplier</span>
+                            <span className="bo-cv-rtr-result-val" role="cell">
+                              {currentRtrAssessment.applicableEMIMultiplier != null ? `${currentRtrAssessment.applicableEMIMultiplier}x` : '—'}
+                            </span>
                           </div>
-                          <div>
-                            <input
-                              type="number"
-                              min="0"
-                              placeholder="e.g. 150000"
-                              value={proposedLoan.recommendedLoanAmount}
-                              onChange={(e) => setProposedLoan((p) => ({ ...p, recommendedLoanAmount: e.target.value }))}
-                              aria-label="Recommended Loan Amount"
-                            />
-                            <div className="bo-cv-rtr-recommended-emi" aria-live="polite">
-                              <span>Recommended EMI</span>
-                              <strong>
-                                {Number(proposedLoan.recommendedLoanAmount) > 0 && currentRtrAssessment.emiAmountFactor != null
-                                  ? formatCurrency((Number(proposedLoan.recommendedLoanAmount) / 100000) * Number(currentRtrAssessment.emiAmountFactor))
-                                  : '—'}
-                              </strong>
-                            </div>
-                            <button
-                              type="button"
-                              className="bo-btn bo-btn--primary bo-btn--sm"
-                              onClick={saveProposedLoan}
-                              disabled={proposedLoanSaving || !currentRtrAssessment?.applicationRTRAssessmentId}
-                            >
-                              {proposedLoanSaving ? 'Saving...' : 'Save Recommendation'}
-                            </button>
+
+                          <div className="bo-cv-rtr-result-row" role="row">
+                            <span className="bo-cv-rtr-result-label" role="rowheader">Max Top-Up Amount</span>
+                            <span className="bo-cv-rtr-result-val" role="cell">
+                              {currentRtrAssessment.maxTopUpAmount != null ? formatCurrency(currentRtrAssessment.maxTopUpAmount) : '—'}
+                            </span>
+                          </div>
+
+                          <div className="bo-cv-rtr-result-row" role="row">
+                            <span className="bo-cv-rtr-result-label" role="rowheader">Benchmark Monthly EMI</span>
+                            <span className="bo-cv-rtr-result-val" role="cell">
+                              {currentRtrAssessment.emiAmount != null ? formatCurrency(currentRtrAssessment.emiAmount) : '—'}
+                            </span>
+                          </div>
+
+                          <div className="bo-cv-rtr-result-row" role="row">
+                            <span className="bo-cv-rtr-result-label" role="rowheader">Paid Amount (Sanction - POS)</span>
+                            <span className="bo-cv-rtr-result-val" role="cell">
+                              {currentRtrAssessment.paidAmount != null ? formatCurrency(currentRtrAssessment.paidAmount) : '—'}
+                            </span>
+                          </div>
+
+                          <div className="bo-cv-rtr-result-row bo-cv-rtr-result-row--total" role="row">
+                            <span className="bo-cv-rtr-result-label" role="rowheader">Loan Eligibility</span>
+                            <span className="bo-cv-rtr-result-val" role="cell">
+                              {currentRtrAssessment.finalLoanEligibility != null ? formatCurrency(currentRtrAssessment.finalLoanEligibility) : '—'}
+                            </span>
                           </div>
                         </div>
 
@@ -13565,7 +13544,7 @@ export default function CustomerVerification() {
                         </div>
                         <h4>No RTR eligibility calculation available yet</h4>
                         <p>
-                          Enter loan facilities, verify proposed loan parameters, and click <strong>Calculate RTR Eligibility</strong> above to generate authoritative results.
+                          Click <strong>Calculate Eligibility</strong> above to generate authoritative results.
                         </p>
                       </div>
                     )}

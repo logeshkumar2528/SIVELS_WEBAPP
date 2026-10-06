@@ -11294,27 +11294,53 @@
   flex-direction: column;
   gap: 20px;
   width: 100%;
-  padding-bottom: clamp(320px, 45vh, 480px);
+  padding-bottom: 24px;
 }
 
-/* ── Workspace Header ── */
+/* ── Workspace Header & Applicant Card (Card 1) ── */
+.bo-cv-rtr-header-card {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+
+.bo-cv-rtr-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 22px;
+}
+
+.bo-cv-rtr-applicant-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 22px;
+  background: #fafcfb;
+  border-top: 1px solid #edf2f0;
+}
+
 .bo-cv-rtr-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 20px 24px;
+  padding: 16px 22px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 18px;
+  border-radius: 16px;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
 }
 
 .bo-cv-rtr-header-left {
   display: flex;
   align-items: center;
-  gap: 18px;
-  min-width: 0;
+  flex-shrink: 0;
 }
 
 .bo-cv-rtr-back-btn {
@@ -11341,13 +11367,16 @@
   transform: translateX(-2px);
 }
 
+.bo-cv-rtr-header-center,
 .bo-cv-rtr-title-block {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
+  flex: 1 1 auto;
 }
 
+.bo-cv-rtr-header-center .bo-cv-elig-kicker,
 .bo-cv-rtr-title-block .bo-cv-elig-kicker {
   align-self: flex-start;
   margin-bottom: 2px;
@@ -11358,15 +11387,16 @@
 
 .bo-cv-rtr-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 800;
   color: #0b2f22;
   letter-spacing: -0.02em;
+  line-height: 1.25;
 }
 
 .bo-cv-rtr-sub {
   margin: 0;
-  font-size: 13px;
+  font-size: 12.5px;
   color: #64748b;
   line-height: 1.4;
 }
@@ -11374,6 +11404,7 @@
 .bo-cv-rtr-header-right {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
   flex-shrink: 0;
 }
@@ -11549,91 +11580,101 @@
   white-space: nowrap;
 }
 
-/* ── Facility Cards List ── */
-.bo-cv-rtr-card-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.bo-cv-rtr-facility-card {
-  padding: 14px 16px;
-  border-radius: 12px;
+/* ── Loan Facilities Excel-Style Matrix ── */
+.bo-cv-rtr-matrix-wrapper {
+  width: 100%;
+  overflow-x: auto;
   border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+  box-sizing: border-box;
+}
+
+.bo-cv-rtr-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: max-content;
+}
+
+.bo-cv-rtr-matrix-corner-th {
   background: #f8fafc;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  transition: all 0.15s ease;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 12px 16px;
+  width: 170px;
+  min-width: 160px;
+  max-width: 180px;
+  border-bottom: 2px solid #cbdad5;
+  border-right: 1px solid #e2e8f0;
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.02);
 }
 
-.bo-cv-rtr-facility-card:hover {
-  border-color: #cbd5e1;
+.bo-cv-rtr-matrix-col-th {
+  background: #f8fafc;
+  padding: 10px 14px;
+  border-bottom: 2px solid #cbdad5;
+  border-right: 1px solid #edf2f0;
+  min-width: 220px;
+  text-align: left;
+  box-sizing: border-box;
 }
 
-.bo-cv-rtr-facility-card.is-selected {
-  border-color: #0f7a4c;
+.bo-cv-rtr-matrix-col-th.is-selected {
   background: #f0faf5;
+  border-bottom-color: #0f7a4c;
 }
 
-.bo-cv-rtr-facility-card.is-draft {
-  border-style: dashed;
+.bo-cv-rtr-matrix-col-th.is-draft {
+  background: #fffdfa;
 }
 
-.bo-cv-rtr-strip-top {
+.bo-cv-rtr-matrix-th-content {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 0;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.bo-cv-rtr-facility-index {
+.bo-cv-rtr-matrix-th-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.bo-cv-rtr-matrix-facility-idx {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: #e2e8f0;
   color: #475569;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 750;
   flex-shrink: 0;
 }
 
-.bo-cv-rtr-field--lender {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
+.bo-cv-rtr-matrix-col-th.is-selected .bo-cv-rtr-matrix-facility-idx {
+  background: #0f7a4c;
+  color: #ffffff;
 }
 
-.bo-cv-rtr-field--lender span,
-.bo-cv-rtr-field span {
-  font-size: 11.5px;
-  font-weight: 650;
-  color: #475569;
-}
-
-.bo-cv-rtr-field-input {
-  width: 100%;
-  min-height: 36px;
-  padding: 6px 10px;
-  border: 1px solid #cbdad5;
-  border-radius: 8px;
-  background: #ffffff;
+.bo-cv-rtr-matrix-th-title strong {
+  font-size: 12px;
+  font-weight: 750;
   color: #0f172a;
-  font-size: 13px;
-  font-weight: 600;
-  font-family: inherit;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.bo-cv-rtr-field-input:focus {
-  outline: none;
-  border-color: #0f7a4c;
-  box-shadow: 0 0 0 2px rgba(15, 122, 76, 0.14);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .bo-cv-rtr-facility-badges {
@@ -11669,8 +11710,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 6px;
   border: 1px solid #fecaca;
   background: #fef2f2;
@@ -11684,25 +11725,54 @@
   border-color: #f87171;
 }
 
-.bo-cv-rtr-facility-grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 10px;
+.bo-cv-rtr-matrix-row-label {
+  background: #fafcfb;
+  color: #334155;
+  font-size: 12.5px;
+  font-weight: 650;
+  padding: 10px 16px;
+  border-bottom: 1px solid #edf2f0;
+  border-right: 1px solid #e2e8f0;
+  white-space: nowrap;
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.02);
 }
 
-.bo-cv-rtr-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
+.bo-cv-rtr-matrix-cell {
+  padding: 8px 12px;
+  border-bottom: 1px solid #edf2f0;
+  border-right: 1px solid #edf2f0;
+  min-width: 220px;
+  vertical-align: middle;
+  background: #ffffff;
 }
 
-.bo-cv-rtr-field.is-compact {
-  max-width: 100%;
+.bo-cv-rtr-matrix-cell.is-selected {
+  background: #fafdfb;
 }
 
-.bo-cv-rtr-field .req {
-  color: #dc2626;
+.bo-cv-rtr-matrix-input {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid #cbdad5;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.bo-cv-rtr-matrix-input:focus {
+  outline: none;
+  border-color: #0f7a4c;
+  box-shadow: 0 0 0 2px rgba(15, 122, 76, 0.14);
 }
 
 /* ── Proposed Loan Details Grid ── */
@@ -11823,6 +11893,70 @@
   line-height: 1.4;
 }
 
+/* ── Section 03: Excel-Style RTR Result Table ── */
+.bo-cv-rtr-result-table {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.bo-cv-rtr-result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13.5px;
+  box-sizing: border-box;
+  transition: background-color 0.15s ease;
+}
+
+.bo-cv-rtr-result-row:nth-child(even) {
+  background-color: #f8fafc;
+}
+
+.bo-cv-rtr-result-row:hover {
+  background-color: #f1f5f9;
+}
+
+.bo-cv-rtr-result-label {
+  color: #475569;
+  font-weight: 500;
+  font-size: 13.5px;
+  text-align: left;
+}
+
+.bo-cv-rtr-result-val {
+  color: #0f172a;
+  font-weight: 650;
+  font-size: 14px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bo-cv-rtr-result-row--total {
+  background: #f0fdf4 !important;
+  border-top: 2px solid #86efac;
+  border-bottom: none;
+  padding: 14px 18px;
+}
+
+.bo-cv-rtr-result-row--total .bo-cv-rtr-result-label {
+  color: #14532d;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.bo-cv-rtr-result-row--total .bo-cv-rtr-result-val {
+  color: #15803d;
+  font-size: 18px;
+  font-weight: 800;
+}
+
 /* ── Section 04: Exact 4 + 4 Result KPI Cards ── */
 .bo-cv-rtr-results-container .bo-cv-result-metrics-grid {
   display: grid;
@@ -11872,10 +12006,6 @@
 
 /* ── Responsive Breakpoints ── */
 @media (max-width: 1200px) {
-  .bo-cv-rtr-facility-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
   .bo-cv-rtr-live-bar {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -11888,16 +12018,24 @@
 }
 
 @media (max-width: 900px) {
-  .bo-cv-rtr-header {
+  .bo-cv-rtr-header,
+  .bo-cv-rtr-header-top {
     flex-direction: column;
-    align-items: stretch;
+    align-items: flex-start;
     gap: 14px;
   }
 
-  .bo-cv-rtr-header-left {
+  .bo-cv-rtr-applicant-row {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
+  }
+
+  .bo-cv-rtr-header-left,
+  .bo-cv-rtr-header-center,
+  .bo-cv-rtr-header-right {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .bo-cv-rtr-calc-bar {
@@ -11911,10 +12049,6 @@
     justify-content: center;
   }
 
-  .bo-cv-rtr-facility-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .bo-cv-rtr-proposed-grid {
     grid-template-columns: 1fr;
   }
@@ -11925,7 +12059,6 @@
 }
 
 @media (max-width: 640px) {
-  .bo-cv-rtr-facility-grid,
   .bo-cv-rtr-live-bar,
   .bo-cv-rtr-results-container .bo-cv-result-metrics-grid {
     grid-template-columns: 1fr;
