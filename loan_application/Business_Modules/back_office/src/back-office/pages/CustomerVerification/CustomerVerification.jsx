@@ -13012,7 +13012,7 @@ export default function CustomerVerification() {
                 <div className="bo-cv-rtr-workspace">
                   {/* ── CARD 1: HEADER + APPLICANT SELECTOR ── */}
                   <div className="bo-cv-rtr-header-card">
-                    <div className="bo-cv-rtr-header-top">
+                    <div className="bo-cv-rtr-header-row">
                       <div className="bo-cv-rtr-header-left">
                         <button
                           type="button"
@@ -13022,54 +13022,38 @@ export default function CustomerVerification() {
                           {ArrowLeftIcon ? <ArrowLeftIcon size={16} /> : '←'}
                           <span>Back</span>
                         </button>
-                      </div>
-                      <div className="bo-cv-rtr-header-center">
                         <h2 className="bo-cv-rtr-title">RTR Eligibility Assessment</h2>
-                        <span className="bo-cv-result-method-badge">RTR Method</span>
                       </div>
-                      <div className="bo-cv-rtr-header-right">
-                        <div className="bo-cv-rtr-applicant-context">
-                          <span className="bo-cv-rtr-context-pill">
-                            {UserIcon && <UserIcon size={12} />}
-                            <strong>{selectedApplicant?.name || 'Applicant'}</strong>
-                            <small>({selectedApplicant?.isMain ? 'Main' : selectedApplicant?.label})</small>
-                          </span>
-                          <span className="bo-cv-rtr-context-pill is-amount">
-                            Req {formatCurrency(appDetails.loanAmount)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
 
-                    {/* Applicant Selector Row */}
-                    {allApplicants.length > 0 && (
-                      <div className="bo-cv-rtr-applicant-row">
-                        <span className="bo-cv-rtr-bar-label">APPLICANT</span>
-                        <div className="bo-cv-elig-person-rail" role="tablist" aria-label="RTR Applicants">
-                          {allApplicants.map((app) => {
-                            const isSelected = app.sequence === selectedApplicantSequence;
-                            return (
-                              <button
-                                key={`rtr-app-tab-${app.sequence}`}
-                                type="button"
-                                role="tab"
-                                aria-selected={isSelected}
-                                className={`bo-cv-elig-person-chip ${isSelected ? 'is-active' : ''} ${app.isMain ? 'is-main' : ''}`}
-                                onClick={() => setSelectedApplicantSequence(app.sequence)}
-                              >
-                                <span className="bo-cv-elig-person-avatar">
-                                  {UserIcon && <UserIcon size={14} />}
-                                </span>
-                                <span className="bo-cv-elig-person-meta">
-                                  <strong>{app.name}</strong>
-                                  <small>{app.isMain ? 'Main Applicant' : app.label}</small>
-                                </span>
-                              </button>
-                            );
-                          })}
+                      {allApplicants.length > 0 && (
+                        <div className="bo-cv-rtr-applicant-group">
+                          <span className="bo-cv-rtr-bar-label">APPLICANT</span>
+                          <div className="bo-cv-elig-person-rail" role="tablist" aria-label="RTR Applicants">
+                            {allApplicants.map((app) => {
+                              const isSelected = app.sequence === selectedApplicantSequence;
+                              return (
+                                <button
+                                  key={`rtr-app-tab-${app.sequence}`}
+                                  type="button"
+                                  role="tab"
+                                  aria-selected={isSelected}
+                                  className={`bo-cv-elig-person-chip ${isSelected ? 'is-active' : ''} ${app.isMain ? 'is-main' : ''}`}
+                                  onClick={() => setSelectedApplicantSequence(app.sequence)}
+                                >
+                                  <span className="bo-cv-elig-person-avatar">
+                                    {UserIcon && <UserIcon size={14} />}
+                                  </span>
+                                  <span className="bo-cv-elig-person-meta">
+                                    <strong>{app.name}</strong>
+                                    <small>{app.isMain ? 'Main Applicant' : app.label}</small>
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
 
                   {/* ── CARD 2: LOAN FACILITIES ── */}
@@ -13588,73 +13572,55 @@ export default function CustomerVerification() {
               <div className="bo-cv-elig-deck bo-cv-elig-deck--normal-workspace">
                 <div className="bo-cv-normal-workspace">
                   {/* ── Normal Income Workspace Header ── */}
-                  <header className="bo-cv-normal-header">
-                    <div className="bo-cv-normal-header-left">
-                      <button
-                        type="button"
-                        className="bo-cv-normal-back-btn"
-                        onClick={() => setNormalIncomeWorkspaceOpen(false)}
-                      >
-                        {ArrowLeftIcon ? <ArrowLeftIcon size={16} /> : '←'}
-                        <span>Back to Eligibility Assessment</span>
-                      </button>
-                      <div className="bo-cv-normal-title-block">
-                        <span className="bo-cv-elig-kicker">STEP 11 · NORMAL INCOME METHOD</span>
+                  <div className="bo-cv-normal-header-card">
+                    <div className="bo-cv-normal-header-row">
+                      <div className="bo-cv-normal-header-left">
+                        <button
+                          type="button"
+                          className="bo-cv-normal-back-btn"
+                          onClick={() => setNormalIncomeWorkspaceOpen(false)}
+                        >
+                          {ArrowLeftIcon ? <ArrowLeftIcon size={16} /> : '←'}
+                          <span>Back</span>
+                        </button>
                         <h2 className="bo-cv-normal-title">Normal Income Eligibility Assessment</h2>
-                        <p className="bo-cv-normal-sub">
-                          Business financials &amp; other income based assessment for applicant.
-                        </p>
                       </div>
-                    </div>
-                    <div className="bo-cv-normal-header-right">
-                      <div className="bo-cv-normal-applicant-context">
-                        <span className="bo-cv-normal-context-pill">
-                          {UserIcon && <UserIcon size={12} />}
-                          <strong>{selectedApplicant?.name || 'Applicant'}</strong>
-                          <small>({selectedApplicant?.isMain ? 'Main' : selectedApplicant?.label})</small>
-                        </span>
-                        <span className="bo-cv-normal-context-pill is-amount">
-                          Req {formatCurrency(appDetails.loanAmount)}
-                        </span>
-                      </div>
-                    </div>
-                  </header>
 
-                  {/* ── Applicant Selection Rail (if multiple) ── */}
-                  {allApplicants.length > 1 && (
-                    <div className="bo-cv-normal-applicant-bar">
-                      <span className="bo-cv-normal-bar-label">Applicant Profile:</span>
-                      <div className="bo-cv-elig-person-rail" role="tablist" aria-label="Normal Income Applicants">
-                        {allApplicants.map((app) => {
-                          const isSelected = app.sequence === selectedApplicantSequence;
-                          return (
-                            <button
-                              key={`normal-app-tab-${app.sequence}`}
-                              type="button"
-                              role="tab"
-                              aria-selected={isSelected}
-                              className={`bo-cv-elig-person-chip ${isSelected ? 'is-active' : ''} ${app.isMain ? 'is-main' : ''}`}
-                              onClick={() => setSelectedApplicantSequence(app.sequence)}
-                            >
-                              <span className="bo-cv-elig-person-avatar">
-                                {UserIcon && <UserIcon size={14} />}
-                              </span>
-                              <span className="bo-cv-elig-person-meta">
-                                <strong>{app.name}</strong>
-                                <small>{app.isMain ? 'Main Applicant' : app.label}</small>
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                      {allApplicants.length > 0 && (
+                        <div className="bo-cv-normal-applicant-group">
+                          <span className="bo-cv-normal-bar-label">APPLICANT</span>
+                          <div className="bo-cv-elig-person-rail" role="tablist" aria-label="Normal Income Applicants">
+                            {allApplicants.map((app) => {
+                              const isSelected = app.sequence === selectedApplicantSequence;
+                              return (
+                                <button
+                                  key={`normal-app-tab-${app.sequence}`}
+                                  type="button"
+                                  role="tab"
+                                  aria-selected={isSelected}
+                                  className={`bo-cv-elig-person-chip ${isSelected ? 'is-active' : ''} ${app.isMain ? 'is-main' : ''}`}
+                                  onClick={() => setSelectedApplicantSequence(app.sequence)}
+                                >
+                                  <span className="bo-cv-elig-person-avatar">
+                                    {UserIcon && <UserIcon size={14} />}
+                                  </span>
+                                  <span className="bo-cv-elig-person-meta">
+                                    <strong>{app.name}</strong>
+                                    <small>{app.isMain ? 'Main Applicant' : app.label}</small>
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
 
                   {/* ── 01 — PRIMARY BUSINESS INCOME ── */}
-                  <section className="bo-cv-normal-section" aria-label="01 Primary Business Income">
+                  <section className="bo-cv-normal-section" aria-label="Primary Business Income">
                     <div className="bo-cv-normal-section-head">
                       <div className="bo-cv-normal-section-title-wrap">
-                        <span className="bo-cv-normal-section-num">01</span>
                         <div>
                           <h3 className="bo-cv-normal-section-title">Primary Business Income</h3>
                         </div>
@@ -13862,10 +13828,9 @@ export default function CustomerVerification() {
                   </section>
 
                   {/* ── 02 — OTHER INCOME STREAMS ── */}
-                  <section className="bo-cv-normal-section" aria-label="02 Other Income Streams">
+                  <section className="bo-cv-normal-section" aria-label="Other Income Streams">
                     <div className="bo-cv-normal-section-head">
                       <div className="bo-cv-normal-section-title-wrap">
-                        <span className="bo-cv-normal-section-num">02</span>
                         <div>
                           <h3 className="bo-cv-normal-section-title">Other Income Streams</h3>
                           <p className="bo-cv-normal-section-sub">
@@ -14001,10 +13966,9 @@ export default function CustomerVerification() {
                   </section>
 
                   {/* ── 04 — PROPOSED LOAN & ELIGIBILITY SETTINGS ── */}
-                  <section className="bo-cv-normal-section" aria-label="04 Proposed Loan & Eligibility Settings">
+                  <section className="bo-cv-normal-section" aria-label="Proposed Loan & Eligibility Settings">
                     <div className="bo-cv-normal-section-head">
                       <div className="bo-cv-normal-section-title-wrap">
-                        <span className="bo-cv-normal-section-num">04</span>
                         <div>
                           <h3 className="bo-cv-normal-section-title">Proposed Loan &amp; Eligibility Settings</h3>
                           <p className="bo-cv-normal-section-sub">
@@ -14135,10 +14099,9 @@ export default function CustomerVerification() {
 
                   {false && (<>
                   {/* ── 05 — EXISTING ACTIVE DEBT OBLIGATIONS ── */}
-                  <section className="bo-cv-normal-section" aria-label="05 Existing Active Debt Obligations">
+                  <section className="bo-cv-normal-section" aria-label="Existing Active Debt Obligations">
                     <div className="bo-cv-normal-section-head">
                       <div className="bo-cv-normal-section-title-wrap">
-                        <span className="bo-cv-normal-section-num">05</span>
                         <div>
                           <h3 className="bo-cv-normal-section-title">Existing Active Obligations &amp; Policy Benchmark</h3>
                           <p className="bo-cv-normal-section-sub">
@@ -14475,7 +14438,6 @@ export default function CustomerVerification() {
 
                     <div className="bo-cv-normal-calc-bar">
                       <div className="bo-cv-normal-calc-bar-info">
-                        <span className="bo-cv-normal-section-num">06</span>
                         <div>
                           <h3 className="bo-cv-normal-calc-bar-title">Calculate Normal Income Eligibility</h3>
                         </div>
@@ -14519,10 +14481,9 @@ export default function CustomerVerification() {
                    </section>
 
                   {/* ── 07 — NORMAL INCOME ELIGIBILITY RESULT ── */}
-                  <section className="bo-cv-normal-section" aria-label="07 Normal Income Eligibility Result">
+                  <section className="bo-cv-normal-section" aria-label="Normal Income Eligibility Result">
                     <div className="bo-cv-normal-section-head">
                       <div className="bo-cv-normal-section-title-wrap">
-                        <span className="bo-cv-normal-section-num is-result">07</span>
                         <div>
                           <h3 className="bo-cv-normal-section-title">Normal Income Eligibility Assessment Result</h3>
                         </div>
@@ -14820,7 +14781,7 @@ export default function CustomerVerification() {
                 <div className="bo-cv-income-workspace">
                   {/* ── CARD 1: HEADER + APPLICANT SELECTOR ── */}
                   <div className="bo-cv-income-header-card">
-                    <div className="bo-cv-income-header-top">
+                    <div className="bo-cv-income-header-row">
                       <div className="bo-cv-income-header-left">
                         <button
                           type="button"
@@ -14830,54 +14791,38 @@ export default function CustomerVerification() {
                           {ArrowLeftIcon ? <ArrowLeftIcon size={16} /> : '←'}
                           <span>Back</span>
                         </button>
-                      </div>
-                      <div className="bo-cv-income-header-center">
                         <h2 className="bo-cv-income-title">Income Method Assessment</h2>
-                        <span className="bo-cv-result-method-badge">Income Method</span>
                       </div>
-                      <div className="bo-cv-income-header-right">
-                        <div className="bo-cv-income-applicant-context">
-                          <span className="bo-cv-income-context-pill">
-                            {UserIcon && <UserIcon size={12} />}
-                            <strong>{selectedApplicant?.name || 'Applicant'}</strong>
-                            <small>({selectedApplicant?.isMain ? 'Main' : selectedApplicant?.label})</small>
-                          </span>
-                          <span className="bo-cv-income-context-pill is-amount">
-                            Req {formatCurrency(appDetails.loanAmount)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
 
-                    {/* Applicant Selector Row */}
-                    {allApplicants.length > 0 && (
-                      <div className="bo-cv-income-applicant-row">
-                        <span className="bo-cv-income-bar-label">APPLICANT</span>
-                        <div className="bo-cv-elig-person-rail" role="tablist" aria-label="Income Method Applicants">
-                          {allApplicants.map((app) => {
-                            const isSelected = app.sequence === selectedApplicantSequence;
-                            return (
-                              <button
-                                key={`income-app-tab-${app.sequence}`}
-                                type="button"
-                                role="tab"
-                                aria-selected={isSelected}
-                                className={`bo-cv-elig-person-chip ${isSelected ? 'is-active' : ''} ${app.isMain ? 'is-main' : ''}`}
-                                onClick={() => setSelectedApplicantSequence(app.sequence)}
-                              >
-                                <span className="bo-cv-elig-person-avatar">
-                                  {UserIcon && <UserIcon size={14} />}
-                                </span>
-                                <span className="bo-cv-elig-person-meta">
-                                  <strong>{app.name}</strong>
-                                  <small>{app.isMain ? 'Main Applicant' : app.label}</small>
-                                </span>
-                              </button>
-                            );
-                          })}
+                      {allApplicants.length > 0 && (
+                        <div className="bo-cv-income-applicant-group">
+                          <span className="bo-cv-income-bar-label">APPLICANT</span>
+                          <div className="bo-cv-elig-person-rail" role="tablist" aria-label="Income Method Applicants">
+                            {allApplicants.map((app) => {
+                              const isSelected = app.sequence === selectedApplicantSequence;
+                              return (
+                                <button
+                                  key={`income-app-tab-${app.sequence}`}
+                                  type="button"
+                                  role="tab"
+                                  aria-selected={isSelected}
+                                  className={`bo-cv-elig-person-chip ${isSelected ? 'is-active' : ''} ${app.isMain ? 'is-main' : ''}`}
+                                  onClick={() => setSelectedApplicantSequence(app.sequence)}
+                                >
+                                  <span className="bo-cv-elig-person-avatar">
+                                    {UserIcon && <UserIcon size={14} />}
+                                  </span>
+                                  <span className="bo-cv-elig-person-meta">
+                                    <strong>{app.name}</strong>
+                                    <small>{app.isMain ? 'Main Applicant' : app.label}</small>
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
 
                   {/* ── Monthly Salary Breakdown ── */}

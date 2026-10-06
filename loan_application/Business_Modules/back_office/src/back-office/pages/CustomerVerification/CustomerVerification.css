@@ -5859,18 +5859,22 @@
   overflow: hidden;
 }
 
-.bo-cv-income-header-top {
+.bo-cv-income-header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  padding: 16px 22px;
+  flex-wrap: wrap;
+  gap: 14px 20px;
+  padding: 12px 20px;
+  width: 100%;
 }
 
 .bo-cv-income-header-left {
   display: flex;
   align-items: center;
+  gap: 14px;
   flex-shrink: 0;
+  min-width: 0;
 }
 
 .bo-cv-income-back-btn {
@@ -5897,80 +5901,28 @@
   transform: translateX(-2px);
 }
 
-.bo-cv-income-header-center {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
 .bo-cv-income-title {
   margin: 0;
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 800;
   color: #0b2f22;
   letter-spacing: -0.02em;
   line-height: 1.25;
+  white-space: nowrap;
 }
 
-.bo-cv-income-header-right {
+.bo-cv-income-applicant-group {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.bo-cv-income-applicant-context {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.bo-cv-income-context-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 999px;
-  font-size: 12px;
-  color: #334155;
-  font-weight: 600;
-}
-
-.bo-cv-income-context-pill strong {
-  color: #0f172a;
-}
-
-.bo-cv-income-context-pill small {
-  color: #64748b;
-}
-
-.bo-cv-income-context-pill.is-amount {
-  background: #f0faf5;
-  border-color: rgba(15, 122, 76, 0.25);
-  color: #0f7a4c;
-  font-weight: 700;
-}
-
-/* ── Applicant Selection Row (Inside Card 1) ── */
-.bo-cv-income-applicant-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 22px;
-  background: #fafcfb;
-  border-top: 1px solid #edf2f0;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .bo-cv-income-bar-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: #64748b;
   white-space: nowrap;
 }
@@ -6237,21 +6189,14 @@
 }
 
 @media (max-width: 900px) {
-  .bo-cv-income-header-top {
+  .bo-cv-income-header-row {
     flex-direction: column;
     align-items: flex-start;
-    gap: 14px;
-  }
-
-  .bo-cv-income-applicant-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
+    gap: 12px;
   }
 
   .bo-cv-income-header-left,
-  .bo-cv-income-header-center,
-  .bo-cv-income-header-right {
+  .bo-cv-income-applicant-group {
     width: 100%;
     justify-content: flex-start;
   }
@@ -11735,39 +11680,22 @@
   overflow: hidden;
 }
 
-.bo-cv-rtr-header-top {
+.bo-cv-rtr-header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  padding: 16px 22px;
-}
-
-.bo-cv-rtr-applicant-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 22px;
-  background: #fafcfb;
-  border-top: 1px solid #edf2f0;
-}
-
-.bo-cv-rtr-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 16px 22px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  flex-wrap: wrap;
+  gap: 14px 20px;
+  padding: 12px 20px;
+  width: 100%;
 }
 
 .bo-cv-rtr-header-left {
   display: flex;
   align-items: center;
+  gap: 14px;
   flex-shrink: 0;
+  min-width: 0;
 }
 
 .bo-cv-rtr-back-btn {
@@ -11794,90 +11722,28 @@
   transform: translateX(-2px);
 }
 
-.bo-cv-rtr-header-center,
-.bo-cv-rtr-title-block {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.bo-cv-rtr-header-center .bo-cv-elig-kicker,
-.bo-cv-rtr-title-block .bo-cv-elig-kicker {
-  align-self: flex-start;
-  margin-bottom: 2px;
-  background: #e8f4ee;
-  color: #0f7a4c;
-  border: 1px solid rgba(15, 122, 76, 0.2);
-}
-
 .bo-cv-rtr-title {
   margin: 0;
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 800;
   color: #0b2f22;
   letter-spacing: -0.02em;
   line-height: 1.25;
+  white-space: nowrap;
 }
 
-.bo-cv-rtr-sub {
-  margin: 0;
-  font-size: 12.5px;
-  color: #64748b;
-  line-height: 1.4;
-}
-
-.bo-cv-rtr-header-right {
+.bo-cv-rtr-applicant-group {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.bo-cv-rtr-applicant-context {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.bo-cv-rtr-context-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 999px;
-  font-size: 12px;
-  color: #334155;
-  font-weight: 600;
-}
-
-.bo-cv-rtr-context-pill.is-amount {
-  background: #f0faf5;
-  border-color: rgba(15, 122, 76, 0.25);
-  color: #0f7a4c;
-  font-weight: 700;
-}
-
-/* ── Applicant Selection Bar ── */
-.bo-cv-rtr-applicant-bar {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 18px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .bo-cv-rtr-bar-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: #64748b;
   white-space: nowrap;
 }
@@ -12445,22 +12311,14 @@
 }
 
 @media (max-width: 900px) {
-  .bo-cv-rtr-header,
-  .bo-cv-rtr-header-top {
+  .bo-cv-rtr-header-row {
     flex-direction: column;
     align-items: flex-start;
-    gap: 14px;
-  }
-
-  .bo-cv-rtr-applicant-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
+    gap: 12px;
   }
 
   .bo-cv-rtr-header-left,
-  .bo-cv-rtr-header-center,
-  .bo-cv-rtr-header-right {
+  .bo-cv-rtr-applicant-group {
     width: 100%;
     justify-content: flex-start;
   }
@@ -12514,22 +12372,31 @@
 }
 
 /* ── Normal Income Header ── */
-.bo-cv-normal-header {
+.bo-cv-normal-header-card {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+
+.bo-cv-normal-header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  padding: 20px 24px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 18px;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  flex-wrap: wrap;
+  gap: 14px 20px;
+  padding: 12px 20px;
+  width: 100%;
 }
 
 .bo-cv-normal-header-left {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 14px;
+  flex-shrink: 0;
   min-width: 0;
 }
 
@@ -12557,85 +12424,28 @@
   transform: translateX(-2px);
 }
 
-.bo-cv-normal-title-block {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.bo-cv-normal-title-block .bo-cv-elig-kicker {
-  align-self: flex-start;
-  margin-bottom: 2px;
-  background: #e8f4ee;
-  color: #0f7a4c;
-  border: 1px solid rgba(15, 122, 76, 0.2);
-}
-
 .bo-cv-normal-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
   color: #0b2f22;
   letter-spacing: -0.02em;
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
-.bo-cv-normal-sub {
-  margin: 0;
-  font-size: 13px;
-  color: #64748b;
-  line-height: 1.4;
-}
-
-.bo-cv-normal-header-right {
+.bo-cv-normal-applicant-group {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.bo-cv-normal-applicant-context {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.bo-cv-normal-context-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 999px;
-  font-size: 12px;
-  color: #334155;
-  font-weight: 600;
-}
-
-.bo-cv-normal-context-pill.is-amount {
-  background: #f0faf5;
-  border-color: rgba(15, 122, 76, 0.25);
-  color: #0f7a4c;
-  font-weight: 700;
-}
-
-/* ── Applicant Selection Bar ── */
-.bo-cv-normal-applicant-bar {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 18px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .bo-cv-normal-bar-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: #64748b;
   white-space: nowrap;
 }
@@ -12824,16 +12634,16 @@
 }
 
 @media (max-width: 900px) {
-  .bo-cv-normal-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 14px;
-  }
-
-  .bo-cv-normal-header-left {
+  .bo-cv-normal-header-row {
     flex-direction: column;
     align-items: flex-start;
-    gap: 10px;
+    gap: 12px;
+  }
+
+  .bo-cv-normal-header-left,
+  .bo-cv-normal-applicant-group {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .bo-cv-normal-calc-bar {
