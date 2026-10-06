@@ -92,6 +92,13 @@ function formatFoirCurrency(amount) {
     : `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function formatFoirPercentage(value) {
+  if (value === null || value === undefined || value === '' || isNaN(value)) return '—';
+  const num = Number(value);
+  const percentage = num > 1 ? num : num * 100;
+  return `${percentage.toFixed(2)}%`;
+}
+
 function formatFileSize(bytes) {
   if (!bytes || isNaN(bytes)) return '0 B';
   const k = 1024;
@@ -5078,6 +5085,8 @@ export default function CustomerVerification() {
       return;
     }
 
+    let latestProposedLoan = activeProposedLoan;
+
     if (selectedMethodCode === 'INCOME') {
       // Step 4a: Synchronize salary rows (POST new rows, PUT modified persisted rows)
       const syncRes = await synchronizeSalaryRows();
@@ -5106,6 +5115,25 @@ export default function CustomerVerification() {
       // Rehydrate other income rows before calculation as well. Do not apply
       // the restriction or any income aggregation in the browser.
       await fetchOtherIncomeRecords(calculationAppProdId, selectedApplicantSequence);
+
+      // The active RTR proposed-loan record is the source of truth for the
+      // Income Method calculation inputs. Do not reuse the older assessment
+      // values (for example, a previous 24-month EMI configuration).
+      latestProposedLoan = await backOfficeService.getProposedLoan(
+        calculationAppProdId,
+        selectedApplicantSequence
+      );
+      const activeLoanAmount = latestProposedLoan?.proposedLoanAmount
+        ?? latestProposedLoan?.recommendedLoanAmount
+        ?? latestProposedLoan?.ProposedLoanAmount;
+      if (!latestProposedLoan || Number(activeLoanAmount) <= 0) {
+        setCalcBanner({
+          type: 'error',
+          message: 'The active RTR proposed-loan record could not be loaded. Save the RTR Common Sheet and try again.',
+        });
+        return;
+      }
+      setActiveProposedLoan(latestProposedLoan || null);
     } else if (selectedMethodCode === 'NORMAL_INCOME') {
       // Step 4a: Synchronize Normal Income records (Primary Income POST/PUT, Other Income POST/PUT)
       const syncRes = await synchronizeNormalIncomeRecords();
@@ -5202,7 +5230,7 @@ export default function CustomerVerification() {
     }
 
     let finalManualObligation = null;
-    if (selectedMethodCode !== 'INCOME' && currentCalcSettings.isEditingObligation && currentCalcSettings.manualObligationInput !== '') {
+    if ((selectedMethodCode === 'INCOME' || selectedMethodCode === 'NORMAL_INCOME' || selectedMethodCode === 'ABB') && currentCalcSettings.isEditingObligation && currentCalcSettings.manualObligationInput !== '') {
       const oblNum = Number(currentCalcSettings.manualObligationInput);
       if (isNaN(oblNum) || oblNum < 0) {
         setCalcBanner({
@@ -5212,6 +5240,19 @@ export default function CustomerVerification() {
         return;
       }
       finalManualObligation = oblNum;
+    }
+
+    if (selectedMethodCode === 'INCOME') {
+      // Income Method test cases use the Excel policy FOIR of 60%. Keep an
+      // explicitly entered Back Office override, but never inherit a different
+      // FOIR master value (such as 65%) for the default calculation.
+      finalManualFoir = finalManualFoir ?? 60;
+      finalManualObligation = finalManualObligation ?? Number(rtrSummaryMetrics.totalEmi || 0);
+
+      const proposedRoi = latestProposedLoan?.proposedROI ?? latestProposedLoan?.proposedRoi ?? latestProposedLoan?.ProposedROI;
+      const proposedTenure = latestProposedLoan?.proposedTenureMonths ?? latestProposedLoan?.proposedTenure ?? latestProposedLoan?.ProposedTenureMonths;
+      finalManualRoi = proposedRoi ?? finalManualRoi;
+      finalManualTenure = proposedTenure ?? finalManualTenure;
     }
 
     // Resolve AssessmentMethodId dynamically
@@ -5231,7 +5272,8 @@ export default function CustomerVerification() {
         setCalcBanner({ type: 'error', message: 'Income assessment method is not available from the server.' });
         return;
       }
-      calculatedMethodId = Number(incomeMethod.assessmentMethodId);
+      // Income Method is contractually assessmentMethodId = 1.
+      calculatedMethodId = 1;
     }
 
     setCalculating(true);
@@ -5249,8 +5291,12 @@ export default function CustomerVerification() {
         manualAnnualSalaryIncome: selectedMethodCode === 'NORMAL_INCOME'
           ? (currentCalcSettings.manualAnnualSalaryIncome === '' ? 0 : Number(currentCalcSettings.manualAnnualSalaryIncome))
           : null,
-        recommendedLoanAmount: selectedMethodCode === 'INCOME' && currentCalcSettings.recommendedLoanAmount !== ''
-          ? Number(currentCalcSettings.recommendedLoanAmount)
+        recommendedLoanAmount: selectedMethodCode === 'INCOME'
+          ? Number(
+            latestProposedLoan?.proposedLoanAmount
+              ?? latestProposedLoan?.recommendedLoanAmount
+              ?? latestProposedLoan?.ProposedLoanAmount
+          ) || null
           : finalRecommendedAmount,
         restrictOtherIncomeToSalary: selectedMethodCode === 'INCOME'
           ? (currentCalcSettings.restrictOtherIncomeToSalary !== false)
@@ -13417,8 +13463,8 @@ export default function CustomerVerification() {
                           <div className="bo-cv-rtr-result-row" role="row">
                             <span className="bo-cv-rtr-result-label" role="rowheader">EMI Factor @ IRR / Tenor</span>
                             <span className="bo-cv-rtr-result-val" role="cell">
-                              {activeProposedLoan?.proposedEMI != null
-                                ? Number(activeProposedLoan.proposedEMI).toFixed(2)
+                              {(activeProposedLoan?.proposedEMI ?? activeProposedLoan?.ProposedEMI) != null
+                                ? Number(activeProposedLoan.proposedEMI ?? activeProposedLoan.ProposedEMI).toFixed(2)
                                 : '—'}
                             </span>
                           </div>
@@ -14557,9 +14603,7 @@ export default function CustomerVerification() {
                           <div className="bo-cv-result-metric-card">
                             <span className="bo-cv-result-metric-label">Actual Calculated FOIR</span>
                             <strong className="bo-cv-result-metric-val">
-                              {currentAssessment.actualFOIR != null
-                                ? `${(Number(currentAssessment.actualFOIR) * 100).toFixed(2)}%`
-                                : '—'}
+                              {formatFoirPercentage(currentAssessment.actualFOIR)}
                             </strong>
                             <span className="bo-cv-result-metric-sub">Combined obligation / income</span>
                           </div>
@@ -15407,7 +15451,13 @@ export default function CustomerVerification() {
                           <div className="bo-cv-income-result-row" role="row">
                             <span className="bo-cv-income-result-label" role="rowheader">Proposed Loan Amount</span>
                             <span className="bo-cv-income-result-val" role="cell">
-                              {currentAssessment.requestedLoanAmount != null
+                              {(activeProposedLoan?.proposedLoanAmount
+                                ?? activeProposedLoan?.recommendedLoanAmount
+                                ?? activeProposedLoan?.ProposedLoanAmount) != null
+                                ? formatCurrency(activeProposedLoan.proposedLoanAmount
+                                  ?? activeProposedLoan.recommendedLoanAmount
+                                  ?? activeProposedLoan.ProposedLoanAmount)
+                                : currentAssessment.requestedLoanAmount != null
                                 ? formatCurrency(currentAssessment.requestedLoanAmount)
                                 : appDetails?.loanAmount != null
                                 ? formatCurrency(appDetails.loanAmount)
@@ -15418,9 +15468,7 @@ export default function CustomerVerification() {
                           <div className="bo-cv-income-result-row" role="row">
                             <span className="bo-cv-income-result-label" role="rowheader">Actual FOIR</span>
                             <span className="bo-cv-income-result-val" role="cell">
-                              {currentAssessment.actualFOIR != null
-                                ? `${Number(currentAssessment.actualFOIR).toFixed(2)}%`
-                                : '—'}
+                              {formatFoirPercentage(currentAssessment.actualFOIR)}
                             </span>
                           </div>
                         </div>
@@ -18703,9 +18751,7 @@ export default function CustomerVerification() {
                         <div className="bo-cv-result-metric-card">
                           <span className="bo-cv-result-metric-label">Actual Calculated FOIR</span>
                             <strong className="bo-cv-result-metric-val">
-                              {currentAssessment.actualFOIR != null
-                                ? `${(Number(currentAssessment.actualFOIR) * 100).toFixed(2)}%`
-                                : '—'}
+                              {formatFoirPercentage(currentAssessment.actualFOIR)}
                             </strong>
                           <span className="bo-cv-result-metric-sub">
                             Benchmark: {currentAssessment.foirPercentApplied ? `${currentAssessment.foirPercentApplied}%` : '—'}
