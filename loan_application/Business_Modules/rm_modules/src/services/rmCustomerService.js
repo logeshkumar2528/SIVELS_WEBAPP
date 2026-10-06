@@ -294,6 +294,67 @@ export const rmCustomerService = {
       throw err;
     }
   },
+
+  /* ==========================================
+     CUSTOMER PROOFS (ADDRESS / INCOME / DRIVING ...)
+  ========================================== */
+
+  getProofCategories: async () => {
+    const response = await axiosInstance.get('/DocumentTypeMaster');
+    return toList(response.data);
+  },
+
+  getProofsByCategory: async (documentTypeId) => {
+    const response = await axiosInstance.get('/proofmaster', {
+      params: { documentTypeId },
+    });
+    return toList(response.data);
+  },
+
+  /**
+   * List uploaded customer proofs for an applicant context:
+   * { agentCustomerId, applicationProductDetailsId, applicantSequence, verificationTypeCode }.
+   * Callers must still filter the result because the backend may ignore unsupported params.
+   * Treats 404 as an empty list.
+   */
+  getApplicationCustomerProofs: async (filters = {}) => {
+    const params = Object.fromEntries(
+      Object.entries(filters).filter(([, value]) => value !== null && value !== undefined && value !== '')
+    );
+    try {
+      const response = await axiosInstance.get('/customerdocumentproof', {
+        params,
+        validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
+      });
+      if (response.status === 404) return [];
+      return toList(response.data);
+    } catch (err) {
+      if (err?.response?.status === 404 || err?.status === 404) return [];
+      throw err;
+    }
+  },
+
+  uploadApplicationCustomerProof: async (formData, { onUploadProgress } = {}) => {
+    const response = await axiosInstance.post('/customerdocumentproof', formData, { onUploadProgress });
+    return response.data;
+  },
+
+  replaceApplicationCustomerProof: async (id, formData, { onUploadProgress } = {}) => {
+    const response = await axiosInstance.put(`/customerdocumentproof/${encodeURIComponent(id)}`, formData, { onUploadProgress });
+    return response.data;
+  },
+
+  downloadApplicationCustomerProof: async (id) => {
+    const response = await axiosInstance.get(`/customerdocumentproof/${encodeURIComponent(id)}/download`, {
+      responseType: 'blob',
+    });
+    return { blob: response.data, contentType: response.headers?.['content-type'] || '' };
+  },
+
+  deleteApplicationCustomerProof: async (id) => {
+    const response = await axiosInstance.delete(`/customerdocumentproof/${encodeURIComponent(id)}`);
+    return response.data;
+  },
 };
 
 function toList(data) {
