@@ -12,7 +12,8 @@ import {
   RefreshCw,
   FolderOpen,
   FolderArchive,
-  Clock
+  Clock,
+  FileCheck
 } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
@@ -27,6 +28,7 @@ import {
   createArray,
   getApplicantCount,
   getSectionState,
+  resolveApplicantName,
 } from '../applicationWizard/flowUtils';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { parseApiErrorBody } from '../../utils/formatUserFacingError';
@@ -35,6 +37,7 @@ import { resolveVerificationIdByCodeOrName } from '../../../../../Core/src/utils
 import { getCurrentRMContext } from '../../utils/rmContext';
 import rmCustomerService from '../../services/rmCustomerService';
 import { replaceManualDocument, manualDocumentPath, documentPaths, overlayPendingManualDocument, syncManualDocuments, isApplicantDocumentTuple, persistManualUploads, KYC_CATEGORIES, storedCategoryDocuments, updateApplicantSlot, clearUploadedSlot, slotReference, persistIdentitySlot, overlayPendingDocuments, documentHistoryKey } from './kycDocumentState';
+import CustomerProofModal from './CustomerProofModal';
 import './KycDocuments.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -191,6 +194,21 @@ function buildKycState(appData) {
 // The five Main Applicant slots mapped from AgentCustomerDocument records.
 // Used to compare successive loads by real backend document id.
 const AGENT_SOURCE_SLOTS = ['profile', 'aadhaar', 'pan', 'salarySlip', 'bankStatement'];
+
+// Identity verifications that can carry supporting customer proofs.
+const CUSTOMER_PROOF_VERIFICATION_TYPES = KYC_CATEGORIES
+  .filter((category) => category.key === 'aadhaar' || category.key === 'pan')
+  .map(({ code, name }) => ({ code, name }));
+
+function personName(person) {
+  if (!person || typeof person !== 'object') return '';
+  const parts = [
+    person.firstName ?? person.FirstName,
+    person.middleName ?? person.MiddleName,
+    person.lastName ?? person.LastName,
+  ].map((part) => String(part || '').trim()).filter(Boolean);
+  return parts.join(' ') || String(person.fullName ?? person.FullName ?? '').trim();
+}
 
 // Canonical identity columns on an ApplicationKYCDocuments row, keyed by UI slot.
 // PROFILE_IMAGE -> ProfileImagePath, AADHAAR -> AadharDocumentPath, PAN -> PanCardPath.
@@ -396,6 +414,7 @@ function KycCard({
   onChange,
   errors,
   onViewDocuments,
+  onOpenCustomerProof,
   isCoApplicant,
   documentTypeOptions = [],
   verificationOptions = [],
@@ -810,6 +829,34 @@ function KycCard({
               View Documents
             </Button>
           </div>
+
+          {onOpenCustomerProof && (
+            <div className="aw-field">
+              <label className="form-label">Customer Proof</label>
+              <div className="cp-proof-actions">
+                {CUSTOMER_PROOF_VERIFICATION_TYPES.map((type) => (
+                  <Button
+                    key={type.code}
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => onOpenCustomerProof(type)}
+                    icon={<FileCheck size={14} />}
+                    title={`Customer Proof for ${type.name}`}
+                    style={{
+                      width: '100%',
+                      height: '38px',
+                      justifyContent: 'center',
+                      background: '#f8fafc',
+                      border: '1px dashed #cbd5e1',
+                      color: '#0f172a',
+                    }}
+                  >
+                    {type.name}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="aw-field">
             <label className="form-label">Verification Documents</label>
@@ -2506,6 +2553,28 @@ export default function KycDocuments() {
     return resolvedId || null;
   }, [appId, saveApplication, appAgentCustomerId, appCustomerName, appMobile]);
 
+  // Customer Proof modal target: { target: 'applicant' | coApplicantIndex, verification: { code, name } } | null.
+  const [customerProofFor, setCustomerProofFor] = useState(null);
+
+  const customerProofContext = useMemo(() => {
+    if (!customerProofFor) return null;
+    const { target, verification } = customerProofFor;
+    const isApplicant = target === 'applicant';
+    const personalInformation = getSectionState(appData, 'personalInformation', {});
+    const applicantName = isApplicant
+      ? resolveApplicantName(appData)
+      : personName(personalInformation?.coApplicants?.[target]);
+    return {
+      applicationId: appId,
+      applicationProductDetailsId: resolvedProductDetailsId,
+      applicantSequence: isApplicant ? 0 : target + 1,
+      verificationTypeCode: verification?.code ?? null,
+      verificationTypeName: verification?.name ?? '',
+      applicantRole: isApplicant ? 'Applicant' : `Co-Applicant ${target + 1}`,
+      applicantName,
+    };
+  }, [customerProofFor, appData, appId, resolvedProductDetailsId]);
+
   // Load real AgentCustomerDocuments for Main Applicant
   useEffect(() => {
     let isMounted = true;
@@ -2532,7 +2601,7 @@ export default function KycDocuments() {
           if (rawSeq !== undefined && rawSeq !== null && Number.isFinite(Number(rawSeq)) && Number(rawSeq) >= 0) {
             seq = Number(rawSeq);
           } else {
-            const rawName = String(doc.documentTypeName || doc.documentType || doc.name || '').trim();
+            const rawName = String(doc.documentTypeName || doc.customerDocumentTypeName || doc.documentType || doc.name || '').trim();
             const rawCode = String(doc.documentTypeCode || doc.code || '').trim().toUpperCase();
             const fileName = String(doc.fileName || '').trim();
             const text = `${rawCode} ${rawName} ${fileName}`.toUpperCase();
@@ -2546,7 +2615,7 @@ export default function KycDocuments() {
 
           if (!mapped[seq]) mapped[seq] = {};
 
-          const rawName = String(doc.documentTypeName || doc.documentType || doc.name || '').trim();
+          const rawName = String(doc.documentTypeName || doc.customerDocumentTypeName || doc.documentType || doc.name || '').trim();
           const rawCode = String(doc.documentTypeCode || doc.code || '').trim().toUpperCase();
           const fileName = String(doc.fileName || '').toLowerCase();
           const normCat = normalizeToCanonicalCategory(rawCode || rawName || fileName);
@@ -2726,6 +2795,7 @@ export default function KycDocuments() {
             const docRes = await rmCustomerService.getApplicantDocument(resolvedProductDetailsId, seq, typeId);
             const docData = docRes?.data || docRes?.value || docRes;
             if (!docData) {
+              hydratedCoFinancialKeysRef.current.add(cacheKey);
               continue;
             }
             const path = docData?.documentPath || docData?.DocumentPath || docData?.filePath || null;
@@ -3114,7 +3184,7 @@ export default function KycDocuments() {
           const fileName = doc.fileName || 'document';
           const ext = fileName.split('.').pop()?.toLowerCase();
           const isPdf = ext === 'pdf';
-          const canonicalCategory = normalizeToCanonicalCategory(doc.documentTypeCode || doc.documentTypeName || doc.documentType);
+          const canonicalCategory = normalizeToCanonicalCategory(doc.documentTypeCode || doc.documentTypeName || doc.customerDocumentTypeName || doc.documentType);
           const dlUrl = `${API_BASE}/AgentCustomerDocument/download/${docId}`;
 
           try {
@@ -3145,7 +3215,7 @@ export default function KycDocuments() {
               applicantSequence: 0,
               storageSource: 'AGENT_CUSTOMER_DOCUMENT',
               documentTypeId: doc.documentTypeId,
-              documentTypeName: CANONICAL_CATEGORY_META[canonicalCategory]?.name || doc.documentTypeName || doc.documentType || 'Uploaded Document',
+              documentTypeName: CANONICAL_CATEGORY_META[canonicalCategory]?.name || doc.documentTypeName || doc.customerDocumentTypeName || doc.documentType || 'Uploaded Document',
               fileName,
               filePath: doc.filePath,
               fileType: isPdf ? 'pdf' : 'image',
@@ -3171,7 +3241,7 @@ export default function KycDocuments() {
               applicantSequence: 0,
               storageSource: 'AGENT_CUSTOMER_DOCUMENT',
               documentTypeId: doc.documentTypeId,
-              documentTypeName: CANONICAL_CATEGORY_META[canonicalCategory]?.name || doc.documentTypeName || doc.documentType || 'Uploaded Document',
+              documentTypeName: CANONICAL_CATEGORY_META[canonicalCategory]?.name || doc.documentTypeName || doc.customerDocumentTypeName || doc.documentType || 'Uploaded Document',
               fileName,
               filePath: doc.filePath,
               fileType: isPdf ? 'pdf' : 'image',
@@ -5058,6 +5128,7 @@ export default function KycDocuments() {
           onReplacePersistedSlot={(slotIdx, file) => handleReplacePersistedManualSlot('applicant', null, slotIdx, file)}
           onChange={(field, value) => updatePerson('applicant', field, value)}
           onViewDocuments={() => handleOpenDocsModal('applicant')}
+          onOpenCustomerProof={(verification) => setCustomerProofFor({ target: 'applicant', verification })}
           documentTypeOptions={documentTypeOptions}
           verificationOptions={verificationOptions}
           isLoadingMasters={isLoadingMasters}
@@ -5085,6 +5156,7 @@ export default function KycDocuments() {
               onReplacePersistedSlot={(slotIdx, file) => handleReplacePersistedManualSlot('coApplicants', index, slotIdx, file)}
               onChange={(field, value) => updatePerson('coApplicants', field, value, index)}
               onViewDocuments={() => handleOpenDocsModal(index)}
+              onOpenCustomerProof={(verification) => setCustomerProofFor({ target: index, verification })}
               documentTypeOptions={documentTypeOptions}
               verificationOptions={verificationOptions}
               isLoadingMasters={isLoadingMasters}
@@ -5463,6 +5535,15 @@ export default function KycDocuments() {
           </>
         )}
       </Modal>
+
+      {customerProofContext && (
+        <CustomerProofModal
+          key={`${appId}-${customerProofContext.applicantSequence}-${customerProofContext.verificationTypeCode}`}
+          onClose={() => setCustomerProofFor(null)}
+          context={customerProofContext}
+          resolveAgentCustomerId={resolveAgentCustomerId}
+        />
+      )}
 
       {/* ===================================================================
           FULLSCREEN LIGHTBOX / PREVIEW MODAL

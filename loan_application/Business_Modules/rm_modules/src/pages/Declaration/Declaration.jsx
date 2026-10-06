@@ -10,6 +10,7 @@ import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { useLoading } from '../../../../../Core/src/context/LoadingContext';
+import { getCurrentRMContext } from '../../utils/rmContext';
 import { buildApplicationDisplayId, buildSectionUpdate, getSectionState, getApplicantCount, createArray, resolveApplicantName } from '../applicationWizard/flowUtils';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -440,35 +441,36 @@ export default function Declaration() {
           throw new Error('Unable to retrieve customer record for status update.');
         }
 
-        // 2. Build full payload with status: 2 (Logged to HO / Completed)
-        const rawAgentId = customerRecord.agentId !== undefined ? customerRecord.agentId : customerRecord.AgentId;
-        const resolvedAgentId = (rawAgentId === null || rawAgentId === undefined || rawAgentId === '')
-          ? null
-          : Number(rawAgentId);
+        // 2. Move status 1 -> 2 (Logged to HO). The backend only accepts this transition
+        // when the payload carries nothing but the status, so customer fields must not be sent.
+        const currentStatus = Number(customerRecord.status ?? customerRecord.Status);
+        if (currentStatus !== 2) {
+          const { rmId } = getCurrentRMContext();
+          const payload = {
+            agentCustomerId: Number(customerRecord.agentCustomerId || customerRecord.AgentCustomerId || appId),
+            status: 2,
+            ...(rmId ? { modifiedBy: rmId } : {}),
+          };
 
-        const payload = {
-          agentCustomerId: Number(customerRecord.agentCustomerId || customerRecord.AgentCustomerId || appId),
-          agentId: resolvedAgentId,
-          fullName: customerRecord.fullName || customerRecord.FullName || customerRecord.customerName || appData.customerName || '',
-          mobileNumber: customerRecord.mobileNumber || customerRecord.MobileNumber || customerRecord.mobile || appData.mobile || '',
-          email: customerRecord.email || customerRecord.Email || customerRecord.emailAddress || appData.email || '',
-          employmentTypeId: Number(customerRecord.employmentTypeId ?? customerRecord.EmploymentTypeId ?? 1),
-          loanPurposeId: Number(customerRecord.loanPurposeId ?? customerRecord.LoanPurposeId ?? 1),
-          expectedLoanAmount: Number(customerRecord.expectedLoanAmount ?? customerRecord.ExpectedLoanAmount ?? 0),
-          remarks: customerRecord.remarks || customerRecord.Remarks || '',
-          status: 2,
-          isActive: customerRecord.isActive !== undefined ? customerRecord.isActive : (customerRecord.IsActive !== undefined ? customerRecord.IsActive : true),
-        };
+          const token = localStorage.getItem('authToken');
+          const putRes = await fetch(`${API_BASE}/AgentAddCustomer/${appId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify(payload),
+          });
 
-        // 3. Send PUT request
-        const putRes = await fetch(`${API_BASE}/AgentAddCustomer/${appId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-
-        if (!putRes.ok) {
-          throw new Error(`Failed to update application status to Logged to HO (${putRes.status})`);
+          if (!putRes.ok) {
+            const errBody = await putRes.json().catch(() => null);
+            const backendMessage = errBody?.message || errBody?.Message;
+            throw new Error(
+              backendMessage
+                ? `Failed to update application status to Logged to HO: ${backendMessage}`
+                : `Failed to update application status to Logged to HO (${putRes.status})`
+            );
+          }
         }
 
         saveApplication(appId, { status: 'Logged to HO' });

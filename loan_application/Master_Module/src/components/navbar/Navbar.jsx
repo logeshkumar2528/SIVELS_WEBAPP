@@ -17,6 +17,7 @@ const MASTERS_MENU = [
   { label: 'Relationship', path: '/masters/relationship', icon: Users },
   { label: 'Sourcing Channel', path: '/masters/sourcing-channel', icon: Network },
   { label: 'Document Type', path: '/masters/document-type', icon: FileText },
+  { label: 'Customer Document Type', path: '/masters/customer-document-type', icon: FileCheck },
   { label: 'Loan Type', path: '/masters/loan-type', icon: CreditCard },
   { label: 'Loan Product', path: '/masters/loan-product', icon: Package },
   { label: 'Loan Purpose', path: '/masters/loan-purpose', icon: Target },

@@ -23,6 +23,14 @@ import CustomSelect from './CustomSelect'
 import './AddCustomer.css'
 import { masterService } from '../../../../../../Core/src/services/masterService'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
+import {
+  getCustomerDocumentTypes,
+  normalizeCustomerDocumentType,
+  normalizeAgentCustomerDocument,
+  resolveMappedCategories,
+  sortByLatest,
+  uploadAgentCustomerDocument,
+} from '../../../../../../Core/src/services/customerDocumentService'
 import { useLoading } from '../../../../../../Core/src/context/LoadingContext'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { getApiErrorMessage } from '../../../../../../Core/src/utils/apiErrorHandler'
@@ -43,7 +51,7 @@ function AddCustomer() {
   // Master Data State
   const [employmentTypes, setEmploymentTypes] = useState([])
   const [loanProducts, setLoanProducts] = useState([])
-  const [documentTypes, setDocumentTypes] = useState([])
+  const [customerDocumentTypes, setCustomerDocumentTypes] = useState([])
   
   // Specific Error States
   const [employmentTypesError, setEmploymentTypesError] = useState(false)
@@ -73,10 +81,10 @@ function AddCustomer() {
     remarks: '',
   })
 
-  // File Upload State: { [documentTypeId]: File | File[] }
+  // File Upload State: { [customerDocumentTypeId]: File | File[] }
   const [selectedFiles, setSelectedFiles] = useState({})
   
-  // Previews: { [documentTypeId]: string | string[] }
+  // Previews: { [customerDocumentTypeId]: string | string[] }
   const [previews, setPreviews] = useState({})
 
   // Modal Full Image Preview State
@@ -127,11 +135,10 @@ function AddCustomer() {
       }
       
       try {
-        const docTypesRes = await masterService.getDocumentTypes()
-        const arr = extractArray(docTypesRes)
-        setDocumentTypes(arr)
+        const categories = await getCustomerDocumentTypes()
+        setCustomerDocumentTypes(categories.map(normalizeCustomerDocumentType))
       } catch (err) {
-        console.error("Failed to load document types", err)
+        console.error("Failed to load customer document categories", err)
       }
 
       setLoadingMasters(false)
@@ -181,9 +188,10 @@ function AddCustomer() {
               remarks: customer.remarks || '',
             })
 
-            const uploadedIds = docList.map(d => Number(d.documentTypeId || d.DocumentTypeId)).filter(Boolean)
+            const customerDocs = docList.map(normalizeAgentCustomerDocument).filter(d => d.isActive).sort(sortByLatest)
+            const uploadedIds = customerDocs.map(d => Number(d.customerDocumentTypeId)).filter(Boolean)
             setUploadedDocuments(uploadedIds)
-            setExistingCustomerDocs(docList)
+            setExistingCustomerDocs(customerDocs)
           }
         }, { message: 'Loading customer details...' })
       } catch (err) {
@@ -235,25 +243,8 @@ function AddCustomer() {
           return []
         }
 
-        const allMappings = extractArray(res)
-        
-        // Resolve required documents based on active mapping AND active document type
-        const resolvedMappings = allMappings.reduce((acc, mapping) => {
-          if (mapping.isActive === true) {
-            const doc = documentTypes.find(d => Number(d.documentTypeId || d.id) === Number(mapping.documentTypeId))
-            
-            if (doc && doc.isActive === true) {
-              acc.push({
-                ...mapping, // preserves isMandatory, IDs, etc.
-                documentTypeName: doc.documentTypeName || doc.name || mapping.documentTypeName,
-                documentTypeCode: doc.documentTypeCode || doc.code
-              })
-            }
-          }
-          return acc
-        }, [])
-
-        setDocumentMappings(resolvedMappings)
+        // Only active mappings that point to an active CustomerDocumentTypeMaster category
+        setDocumentMappings(resolveMappedCategories(extractArray(res), customerDocumentTypes))
 
         // Preserve uploaded documents if in edit mode and employmentTypeId matches loaded customer type
         if (isEditMode && String(formData.employmentTypeId) === String(loadedEmploymentTypeId)) {
@@ -271,11 +262,11 @@ function AddCustomer() {
       }
     }
 
-    // Ensure documentTypes are loaded before trying to resolve mappings
-    if (documentTypes.length > 0) {
+    // Ensure customer document categories are loaded before trying to resolve mappings
+    if (!loadingMasters) {
       loadMapping()
     }
-  }, [formData.employmentTypeId, documentTypes, isEditMode, loadedEmploymentTypeId])
+  }, [formData.employmentTypeId, customerDocumentTypes, loadingMasters, isEditMode, loadedEmploymentTypeId])
 
   // Manage Preview Object URLs
   useEffect(() => {
@@ -478,8 +469,9 @@ function AddCustomer() {
       const missingDocuments = []
 
       for (const mapping of documentMappings) {
-        const isUploaded = uploadedDocuments.includes(mapping.documentTypeId)
-        const files = selectedFiles[mapping.documentTypeId]
+        if (!mapping.isMandatory) continue
+        const isUploaded = uploadedDocuments.includes(Number(mapping.customerDocumentTypeId))
+        const files = selectedFiles[mapping.customerDocumentTypeId]
         const isMultiple = (mapping.documentTypeName || '').toLowerCase().includes('other')
         const hasFile = isMultiple ? (Array.isArray(files) && files.length > 0) : Boolean(files)
 
@@ -580,14 +572,15 @@ function AddCustomer() {
 
           for (let i = 0; i < filesArray.length; i++) {
             const file = filesArray[i]
-            const docFormData = new FormData()
-            docFormData.append('file', file)
-            docFormData.append('agentCustomerId', String(agentCustomerId))
-            docFormData.append('documentTypeId', String(docTypeId))
-            docFormData.append('createdBy', String(agentId))
 
             try {
-              await agentCustomerService.uploadDocument(docFormData)
+              // Each upload is stored as a new AgentCustomerDocument; earlier files are kept.
+              await uploadAgentCustomerDocument({
+                file,
+                agentCustomerId,
+                customerDocumentTypeId: docTypeId,
+                createdBy: agentId,
+              })
               successfulUploads.push({ docTypeId, index: i, isMultiple: Array.isArray(filesData) })
             } catch (err) {
               failedUploads.push(file.name)
@@ -947,18 +940,20 @@ function AddCustomer() {
                 )}
 
                 {documentMappings.map((mapping) => {
+                  const docKey = mapping.customerDocumentTypeId
                   const docName = mapping.documentTypeName || 'Document'
                   const isMultiple = docName.toLowerCase().includes('other')
-                  const files = selectedFiles[mapping.documentTypeId]
+                  const files = selectedFiles[docKey]
                   const hasFile = isMultiple ? files && files.length > 0 : Boolean(files)
                   const IconComponent = getDocumentIcon(docName)
-                  const isUploaded = uploadedDocuments.includes(Number(mapping.documentTypeId))
+                  const isUploaded = uploadedDocuments.includes(Number(docKey))
+                  // existingCustomerDocs is sorted newest first, so this is the current file.
                   const existingDoc = existingCustomerDocs.find(
-                    (d) => Number(d.documentTypeId || d.DocumentTypeId) === Number(mapping.documentTypeId)
+                    (d) => Number(d.customerDocumentTypeId) === Number(docKey)
                   )
 
                   return (
-                    <div key={mapping.documentTypeId} className={`document-upload-card ${hasFile || isUploaded ? 'has-file' : ''}`}>
+                    <div key={docKey} className={`document-upload-card ${hasFile || isUploaded ? 'has-file' : ''}`}>
                       <div className="document-card-top">
                         <div className="document-icon-badge">
                           <IconComponent size={16} strokeWidth={1.8} />
@@ -966,7 +961,7 @@ function AddCustomer() {
                         <div className="document-card-info">
                           <h4>
                             {docName}
-                            <span className="required-star">*</span>
+                            {mapping.isMandatory && <span className="required-star">*</span>}
                           </h4>
                           {!hasFile && !isUploaded && (
                             <>
@@ -1009,7 +1004,7 @@ function AddCustomer() {
                                 <button
                                   type="button"
                                   className="file-remove-btn"
-                                  onClick={() => handleRemoveFile(mapping.documentTypeId, index)}
+                                  onClick={() => handleRemoveFile(docKey, index)}
                                   style={{ padding: '2px 4px', background: 'transparent', border: 'none' }}
                                   disabled={submitting}
                                 >
@@ -1020,12 +1015,12 @@ function AddCustomer() {
                           </div>
                         ) : (
                           <div className="file-preview-box">
-                            {previews[mapping.documentTypeId] ? (
+                            {previews[docKey] ? (
                               <img
-                                src={previews[mapping.documentTypeId]}
+                                src={previews[docKey]}
                                 alt={`${docName} Preview`}
                                 className="thumbnail-preview-img"
-                                onClick={() => setModalImage({ src: previews[mapping.documentTypeId], title: docName })}
+                                onClick={() => setModalImage({ src: previews[docKey], title: docName })}
                               />
                             ) : (
                               <IconComponent size={18} className="document-icon-badge" />
@@ -1034,11 +1029,11 @@ function AddCustomer() {
                               <span className="file-preview-name">{files.name}</span>
                               <span className="file-preview-size">({formatFileSize(files.size)})</span>
                             </div>
-                            {previews[mapping.documentTypeId] && (
+                            {previews[docKey] && (
                               <button
                                 type="button"
                                 className="action-view"
-                                onClick={() => setModalImage({ src: previews[mapping.documentTypeId], title: docName })}
+                                onClick={() => setModalImage({ src: previews[docKey], title: docName })}
                               >
                                 <Eye size={14} />
                               </button>
@@ -1077,7 +1072,7 @@ function AddCustomer() {
                             multiple={isMultiple}
                             className="file-input-hidden"
                             accept=".pdf,.jpg,.jpeg,.png"
-                            onChange={(e) => handleFileChange(e, mapping.documentTypeId, isMultiple)}
+                            onChange={(e) => handleFileChange(e, docKey, isMultiple)}
                             disabled={submitting}
                           />
                         </label>
@@ -1085,7 +1080,7 @@ function AddCustomer() {
                           <button
                             type="button"
                             className="file-remove-btn"
-                            onClick={() => handleRemoveFile(mapping.documentTypeId)}
+                            onClick={() => handleRemoveFile(docKey)}
                             disabled={submitting}
                           >
                             <Trash2 size={13} />

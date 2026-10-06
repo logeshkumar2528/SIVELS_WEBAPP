@@ -24,6 +24,13 @@ import './NewApplications.css';
 import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
 import { resolveDocumentTypeId, validateApplicantDocumentFile } from '../../../../../Core/src/utils/documentTypeHelper';
 import { resolveVerificationIdByCodeOrName } from '../../../../../Core/src/utils/verificationHelper';
+import {
+  isCustomerFlowRejection,
+  resubmitRejection,
+  uploadCorrectionForRejection,
+} from '../../../../../Core/src/services/customerDocumentService';
+import { readApiError } from '../../../../../Core/src/utils/documentFileActions';
+import ReturnedDocumentDetails from './ReturnedDocumentDetails';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 
@@ -59,6 +66,10 @@ export const getRejectionSlotKey = (r) => {
     r?.applicantSequence !== undefined && r?.applicantSequence !== null
       ? Number(r.applicantSequence)
       : (r?.ApplicantSequence !== undefined && r?.ApplicantSequence !== null ? Number(r.ApplicantSequence) : 0);
+  const proofId = r?.customerDocumentProofId ?? r?.CustomerDocumentProofId;
+  if (proofId !== undefined && proofId !== null) return `${seq}_CUSTOMER_PROOF_${proofId}`;
+  const customerDocTypeId = r?.customerDocumentTypeId ?? r?.CustomerDocumentTypeId;
+  if (customerDocTypeId !== undefined && customerDocTypeId !== null) return `${seq}_CUSTOMER_DOC_TYPE_${customerDocTypeId}`;
   const rawType = String(r?.rejectedDocumentType || r?.RejectedDocumentType || '').toUpperCase().trim();
   const isZipManual = rawType.includes('ZIP') || rawType.includes('ARCHIVE') || rawType.includes('MANUAL');
   const manualIdx =
@@ -111,6 +122,11 @@ export const getRejectedDocumentLabel = (rejection) => {
     else if (seq === 2) prefix = 'Co-Applicant 2';
     else if (seq === 3) prefix = 'Co-Applicant 3';
     else if (seq > 3) prefix = `Co-Applicant ${seq}`;
+  }
+
+  if (isCustomerFlowRejection(rejection)) {
+    const isProof = (rejection.customerDocumentProofId ?? rejection.CustomerDocumentProofId) != null;
+    return `${prefix} ${isProof ? 'Proof Document' : 'Customer Document'}`;
   }
 
   const isSalary = rawType.includes('SALARY') || rawType.includes('INCOME_SHEET') || rawType.includes('INCOME SHEET');
@@ -423,7 +439,52 @@ export default function NewApplications({ initialFilter = 'All' }) {
     loadApplications();
   }, [loadApplications]);
 
+  // New customer document flow: the corrected file is uploaded as a new AgentCustomerDocument or
+  // CustomerDocumentProof, then the rejection is resubmitted. Original files are never overwritten.
+  const handleResubmitCustomerFlowDocument = async (rejection) => {
+    const rejId = rejection.backOfficeDocumentRejectionId ?? rejection.BackOfficeDocumentRejectionId ?? rejection.id;
+    const file = selectedFiles[rejId];
+    const setFeedback = (type, message) => setRejectionFeedback((prev) => ({ ...prev, [rejId]: { type, message } }));
+
+    if (!file) {
+      setFeedback('error', 'Please select a replacement document file before resubmitting.');
+      return;
+    }
+    const valRes = validateApplicantDocumentFile(file);
+    if (!valRes.valid) {
+      setFeedback('error', valRes.error);
+      return;
+    }
+    const rmId = getCurrentRMContext().rmId;
+    if (!rmId) {
+      setFeedback('error', 'No RM context found in session. Please sign in again.');
+      return;
+    }
+
+    setIsSubmittingRejection((prev) => ({ ...prev, [rejId]: true }));
+    setRejectionFeedback((prev) => ({ ...prev, [rejId]: null }));
+    try {
+      await uploadCorrectionForRejection(rejection, file, {
+        agentCustomerId: selectedReturnApp?.agentCustomerId,
+        createdBy: rmId,
+      });
+      await resubmitRejection(rejId, rmId);
+      setFeedback('success', 'Corrected document uploaded as a new file and resubmitted to Back Office.');
+      setSelectedFiles((prev) => ({ ...prev, [rejId]: null }));
+      await loadApplications();
+    } catch (err) {
+      console.error('Error during customer document resubmission:', err);
+      setFeedback('error', await readApiError(err, 'Failed to resubmit document. Please try again.'));
+    } finally {
+      setIsSubmittingRejection((prev) => ({ ...prev, [rejId]: false }));
+    }
+  };
+
   const handleResubmitDocument = async (rejection) => {
+    if (isCustomerFlowRejection(rejection)) {
+      await handleResubmitCustomerFlowDocument(rejection);
+      return;
+    }
     const rejId = rejection.backOfficeDocumentRejectionId ?? rejection.BackOfficeDocumentRejectionId ?? rejection.id;
     const file = selectedFiles[rejId];
     if (!file) {
@@ -1098,6 +1159,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
               const isResubmitted = (rej.status ?? rej.Status) === 'Resubmitted';
               const isSubmitting = isSubmittingRejection[rejId];
               const feedback = rejectionFeedback[rejId];
+              const isCustomerFlow = isCustomerFlowRejection(rej);
 
               return (
                 <div
@@ -1118,16 +1180,20 @@ export default function NewApplications({ initialFilter = 'All' }) {
                     <p className="return-rejection-remarks-text">{(rej.rejectionRemarks || rej.RejectionRemarks) || 'Document rejected. Please provide a clear updated copy.'}</p>
                   </div>
 
+                  <ReturnedDocumentDetails rejection={rej} fallbackLabel={docLabel} />
+
                   {!isResubmitted ? (
                     <div className="return-upload-section">
                       <label className="return-upload-label" htmlFor={`return-file-input-${rejId}`}>
-                        Select Replacement Document (PDF, JPEG, PNG, ZIP):
+                        {isCustomerFlow
+                          ? 'Select Corrected Document (PDF, JPG, JPEG, PNG) — saved as a new file:'
+                          : 'Select Replacement Document (PDF, JPEG, PNG, ZIP):'}
                       </label>
                       <input
                         id={`return-file-input-${rejId}`}
                         type="file"
                         className="return-file-input"
-                        accept="image/*,application/pdf,.zip"
+                        accept={isCustomerFlow ? '.pdf,.jpg,.jpeg,.png' : 'image/*,application/pdf,.zip'}
                         onChange={(e) => {
                           const f = e.target.files?.[0] || null;
                           setSelectedFiles((prev) => ({ ...prev, [rejId]: f }));
