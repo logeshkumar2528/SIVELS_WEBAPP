@@ -9,6 +9,7 @@ import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
 import Modal from '../../components/Modal/Modal';
+import CustomerProofButton from '../../components/CustomerProofViewer/CustomerProofButton';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { parseApiErrorBody } from '../../utils/formatUserFacingError';
 import {
@@ -701,13 +702,16 @@ export default function AddressDetails() {
         </Button>
       }
       metaAction={
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowDocsModal(true)}
-        >
-          View Aadhaar
-        </Button>
+        <>
+          <CustomerProofButton appId={appId} appData={appData} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDocsModal(true)}
+          >
+            View Aadhaar
+          </Button>
+        </>
       }
       footerHint={`Address details are stored against the same application ID. ${activeCount > 1 ? `${activeCount} applicant records are linked.` : 'Only the applicant record is linked.'}`}
     >

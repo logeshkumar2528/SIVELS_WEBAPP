@@ -9,6 +9,7 @@ import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
 import Modal from '../../components/Modal/Modal';
+import CustomerProofButton from '../../components/CustomerProofViewer/CustomerProofButton';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import {
   buildSectionUpdate,
@@ -2033,13 +2034,16 @@ export default function BankExistingLoans() {
           </Button>
         }
         metaAction={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowDocsModal(true)}
-          >
-            View Bank Statement
-          </Button>
+          <>
+            <CustomerProofButton appId={appId} appData={appData} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDocsModal(true)}
+            >
+              View Bank Statement
+            </Button>
+          </>
         }
         footerHint={`Bank information is stored for the same application ID. ${activeCount > 0 ? `${activeCount + 1} applicant records are linked.` : 'Only the applicant record is linked.'}`}
       >
