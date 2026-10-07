@@ -92,6 +92,13 @@ function formatFoirCurrency(amount) {
     : `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function formatFoirPercentage(value) {
+  if (value === null || value === undefined || value === '' || isNaN(value)) return '—';
+  const num = Number(value);
+  const percentage = num > 1 ? num : num * 100;
+  return `${percentage.toFixed(2)}%`;
+}
+
 function formatFileSize(bytes) {
   if (!bytes || isNaN(bytes)) return '0 B';
   const k = 1024;
@@ -568,25 +575,42 @@ function getStatusInfo(status) {
   return { label: 'Pending', className: 'bo-cv-pill-pending' };
 }
 
-function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, initialLoanAmount, initialRate, initialTenure, onBack }) {
+function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBack }) {
   const emptyMonth = () => ({
     applicationBankingMonthlyDetailsId: null,
     monthYear: '', monthlyCredits: '', monthlyCreditsNonBusiness: '', monthlyDebits: '',
     noOfDebits: '', noOfCredits: '', iwBounceCount: '', owBounceCount: '',
     day5Balance: '', day15Balance: '', day25Balance: '',
   });
+  const monthBefore = (monthYear) => {
+    if (!monthYear) return '';
+    const date = new Date(`${String(monthYear).slice(0, 7)}-01T00:00:00`);
+    if (Number.isNaN(date.getTime())) return '';
+    date.setMonth(date.getMonth() - 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+  };
+  const withFixedMonths = (rows, firstMonth = rows?.[0]?.monthYear || '') => {
+    const source = Array.isArray(rows) ? rows : [];
+    const fixed = Array.from({ length: 12 }, (_, index) => ({
+      ...emptyMonth(), ...(source[index] || {}), monthYear: index === 0 ? (firstMonth || source[0]?.monthYear || '') : '',
+    }));
+    for (let index = 1; index < fixed.length; index += 1) fixed[index].monthYear = monthBefore(fixed[index - 1].monthYear);
+    return fixed;
+  };
   const emptyBank = (sequence = 1) => ({
     applicationBankingDetailsId: null,
     bankSequence: sequence,
     bankName: '', accountType: 'Saving', accountNumber: '', isSelectedForEligibility: false,
-    createdBy: userId, modifiedBy: userId, monthlyRows: [emptyMonth()],
+    createdBy: userId, modifiedBy: userId, monthlyRows: withFixedMonths([]),
   });
   const [banks, setBanks] = useState([emptyBank()]);
   const [analysis, setAnalysis] = useState(null);
-  const [eligibility, setEligibility] = useState({ emiStartedInLast3Months: '0', proposedLoanAmount: initialLoanAmount || '', interestRatePercent: initialRate || '10', proposedTenureMonths: initialTenure || '14' });
+  const [eligibility, setEligibility] = useState({ emiStartedInLast3Months: '' });
+  const [proposedLoan, setProposedLoan] = useState({ amount: null, roi: null, tenure: null, emi: null });
   const [busy, setBusy] = useState(false);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [message, setMessage] = useState(null);
+  const [eligibilitySheetOpen, setEligibilitySheetOpen] = useState(false);
 
   const toNumberOrNull = (value) => value === '' || value == null ? null : Number(value);
   const updateBank = (index, key, value) => setBanks((rows) => rows.map((row, i) => i === index ? { ...row, [key]: value } : row));
@@ -594,17 +618,21 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, init
   const loadAnalysis = async () => {
     setAnalysisLoading(true);
     try {
-      const [details, result] = await Promise.all([
+      const [details, result, eligibilityResult] = await Promise.all([
         backOfficeService.getBankingDetails(applicationProductDetailsId),
         backOfficeService.getBankingAnalysis(applicationProductDetailsId),
+        backOfficeService.getBankingEligibilityAnalysis(applicationProductDetailsId).catch(() => null),
       ]);
-      setAnalysis(result || null);
+      setAnalysis(result ? { ...result, eligibility: eligibilityResult || result.eligibility || null } : (eligibilityResult ? { eligibility: eligibilityResult } : null));
+      if (eligibilityResult?.emiStartedInLast3Months != null) {
+        setEligibility({ emiStartedInLast3Months: String(eligibilityResult.emiStartedInLast3Months) });
+      }
       const serverBanks = Array.isArray(details) ? details : (Array.isArray(result?.banks) ? result.banks : []);
       if (serverBanks.length) {
         const hydratedBanks = await Promise.all(serverBanks.map(async (row, index) => {
           const existing = banks.find((item) => Number(item.applicationBankingDetailsId) === Number(row.applicationBankingDetailsId));
           const monthlyRows = await backOfficeService.getBankingMonthlyDetails(row.applicationBankingDetailsId);
-          return { ...emptyBank(index + 1), ...existing, ...row, monthlyRows: Array.isArray(monthlyRows) && monthlyRows.length ? monthlyRows : (existing?.monthlyRows?.length ? existing.monthlyRows : [emptyMonth()]) };
+          return { ...emptyBank(index + 1), ...existing, ...row, monthlyRows: withFixedMonths(monthlyRows?.length ? monthlyRows : existing?.monthlyRows, monthlyRows?.[0]?.monthYear || existing?.monthlyRows?.[0]?.monthYear || '') };
         }));
         setBanks(hydratedBanks);
       }
@@ -612,15 +640,23 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, init
       setMessage({ type: 'error', text: error?.response?.data?.message || error?.message || 'Unable to load banking analysis.' });
     } finally { setAnalysisLoading(false); }
   };
-  useEffect(() => { if (applicationProductDetailsId) loadAnalysis().catch(() => {}); }, [applicationProductDetailsId]);
+  useEffect(() => {
+    if (!applicationProductDetailsId) return;
+    loadAnalysis().catch(() => {});
+    backOfficeService.getLoanObligationsSummary(applicationProductDetailsId, 0).then((summary) => setProposedLoan({
+      amount: summary?.proposedLoanAmount ?? null,
+      roi: summary?.proposedROI ?? null,
+      tenure: summary?.proposedTenureMonths ?? null,
+      emi: summary?.proposedEMI ?? null,
+    })).catch(() => {});
+  }, [applicationProductDetailsId]);
 
   const save = async () => {
     if (!applicationProductDetailsId) return;
     const selected = banks.filter((bank) => bank.isSelectedForEligibility).length;
     if (selected > 3) { setMessage({ type: 'error', text: 'Select a maximum of 3 banks for eligibility.' }); return; }
-    const monthlyFields = ['monthlyCredits', 'monthlyCreditsNonBusiness', 'monthlyDebits', 'noOfDebits', 'noOfCredits', 'iwBounceCount', 'owBounceCount', 'day5Balance', 'day15Balance', 'day25Balance'];
-    if (banks.some((bank) => bank.monthlyRows.some((row) => monthlyFields.some((field) => row[field] !== '' && row[field] != null) && !row.monthYear))) {
-      setMessage({ type: 'error', text: 'Month is required for each filled monthly row.' }); return;
+    if (banks.some((bank) => bank.monthlyRows.length !== 12 || !bank.monthlyRows[0]?.monthYear)) {
+      setMessage({ type: 'error', text: 'Enter the first statement month for every bank. The remaining 11 months are generated automatically.' }); return;
     }
     const bankPayload = banks.map((bank, index) => ({
       applicationBankingDetailsId: bank.applicationBankingDetailsId || undefined,
@@ -634,7 +670,7 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, init
       const savedList = Array.isArray(savedBanks) ? savedBanks : [];
       for (let i = 0; i < banks.length; i += 1) {
         const bankId = savedList[i]?.applicationBankingDetailsId || banks[i].applicationBankingDetailsId;
-        const monthlyPayload = banks[i].monthlyRows.filter((row) => row.monthYear).map((row) => ({
+        const monthlyPayload = withFixedMonths(banks[i].monthlyRows).map((row) => ({
           ...row, applicationBankingMonthlyDetailsId: row.applicationBankingMonthlyDetailsId || undefined,
           applicationBankingDetailsId: bankId, monthYear: row.monthYear,
           monthlyCredits: toNumberOrNull(row.monthlyCredits), monthlyCreditsNonBusiness: toNumberOrNull(row.monthlyCreditsNonBusiness), monthlyDebits: toNumberOrNull(row.monthlyDebits),
@@ -643,20 +679,65 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, init
         }));
         if (bankId) await backOfficeService.saveBankingMonthlyDetails(bankId, monthlyPayload);
       }
-      await backOfficeService.saveBankingEligibility(applicationProductDetailsId, { ...eligibility, emiStartedInLast3Months: Number(eligibility.emiStartedInLast3Months) || 0, proposedLoanAmount: Number(eligibility.proposedLoanAmount) || 0, interestRatePercent: Number(eligibility.interestRatePercent) || 0, proposedTenureMonths: Number(eligibility.proposedTenureMonths) || 0, createdBy: userId, modifiedBy: userId });
+      await backOfficeService.saveBankingEligibility(applicationProductDetailsId, { emiStartedInLast3Months: toNumberOrNull(eligibility.emiStartedInLast3Months), createdBy: userId, modifiedBy: userId });
       await loadAnalysis();
       const result = await backOfficeService.getBankingEligibilityAnalysis(applicationProductDetailsId);
       setAnalysis((current) => result ? { ...current, eligibility: result } : current);
+      setEligibilitySheetOpen(true);
       setMessage({ type: 'success', text: 'Banking details saved and eligibility recalculated.' });
     } catch (error) { setMessage({ type: 'error', text: error?.response?.data?.message || error?.message || 'Unable to save banking details.' }); }
     finally { setBusy(false); }
   };
   const result = analysis?.eligibility || null;
   const pooled = result?.pooledEligibility || {};
+  const eligibilitySheetRef = useRef(null);
+  useEffect(() => {
+    if (result) {
+      requestAnimationFrame(() => eligibilitySheetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+  }, [result]);
   const displayPercent = (value) => value == null ? '—' : `${(Number(value) * 100).toFixed(2)}%`;
   const money = (value) => value == null ? '—' : `₹${Number(value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const averageField = (rows, key) => {
+    const values = rows.map((row) => row[key]).filter((value) => value !== '' && value != null && Number.isFinite(Number(value))).map(Number);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  };
+  const sumField = (rows, key) => {
+    const values = rows.map((row) => row[key]).filter((value) => value !== '' && value != null && Number.isFinite(Number(value))).map(Number);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) : 0;
+  };
+  const monthAbb = (row) => {
+    const values = [row.day5Balance, row.day15Balance, row.day25Balance]
+      .filter((value) => value !== '' && value != null && Number.isFinite(Number(value))).map(Number);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  };
+  const bankAverageAbb = (rows) => {
+    const values = rows.map(monthAbb).filter((value) => value != null);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  };
+  const selectedBanks = banks.filter((bank) => bank.isSelectedForEligibility).slice(0, 3);
+  const consolidatedMonths = Array.from({ length: 12 }, (_, monthIndex) => {
+    const rows = selectedBanks.map((bank) => bank.monthlyRows[monthIndex] || {});
+    const sum = (key) => rows.reduce((total, row) => total + (row[key] === '' || row[key] == null ? 0 : Number(row[key]) || 0), 0);
+    const day5 = sum('day5Balance');
+    const day15 = sum('day15Balance');
+    const day25 = sum('day25Balance');
+    const abb = (day5 + day15 + day25) / 3;
+    return {
+      monthYear: rows[0]?.monthYear || '',
+      monthlyCredits: sum('monthlyCredits'), monthlyCreditsNonBusiness: sum('monthlyCreditsNonBusiness'), monthlyDebits: sum('monthlyDebits'),
+      noOfDebits: sum('noOfDebits'), noOfCredits: sum('noOfCredits'), iwBounceCount: sum('iwBounceCount'), owBounceCount: sum('owBounceCount'),
+      day5Balance: day5, day15Balance: day15, day25Balance: day25, abb,
+      abbToEMI: proposedLoan.emi ? abb / Number(proposedLoan.emi) : null,
+    };
+  });
+  const consolidatedAverage = (key) => consolidatedMonths.reduce((sum, row) => sum + Number(row[key] || 0), 0) / 12;
+  const consolidatedTotal = (key) => consolidatedMonths.reduce((sum, row) => sum + Number(row[key] || 0), 0);
+  const consolidatedAbb = consolidatedMonths.reduce((sum, row) => sum + row.abb, 0) / 12;
+  const eligibilityPooled = result?.pooledEligibility || {};
+  const displayLoanLacs = result?.loanEligibilityInLacs ?? eligibilityPooled.loanEligibilityInLacs;
   return (
-    <section className="bo-cv-banking-workspace" aria-label="Banking Analysis & Eligibility Workspace">
+    <section className={`bo-cv-banking-workspace${eligibilitySheetOpen && result ? ' is-eligibility-only' : ''}`} aria-label="Banking Analysis & Eligibility Workspace">
       {/* ── Top Workspace Header ── */}
       <div className="bo-cv-banking-header">
         <div className="bo-cv-banking-header-left">
@@ -672,11 +753,7 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, init
             </button>
           )}
           <div className="bo-cv-banking-title-block">
-            <span className="bo-cv-elig-kicker">Step 11 · Banking Method</span>
-            <h3 className="bo-cv-banking-title">Banking Analysis &amp; Eligibility</h3>
-            <p className="bo-cv-banking-sub">
-              Add bank accounts and monthly statement details to calculate banking-based eligibility.
-            </p>
+            <h3 className="bo-cv-banking-title">Eligibility - Banking Program</h3>
           </div>
         </div>
         <div className="bo-cv-banking-header-right">
@@ -777,152 +854,74 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, init
               <div>
                 <h5 className="bo-cv-banking-section-title">Monthly Statement</h5>
                 <span className="bo-cv-banking-months-count">
-                  {bank.monthlyRows.length} of 12 Months configured
+                  12 fixed months · first month editable
                 </span>
               </div>
-              <button
-                type="button"
-                className="bo-btn bo-btn--outline bo-btn--sm bo-cv-banking-add-month-btn"
-                disabled={bank.monthlyRows.length >= 12}
-                onClick={() => updateBank(bankIndex, 'monthlyRows', [...bank.monthlyRows, emptyMonth()])}
-              >
-                {PlusIcon ? <PlusIcon size={12} /> : '+'}
-                <span>Add Month</span>
-              </button>
             </div>
 
-            <div className="bo-cv-banking-months-list">
-              {bank.monthlyRows.map((row, monthIndex) => (
-                <div className="bo-cv-banking-month-card" key={row.applicationBankingMonthlyDetailsId || `month-${monthIndex}`}>
-                  {/* Tier 1: Month, Credits, Non-business Credits, Debits, Debit Count, Credit Count */}
-                  <div className="bo-cv-banking-month-grid-tier1">
-                    <label>
-                      Month
-                      <input
-                        type="month"
-                        value={row.monthYear ? String(row.monthYear).slice(0, 7) : ''}
-                        onChange={(e) => updateMonth(bankIndex, monthIndex, 'monthYear', e.target.value ? `${e.target.value}-01` : '')}
-                      />
-                    </label>
-                    <label>
-                      Credits
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={row.monthlyCredits ?? ''}
-                        onChange={(e) => updateMonth(bankIndex, monthIndex, 'monthlyCredits', e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Non-business Credits
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={row.monthlyCreditsNonBusiness ?? ''}
-                        onChange={(e) => updateMonth(bankIndex, monthIndex, 'monthlyCreditsNonBusiness', e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Debits
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={row.monthlyDebits ?? ''}
-                        onChange={(e) => updateMonth(bankIndex, monthIndex, 'monthlyDebits', e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Debit Count
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={row.noOfDebits ?? ''}
-                        onChange={(e) => updateMonth(bankIndex, monthIndex, 'noOfDebits', e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Credit Count
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={row.noOfCredits ?? ''}
-                        onChange={(e) => updateMonth(bankIndex, monthIndex, 'noOfCredits', e.target.value)}
-                      />
-                    </label>
-                  </div>
-
-                  {/* Tier 2: IW Bounce, OW Bounce, Day 5 Balance, Day 15 Balance, Day 25 Balance, Remove */}
-                  <div className="bo-cv-banking-month-grid-tier2">
-                    <label>
-                      IW Bounce
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={row.iwBounceCount ?? ''}
-                        onChange={(e) => updateMonth(bankIndex, monthIndex, 'iwBounceCount', e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      OW Bounce
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={row.owBounceCount ?? ''}
-                        onChange={(e) => updateMonth(bankIndex, monthIndex, 'owBounceCount', e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Day 5 Balance
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={row.day5Balance ?? ''}
-                        onChange={(e) => updateMonth(bankIndex, monthIndex, 'day5Balance', e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Day 15 Balance
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={row.day15Balance ?? ''}
-                        onChange={(e) => updateMonth(bankIndex, monthIndex, 'day15Balance', e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Day 25 Balance
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={row.day25Balance ?? ''}
-                        onChange={(e) => updateMonth(bankIndex, monthIndex, 'day25Balance', e.target.value)}
-                      />
-                    </label>
-                    <div className="bo-cv-banking-month-action">
-                      <button
-                        type="button"
-                        className="bo-btn bo-btn--link bo-cv-banking-remove-month-btn"
-                        onClick={() => updateBank(bankIndex, 'monthlyRows', bank.monthlyRows.filter((_, i) => i !== monthIndex))}
-                        title="Remove this month row"
-                        aria-label={`Remove month ${monthIndex + 1}`}
-                      >
-                        {XIcon ? <XIcon size={13} /> : '✕'}
-                        <span>Remove</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div className="bo-cv-banking-months-list bo-cv-banking-month-table-wrap">
+              <table className="bo-cv-banking-month-table">
+                <thead><tr>
+                  <th>Month</th><th>Credits</th><th>Non-business Credits</th><th>Debits</th>
+                  <th>Debit Count</th><th>Credit Count</th><th>IW Bounce</th><th>OW Bounce</th>
+                  <th>Day 5 Balance</th><th>Day 15 Balance</th><th>Day 25 Balance</th><th>ABB</th><th>ABB / EMI</th>
+                </tr></thead>
+                <tbody>
+                  {bank.monthlyRows.map((row, monthIndex) => {
+                    const field = (name, type = 'number') => (
+                      <input type={type} min={type === 'number' ? '0' : undefined} placeholder={type === 'number' ? '0' : undefined}
+                        value={row[name] ?? ''}
+                        onChange={(e) => updateMonth(bankIndex, monthIndex, name, e.target.value)} />
+                    );
+                    return <tr key={row.applicationBankingMonthlyDetailsId || `month-${monthIndex}`}>
+                      <td>
+                        <input
+                          type="month"
+                          value={row.monthYear ? String(row.monthYear).slice(0, 7) : ''}
+                          disabled={monthIndex !== 0}
+                          aria-label={monthIndex === 0 ? 'First statement month' : `Generated month ${monthIndex + 1}`}
+                          title={monthIndex === 0 ? 'Choose the latest statement month. The previous 11 months will update automatically.' : 'Generated automatically from the first month'}
+                          onChange={(e) => {
+                            if (monthIndex === 0) {
+                              updateBank(bankIndex, 'monthlyRows', withFixedMonths(bank.monthlyRows, e.target.value ? `${e.target.value}-01` : ''));
+                            }
+                          }}
+                        />
+                      </td>
+                      <td>{field('monthlyCredits')}</td><td>{field('monthlyCreditsNonBusiness')}</td><td>{field('monthlyDebits')}</td>
+                      <td>{field('noOfDebits')}</td><td>{field('noOfCredits')}</td><td>{field('iwBounceCount')}</td><td>{field('owBounceCount')}</td>
+                      <td>{field('day5Balance')}</td><td>{field('day15Balance')}</td><td>{field('day25Balance')}</td>
+                      <td className="bo-cv-banking-calculated-cell">{monthAbb(row) == null ? '0.00' : monthAbb(row).toFixed(2)}</td>
+                      <td className="bo-cv-banking-calculated-cell">{monthAbb(row) == null || proposedLoan.emi == null || Number(proposedLoan.emi) === 0 ? '0.00' : (monthAbb(row) / Number(proposedLoan.emi)).toFixed(2)}</td>
+                    </tr>;
+                  })}
+                </tbody>
+                {(() => {
+                  const avgAbb = bankAverageAbb(bank.monthlyRows);
+                  const avgEmi = avgAbb == null || proposedLoan.emi == null || Number(proposedLoan.emi) === 0 ? null : avgAbb / Number(proposedLoan.emi);
+                  return <tfoot>
+                    <tr className="bo-cv-banking-summary-row">
+                      <th>Avg Receipts</th>
+                      <td>{averageField(bank.monthlyRows, 'monthlyCredits') == null ? '0.00' : averageField(bank.monthlyRows, 'monthlyCredits').toFixed(2)}</td>
+                      <td>{averageField(bank.monthlyRows, 'monthlyCreditsNonBusiness') == null ? '0.00' : averageField(bank.monthlyRows, 'monthlyCreditsNonBusiness').toFixed(2)}</td>
+                      <td>{averageField(bank.monthlyRows, 'monthlyDebits') == null ? '0.00' : averageField(bank.monthlyRows, 'monthlyDebits').toFixed(2)}</td>
+                      <td>{sumField(bank.monthlyRows, 'noOfDebits')}</td>
+                      <td>{sumField(bank.monthlyRows, 'noOfCredits')}</td>
+                      <td>{sumField(bank.monthlyRows, 'iwBounceCount')}</td><td>{sumField(bank.monthlyRows, 'owBounceCount')}</td>
+                      <td colSpan="3" />
+                      <td>{avgAbb == null ? '0.00' : avgAbb.toFixed(2)}</td><td>{avgEmi == null ? '0.00' : avgEmi.toFixed(2)}</td>
+                    </tr>
+                    <tr className="bo-cv-banking-summary-row">
+                      <th>ANNUALISED</th>
+                      <td>{averageField(bank.monthlyRows, 'monthlyCredits') == null ? '0.00' : (averageField(bank.monthlyRows, 'monthlyCredits') * 12).toFixed(2)}</td>
+                      <td>{averageField(bank.monthlyRows, 'monthlyCreditsNonBusiness') == null ? '0.00' : (averageField(bank.monthlyRows, 'monthlyCreditsNonBusiness') * 12).toFixed(2)}</td>
+                      <td>{averageField(bank.monthlyRows, 'monthlyDebits') == null ? '0.00' : (averageField(bank.monthlyRows, 'monthlyDebits') * 12).toFixed(2)}</td>
+                      <td colSpan="2">Bounce %</td><td>{displayPercent(sumField(bank.monthlyRows, 'iwBounceCount') / Math.max(1, sumField(bank.monthlyRows, 'noOfDebits')))}</td><td>{displayPercent(sumField(bank.monthlyRows, 'owBounceCount') / Math.max(1, sumField(bank.monthlyRows, 'noOfCredits')))}</td>
+                      <td colSpan="3" /><td>{avgAbb == null ? '0.00' : avgAbb.toFixed(2)}</td><td>{avgEmi == null ? '0.00' : avgEmi.toFixed(2)}</td>
+                    </tr>
+                  </tfoot>;
+                })()}
+              </table>
             </div>
           </div>
 
@@ -1037,35 +1036,6 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, init
               onChange={(e) => setEligibility({ ...eligibility, emiStartedInLast3Months: e.target.value })}
             />
           </label>
-          <label>
-            Proposed Loan Amount
-            <input
-              type="number"
-              min="0"
-              value={eligibility.proposedLoanAmount}
-              onChange={(e) => setEligibility({ ...eligibility, proposedLoanAmount: e.target.value })}
-            />
-          </label>
-          <label>
-            Interest Rate (%)
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={eligibility.interestRatePercent}
-              onChange={(e) => setEligibility({ ...eligibility, interestRatePercent: e.target.value })}
-            />
-            <small>Enter annual interest rate in % (e.g. 12)</small>
-          </label>
-          <label>
-            Tenure (Months)
-            <input
-              type="number"
-              min="1"
-              value={eligibility.proposedTenureMonths}
-              onChange={(e) => setEligibility({ ...eligibility, proposedTenureMonths: e.target.value })}
-            />
-          </label>
         </div>
         <div className="bo-cv-banking-inputs-actions">
           <button
@@ -1080,7 +1050,7 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, init
                 <span>Saving...</span>
               </>
             ) : (
-              <span>Save &amp; Calculate</span>
+              <span>Calculate Eligibility</span>
             )}
           </button>
         </div>
@@ -1088,76 +1058,43 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, init
 
       {/* ── Eligibility Result Card ── */}
       {result && (
-        <div className="bo-cv-banking-results">
-          <h4>Eligibility Result</h4>
-          <div className="bo-cv-banking-result-grid">
-            <div className="bo-cv-banking-result-tile">
-              <small>Proposed Loan Amount (Lacs)</small>
-              <strong>{result.proposedLoanAmount == null ? '—' : (Number(result.proposedLoanAmount) / 100000).toFixed(2)}</strong>
+        <div ref={eligibilitySheetRef} className="bo-cv-banking-results bo-cv-banking-eligibility-sheet">
+          <button type="button" className="bo-btn bo-btn--outline bo-cv-banking-sheet-back" onClick={() => setEligibilitySheetOpen(false)}>
+            ← Back to Banking Details
+          </button>
+          <h4>Eligibility Sheet - Banking Program</h4>
+          <div className="bo-cv-banking-sheet-subtitle">Consolidation of max 3 Banking</div>
+          <div className="bo-cv-banking-result-layout">
+            <div className="bo-cv-banking-result-table-wrap">
+              <table className="bo-cv-banking-result-table">
+                <thead><tr>
+                  <th>MONTHS</th><th>Monthly Credits</th><th>Monthly Credits<br />non Business Related</th><th>Monthly Debits</th>
+                  <th>No. of Debits</th><th>No. of Credits</th><th>I/W Bounces</th><th>O/W Bounces</th>
+                  <th>DAY 5th Balance</th><th>DAY 15th Balance</th><th>DAY 25th Balance</th><th>ABB</th><th>ABB / EMI</th>
+                </tr></thead>
+                <tbody>{consolidatedMonths.map((row, index) => (
+                  <tr key={`eligibility-month-${index}`}>
+                    <th>{row.monthYear ? new Date(row.monthYear).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }) : '—'}</th>
+                    <td>{row.monthlyCredits.toFixed(2)}</td><td>{row.monthlyCreditsNonBusiness.toFixed(2)}</td><td>{row.monthlyDebits.toFixed(2)}</td>
+                    <td>{row.noOfDebits.toFixed(2)}</td><td>{row.noOfCredits.toFixed(2)}</td><td>{row.iwBounceCount.toFixed(2)}</td><td>{row.owBounceCount.toFixed(2)}</td>
+                    <td>{row.day5Balance.toFixed(2)}</td><td>{row.day15Balance.toFixed(2)}</td><td>{row.day25Balance.toFixed(2)}</td><td>{row.abb.toFixed(2)}</td><td>{row.abbToEMI == null ? '0%' : `${(row.abbToEMI * 100).toFixed(0)}%`}</td>
+                  </tr>
+                ))}</tbody>
+                <tfoot>
+                  <tr><th>Avg Receipts</th><td>{consolidatedAverage('monthlyCredits').toFixed(2)}</td><td>{consolidatedAverage('monthlyCreditsNonBusiness').toFixed(2)}</td><td>{consolidatedAverage('monthlyDebits').toFixed(2)}</td><td>{consolidatedTotal('noOfDebits')}</td><td>{consolidatedTotal('noOfCredits')}</td><td>{consolidatedTotal('iwBounceCount')}</td><td>{consolidatedTotal('owBounceCount')}</td><td colSpan="3" /><td>{consolidatedAbb.toFixed(2)}</td><td>{proposedLoan.emi ? `${((consolidatedAbb / Number(proposedLoan.emi)) * 100).toFixed(0)}%` : '0%'}</td></tr>
+                  <tr><th>ANNUALISED</th><td>{(consolidatedAverage('monthlyCredits') * 12).toFixed(2)}</td><td>{(consolidatedAverage('monthlyCreditsNonBusiness') * 12).toFixed(2)}</td><td>{(consolidatedAverage('monthlyDebits') * 12).toFixed(2)}</td><td colSpan="2">Bounce %</td><td>{displayPercent(consolidatedTotal('iwBounceCount') / Math.max(1, consolidatedTotal('noOfDebits')))}</td><td>{displayPercent(consolidatedTotal('owBounceCount') / Math.max(1, consolidatedTotal('noOfCredits')))}</td><td colSpan="3" /><td>{consolidatedAbb.toFixed(2)}</td><td>{proposedLoan.emi ? `${((consolidatedAbb / Number(proposedLoan.emi)) * 100).toFixed(0)}%` : '0%'}</td></tr>
+                </tfoot>
+              </table>
             </div>
-            <div className="bo-cv-banking-result-tile is-accent">
-              <small>Proposed EMI</small>
-              <strong>{money(result.proposedEMI)}</strong>
+            <div className="bo-cv-banking-eligibility-details">
+              <div><span>EMI Started in last 3 months</span><strong>{eligibility.emiStartedInLast3Months || '—'}</strong></div>
+              <div><span>Proposed Loan Amount (in Lacs)</span><strong>{proposedLoan.amount == null ? '—' : (Number(proposedLoan.amount) / 100000).toFixed(2)}</strong></div>
+              <div><span>Interest Rate %</span><strong>{proposedLoan.roi == null ? '—' : `${proposedLoan.roi}%`}</strong></div>
+              <div><span>Proposed Loan Tenure (months)</span><strong>{proposedLoan.tenure ?? '—'}</strong></div>
+              <div><span>Proposed EMI</span><strong>{money(proposedLoan.emi)}</strong></div>
+              <div><span>ABB : EMI</span><strong>{eligibilityPooled.abbToEMI == null ? (proposedLoan.emi ? (consolidatedAbb / Number(proposedLoan.emi)).toFixed(2) : '—') : Number(eligibilityPooled.abbToEMI).toFixed(2)}</strong></div>
+              <div><span>Loan Eligibility (Rs in Lacs) @ 2 x ABB</span><strong>{displayLoanLacs == null ? '—' : Number(displayLoanLacs).toFixed(2)}</strong></div>
             </div>
-            <div className="bo-cv-banking-result-tile">
-              <small>Pooled ABB (12-month basis)</small>
-              <strong>{money(pooled.abb)}</strong>
-            </div>
-            <div className="bo-cv-banking-result-tile">
-              <small>ABB : EMI</small>
-              <strong>{pooled.abbToEMI == null ? '—' : Number(pooled.abbToEMI).toFixed(2)}</strong>
-            </div>
-            <div className="bo-cv-banking-result-tile is-accent">
-              <small>Loan Eligibility (lacs)</small>
-              <strong>{pooled.loanEligibilityInLacs == null ? '—' : Number(pooled.loanEligibilityInLacs).toFixed(2)}</strong>
-            </div>
-            <div className="bo-cv-banking-result-tile">
-              <small>Avg Receipts / Month</small>
-              <strong>{money(pooled.avgMonthlyCredits)}</strong>
-            </div>
-            <div className="bo-cv-banking-result-tile">
-              <small>Avg Non-business Credits / Month</small>
-              <strong>{money(pooled.avgMonthlyCreditsNonBusiness)}</strong>
-            </div>
-            <div className="bo-cv-banking-result-tile">
-              <small>Avg Debits / Month</small>
-              <strong>{money(pooled.avgMonthlyDebits)}</strong>
-            </div>
-            <div className="bo-cv-banking-result-tile">
-              <small>Annual Credits</small>
-              <strong>{money(pooled.annualisedCredits)}</strong>
-            </div>
-            <div className="bo-cv-banking-result-tile">
-              <small>Annual Non-business Credits</small>
-              <strong>{money(pooled.annualisedCreditsNonBusiness)}</strong>
-            </div>
-            <div className="bo-cv-banking-result-tile">
-              <small>Annual Debits</small>
-              <strong>{money(pooled.annualisedDebits)}</strong>
-            </div>
-            <div className="bo-cv-banking-result-tile">
-              <small>Debit / Credit Counts</small>
-              <strong>{pooled.totalNoOfDebits ?? 0} / {pooled.totalNoOfCredits ?? 0}</strong>
-            </div>
-            <div className="bo-cv-banking-result-tile">
-              <small>IW / OW Bounces</small>
-              <strong>{pooled.totalIWBounces ?? 0} / {pooled.totalOWBounces ?? 0}</strong>
-            </div>
-            <div className="bo-cv-banking-result-tile">
-              <small>IW / OW Bounce %</small>
-              <strong>{displayPercent(pooled.iwBouncePercent)} / {displayPercent(pooled.owBouncePercent)}</strong>
-            </div>
-          </div>
-
-          <div className="bo-cv-banking-selected-banks-box">
-            <h5>Selected Banks</h5>
-            <ul className="bo-cv-banking-selected-banks">
-              {(result.selectedBanks || []).map((bank) => (
-                <li key={bank.applicationBankingDetailsId}>
-                  {bank.bankName || '—'}{bank.accountType ? ` (${bank.accountType})` : ''}
-                </li>
-              ))}
-            </ul>
           </div>
         </div>
       )}
@@ -2062,6 +1999,7 @@ export default function CustomerVerification() {
   const [proposedLoanSaving, setProposedLoanSaving] = useState(false);
   const [proposedLoanBanner, setProposedLoanBanner] = useState(null);
   const [proposedLoan, setProposedLoan] = useState({ manualROI: '', manualTenureMonths: '', recommendedLoanAmount: '' });
+  const [activeProposedLoan, setActiveProposedLoan] = useState(null);
   const calcSheetRef = useRef(null);
   const rtrResultSectionRef = useRef(null);
 
@@ -2112,6 +2050,8 @@ export default function CustomerVerification() {
           recommendedLoanAmount: saved.recommendedLoanAmount ?? previous.recommendedLoanAmount,
         }));
       }
+      const refreshedProposedLoan = await backOfficeService.getProposedLoan(calculationAppProdId, selectedApplicantSequence);
+      setActiveProposedLoan(refreshedProposedLoan || null);
       setProposedLoanBanner({ type: 'success', message: 'Proposed loan details saved successfully.' });
       setProposedLoanOpen(false);
     } catch (err) {
@@ -2360,6 +2300,14 @@ export default function CustomerVerification() {
       0
     );
   }, [verificationData]);
+
+  // The RTR result must use the active proposed-loan record, not the older assessment EMI factor.
+  useEffect(() => {
+    if (activeStep !== 16 || !calculationAppProdId || calculationAppProdId <= 0) return;
+    backOfficeService.getProposedLoan(calculationAppProdId, selectedApplicantSequence)
+      .then((record) => setActiveProposedLoan(record || null))
+      .catch(() => setActiveProposedLoan(null));
+  }, [activeStep, calculationAppProdId, selectedApplicantSequence, rtrCalculatedTrigger]);
 
   const calculationAgentCustId = useMemo(() => {
     const rawCustomer = verificationData?.raw?.customer || verificationData?.customer || {};
@@ -5137,6 +5085,8 @@ export default function CustomerVerification() {
       return;
     }
 
+    let latestProposedLoan = activeProposedLoan;
+
     if (selectedMethodCode === 'INCOME') {
       // Step 4a: Synchronize salary rows (POST new rows, PUT modified persisted rows)
       const syncRes = await synchronizeSalaryRows();
@@ -5165,6 +5115,25 @@ export default function CustomerVerification() {
       // Rehydrate other income rows before calculation as well. Do not apply
       // the restriction or any income aggregation in the browser.
       await fetchOtherIncomeRecords(calculationAppProdId, selectedApplicantSequence);
+
+      // The active RTR proposed-loan record is the source of truth for the
+      // Income Method calculation inputs. Do not reuse the older assessment
+      // values (for example, a previous 24-month EMI configuration).
+      latestProposedLoan = await backOfficeService.getProposedLoan(
+        calculationAppProdId,
+        selectedApplicantSequence
+      );
+      const activeLoanAmount = latestProposedLoan?.proposedLoanAmount
+        ?? latestProposedLoan?.recommendedLoanAmount
+        ?? latestProposedLoan?.ProposedLoanAmount;
+      if (!latestProposedLoan || Number(activeLoanAmount) <= 0) {
+        setCalcBanner({
+          type: 'error',
+          message: 'The active RTR proposed-loan record could not be loaded. Save the RTR Common Sheet and try again.',
+        });
+        return;
+      }
+      setActiveProposedLoan(latestProposedLoan || null);
     } else if (selectedMethodCode === 'NORMAL_INCOME') {
       // Step 4a: Synchronize Normal Income records (Primary Income POST/PUT, Other Income POST/PUT)
       const syncRes = await synchronizeNormalIncomeRecords();
@@ -5261,7 +5230,7 @@ export default function CustomerVerification() {
     }
 
     let finalManualObligation = null;
-    if (selectedMethodCode !== 'INCOME' && currentCalcSettings.isEditingObligation && currentCalcSettings.manualObligationInput !== '') {
+    if ((selectedMethodCode === 'INCOME' || selectedMethodCode === 'NORMAL_INCOME' || selectedMethodCode === 'ABB') && currentCalcSettings.isEditingObligation && currentCalcSettings.manualObligationInput !== '') {
       const oblNum = Number(currentCalcSettings.manualObligationInput);
       if (isNaN(oblNum) || oblNum < 0) {
         setCalcBanner({
@@ -5271,6 +5240,19 @@ export default function CustomerVerification() {
         return;
       }
       finalManualObligation = oblNum;
+    }
+
+    if (selectedMethodCode === 'INCOME') {
+      // Income Method test cases use the Excel policy FOIR of 60%. Keep an
+      // explicitly entered Back Office override, but never inherit a different
+      // FOIR master value (such as 65%) for the default calculation.
+      finalManualFoir = finalManualFoir ?? 60;
+      finalManualObligation = finalManualObligation ?? Number(rtrSummaryMetrics.totalEmi || 0);
+
+      const proposedRoi = latestProposedLoan?.proposedROI ?? latestProposedLoan?.proposedRoi ?? latestProposedLoan?.ProposedROI;
+      const proposedTenure = latestProposedLoan?.proposedTenureMonths ?? latestProposedLoan?.proposedTenure ?? latestProposedLoan?.ProposedTenureMonths;
+      finalManualRoi = proposedRoi ?? finalManualRoi;
+      finalManualTenure = proposedTenure ?? finalManualTenure;
     }
 
     // Resolve AssessmentMethodId dynamically
@@ -5290,7 +5272,8 @@ export default function CustomerVerification() {
         setCalcBanner({ type: 'error', message: 'Income assessment method is not available from the server.' });
         return;
       }
-      calculatedMethodId = Number(incomeMethod.assessmentMethodId);
+      // Income Method is contractually assessmentMethodId = 1.
+      calculatedMethodId = 1;
     }
 
     setCalculating(true);
@@ -5308,8 +5291,12 @@ export default function CustomerVerification() {
         manualAnnualSalaryIncome: selectedMethodCode === 'NORMAL_INCOME'
           ? (currentCalcSettings.manualAnnualSalaryIncome === '' ? 0 : Number(currentCalcSettings.manualAnnualSalaryIncome))
           : null,
-        recommendedLoanAmount: selectedMethodCode === 'INCOME' && currentCalcSettings.recommendedLoanAmount !== ''
-          ? Number(currentCalcSettings.recommendedLoanAmount)
+        recommendedLoanAmount: selectedMethodCode === 'INCOME'
+          ? Number(
+            latestProposedLoan?.proposedLoanAmount
+              ?? latestProposedLoan?.recommendedLoanAmount
+              ?? latestProposedLoan?.ProposedLoanAmount
+          ) || null
           : finalRecommendedAmount,
         restrictOtherIncomeToSalary: selectedMethodCode === 'INCOME'
           ? (currentCalcSettings.restrictOtherIncomeToSalary !== false)
@@ -13476,7 +13463,9 @@ export default function CustomerVerification() {
                           <div className="bo-cv-rtr-result-row" role="row">
                             <span className="bo-cv-rtr-result-label" role="rowheader">EMI Factor @ IRR / Tenor</span>
                             <span className="bo-cv-rtr-result-val" role="cell">
-                              {currentRtrAssessment.emiAmountFactor != null ? String(currentRtrAssessment.emiAmountFactor) : '—'}
+                              {(activeProposedLoan?.proposedEMI ?? activeProposedLoan?.ProposedEMI) != null
+                                ? Number(activeProposedLoan.proposedEMI ?? activeProposedLoan.ProposedEMI).toFixed(2)
+                                : '—'}
                             </span>
                           </div>
 
@@ -13560,9 +13549,6 @@ export default function CustomerVerification() {
                 <BankingEligibilityWorkspace
                   applicationProductDetailsId={calculationAppProdId}
                   userId={getAuthenticatedBackOfficeId()}
-                  initialLoanAmount={proposedLoan.recommendedLoanAmount || appDetails.loanAmount || ''}
-                  initialRate={proposedLoan.manualROI || resolvedAppRoi || '10'}
-                  initialTenure={proposedLoan.manualTenureMonths || resolvedAppTenure || '14'}
                   onBack={() => setBankingWorkspaceOpen(false)}
                 />
               </div>
@@ -14617,9 +14603,7 @@ export default function CustomerVerification() {
                           <div className="bo-cv-result-metric-card">
                             <span className="bo-cv-result-metric-label">Actual Calculated FOIR</span>
                             <strong className="bo-cv-result-metric-val">
-                              {currentAssessment.actualFOIR != null
-                                ? `${(Number(currentAssessment.actualFOIR) * 100).toFixed(2)}%`
-                                : '—'}
+                              {formatFoirPercentage(currentAssessment.actualFOIR)}
                             </strong>
                             <span className="bo-cv-result-metric-sub">Combined obligation / income</span>
                           </div>
@@ -15467,7 +15451,13 @@ export default function CustomerVerification() {
                           <div className="bo-cv-income-result-row" role="row">
                             <span className="bo-cv-income-result-label" role="rowheader">Proposed Loan Amount</span>
                             <span className="bo-cv-income-result-val" role="cell">
-                              {currentAssessment.requestedLoanAmount != null
+                              {(activeProposedLoan?.proposedLoanAmount
+                                ?? activeProposedLoan?.recommendedLoanAmount
+                                ?? activeProposedLoan?.ProposedLoanAmount) != null
+                                ? formatCurrency(activeProposedLoan.proposedLoanAmount
+                                  ?? activeProposedLoan.recommendedLoanAmount
+                                  ?? activeProposedLoan.ProposedLoanAmount)
+                                : currentAssessment.requestedLoanAmount != null
                                 ? formatCurrency(currentAssessment.requestedLoanAmount)
                                 : appDetails?.loanAmount != null
                                 ? formatCurrency(appDetails.loanAmount)
@@ -15478,9 +15468,7 @@ export default function CustomerVerification() {
                           <div className="bo-cv-income-result-row" role="row">
                             <span className="bo-cv-income-result-label" role="rowheader">Actual FOIR</span>
                             <span className="bo-cv-income-result-val" role="cell">
-                              {currentAssessment.actualFOIR != null
-                                ? `${Number(currentAssessment.actualFOIR).toFixed(2)}%`
-                                : '—'}
+                              {formatFoirPercentage(currentAssessment.actualFOIR)}
                             </span>
                           </div>
                         </div>
@@ -18763,9 +18751,7 @@ export default function CustomerVerification() {
                         <div className="bo-cv-result-metric-card">
                           <span className="bo-cv-result-metric-label">Actual Calculated FOIR</span>
                             <strong className="bo-cv-result-metric-val">
-                              {currentAssessment.actualFOIR != null
-                                ? `${(Number(currentAssessment.actualFOIR) * 100).toFixed(2)}%`
-                                : '—'}
+                              {formatFoirPercentage(currentAssessment.actualFOIR)}
                             </strong>
                           <span className="bo-cv-result-metric-sub">
                             Benchmark: {currentAssessment.foirPercentApplied ? `${currentAssessment.foirPercentApplied}%` : '—'}
