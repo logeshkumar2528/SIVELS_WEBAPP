@@ -24,6 +24,13 @@ import {
 import Select from '../../components/Select/Select';
 import { masterService } from '../../../../../Core/src/services/masterService';
 import { rmCustomerService } from '../../services/rmCustomerService';
+import {
+  getCustomerDocumentTypes,
+  normalizeCustomerDocumentType,
+  normalizeEmploymentMapping,
+  resolveMappedCategories,
+  uploadAgentCustomerDocument,
+} from '../../../../../Core/src/services/customerDocumentService';
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 import { getCurrentRMContext } from '../../utils/rmContext';
 import { ROUTES } from '../../config/routeConfig';
@@ -40,6 +47,7 @@ export default function AddCustomer() {
   const [employmentTypes, setEmploymentTypes] = useState([]);
   const [loanPurposes, setLoanPurposes] = useState([]);
   const [documentTypes, setDocumentTypes] = useState([]);
+  const [customerDocumentTypes, setCustomerDocumentTypes] = useState([]);
   const [loadingMasters, setLoadingMasters] = useState(true);
   const [mastersError, setMastersError] = useState(null);
 
@@ -94,13 +102,22 @@ export default function AddCustomer() {
       };
 
       try {
-        const [typesRes, purposesRes, docTypesRes] = await Promise.all([
+        const [typesRes, purposesRes, docTypesRes, customerDocTypesRes] = await Promise.all([
           masterService.getEmploymentTypes(),
           masterService.getLoanPurposes(),
-          masterService.getDocumentTypes(),
+          masterService.getDocumentTypes().catch((err) => {
+            console.error('Failed to load legacy document types for RM Add Customer:', err);
+            return [];
+          }),
+          getCustomerDocumentTypes().catch((err) => {
+            console.error('Failed to load customer document types for RM Add Customer:', err);
+            return [];
+          }),
         ]);
 
         if (isMounted) {
+          setCustomerDocumentTypes(customerDocTypesRes.map(normalizeCustomerDocumentType));
+
           const typesArr = extractArray(typesRes);
           setEmploymentTypes(typesArr.filter((t) => t.isActive !== false));
 
@@ -163,23 +180,32 @@ export default function AddCustomer() {
         const res = await masterService.getEmploymentTypeDocumentMapping(formData.employmentTypeId);
         const allMappings = extractArray(res);
 
-        // Resolve required documents based on active mapping AND active document type
-        const resolvedMappings = allMappings.reduce((acc, mapping) => {
-          if (mapping.isActive === true) {
-            const doc = documentTypes.find(
-              (d) => Number(d.documentTypeId || d.id) === Number(mapping.documentTypeId)
-            );
+        // New-flow mappings point to CustomerDocumentTypeMaster via CustomerDocumentTypeId.
+        const customerFlowMappings = resolveMappedCategories(allMappings, customerDocumentTypes).map((category) => ({
+          ...category,
+          docKey: `c-${category.customerDocumentTypeId}`,
+        }));
 
-            if (doc && doc.isActive === true) {
-              acc.push({
-                ...mapping,
-                documentTypeName: doc.documentTypeName || doc.name || mapping.documentTypeName,
-                documentTypeCode: doc.documentTypeCode || doc.code,
-              });
-            }
-          }
+        // Older mappings that only carry DocumentTypeId still resolve against DocumentTypeMaster.
+        const seenLegacy = new Set();
+        const legacyMappings = allMappings.reduce((acc, row) => {
+          const mapping = normalizeEmploymentMapping(row);
+          if (!mapping.isActive || mapping.customerDocumentTypeId || !mapping.documentTypeId) return acc;
+          const key = String(mapping.documentTypeId);
+          if (seenLegacy.has(key)) return acc;
+          const doc = documentTypes.find((d) => String(d.documentTypeId || d.id) === key);
+          if (!doc) return acc;
+          seenLegacy.add(key);
+          acc.push({
+            ...mapping,
+            documentTypeName: doc.documentTypeName || doc.name || row.documentTypeName,
+            documentTypeCode: doc.documentTypeCode || doc.code,
+            docKey: `d-${key}`,
+          });
           return acc;
         }, []);
+
+        const resolvedMappings = [...customerFlowMappings, ...legacyMappings];
 
         if (isMounted) {
           setDocumentMappings(resolvedMappings);
@@ -199,14 +225,14 @@ export default function AddCustomer() {
       }
     };
 
-    if (documentTypes.length > 0) {
+    if (!loadingMasters) {
       loadMapping();
     }
 
     return () => {
       isMounted = false;
     };
-  }, [formData.employmentTypeId, documentTypes]);
+  }, [formData.employmentTypeId, documentTypes, customerDocumentTypes, loadingMasters]);
 
   // Manage Preview Object URLs
   useEffect(() => {
@@ -418,7 +444,7 @@ export default function AddCustomer() {
     // Mandatory Documents Validation
     for (const mapping of documentMappings) {
       if (mapping.isMandatory) {
-        const files = selectedFiles[mapping.documentTypeId];
+        const files = selectedFiles[mapping.docKey];
         if (!files || (Array.isArray(files) && files.length === 0)) {
           setGlobalBanner({
             type: 'error',
@@ -501,30 +527,38 @@ export default function AddCustomer() {
       const updatedUploadedDocTypeIds = new Set(uploadedDocTypeIds);
       const failedUploads = [];
 
-      for (const docTypeId of Object.keys(selectedFiles)) {
-        if (updatedUploadedDocTypeIds.has(docTypeId)) {
+      for (const docKey of Object.keys(selectedFiles)) {
+        if (updatedUploadedDocTypeIds.has(docKey)) {
           continue; // Already successfully uploaded
         }
 
-        const fileData = selectedFiles[docTypeId];
-        if (!fileData) continue;
+        const mapping = documentMappings.find((m) => m.docKey === docKey);
+        const fileData = selectedFiles[docKey];
+        if (!mapping || !fileData) continue;
 
         const filesList = Array.isArray(fileData) ? fileData : [fileData];
 
         for (const file of filesList) {
           if (!file) continue;
 
-          const uploadFormData = new FormData();
-          uploadFormData.append('file', file);
-          uploadFormData.append('agentCustomerId', String(targetCustomerId));
-          uploadFormData.append('documentTypeId', String(docTypeId));
-          uploadFormData.append('createdBy', String(rmId));
+          let promise;
+          if (mapping.customerDocumentTypeId) {
+            promise = uploadAgentCustomerDocument({
+              file,
+              agentCustomerId: targetCustomerId,
+              customerDocumentTypeId: mapping.customerDocumentTypeId,
+              createdBy: rmId,
+            });
+          } else {
+            const uploadFormData = new FormData();
+            uploadFormData.append('file', file);
+            uploadFormData.append('agentCustomerId', String(targetCustomerId));
+            uploadFormData.append('documentTypeId', String(mapping.documentTypeId));
+            uploadFormData.append('createdBy', String(rmId));
+            promise = rmCustomerService.uploadAgentCustomerDocument(uploadFormData);
+          }
 
-          uploadTasks.push({
-            docTypeId,
-            fileName: file.name,
-            promise: rmCustomerService.uploadAgentCustomerDocument(uploadFormData),
-          });
+          uploadTasks.push({ docTypeId: docKey, fileName: file.name, promise });
         }
       }
 
@@ -848,14 +882,14 @@ export default function AddCustomer() {
                 {documentMappings.map((mapping) => {
                   const docName = mapping.documentTypeName || 'Document';
                   const isMultiple = docName.toLowerCase().includes('other');
-                  const files = selectedFiles[mapping.documentTypeId];
+                  const files = selectedFiles[mapping.docKey];
                   const hasFile = isMultiple ? files && files.length > 0 : Boolean(files);
                   const IconComponent = getDocumentIcon(docName);
-                  const isUploaded = uploadedDocTypeIds.has(String(mapping.documentTypeId));
+                  const isUploaded = uploadedDocTypeIds.has(mapping.docKey);
 
                   return (
                     <div
-                      key={mapping.documentTypeId}
+                      key={mapping.docKey}
                       className={`document-upload-card ${hasFile ? 'has-file' : ''}`}
                     >
                       {hasFile ? (
@@ -889,7 +923,7 @@ export default function AddCustomer() {
                                   <button
                                     type="button"
                                     className="file-remove-btn"
-                                    onClick={() => handleRemoveFile(mapping.documentTypeId, index)}
+                                    onClick={() => handleRemoveFile(mapping.docKey, index)}
                                     style={{ padding: '2px 4px', background: 'transparent', border: 'none' }}
                                     disabled={submitting}
                                   >
@@ -901,12 +935,12 @@ export default function AddCustomer() {
                           </div>
                         ) : (
                           <div className="file-preview-box">
-                            {previews[mapping.documentTypeId] ? (
+                            {previews[mapping.docKey] ? (
                               <img
-                                src={previews[mapping.documentTypeId]}
+                                src={previews[mapping.docKey]}
                                 alt={`${docName} Preview`}
                                 className="thumbnail-preview-img"
-                                onClick={() => setModalImage({ src: previews[mapping.documentTypeId], title: docName })}
+                                onClick={() => setModalImage({ src: previews[mapping.docKey], title: docName })}
                               />
                             ) : (
                               <IconComponent size={18} className="document-icon-badge" />
@@ -915,11 +949,11 @@ export default function AddCustomer() {
                               <span className="file-preview-name">{files.name}</span>
                               <span className="file-preview-size">({formatFileSize(files.size)})</span>
                             </div>
-                            {previews[mapping.documentTypeId] && (
+                            {previews[mapping.docKey] && (
                               <button
                                 type="button"
                                 className="action-view"
-                                onClick={() => setModalImage({ src: previews[mapping.documentTypeId], title: docName })}
+                                onClick={() => setModalImage({ src: previews[mapping.docKey], title: docName })}
                               >
                                 <Eye size={14} />
                               </button>
@@ -963,7 +997,7 @@ export default function AddCustomer() {
                                 multiple={isMultiple}
                                 className="file-input-hidden"
                                 accept=".pdf,.jpg,.jpeg,.png"
-                                onChange={(e) => handleFileChange(e, mapping.documentTypeId, isMultiple)}
+                                onChange={(e) => handleFileChange(e, mapping.docKey, isMultiple)}
                                 disabled={submitting}
                               />
                             </label>
@@ -971,7 +1005,7 @@ export default function AddCustomer() {
                               <button
                                 type="button"
                                 className="file-remove-btn"
-                                onClick={() => handleRemoveFile(mapping.documentTypeId)}
+                                onClick={() => handleRemoveFile(mapping.docKey)}
                                 disabled={submitting}
                               >
                                 <Trash2 size={13} />
