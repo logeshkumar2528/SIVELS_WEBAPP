@@ -37,6 +37,10 @@ import {
 import { downloadDocument, openDocument, readApiError } from '../../../../../../Core/src/utils/documentFileActions';
 import './CustomerDocumentsPanel.css';
 
+function normalizeStoredPath(path) {
+  return String(path || '').trim().replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
+}
+
 const STATUS_META = {
   [REJECTION_STATUS.RETURNED]: { label: 'Returned to RM', tone: 'danger' },
   [REJECTION_STATUS.RESUBMITTED]: { label: 'Resubmitted', tone: 'warning' },
@@ -254,6 +258,22 @@ export default function CustomerDocumentsPanel({
     ? () => downloadCustomerDocumentProof(doc.customerDocumentProofId)
     : () => downloadAgentCustomerDocument(doc.agentCustomerDocumentId));
 
+  // The path download endpoint only serves UploadedFiles/KYCDocuments, so history paths that
+  // belong to a loaded proof or customer-page document are downloaded through that record.
+  const docsByPath = useMemo(() => {
+    const map = new Map();
+    [...customerPageDocs, ...proofDocs].forEach((doc) => {
+      const path = normalizeStoredPath(doc.filePath);
+      if (path && !map.has(path)) map.set(path, doc);
+    });
+    return map;
+  }, [customerPageDocs, proofDocs]);
+
+  const pathLoader = (path) => {
+    const doc = docsByPath.get(normalizeStoredPath(path));
+    return doc ? loaderFor(doc) : () => downloadDocumentByPath(path);
+  };
+
   const runFileAction = async (key, action, run) => {
     setBusy({ key, action });
     setMessage(key, null, null);
@@ -328,7 +348,7 @@ export default function CustomerDocumentsPanel({
       type="button"
       className="bo-cdp-path"
       title={path}
-      onClick={() => runFileAction(key, 'path', () => openDocument(() => downloadDocumentByPath(path), fileName(path)))}
+      onClick={() => runFileAction(key, 'path', () => openDocument(pathLoader(path), fileName(path)))}
     >
       <span className="bo-cdp-path-label">{label}</span>
       <span className="bo-cdp-path-value">{fileName(path)}</span>
