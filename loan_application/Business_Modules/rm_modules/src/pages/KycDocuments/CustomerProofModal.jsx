@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import Button from '../../components/Button/Button';
 import Modal from '../../components/Modal/Modal';
-import Select from '../../components/Select/Select';
 import rmCustomerService from '../../services/rmCustomerService';
 import { parseApiErrorBody } from '../../utils/formatUserFacingError';
 import { validateApplicantDocumentFile } from '../../../../../Core/src/utils/documentTypeHelper';
@@ -170,16 +169,18 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
   const [categoryError, setCategoryError] = useState('');
 
   const [proofsByCategory, setProofsByCategory] = useState({});
-  const [isLoadingProofs, setIsLoadingProofs] = useState(false);
-  const [proofError, setProofError] = useState('');
+  const [loadingCategoryIds, setLoadingCategoryIds] = useState([]);
+  const [proofLoadErrors, setProofLoadErrors] = useState({});
 
-  const [selectedCategoryId, setSelectedCategoryId] = useState('');
-  const [selectedProofIds, setSelectedProofIds] = useState([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
+  // Selected proofs are keyed "<categoryId>::<proofId>" so the same proof id
+  // under different categories stays distinct.
+  const [selectedProofKeys, setSelectedProofKeys] = useState([]);
   const [filesByProof, setFilesByProof] = useState({});
   const [proofErrors, setProofErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadingProofId, setUploadingProofId] = useState(null);
+  const [uploadingKey, setUploadingKey] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const [savedProofs, setSavedProofs] = useState([]);
@@ -196,7 +197,6 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
 
   const replaceInputRef = useRef(null);
   const uploadingRef = useRef(false);
-  const proofRequestRef = useRef(0);
   const savedRequestRef = useRef(0);
   const mountedRef = useRef(true);
   const proofsByCategoryRef = useRef({});
@@ -228,13 +228,9 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
     () => categories.filter((c) => c.isActive).map(({ value, label }) => ({ value, label })),
     [categories]
   );
-  const proofOptions = useMemo(
-    () => (proofsByCategory[selectedCategoryId] || []).filter((p) => p.isActive).map(({ value, label }) => ({ value, label })),
-    [proofsByCategory, selectedCategoryId]
-  );
-  const selectedProofOptions = useMemo(
-    () => proofOptions.filter((p) => selectedProofIds.some((id) => sameValue(id, p.value))),
-    [proofOptions, selectedProofIds]
+  const activeProofsFor = useCallback(
+    (categoryId) => (proofsByCategory[categoryId] || []).filter((p) => p.isActive),
+    [proofsByCategory]
   );
 
   const categoryName = useCallback(
@@ -244,6 +240,20 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
   const proofName = useCallback(
     (categoryId, id) => (proofsByCategory[categoryId] || []).find((p) => sameValue(p.value, id))?.label,
     [proofsByCategory]
+  );
+
+  const selectedProofItems = useMemo(
+    () => selectedProofKeys.map((key) => {
+      const [categoryId, proofId] = key.split('::');
+      return {
+        key,
+        categoryId,
+        proofId,
+        label: proofName(categoryId, proofId) || 'Proof',
+        categoryLabel: categoryName(categoryId) || 'Category',
+      };
+    }),
+    [selectedProofKeys, proofName, categoryName]
   );
 
   const fetchProofsForCategory = useCallback(async (documentTypeId) => {
@@ -337,56 +347,50 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
     if (!isResolvingCustomer) loadSavedProofs(agentCustomerId);
   }, [isResolvingCustomer, agentCustomerId, loadSavedProofs]);
 
-  const clearSelection = () => {
-    setSelectedProofIds([]);
-    setFilesByProof({});
-    setProofErrors({});
-  };
+  const withoutKeys = (obj, shouldDrop) => Object.fromEntries(Object.entries(obj).filter(([key]) => !shouldDrop(key)));
 
-  const handleCategoryChange = async (value) => {
-    setSelectedCategoryId(value);
-    clearSelection();
-    setFormError('');
-    setProofError('');
-    setSuccessMessage('');
-    const requestId = ++proofRequestRef.current;
-    if (!value || proofsByCategoryRef.current[value]) {
-      setIsLoadingProofs(false);
-      return;
-    }
-    setIsLoadingProofs(true);
+  const loadProofsFor = async (categoryId) => {
+    const key = String(categoryId);
+    setProofLoadErrors((prev) => withoutKeys(prev, (k) => k === key));
+    setLoadingCategoryIds((prev) => (prev.includes(key) ? prev : [...prev, key]));
     try {
-      await fetchProofsForCategory(value);
+      await fetchProofsForCategory(categoryId);
     } catch (err) {
       const message = await errorMessage(err, 'Unable to load proofs for this category.');
-      if (mountedRef.current && requestId === proofRequestRef.current) setProofError(message);
+      if (mountedRef.current) setProofLoadErrors((prev) => ({ ...prev, [key]: message }));
     } finally {
-      if (mountedRef.current && requestId === proofRequestRef.current) setIsLoadingProofs(false);
+      if (mountedRef.current) setLoadingCategoryIds((prev) => prev.filter((id) => id !== key));
     }
   };
 
-  const toggleProof = (proofId) => {
+  const toggleCategory = (categoryId) => {
     if (isUploading) return;
-    const key = String(proofId);
-    setSelectedProofIds((prev) => (
-      prev.some((id) => sameValue(id, proofId)) ? prev.filter((id) => !sameValue(id, proofId)) : [...prev, proofId]
-    ));
-    setFilesByProof((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-    setProofErrors((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
+    const key = String(categoryId);
+    setFormError('');
+    setSuccessMessage('');
+    if (selectedCategoryIds.includes(key)) {
+      const isInCategory = (k) => k.startsWith(`${key}::`);
+      setSelectedCategoryIds((prev) => prev.filter((id) => id !== key));
+      setSelectedProofKeys((prev) => prev.filter((k) => !isInCategory(k)));
+      setFilesByProof((prev) => withoutKeys(prev, isInCategory));
+      setProofErrors((prev) => withoutKeys(prev, isInCategory));
+      return;
+    }
+    setSelectedCategoryIds((prev) => [...prev, key]);
+    if (!proofsByCategoryRef.current[categoryId] && !proofsByCategoryRef.current[key]) loadProofsFor(categoryId);
+  };
+
+  const toggleProof = (categoryId, proofId) => {
+    if (isUploading) return;
+    const key = `${categoryId}::${proofId}`;
+    setSelectedProofKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+    setFilesByProof((prev) => withoutKeys(prev, (k) => k === key));
+    setProofErrors((prev) => withoutKeys(prev, (k) => k === key));
     setFormError('');
     setSuccessMessage('');
   };
 
-  const handleProofFileChange = (proofId, event) => {
-    const key = String(proofId);
+  const handleProofFileChange = (key, event) => {
     const file = event.target.files?.[0] || null;
     event.target.value = '';
     setSuccessMessage('');
@@ -397,13 +401,8 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
     setFilesByProof((prev) => ({ ...prev, [key]: file }));
   };
 
-  const removeProofFile = (proofId) => {
-    const key = String(proofId);
-    setFilesByProof((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
+  const removeProofFile = (key) => {
+    setFilesByProof((prev) => withoutKeys(prev, (k) => k === key));
   };
 
   const contextError = () => {
@@ -436,47 +435,45 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
     setSuccessMessage('');
     const missing = contextError();
     if (missing) return setFormError(missing);
-    if (!selectedCategoryId) return setFormError('Please select a proof category.');
-    if (selectedProofIds.length === 0) return setFormError('Please select at least one proof.');
-    const withoutFile = selectedProofIds.filter((id) => !filesByProof[String(id)]);
+    if (selectedCategoryIds.length === 0) return setFormError('Please select at least one proof category.');
+    if (selectedProofItems.length === 0) return setFormError('Please select at least one proof.');
+    const withoutFile = selectedProofItems.filter((item) => !filesByProof[item.key]);
     if (withoutFile.length > 0) {
-      const names = withoutFile.map((id) => proofName(selectedCategoryId, id) || 'Proof').join(', ');
-      return setFormError(`Please choose a file for: ${names}.`);
+      return setFormError(`Please choose a file for: ${withoutFile.map((item) => item.label).join(', ')}.`);
     }
 
     uploadingRef.current = true;
     setFormError('');
     setIsUploading(true);
-    const uploaded = [];
+    const uploadedKeys = [];
+    const uploadedLabels = [];
     const failed = [];
-    for (const proofId of selectedProofIds) {
-      const key = String(proofId);
-      const label = proofName(selectedCategoryId, proofId) || 'Proof';
-      setUploadingProofId(proofId);
+    for (const item of selectedProofItems) {
+      setUploadingKey(item.key);
       setUploadProgress(0);
       try {
         await rmCustomerService.uploadApplicationCustomerProof(
-          buildFormData({ documentTypeId: selectedCategoryId, proofId, file: filesByProof[key] }),
+          buildFormData({ documentTypeId: item.categoryId, proofId: item.proofId, file: filesByProof[item.key] }),
           { onUploadProgress: trackProgress }
         );
-        uploaded.push({ proofId, label });
+        uploadedKeys.push(item.key);
+        uploadedLabels.push(item.label);
       } catch (err) {
         const message = await errorMessage(err, 'Upload failed.');
-        failed.push(label);
-        if (mountedRef.current) setProofErrors((prev) => ({ ...prev, [key]: message }));
+        failed.push(item.label);
+        if (mountedRef.current) setProofErrors((prev) => ({ ...prev, [item.key]: message }));
       }
     }
     uploadingRef.current = false;
     if (!mountedRef.current) return;
 
-    const uploadedIds = uploaded.map((u) => u.proofId);
-    const isUploadedId = (id) => uploadedIds.some((u) => sameValue(u, id));
-    setSelectedProofIds((prev) => prev.filter((id) => !isUploadedId(id)));
-    setFilesByProof((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => !isUploadedId(id))));
-    setUploadingProofId(null);
+    const isUploadedKey = (key) => uploadedKeys.includes(key);
+    setSelectedProofKeys((prev) => prev.filter((key) => !isUploadedKey(key)));
+    setFilesByProof((prev) => withoutKeys(prev, isUploadedKey));
+    setUploadingKey(null);
     setIsUploading(false);
-    if (uploaded.length > 0) {
-      setSuccessMessage(`${uploaded.map((u) => u.label).join(', ')} uploaded successfully.`);
+    if (uploadedLabels.length > 0) {
+      setSuccessMessage(`${uploadedLabels.join(', ')} uploaded successfully.`);
       loadSavedProofs(agentCustomerId);
     }
     if (failed.length > 0) {
@@ -624,10 +621,10 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
     if (!isBusy) onClose();
   };
 
-  const isProofUploaded = (proofId) => savedProofs.some(
-    (r) => sameValue(r.proofId, proofId) && sameValue(r.documentTypeId, selectedCategoryId)
+  const isProofUploaded = (categoryId, proofId) => savedProofs.some(
+    (r) => sameValue(r.proofId, proofId) && sameValue(r.documentTypeId, categoryId)
   );
-  const readyCount = selectedProofIds.filter((id) => filesByProof[String(id)]).length;
+  const readyCount = selectedProofItems.filter((item) => filesByProof[item.key]).length;
 
   const displayName = applicantName && applicantName !== applicantRole
     ? `${applicantName} (${applicantRole})`
@@ -683,19 +680,34 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
           </div>
         ) : (
           <div className="cp-form-grid">
-            <div className="aw-field">
-              <label className="form-label">Proof Category</label>
-              <div className="aw-input-wrapper">
-                <Select
-                  value={selectedCategoryId}
-                  onChange={handleCategoryChange}
-                  options={categoryOptions}
-                  placeholder={isLoadingCategories ? 'Loading categories...' : 'Select category'}
-                  disabled={isLoadingCategories || isUploading}
-                />
-              </div>
-              {!isLoadingCategories && categoryOptions.length === 0 && (
+            <div className="aw-field cp-field-full">
+              <label className="form-label">
+                Proof Category <span className="cp-hint">(select one or more)</span>
+              </label>
+              {isLoadingCategories ? (
+                <span className="cp-hint">Loading categories...</span>
+              ) : categoryOptions.length === 0 ? (
                 <span className="cp-hint">No active proof categories are configured.</span>
+              ) : (
+                <div className="cp-chip-group" role="group" aria-label="Proof categories">
+                  {categoryOptions.map((category) => {
+                    const isSelected = selectedCategoryIds.includes(String(category.value));
+                    return (
+                      <button
+                        key={category.value}
+                        type="button"
+                        aria-pressed={isSelected}
+                        className={`cp-chip ${isSelected ? 'is-selected' : ''}`}
+                        onClick={() => toggleCategory(category.value)}
+                        disabled={isUploading}
+                        title={category.label}
+                      >
+                        {isSelected && <Check size={13} />}
+                        {category.label}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
@@ -703,65 +715,79 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
               <label className="form-label">
                 Proof <span className="cp-hint">(select one or more)</span>
               </label>
-              {!selectedCategoryId ? (
+              {selectedCategoryIds.length === 0 ? (
                 <span className="cp-hint">Select a category first.</span>
-              ) : isLoadingProofs ? (
-                <span className="cp-hint">Loading proofs...</span>
-              ) : proofOptions.length > 0 && (
-                <div className="cp-chip-group" role="group" aria-label="Proofs">
-                  {proofOptions.map((proof) => {
-                    const isSelected = selectedProofIds.some((id) => sameValue(id, proof.value));
-                    const isUploaded = isProofUploaded(proof.value);
+              ) : (
+                <div className="cp-proof-groups">
+                  {selectedCategoryIds.map((categoryId) => {
+                    const options = activeProofsFor(categoryId);
+                    const isLoading = loadingCategoryIds.includes(categoryId);
+                    const loadError = proofLoadErrors[categoryId];
                     return (
-                      <button
-                        key={proof.value}
-                        type="button"
-                        aria-pressed={isSelected}
-                        className={`cp-chip ${isSelected ? 'is-selected' : ''} ${isUploaded ? 'is-uploaded' : ''}`}
-                        onClick={() => toggleProof(proof.value)}
-                        disabled={isUploading || isUploaded}
-                        title={isUploaded ? 'Already uploaded. Use Replace below to update the file.' : proof.label}
-                      >
-                        {(isSelected || isUploaded) && <Check size={13} />}
-                        {proof.label}
-                        {isUploaded && <span className="cp-chip-tag">Uploaded</span>}
-                      </button>
+                      <div key={categoryId} className="cp-proof-group">
+                        <span className="cp-proof-group-title">{categoryName(categoryId) || 'Category'}</span>
+                        {isLoading ? (
+                          <span className="cp-hint">Loading proofs...</span>
+                        ) : loadError ? (
+                          <span className="aw-field-error">
+                            {loadError}{' '}
+                            <button type="button" className="cp-link-btn" onClick={() => loadProofsFor(categoryId)}>
+                              Retry
+                            </button>
+                          </span>
+                        ) : options.length === 0 ? (
+                          <span className="cp-hint">No active proofs are configured for this category.</span>
+                        ) : (
+                          <div className="cp-chip-group" role="group" aria-label={`${categoryName(categoryId) || 'Category'} proofs`}>
+                            {options.map((proof) => {
+                              const key = `${categoryId}::${proof.value}`;
+                              const isSelected = selectedProofKeys.includes(key);
+                              const isUploaded = isProofUploaded(categoryId, proof.value);
+                              return (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  aria-pressed={isSelected}
+                                  className={`cp-chip ${isSelected ? 'is-selected' : ''} ${isUploaded ? 'is-uploaded' : ''}`}
+                                  onClick={() => toggleProof(categoryId, proof.value)}
+                                  disabled={isUploading || isUploaded}
+                                  title={isUploaded ? 'Already uploaded. Use Replace below to update the file.' : proof.label}
+                                >
+                                  {(isSelected || isUploaded) && <Check size={13} />}
+                                  {proof.label}
+                                  {isUploaded && <span className="cp-chip-tag">Uploaded</span>}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
-              )}
-              {proofError && (
-                <span className="aw-field-error">
-                  {proofError}{' '}
-                  <button type="button" className="cp-link-btn" onClick={() => handleCategoryChange(selectedCategoryId)}>
-                    Retry
-                  </button>
-                </span>
-              )}
-              {selectedCategoryId && !isLoadingProofs && !proofError && proofOptions.length === 0 && (
-                <span className="cp-hint">No active proofs are configured for this category.</span>
               )}
             </div>
           </div>
         )}
 
-        {selectedProofOptions.length > 0 && (
+        {selectedProofItems.length > 0 && (
           <div className="cp-upload-list">
-            {selectedProofOptions.map((proof) => {
-              const key = String(proof.value);
+            {selectedProofItems.map((item) => {
+              const { key } = item;
               const file = filesByProof[key];
-              const inputId = `cp-file-input-${key}`;
-              const isRowUploading = isUploading && sameValue(uploadingProofId, proof.value);
+              const inputId = `cp-file-input-${key.replace('::', '-')}`;
+              const isRowUploading = isUploading && uploadingKey === key;
+              const rowLabel = selectedCategoryIds.length > 1 ? `${item.label} (${item.categoryLabel})` : item.label;
               return (
                 <div key={key} className="cp-upload-item">
                   <div className="cp-upload-row">
-                    <span className="cp-upload-label" title={proof.label}>{proof.label}</span>
+                    <span className="cp-upload-label" title={rowLabel}>{rowLabel}</span>
                     <input
                       type="file"
                       accept={ACCEPTED_FILE_TYPES}
                       className="cp-file-input"
                       id={inputId}
-                      onChange={(event) => handleProofFileChange(proof.value, event)}
+                      onChange={(event) => handleProofFileChange(key, event)}
                       disabled={isUploading}
                     />
                     <label htmlFor={inputId} className={`cp-file-picker ${isUploading ? 'is-disabled' : ''}`}>
@@ -785,8 +811,8 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
                       <button
                         type="button"
                         className="cp-icon-btn"
-                        onClick={() => removeProofFile(proof.value)}
-                        aria-label={`Remove file for ${proof.label}`}
+                        onClick={() => removeProofFile(key)}
+                        aria-label={`Remove file for ${item.label}`}
                         title="Remove file"
                       >
                         <X size={14} />
@@ -800,7 +826,7 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
 
             <div className="cp-upload-actions">
               <span className="cp-hint">
-                {readyCount} of {selectedProofOptions.length} file{selectedProofOptions.length > 1 ? 's' : ''} ready
+                {readyCount} of {selectedProofItems.length} file{selectedProofItems.length > 1 ? 's' : ''} ready
               </span>
               <Button
                 variant="primary"
@@ -811,7 +837,7 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
               >
                 {isUploading
                   ? 'Uploading...'
-                  : `Upload ${selectedProofOptions.length > 1 ? `${selectedProofOptions.length} Documents` : 'Document'}`}
+                  : `Upload ${selectedProofItems.length > 1 ? `${selectedProofItems.length} Documents` : 'Document'}`}
               </Button>
             </div>
           </div>
