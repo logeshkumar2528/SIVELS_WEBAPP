@@ -29,6 +29,87 @@ function extractArray(raw) {
   return [];
 }
 
+function firstValue(row, ...keys) {
+  for (const key of keys) {
+    const value = row?.[key];
+    if (value !== undefined && value !== null && value !== '') return value;
+  }
+  return undefined;
+}
+
+function isActiveProofRecord(row) {
+  if (firstValue(row, 'isActive', 'IsActive') === false) return false;
+  const status = String(firstValue(row, 'status', 'Status') ?? '').trim().toLowerCase();
+  return status !== 'inactive' && status !== 'deleted';
+}
+
+/**
+ * Loads the customer proofs (CustomerDocumentProof) for one customer and application and
+ * resolves their display names. Only records that belong to this customer, and to this
+ * application product when both sides know it, are kept.
+ */
+async function loadCustomerProofs({ customerId, productDetailsId, categoryMap = {}, headers = {} }) {
+  if (customerId === undefined || customerId === null || customerId === '') return [];
+  const query = new URLSearchParams({ agentCustomerId: String(customerId) });
+  if (productDetailsId) query.set('applicationProductDetailsId', String(productDetailsId));
+
+  const [proofRes, proofMasterRes] = await Promise.allSettled([
+    fetch(`${API_BASE}/customerdocumentproof?${query}`, { headers }).then((r) => (r.ok ? r.json() : [])),
+    fetch(`${API_BASE}/proofmaster`, { headers }).then((r) => (r.ok ? r.json() : [])),
+  ]);
+  const records = proofRes.status === 'fulfilled' ? extractArray(proofRes.value) : [];
+  const proofNames = {};
+  if (proofMasterRes.status === 'fulfilled') {
+    extractArray(proofMasterRes.value).forEach((row) => {
+      const id = firstValue(row, 'proofId', 'ProofId');
+      const name = firstValue(row, 'proofName', 'ProofName');
+      if (id !== undefined && name) proofNames[String(id)] = String(name).trim();
+    });
+  }
+
+  return records
+    .filter(isActiveProofRecord)
+    .filter((row) => String(firstValue(row, 'agentCustomerId', 'AgentCustomerId') ?? '') === String(customerId))
+    .filter((row) => {
+      const rowProductId = firstValue(row, 'applicationProductDetailsId', 'ApplicationProductDetailsId');
+      return !productDetailsId || rowProductId === undefined || String(rowProductId) === String(productDetailsId);
+    })
+    .map((row) => {
+      const sequence = Number(firstValue(row, 'applicantSequence', 'ApplicantSequence'));
+      const documentTypeId = firstValue(row, 'documentTypeId', 'DocumentTypeId');
+      const proofId = firstValue(row, 'proofId', 'ProofId');
+      return {
+        applicantSequence: sequence,
+        categoryName: String(
+          firstValue(row, 'documentTypeName', 'DocumentTypeName') ?? categoryMap[String(documentTypeId)] ?? ''
+        ).trim(),
+        proofName: String(
+          firstValue(row, 'proofName', 'ProofName') ?? (proofId !== undefined ? proofNames[String(proofId)] : '') ?? ''
+        ).trim(),
+      };
+    })
+    .filter((proof) => Number.isInteger(proof.applicantSequence) && proof.applicantSequence >= 0 && proof.proofName);
+}
+
+/** Groups one person's proofs as [{ category, proofs: [unique proof names] }]. */
+function groupCustomerProofs(proofs, applicantSequence) {
+  const groups = [];
+  proofs
+    .filter((proof) => proof.applicantSequence === applicantSequence)
+    .forEach(({ categoryName, proofName }) => {
+      const category = categoryName || 'Customer Proof';
+      let group = groups.find((g) => g.category.toLowerCase() === category.toLowerCase());
+      if (!group) {
+        group = { category, proofs: [] };
+        groups.push(group);
+      }
+      if (!group.proofs.some((name) => name.toLowerCase() === proofName.toLowerCase())) {
+        group.proofs.push(proofName);
+      }
+    });
+  return groups;
+}
+
 function mergeNonEmpty(primary = {}, fallback = {}) {
   const result = { ...(fallback || {}) };
   Object.entries(primary || {}).forEach(([k, v]) => {
@@ -101,6 +182,8 @@ export default function PdfView() {
   const [liveApplicantKyc, setLiveApplicantKyc] = useState(null);
   const [coApplicantPhotos, setCoApplicantPhotos] = useState({});
   const [downloadedDocs, setDownloadedDocs] = useState([]);
+  // Customer proofs (CustomerDocumentProof) as { applicantSequence, categoryName, proofName }
+  const [customerProofs, setCustomerProofs] = useState([]);
   const [isMetadataLoading, setIsMetadataLoading] = useState(true);
   const [isDocsDownloading, setIsDocsDownloading] = useState(true);
   const [isCoPhotosLoading, setIsCoPhotosLoading] = useState(false);
@@ -861,6 +944,30 @@ export default function PdfView() {
               }));
               setLiveCollateral(liveList);
             }
+          }
+
+          // 4. Customer proofs selected on the KYC page (applicant + co-applicants)
+          {
+            const prodList = productDetailsRes.status === 'fulfilled' ? extractArray(productDetailsRes.value) : [];
+            const matchedProduct = prodList.find(
+              (p) =>
+                String(p.agentCustomerId ?? p.AgentCustomerId) === String(resolvedCustomerId) ||
+                String(p.agentCustomerId ?? p.AgentCustomerId) === String(applicationId)
+            );
+            const proofProductId =
+              matchedProduct?.applicationProductDetailsId ??
+              matchedProduct?.ApplicationProductDetailsId ??
+              appData.applicationProductDetailsId ??
+              null;
+            const categoryMap = docTypeMap.status === 'fulfilled' ? docTypeMap.value || {} : {};
+            loadCustomerProofs({
+              customerId: resolvedCustomerId,
+              productDetailsId: proofProductId,
+              categoryMap,
+              headers: authHeaders,
+            }).then((rows) => {
+              if (active) setCustomerProofs(rows);
+            });
           }
 
           // Resolve RM & Ownership strictly from backend ApplicationFullDetails
@@ -2140,11 +2247,51 @@ export default function PdfView() {
     return names;
   };
 
+  // Co-Applicant KYC values: live backend record first (matched by applicantSequence),
+  // then the draft, supporting camelCase / PascalCase and raw backend field names.
+  const getCoApplicantKyc = (index) => {
+    const targetSeq = index + 1;
+    const liveKyc =
+      liveKycCoApplicants.find((k) => Number(k.applicantSequence ?? k.ApplicantSequence) === targetSeq) ||
+      liveKycCoApplicants[index] ||
+      {};
+    const draftKyc = kycData.coApplicants?.[index] || {};
+    const co = coApplicants[index] || {};
+    const pickText = (...values) => {
+      const found = values.find((v) => v !== undefined && v !== null && String(v).trim() !== '');
+      return found === undefined ? '' : String(found).trim();
+    };
+    return {
+      aadhaarLast4: pickText(
+        liveKyc.aadhaarLast4, liveKyc.AadhaarLast4, liveKyc.aadhaarLastFourDigits, liveKyc.AadhaarLastFourDigits,
+        draftKyc.aadhaarLast4, draftKyc.AadhaarLast4
+      ),
+      panCardNo: pickText(
+        liveKyc.panCardNo, liveKyc.PanCardNo, liveKyc.PANCardNo,
+        draftKyc.panCardNo, draftKyc.PanCardNo, co.panCardNo
+      ),
+      identityDocumentType: pickText(
+        liveKyc.identityDocumentType, liveKyc.IdentityDocumentType, liveKyc.documentTypeId, liveKyc.DocumentTypeId,
+        draftKyc.identityDocumentType, draftKyc.IdentityDocumentType
+      ),
+      identityDocumentNo: pickText(
+        liveKyc.identityDocumentNo, liveKyc.IdentityDocumentNo, liveKyc.documentNumber, liveKyc.DocumentNumber,
+        draftKyc.identityDocumentNo, draftKyc.IdentityDocumentNo
+      ),
+      verificationStatus: pickText(
+        liveKyc.verificationStatus, liveKyc.VerificationStatus, liveKyc.verificationId, liveKyc.VerificationId,
+        draftKyc.verificationStatus, draftKyc.VerificationStatus
+      ),
+    };
+  };
+  const coApplicantKycRows = hasCoApplicants ? coApplicants.map((_, i) => getCoApplicantKyc(i)) : [];
+
   const documentPeople = [
     {
       label: 'Applicant',
       isCoApplicant: false,
       coIndex: null,
+      applicantSequence: 0,
       kyc: kycData.applicant || {},
       documents: applicantDocs,
     },
@@ -2153,6 +2300,7 @@ export default function PdfView() {
           label: `Co-Applicant ${index + 1}`,
           isCoApplicant: true,
           coIndex: index,
+          applicantSequence: index + 1,
           kyc: kycData.coApplicants?.[index] || {},
           documents: coApplicantDocsMap[index] || [],
         }))
@@ -2888,38 +3036,34 @@ export default function PdfView() {
                 <td>Aadhaar Last 4</td>
                 <td>{kycData.applicant?.aadhaarLast4 || '-'}</td>
                 {hasCoApplicants &&
-                  coApplicants.map((_, i) => <td key={i}>{kycData.coApplicants?.[i]?.aadhaarLast4 || '-'}</td>)}
+                  coApplicantKycRows.map((row, i) => <td key={i}>{row.aadhaarLast4 || '-'}</td>)}
               </tr>
               <tr>
                 <td>PAN Card No</td>
                 <td>{kycData.applicant?.panCardNo || applicant.panCardNo || '-'}</td>
                 {hasCoApplicants &&
-                  coApplicants.map((co, i) => (
-                    <td key={i}>{kycData.coApplicants?.[i]?.panCardNo || co.panCardNo || '-'}</td>
-                  ))}
+                  coApplicantKycRows.map((row, i) => <td key={i}>{row.panCardNo || '-'}</td>)}
               </tr>
               <tr>
                 <td>Identity Doc Type</td>
                 <td>{resolveDocType(kycData.applicant?.identityDocumentType) || '-'}</td>
                 {hasCoApplicants &&
-                  coApplicants.map((_, i) => (
-                    <td key={i}>{resolveDocType(kycData.coApplicants?.[i]?.identityDocumentType) || '-'}</td>
+                  coApplicantKycRows.map((row, i) => (
+                    <td key={i}>{resolveDocType(row.identityDocumentType) || '-'}</td>
                   ))}
               </tr>
               <tr>
                 <td>Identity Doc No</td>
                 <td>{kycData.applicant?.identityDocumentNo || '-'}</td>
                 {hasCoApplicants &&
-                  coApplicants.map((_, i) => (
-                    <td key={i}>{kycData.coApplicants?.[i]?.identityDocumentNo || '-'}</td>
-                  ))}
+                  coApplicantKycRows.map((row, i) => <td key={i}>{row.identityDocumentNo || '-'}</td>)}
               </tr>
               <tr>
                 <td>Verification Status</td>
                 <td>{resolveVerification(kycData.applicant?.verificationStatus) || '-'}</td>
                 {hasCoApplicants &&
-                  coApplicants.map((_, i) => (
-                    <td key={i}>{resolveVerification(kycData.coApplicants?.[i]?.verificationStatus) || 'Pending'}</td>
+                  coApplicantKycRows.map((row, i) => (
+                    <td key={i}>{resolveVerification(row.verificationStatus) || 'Pending'}</td>
                   ))}
               </tr>
             </tbody>
@@ -2938,6 +3082,7 @@ export default function PdfView() {
           >
             {documentPeople.map((person) => {
               const documentNames = getCollectedDocumentNames(person.kyc, person.documents, person.isCoApplicant, person.coIndex);
+              const proofGroups = groupCustomerProofs(customerProofs, person.applicantSequence);
 
               return (
                 <div
@@ -2961,8 +3106,27 @@ export default function PdfView() {
                         </span>
                       ))}
                     </div>
-                  ) : (
+                  ) : proofGroups.length === 0 ? (
                     <span style={{ fontSize: '10px', color: '#64748b' }}>No KYC documents collected</span>
+                  ) : null}
+                  {proofGroups.length > 0 && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '3px',
+                        marginTop: documentNames.length > 0 ? '7px' : 0,
+                        paddingTop: documentNames.length > 0 ? '6px' : 0,
+                        borderTop: documentNames.length > 0 ? '1px dashed #cbd5e1' : 'none',
+                      }}
+                    >
+                      {proofGroups.map((group) => (
+                        <div key={group.category} style={{ fontSize: '10.5px', color: '#334155' }}>
+                          <span style={{ fontWeight: '600', color: '#0f172a' }}>{group.category}:</span>{' '}
+                          {group.proofs.join(', ')}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               );
