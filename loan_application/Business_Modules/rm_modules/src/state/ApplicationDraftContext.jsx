@@ -409,6 +409,7 @@ function normalizeApplicationRecord(record = {}) {
     sourcingChannelDisplay: record.sourcingChannelDisplay || record.sourcingChannel || '',
     createdDate: record.createdDate || '',
     _isHydrated: record._isHydrated || false,
+    _hydratedAt: record._hydratedAt || 0,
 
     // Synchronized section structures
     sections,
@@ -744,6 +745,214 @@ export function normalizeBankBackendRow(rawRow = {}) {
   };
 }
 
+function hasRecordId(value) {
+  return value !== undefined && value !== null && value !== '';
+}
+
+function toRecordList(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (Array.isArray(raw?.value)) return raw.value;
+  if (Array.isArray(raw?.data)) return raw.data;
+  if (Array.isArray(raw?.items)) return raw.items;
+  return raw && typeof raw === 'object' && Object.keys(raw).length > 0 ? [raw] : [];
+}
+
+const personalRowId = (p) => p?.personalInformationId ?? p?.PersonalInformationId;
+const personalRowKycId = (p) =>
+  p?.applicationKYCDocumentId ?? p?.ApplicationKYCDocumentId ?? p?.kycDocumentId ?? p?.KycDocumentId;
+
+/**
+ * True when a personal information row belongs to the current application: by its KYC record
+ * when it has one, otherwise by agentCustomerId / applicationProductDetailsId.
+ */
+function personalRowBelongsToApplication(row, { kycIds, agentCustomerId, productDetailsId }) {
+  const kycId = personalRowKycId(row);
+  if (hasRecordId(kycId)) return kycIds.has(String(kycId));
+  const rowCustomerId = row?.agentCustomerId ?? row?.AgentCustomerId;
+  const rowProductId = row?.applicationProductDetailsId ?? row?.ApplicationProductDetailsId;
+  return (hasRecordId(rowCustomerId) && hasRecordId(agentCustomerId) && String(rowCustomerId) === String(agentCustomerId))
+    || (hasRecordId(rowProductId) && hasRecordId(productDetailsId) && String(rowProductId) === String(productDetailsId));
+}
+
+const kycRowId = (k) => k?.applicationKYCDocumentId ?? k?.ApplicationKYCDocumentId ?? k?.kycDocumentId ?? k?.KycDocumentId;
+
+async function fetchRecordList(url) {
+  try {
+    const res = await fetch(url);
+    return res.ok ? toRecordList(await res.json()) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Adds rows from `incoming` whose id is not already present; rows already present win. */
+function mergeRowsById(existing, incoming, getId) {
+  const merged = [...existing];
+  const seen = new Set(existing.map(getId).filter(hasRecordId).map(String));
+  incoming.forEach((row) => {
+    const id = getId(row);
+    if (hasRecordId(id)) {
+      if (seen.has(String(id))) return;
+      seen.add(String(id));
+    }
+    merged.push(row);
+  });
+  return merged;
+}
+
+/**
+ * ApplicationFullDetails can return only the primary applicant, so the KYC and personal
+ * information rows of every person on this application are merged in from the list
+ * endpoints. KYC rows belong by applicationProductDetailsId / agentCustomerId; personal rows
+ * by their KYC record, or by customer / product ids when they have no KYC link.
+ */
+async function mergeApplicationPeopleRows(backendResult, baseUrl, agentCustomerId) {
+  const rawProduct =
+    backendResult.productDetails ??
+    backendResult.ProductDetails ??
+    backendResult.applicationProductDetails ??
+    backendResult.ApplicationProductDetails;
+  const productRow = toRecordList(rawProduct)[0];
+  const product = productRow?.product ?? productRow?.Product ?? productRow;
+  const productDetailsId =
+    product?.applicationProductDetailsId ??
+    product?.ApplicationProductDetailsId ??
+    backendResult.customer?.applicationProductDetailsId ??
+    backendResult.customer?.ApplicationProductDetailsId;
+  if (!hasRecordId(productDetailsId) && !hasRecordId(agentCustomerId)) return;
+
+  const [allKycs, allPersonal] = await Promise.all([
+    fetchRecordList(`${baseUrl}/ApplicationKYCDocuments`),
+    fetchRecordList(`${baseUrl}/ApplicationPersonalInformation`),
+  ]);
+
+  let kycs = toRecordList(
+    backendResult.kycDocuments ??
+    backendResult.KycDocuments ??
+    backendResult.applicationKYCDocuments ??
+    backendResult.ApplicationKYCDocuments
+  );
+  if (allKycs) {
+    const ownKycs = allKycs.filter((k) => {
+      const kProductId = k?.applicationProductDetailsId ?? k?.ApplicationProductDetailsId;
+      const kCustomerId = k?.agentCustomerId ?? k?.AgentCustomerId;
+      if (hasRecordId(kProductId) && hasRecordId(productDetailsId)) return String(kProductId) === String(productDetailsId);
+      return hasRecordId(kCustomerId) && String(kCustomerId) === String(agentCustomerId);
+    });
+    kycs = mergeRowsById(kycs, ownKycs, kycRowId);
+    backendResult.kycDocuments = kycs;
+  }
+
+  if (allPersonal) {
+    const existingPersonal = toRecordList(
+      backendResult.personalInformation ??
+      backendResult.PersonalInformation ??
+      backendResult.applicationPersonalInformation ??
+      backendResult.ApplicationPersonalInformation
+    );
+    const scope = {
+      kycIds: new Set(kycs.map(kycRowId).filter(hasRecordId).map(String)),
+      agentCustomerId,
+      productDetailsId,
+    };
+    backendResult.personalInformation = mergeRowsById(
+      existingPersonal,
+      allPersonal.filter((row) => personalRowBelongsToApplication(row, scope)),
+      personalRowId
+    );
+  }
+
+  await mergeApplicationDetailRows(backendResult, baseUrl);
+}
+
+const addressRowId = (a) =>
+  a?.applicationAddressDetailsId ?? a?.ApplicationAddressDetailsId ?? a?.addressDetailsId ?? a?.AddressDetailsId;
+const addressRowPersonalId = (a) => a?.personalInformationId ?? a?.PersonalInformationId;
+const employmentRowId = (e) =>
+  e?.applicationEmploymentIncomeDetailsId ??
+  e?.ApplicationEmploymentIncomeDetailsId ??
+  e?.employmentIncomeDetailsId ??
+  e?.EmploymentIncomeDetailsId;
+const employmentRowAddressId = (e) =>
+  e?.applicationAddressDetailsId ?? e?.ApplicationAddressDetailsId ?? e?.addressDetailsId ?? e?.AddressDetailsId;
+const bankRowId = (b) =>
+  b?.applicationBankExistingLoanDetailsId ??
+  b?.ApplicationBankExistingLoanDetailsId ??
+  b?.bankLoan?.applicationBankExistingLoanDetailsId ??
+  b?.BankLoan?.ApplicationBankExistingLoanDetailsId;
+const bankRowEmploymentId = (b) =>
+  b?.applicationEmploymentIncomeDetailsId ??
+  b?.ApplicationEmploymentIncomeDetailsId ??
+  b?.bankLoan?.applicationEmploymentIncomeDetailsId ??
+  b?.BankLoan?.ApplicationEmploymentIncomeDetailsId ??
+  b?.employmentIncomeDetailsId ??
+  b?.EmploymentIncomeDetailsId;
+
+const idSet = (rows, getId) => new Set(rows.map(getId).filter(hasRecordId).map(String));
+
+/**
+ * Address, employment and bank rows hang off personal information → address → employment.
+ * ApplicationFullDetails omits the co-applicant rows, so every row linked to a person on this
+ * application is merged in from the list endpoints.
+ */
+async function mergeApplicationDetailRows(backendResult, baseUrl) {
+  const personalIds = idSet(
+    toRecordList(
+      backendResult.personalInformation ??
+      backendResult.PersonalInformation ??
+      backendResult.applicationPersonalInformation ??
+      backendResult.ApplicationPersonalInformation
+    ),
+    personalRowId
+  );
+  if (personalIds.size === 0) return;
+
+  const [allAddresses, allEmployments, allBanks] = await Promise.all([
+    fetchRecordList(`${baseUrl}/ApplicationAddressDetails`),
+    fetchRecordList(`${baseUrl}/ApplicationEmploymentIncomeDetails`),
+    fetchRecordList(`${baseUrl}/ApplicationBankExistingLoanDetails`),
+  ]);
+
+  const addresses = mergeRowsById(
+    toRecordList(
+      backendResult.addressDetails ??
+      backendResult.AddressDetails ??
+      backendResult.applicationAddressDetails ??
+      backendResult.ApplicationAddressDetails
+    ),
+    (allAddresses || []).filter((a) => personalIds.has(String(addressRowPersonalId(a)))),
+    addressRowId
+  );
+  if (allAddresses) backendResult.addressDetails = addresses;
+
+  const addressIds = idSet(addresses, addressRowId);
+  const employments = mergeRowsById(
+    toRecordList(
+      backendResult.employmentIncome ??
+      backendResult.EmploymentIncome ??
+      backendResult.applicationEmploymentIncomeDetails ??
+      backendResult.ApplicationEmploymentIncomeDetails
+    ),
+    (allEmployments || []).filter((e) => addressIds.has(String(employmentRowAddressId(e)))),
+    employmentRowId
+  );
+  if (allEmployments) backendResult.employmentIncome = employments;
+
+  const employmentIds = idSet(employments, employmentRowId);
+  if (allBanks) {
+    backendResult.bankExistingLoans = mergeRowsById(
+      toRecordList(
+        backendResult.bankExistingLoans ??
+        backendResult.BankExistingLoans ??
+        backendResult.applicationBankExistingLoanDetails ??
+        backendResult.ApplicationBankExistingLoanDetails
+      ),
+      allBanks.filter((b) => employmentIds.has(String(bankRowEmploymentId(b)))),
+      bankRowId
+    );
+  }
+}
+
 export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   if (!backendData) return existingDraft;
 
@@ -1063,15 +1272,28 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   const distanceFromBranchKm = (rawDistance !== '' && rawDistance !== null && rawDistance !== undefined && !isNaN(Number(rawDistance)))
     ? Number(rawDistance)
     : '';
-  const coApplicantsCount = (effectiveProductDetails?.noOfCoApplicants !== undefined && effectiveProductDetails?.noOfCoApplicants !== null && effectiveProductDetails?.noOfCoApplicants !== '')
-    ? Number(effectiveProductDetails.noOfCoApplicants)
-    : ((effectiveProductDetails?.NoOfCoApplicants !== undefined && effectiveProductDetails?.NoOfCoApplicants !== null && effectiveProductDetails?.NoOfCoApplicants !== '')
-      ? Number(effectiveProductDetails.NoOfCoApplicants)
-      : (effectiveProductDetails?.coApplicantsCount !== undefined && effectiveProductDetails?.coApplicantsCount !== null && effectiveProductDetails?.coApplicantsCount !== ''
-        ? Number(effectiveProductDetails.coApplicantsCount)
-        : (effectiveProductDetails?.CoApplicantsCount !== undefined && effectiveProductDetails?.CoApplicantsCount !== null && effectiveProductDetails?.CoApplicantsCount !== ''
-          ? Number(effectiveProductDetails.CoApplicantsCount)
-          : 0)));
+  // Explicit count from the product record wins; otherwise fall back to the highest
+  // co-applicant sequence in the backend KYC records, then to the existing draft.
+  const explicitCoCountRaw = [
+    effectiveProductDetails?.noOfCoApplicants,
+    effectiveProductDetails?.NoOfCoApplicants,
+    effectiveProductDetails?.coApplicantsCount,
+    effectiveProductDetails?.CoApplicantsCount,
+  ].find((value) => hasRecordId(value) && Number.isFinite(Number(value)));
+  const backendCoCount = kycList.reduce((max, k) => {
+    const seq = Number(k?.applicantSequence ?? k?.ApplicantSequence);
+    return Number.isInteger(seq) && seq > max ? seq : max;
+  }, 0);
+  const draftCoCount = Math.max(
+    hasRecordId(existingDraft.coApplicantsCount) && Number.isFinite(Number(existingDraft.coApplicantsCount))
+      ? Number(existingDraft.coApplicantsCount)
+      : 0,
+    existingDraft.registration?.personalInformation?.coApplicants?.length || 0,
+    existingDraft.personalInformation?.coApplicants?.length || 0
+  );
+  const coApplicantsCount = explicitCoCountRaw !== undefined
+    ? Math.max(0, Number(explicitCoCountRaw))
+    : Math.max(backendCoCount, draftCoCount);
 
   // 2. KYC Documents
   const kycProductId = applicationProductDetailsId;
@@ -1088,25 +1310,59 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
   };
 
   // 3. Personal Information / Customer Registration (Sequence-Aware Relational Matching)
-  const findPersonalRowForSequence = (targetSeq, targetKycRow) => {
+  const claimedPersonalRows = new Set();
+  const kycSequenceById = new Map(
+    kycList
+      .map((k) => [
+        k?.applicationKYCDocumentId ?? k?.ApplicationKYCDocumentId ?? k?.kycDocumentId ?? k?.KycDocumentId,
+        k?.applicantSequence ?? k?.ApplicantSequence,
+      ])
+      .filter(([id, seq]) => hasRecordId(id) && hasRecordId(seq))
+      .map(([id, seq]) => [String(id), Number(seq)])
+  );
+
+  // Match priority: KYC record id -> applicantSequence -> draft personalInformationId ->
+  // agentCustomerId + applicationProductDetailsId (single unclaimed row only).
+  const findPersonalRowForSequence = (targetSeq, targetKycRow, draftPersonalId = null) => {
     if (!Array.isArray(personalList) || personalList.length === 0) return null;
-    const targetKycId = targetKycRow?.applicationKYCDocumentId ?? targetKycRow?.ApplicationKYCDocumentId ?? targetKycRow?.kycDocumentId;
+    const available = personalList.filter((p) => !claimedPersonalRows.has(p));
+    const claim = (row) => {
+      if (row) claimedPersonalRows.add(row);
+      return row || null;
+    };
+    const targetKycId = targetKycRow?.applicationKYCDocumentId ?? targetKycRow?.ApplicationKYCDocumentId ?? targetKycRow?.kycDocumentId ?? targetKycRow?.KycDocumentId;
 
     // 1. Primary: Strictly match by applicationKYCDocumentId
-    if (targetKycId) {
-      const matched = personalList.find((p) => {
-        const pKycId = p.applicationKYCDocumentId ?? p.ApplicationKYCDocumentId ?? p.kycDocumentId;
-        return pKycId !== undefined && pKycId !== null && pKycId !== '' && Number(pKycId) === Number(targetKycId);
+    if (hasRecordId(targetKycId)) {
+      const matched = available.find((p) => {
+        const pKycId = personalRowKycId(p);
+        return hasRecordId(pKycId) && Number(pKycId) === Number(targetKycId);
       });
-      if (matched) return matched;
+      if (matched) return claim(matched);
     }
 
-    // 2. Secondary: Match by applicantSequence if present on personal row
-    const matchedBySeq = personalList.find((p) => {
+    // 2. applicantSequence on the personal row, or on the KYC record it points to
+    const matchedBySeq = available.find((p) => {
       const rawSeq = p.applicantSequence ?? p.ApplicantSequence;
-      return rawSeq !== undefined && rawSeq !== null && rawSeq !== '' && Number(rawSeq) === targetSeq;
+      if (hasRecordId(rawSeq)) return Number(rawSeq) === targetSeq;
+      const pKycId = personalRowKycId(p);
+      return hasRecordId(pKycId) && kycSequenceById.get(String(pKycId)) === targetSeq;
     });
-    if (matchedBySeq) return matchedBySeq;
+    if (matchedBySeq) return claim(matchedBySeq);
+
+    // 3. personalInformationId already known from the draft
+    if (hasRecordId(draftPersonalId)) {
+      const matchedById = available.find((p) => hasRecordId(personalRowId(p)) && Number(personalRowId(p)) === Number(draftPersonalId));
+      if (matchedById) return claim(matchedById);
+    }
+
+    // 4. Rows without a KYC link that carry this application's customer / product ids
+    const unlinked = available.filter((p) => !hasRecordId(personalRowKycId(p)) && personalRowBelongsToApplication(p, {
+      kycIds: new Set(),
+      agentCustomerId: appIdStr,
+      productDetailsId: applicationProductDetailsId,
+    }));
+    if (unlinked.length === 1) return claim(unlinked[0]);
 
     return null;
   };
@@ -1122,17 +1378,16 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
           null
         )
       : null;
-    const personalInformationId = rawPersId ?? rawDraftPersId ?? fallbackDraftPersId ?? null;
-    const relationshipWithApplicant = persRow.relationshipId ?? persRow.RelationshipId ?? persRow.relationshipWithApplicant ?? persRow.RelationshipWithApplicant ?? draftPers.relationshipWithApplicant ?? (isPrimary ? 'SELF' : '');
-    const title = persRow.titleId ?? persRow.TitleId ?? persRow.title ?? persRow.Title ?? draftPers.title ?? '';
-    const rawFirst = persRow.firstName ?? persRow.FirstName ?? draftPers.firstName;
-    const rawMiddle = persRow.middleName ?? persRow.MiddleName ?? draftPers.middleName;
-    const rawLast = persRow.lastName ?? persRow.LastName ?? draftPers.lastName;
+    // First non-empty value wins, so an empty backend field never wipes a saved draft value.
+    const filled = (...values) => values.find((value) => hasRecordId(value) && String(value).trim() !== '');
+    const personalInformationId = filled(rawPersId, rawDraftPersId, fallbackDraftPersId) ?? null;
+    const relationshipWithApplicant = filled(persRow.relationshipId, persRow.RelationshipId, persRow.relationshipWithApplicant, persRow.RelationshipWithApplicant, draftPers.relationshipWithApplicant) ?? (isPrimary ? 'SELF' : '');
+    const title = filled(persRow.titleId, persRow.TitleId, persRow.title, persRow.Title, draftPers.title) ?? '';
+    const rawFirst = filled(persRow.firstName, persRow.FirstName, draftPers.firstName);
+    const rawMiddle = filled(persRow.middleName, persRow.MiddleName, draftPers.middleName);
+    const rawLast = filled(persRow.lastName, persRow.LastName, draftPers.lastName);
 
-    const hasSavedStructuredName =
-      (rawFirst !== undefined && rawFirst !== null && String(rawFirst).trim() !== '') ||
-      (rawMiddle !== undefined && rawMiddle !== null && String(rawMiddle).trim() !== '') ||
-      (rawLast !== undefined && rawLast !== null && String(rawLast).trim() !== '');
+    const hasSavedStructuredName = Boolean(rawFirst || rawMiddle || rawLast);
 
     let firstName = rawFirst ?? '';
     let middleName = rawMiddle ?? '';
@@ -1144,17 +1399,17 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
       middleName = split.middleName;
       lastName = split.lastName;
     }
-    const fatherOrSpouseName = persRow.fatherSpouseName ?? persRow.FatherSpouseName ?? persRow.fatherOrSpouseName ?? persRow.FatherOrSpouseName ?? draftPers.fatherOrSpouseName ?? '';
-    const mothersMaidenName = persRow.mothersMaidenName ?? persRow.MothersMaidenName ?? draftPers.mothersMaidenName ?? '';
-    const rawDob = persRow.dateOfBirth ?? persRow.DateOfBirth ?? draftPers.dateOfBirth;
+    const fatherOrSpouseName = filled(persRow.fatherSpouseName, persRow.FatherSpouseName, persRow.fatherOrSpouseName, persRow.FatherOrSpouseName, draftPers.fatherOrSpouseName) ?? '';
+    const mothersMaidenName = filled(persRow.mothersMaidenName, persRow.MothersMaidenName, draftPers.mothersMaidenName) ?? '';
+    const rawDob = filled(persRow.dateOfBirth, persRow.DateOfBirth, draftPers.dateOfBirth);
     const dateOfBirth = rawDob ? String(rawDob).slice(0, 10) : '';
-    const religion = persRow.religionId ?? persRow.ReligionId ?? persRow.religion ?? persRow.Religion ?? draftPers.religion ?? '';
-    const category = persRow.casteId ?? persRow.CasteId ?? persRow.category ?? persRow.Category ?? draftPers.category ?? '';
-    const gender = persRow.genderId ?? persRow.GenderId ?? persRow.gender ?? persRow.Gender ?? draftPers.gender ?? '';
-    const maritalStatus = persRow.maritalStatusId ?? persRow.MaritalStatusId ?? persRow.maritalStatus ?? persRow.MaritalStatus ?? draftPers.maritalStatus ?? '';
-    const mobileNo = persRow.mobileNumber ?? persRow.MobileNumber ?? persRow.mobileNo ?? persRow.MobileNo ?? (isPrimary ? (defaultMobile || draftPers.mobileNo || '') : (draftPers.mobileNo || ''));
-    const emailId = persRow.emailId ?? persRow.EmailId ?? persRow.email ?? persRow.Email ?? (isPrimary ? (defaultEmail || draftPers.emailId || '') : (draftPers.emailId || ''));
-    const panCardNo = kycRow?.panCardNo ?? kycRow?.PanCardNo ?? persRow.panCardNo ?? persRow.PanCardNo ?? draftPers.panCardNo ?? '';
+    const religion = filled(persRow.religionId, persRow.ReligionId, persRow.religion, persRow.Religion, draftPers.religion) ?? '';
+    const category = filled(persRow.casteId, persRow.CasteId, persRow.category, persRow.Category, draftPers.category) ?? '';
+    const gender = filled(persRow.genderId, persRow.GenderId, persRow.gender, persRow.Gender, draftPers.gender) ?? '';
+    const maritalStatus = filled(persRow.maritalStatusId, persRow.MaritalStatusId, persRow.maritalStatus, persRow.MaritalStatus, draftPers.maritalStatus) ?? '';
+    const mobileNo = filled(persRow.mobileNumber, persRow.MobileNumber, persRow.mobileNo, persRow.MobileNo, isPrimary ? defaultMobile : undefined, draftPers.mobileNo) ?? '';
+    const emailId = filled(persRow.emailId, persRow.EmailId, persRow.email, persRow.Email, isPrimary ? defaultEmail : undefined, draftPers.emailId) ?? '';
+    const panCardNo = filled(kycRow?.panCardNo, kycRow?.PanCardNo, kycRow?.PANCardNo, persRow.panCardNo, persRow.PanCardNo, draftPers.panCardNo) ?? '';
 
     return {
       personalInformationId,
@@ -1176,10 +1431,16 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     };
   };
 
+  const draftCoApplicantPersonal = (idx) =>
+    existingDraft.registration?.personalInformation?.coApplicants?.[idx] ||
+    existingDraft.personalInformation?.coApplicants?.[idx] ||
+    {};
+  // Co-applicants are matched by their own KYC records before the applicant, so the
+  // applicant fallbacks can never claim a co-applicant row.
+  const coApplicantPersList = Array.from({ length: Number(coApplicantsCount) || 0 }, (_, idx) =>
+    findPersonalRowForSequence(idx + 1, coApplicantKycs[idx], draftCoApplicantPersonal(idx).personalInformationId)
+  );
   const applicantPers = findPersonalRowForSequence(0, applicantKyc);
-  const coApplicantPersList = Array.from({ length: Number(coApplicantsCount) || 0 }, (_, idx) => {
-    return findPersonalRowForSequence(idx + 1, coApplicantKycs[idx]);
-  });
 
   const coApplicantPersonalIds = new Set(
     coApplicantPersList
@@ -1190,7 +1451,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
 
   const mappedCoApplicants = Array.from({ length: Number(coApplicantsCount) || 0 }, (_, idx) => {
     const coPers = coApplicantPersList[idx] || {};
-    const draftCo = existingDraft.registration?.personalInformation?.coApplicants?.[idx] || existingDraft.personalInformation?.coApplicants?.[idx] || {};
+    const draftCo = draftCoApplicantPersonal(idx);
     return mapPersonalPerson(coPers, draftCo, coApplicantKycs[idx], '', '', '', false);
   });
 
@@ -1380,7 +1641,8 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     const isDraftPersConflicting =
       (targetSeq === 0 && draftAddr.personalInformationId && coApplicantPersonalIds.has(Number(draftAddr.personalInformationId))) ||
       (resolvedPersId && draftAddr.personalInformationId && Number(draftAddr.personalInformationId) !== Number(resolvedPersId));
-    const isDraftSuppressedByExplicitBackend = isBackendAddressExplicit && !addressDetailsId;
+    const isDraftSuppressedByExplicitBackend =
+      isBackendAddressExplicit && !addressDetailsId && hasRecordId(draftAddr.addressDetailsId ?? draftAddr.applicationAddressDetailsId);
 
     const safeDraftAddr = isDraftIdClaimed || isDraftPersConflicting || isDraftSuppressedByExplicitBackend ? {} : draftAddr;
 
@@ -1571,7 +1833,8 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     const rawEmpId = getEmpId(effectiveEmpRow);
     const isDraftIdClaimed = draftEmp.employmentIncomeDetailsId && claimedEmploymentIds.has(Number(draftEmp.employmentIncomeDetailsId)) && (!rawEmpId || Number(draftEmp.employmentIncomeDetailsId) !== Number(rawEmpId));
     const isDraftAddrConflicting = resolvedAddrId && draftEmp.applicationAddressDetailsId && Number(draftEmp.applicationAddressDetailsId) !== Number(resolvedAddrId);
-    const isDraftSuppressedByExplicitBackend = isBackendEmpExplicit && !rawEmpId;
+    const isDraftSuppressedByExplicitBackend =
+      isBackendEmpExplicit && !rawEmpId && hasRecordId(draftEmp.employmentIncomeDetailsId ?? draftEmp.applicationEmploymentIncomeDetailsId);
 
     const safeDraftEmp = isDraftIdClaimed || isDraftAddrConflicting || isDraftSuppressedByExplicitBackend ? {} : draftEmp;
 
@@ -1732,7 +1995,8 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     const rawBankId = getBankId(effectiveBankRow);
     const isDraftIdClaimed = draftBank.applicationBankExistingLoanDetailsId && claimedBankIds.has(Number(draftBank.applicationBankExistingLoanDetailsId)) && (!rawBankId || Number(draftBank.applicationBankExistingLoanDetailsId) !== Number(rawBankId));
     const isDraftEmpConflicting = resolvedEmpId && draftBank.applicationEmploymentIncomeDetailsId && Number(draftBank.applicationEmploymentIncomeDetailsId) !== Number(resolvedEmpId);
-    const isDraftSuppressedByExplicitBackend = isBackendBankExplicit && !rawBankId;
+    const isDraftSuppressedByExplicitBackend =
+      isBackendBankExplicit && !rawBankId && hasRecordId(draftBank.applicationBankExistingLoanDetailsId);
 
     const safeDraftBank = isDraftIdClaimed || isDraftEmpConflicting || isDraftSuppressedByExplicitBackend ? {} : draftBank;
 
@@ -1810,6 +2074,10 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     activeCreditCardsDetails: [],
   });
 
+  // A draft bank never saved to the backend has no id yet and must survive a backend reload.
+  const keepDraftBank = (draftBank) =>
+    Boolean(draftBank?.bankName) && (!isBackendBankExplicit || !hasRecordId(draftBank.applicationBankExistingLoanDetailsId));
+
   const applicantEmpId = employmentIncome.applicant?.applicationEmploymentIncomeDetailsId ?? employmentIncome.applicant?.employmentIncomeDetailsId;
   const applicantBankList = filterBankRowsForSequence(0, employmentIncome.applicant);
   const draftAppBanks = Array.isArray(existingDraft.bankExistingLoans?.applicant?.banks)
@@ -1826,7 +2094,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
 
   const mappedPrimaryBank = primaryBankRecord
     ? mapBankRecord(primaryBankRecord, customerName, draftAppPrimary, applicantEmpId)
-    : (!isBackendBankExplicit && draftAppPrimary.bankName ? mapBankRecord({}, customerName, draftAppPrimary, applicantEmpId) : createEmptyBankRecord(customerName, true));
+    : (keepDraftBank(draftAppPrimary) ? mapBankRecord({}, customerName, draftAppPrimary, applicantEmpId) : createEmptyBankRecord(customerName, true));
 
   const mappedOtherBanks = otherBankRecords.map((rec, idx) =>
     mapBankRecord(rec, customerName, draftAppBanks[idx + 1] || (idx === 0 ? draftAppOther : {}), applicantEmpId)
@@ -1841,12 +2109,12 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
         applicantBanks.push(mapBankRecord({}, customerName, draftAppBanks[i], applicantEmpId));
       }
     }
-  } else if (!isBackendBankExplicit && draftAppOther.bankName) {
+  } else if (keepDraftBank(draftAppOther)) {
     applicantBanks.push(mapBankRecord({}, customerName, draftAppOther, applicantEmpId));
   }
 
   const mappedOtherBank = applicantBanks[1] || (
-    !isBackendBankExplicit && draftAppOther.bankName
+    keepDraftBank(draftAppOther)
       ? mapBankRecord({}, customerName, draftAppOther, applicantEmpId)
       : createEmptyBankRecord(customerName, false)
   );
@@ -1873,7 +2141,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
 
     const mappedCoPrimary = coPrimary
       ? mapBankRecord(coPrimary, coName, draftCoPrimary, coEmpId)
-      : (!isBackendBankExplicit && draftCoPrimary.bankName ? mapBankRecord({}, coName, draftCoPrimary, coEmpId) : createEmptyBankRecord(coName, true));
+      : (keepDraftBank(draftCoPrimary) ? mapBankRecord({}, coName, draftCoPrimary, coEmpId) : createEmptyBankRecord(coName, true));
 
     const mappedCoOthers = coOtherRecords.map((rec, rIdx) =>
       mapBankRecord(rec, coName, draftCoBanks[rIdx + 1] || (rIdx === 0 ? draftCoOther : {}), coEmpId)
@@ -1888,12 +2156,12 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
           coBanks.push(mapBankRecord({}, coName, draftCoBanks[i], coEmpId));
         }
       }
-    } else if (!isBackendBankExplicit && draftCoOther.bankName) {
+    } else if (keepDraftBank(draftCoOther)) {
       coBanks.push(mapBankRecord({}, coName, draftCoOther, coEmpId));
     }
 
     const mappedCoOther = coBanks[1] || (
-      !isBackendBankExplicit && draftCoOther.bankName
+      keepDraftBank(draftCoOther)
         ? mapBankRecord({}, coName, draftCoOther, coEmpId)
         : createEmptyBankRecord(coName, false)
     );
@@ -2423,15 +2691,15 @@ export function ApplicationDraftProvider({ children }) {
                 .map(Number)
             );
 
+            const personalScope = {
+              kycIds: new Set([...currentApplicationKycIds].map(String)),
+              agentCustomerId: appIdStr,
+              productDetailsId: effectiveProdId,
+            };
+
             if (!hasPersonal && persRes.status === 'fulfilled' && persRes.value) {
               const rawPers = extractArr(persRes.value);
-              const matchedPers = currentApplicationKycIds.size > 0
-                ? rawPers.filter((p) => {
-                    const kycId = p.applicationKYCDocumentId ?? p.ApplicationKYCDocumentId ?? p.kycDocumentId;
-                    return kycId !== undefined && kycId !== null && currentApplicationKycIds.has(Number(kycId));
-                  })
-                : [];
-              backendResult.personalInformation = matchedPers;
+              backendResult.personalInformation = rawPers.filter((p) => personalRowBelongsToApplication(p, personalScope));
             } else if (!hasPersonal) {
               backendResult.personalInformation = [];
             } else if (hasPersonal) {
@@ -2441,12 +2709,12 @@ export function ApplicationDraftProvider({ children }) {
                 backendResult.applicationPersonalInformation ??
                 backendResult.ApplicationPersonalInformation
               );
-              backendResult.personalInformation = currentApplicationKycIds.size > 0
-                ? existingPers.filter((p) => {
-                    const kycId = p.applicationKYCDocumentId ?? p.ApplicationKYCDocumentId ?? p.kycDocumentId;
-                    return kycId !== undefined && kycId !== null && currentApplicationKycIds.has(Number(kycId));
-                  })
-                : [];
+              // Rows from ApplicationFullDetails already belong to this application; only rows
+              // that point to another application's KYC record are dropped.
+              backendResult.personalInformation = existingPers.filter((p) => {
+                const kycId = personalRowKycId(p);
+                return !hasRecordId(kycId) || currentApplicationKycIds.size === 0 || currentApplicationKycIds.has(Number(kycId));
+              });
             }
 
             // Build current application personal information ID set
@@ -2601,8 +2869,9 @@ export function ApplicationDraftProvider({ children }) {
         }
 
         if (backendResult) {
+          await mergeApplicationPeopleRows(backendResult, baseUrl, appIdStr);
           const currentDraft = applicationsRef.current[appIdStr] || getApplication(appIdStr);
-          const mapped = mapBackendToApplication(backendResult, currentDraft);
+          const mapped = { ...mapBackendToApplication(backendResult, currentDraft), _hydratedAt: Date.now() };
           applicationsRef.current = {
             ...applicationsRef.current,
             [appIdStr]: mapped,

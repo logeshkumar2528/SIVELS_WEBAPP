@@ -29,6 +29,122 @@ function extractArray(raw) {
   return [];
 }
 
+function firstValue(row, ...keys) {
+  for (const key of keys) {
+    const value = row?.[key];
+    if (value !== undefined && value !== null && value !== '') return value;
+  }
+  return undefined;
+}
+
+function isActiveProofRecord(row) {
+  if (firstValue(row, 'isActive', 'IsActive') === false) return false;
+  const status = String(firstValue(row, 'status', 'Status') ?? '').trim().toLowerCase();
+  return status !== 'inactive' && status !== 'deleted';
+}
+
+/**
+ * Loads the customer proofs (CustomerDocumentProof) for one customer and application and
+ * resolves their display names. Only records that belong to this customer, and to this
+ * application product when both sides know it, are kept.
+ */
+async function loadCustomerProofs({ customerId, productDetailsId, categoryMap = {}, headers = {} }) {
+  if (customerId === undefined || customerId === null || customerId === '') return [];
+  const query = new URLSearchParams({ agentCustomerId: String(customerId) });
+  if (productDetailsId) query.set('applicationProductDetailsId', String(productDetailsId));
+
+  const [proofRes, proofMasterRes] = await Promise.allSettled([
+    fetch(`${API_BASE}/customerdocumentproof?${query}`, { headers }).then((r) => (r.ok ? r.json() : [])),
+    fetch(`${API_BASE}/proofmaster`, { headers }).then((r) => (r.ok ? r.json() : [])),
+  ]);
+  const records = proofRes.status === 'fulfilled' ? extractArray(proofRes.value) : [];
+  const proofNames = {};
+  if (proofMasterRes.status === 'fulfilled') {
+    extractArray(proofMasterRes.value).forEach((row) => {
+      const id = firstValue(row, 'proofId', 'ProofId');
+      const name = firstValue(row, 'proofName', 'ProofName');
+      if (id !== undefined && name) proofNames[String(id)] = String(name).trim();
+    });
+  }
+
+  return records
+    .filter(isActiveProofRecord)
+    .filter((row) => String(firstValue(row, 'agentCustomerId', 'AgentCustomerId') ?? '') === String(customerId))
+    .filter((row) => {
+      const rowProductId = firstValue(row, 'applicationProductDetailsId', 'ApplicationProductDetailsId');
+      return !productDetailsId || rowProductId === undefined || String(rowProductId) === String(productDetailsId);
+    })
+    .map((row) => {
+      const sequence = Number(firstValue(row, 'applicantSequence', 'ApplicantSequence'));
+      const documentTypeId = firstValue(row, 'documentTypeId', 'DocumentTypeId');
+      const proofId = firstValue(row, 'proofId', 'ProofId');
+      return {
+        id: firstValue(row, 'customerDocumentProofId', 'CustomerDocumentProofId', 'id', 'Id'),
+        applicantSequence: sequence,
+        documentTypeId,
+        categoryName: String(
+          firstValue(row, 'documentTypeName', 'DocumentTypeName') ?? categoryMap[String(documentTypeId)] ?? ''
+        ).trim(),
+        proofName: String(
+          firstValue(row, 'proofName', 'ProofName') ?? (proofId !== undefined ? proofNames[String(proofId)] : '') ?? ''
+        ).trim(),
+        contentType: String(firstValue(row, 'contentType', 'ContentType') ?? '').toLowerCase(),
+        fileName: String(firstValue(row, 'originalFileName', 'OriginalFileName', 'fileName', 'FileName', 'filePath', 'FilePath') ?? ''),
+        uploadedAt: firstValue(row, 'modifiedAt', 'ModifiedAt', 'createdAt', 'CreatedAt'),
+      };
+    })
+    .filter((proof) => Number.isInteger(proof.applicantSequence) && proof.applicantSequence >= 0);
+}
+
+const PROOF_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+const PROOF_IMAGE_EXTENSIONS = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+
+/** Image MIME type for a proof file, or '' when it is not a supported image (e.g. a PDF). */
+function proofImageType(contentType, fileName) {
+  const type = String(contentType || '').toLowerCase().split(';')[0].trim();
+  if (PROOF_IMAGE_TYPES.includes(type)) return type === 'image/jpg' ? 'image/jpeg' : type;
+  if (type && type !== 'application/octet-stream') return '';
+  const ext = String(fileName || '').split('?')[0].split('.').pop().toLowerCase();
+  return PROOF_IMAGE_EXTENSIONS[ext] || '';
+}
+
+/**
+ * The Address Proof image to use as a person's photo: a proof whose name mentions "photo"
+ * first, otherwise the most recent Address Proof image. PDFs and other files are ignored.
+ */
+function pickAddressProofPhoto(proofs, applicantSequence) {
+  const candidates = proofs
+    .filter((proof) => proof.applicantSequence === applicantSequence && proof.id !== undefined)
+    .filter((proof) => /address/i.test(proof.categoryName))
+    .filter((proof) => proofImageType(proof.contentType, proof.fileName))
+    .sort((a, b) => {
+      const photoRank = Number(/photo/i.test(b.proofName)) - Number(/photo/i.test(a.proofName));
+      if (photoRank !== 0) return photoRank;
+      const timeDiff = new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime();
+      return timeDiff !== 0 ? timeDiff : Number(b.id) - Number(a.id);
+    });
+  return candidates[0] || null;
+}
+
+/** Groups one person's proofs as [{ category, proofs: [unique proof names] }]. */
+function groupCustomerProofs(proofs, applicantSequence) {
+  const groups = [];
+  proofs
+    .filter((proof) => proof.applicantSequence === applicantSequence && proof.proofName)
+    .forEach(({ categoryName, proofName }) => {
+      const category = categoryName || 'Customer Proof';
+      let group = groups.find((g) => g.category.toLowerCase() === category.toLowerCase());
+      if (!group) {
+        group = { category, proofs: [] };
+        groups.push(group);
+      }
+      if (!group.proofs.some((name) => name.toLowerCase() === proofName.toLowerCase())) {
+        group.proofs.push(proofName);
+      }
+    });
+  return groups;
+}
+
 function mergeNonEmpty(primary = {}, fallback = {}) {
   const result = { ...(fallback || {}) };
   Object.entries(primary || {}).forEach(([k, v]) => {
@@ -101,6 +217,12 @@ export default function PdfView() {
   const [liveApplicantKyc, setLiveApplicantKyc] = useState(null);
   const [coApplicantPhotos, setCoApplicantPhotos] = useState({});
   const [downloadedDocs, setDownloadedDocs] = useState([]);
+  // Customer proofs (CustomerDocumentProof) as { applicantSequence, categoryName, proofName }
+  const [customerProofs, setCustomerProofs] = useState([]);
+  const [customerProofsReady, setCustomerProofsReady] = useState(false);
+  // Co-Applicant Address Proof images keyed by applicantSequence (1, 2, ...)
+  const [coApplicantProofPhotos, setCoApplicantProofPhotos] = useState({});
+  const [isProofPhotosDownloading, setIsProofPhotosDownloading] = useState(false);
   const [isMetadataLoading, setIsMetadataLoading] = useState(true);
   const [isDocsDownloading, setIsDocsDownloading] = useState(true);
   const [isCoPhotosLoading, setIsCoPhotosLoading] = useState(false);
@@ -149,6 +271,8 @@ export default function PdfView() {
     async function loadAllData() {
       setIsMetadataLoading(true);
       setIsDocsDownloading(true);
+      setCustomerProofsReady(false);
+      let proofsRequested = false;
       try {
         // Hydrate full application data into draft context first (forceRefresh: true)
         try {
@@ -863,6 +987,38 @@ export default function PdfView() {
             }
           }
 
+          // 4. Customer proofs selected on the KYC page (applicant + co-applicants)
+          {
+            const prodList = productDetailsRes.status === 'fulfilled' ? extractArray(productDetailsRes.value) : [];
+            const matchedProduct = prodList.find(
+              (p) =>
+                String(p.agentCustomerId ?? p.AgentCustomerId) === String(resolvedCustomerId) ||
+                String(p.agentCustomerId ?? p.AgentCustomerId) === String(applicationId)
+            );
+            const proofProductId =
+              matchedProduct?.applicationProductDetailsId ??
+              matchedProduct?.ApplicationProductDetailsId ??
+              appData.applicationProductDetailsId ??
+              null;
+            const categoryMap = docTypeMap.status === 'fulfilled' ? docTypeMap.value || {} : {};
+            proofsRequested = true;
+            loadCustomerProofs({
+              customerId: resolvedCustomerId,
+              productDetailsId: proofProductId,
+              categoryMap,
+              headers: authHeaders,
+            })
+              .then((rows) => {
+                if (active) setCustomerProofs(rows);
+              })
+              .catch((proofErr) => {
+                console.warn('Could not load customer proofs for PDF:', proofErr);
+              })
+              .finally(() => {
+                if (active) setCustomerProofsReady(true);
+              });
+          }
+
           // Resolve RM & Ownership strictly from backend ApplicationFullDetails
           let resolvedOwnership = null;
           if (fullDetailsRes?.status === 'fulfilled' && fullDetailsRes.value) {
@@ -1066,6 +1222,7 @@ export default function PdfView() {
         if (active) {
           setIsMetadataLoading(false);
           setIsDocsDownloading(false);
+          if (!proofsRequested) setCustomerProofsReady(true);
         }
       }
     }
@@ -1080,7 +1237,13 @@ export default function PdfView() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [errorPopup, setErrorPopup] = useState(null);
 
-  const isPdfMediaReady = !isMetadataLoading && !isDocsDownloading && !isCoPhotosLoading && !isApplicantPhotoLoading;
+  const isPdfMediaReady =
+    !isMetadataLoading &&
+    !isDocsDownloading &&
+    !isCoPhotosLoading &&
+    !isApplicantPhotoLoading &&
+    customerProofsReady &&
+    !isProofPhotosDownloading;
 
   // Global preparation loader lifecycle: displays existing Sivels global loader while documents/media prepare
   useEffect(() => {
@@ -1624,7 +1787,20 @@ export default function PdfView() {
     coApplicantKycIds.forEach((kycId, idx) => {
       if (!kycId) return;
 
+      const kycRecord = liveAllKycRecords.find(
+        (k) => String(k.applicationKYCDocumentId ?? k.ApplicationKYCDocumentId ?? k.kycDocumentId ?? '') === String(kycId)
+      );
+      const storedPath = String(kycRecord?.profileImagePath ?? kycRecord?.ProfileImagePath ?? '')
+        .trim()
+        .replace(/\\/g, '/')
+        .replace(/^\/+/, '');
+
       fetch(`${API_BASE}/ApplicationKYCDocuments/${kycId}/profile-image`, { headers })
+        .then((res) => {
+          if (res.ok || !storedPath) return res;
+          // Fallback: the stored profile image path on this co-applicant's own KYC record
+          return fetch(`${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(storedPath)}`, { headers });
+        })
         .then(async (res) => {
           if (res.ok && isMounted) {
             const blob = await res.blob();
@@ -1660,6 +1836,59 @@ export default function PdfView() {
       isMounted = false;
     };
   }, [hasCoApplicants, coApplicantKycIdsKey]);
+
+  // Co-Applicant Address Proof images (CustomerDocumentProof), one per applicantSequence >= 1.
+  // Sequence 0 (the Applicant) is never considered, so the Applicant's image cannot leak here.
+  const coApplicantProofPhotoPicks = useMemo(() => {
+    if (!hasCoApplicants) return [];
+    return Array.from({ length: applicantCount }, (_, idx) => ({ seq: idx + 1, proof: pickAddressProofPhoto(customerProofs, idx + 1) }))
+      .filter(({ proof }) => proof);
+  }, [customerProofs, hasCoApplicants, applicantCount]);
+  const coApplicantProofPhotoKey = coApplicantProofPhotoPicks.map(({ seq, proof }) => `${seq}:${proof.id}`).join(',');
+
+  useEffect(() => {
+    if (coApplicantProofPhotoPicks.length === 0) {
+      setCoApplicantProofPhotos({});
+      setIsProofPhotosDownloading(false);
+      return undefined;
+    }
+
+    let isMounted = true;
+    setIsProofPhotosDownloading(true);
+    const token = localStorage.getItem('authToken');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+    Promise.allSettled(
+      coApplicantProofPhotoPicks.map(async ({ seq, proof }) => {
+        const res = await fetch(`${API_BASE}/customerdocumentproof/${encodeURIComponent(proof.id)}/download`, { headers });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const imageType = proofImageType(blob.type, '') || proofImageType(proof.contentType, proof.fileName);
+        // A PDF (or any non-image) proof is skipped so the KYC profile image fallback applies.
+        if (!blob || blob.size === 0 || !imageType || /pdf/i.test(blob.type)) return null;
+        const objectUrl = URL.createObjectURL(new Blob([blob], { type: imageType }));
+        blobUrlsRef.current.push(objectUrl);
+        return { seq, objectUrl };
+      })
+    ).then((results) => {
+      if (!isMounted) return;
+      const next = {};
+      results.forEach((result, idx) => {
+        if (result.status === 'fulfilled' && result.value) {
+          next[result.value.seq] = result.value.objectUrl;
+        } else if (result.status === 'rejected') {
+          console.warn(`Could not load Address Proof image for co-applicant ${coApplicantProofPhotoPicks[idx].seq}:`, result.reason);
+        }
+      });
+      setCoApplicantProofPhotos(next);
+      setIsProofPhotosDownloading(false);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coApplicantProofPhotoKey]);
 
   const rawAddress = appData.addressDetails || appData.sections?.addressDetails || {};
   const rawAddressApplicant = rawAddress.applicant || {};
@@ -2140,11 +2369,51 @@ export default function PdfView() {
     return names;
   };
 
+  // Co-Applicant KYC values: live backend record first (matched by applicantSequence),
+  // then the draft, supporting camelCase / PascalCase and raw backend field names.
+  const getCoApplicantKyc = (index) => {
+    const targetSeq = index + 1;
+    const liveKyc =
+      liveKycCoApplicants.find((k) => Number(k.applicantSequence ?? k.ApplicantSequence) === targetSeq) ||
+      liveKycCoApplicants[index] ||
+      {};
+    const draftKyc = kycData.coApplicants?.[index] || {};
+    const co = coApplicants[index] || {};
+    const pickText = (...values) => {
+      const found = values.find((v) => v !== undefined && v !== null && String(v).trim() !== '');
+      return found === undefined ? '' : String(found).trim();
+    };
+    return {
+      aadhaarLast4: pickText(
+        liveKyc.aadhaarLast4, liveKyc.AadhaarLast4, liveKyc.aadhaarLastFourDigits, liveKyc.AadhaarLastFourDigits,
+        draftKyc.aadhaarLast4, draftKyc.AadhaarLast4
+      ),
+      panCardNo: pickText(
+        liveKyc.panCardNo, liveKyc.PanCardNo, liveKyc.PANCardNo,
+        draftKyc.panCardNo, draftKyc.PanCardNo, co.panCardNo
+      ),
+      identityDocumentType: pickText(
+        liveKyc.identityDocumentType, liveKyc.IdentityDocumentType, liveKyc.documentTypeId, liveKyc.DocumentTypeId,
+        draftKyc.identityDocumentType, draftKyc.IdentityDocumentType
+      ),
+      identityDocumentNo: pickText(
+        liveKyc.identityDocumentNo, liveKyc.IdentityDocumentNo, liveKyc.documentNumber, liveKyc.DocumentNumber,
+        draftKyc.identityDocumentNo, draftKyc.IdentityDocumentNo
+      ),
+      verificationStatus: pickText(
+        liveKyc.verificationStatus, liveKyc.VerificationStatus, liveKyc.verificationId, liveKyc.VerificationId,
+        draftKyc.verificationStatus, draftKyc.VerificationStatus
+      ),
+    };
+  };
+  const coApplicantKycRows = hasCoApplicants ? coApplicants.map((_, i) => getCoApplicantKyc(i)) : [];
+
   const documentPeople = [
     {
       label: 'Applicant',
       isCoApplicant: false,
       coIndex: null,
+      applicantSequence: 0,
       kyc: kycData.applicant || {},
       documents: applicantDocs,
     },
@@ -2153,6 +2422,7 @@ export default function PdfView() {
           label: `Co-Applicant ${index + 1}`,
           isCoApplicant: true,
           coIndex: index,
+          applicantSequence: index + 1,
           kyc: kycData.coApplicants?.[index] || {},
           documents: coApplicantDocsMap[index] || [],
         }))
@@ -2748,6 +3018,7 @@ export default function PdfView() {
                 coApplicants.map((_, i) => {
                   const kycId = coApplicantKycIds[i];
                   const coPhotoUrl =
+                    coApplicantProofPhotos[i + 1] ||
                     (kycId ? (coApplicantPhotos[kycId] || coApplicantPhotos[String(kycId)]) : null) ||
                     coApplicantPhotos[i] ||
                     coApplicantPhotos[String(i)] ||
@@ -2886,40 +3157,36 @@ export default function PdfView() {
             <tbody>
               <tr>
                 <td>Aadhaar Last 4</td>
-                <td>{kycData.applicant?.aadhaarLast4 || '-'}</td>
+                <td>{kycData.applicant?.aadhaarLast4 ? `XXXX XXXX ${String(kycData.applicant.aadhaarLast4).slice(-4)}` : '-'}</td>
                 {hasCoApplicants &&
-                  coApplicants.map((_, i) => <td key={i}>{kycData.coApplicants?.[i]?.aadhaarLast4 || '-'}</td>)}
+                  coApplicantKycRows.map((row, i) => <td key={i}>{row.aadhaarLast4 ? `XXXX XXXX ${String(row.aadhaarLast4).slice(-4)}` : '-'}</td>)}
               </tr>
               <tr>
                 <td>PAN Card No</td>
                 <td>{kycData.applicant?.panCardNo || applicant.panCardNo || '-'}</td>
                 {hasCoApplicants &&
-                  coApplicants.map((co, i) => (
-                    <td key={i}>{kycData.coApplicants?.[i]?.panCardNo || co.panCardNo || '-'}</td>
-                  ))}
+                  coApplicantKycRows.map((row, i) => <td key={i}>{row.panCardNo || '-'}</td>)}
               </tr>
               <tr>
                 <td>Identity Doc Type</td>
                 <td>{resolveDocType(kycData.applicant?.identityDocumentType) || '-'}</td>
                 {hasCoApplicants &&
-                  coApplicants.map((_, i) => (
-                    <td key={i}>{resolveDocType(kycData.coApplicants?.[i]?.identityDocumentType) || '-'}</td>
+                  coApplicantKycRows.map((row, i) => (
+                    <td key={i}>{resolveDocType(row.identityDocumentType) || '-'}</td>
                   ))}
               </tr>
               <tr>
                 <td>Identity Doc No</td>
                 <td>{kycData.applicant?.identityDocumentNo || '-'}</td>
                 {hasCoApplicants &&
-                  coApplicants.map((_, i) => (
-                    <td key={i}>{kycData.coApplicants?.[i]?.identityDocumentNo || '-'}</td>
-                  ))}
+                  coApplicantKycRows.map((row, i) => <td key={i}>{row.identityDocumentNo || '-'}</td>)}
               </tr>
               <tr>
                 <td>Verification Status</td>
                 <td>{resolveVerification(kycData.applicant?.verificationStatus) || '-'}</td>
                 {hasCoApplicants &&
-                  coApplicants.map((_, i) => (
-                    <td key={i}>{resolveVerification(kycData.coApplicants?.[i]?.verificationStatus) || 'Pending'}</td>
+                  coApplicantKycRows.map((row, i) => (
+                    <td key={i}>{resolveVerification(row.verificationStatus) || 'Pending'}</td>
                   ))}
               </tr>
             </tbody>
@@ -2938,6 +3205,7 @@ export default function PdfView() {
           >
             {documentPeople.map((person) => {
               const documentNames = getCollectedDocumentNames(person.kyc, person.documents, person.isCoApplicant, person.coIndex);
+              const proofGroups = groupCustomerProofs(customerProofs, person.applicantSequence);
 
               return (
                 <div
@@ -2961,8 +3229,27 @@ export default function PdfView() {
                         </span>
                       ))}
                     </div>
-                  ) : (
+                  ) : proofGroups.length === 0 ? (
                     <span style={{ fontSize: '10px', color: '#64748b' }}>No KYC documents collected</span>
+                  ) : null}
+                  {proofGroups.length > 0 && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '3px',
+                        marginTop: documentNames.length > 0 ? '7px' : 0,
+                        paddingTop: documentNames.length > 0 ? '6px' : 0,
+                        borderTop: documentNames.length > 0 ? '1px dashed #cbd5e1' : 'none',
+                      }}
+                    >
+                      {proofGroups.map((group) => (
+                        <div key={group.category} style={{ fontSize: '10.5px', color: '#334155' }}>
+                          <span style={{ fontWeight: '600', color: '#0f172a' }}>{group.category}:</span>{' '}
+                          {group.proofs.join(', ')}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               );

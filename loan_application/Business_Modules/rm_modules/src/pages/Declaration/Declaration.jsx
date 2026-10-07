@@ -399,6 +399,26 @@ export default function Declaration() {
           throw new Error('Invalid customer ID for final submission.');
         }
 
+        const statusRes = await fetch(`${API_BASE}/AgentAddCustomer/${agentCustomerId}`);
+        if (statusRes.ok) {
+          const statusData = await statusRes.json().catch(() => null);
+          const customer = statusData?.value ?? statusData?.data ?? statusData;
+          const currentStatus = Number(customer?.status ?? customer?.Status);
+          // Backend only allows the status 1 → 2 transition; 2 means it was already logged to HO.
+          if (currentStatus === 2) {
+            saveApplication(appId, { status: 'Logged to HO' });
+            setOtpStep('success');
+            return;
+          }
+          if (Number.isFinite(currentStatus) && currentStatus !== 1) {
+            throw new Error(
+              currentStatus === 0
+                ? 'This application is still with the agent and cannot be logged to HO yet.'
+                : 'This application has already moved past RM review and cannot be submitted again.'
+            );
+          }
+        }
+
         const payload = {
           agentCustomerId,
           status: 2,

@@ -37,6 +37,7 @@ import VerificationStepModal from '../../components/Verification/VerificationSte
 import AssetBase from '../../components/AssetBase/AssetBase';
 import RtrCommonSheet from '../../components/RtrCommonSheet/RtrCommonSheet';
 import CustomerDocumentsPanel from '../../components/CustomerDocuments/CustomerDocumentsPanel';
+import CustomerProofVerificationSection from '../../components/CustomerDocuments/CustomerProofVerificationSection';
 import { FolderOpen } from 'lucide-react';
 import PdfView from '../../../../../rm_modules/src/pages/PdfView/PdfView';
 import { ApplicationDraftProvider } from '../../../../../rm_modules/src/state/ApplicationDraftContext';
@@ -56,7 +57,6 @@ const InfoIcon = iconMap['Info'];
 const BuildingIcon = iconMap['Building2'] || iconMap['Landmark'];
 const LandmarkIcon = iconMap['Landmark'];
 const UserIcon = iconMap['User'];
-const UsersIcon = iconMap['Users'];
 const PlusIcon = iconMap['Plus'] || iconMap['FilePlus'];
 const XIcon = iconMap['X'];
 const RefreshCwIcon = iconMap['RefreshCw'];
@@ -65,8 +65,6 @@ const BadgeIndianRupeeIcon = iconMap['BadgeIndianRupee'];
 const EyeIcon = iconMap['Eye'];
 const DownloadIcon = iconMap['Download'];
 const FileTextIcon = iconMap['FileText'];
-const ChevronLeftIcon = iconMap['ChevronLeft'];
-const ChevronRightIcon = iconMap['ChevronRight'];
 const SendIcon = iconMap['Send'];
 const PhoneIcon = iconMap['Phone'];
 const CameraIcon = iconMap['Camera'];
@@ -474,6 +472,26 @@ function resolveRowStatus({ rejection, hasFile, isVerified, isNotRequired, isOpt
     return 'Verified';
   }
   return 'Not Verified';
+}
+
+// Any uploaded document must be verifiable, even when the employment-type mapping marks it not required.
+function makeUploadedRowsVerifiable(rows) {
+  return rows.map((row) => {
+    if (!row.isNotRequired || !row.hasFile) return row;
+    return {
+      ...row,
+      isRequired: true,
+      isOptional: false,
+      isNotRequired: false,
+      status: resolveRowStatus({
+        rejection: row.rejection,
+        hasFile: true,
+        isVerified: row.isVerified,
+        isNotRequired: false,
+        isOptional: false,
+      }),
+    };
+  });
 }
 
 const getRejectionSortTime = (r) => {
@@ -1541,7 +1559,7 @@ export default function CustomerVerification() {
       const nameParts = [pers.firstName, pers.middleName, pers.lastName].filter(Boolean).join(' ');
       const name = nameParts || pers.fullName || pers.customerName || `Co-Applicant ${i + 1}`;
       const pan = kyc.panCardNo || pers.panCardNo || pers.pan || '';
-      const aadhaarLast4 = kyc.aadhaarLastFourDigits || pers.aadhaarLastFourDigits || '';
+      const aadhaarLast4 = String(kyc.aadhaarLastFourDigits || pers.aadhaarLastFourDigits || '').slice(-4);
       const aadhaarDisplay = aadhaarLast4
         ? `XXXX-XXXX-${aadhaarLast4}`
         : (pers.aadhaarNumber ? String(pers.aadhaarNumber) : (kyc.aadhaarNumber ? String(kyc.aadhaarNumber) : '—'));
@@ -7578,35 +7596,8 @@ export default function CustomerVerification() {
     const currentGen = ++financialFetchGenRef.current;
 
     // 1. Applicant Salary Slip (Parallel Task)
-    const isApplicantSalarySlipApplicable =
-      !sTypeId ||
-      !mainApplicantEmploymentTypeId ||
-      employmentTypeDocMappings.length === 0
-        ? true
-        : !getDocumentApplicability({
-            documentTypeId: sTypeId,
-            employmentTypeId: mainApplicantEmploymentTypeId,
-            mappings: employmentTypeDocMappings,
-          }).isNotRequired;
-
     let fetchSalaryPromise = Promise.resolve();
 
-    if (!isApplicantSalarySlipApplicable) {
-      if (currentGen === financialFetchGenRef.current) {
-        setApplicantFinancialDocs((prev) => ({
-          ...prev,
-          salarySlip: {
-            loading: false,
-            data: null,
-            preview: null,
-            comparison: null,
-            rejection: null,
-            error: null,
-            isNotRequired: true,
-          },
-        }));
-      }
-    } else {
       setApplicantFinancialDocs((prev) => ({
         ...prev,
         salarySlip: { ...(prev.salarySlip || {}), loading: true, error: null },
@@ -7695,7 +7686,6 @@ export default function CustomerVerification() {
         }
       }
     })();
-  }
 
     // 2. Applicant Bank Statement (Parallel Task)
     setApplicantFinancialDocs((prev) => ({
@@ -7796,30 +7786,8 @@ export default function CustomerVerification() {
           let coSalarySlip = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
           let coBankStatement = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
 
-          const coEmpId = getEmploymentTypeIdForSequence(seq);
-          const isCoSalarySlipApplicable =
-            !sTypeId || !coEmpId || employmentTypeDocMappings.length === 0
-              ? true
-              : !getDocumentApplicability({
-                  documentTypeId: sTypeId,
-                  employmentTypeId: coEmpId,
-                  mappings: employmentTypeDocMappings,
-                }).isNotRequired;
-
           const salaryCoPromise = (async () => {
             if (!sTypeId) return;
-            if (!isCoSalarySlipApplicable) {
-              coSalarySlip = {
-                loading: false,
-                data: null,
-                preview: null,
-                comparison: null,
-                rejection: null,
-                error: null,
-                isNotRequired: true,
-              };
-              return;
-            }
             try {
               const docRes = await backOfficeService.getApplicantDocument(appProdId, seq, sTypeId);
               const docData = docRes?.data || docRes?.value || docRes;
@@ -10195,7 +10163,7 @@ export default function CustomerVerification() {
       manualDocs: applicantManualDocs,
     });
 
-    return rows;
+    return makeUploadedRowsVerifiable(rows);
   }, [
     getActiveRejectionForApplicant,
     docPreviews,
@@ -10547,7 +10515,7 @@ export default function CustomerVerification() {
       coNumber,
     });
 
-    return rows;
+    return makeUploadedRowsVerifiable(rows);
   }, [
     selectedCoApplicant,
     resolvedKycList,
@@ -10583,8 +10551,8 @@ export default function CustomerVerification() {
   const applicantRequiredCount = applicantApplicableRequiredRows.length;
 
   const applicantVerifiedCount = useMemo(() => {
-    return applicantDocRows.filter((r) => r.isVerified && r.hasFile && !r.isNotRequired).length;
-  }, [applicantDocRows]);
+    return applicantApplicableRequiredRows.filter((r) => r.isVerified && r.hasFile).length;
+  }, [applicantApplicableRequiredRows]);
 
   const allApplicantDocsVerified =
     applicantRequiredCount > 0 &&
@@ -10597,8 +10565,8 @@ export default function CustomerVerification() {
   const coApplicantRequiredCount = coApplicantApplicableRequiredRows.length;
 
   const coApplicantVerifiedCount = useMemo(() => {
-    return coApplicantDocRows.filter((r) => r.isVerified && r.hasFile && !r.isNotRequired).length;
-  }, [coApplicantDocRows]);
+    return coApplicantApplicableRequiredRows.filter((r) => r.isVerified && r.hasFile).length;
+  }, [coApplicantApplicableRequiredRows]);
 
   const allCoApplicantDocsVerified =
     coApplicantRequiredCount > 0 &&
@@ -11545,7 +11513,7 @@ export default function CustomerVerification() {
                           </tr>
                         </thead>
                         <tbody>
-                          {coApplicantDocRows.map((row, idx) => {
+                          {coApplicantDocRows.filter((row) => row.stepCode === 'ZIP_ARCHIVE').map((row, idx) => {
                             const IconComp = row.icon;
                             const isThisRowSaving = savingVerificationKey === `${row.applicantSequence}_${row.stepCode}`;
                             const isCheckboxDisabled =
@@ -11700,6 +11668,29 @@ export default function CustomerVerification() {
                   )}
                 </div>
               </div>
+
+              <CustomerProofVerificationSection
+                agentCustomerId={verificationData?.customerId || verificationData?.agentCustomerId || customerId}
+                applicationProductDetailsId={resolvedAppProdId || null}
+                rmId={
+                  verificationData?.rmId ||
+                  verificationData?.customer?.rmId ||
+                  verificationData?.application?.rmId ||
+                  verificationData?.raw?.customer?.rmId ||
+                  verificationData?.raw?.productDetails?.[0]?.rmId ||
+                  verificationData?.raw?.productDetails?.rmId ||
+                  null
+                }
+                backOfficeId={getAuthenticatedBackOfficeId()}
+                applicants={[
+                  { sequence: 0, name: verificationData?.customerName || '' },
+                  ...coApplicants.map((co) => ({ sequence: co.sequence, name: co.name })),
+                ]}
+                onChanged={() => {
+                  fetchApplicationRejections();
+                  fetchAllCustomerDocs();
+                }}
+              />
             </div>
           )}
 

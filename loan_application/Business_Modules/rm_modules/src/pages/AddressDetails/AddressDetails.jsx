@@ -9,6 +9,7 @@ import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
 import Modal from '../../components/Modal/Modal';
+import CustomerProofButton from '../../components/CustomerProofViewer/CustomerProofButton';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { parseApiErrorBody } from '../../utils/formatUserFacingError';
 import {
@@ -221,7 +222,8 @@ export default function AddressDetails() {
   const [searchParams] = useSearchParams();
   const isViewMode = searchParams.get('mode') === 'view';
   const appId = applicationId;
-  const { getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
+  const { applications, getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
+  const hydratedAt = applications?.[appId]?._hydratedAt || 0;
   const [form, setForm] = useState(() => buildAddressState(getApplication(appId)));
   const [errors, setErrors] = useState({});
   const [errorPopup, setErrorPopup] = useState(null);
@@ -362,7 +364,7 @@ export default function AddressDetails() {
   useEffect(() => {
     setForm(buildAddressState(getApplication(appId)));
     setErrors({});
-  }, [appId, getApplication]);
+  }, [appId, getApplication, hydratedAt]);
 
   const persist = (nextForm) => {
     setForm(nextForm);
@@ -700,13 +702,16 @@ export default function AddressDetails() {
         </Button>
       }
       metaAction={
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowDocsModal(true)}
-        >
-          View Aadhaar
-        </Button>
+        <>
+          <CustomerProofButton appId={appId} appData={appData} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDocsModal(true)}
+          >
+            View Aadhaar
+          </Button>
+        </>
       }
       footerHint={`Address details are stored against the same application ID. ${activeCount > 1 ? `${activeCount} applicant records are linked.` : 'Only the applicant record is linked.'}`}
     >

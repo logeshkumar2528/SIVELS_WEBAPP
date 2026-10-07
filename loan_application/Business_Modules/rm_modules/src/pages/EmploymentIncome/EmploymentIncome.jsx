@@ -5,6 +5,7 @@ import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
 import Select from '../../components/Select/Select';
 import Modal from '../../components/Modal/Modal';
+import CustomerProofButton from '../../components/CustomerProofViewer/CustomerProofButton';
 import { ROUTES } from '../../config/routeConfig';
 import { APPLICATION_WIZARD_STEPS } from '../../config/applicationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
@@ -314,7 +315,8 @@ export default function EmploymentIncome() {
   const [searchParams] = useSearchParams();
   const isViewMode = searchParams.get('mode') === 'view';
   const appId = applicationId;
-  const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
+  const { applications, getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
+  const hydratedAt = applications?.[appId]?._hydratedAt || 0;
   const [form, setForm] = useState(() => buildEmploymentState(getApplication(appId)));
   const [errors, setErrors] = useState({});
   const [errorPopup, setErrorPopup] = useState(null);
@@ -459,7 +461,7 @@ export default function EmploymentIncome() {
   useEffect(() => {
     setForm(buildEmploymentState(getApplication(appId)));
     setErrors({});
-  }, [appId, getApplication]);
+  }, [appId, getApplication, hydratedAt]);
 
   const persist = (nextForm) => {
     setForm(nextForm);
@@ -675,13 +677,16 @@ export default function EmploymentIncome() {
           </Button>
         }
         metaAction={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowDocsModal(true)}
-          >
-            View Salary Slip
-          </Button>
+          <>
+            <CustomerProofButton appId={appId} appData={appData} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDocsModal(true)}
+            >
+              View Salary Slip
+            </Button>
+          </>
         }
         footerHint={`Employment and income data is stored for ${activeCount > 1 ? `${activeCount} applicant records` : 'the applicant record'} on the same application.`}
       >

@@ -598,7 +598,7 @@ export default function CustomerRegistration() {
   const [searchParams] = useSearchParams();
   const isViewMode = searchParams.get('mode') === 'view';
   const appId = applicationId;
-  const { getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
+  const { applications, getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
   const [form, setForm] = useState(() => buildPersonalInformationState(getApplication(appId)));
   const [applicantHeaderName, setApplicantHeaderName] = useState(() => {
     const initialData = getApplication(appId);
@@ -712,7 +712,8 @@ export default function CustomerRegistration() {
     loadMasters();
   }, []);
 
-  const appData = useMemo(() => getApplication(appId), [getApplication, appId]);
+  // getApplication is stable, so the store's applications map is what signals re-hydration.
+  const appData = useMemo(() => getApplication(appId), [getApplication, appId, applications]);
   const coApplicantCount = getApplicantCount(appData);
   const applicationSteps = useMemo(() => APPLICATION_WIZARD_STEPS, []);
 
@@ -743,6 +744,16 @@ export default function CustomerRegistration() {
     }
   }, [appId, ensureApplication, getApplication]);
 
+  // Changes whenever hydration brings a different set of people or personal records.
+  const hydratedPersonalKey = useMemo(() => {
+    const saved = appData?.registration?.personalInformation || appData?.sections?.personalInformation || {};
+    const people = [saved.applicant, ...(Array.isArray(saved.coApplicants) ? saved.coApplicants : [])];
+    return [
+      getApplicantCount(appData),
+      ...people.map((p) => `${p?.personalInformationId ?? ''}:${p?.firstName ?? ''}:${p?.lastName ?? ''}`),
+    ].join('|');
+  }, [appData]);
+
   // Synchronize when hydrated customer data becomes available if user hasn't typed
   useEffect(() => {
     if (!hasUserEditedRef.current) {
@@ -769,7 +780,7 @@ export default function CustomerRegistration() {
         }
       }
     }
-  }, [appId, appData?._isHydrated, appData?.customerName, appData?.fullName, getApplication]);
+  }, [appId, appData?._isHydrated, appData?.customerName, appData?.fullName, hydratedPersonalKey, getApplication]);
 
   useEffect(() => {
     if (hasUserEditedRef.current || applicantHeaderName !== 'Applicant') return;

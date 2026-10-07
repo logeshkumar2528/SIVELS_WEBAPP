@@ -1,0 +1,138 @@
+.cpv-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) 1fr;
+  gap: 16px;
+  min-height: 420px;
+}
+
+.cpv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 65vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.cpv-person {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.cpv-person-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.cpv-category + .cpv-category {
+  margin-top: 10px;
+}
+
+.cpv-category-name {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #2f6b4f;
+  margin-bottom: 6px;
+}
+
+.cpv-proof {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  gap: 2px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cpv-proof:hover {
+  border-color: #2f6b4f;
+}
+
+.cpv-proof.is-active {
+  border-color: #2f6b4f;
+  background: #eef6f1;
+}
+
+.cpv-proof-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.cpv-proof-meta {
+  font-size: 11px;
+  color: #64748b;
+  word-break: break-all;
+}
+
+.cpv-preview {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+  min-width: 0;
+}
+
+.cpv-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 10px;
+}
+
+.cpv-preview-header a {
+  font-weight: 500;
+  color: #2f6b4f;
+  white-space: nowrap;
+}
+
+.cpv-preview-image {
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  align-self: center;
+  border-radius: 6px;
+}
+
+.cpv-preview-frame {
+  width: 100%;
+  flex: 1;
+  min-height: 60vh;
+  border: none;
+}
+
+.cpv-empty {
+  margin: auto;
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.cpv-error {
+  color: #b91c1c;
+}
+
+@media (max-width: 720px) {
+  .cpv-layout {
+    grid-template-columns: 1fr;
+  }
+}

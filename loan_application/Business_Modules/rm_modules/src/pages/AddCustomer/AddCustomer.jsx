@@ -24,6 +24,13 @@ import {
 import Select from '../../components/Select/Select';
 import { masterService } from '../../../../../Core/src/services/masterService';
 import { rmCustomerService } from '../../services/rmCustomerService';
+import {
+  getCustomerDocumentTypes,
+  normalizeCustomerDocumentType,
+  normalizeEmploymentMapping,
+  resolveMappedCategories,
+  uploadAgentCustomerDocument,
+} from '../../../../../Core/src/services/customerDocumentService';
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 import { getCurrentRMContext } from '../../utils/rmContext';
 import { ROUTES } from '../../config/routeConfig';
@@ -38,8 +45,9 @@ export default function AddCustomer() {
 
   // Master Data State
   const [employmentTypes, setEmploymentTypes] = useState([]);
-  const [loanPurposes, setLoanPurposes] = useState([]);
+  const [loanProducts, setLoanProducts] = useState([]);
   const [documentTypes, setDocumentTypes] = useState([]);
+  const [customerDocumentTypes, setCustomerDocumentTypes] = useState([]);
   const [loadingMasters, setLoadingMasters] = useState(true);
   const [mastersError, setMastersError] = useState(null);
 
@@ -61,7 +69,7 @@ export default function AddCustomer() {
     mobileNumber: '',
     email: '',
     employmentTypeId: '',
-    loanPurposeId: '',
+    loanProductId: '',
     expectedAmount: '',
     remarks: '',
   });
@@ -94,18 +102,27 @@ export default function AddCustomer() {
       };
 
       try {
-        const [typesRes, purposesRes, docTypesRes] = await Promise.all([
+        const [typesRes, productsRes, docTypesRes, customerDocTypesRes] = await Promise.all([
           masterService.getEmploymentTypes(),
-          masterService.getLoanPurposes(),
-          masterService.getDocumentTypes(),
+          masterService.getLoanProducts(),
+          masterService.getDocumentTypes().catch((err) => {
+            console.error('Failed to load legacy document types for RM Add Customer:', err);
+            return [];
+          }),
+          getCustomerDocumentTypes().catch((err) => {
+            console.error('Failed to load customer document types for RM Add Customer:', err);
+            return [];
+          }),
         ]);
 
         if (isMounted) {
+          setCustomerDocumentTypes(customerDocTypesRes.map(normalizeCustomerDocumentType));
+
           const typesArr = extractArray(typesRes);
           setEmploymentTypes(typesArr.filter((t) => t.isActive !== false));
 
-          const purposesArr = extractArray(purposesRes);
-          setLoanPurposes(purposesArr.filter((p) => p.isActive !== false));
+          const productsArr = extractArray(productsRes);
+          setLoanProducts(productsArr.filter((p) => p.isActive !== false));
 
           const docTypesArr = extractArray(docTypesRes);
           setDocumentTypes(docTypesArr.filter((d) => d.isActive !== false));
@@ -113,7 +130,7 @@ export default function AddCustomer() {
       } catch (err) {
         if (isMounted) {
           console.error('Failed to load master data for RM Add Customer:', err);
-          setMastersError('Failed to load Employment Types or Loan Purposes. Please refresh.');
+          setMastersError('Failed to load Employment Types or Loan Products. Please refresh.');
         }
       } finally {
         if (isMounted) {
@@ -163,23 +180,32 @@ export default function AddCustomer() {
         const res = await masterService.getEmploymentTypeDocumentMapping(formData.employmentTypeId);
         const allMappings = extractArray(res);
 
-        // Resolve required documents based on active mapping AND active document type
-        const resolvedMappings = allMappings.reduce((acc, mapping) => {
-          if (mapping.isActive === true) {
-            const doc = documentTypes.find(
-              (d) => Number(d.documentTypeId || d.id) === Number(mapping.documentTypeId)
-            );
+        // New-flow mappings point to CustomerDocumentTypeMaster via CustomerDocumentTypeId.
+        const customerFlowMappings = resolveMappedCategories(allMappings, customerDocumentTypes).map((category) => ({
+          ...category,
+          docKey: `c-${category.customerDocumentTypeId}`,
+        }));
 
-            if (doc && doc.isActive === true) {
-              acc.push({
-                ...mapping,
-                documentTypeName: doc.documentTypeName || doc.name || mapping.documentTypeName,
-                documentTypeCode: doc.documentTypeCode || doc.code,
-              });
-            }
-          }
+        // Older mappings that only carry DocumentTypeId still resolve against DocumentTypeMaster.
+        const seenLegacy = new Set();
+        const legacyMappings = allMappings.reduce((acc, row) => {
+          const mapping = normalizeEmploymentMapping(row);
+          if (!mapping.isActive || mapping.customerDocumentTypeId || !mapping.documentTypeId) return acc;
+          const key = String(mapping.documentTypeId);
+          if (seenLegacy.has(key)) return acc;
+          const doc = documentTypes.find((d) => String(d.documentTypeId || d.id) === key);
+          if (!doc) return acc;
+          seenLegacy.add(key);
+          acc.push({
+            ...mapping,
+            documentTypeName: doc.documentTypeName || doc.name || row.documentTypeName,
+            documentTypeCode: doc.documentTypeCode || doc.code,
+            docKey: `d-${key}`,
+          });
           return acc;
         }, []);
+
+        const resolvedMappings = [...customerFlowMappings, ...legacyMappings];
 
         if (isMounted) {
           setDocumentMappings(resolvedMappings);
@@ -199,14 +225,14 @@ export default function AddCustomer() {
       }
     };
 
-    if (documentTypes.length > 0) {
+    if (!loadingMasters) {
       loadMapping();
     }
 
     return () => {
       isMounted = false;
     };
-  }, [formData.employmentTypeId, documentTypes]);
+  }, [formData.employmentTypeId, documentTypes, customerDocumentTypes, loadingMasters]);
 
   // Manage Preview Object URLs
   useEffect(() => {
@@ -390,9 +416,9 @@ export default function AddCustomer() {
       isValid = false;
     }
 
-    // Loan Purpose
-    if (!formData.loanPurposeId) {
-      errors.loanPurposeId = 'Loan Purpose is required.';
+    // Loan Product
+    if (!formData.loanProductId) {
+      errors.loanProductId = 'Loan Product is required.';
       isValid = false;
     }
 
@@ -418,7 +444,7 @@ export default function AddCustomer() {
     // Mandatory Documents Validation
     for (const mapping of documentMappings) {
       if (mapping.isMandatory) {
-        const files = selectedFiles[mapping.documentTypeId];
+        const files = selectedFiles[mapping.docKey];
         if (!files || (Array.isArray(files) && files.length === 0)) {
           setGlobalBanner({
             type: 'error',
@@ -466,7 +492,7 @@ export default function AddCustomer() {
           mobileNumber: formData.mobileNumber.trim(),
           email: formData.email && formData.email.trim() !== '' ? formData.email.trim() : null,
           employmentTypeId: Number(formData.employmentTypeId),
-          loanPurposeId: Number(formData.loanPurposeId),
+          loanProductId: Number(formData.loanProductId),
           expectedLoanAmount: parseAmountToNumber(formData.expectedAmount),
           remarks: formData.remarks.trim(),
           status: 0,
@@ -501,30 +527,38 @@ export default function AddCustomer() {
       const updatedUploadedDocTypeIds = new Set(uploadedDocTypeIds);
       const failedUploads = [];
 
-      for (const docTypeId of Object.keys(selectedFiles)) {
-        if (updatedUploadedDocTypeIds.has(docTypeId)) {
+      for (const docKey of Object.keys(selectedFiles)) {
+        if (updatedUploadedDocTypeIds.has(docKey)) {
           continue; // Already successfully uploaded
         }
 
-        const fileData = selectedFiles[docTypeId];
-        if (!fileData) continue;
+        const mapping = documentMappings.find((m) => m.docKey === docKey);
+        const fileData = selectedFiles[docKey];
+        if (!mapping || !fileData) continue;
 
         const filesList = Array.isArray(fileData) ? fileData : [fileData];
 
         for (const file of filesList) {
           if (!file) continue;
 
-          const uploadFormData = new FormData();
-          uploadFormData.append('file', file);
-          uploadFormData.append('agentCustomerId', String(targetCustomerId));
-          uploadFormData.append('documentTypeId', String(docTypeId));
-          uploadFormData.append('createdBy', String(rmId));
+          let promise;
+          if (mapping.customerDocumentTypeId) {
+            promise = uploadAgentCustomerDocument({
+              file,
+              agentCustomerId: targetCustomerId,
+              customerDocumentTypeId: mapping.customerDocumentTypeId,
+              createdBy: rmId,
+            });
+          } else {
+            const uploadFormData = new FormData();
+            uploadFormData.append('file', file);
+            uploadFormData.append('agentCustomerId', String(targetCustomerId));
+            uploadFormData.append('documentTypeId', String(mapping.documentTypeId));
+            uploadFormData.append('createdBy', String(rmId));
+            promise = rmCustomerService.uploadAgentCustomerDocument(uploadFormData);
+          }
 
-          uploadTasks.push({
-            docTypeId,
-            fileName: file.name,
-            promise: rmCustomerService.uploadAgentCustomerDocument(uploadFormData),
-          });
+          uploadTasks.push({ docTypeId: docKey, fileName: file.name, promise });
         }
       }
 
@@ -560,7 +594,9 @@ export default function AddCustomer() {
       navigate(ROUTES.CUSTOMER_SUBMISSION_HISTORY);
     } catch (err) {
       console.error('Error in RM Add Customer submission:', err);
+      const fieldMessages = Object.values(err?.response?.data?.errors || {}).flat().filter(Boolean);
       const errMsg =
+        (fieldMessages.length > 0 ? fieldMessages.join(' ') : null) ||
         err?.response?.data?.message ||
         err?.response?.data?.title ||
         err?.message ||
@@ -584,9 +620,9 @@ export default function AddCustomer() {
     label: type.employmentTypeName || type.name || 'Employment Type',
   }));
 
-  const loanPurposeOptions = loanPurposes.map((purpose) => ({
-    value: String(purpose.loanPurposeId || purpose.id),
-    label: purpose.purposeName || purpose.name || purpose.productName || 'Loan Purpose',
+  const loanProductOptions = loanProducts.map((product) => ({
+    value: String(product.loanProductId ?? product.id),
+    label: product.productName || product.productCode || 'Unnamed Product',
   }));
 
   const employmentPlaceholder = loadingMasters
@@ -597,13 +633,13 @@ export default function AddCustomer() {
     ? 'No employment types available'
     : 'Select employment type';
 
-  const loanPurposePlaceholder = loadingMasters
-    ? 'Loading loan purposes...'
+  const loanProductPlaceholder = loadingMasters
+    ? 'Loading loan products...'
     : mastersError
-    ? 'Unable to load loan purposes. Please try again.'
-    : loanPurposes.length === 0
-    ? 'No loan purposes available'
-    : 'Select purpose';
+    ? 'Unable to load loan products. Please try again.'
+    : loanProducts.length === 0
+    ? 'No loan products available'
+    : 'Select product';
 
   return (
     <div className="add-customer">
@@ -750,23 +786,23 @@ export default function AddCustomer() {
               {fieldErrors.employmentTypeId && <div className="form-field-error">{fieldErrors.employmentTypeId}</div>}
             </div>
 
-            {/* Loan Purpose */}
+            {/* Loan Product */}
             <div className="form-group">
-              <label className="form-label" htmlFor="loanPurposeId">
-                Loan Purpose<span className="required-star">*</span>
+              <label className="form-label" htmlFor="loanProductId">
+                Loan Product<span className="required-star">*</span>
               </label>
               <Select
-                id="loanPurposeId"
-                name="loanPurposeId"
-                value={formData.loanPurposeId}
-                onChange={(val) => handleSelectChange('loanPurposeId', val)}
-                options={loanPurposeOptions}
-                placeholder={loanPurposePlaceholder}
+                id="loanProductId"
+                name="loanProductId"
+                value={formData.loanProductId}
+                onChange={(val) => handleSelectChange('loanProductId', val)}
+                options={loanProductOptions}
+                placeholder={loanProductPlaceholder}
                 disabled={loadingMasters || !!mastersError || submitting || Boolean(createdRmCustomerId)}
-                error={Boolean(fieldErrors.loanPurposeId)}
+                error={Boolean(fieldErrors.loanProductId)}
                 icon={<Target size={16} strokeWidth={1.8} />}
               />
-              {fieldErrors.loanPurposeId && <div className="form-field-error">{fieldErrors.loanPurposeId}</div>}
+              {fieldErrors.loanProductId && <div className="form-field-error">{fieldErrors.loanProductId}</div>}
             </div>
 
             {/* Expected Loan Amount */}
@@ -848,14 +884,14 @@ export default function AddCustomer() {
                 {documentMappings.map((mapping) => {
                   const docName = mapping.documentTypeName || 'Document';
                   const isMultiple = docName.toLowerCase().includes('other');
-                  const files = selectedFiles[mapping.documentTypeId];
+                  const files = selectedFiles[mapping.docKey];
                   const hasFile = isMultiple ? files && files.length > 0 : Boolean(files);
                   const IconComponent = getDocumentIcon(docName);
-                  const isUploaded = uploadedDocTypeIds.has(String(mapping.documentTypeId));
+                  const isUploaded = uploadedDocTypeIds.has(mapping.docKey);
 
                   return (
                     <div
-                      key={mapping.documentTypeId}
+                      key={mapping.docKey}
                       className={`document-upload-card ${hasFile ? 'has-file' : ''}`}
                     >
                       {hasFile ? (
@@ -889,7 +925,7 @@ export default function AddCustomer() {
                                   <button
                                     type="button"
                                     className="file-remove-btn"
-                                    onClick={() => handleRemoveFile(mapping.documentTypeId, index)}
+                                    onClick={() => handleRemoveFile(mapping.docKey, index)}
                                     style={{ padding: '2px 4px', background: 'transparent', border: 'none' }}
                                     disabled={submitting}
                                   >
@@ -901,12 +937,12 @@ export default function AddCustomer() {
                           </div>
                         ) : (
                           <div className="file-preview-box">
-                            {previews[mapping.documentTypeId] ? (
+                            {previews[mapping.docKey] ? (
                               <img
-                                src={previews[mapping.documentTypeId]}
+                                src={previews[mapping.docKey]}
                                 alt={`${docName} Preview`}
                                 className="thumbnail-preview-img"
-                                onClick={() => setModalImage({ src: previews[mapping.documentTypeId], title: docName })}
+                                onClick={() => setModalImage({ src: previews[mapping.docKey], title: docName })}
                               />
                             ) : (
                               <IconComponent size={18} className="document-icon-badge" />
@@ -915,11 +951,11 @@ export default function AddCustomer() {
                               <span className="file-preview-name">{files.name}</span>
                               <span className="file-preview-size">({formatFileSize(files.size)})</span>
                             </div>
-                            {previews[mapping.documentTypeId] && (
+                            {previews[mapping.docKey] && (
                               <button
                                 type="button"
                                 className="action-view"
-                                onClick={() => setModalImage({ src: previews[mapping.documentTypeId], title: docName })}
+                                onClick={() => setModalImage({ src: previews[mapping.docKey], title: docName })}
                               >
                                 <Eye size={14} />
                               </button>
@@ -963,7 +999,7 @@ export default function AddCustomer() {
                                 multiple={isMultiple}
                                 className="file-input-hidden"
                                 accept=".pdf,.jpg,.jpeg,.png"
-                                onChange={(e) => handleFileChange(e, mapping.documentTypeId, isMultiple)}
+                                onChange={(e) => handleFileChange(e, mapping.docKey, isMultiple)}
                                 disabled={submitting}
                               />
                             </label>
@@ -971,7 +1007,7 @@ export default function AddCustomer() {
                               <button
                                 type="button"
                                 className="file-remove-btn"
-                                onClick={() => handleRemoveFile(mapping.documentTypeId)}
+                                onClick={() => handleRemoveFile(mapping.docKey)}
                                 disabled={submitting}
                               >
                                 <Trash2 size={13} />

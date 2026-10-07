@@ -254,7 +254,7 @@ export function KycDocumentsTab({ applicants = [], documents = [], masterLookups
             docId: null,
             serverPath: kyc.aadharDocumentPath,
             fileName: kyc.aadharDocumentPath ? (kyc.aadharDocumentPath.split('/').pop() || 'Aadhaar Card') : 'Aadhaar e-KYC',
-            identifier: kyc.aadhaarLastFourDigits ? `XXXX-XXXX-${kyc.aadhaarLastFourDigits}` : 'Aadhaar UIDAI Proof',
+            identifier: kyc.aadhaarLastFourDigits ? `XXXX-XXXX-${String(kyc.aadhaarLastFourDigits).slice(-4)}` : 'Aadhaar UIDAI Proof',
             status: vLabel,
             isVerified: isVerifiedRecord,
             createdAt: kyc.createdAt,
