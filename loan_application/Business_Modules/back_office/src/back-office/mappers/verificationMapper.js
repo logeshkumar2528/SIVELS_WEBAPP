@@ -159,7 +159,7 @@ export function mapApplicationFullDetails(response, extraDocs = []) {
     getValue(applicantPers, 'aadhaarLastFourDigits', 'AadhaarLastFourDigits') ||
     '';
 
-  const aadhaarDisplay = aadhaarLast4 ? `XXXX-XXXX-${aadhaarLast4}` : (getValue(applicantKyc, 'aadhaarNumber', 'AadhaarNumber') || 'Not Available');
+  const aadhaarDisplay = aadhaarLast4 ? `XXXX-XXXX-${String(aadhaarLast4).slice(-4)}` : (getValue(applicantKyc, 'aadhaarNumber', 'AadhaarNumber') || 'Not Available');
 
   const rawCustomerCode = getValue(
     customer,
@@ -290,7 +290,7 @@ export function mapApplicationFullDetails(response, extraDocs = []) {
       fileName: doc.fileName || '',
       filePath: doc.filePath || '',
       type: docName,
-      documentNumber: doc.documentNumber || (doc.panCardNo ? doc.panCardNo : (doc.aadhaarLastFourDigits ? `XXXX-XXXX-${doc.aadhaarLastFourDigits}` : '—')),
+      documentNumber: doc.documentNumber || (doc.panCardNo ? doc.panCardNo : (doc.aadhaarLastFourDigits ? `XXXX-XXXX-${String(doc.aadhaarLastFourDigits).slice(-4)}` : '—')),
       uploadStatus: 'Uploaded',
       verificationStatus: doc.verificationStatus || 'Uploaded',
       fileSize: doc.fileSize || 'Uploaded',
@@ -304,7 +304,7 @@ export function mapApplicationFullDetails(response, extraDocs = []) {
     kycList.forEach((doc, idx) => {
       const docId = String(getValue(doc, 'applicationKYCDocumentId', 'ApplicationKYCDocumentId') || `KYC_${idx + 1}`);
       const name = getValue(doc, 'documentTypeName', 'DocumentTypeName') || (doc.panCardNo ? 'PAN Card' : doc.aadhaarLastFourDigits ? 'Aadhaar Card' : `KYC Document ${idx + 1}`);
-      const docNumber = getValue(doc, 'documentNumber', 'DocumentNumber') || doc.panCardNo || (doc.aadhaarLastFourDigits ? `XXXX-XXXX-${doc.aadhaarLastFourDigits}` : '—');
+      const docNumber = getValue(doc, 'documentNumber', 'DocumentNumber') || doc.panCardNo || (doc.aadhaarLastFourDigits ? `XXXX-XXXX-${String(doc.aadhaarLastFourDigits).slice(-4)}` : '—');
       combinedDocs.push({
         id: docId,
         name,

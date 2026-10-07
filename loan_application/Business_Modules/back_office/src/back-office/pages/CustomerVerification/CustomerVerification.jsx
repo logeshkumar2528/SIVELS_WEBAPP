@@ -1559,7 +1559,7 @@ export default function CustomerVerification() {
       const nameParts = [pers.firstName, pers.middleName, pers.lastName].filter(Boolean).join(' ');
       const name = nameParts || pers.fullName || pers.customerName || `Co-Applicant ${i + 1}`;
       const pan = kyc.panCardNo || pers.panCardNo || pers.pan || '';
-      const aadhaarLast4 = kyc.aadhaarLastFourDigits || pers.aadhaarLastFourDigits || '';
+      const aadhaarLast4 = String(kyc.aadhaarLastFourDigits || pers.aadhaarLastFourDigits || '').slice(-4);
       const aadhaarDisplay = aadhaarLast4
         ? `XXXX-XXXX-${aadhaarLast4}`
         : (pers.aadhaarNumber ? String(pers.aadhaarNumber) : (kyc.aadhaarNumber ? String(kyc.aadhaarNumber) : '—'));

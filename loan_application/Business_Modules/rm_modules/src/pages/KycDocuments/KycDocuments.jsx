@@ -67,9 +67,9 @@ export function normalizeToCanonicalCategory(typeStr) {
   return clean;
 }
 
-function last4FromValue(value = '') {
+function fullAadhaarFromValue(value = '') {
   const digits = String(value).replace(/[^\d]/g, '');
-  return digits.slice(-4);
+  return digits.length === 12 ? digits : '';
 }
 
 function formatFileSize(bytes) {
@@ -141,7 +141,7 @@ function buildKycState(appData) {
       // It is resolved live from the backend by (applicationProductDetailsId,
       // applicantSequence = 0); a stale browser-held id must never target an upload.
       kycDocumentId: null,
-      aadhaarLast4: saved.applicant?.aadhaarLast4 || last4FromValue(appData.aadhaarNo),
+      aadhaarLast4: saved.applicant?.aadhaarLast4 || fullAadhaarFromValue(appData.aadhaarNo),
       panCardNo: saved.applicant?.panCardNo || appData.panCardNo || appData.panNumber || '',
       identityDocumentType: saved.applicant?.identityDocumentType || '',
       numberOfDocuments: appNumDocs,
@@ -300,9 +300,9 @@ function validateKyc(person) {
 
   const aadhaarClean = String(person?.aadhaarLast4 || '').replace(/\D/g, '');
   if (!aadhaarClean) {
-    errors.aadhaarLast4 = 'Aadhaar last 4 digits are required';
-  } else if (aadhaarClean.length !== 4) {
-    errors.aadhaarLast4 = 'Aadhaar must be exactly 4 digits';
+    errors.aadhaarLast4 = 'Enter the 12-digit Aadhaar number';
+  } else if (aadhaarClean.length !== 12) {
+    errors.aadhaarLast4 = 'Aadhaar number must be exactly 12 digits';
   }
 
   const panClean = String(person?.panCardNo || '').trim();
@@ -445,6 +445,7 @@ function KycCard({
   employmentTypeDocMappings = [],
   coApplicantEmploymentTypeId = null,
   isReadOnly = false,
+  onEnsureKycRecordId,
 }) {
   const [otpStep, setOtpStep] = useState(person.verificationStatus === 'Verified' ? 'verified' : 'idle');
   const [otpValue, setOtpValue] = useState('');
@@ -462,17 +463,85 @@ function KycCard({
     }
   }, [person.verificationStatus, otpStep]);
 
-  const handleSendOtp = () => {
-    setOtpStep('otp_sent');
+  const [aadhaarNumber, setAadhaarNumber] = useState('');
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [otpMessage, setOtpMessage] = useState(null);
+  const [resendIn, setResendIn] = useState(0);
+
+  useEffect(() => {
+    if (resendIn <= 0) return undefined;
+    const timer = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendIn]);
+
+  const apiErrorMessage = (err, fallback) => {
+    const data = err?.response?.data;
+    if (data?.errors && typeof data.errors === 'object') {
+      const first = Object.values(data.errors).flat()[0];
+      if (first) return String(first);
+    }
+    return data?.message || data?.Message || err?.message || fallback;
+  };
+
+  const handleSendOtp = async () => {
+    if (aadhaarNumber.length !== 12 || otpBusy) return;
+    setOtpBusy(true);
+    setOtpMessage(null);
+    try {
+      const kycId = await onEnsureKycRecordId();
+      const res = await rmCustomerService.initiateAadhaarOtp(kycId, aadhaarNumber);
+      const success = res?.success ?? res?.Success;
+      const message = res?.message ?? res?.Message;
+      const wait = Number(res?.resendAfterSeconds ?? res?.ResendAfterSeconds) || 0;
+      if (!success) {
+        if (wait > 0) setResendIn(wait);
+        setOtpMessage({ type: 'error', text: message || 'Could not send the Aadhaar OTP.' });
+        return;
+      }
+      setOtpStep('otp_sent');
+      setOtpValue('');
+      setResendIn(wait || 60);
+      setOtpMessage({ type: 'success', text: message || 'OTP sent to the Aadhaar-linked mobile number.' });
+    } catch (err) {
+      setOtpMessage({ type: 'error', text: apiErrorMessage(err, 'Could not send the Aadhaar OTP.') });
+    } finally {
+      setOtpBusy(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otpValue.length !== 6 || otpBusy) return;
+    setOtpBusy(true);
+    setOtpMessage(null);
+    try {
+      const kycId = await onEnsureKycRecordId();
+      const res = await rmCustomerService.verifyAadhaarOtp(kycId, otpValue);
+      const success = res?.success ?? res?.Success;
+      const message = res?.message ?? res?.Message;
+      if (!success) {
+        setOtpMessage({ type: 'error', text: message || 'Aadhaar OTP verification failed.' });
+        return;
+      }
+      const fullName = res?.fullName ?? res?.FullName;
+      onChange('aadhaarLast4', (current) => ({ ...current, aadhaarLast4: aadhaarNumber || current.aadhaarLast4, verificationStatus: 'Verified' }));
+      setOtpStep('verified');
+      setOtpValue('');
+      setAadhaarNumber('');
+      setOtpMessage({ type: 'success', text: fullName ? `Aadhaar verified for ${fullName}.` : (message || 'Aadhaar verified successfully.') });
+    } catch (err) {
+      setOtpMessage({ type: 'error', text: apiErrorMessage(err, 'Aadhaar OTP verification failed.') });
+    } finally {
+      setOtpBusy(false);
+    }
+  };
+
+  const handleChangeAadhaar = () => {
+    setOtpStep('idle');
     setOtpValue('');
+    setOtpMessage(null);
   };
 
-  const handleVerifyOtp = () => {
-    setOtpStep('verified');
-    onChange('verificationStatus', 'Verified');
-  };
-
-  const isAadhaarComplete = person.aadhaarLast4?.length === 4;
+  const isAadhaarComplete = aadhaarNumber.length === 12;
 
   const selectedDocumentRawFiles = Array.isArray(person.identityDocumentRawFiles) ? person.identityDocumentRawFiles : [];
 
@@ -627,81 +696,79 @@ function KycCard({
       <div className="aw-mini-card__body">
         <div className="aw-grid">
           <div className="aw-field">
-            <label className="form-label">Aadhaar Last 4 Digits</label>
+            <label className="form-label">{otpStep === 'otp_sent' ? 'Aadhaar OTP' : 'Aadhaar Number'}</label>
             <div className="aw-input-wrapper">
               <FileText className="aw-input-icon" size={14} />
               <input
                 className={`form-input aw-input aw-input--with-icon ${errors.aadhaarLast4 ? 'aw-input--invalid' : ''}`}
-                value={otpStep === 'otp_sent' ? otpValue : person.aadhaarLast4}
-                placeholder={otpStep === 'otp_sent' ? 'Enter OTP' : ''}
+                value={
+                  otpStep === 'otp_sent'
+                    ? otpValue
+                    : otpStep === 'verified' || isReadOnly
+                      ? (person.aadhaarLast4 ? `XXXX XXXX ${String(person.aadhaarLast4).slice(-4)}` : '')
+                      : aadhaarNumber
+                }
+                placeholder={
+                  otpStep === 'otp_sent'
+                    ? 'Enter 6-digit OTP'
+                    : person.aadhaarLast4
+                      ? `XXXX XXXX ${String(person.aadhaarLast4).slice(-4)}`
+                      : 'Enter 12-digit Aadhaar number'
+                }
                 inputMode="numeric"
-                maxLength={otpStep === 'otp_sent' ? 6 : 4}
-                disabled={otpStep === 'verified' || isReadOnly}
+                autoComplete="off"
+                maxLength={otpStep === 'otp_sent' ? 6 : 12}
+                disabled={otpStep === 'verified' || isReadOnly || otpBusy}
                 style={{
                   paddingRight:
-                    !isReadOnly && otpStep !== 'verified' && (isAadhaarComplete || otpStep === 'otp_sent') ? '76px' : '12px',
+                    !isReadOnly && otpStep !== 'verified' && (isAadhaarComplete || otpStep === 'otp_sent') ? '86px' : '12px',
                 }}
                 onChange={(e) => {
+                  const digits = e.target.value.replace(/[^\d]/g, '');
                   if (otpStep === 'otp_sent') {
-                    setOtpValue(e.target.value.replace(/[^\d]/g, ''));
-                  } else {
-                    onChange('aadhaarLast4', e.target.value.replace(/[^\d]/g, ''));
-                    if (otpStep === 'verified') {
-                      setOtpStep('idle');
-                      onChange('verificationStatus', 'Pending');
-                    }
+                    setOtpValue(digits.slice(0, 6));
+                    return;
                   }
+                  const next = digits.slice(0, 12);
+                  setAadhaarNumber(next);
+                  setOtpMessage(null);
+                  onChange('aadhaarLast4', next.length === 12 ? next : '');
                 }}
               />
               {otpStep === 'idle' && isAadhaarComplete && !isReadOnly && (
                 <button
                   type="button"
+                  className="aw-aadhaar-otp-btn"
                   onClick={handleSendOtp}
-                  style={{
-                    position: 'absolute',
-                    right: '4px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    padding: '4px 10px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    background: '#0F7A4C',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    zIndex: 10,
-                  }}
+                  disabled={otpBusy || resendIn > 0}
                 >
-                  Send OTP
+                  {otpBusy ? 'Sending…' : resendIn > 0 ? `Wait ${resendIn}s` : 'Send OTP'}
                 </button>
               )}
               {otpStep === 'otp_sent' && !isReadOnly && (
                 <button
                   type="button"
+                  className="aw-aadhaar-otp-btn"
                   onClick={handleVerifyOtp}
-                  disabled={otpValue.length < 4}
-                  style={{
-                    position: 'absolute',
-                    right: '4px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    padding: '4px 10px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    background: '#0F7A4C',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    zIndex: 10,
-                    opacity: otpValue.length < 4 ? 0.5 : 1,
-                  }}
+                  disabled={otpBusy || otpValue.length !== 6}
                 >
-                  Verify
+                  {otpBusy ? 'Verifying…' : 'Verify'}
                 </button>
               )}
             </div>
+            {otpStep === 'otp_sent' && !isReadOnly && (
+              <div className="aw-aadhaar-otp-links">
+                <button type="button" onClick={handleSendOtp} disabled={otpBusy || resendIn > 0}>
+                  {resendIn > 0 ? `Resend OTP in ${resendIn}s` : 'Resend OTP'}
+                </button>
+                <button type="button" onClick={handleChangeAadhaar} disabled={otpBusy}>
+                  Change Aadhaar number
+                </button>
+              </div>
+            )}
+            {otpMessage && (
+              <span className={otpMessage.type === 'error' ? 'aw-field-error' : 'aw-aadhaar-otp-success'}>{otpMessage.text}</span>
+            )}
             {errors.aadhaarLast4 && <span className="aw-field-error">{errors.aadhaarLast4}</span>}
           </div>
 
@@ -3447,6 +3514,90 @@ export default function KycDocuments() {
     });
   };
 
+  // The Aadhaar OTP API needs an existing ApplicationKYCDocuments row. Reuse the live row
+  // for this applicant sequence, otherwise create a minimal one and register it so the
+  // later Save & Continue updates it instead of creating a duplicate.
+  const ensureKycRecordId = async (personType, personIndex = null) => {
+    const isApplicant = personType === 'applicant';
+    const person = isApplicant ? form.applicant : form.coApplicants[personIndex];
+    const existingId = isApplicant
+      ? applicantKycId || person?.kycDocumentId
+      : coApplicantKycIds[personIndex] || person?.kycDocumentId;
+    if (existingId) return Number(existingId);
+
+    if (isApplicant && (mainApplicantKycResolution.ambiguous || mainApplicantKycResolution.sequenceFieldMissing)) {
+      throw new Error('The Main Applicant KYC record could not be identified. Please reload the page and try again.');
+    }
+    if (!resolvedProductDetailsId) {
+      throw new Error('Application details are still loading. Please try again in a moment.');
+    }
+    const verificationId = resolveVerificationId(person?.verificationStatus) || resolveVerificationId('Pending');
+    if (!verificationId) {
+      throw new Error('Verification statuses are still loading. Please try again in a moment.');
+    }
+    const documentTypeId =
+      (person?.identityDocumentType ? Number(person.identityDocumentType) : null) ||
+      resolveDocumentTypeId(documentTypeOptions, 'Aadhaar Card');
+    if (!documentTypeId) {
+      throw new Error('Please select a Document Type before sending the Aadhaar OTP.');
+    }
+
+    const payload = {
+      ApplicationProductDetailsId: Number(resolvedProductDetailsId),
+      ApplicantSequence: isApplicant ? 0 : personIndex + 1,
+      AadhaarLastFourDigits: null,
+      PANCardNo: person?.panCardNo || null,
+      DocumentNumber: person?.identityDocumentNo || null,
+      VerificationId: verificationId,
+      DocumentTypeId: Number(documentTypeId),
+      DocumentPath: null,
+      AadharDocumentPath: null,
+      PanCardPath: null,
+      ProfileImagePath: null,
+      numberOfDocuments: 0,
+      CreatedBy: 1,
+    };
+
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE}/ApplicationKYCDocuments`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      const fieldError = errData?.errors && typeof errData.errors === 'object'
+        ? Object.values(errData.errors).flat()[0]
+        : null;
+      throw new Error(fieldError || parseApiErrorBody(errData, 'Could not create the KYC record for Aadhaar verification.').message);
+    }
+    const text = await response.text();
+    let saved = {};
+    try {
+      saved = text ? JSON.parse(text) : {};
+    } catch {
+      saved = {};
+    }
+    const newId = Number(
+      (typeof saved === 'number' ? saved : null) ||
+        saved.applicationKYCDocumentId ||
+        saved.ApplicationKYCDocumentId ||
+        saved.id ||
+        saved?.data?.applicationKYCDocumentId ||
+        saved?.data?.id
+    ) || null;
+    if (!newId) {
+      throw new Error('The KYC record was created but the server did not return its identifier. Please reload and try again.');
+    }
+
+    updatePerson(personType, null, (current) => ({ ...current, kycDocumentId: newId, applicationKYCDocumentId: newId }), personIndex);
+    setKycRecordsList((prev) => [...prev, { ...payload, applicationKYCDocumentId: newId }]);
+    return newId;
+  };
+
   const handleReplacePersistedManualSlot = async (personType, personIndex, slotIdx, file) => {
     const person = personType === 'applicant' ? form.applicant : form.coApplicants[personIndex];
     const kycId = person?.kycDocumentId;
@@ -4486,6 +4637,7 @@ export default function KycDocuments() {
           onViewAgentDoc={handleViewAgentDoc}
           onReplacePersistedSlot={(slotIdx, file) => handleReplacePersistedManualSlot('applicant', null, slotIdx, file)}
           onChange={(field, value) => updatePerson('applicant', field, value)}
+          onEnsureKycRecordId={() => ensureKycRecordId('applicant')}
           onViewDocuments={() => handleOpenDocsModal('applicant')}
           onOpenCustomerProof={(verification) => setCustomerProofFor({ target: 'applicant', verification })}
           documentTypeOptions={documentTypeOptions}
@@ -4514,6 +4666,7 @@ export default function KycDocuments() {
               onViewPersistedDoc={handleViewPersistedDoc}
               onReplacePersistedSlot={(slotIdx, file) => handleReplacePersistedManualSlot('coApplicants', index, slotIdx, file)}
               onChange={(field, value) => updatePerson('coApplicants', field, value, index)}
+              onEnsureKycRecordId={() => ensureKycRecordId('coApplicants', index)}
               onOpenCustomerProof={(verification) => setCustomerProofFor({ target: index, verification })}
               documentTypeOptions={documentTypeOptions}
               verificationOptions={verificationOptions}

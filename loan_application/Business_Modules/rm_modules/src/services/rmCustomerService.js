@@ -355,6 +355,22 @@ export const rmCustomerService = {
     const response = await axiosInstance.delete(`/customerdocumentproof/${encodeURIComponent(id)}`);
     return response.data;
   },
+
+  initiateAadhaarOtp: async (kycDocumentId, aadhaarNumber) => {
+    const response = await axiosInstance.post('/AadhaarKyc/initiate', {
+      kycDocumentId: Number(kycDocumentId),
+      aadhaarNumber,
+    });
+    return response.data;
+  },
+
+  verifyAadhaarOtp: async (kycDocumentId, otp) => {
+    const response = await axiosInstance.post('/AadhaarKyc/verify', {
+      kycDocumentId: Number(kycDocumentId),
+      otp,
+    });
+    return response.data;
+  },
 };
 
 function toList(data) {

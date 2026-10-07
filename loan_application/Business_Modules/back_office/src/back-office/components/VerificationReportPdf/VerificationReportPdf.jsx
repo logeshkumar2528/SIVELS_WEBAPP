@@ -240,7 +240,7 @@ export default function VerificationReportPdf({
         index: i + 1,
         name,
         pan: k.panCardNo || p.panCardNo || '—',
-        aadhaarDisplay: k.aadhaarLastFourDigits ? `XXXX-XXXX-${k.aadhaarLastFourDigits}` : (p.aadhaarNumber || '—'),
+        aadhaarDisplay: k.aadhaarLastFourDigits ? `XXXX-XXXX-${String(k.aadhaarLastFourDigits).slice(-4)}` : (p.aadhaarNumber || '—'),
       });
     }
     return result;

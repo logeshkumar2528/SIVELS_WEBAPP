@@ -3157,9 +3157,9 @@ export default function PdfView() {
             <tbody>
               <tr>
                 <td>Aadhaar Last 4</td>
-                <td>{kycData.applicant?.aadhaarLast4 || '-'}</td>
+                <td>{kycData.applicant?.aadhaarLast4 ? `XXXX XXXX ${String(kycData.applicant.aadhaarLast4).slice(-4)}` : '-'}</td>
                 {hasCoApplicants &&
-                  coApplicantKycRows.map((row, i) => <td key={i}>{row.aadhaarLast4 || '-'}</td>)}
+                  coApplicantKycRows.map((row, i) => <td key={i}>{row.aadhaarLast4 ? `XXXX XXXX ${String(row.aadhaarLast4).slice(-4)}` : '-'}</td>)}
               </tr>
               <tr>
                 <td>PAN Card No</td>
