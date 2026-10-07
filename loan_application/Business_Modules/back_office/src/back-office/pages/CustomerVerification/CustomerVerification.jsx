@@ -474,6 +474,26 @@ function resolveRowStatus({ rejection, hasFile, isVerified, isNotRequired, isOpt
   return 'Not Verified';
 }
 
+// Any uploaded document must be verifiable, even when the employment-type mapping marks it not required.
+function makeUploadedRowsVerifiable(rows) {
+  return rows.map((row) => {
+    if (!row.isNotRequired || !row.hasFile) return row;
+    return {
+      ...row,
+      isRequired: true,
+      isOptional: false,
+      isNotRequired: false,
+      status: resolveRowStatus({
+        rejection: row.rejection,
+        hasFile: true,
+        isVerified: row.isVerified,
+        isNotRequired: false,
+        isOptional: false,
+      }),
+    };
+  });
+}
+
 const getRejectionSortTime = (r) => {
   const vTime = new Date(r?.verifiedAt || r?.VerifiedAt || 0).getTime();
   if (vTime > 0) return vTime;
@@ -7576,35 +7596,8 @@ export default function CustomerVerification() {
     const currentGen = ++financialFetchGenRef.current;
 
     // 1. Applicant Salary Slip (Parallel Task)
-    const isApplicantSalarySlipApplicable =
-      !sTypeId ||
-      !mainApplicantEmploymentTypeId ||
-      employmentTypeDocMappings.length === 0
-        ? true
-        : !getDocumentApplicability({
-            documentTypeId: sTypeId,
-            employmentTypeId: mainApplicantEmploymentTypeId,
-            mappings: employmentTypeDocMappings,
-          }).isNotRequired;
-
     let fetchSalaryPromise = Promise.resolve();
 
-    if (!isApplicantSalarySlipApplicable) {
-      if (currentGen === financialFetchGenRef.current) {
-        setApplicantFinancialDocs((prev) => ({
-          ...prev,
-          salarySlip: {
-            loading: false,
-            data: null,
-            preview: null,
-            comparison: null,
-            rejection: null,
-            error: null,
-            isNotRequired: true,
-          },
-        }));
-      }
-    } else {
       setApplicantFinancialDocs((prev) => ({
         ...prev,
         salarySlip: { ...(prev.salarySlip || {}), loading: true, error: null },
@@ -7693,7 +7686,6 @@ export default function CustomerVerification() {
         }
       }
     })();
-  }
 
     // 2. Applicant Bank Statement (Parallel Task)
     setApplicantFinancialDocs((prev) => ({
@@ -7794,30 +7786,8 @@ export default function CustomerVerification() {
           let coSalarySlip = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
           let coBankStatement = { loading: false, data: null, preview: null, comparison: null, rejection: null, error: null };
 
-          const coEmpId = getEmploymentTypeIdForSequence(seq);
-          const isCoSalarySlipApplicable =
-            !sTypeId || !coEmpId || employmentTypeDocMappings.length === 0
-              ? true
-              : !getDocumentApplicability({
-                  documentTypeId: sTypeId,
-                  employmentTypeId: coEmpId,
-                  mappings: employmentTypeDocMappings,
-                }).isNotRequired;
-
           const salaryCoPromise = (async () => {
             if (!sTypeId) return;
-            if (!isCoSalarySlipApplicable) {
-              coSalarySlip = {
-                loading: false,
-                data: null,
-                preview: null,
-                comparison: null,
-                rejection: null,
-                error: null,
-                isNotRequired: true,
-              };
-              return;
-            }
             try {
               const docRes = await backOfficeService.getApplicantDocument(appProdId, seq, sTypeId);
               const docData = docRes?.data || docRes?.value || docRes;
@@ -10193,7 +10163,7 @@ export default function CustomerVerification() {
       manualDocs: applicantManualDocs,
     });
 
-    return rows;
+    return makeUploadedRowsVerifiable(rows);
   }, [
     getActiveRejectionForApplicant,
     docPreviews,
@@ -10545,7 +10515,7 @@ export default function CustomerVerification() {
       coNumber,
     });
 
-    return rows;
+    return makeUploadedRowsVerifiable(rows);
   }, [
     selectedCoApplicant,
     resolvedKycList,
@@ -10581,8 +10551,8 @@ export default function CustomerVerification() {
   const applicantRequiredCount = applicantApplicableRequiredRows.length;
 
   const applicantVerifiedCount = useMemo(() => {
-    return applicantDocRows.filter((r) => r.isVerified && r.hasFile && !r.isNotRequired).length;
-  }, [applicantDocRows]);
+    return applicantApplicableRequiredRows.filter((r) => r.isVerified && r.hasFile).length;
+  }, [applicantApplicableRequiredRows]);
 
   const allApplicantDocsVerified =
     applicantRequiredCount > 0 &&
@@ -10595,8 +10565,8 @@ export default function CustomerVerification() {
   const coApplicantRequiredCount = coApplicantApplicableRequiredRows.length;
 
   const coApplicantVerifiedCount = useMemo(() => {
-    return coApplicantDocRows.filter((r) => r.isVerified && r.hasFile && !r.isNotRequired).length;
-  }, [coApplicantDocRows]);
+    return coApplicantApplicableRequiredRows.filter((r) => r.isVerified && r.hasFile).length;
+  }, [coApplicantApplicableRequiredRows]);
 
   const allCoApplicantDocsVerified =
     coApplicantRequiredCount > 0 &&
