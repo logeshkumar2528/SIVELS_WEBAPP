@@ -314,7 +314,8 @@ export default function EmploymentIncome() {
   const [searchParams] = useSearchParams();
   const isViewMode = searchParams.get('mode') === 'view';
   const appId = applicationId;
-  const { getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
+  const { applications, getApplication, ensureApplication, saveApplication } = useApplicationDraftStore();
+  const hydratedAt = applications?.[appId]?._hydratedAt || 0;
   const [form, setForm] = useState(() => buildEmploymentState(getApplication(appId)));
   const [errors, setErrors] = useState({});
   const [errorPopup, setErrorPopup] = useState(null);
@@ -459,7 +460,7 @@ export default function EmploymentIncome() {
   useEffect(() => {
     setForm(buildEmploymentState(getApplication(appId)));
     setErrors({});
-  }, [appId, getApplication]);
+  }, [appId, getApplication, hydratedAt]);
 
   const persist = (nextForm) => {
     setForm(nextForm);

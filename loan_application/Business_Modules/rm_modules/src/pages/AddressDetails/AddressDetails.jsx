@@ -221,7 +221,8 @@ export default function AddressDetails() {
   const [searchParams] = useSearchParams();
   const isViewMode = searchParams.get('mode') === 'view';
   const appId = applicationId;
-  const { getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
+  const { applications, getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
+  const hydratedAt = applications?.[appId]?._hydratedAt || 0;
   const [form, setForm] = useState(() => buildAddressState(getApplication(appId)));
   const [errors, setErrors] = useState({});
   const [errorPopup, setErrorPopup] = useState(null);
@@ -362,7 +363,7 @@ export default function AddressDetails() {
   useEffect(() => {
     setForm(buildAddressState(getApplication(appId)));
     setErrors({});
-  }, [appId, getApplication]);
+  }, [appId, getApplication, hydratedAt]);
 
   const persist = (nextForm) => {
     setForm(nextForm);

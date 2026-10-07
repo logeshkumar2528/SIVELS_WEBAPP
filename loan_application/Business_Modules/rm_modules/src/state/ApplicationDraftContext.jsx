@@ -409,6 +409,7 @@ function normalizeApplicationRecord(record = {}) {
     sourcingChannelDisplay: record.sourcingChannelDisplay || record.sourcingChannel || '',
     createdDate: record.createdDate || '',
     _isHydrated: record._isHydrated || false,
+    _hydratedAt: record._hydratedAt || 0,
 
     // Synchronized section structures
     sections,
@@ -858,6 +859,96 @@ async function mergeApplicationPeopleRows(backendResult, baseUrl, agentCustomerI
       existingPersonal,
       allPersonal.filter((row) => personalRowBelongsToApplication(row, scope)),
       personalRowId
+    );
+  }
+
+  await mergeApplicationDetailRows(backendResult, baseUrl);
+}
+
+const addressRowId = (a) =>
+  a?.applicationAddressDetailsId ?? a?.ApplicationAddressDetailsId ?? a?.addressDetailsId ?? a?.AddressDetailsId;
+const addressRowPersonalId = (a) => a?.personalInformationId ?? a?.PersonalInformationId;
+const employmentRowId = (e) =>
+  e?.applicationEmploymentIncomeDetailsId ??
+  e?.ApplicationEmploymentIncomeDetailsId ??
+  e?.employmentIncomeDetailsId ??
+  e?.EmploymentIncomeDetailsId;
+const employmentRowAddressId = (e) =>
+  e?.applicationAddressDetailsId ?? e?.ApplicationAddressDetailsId ?? e?.addressDetailsId ?? e?.AddressDetailsId;
+const bankRowId = (b) =>
+  b?.applicationBankExistingLoanDetailsId ??
+  b?.ApplicationBankExistingLoanDetailsId ??
+  b?.bankLoan?.applicationBankExistingLoanDetailsId ??
+  b?.BankLoan?.ApplicationBankExistingLoanDetailsId;
+const bankRowEmploymentId = (b) =>
+  b?.applicationEmploymentIncomeDetailsId ??
+  b?.ApplicationEmploymentIncomeDetailsId ??
+  b?.bankLoan?.applicationEmploymentIncomeDetailsId ??
+  b?.BankLoan?.ApplicationEmploymentIncomeDetailsId ??
+  b?.employmentIncomeDetailsId ??
+  b?.EmploymentIncomeDetailsId;
+
+const idSet = (rows, getId) => new Set(rows.map(getId).filter(hasRecordId).map(String));
+
+/**
+ * Address, employment and bank rows hang off personal information → address → employment.
+ * ApplicationFullDetails omits the co-applicant rows, so every row linked to a person on this
+ * application is merged in from the list endpoints.
+ */
+async function mergeApplicationDetailRows(backendResult, baseUrl) {
+  const personalIds = idSet(
+    toRecordList(
+      backendResult.personalInformation ??
+      backendResult.PersonalInformation ??
+      backendResult.applicationPersonalInformation ??
+      backendResult.ApplicationPersonalInformation
+    ),
+    personalRowId
+  );
+  if (personalIds.size === 0) return;
+
+  const [allAddresses, allEmployments, allBanks] = await Promise.all([
+    fetchRecordList(`${baseUrl}/ApplicationAddressDetails`),
+    fetchRecordList(`${baseUrl}/ApplicationEmploymentIncomeDetails`),
+    fetchRecordList(`${baseUrl}/ApplicationBankExistingLoanDetails`),
+  ]);
+
+  const addresses = mergeRowsById(
+    toRecordList(
+      backendResult.addressDetails ??
+      backendResult.AddressDetails ??
+      backendResult.applicationAddressDetails ??
+      backendResult.ApplicationAddressDetails
+    ),
+    (allAddresses || []).filter((a) => personalIds.has(String(addressRowPersonalId(a)))),
+    addressRowId
+  );
+  if (allAddresses) backendResult.addressDetails = addresses;
+
+  const addressIds = idSet(addresses, addressRowId);
+  const employments = mergeRowsById(
+    toRecordList(
+      backendResult.employmentIncome ??
+      backendResult.EmploymentIncome ??
+      backendResult.applicationEmploymentIncomeDetails ??
+      backendResult.ApplicationEmploymentIncomeDetails
+    ),
+    (allEmployments || []).filter((e) => addressIds.has(String(employmentRowAddressId(e)))),
+    employmentRowId
+  );
+  if (allEmployments) backendResult.employmentIncome = employments;
+
+  const employmentIds = idSet(employments, employmentRowId);
+  if (allBanks) {
+    backendResult.bankExistingLoans = mergeRowsById(
+      toRecordList(
+        backendResult.bankExistingLoans ??
+        backendResult.BankExistingLoans ??
+        backendResult.applicationBankExistingLoanDetails ??
+        backendResult.ApplicationBankExistingLoanDetails
+      ),
+      allBanks.filter((b) => employmentIds.has(String(bankRowEmploymentId(b)))),
+      bankRowId
     );
   }
 }
@@ -1550,7 +1641,8 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     const isDraftPersConflicting =
       (targetSeq === 0 && draftAddr.personalInformationId && coApplicantPersonalIds.has(Number(draftAddr.personalInformationId))) ||
       (resolvedPersId && draftAddr.personalInformationId && Number(draftAddr.personalInformationId) !== Number(resolvedPersId));
-    const isDraftSuppressedByExplicitBackend = isBackendAddressExplicit && !addressDetailsId;
+    const isDraftSuppressedByExplicitBackend =
+      isBackendAddressExplicit && !addressDetailsId && hasRecordId(draftAddr.addressDetailsId ?? draftAddr.applicationAddressDetailsId);
 
     const safeDraftAddr = isDraftIdClaimed || isDraftPersConflicting || isDraftSuppressedByExplicitBackend ? {} : draftAddr;
 
@@ -1741,7 +1833,8 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     const rawEmpId = getEmpId(effectiveEmpRow);
     const isDraftIdClaimed = draftEmp.employmentIncomeDetailsId && claimedEmploymentIds.has(Number(draftEmp.employmentIncomeDetailsId)) && (!rawEmpId || Number(draftEmp.employmentIncomeDetailsId) !== Number(rawEmpId));
     const isDraftAddrConflicting = resolvedAddrId && draftEmp.applicationAddressDetailsId && Number(draftEmp.applicationAddressDetailsId) !== Number(resolvedAddrId);
-    const isDraftSuppressedByExplicitBackend = isBackendEmpExplicit && !rawEmpId;
+    const isDraftSuppressedByExplicitBackend =
+      isBackendEmpExplicit && !rawEmpId && hasRecordId(draftEmp.employmentIncomeDetailsId ?? draftEmp.applicationEmploymentIncomeDetailsId);
 
     const safeDraftEmp = isDraftIdClaimed || isDraftAddrConflicting || isDraftSuppressedByExplicitBackend ? {} : draftEmp;
 
@@ -1902,7 +1995,8 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     const rawBankId = getBankId(effectiveBankRow);
     const isDraftIdClaimed = draftBank.applicationBankExistingLoanDetailsId && claimedBankIds.has(Number(draftBank.applicationBankExistingLoanDetailsId)) && (!rawBankId || Number(draftBank.applicationBankExistingLoanDetailsId) !== Number(rawBankId));
     const isDraftEmpConflicting = resolvedEmpId && draftBank.applicationEmploymentIncomeDetailsId && Number(draftBank.applicationEmploymentIncomeDetailsId) !== Number(resolvedEmpId);
-    const isDraftSuppressedByExplicitBackend = isBackendBankExplicit && !rawBankId;
+    const isDraftSuppressedByExplicitBackend =
+      isBackendBankExplicit && !rawBankId && hasRecordId(draftBank.applicationBankExistingLoanDetailsId);
 
     const safeDraftBank = isDraftIdClaimed || isDraftEmpConflicting || isDraftSuppressedByExplicitBackend ? {} : draftBank;
 
@@ -1980,6 +2074,10 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
     activeCreditCardsDetails: [],
   });
 
+  // A draft bank never saved to the backend has no id yet and must survive a backend reload.
+  const keepDraftBank = (draftBank) =>
+    Boolean(draftBank?.bankName) && (!isBackendBankExplicit || !hasRecordId(draftBank.applicationBankExistingLoanDetailsId));
+
   const applicantEmpId = employmentIncome.applicant?.applicationEmploymentIncomeDetailsId ?? employmentIncome.applicant?.employmentIncomeDetailsId;
   const applicantBankList = filterBankRowsForSequence(0, employmentIncome.applicant);
   const draftAppBanks = Array.isArray(existingDraft.bankExistingLoans?.applicant?.banks)
@@ -1996,7 +2094,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
 
   const mappedPrimaryBank = primaryBankRecord
     ? mapBankRecord(primaryBankRecord, customerName, draftAppPrimary, applicantEmpId)
-    : (!isBackendBankExplicit && draftAppPrimary.bankName ? mapBankRecord({}, customerName, draftAppPrimary, applicantEmpId) : createEmptyBankRecord(customerName, true));
+    : (keepDraftBank(draftAppPrimary) ? mapBankRecord({}, customerName, draftAppPrimary, applicantEmpId) : createEmptyBankRecord(customerName, true));
 
   const mappedOtherBanks = otherBankRecords.map((rec, idx) =>
     mapBankRecord(rec, customerName, draftAppBanks[idx + 1] || (idx === 0 ? draftAppOther : {}), applicantEmpId)
@@ -2011,12 +2109,12 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
         applicantBanks.push(mapBankRecord({}, customerName, draftAppBanks[i], applicantEmpId));
       }
     }
-  } else if (!isBackendBankExplicit && draftAppOther.bankName) {
+  } else if (keepDraftBank(draftAppOther)) {
     applicantBanks.push(mapBankRecord({}, customerName, draftAppOther, applicantEmpId));
   }
 
   const mappedOtherBank = applicantBanks[1] || (
-    !isBackendBankExplicit && draftAppOther.bankName
+    keepDraftBank(draftAppOther)
       ? mapBankRecord({}, customerName, draftAppOther, applicantEmpId)
       : createEmptyBankRecord(customerName, false)
   );
@@ -2043,7 +2141,7 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
 
     const mappedCoPrimary = coPrimary
       ? mapBankRecord(coPrimary, coName, draftCoPrimary, coEmpId)
-      : (!isBackendBankExplicit && draftCoPrimary.bankName ? mapBankRecord({}, coName, draftCoPrimary, coEmpId) : createEmptyBankRecord(coName, true));
+      : (keepDraftBank(draftCoPrimary) ? mapBankRecord({}, coName, draftCoPrimary, coEmpId) : createEmptyBankRecord(coName, true));
 
     const mappedCoOthers = coOtherRecords.map((rec, rIdx) =>
       mapBankRecord(rec, coName, draftCoBanks[rIdx + 1] || (rIdx === 0 ? draftCoOther : {}), coEmpId)
@@ -2058,12 +2156,12 @@ export function mapBackendToApplication(backendData = {}, existingDraft = {}) {
           coBanks.push(mapBankRecord({}, coName, draftCoBanks[i], coEmpId));
         }
       }
-    } else if (!isBackendBankExplicit && draftCoOther.bankName) {
+    } else if (keepDraftBank(draftCoOther)) {
       coBanks.push(mapBankRecord({}, coName, draftCoOther, coEmpId));
     }
 
     const mappedCoOther = coBanks[1] || (
-      !isBackendBankExplicit && draftCoOther.bankName
+      keepDraftBank(draftCoOther)
         ? mapBankRecord({}, coName, draftCoOther, coEmpId)
         : createEmptyBankRecord(coName, false)
     );
@@ -2773,7 +2871,7 @@ export function ApplicationDraftProvider({ children }) {
         if (backendResult) {
           await mergeApplicationPeopleRows(backendResult, baseUrl, appIdStr);
           const currentDraft = applicationsRef.current[appIdStr] || getApplication(appIdStr);
-          const mapped = mapBackendToApplication(backendResult, currentDraft);
+          const mapped = { ...mapBackendToApplication(backendResult, currentDraft), _hydratedAt: Date.now() };
           applicationsRef.current = {
             ...applicationsRef.current,
             [appIdStr]: mapped,
