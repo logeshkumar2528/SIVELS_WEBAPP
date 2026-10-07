@@ -105,6 +105,7 @@ function toCategoryOption(row) {
   return {
     value: pick(row, 'documentTypeId', 'DocumentTypeId'),
     label: pick(row, 'documentTypeName', 'DocumentTypeName', 'documentTypeCode', 'DocumentTypeCode') || '',
+    code: pick(row, 'documentTypeCode', 'DocumentTypeCode'),
     isActive: isActiveRecord(row),
   };
 }
@@ -113,9 +114,18 @@ function toProofOption(row) {
   return {
     value: pick(row, 'proofId', 'ProofId'),
     label: pick(row, 'proofName', 'ProofName', 'proofCode', 'ProofCode') || '',
+    code: pick(row, 'proofCode', 'ProofCode'),
     documentTypeId: pick(row, 'documentTypeId', 'DocumentTypeId'),
     isActive: isActiveRecord(row),
   };
+}
+
+// The main applicant's Aadhaar, PAN and photo are captured elsewhere in the
+// application flow, so they are not offered as customer proofs for them.
+const HIDDEN_PROOF_PATTERNS = [/aadh?a+r/i, /\bpan\b/i, /photo/i];
+
+function isHiddenProofItem(...texts) {
+  return texts.some((text) => text && HIDDEN_PROOF_PATTERNS.some((pattern) => pattern.test(String(text))));
 }
 
 function normalizeProofRecord(row) {
@@ -224,13 +234,19 @@ export default function CustomerProofModal({ onClose, context, resolveAgentCusto
     return missing;
   }, [isResolvingCustomer, agentCustomerId, applicationProductDetailsId, applicantSequence, verificationTypeCode]);
 
+  const isMainApplicant = hasValue(applicantSequence) && Number(applicantSequence) === 0;
+  const isSelectable = useCallback(
+    (item) => item.isActive && !(isMainApplicant && isHiddenProofItem(item.label, item.code)),
+    [isMainApplicant]
+  );
+
   const categoryOptions = useMemo(
-    () => categories.filter((c) => c.isActive).map(({ value, label }) => ({ value, label })),
-    [categories]
+    () => categories.filter(isSelectable).map(({ value, label }) => ({ value, label })),
+    [categories, isSelectable]
   );
   const activeProofsFor = useCallback(
-    (categoryId) => (proofsByCategory[categoryId] || []).filter((p) => p.isActive),
-    [proofsByCategory]
+    (categoryId) => (proofsByCategory[categoryId] || []).filter(isSelectable),
+    [proofsByCategory, isSelectable]
   );
 
   const categoryName = useCallback(
