@@ -45,7 +45,7 @@ export default function AddCustomer() {
 
   // Master Data State
   const [employmentTypes, setEmploymentTypes] = useState([]);
-  const [loanPurposes, setLoanPurposes] = useState([]);
+  const [loanProducts, setLoanProducts] = useState([]);
   const [documentTypes, setDocumentTypes] = useState([]);
   const [customerDocumentTypes, setCustomerDocumentTypes] = useState([]);
   const [loadingMasters, setLoadingMasters] = useState(true);
@@ -69,7 +69,7 @@ export default function AddCustomer() {
     mobileNumber: '',
     email: '',
     employmentTypeId: '',
-    loanPurposeId: '',
+    loanProductId: '',
     expectedAmount: '',
     remarks: '',
   });
@@ -102,9 +102,9 @@ export default function AddCustomer() {
       };
 
       try {
-        const [typesRes, purposesRes, docTypesRes, customerDocTypesRes] = await Promise.all([
+        const [typesRes, productsRes, docTypesRes, customerDocTypesRes] = await Promise.all([
           masterService.getEmploymentTypes(),
-          masterService.getLoanPurposes(),
+          masterService.getLoanProducts(),
           masterService.getDocumentTypes().catch((err) => {
             console.error('Failed to load legacy document types for RM Add Customer:', err);
             return [];
@@ -121,8 +121,8 @@ export default function AddCustomer() {
           const typesArr = extractArray(typesRes);
           setEmploymentTypes(typesArr.filter((t) => t.isActive !== false));
 
-          const purposesArr = extractArray(purposesRes);
-          setLoanPurposes(purposesArr.filter((p) => p.isActive !== false));
+          const productsArr = extractArray(productsRes);
+          setLoanProducts(productsArr.filter((p) => p.isActive !== false));
 
           const docTypesArr = extractArray(docTypesRes);
           setDocumentTypes(docTypesArr.filter((d) => d.isActive !== false));
@@ -130,7 +130,7 @@ export default function AddCustomer() {
       } catch (err) {
         if (isMounted) {
           console.error('Failed to load master data for RM Add Customer:', err);
-          setMastersError('Failed to load Employment Types or Loan Purposes. Please refresh.');
+          setMastersError('Failed to load Employment Types or Loan Products. Please refresh.');
         }
       } finally {
         if (isMounted) {
@@ -416,9 +416,9 @@ export default function AddCustomer() {
       isValid = false;
     }
 
-    // Loan Purpose
-    if (!formData.loanPurposeId) {
-      errors.loanPurposeId = 'Loan Purpose is required.';
+    // Loan Product
+    if (!formData.loanProductId) {
+      errors.loanProductId = 'Loan Product is required.';
       isValid = false;
     }
 
@@ -492,7 +492,7 @@ export default function AddCustomer() {
           mobileNumber: formData.mobileNumber.trim(),
           email: formData.email && formData.email.trim() !== '' ? formData.email.trim() : null,
           employmentTypeId: Number(formData.employmentTypeId),
-          loanPurposeId: Number(formData.loanPurposeId),
+          loanProductId: Number(formData.loanProductId),
           expectedLoanAmount: parseAmountToNumber(formData.expectedAmount),
           remarks: formData.remarks.trim(),
           status: 0,
@@ -594,7 +594,9 @@ export default function AddCustomer() {
       navigate(ROUTES.CUSTOMER_SUBMISSION_HISTORY);
     } catch (err) {
       console.error('Error in RM Add Customer submission:', err);
+      const fieldMessages = Object.values(err?.response?.data?.errors || {}).flat().filter(Boolean);
       const errMsg =
+        (fieldMessages.length > 0 ? fieldMessages.join(' ') : null) ||
         err?.response?.data?.message ||
         err?.response?.data?.title ||
         err?.message ||
@@ -618,9 +620,9 @@ export default function AddCustomer() {
     label: type.employmentTypeName || type.name || 'Employment Type',
   }));
 
-  const loanPurposeOptions = loanPurposes.map((purpose) => ({
-    value: String(purpose.loanPurposeId || purpose.id),
-    label: purpose.purposeName || purpose.name || purpose.productName || 'Loan Purpose',
+  const loanProductOptions = loanProducts.map((product) => ({
+    value: String(product.loanProductId ?? product.id),
+    label: product.productName || product.productCode || 'Unnamed Product',
   }));
 
   const employmentPlaceholder = loadingMasters
@@ -631,13 +633,13 @@ export default function AddCustomer() {
     ? 'No employment types available'
     : 'Select employment type';
 
-  const loanPurposePlaceholder = loadingMasters
-    ? 'Loading loan purposes...'
+  const loanProductPlaceholder = loadingMasters
+    ? 'Loading loan products...'
     : mastersError
-    ? 'Unable to load loan purposes. Please try again.'
-    : loanPurposes.length === 0
-    ? 'No loan purposes available'
-    : 'Select purpose';
+    ? 'Unable to load loan products. Please try again.'
+    : loanProducts.length === 0
+    ? 'No loan products available'
+    : 'Select product';
 
   return (
     <div className="add-customer">
@@ -784,23 +786,23 @@ export default function AddCustomer() {
               {fieldErrors.employmentTypeId && <div className="form-field-error">{fieldErrors.employmentTypeId}</div>}
             </div>
 
-            {/* Loan Purpose */}
+            {/* Loan Product */}
             <div className="form-group">
-              <label className="form-label" htmlFor="loanPurposeId">
-                Loan Purpose<span className="required-star">*</span>
+              <label className="form-label" htmlFor="loanProductId">
+                Loan Product<span className="required-star">*</span>
               </label>
               <Select
-                id="loanPurposeId"
-                name="loanPurposeId"
-                value={formData.loanPurposeId}
-                onChange={(val) => handleSelectChange('loanPurposeId', val)}
-                options={loanPurposeOptions}
-                placeholder={loanPurposePlaceholder}
+                id="loanProductId"
+                name="loanProductId"
+                value={formData.loanProductId}
+                onChange={(val) => handleSelectChange('loanProductId', val)}
+                options={loanProductOptions}
+                placeholder={loanProductPlaceholder}
                 disabled={loadingMasters || !!mastersError || submitting || Boolean(createdRmCustomerId)}
-                error={Boolean(fieldErrors.loanPurposeId)}
+                error={Boolean(fieldErrors.loanProductId)}
                 icon={<Target size={16} strokeWidth={1.8} />}
               />
-              {fieldErrors.loanPurposeId && <div className="form-field-error">{fieldErrors.loanPurposeId}</div>}
+              {fieldErrors.loanProductId && <div className="form-field-error">{fieldErrors.loanProductId}</div>}
             </div>
 
             {/* Expected Loan Amount */}
