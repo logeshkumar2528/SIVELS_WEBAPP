@@ -125,6 +125,10 @@ export function normalizeCustomerDocumentProof(row) {
     contentType: pick(row, 'contentType', 'ContentType') || '',
     fileSize: pick(row, 'fileSize', 'FileSize'),
     isActive: isActiveFlag(row),
+    isVerified: pick(row, 'isVerified', 'IsVerified') === true,
+    verifiedByBackOfficeId: pick(row, 'verifiedByBackOfficeId', 'VerifiedByBackOfficeId'),
+    verifiedAt: pick(row, 'verifiedAt', 'VerifiedAt'),
+    verificationRemarks: pick(row, 'verificationRemarks', 'VerificationRemarks') || '',
     createdBy: pick(row, 'createdBy', 'CreatedBy'),
     createdAt: pick(row, 'createdAt', 'CreatedAt'),
     modifiedAt: pick(row, 'modifiedAt', 'ModifiedAt'),
@@ -352,6 +356,16 @@ export const downloadCustomerDocumentProof = async (id) => {
     responseType: 'blob',
   });
   return { blob: response.data, contentType: response.headers?.['content-type'] || '' };
+};
+
+/** Back Office marks one customer proof as verified (or resets it with isVerified: false). */
+export const verifyCustomerDocumentProof = async (id, { backOfficeId, isVerified, remarks = '' }) => {
+  const response = await axiosInstance.put(`/customerdocumentproof/${encodeURIComponent(id)}/verify`, {
+    backOfficeId: Number(backOfficeId),
+    isVerified: Boolean(isVerified),
+    remarks: String(remarks || '').trim(),
+  });
+  return normalizeCustomerDocumentProof(response.data?.data || response.data);
 };
 
 function proofFormData(proof, file) {

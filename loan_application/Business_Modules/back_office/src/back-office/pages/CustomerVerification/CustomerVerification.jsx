@@ -37,6 +37,7 @@ import VerificationStepModal from '../../components/Verification/VerificationSte
 import AssetBase from '../../components/AssetBase/AssetBase';
 import RtrCommonSheet from '../../components/RtrCommonSheet/RtrCommonSheet';
 import CustomerDocumentsPanel from '../../components/CustomerDocuments/CustomerDocumentsPanel';
+import CustomerProofVerificationSection from '../../components/CustomerDocuments/CustomerProofVerificationSection';
 import { FolderOpen } from 'lucide-react';
 import PdfView from '../../../../../rm_modules/src/pages/PdfView/PdfView';
 import { ApplicationDraftProvider } from '../../../../../rm_modules/src/state/ApplicationDraftContext';
@@ -56,7 +57,6 @@ const InfoIcon = iconMap['Info'];
 const BuildingIcon = iconMap['Building2'] || iconMap['Landmark'];
 const LandmarkIcon = iconMap['Landmark'];
 const UserIcon = iconMap['User'];
-const UsersIcon = iconMap['Users'];
 const PlusIcon = iconMap['Plus'] || iconMap['FilePlus'];
 const XIcon = iconMap['X'];
 const RefreshCwIcon = iconMap['RefreshCw'];
@@ -65,8 +65,6 @@ const BadgeIndianRupeeIcon = iconMap['BadgeIndianRupee'];
 const EyeIcon = iconMap['Eye'];
 const DownloadIcon = iconMap['Download'];
 const FileTextIcon = iconMap['FileText'];
-const ChevronLeftIcon = iconMap['ChevronLeft'];
-const ChevronRightIcon = iconMap['ChevronRight'];
 const SendIcon = iconMap['Send'];
 const PhoneIcon = iconMap['Phone'];
 const CameraIcon = iconMap['Camera'];
@@ -11545,7 +11543,7 @@ export default function CustomerVerification() {
                           </tr>
                         </thead>
                         <tbody>
-                          {coApplicantDocRows.map((row, idx) => {
+                          {coApplicantDocRows.filter((row) => row.stepCode === 'ZIP_ARCHIVE').map((row, idx) => {
                             const IconComp = row.icon;
                             const isThisRowSaving = savingVerificationKey === `${row.applicantSequence}_${row.stepCode}`;
                             const isCheckboxDisabled =
@@ -11700,6 +11698,29 @@ export default function CustomerVerification() {
                   )}
                 </div>
               </div>
+
+              <CustomerProofVerificationSection
+                agentCustomerId={verificationData?.customerId || verificationData?.agentCustomerId || customerId}
+                applicationProductDetailsId={resolvedAppProdId || null}
+                rmId={
+                  verificationData?.rmId ||
+                  verificationData?.customer?.rmId ||
+                  verificationData?.application?.rmId ||
+                  verificationData?.raw?.customer?.rmId ||
+                  verificationData?.raw?.productDetails?.[0]?.rmId ||
+                  verificationData?.raw?.productDetails?.rmId ||
+                  null
+                }
+                backOfficeId={getAuthenticatedBackOfficeId()}
+                applicants={[
+                  { sequence: 0, name: verificationData?.customerName || '' },
+                  ...coApplicants.map((co) => ({ sequence: co.sequence, name: co.name })),
+                ]}
+                onChanged={() => {
+                  fetchApplicationRejections();
+                  fetchAllCustomerDocs();
+                }}
+              />
             </div>
           )}
 
