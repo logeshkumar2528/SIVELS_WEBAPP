@@ -79,23 +79,58 @@ async function loadCustomerProofs({ customerId, productDetailsId, categoryMap = 
       const documentTypeId = firstValue(row, 'documentTypeId', 'DocumentTypeId');
       const proofId = firstValue(row, 'proofId', 'ProofId');
       return {
+        id: firstValue(row, 'customerDocumentProofId', 'CustomerDocumentProofId', 'id', 'Id'),
         applicantSequence: sequence,
+        documentTypeId,
         categoryName: String(
           firstValue(row, 'documentTypeName', 'DocumentTypeName') ?? categoryMap[String(documentTypeId)] ?? ''
         ).trim(),
         proofName: String(
           firstValue(row, 'proofName', 'ProofName') ?? (proofId !== undefined ? proofNames[String(proofId)] : '') ?? ''
         ).trim(),
+        contentType: String(firstValue(row, 'contentType', 'ContentType') ?? '').toLowerCase(),
+        fileName: String(firstValue(row, 'originalFileName', 'OriginalFileName', 'fileName', 'FileName', 'filePath', 'FilePath') ?? ''),
+        uploadedAt: firstValue(row, 'modifiedAt', 'ModifiedAt', 'createdAt', 'CreatedAt'),
       };
     })
-    .filter((proof) => Number.isInteger(proof.applicantSequence) && proof.applicantSequence >= 0 && proof.proofName);
+    .filter((proof) => Number.isInteger(proof.applicantSequence) && proof.applicantSequence >= 0);
+}
+
+const PROOF_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+const PROOF_IMAGE_EXTENSIONS = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+
+/** Image MIME type for a proof file, or '' when it is not a supported image (e.g. a PDF). */
+function proofImageType(contentType, fileName) {
+  const type = String(contentType || '').toLowerCase().split(';')[0].trim();
+  if (PROOF_IMAGE_TYPES.includes(type)) return type === 'image/jpg' ? 'image/jpeg' : type;
+  if (type && type !== 'application/octet-stream') return '';
+  const ext = String(fileName || '').split('?')[0].split('.').pop().toLowerCase();
+  return PROOF_IMAGE_EXTENSIONS[ext] || '';
+}
+
+/**
+ * The Address Proof image to use as a person's photo: a proof whose name mentions "photo"
+ * first, otherwise the most recent Address Proof image. PDFs and other files are ignored.
+ */
+function pickAddressProofPhoto(proofs, applicantSequence) {
+  const candidates = proofs
+    .filter((proof) => proof.applicantSequence === applicantSequence && proof.id !== undefined)
+    .filter((proof) => /address/i.test(proof.categoryName))
+    .filter((proof) => proofImageType(proof.contentType, proof.fileName))
+    .sort((a, b) => {
+      const photoRank = Number(/photo/i.test(b.proofName)) - Number(/photo/i.test(a.proofName));
+      if (photoRank !== 0) return photoRank;
+      const timeDiff = new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime();
+      return timeDiff !== 0 ? timeDiff : Number(b.id) - Number(a.id);
+    });
+  return candidates[0] || null;
 }
 
 /** Groups one person's proofs as [{ category, proofs: [unique proof names] }]. */
 function groupCustomerProofs(proofs, applicantSequence) {
   const groups = [];
   proofs
-    .filter((proof) => proof.applicantSequence === applicantSequence)
+    .filter((proof) => proof.applicantSequence === applicantSequence && proof.proofName)
     .forEach(({ categoryName, proofName }) => {
       const category = categoryName || 'Customer Proof';
       let group = groups.find((g) => g.category.toLowerCase() === category.toLowerCase());
@@ -184,6 +219,10 @@ export default function PdfView() {
   const [downloadedDocs, setDownloadedDocs] = useState([]);
   // Customer proofs (CustomerDocumentProof) as { applicantSequence, categoryName, proofName }
   const [customerProofs, setCustomerProofs] = useState([]);
+  const [customerProofsReady, setCustomerProofsReady] = useState(false);
+  // Co-Applicant Address Proof images keyed by applicantSequence (1, 2, ...)
+  const [coApplicantProofPhotos, setCoApplicantProofPhotos] = useState({});
+  const [isProofPhotosDownloading, setIsProofPhotosDownloading] = useState(false);
   const [isMetadataLoading, setIsMetadataLoading] = useState(true);
   const [isDocsDownloading, setIsDocsDownloading] = useState(true);
   const [isCoPhotosLoading, setIsCoPhotosLoading] = useState(false);
@@ -232,6 +271,8 @@ export default function PdfView() {
     async function loadAllData() {
       setIsMetadataLoading(true);
       setIsDocsDownloading(true);
+      setCustomerProofsReady(false);
+      let proofsRequested = false;
       try {
         // Hydrate full application data into draft context first (forceRefresh: true)
         try {
@@ -960,14 +1001,22 @@ export default function PdfView() {
               appData.applicationProductDetailsId ??
               null;
             const categoryMap = docTypeMap.status === 'fulfilled' ? docTypeMap.value || {} : {};
+            proofsRequested = true;
             loadCustomerProofs({
               customerId: resolvedCustomerId,
               productDetailsId: proofProductId,
               categoryMap,
               headers: authHeaders,
-            }).then((rows) => {
-              if (active) setCustomerProofs(rows);
-            });
+            })
+              .then((rows) => {
+                if (active) setCustomerProofs(rows);
+              })
+              .catch((proofErr) => {
+                console.warn('Could not load customer proofs for PDF:', proofErr);
+              })
+              .finally(() => {
+                if (active) setCustomerProofsReady(true);
+              });
           }
 
           // Resolve RM & Ownership strictly from backend ApplicationFullDetails
@@ -1173,6 +1222,7 @@ export default function PdfView() {
         if (active) {
           setIsMetadataLoading(false);
           setIsDocsDownloading(false);
+          if (!proofsRequested) setCustomerProofsReady(true);
         }
       }
     }
@@ -1187,7 +1237,13 @@ export default function PdfView() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [errorPopup, setErrorPopup] = useState(null);
 
-  const isPdfMediaReady = !isMetadataLoading && !isDocsDownloading && !isCoPhotosLoading && !isApplicantPhotoLoading;
+  const isPdfMediaReady =
+    !isMetadataLoading &&
+    !isDocsDownloading &&
+    !isCoPhotosLoading &&
+    !isApplicantPhotoLoading &&
+    customerProofsReady &&
+    !isProofPhotosDownloading;
 
   // Global preparation loader lifecycle: displays existing Sivels global loader while documents/media prepare
   useEffect(() => {
@@ -1731,7 +1787,20 @@ export default function PdfView() {
     coApplicantKycIds.forEach((kycId, idx) => {
       if (!kycId) return;
 
+      const kycRecord = liveAllKycRecords.find(
+        (k) => String(k.applicationKYCDocumentId ?? k.ApplicationKYCDocumentId ?? k.kycDocumentId ?? '') === String(kycId)
+      );
+      const storedPath = String(kycRecord?.profileImagePath ?? kycRecord?.ProfileImagePath ?? '')
+        .trim()
+        .replace(/\\/g, '/')
+        .replace(/^\/+/, '');
+
       fetch(`${API_BASE}/ApplicationKYCDocuments/${kycId}/profile-image`, { headers })
+        .then((res) => {
+          if (res.ok || !storedPath) return res;
+          // Fallback: the stored profile image path on this co-applicant's own KYC record
+          return fetch(`${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(storedPath)}`, { headers });
+        })
         .then(async (res) => {
           if (res.ok && isMounted) {
             const blob = await res.blob();
@@ -1767,6 +1836,59 @@ export default function PdfView() {
       isMounted = false;
     };
   }, [hasCoApplicants, coApplicantKycIdsKey]);
+
+  // Co-Applicant Address Proof images (CustomerDocumentProof), one per applicantSequence >= 1.
+  // Sequence 0 (the Applicant) is never considered, so the Applicant's image cannot leak here.
+  const coApplicantProofPhotoPicks = useMemo(() => {
+    if (!hasCoApplicants) return [];
+    return Array.from({ length: applicantCount }, (_, idx) => ({ seq: idx + 1, proof: pickAddressProofPhoto(customerProofs, idx + 1) }))
+      .filter(({ proof }) => proof);
+  }, [customerProofs, hasCoApplicants, applicantCount]);
+  const coApplicantProofPhotoKey = coApplicantProofPhotoPicks.map(({ seq, proof }) => `${seq}:${proof.id}`).join(',');
+
+  useEffect(() => {
+    if (coApplicantProofPhotoPicks.length === 0) {
+      setCoApplicantProofPhotos({});
+      setIsProofPhotosDownloading(false);
+      return undefined;
+    }
+
+    let isMounted = true;
+    setIsProofPhotosDownloading(true);
+    const token = localStorage.getItem('authToken');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+    Promise.allSettled(
+      coApplicantProofPhotoPicks.map(async ({ seq, proof }) => {
+        const res = await fetch(`${API_BASE}/customerdocumentproof/${encodeURIComponent(proof.id)}/download`, { headers });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const imageType = proofImageType(blob.type, '') || proofImageType(proof.contentType, proof.fileName);
+        // A PDF (or any non-image) proof is skipped so the KYC profile image fallback applies.
+        if (!blob || blob.size === 0 || !imageType || /pdf/i.test(blob.type)) return null;
+        const objectUrl = URL.createObjectURL(new Blob([blob], { type: imageType }));
+        blobUrlsRef.current.push(objectUrl);
+        return { seq, objectUrl };
+      })
+    ).then((results) => {
+      if (!isMounted) return;
+      const next = {};
+      results.forEach((result, idx) => {
+        if (result.status === 'fulfilled' && result.value) {
+          next[result.value.seq] = result.value.objectUrl;
+        } else if (result.status === 'rejected') {
+          console.warn(`Could not load Address Proof image for co-applicant ${coApplicantProofPhotoPicks[idx].seq}:`, result.reason);
+        }
+      });
+      setCoApplicantProofPhotos(next);
+      setIsProofPhotosDownloading(false);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coApplicantProofPhotoKey]);
 
   const rawAddress = appData.addressDetails || appData.sections?.addressDetails || {};
   const rawAddressApplicant = rawAddress.applicant || {};
@@ -2896,6 +3018,7 @@ export default function PdfView() {
                 coApplicants.map((_, i) => {
                   const kycId = coApplicantKycIds[i];
                   const coPhotoUrl =
+                    coApplicantProofPhotos[i + 1] ||
                     (kycId ? (coApplicantPhotos[kycId] || coApplicantPhotos[String(kycId)]) : null) ||
                     coApplicantPhotos[i] ||
                     coApplicantPhotos[String(i)] ||
