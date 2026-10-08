@@ -6,7 +6,7 @@
  * Route: /backoffice/customers/:customerId/verify
  *
  * Architecture:
- * - 15-Step Underwriting Verification Workflow (Sidebar: 01–15).
+ * - 16-Step Underwriting Verification Workflow (Sidebar: 01–16).
  * - Step 01: View Form (Direct embedded PdfView with ApplicationDraftProvider).
  * - Step 02: Document Verification (Applicant & Co-Applicant KYC documents).
  * - Step 03: Property FI (Field Investigation placeholder).
@@ -20,7 +20,7 @@
  * - Step 11: Asset Base (Property and asset portfolio records).
  * - Step 12: RTR Common Sheet (Obligation assessment).
  * - Step 13: Eligibility Assessment (Methodology & multi-applicant credit assessment engine).
- * - Step 14: Recommendation Sheet (Credit underwriter recommendation placeholder).
+ * - Step 15: Recommendation Sheet (Credit underwriter recommendation placeholder).
  * - Step 15: Final Action (Application disposition & workflow history).
  * - Single-fetch shared data and VerificationStepModal are preserved in code for easy inspection.
  */
@@ -36,6 +36,7 @@ import { getBackOfficeAuth } from '../../auth/authStorage';
 import VerificationStepModal from '../../components/Verification/VerificationStepModal';
 import AssetBase from '../../components/AssetBase/AssetBase';
 import RtrCommonSheet from '../../components/RtrCommonSheet/RtrCommonSheet';
+import DeviationAssessment from '../../components/DeviationAssessment/DeviationAssessment';
 import CustomerDocumentsPanel from '../../components/CustomerDocuments/CustomerDocumentsPanel';
 import CustomerProofVerificationSection from '../../components/CustomerDocuments/CustomerProofVerificationSection';
 import { FolderOpen } from 'lucide-react';
@@ -225,7 +226,7 @@ const INITIAL_STEP_VERIFICATIONS = {
 };
 
 /**
- * 15-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
+ * 16-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
  */
 const VERIFICATION_WORKFLOW_STEPS = [
   { id: 1, number: 1, visibleNum: '01', title: 'View Form', subtitle: 'Application form', group: 'FORM REVIEW' },
@@ -241,8 +242,9 @@ const VERIFICATION_WORKFLOW_STEPS = [
   { id: 20, number: 20, visibleNum: '11', title: 'Asset Base', subtitle: 'Property & asset portfolio', group: 'CREDIT & ASSESSMENT' },
   { id: 15, number: 15, visibleNum: '12', title: 'RTR Common Sheet', subtitle: 'Obligation assessment', group: 'CREDIT & ASSESSMENT' },
   { id: 16, number: 16, visibleNum: '13', title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
-  { id: 17, number: 17, visibleNum: '14', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
-  { id: 18, number: 18, visibleNum: '15', title: 'Final Action', subtitle: 'Return to RM / Credit Manager', group: 'FINAL ACTION' },
+  { id: 21, number: 21, visibleNum: '14', title: 'Deviation Assessment', subtitle: '', group: 'CREDIT & ASSESSMENT' },
+  { id: 17, number: 17, visibleNum: '15', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
+  { id: 18, number: 18, visibleNum: '16', title: 'Final Action', subtitle: 'Return to RM / Credit Manager', group: 'FINAL ACTION' },
 ];
 
 /**
@@ -262,8 +264,9 @@ const VISIBLE_TO_INTERNAL_STEP = {
   11: 20,
   12: 15,
   13: 16,
-  14: 17,
-  15: 18,
+  14: 21,
+  15: 17,
+  16: 18,
 };
 
 /**
@@ -288,14 +291,15 @@ const INTERNAL_TO_VISIBLE_STEP = {
   20: 11,
   15: 12,
   16: 13,
-  17: 14,
-  18: 15,
+  17: 15,
+  18: 16,
+  21: 14,
 };
 
 function resolveInternalStepFromQuery(stepParam) {
   if (stepParam == null || stepParam === '') return 1;
   const parsed = Number(stepParam);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 15) {
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 16) {
     return 1;
   }
   return VISIBLE_TO_INTERNAL_STEP[parsed] ?? 1;
@@ -1128,7 +1132,7 @@ export default function CustomerVerification() {
   // 1. Fetch Real Application from Backend via Phase 1/3 Hook
   const { verificationData, loading, error, refetch } = useVerificationWorkspace(customerId);
 
-  // 2. Active 15-Step Workflow State (Initialized from URL ?step= query parameter)
+  // 2. Active 16-Step Workflow State (Initialized from URL ?step= query parameter)
   const [activeStep, setActiveStep] = useState(() => resolveInternalStepFromQuery(searchParams.get('step')));
   const [viewFormRefreshKey, setViewFormRefreshKey] = useState(0);
 
@@ -11101,12 +11105,12 @@ export default function CustomerVerification() {
         )}
 
         {/* ── 15-STEP VERIFICATION WORKFLOW SIDEBAR (SIVELS FINANCE) ── */}
-        <aside className="bo-cv-left-sidebar" aria-label="15-Step Underwriting Verification Workflow">
+        <aside className="bo-cv-left-sidebar" aria-label="16-Step Underwriting Verification Workflow">
           <div className="bo-cv-sidebar-header">
             <div className="bo-cv-sidebar-heading-row">
               <div>
                 <h2 className="bo-cv-sidebar-title">Verification Steps</h2>
-                <span className="bo-cv-sidebar-subtitle">15-Step Workflow</span>
+                <span className="bo-cv-sidebar-subtitle">16-Step Workflow</span>
               </div>
               <span className="bo-cv-step-count">{VERIFICATION_WORKFLOW_STEPS.length}</span>
             </div>
@@ -18885,14 +18889,23 @@ export default function CustomerVerification() {
             )
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
-              STEP 13: RECOMMENDATION SHEET (CREDIT RECOMMENDATION PLACEHOLDER)
-          ══════════════════════════════════════════════════════════════════ */}
+          {/* STEP 14: DEVIATION ASSESSMENT */}
+          {activeStep === 21 && (
+            <div className="bo-cv-step-content">
+              <DeviationAssessment
+                applicationProductDetailsId={calculationAppProdId}
+                backOfficeId={resolveCalculationAuthInfo().backOfficeId}
+                createdBy={resolveCalculationAuthInfo().userId}
+              />
+            </div>
+          )}
+
+          {/* STEP 15: RECOMMENDATION SHEET */}
           {activeStep === 17 && (
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">13</div>
+                  <div className="bo-cv-step-badge-num">15</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Recommendation Sheet</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -18900,7 +18913,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 13 of 14</span>
+                <span className="bo-cv-step-tag-pill">Step 15 of 16</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -18915,13 +18928,13 @@ export default function CustomerVerification() {
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
-              STEP 14: FINAL APPLICATION ACTION (APPLICATION WORKFLOW)
+              STEP 16: FINAL APPLICATION ACTION (APPLICATION WORKFLOW)
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 18 && (
             <div className="bo-cv-step-panel bo-cv-workflow-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">14</div>
+                  <div className="bo-cv-step-badge-num">16</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Final Application Action &amp; Disposition</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -18929,7 +18942,7 @@ export default function CustomerVerification() {
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 14 of 14</span>
+                <span className="bo-cv-step-tag-pill">Step 16 of 16</span>
               </div>
 
               {/* Action Feedback Banner */}

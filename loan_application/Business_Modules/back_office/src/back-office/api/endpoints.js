@@ -29,6 +29,13 @@ export const BACK_OFFICE_ENDPOINTS = {
   MORTGAGE_STATUS_MASTER: '/MortgageStatusMaster',
   MORTGAGE_STATUS_MASTER_BY_ID: (id) => `/MortgageStatusMaster/${encodeURIComponent(id)}`,
 
+  DEVIATION_MASTERS: '/DeviationMaster',
+  CIR_DEVIATION_MASTERS: '/CIRDeviationMaster',
+  NEGATIVE_FI_DEVIATION_MASTERS: '/NegativeFIDeviationMaster',
+  APPLICATION_DEVIATION_DECISIONS: (applicationProductDetailsId) => `/ApplicationDeviationDecision/by-application/${encodeURIComponent(applicationProductDetailsId)}`,
+  APPLICATION_CIR_DEVIATION_DECISIONS: (applicationProductDetailsId) => `/ApplicationCIRDeviationDecision/by-application/${encodeURIComponent(applicationProductDetailsId)}`,
+  APPLICATION_NEGATIVE_FI_DECISIONS: (applicationProductDetailsId) => `/ApplicationNegativeFIDecision/by-application/${encodeURIComponent(applicationProductDetailsId)}`,
+
   BANKS_ACTIVE: '/masters/bank/active',
   BANK_BRANCHES: '/BankBranch',
   BANK_ACTIVE_LOANS: '/ApplicationBankActiveLoanDetails',

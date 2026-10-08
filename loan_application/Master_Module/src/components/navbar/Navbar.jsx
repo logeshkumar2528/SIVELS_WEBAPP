@@ -6,7 +6,7 @@ import {
   CreditCard, Package, Target, Repeat, User, Heart, Building, 
   Map, Building2, Briefcase, Landmark, Globe, MapPin, Link, 
   Layers, ShieldCheck, Home, Key, GraduationCap, Star, Contact, Shield, TrendingUp, LogOut, ArrowLeft,
-  Factory, Clock, Calculator, UserCheck, FileSpreadsheet, Activity, FileCheck
+  Factory, Clock, Calculator, UserCheck, FileSpreadsheet, Activity, FileCheck, ShieldAlert
 } from 'lucide-react';
 import { MasterModal } from '../masters/MasterModal/MasterModal';
 import './Navbar.css';
@@ -51,6 +51,9 @@ const MASTERS_MENU = [
   { label: 'Health Check Type', path: '/masters/health-check-type', icon: Activity },
   { label: 'Proof Master', path: '/masters/proof-master', icon: FileCheck },
   { label: 'Mortgage Status', path: '/masters/mortgage-status', icon: ShieldCheck },
+  { label: 'Deviation List', path: '/masters/deviation-list', icon: ShieldCheck },
+  { label: 'CIR Deviations', path: '/masters/cir-deviations', icon: Activity },
+  { label: 'Negative FI Deviations', path: '/masters/negative-fi-deviations', icon: ShieldAlert },
   { label: 'Company Configuration', path: '/company', icon: Building2 }
 ];
 
