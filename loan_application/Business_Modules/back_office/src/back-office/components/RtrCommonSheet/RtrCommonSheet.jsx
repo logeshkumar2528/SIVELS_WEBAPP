@@ -378,6 +378,25 @@ export default function RtrCommonSheet({
     setSummary((prev) => ({ ...prev, [field]: value }));
   };
 
+  useEffect(() => {
+    const amount = Number(summary.proposedLoanAmount);
+    const tenor = Number(summary.proposedLoanTenor);
+    const roi = Number(summary.proposedLoanRoi);
+    const nextEmi = !amount || amount <= 0 || !tenor || tenor <= 0 || !roi || roi <= 0
+      ? ''
+      : (() => {
+          const monthlyRate = roi / 1200;
+          return (amount * monthlyRate * ((1 + monthlyRate) ** tenor)) / (((1 + monthlyRate) ** tenor) - 1);
+        })();
+
+    setSummary((prev) => {
+      const formattedEmi = nextEmi === '' ? '' : nextEmi.toFixed(2);
+      return prev.proposedLoanEmi === formattedEmi
+        ? prev
+        : { ...prev, proposedLoanEmi: formattedEmi };
+    });
+  }, [summary.proposedLoanAmount, summary.proposedLoanTenor, summary.proposedLoanRoi]);
+
   // Add a new blank row
   const handleAddRow = () => {
     setRows((prev) => [...prev, createBlankRow()]);
@@ -431,9 +450,24 @@ export default function RtrCommonSheet({
   // Update a regular table cell
   const handleRowChange = (rowId, field, value) => {
     setRows((prev) =>
-      prev.map((r) => (r.id === rowId ? { ...r, [field]: value } : r))
+      prev.map((r) => {
+        if (r.id !== rowId) return r;
+        const next = { ...r, [field]: value };
+        if (field === 'tenor' || field === 'paidTenor') {
+          next.outstandingTenor = next.tenor === '' || next.paidTenor === ''
+            ? ''
+            : Math.max(0, Number(next.tenor) - Number(next.paidTenor));
+        }
+        return next;
+      })
     );
   };
+
+  const calculatedOutstandingTenor = (row) => (
+    row.tenor === '' || row.paidTenor === ''
+      ? ''
+      : Math.max(0, Number(row.tenor) - Number(row.paidTenor))
+  );
 
   // Handle dynamic master status selection
   const handleStatusChange = (rowId, selectedIdStr) => {
@@ -493,7 +527,7 @@ export default function RtrCommonSheet({
       loanEndDate: parseDateOrNull(row.endDate),
       tenureMonths: parseNumOrNull(row.tenor),
       paidTenureMonths: parseNumOrNull(row.paidTenor),
-      outstandingTenureMonths: parseNumOrNull(row.outstandingTenor),
+      outstandingTenureMonths: parseNumOrNull(calculatedOutstandingTenor(row)),
       bounceCount: parseNumOrNull(row.bounceCount),
       isFoirApplicable: parseBoolOrNull(row.forValue),
       emiDueDay: row.emiDueDay != null ? Number(row.emiDueDay) : null,
@@ -1051,8 +1085,8 @@ export default function RtrCommonSheet({
                         type="number"
                         placeholder="0"
                         className="bo-rtr-input bo-rtr-input-num"
-                        value={row.outstandingTenor}
-                        onChange={(e) => handleRowChange(row.id, 'outstandingTenor', e.target.value)}
+                        value={calculatedOutstandingTenor(row)}
+                        readOnly
                         disabled={obligationsSaving}
                       />
                     </td>
