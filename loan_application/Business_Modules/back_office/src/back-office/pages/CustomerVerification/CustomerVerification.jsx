@@ -3764,6 +3764,23 @@ export default function CustomerVerification() {
   const [rtrAssessmentsList, setRtrAssessmentsList] = useState([]);
   const [rtrAssessmentsLoading, setRtrAssessmentsLoading] = useState(false);
   const [rtrAssessmentsError, setRtrAssessmentsError] = useState(null);
+  const [rtrNormMasters, setRtrNormMasters] = useState([]);
+
+  const orderedRtrNormMasters = useMemo(() => [...rtrNormMasters].sort((a, b) => {
+    const aMin = Number(a?.minMOB ?? a?.MinMOB ?? a?.minMob ?? a?.MinMob) || 0;
+    const bMin = Number(b?.minMOB ?? b?.MinMOB ?? b?.minMob ?? b?.MinMob) || 0;
+    return aMin - bMin;
+  }), [rtrNormMasters]);
+
+  useEffect(() => {
+    if (activeStep !== 16 || selectedMethodCode !== 'RTR') return;
+    backOfficeService.getRTRNormMasters()
+      .then((records) => setRtrNormMasters(Array.isArray(records) ? records.filter((row) => {
+        const value = row?.isActive ?? row?.IsActive ?? row?.active ?? row?.Active;
+        return value === true || value === 1 || value === '1';
+      }) : []))
+      .catch(() => setRtrNormMasters([]));
+  }, [activeStep, selectedMethodCode, rtrCalculatedTrigger]);
 
   // Helper to generate a single empty RTR loan draft (add more via "Add facility")
   const getDefaultRtrDraftLoans = useCallback((appProdId, seq) => {
@@ -13035,6 +13052,25 @@ export default function CustomerVerification() {
                       )}
                     </div>
                   </div>
+
+                  <section className="bo-cv-rtr-norms-card" aria-label="RTR Norms">
+                    <div className="bo-cv-rtr-norms-title">RTR Norms</div>
+                    <div className="bo-cv-rtr-norms-table-wrap">
+                      <table className="bo-cv-rtr-norms-table">
+                        <thead><tr><th>RTR</th>{orderedRtrNormMasters.map((row, index) => {
+                          const min = row?.minMOB ?? row?.MinMOB;
+                          const max = row?.maxMOB ?? row?.MaxMOB;
+                          return <th key={`rtr-norm-head-${index}`}>{max == null || max === '' ? `>${Math.max(Number(min) - 1, 0)} MOB` : `${min}-${max} MOB`}</th>;
+                        })}</tr></thead>
+                        <tbody>
+                          <tr><td>OD as per CIR</td>{orderedRtrNormMasters.map((row, index) => <td key={`rtr-od-${index}`}>{row?.maxODCount ?? row?.MaxODCount ?? '—'}</td>)}</tr>
+                          <tr><td>Bounce (as per SOA)</td>{orderedRtrNormMasters.map((row, index) => <td key={`rtr-bounce-${index}`}>&lt;={row?.maxBounceCount ?? row?.MaxBounceCount ?? '—'}</td>)}</tr>
+                          <tr><td>Multiplier on EMI</td>{orderedRtrNormMasters.map((row, index) => <td key={`rtr-mult-${index}`}>{row?.emiMultiplier ?? row?.EMIMultiplier ?? '—'}x</td>)}</tr>
+                          <tr><td>Max Topup</td>{orderedRtrNormMasters.map((row, index) => <td key={`rtr-topup-${index}`}>upto {row?.maxTopUpPercentage ?? row?.MaxTopUpPercentage ?? '—'}% of BT amount</td>)}</tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
 
                   {/* ── CARD 2: LOAN FACILITIES ── */}
                   <section className="bo-cv-rtr-section" aria-label="Loan Facilities">

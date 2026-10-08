@@ -3340,7 +3340,7 @@
 }
 
 .bo-cv-pd-grid--2col {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .bo-cv-pd-field {
@@ -3445,7 +3445,7 @@
 
 .bo-cv-pd-collateral-subfields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   margin-top: 8px;
 }
@@ -11730,6 +11730,9 @@
   padding: 12px 20px;
   width: 100%;
 }
+
+.bo-cv-rtr-norms-card{margin-top:16px;border:1px solid #cbd5df;background:#fff;overflow:hidden}.bo-cv-rtr-norms-title{padding:7px 12px;text-align:center;background:#d8dde2;border-bottom:1px solid #111;color:#111;font-size:16px;font-weight:700}.bo-cv-rtr-norms-table-wrap{overflow-x:auto}.bo-cv-rtr-norms-table{width:100%;border-collapse:collapse;min-width:760px;color:#111;font-size:13px}.bo-cv-rtr-norms-table th,.bo-cv-rtr-norms-table td{border:1px solid #111;padding:4px 7px;text-align:left;white-space:nowrap}.bo-cv-rtr-norms-table th{font-weight:500;background:#f3f3f3}.bo-cv-rtr-norms-table td:first-child{font-weight:500;background:#f8f8f8}
+
 
 .bo-cv-rtr-header-left {
   display: flex;

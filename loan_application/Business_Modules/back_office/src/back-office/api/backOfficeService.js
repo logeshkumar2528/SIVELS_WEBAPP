@@ -132,6 +132,12 @@ export const backOfficeService = {
     return unwrapResponse(response);
   },
 
+  getRTRNormMasters: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.RTR_NORM_MASTER);
+    return unwrapResponse(response);
+  },
+
+
   /* ==========================================
      4. CUSTOMER / APPLICATION QUEUE APIs
   ========================================== */

@@ -24,6 +24,7 @@ export const BACK_OFFICE_ENDPOINTS = {
   PD_VERIFICATION_TYPES: '/PDVerificationTypeMaster',
   HEALTH_CHECK_TYPES: '/health-check-types',
   RTR_LOAN_STATUS_MASTER: '/rtr-loan-status-master',
+  RTR_NORM_MASTER: '/rtr-norm-master',
   PROPERTY_MASTER: '/PropertyMaster',
   PROPERTY_MASTER_BY_ID: (id) => `/PropertyMaster/${encodeURIComponent(id)}`,
   MORTGAGE_STATUS_MASTER: '/MortgageStatusMaster',
