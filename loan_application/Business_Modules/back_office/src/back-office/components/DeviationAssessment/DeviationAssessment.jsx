@@ -94,7 +94,7 @@ export default function DeviationAssessment({ applicationProductDetailsId, backO
   ], []);
 
   return <div className="bo-deviation-assessment">
-    <div className="bo-deviation-header"><div><h2>Deviation</h2></div><div className="bo-deviation-header-actions"><button type="button" onClick={load} disabled={isSaving}>Refresh</button></div></div>
+    <div className="bo-deviation-header"><div /><div className="bo-deviation-header-actions"><button type="button" onClick={load} disabled={isSaving}>Refresh</button></div></div>
     {error && <div className="bo-deviation-error">{error}</div>}
     {section('general', 'Deviation List', generalColumns, masters.general)}
     {section('cir', 'CIR Deviations', [

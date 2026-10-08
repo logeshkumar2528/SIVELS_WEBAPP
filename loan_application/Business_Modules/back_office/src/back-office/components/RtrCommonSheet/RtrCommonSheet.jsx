@@ -620,9 +620,6 @@ export default function RtrCommonSheet({
           <div className="bo-cv-step-badge-num">11</div>
           <div>
             <h2 className="bo-cv-step-panel-title">RTR Common Sheet</h2>
-            <p className="bo-cv-step-panel-desc">
-              Obligation assessment and repayment track record evaluation.
-            </p>
           </div>
         </div>
         <span className="bo-cv-step-tag-pill">Step 11 of 14</span>
@@ -813,9 +810,6 @@ export default function RtrCommonSheet({
           <div className="bo-rtr-facilities-toolbar">
             <div className="bo-rtr-facilities-title-wrap">
               <h3 className="bo-rtr-section-title">Obligation Details</h3>
-              <span className="bo-rtr-facilities-subtitle">
-                Record borrower loan facilities and repayment track record from credit bureau &amp; statements
-              </span>
             </div>
             <div className="bo-rtr-facilities-toolbar-actions">
               <button

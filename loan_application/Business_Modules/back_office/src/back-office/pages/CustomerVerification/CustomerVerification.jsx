@@ -229,22 +229,22 @@ const INITIAL_STEP_VERIFICATIONS = {
  * 16-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
  */
 const VERIFICATION_WORKFLOW_STEPS = [
-  { id: 1, number: 1, visibleNum: '01', title: 'View Form', subtitle: 'Application form', group: 'FORM REVIEW' },
-  { id: 2, number: 2, visibleNum: '02', title: 'Document Verification', subtitle: 'Applicant & Co-Applicant docs', group: 'DOCUMENT VERIFICATION', stepCodes: ['PROFILE_IMAGE', 'AADHAAR', 'PAN', 'SALARY_SLIP', 'BANK_STATEMENT', 'ZIP_ARCHIVE'] },
-  { id: 8, number: 8, visibleNum: '03', title: 'Property FI', subtitle: 'Property investigation', group: 'FIELD INVESTIGATION' },
-  { id: 9, number: 9, visibleNum: '04', title: 'Office FI', subtitle: 'Office verification', group: 'FIELD INVESTIGATION' },
-  { id: 10, number: 10, visibleNum: '05', title: 'Residence FI', subtitle: 'Residence verification', group: 'FIELD INVESTIGATION' },
-  { id: 11, number: 11, visibleNum: '06', title: 'Legal Opinion', subtitle: 'Legal report upload', group: 'CREDIT & ASSESSMENT' },
-  { id: 12, number: 12, visibleNum: '07', title: 'Technical Value', subtitle: 'Valuation report upload', group: 'CREDIT & ASSESSMENT' },
-  { id: 13, number: 13, visibleNum: '08', title: 'CIBIL Check', subtitle: 'Credit Bureau & PAN', group: 'CREDIT & ASSESSMENT' },
-  { id: 19, number: 19, visibleNum: '09', title: 'Health Check', subtitle: 'Health verification', group: 'CREDIT & ASSESSMENT' },
-  { id: 14, number: 14, visibleNum: '10', title: 'PD Verification', subtitle: 'Personal discussion', group: 'CREDIT & ASSESSMENT' },
-  { id: 20, number: 20, visibleNum: '11', title: 'Asset Base', subtitle: 'Property & asset portfolio', group: 'CREDIT & ASSESSMENT' },
-  { id: 15, number: 15, visibleNum: '12', title: 'RTR Common Sheet', subtitle: 'Obligation assessment', group: 'CREDIT & ASSESSMENT' },
-  { id: 16, number: 16, visibleNum: '13', title: 'Eligibility Assessment', subtitle: 'Method & applicant assessment', group: 'CREDIT & ASSESSMENT' },
-  { id: 21, number: 21, visibleNum: '14', title: 'Deviation Assessment', subtitle: '', group: 'CREDIT & ASSESSMENT' },
-  { id: 17, number: 17, visibleNum: '15', title: 'Recommendation Sheet', subtitle: 'Credit recommendation', group: 'CREDIT & ASSESSMENT' },
-  { id: 18, number: 18, visibleNum: '16', title: 'Final Action', subtitle: 'Return to RM / Credit Manager', group: 'FINAL ACTION' },
+  { id: 1, number: 1, visibleNum: '01', title: 'View Form', subtitle: '', group: 'FORM REVIEW' },
+  { id: 2, number: 2, visibleNum: '02', title: 'Document Verification', subtitle: '', group: 'DOCUMENT VERIFICATION', stepCodes: ['PROFILE_IMAGE', 'AADHAAR', 'PAN', 'SALARY_SLIP', 'BANK_STATEMENT', 'ZIP_ARCHIVE'] },
+  { id: 8, number: 8, visibleNum: '03', title: 'Property FI', subtitle: '', group: 'FIELD INVESTIGATION' },
+  { id: 9, number: 9, visibleNum: '04', title: 'Office FI', subtitle: '', group: 'FIELD INVESTIGATION' },
+  { id: 10, number: 10, visibleNum: '05', title: 'Residence FI', subtitle: '', group: 'FIELD INVESTIGATION' },
+  { id: 11, number: 11, visibleNum: '06', title: 'Legal Report', subtitle: '', group: 'CREDIT & ASSESSMENT' },
+  { id: 12, number: 12, visibleNum: '07', title: 'Technical Report', subtitle: '', group: 'CREDIT & ASSESSMENT' },
+  { id: 13, number: 13, visibleNum: '08', title: 'CIBIL Check', subtitle: '', group: 'CREDIT & ASSESSMENT' },
+  { id: 19, number: 19, visibleNum: '09', title: 'Health Check', subtitle: '', group: 'CREDIT & ASSESSMENT' },
+  { id: 14, number: 14, visibleNum: '10', title: 'PD Verification', subtitle: '', group: 'CREDIT & ASSESSMENT' },
+  { id: 20, number: 20, visibleNum: '11', title: 'Asset Base', subtitle: '', group: 'CREDIT & ASSESSMENT' },
+  { id: 15, number: 15, visibleNum: '12', title: 'RTR Common Sheet', subtitle: '', group: 'CREDIT & ASSESSMENT' },
+  { id: 16, number: 16, visibleNum: '13', title: 'Eligibility Assessment', subtitle: '', group: 'CREDIT & ASSESSMENT' },
+  { id: 21, number: 21, visibleNum: '14', title: 'Deviations', subtitle: '', group: 'CREDIT & ASSESSMENT' },
+  { id: 17, number: 17, visibleNum: '15', title: 'Recommendation Sheet', subtitle: '', group: 'CREDIT & ASSESSMENT' },
+  { id: 18, number: 18, visibleNum: '16', title: 'Final Action', subtitle: '', group: 'FINAL ACTION' },
 ];
 
 /**
@@ -597,7 +597,7 @@ function getStatusInfo(status) {
   return { label: 'Pending', className: 'bo-cv-pill-pending' };
 }
 
-function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBack }) {
+function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBack, initialResultOnly = false }) {
   const emptyMonth = () => ({
     applicationBankingMonthlyDetailsId: null,
     monthYear: '', monthlyCredits: '', monthlyCreditsNonBusiness: '', monthlyDebits: '',
@@ -632,7 +632,7 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
   const [busy, setBusy] = useState(false);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [message, setMessage] = useState(null);
-  const [eligibilitySheetOpen, setEligibilitySheetOpen] = useState(false);
+  const [eligibilitySheetOpen, setEligibilitySheetOpen] = useState(initialResultOnly);
 
   const toNumberOrNull = (value) => value === '' || value == null ? null : Number(value);
   const updateBank = (index, key, value) => setBanks((rows) => rows.map((row, i) => i === index ? { ...row, [key]: value } : row));
@@ -759,7 +759,7 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
   const eligibilityPooled = result?.pooledEligibility || {};
   const displayLoanLacs = result?.loanEligibilityInLacs ?? eligibilityPooled.loanEligibilityInLacs;
   return (
-    <section className={`bo-cv-banking-workspace${eligibilitySheetOpen && result ? ' is-eligibility-only' : ''}`} aria-label="Banking Analysis & Eligibility Workspace">
+    <section className={`bo-cv-banking-workspace${(eligibilitySheetOpen || initialResultOnly) ? ' is-eligibility-only' : ''}`} aria-label="Banking Analysis & Eligibility Workspace">
       {/* ── Top Workspace Header ── */}
       <div className="bo-cv-banking-header">
         <div className="bo-cv-banking-header-left">
@@ -775,7 +775,7 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
             </button>
           )}
           <div className="bo-cv-banking-title-block">
-            <h3 className="bo-cv-banking-title">Eligibility - Banking Program</h3>
+            <h3 className="bo-cv-banking-title">Banking</h3>
           </div>
         </div>
         <div className="bo-cv-banking-header-right">
@@ -884,9 +884,9 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
             <div className="bo-cv-banking-months-list bo-cv-banking-month-table-wrap">
               <table className="bo-cv-banking-month-table">
                 <thead><tr>
-                  <th>Month</th><th>Credits</th><th>Non-business Credits</th><th>Debits</th>
-                  <th>Debit Count</th><th>Credit Count</th><th>IW Bounce</th><th>OW Bounce</th>
-                  <th>Day 5 Balance</th><th>Day 15 Balance</th><th>Day 25 Balance</th><th>ABB</th><th>ABB / EMI</th>
+                  <th>MONTHS</th><th>Monthly Credits</th><th>Monthly Credits<br />non Business Related</th><th>Monthly Debits</th>
+                  <th>No. of Debits</th><th>No. of Credits</th><th>I/W Bounces</th><th>O/W Bounces</th>
+                  <th>DAY 5th<br />Balance</th><th>DAY 15th<br />Balance</th><th>DAY 25th<br />Balance</th><th>ABB</th><th>ABB / EMI</th>
                 </tr></thead>
                 <tbody>
                   {bank.monthlyRows.map((row, monthIndex) => {
@@ -1081,10 +1081,10 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
       {/* ── Eligibility Result Card ── */}
       {result && (
         <div ref={eligibilitySheetRef} className="bo-cv-banking-results bo-cv-banking-eligibility-sheet">
-          <button type="button" className="bo-btn bo-btn--outline bo-cv-banking-sheet-back" onClick={() => setEligibilitySheetOpen(false)}>
-            ← Back to Banking Details
+          <button type="button" className="bo-btn bo-btn--outline bo-cv-banking-sheet-back" onClick={() => (onBack ? onBack() : setEligibilitySheetOpen(false))}>
+            ← Back to Banking
           </button>
-          <h4>Eligibility Sheet - Banking Program</h4>
+          <h4>Banking Eligibility</h4>
           <div className="bo-cv-banking-sheet-subtitle">Consolidation of max 3 Banking</div>
           <div className="bo-cv-banking-result-layout">
             <div className="bo-cv-banking-result-table-wrap">
@@ -6040,21 +6040,6 @@ export default function CustomerVerification() {
     return (
       <section className="bo-cv-health-checks" aria-label="Health Check">
         <div className="bo-cv-health-checks-card">
-          <div className="bo-cv-health-checks-head">
-            <div className="bo-cv-health-checks-head-icon" aria-hidden="true">
-              {ShieldCheckIcon ? <ShieldCheckIcon size={18} /> : <span>✓</span>}
-            </div>
-            <div className="bo-cv-health-checks-head-copy">
-              <h3 className="bo-cv-health-checks-title">Health Check Particulars</h3>
-              <p className="bo-cv-health-checks-subtitle">
-                Capture Yes/No, date, and findings for each active master health check type.
-              </p>
-            </div>
-            <span className="bo-cv-health-checks-count">
-              {activeHealthCheckTypes.length} check{activeHealthCheckTypes.length === 1 ? '' : 's'}
-            </span>
-          </div>
-
           <div className="bo-cv-health-checks-table-wrap">
             <table className="bo-cv-health-checks-table">
               <thead>
@@ -11716,13 +11701,12 @@ export default function CustomerVerification() {
           )}
 
           {activeStep === 8 && (
-            <div className="bo-cv-step-panel">
+            <div className="bo-cv-step-panel bo-cv-property-fi-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
                   <div className="bo-cv-step-badge-num">03</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Property FI</h2>
-                    <p className="bo-cv-step-panel-desc">Property Field Investigation details and collateral valuation.</p>
                   </div>
                 </div>
                 <span className="bo-cv-step-tag-pill">Step 03 of 14</span>
@@ -11743,13 +11727,12 @@ export default function CustomerVerification() {
               STEP 09: OFFICE FI (PLACEHOLDER)
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 9 && (
-            <div className="bo-cv-step-panel">
+            <div className="bo-cv-step-panel bo-cv-office-fi-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
                   <div className="bo-cv-step-badge-num">04</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Office FI</h2>
-                    <p className="bo-cv-step-panel-desc">Workplace and business establishment field investigation.</p>
                   </div>
                 </div>
                 <span className="bo-cv-step-tag-pill">Step 04 of 14</span>
@@ -11770,13 +11753,12 @@ export default function CustomerVerification() {
               STEP 10: RESIDENCE FI (PLACEHOLDER)
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 10 && (
-            <div className="bo-cv-step-panel">
+            <div className="bo-cv-step-panel bo-cv-residence-fi-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
                   <div className="bo-cv-step-badge-num">05</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Residence FI</h2>
-                    <p className="bo-cv-step-panel-desc">Physical residence field verification and neighbor check.</p>
                   </div>
                 </div>
                 <span className="bo-cv-step-tag-pill">Step 05 of 14</span>
@@ -11797,15 +11779,12 @@ export default function CustomerVerification() {
               STEP 09: LEGAL OPINION
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 11 && (
-            <div className="bo-cv-step-panel">
+            <div className="bo-cv-step-panel bo-cv-legal-report-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
                   <div className="bo-cv-step-badge-num">06</div>
                   <div>
-                    <h2 className="bo-cv-step-panel-title">Legal Opinion</h2>
-                    <p className="bo-cv-step-panel-desc">
-                      Upload and review advocate title investigation report and legal opinion (Max: 150 MB).
-                    </p>
+                    <h2 className="bo-cv-step-panel-title">Legal Report</h2>
                   </div>
                 </div>
                 <span className="bo-cv-step-tag-pill">Step 06 of 14</span>
@@ -11939,15 +11918,12 @@ export default function CustomerVerification() {
               STEP 10: TECHNICAL VALUE
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 12 && (
-            <div className="bo-cv-step-panel">
+            <div className="bo-cv-step-panel bo-cv-technical-report-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
                   <div className="bo-cv-step-badge-num">07</div>
                   <div>
-                    <h2 className="bo-cv-step-panel-title">Technical Value</h2>
-                    <p className="bo-cv-step-panel-desc">
-                      Upload and review certified engineer property valuation and technical report (Max: 150 MB).
-                    </p>
+                    <h2 className="bo-cv-step-panel-title">Technical Report</h2>
                   </div>
                 </div>
                 <span className="bo-cv-step-tag-pill">Step 07 of 14</span>
@@ -12081,15 +12057,12 @@ export default function CustomerVerification() {
               STEP 13: CIBIL CHECK
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 13 && (
-            <div className="bo-cv-step-panel">
+            <div className="bo-cv-step-panel bo-cv-cibil-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
                   <div className="bo-cv-step-badge-num">08</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Credit Bureau &amp; CIBIL Verification</h2>
-                    <p className="bo-cv-step-panel-desc">
-                      Direct bureau credit pull, CIR score breakdown, and manual PAN verification upload.
-                    </p>
                   </div>
                 </div>
                 <span className="bo-cv-step-tag-pill">Step 08 of 14</span>
@@ -12100,9 +12073,6 @@ export default function CustomerVerification() {
                 <div className="bo-cv-manual-pan-header">
                   <div className="bo-cv-manual-pan-title-group">
                     <h3 className="bo-cv-manual-pan-title">Manual CIBIL PAN Card Upload</h3>
-                    <p className="bo-cv-manual-pan-subtitle">
-                      Upload an additional reference PAN document for manual CIBIL bureau verification. This does not alter the applicant's official KYC PAN.
-                    </p>
                   </div>
                 </div>
 
@@ -12233,9 +12203,6 @@ export default function CustomerVerification() {
                       </div>
                       <div>
                         <h3 className="bo-cv-card-title">Credit Bureau Verification</h3>
-                        <p className="bo-cv-card-subtitle">
-                          Retrieve applicant credit profile using PAN information.
-                        </p>
                       </div>
                     </div>
 
@@ -12267,10 +12234,6 @@ export default function CustomerVerification() {
                         {ArrowRightIcon && <ArrowRightIcon size={16} />}
                       </button>
 
-                      <span className="bo-cv-secure-tag">
-                        {LockIcon && <LockIcon size={13} />}
-                        <span>Secure Bureau Inquiry &bull; TransUnion CIBIL &amp; Experian</span>
-                      </span>
                     </div>
                   </div>
                 </div>
@@ -12635,9 +12598,6 @@ export default function CustomerVerification() {
                   <div className="bo-cv-step-badge-num">09</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Health Check</h2>
-                    <p className="bo-cv-step-panel-desc">
-                      Capture Yes/No, date of check, and underwriting findings for active master health check types.
-                    </p>
                   </div>
                 </div>
                 <span className="bo-cv-step-tag-pill">Step 09 of 14</span>
@@ -12657,9 +12617,6 @@ export default function CustomerVerification() {
                   <div className="bo-cv-step-badge-num">10</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">PD Sheet</h2>
-                    <p className="bo-cv-step-panel-desc">
-                      Record personal discussion findings, borrower profiles, and credit underwriting observations.
-                    </p>
                   </div>
                 </div>
                 <span className="bo-cv-step-tag-pill">Step 10 of 14</span>
@@ -12738,8 +12695,8 @@ export default function CustomerVerification() {
                       <span className="bo-cv-pd-field-label">
                         <span className="bo-cv-pd-field-num">3</span> Address Where PD Was Conducted
                       </span>
-                      <input
-                        type="text"
+                      <textarea
+                        rows="3"
                         placeholder="Enter discussion / visit address"
                         value={sheet.pdAddress}
                         onChange={(e) => updateRecommendationSheet(sheet.id, 'pdAddress', e.target.value)}
@@ -12752,8 +12709,8 @@ export default function CustomerVerification() {
                         <span className="bo-cv-pd-field-label">
                           <span className="bo-cv-pd-field-num">4</span> Personal Discussion / Site Visit
                         </span>
-                        <input
-                          type="text"
+                        <textarea
+                          rows="3"
                           placeholder="Enter visit details"
                           value={sheet.personalDiscussionSiteVisit}
                           onChange={(e) => updateRecommendationSheet(sheet.id, 'personalDiscussionSiteVisit', e.target.value)}
@@ -12764,8 +12721,8 @@ export default function CustomerVerification() {
                         <span className="bo-cv-pd-field-label">
                           <span className="bo-cv-pd-field-num">5</span> End Use of the Loan
                         </span>
-                        <input
-                          type="text"
+                        <textarea
+                          rows="3"
                           placeholder="Describe intended use"
                           value={sheet.endUse}
                           onChange={(e) => updateRecommendationSheet(sheet.id, 'endUse', e.target.value)}
@@ -12776,10 +12733,10 @@ export default function CustomerVerification() {
                     {/* 6. Disbursement Transaction (Full width) */}
                     <label className="bo-cv-pd-field bo-cv-pd-field--full">
                       <span className="bo-cv-pd-field-label">
-                        <span className="bo-cv-pd-field-num">6</span> Disbursement Transaction
+                        <span className="bo-cv-pd-field-num">6</span> Disbursement Trans
                       </span>
-                      <input
-                        type="text"
+                      <textarea
+                        rows="3"
                         placeholder="Enter transaction details"
                         value={sheet.disbursementTransaction}
                         onChange={(e) => updateRecommendationSheet(sheet.id, 'disbursementTransaction', e.target.value)}
@@ -13581,6 +13538,18 @@ export default function CustomerVerification() {
                   applicationProductDetailsId={calculationAppProdId}
                   userId={getAuthenticatedBackOfficeId()}
                   onBack={() => setBankingWorkspaceOpen(false)}
+                />
+              </div>
+            ) : selectedMethodCode === 'BANKING_ELIGIBILITY' && bankingWorkspaceOpen ? (
+              <div className="bo-cv-elig-deck bo-cv-elig-deck--banking-workspace">
+                <BankingEligibilityWorkspace
+                  applicationProductDetailsId={calculationAppProdId}
+                  userId={getAuthenticatedBackOfficeId()}
+                  initialResultOnly
+                  onBack={() => {
+                    setSelectedMethodCode('BANKING');
+                    setBankingWorkspaceOpen(true);
+                  }}
                 />
               </div>
             ) : selectedMethodCode === 'NORMAL_INCOME' && normalIncomeWorkspaceOpen ? (
@@ -15305,9 +15274,6 @@ export default function CustomerVerification() {
                     <div className="bo-cv-income-control-card">
                       <div className="bo-cv-income-control-info">
                         <h4 className="bo-cv-income-control-title">Restrict Other Income to maximum 100% of Salaried Income</h4>
-                        <p className="bo-cv-income-control-desc">
-                          Cap eligible additional income at total salaried income ({formatCurrency(liveSalaryAverage)}).
-                        </p>
                       </div>
                       <div className="bo-cv-toggle-container">
                         <div className="bo-cv-toggle-btn-group" role="group" aria-label="Restrict Other Income to maximum 100% of Salaried Income">
@@ -15355,9 +15321,6 @@ export default function CustomerVerification() {
                       <div className="bo-cv-income-calc-bar-info">
                         <div>
                           <h3 className="bo-cv-income-calc-bar-title">Calculate Income Eligibility</h3>
-                          <p className="bo-cv-income-calc-bar-sub">
-                            Run authoritative underwriting eligibility calculation for {selectedApplicant?.name || 'Applicant'}.
-                          </p>
                         </div>
                       </div>
 
@@ -15584,8 +15547,13 @@ export default function CustomerVerification() {
                           const isRtr = code === 'RTR';
                           const isNormalIncome = code === 'NORMAL_INCOME';
                           const isBanking = code === 'BANKING';
-                          const shortName =
-                            method.methodName ||
+                          const shortName = isIncome
+                            ? 'Eligibility - Salaried'
+                            : isNormalIncome
+                            ? 'Eligibility - Normal Income'
+                            : isRtr
+                            ? 'Eligibility - RTR Sheet'
+                            : method.methodName ||
                             (isIncome
                               ? 'Income'
                               : isRtr
@@ -15652,6 +15620,28 @@ export default function CustomerVerification() {
                             </button>
                           );
                         })}
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={selectedMethodCode === 'BANKING_ELIGIBILITY'}
+                          className={`bo-cv-elig-method-chip ${selectedMethodCode === 'BANKING_ELIGIBILITY' ? 'is-active' : ''}`}
+                          onClick={() => {
+                            setSelectedMethodCode('BANKING_ELIGIBILITY');
+                            setBankingWorkspaceOpen(true);
+                            setRtrWorkspaceOpen(false);
+                            setNormalIncomeWorkspaceOpen(false);
+                            setIncomeWorkspaceOpen(false);
+                          }}
+                          disabled={methodsLoading}
+                        >
+                          <span className="bo-cv-elig-method-chip-icon">
+                            {BuildingIcon && <BuildingIcon size={15} />}
+                          </span>
+                          <span className="bo-cv-elig-method-chip-text">
+                            <strong>Eligibility - Banking Program</strong>
+                            <small>BANKING_ELIGIBILITY</small>
+                          </span>
+                        </button>
                       </div>
                     )}
                   </div>
@@ -18927,7 +18917,16 @@ export default function CustomerVerification() {
 
           {/* STEP 14: DEVIATION ASSESSMENT */}
           {activeStep === 21 && (
-            <div className="bo-cv-step-content">
+            <div className="bo-cv-step-panel bo-cv-deviation-step-panel">
+              <div className="bo-cv-step-panel-header">
+                <div className="bo-cv-step-header-left">
+                  <div className="bo-cv-step-badge-num">14</div>
+                  <div>
+                    <h2 className="bo-cv-step-panel-title">Deviation</h2>
+                  </div>
+                </div>
+                <span className="bo-cv-step-tag-pill">Step 14 of 16</span>
+              </div>
               <DeviationAssessment
                 applicationProductDetailsId={calculationAppProdId}
                 backOfficeId={resolveCalculationAuthInfo().backOfficeId}

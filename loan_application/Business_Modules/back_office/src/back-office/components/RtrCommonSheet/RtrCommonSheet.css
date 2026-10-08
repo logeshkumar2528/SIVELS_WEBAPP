@@ -967,3 +967,6 @@
     gap: 10px;
   }
 }
+.bo-rtr-panel > .bo-cv-step-panel-header .bo-cv-step-header-left {
+  align-items: center;
+}

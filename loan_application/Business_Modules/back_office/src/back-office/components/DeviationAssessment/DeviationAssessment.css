@@ -3,3 +3,14 @@
 .bo-deviation-confirm p{margin:0 0 22px;color:#334e68}.bo-deviation-confirm-actions{display:flex;justify-content:flex-end;gap:10px}.bo-deviation-cancel{border:1px solid #b8c8d7;border-radius:8px;padding:10px 18px;background:#fff;color:#334e68;font-weight:600}
 .master-modal-content.bo-deviation-confirm-modal{max-width:520px;border-radius:14px;box-shadow:0 18px 48px rgba(15,42,66,.22)}.bo-deviation-confirm-modal .master-modal-header{padding:20px 24px;border-bottom:1px solid #e6edf3;align-items:center}.bo-deviation-confirm-modal .master-modal-title{font-size:1.25rem;color:#123c31}.bo-deviation-confirm-modal .master-modal-close{width:36px;height:36px;padding:0;border-color:#d9e4ec}.bo-deviation-confirm-modal .master-modal-body{padding:22px 24px 24px}.bo-deviation-confirm-modal .bo-deviation-confirm p{font-size:.96rem;line-height:1.55;margin-bottom:24px}.bo-deviation-confirm-modal .bo-deviation-save{padding:10px 18px}.bo-deviation-confirm-modal .bo-deviation-cancel{padding:10px 18px}
 .bo-deviation-assessment{padding:20px;border-radius:12px}.bo-deviation-header{margin-bottom:16px}.bo-deviation-header h2{font-size:1.65rem}.bo-deviation-header button{padding:7px 13px;font-size:.88rem}.bo-deviation-section{margin-top:16px}.bo-deviation-section-title{padding:10px 14px}.bo-deviation-section-title h3{font-size:1.15rem}.bo-deviation-table th,.bo-deviation-table td{padding:7px 10px}.bo-deviation-table th{font-size:11px}.bo-deviation-table td{font-size:12px}.bo-deviation-table select{width:82px;padding:5px 7px;font-size:12px}.bo-deviation-footer-actions{margin-top:16px;padding-top:12px}.bo-deviation-save{padding:8px 16px;font-size:.88rem}
+
+/* Match the PD Sheet green card styling inside the Deviation step. */
+.bo-deviation-assessment{border-color:#cfe5d7;border-top:0;background:#fbfdfc}
+.bo-deviation-header{padding:10px 12px;background:linear-gradient(115deg,#f2faf5 0%,#ffffff 62%);border-bottom:1px solid #e8eeea;border-radius:6px}
+.bo-deviation-section{border-color:#b9d8c6;box-shadow:0 1px 3px rgba(15,122,76,.04)}
+.bo-deviation-section-title{background:#ffffff;border-bottom-color:#a7d9bd}
+.bo-deviation-table th{background:#ffffff}
+
+/* Keep Refresh in the outer step header row without adding helper copy. */
+.bo-cv-deviation-step-panel{position:relative}
+.bo-cv-deviation-step-panel .bo-deviation-header{position:absolute;top:20px;right:150px;margin:0;padding:0;background:transparent;border:0;z-index:2}
