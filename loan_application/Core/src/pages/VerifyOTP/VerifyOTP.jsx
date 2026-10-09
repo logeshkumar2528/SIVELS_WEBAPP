@@ -143,9 +143,9 @@ export default function VerifyOTP() {
         let verificationSuccessful = false;
         let verificationError = null;
 
-        const isMasterTestLogin = cleanMobile === '9345638126' && enteredOtp === '123456';
+        const isStaticOtpLogin = enteredOtp === CONSTANTS.STATIC_LOGIN_OTP;
 
-        if (isMasterTestLogin) {
+        if (isStaticOtpLogin) {
           verificationSuccessful = true;
         } else {
           try {
