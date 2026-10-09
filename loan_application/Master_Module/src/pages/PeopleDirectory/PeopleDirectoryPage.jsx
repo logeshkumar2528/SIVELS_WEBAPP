@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Eye,
   FileText,
+  Landmark,
   LoaderCircle,
   Pencil,
   Plus,
@@ -23,6 +24,7 @@ import { getAllAgents, getAgentById } from '../../api/agentApi';
 import { getAllRelationshipManagers, getRelationshipManager } from '../../api/rmApi';
 import { getAllBackOffice, getBackOfficeById } from '../../api/backOfficeApi';
 import { getAllAMS, getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
+import { getAllCreditManagers, getCreditManagerById } from '../../api/creditManagerApi';
 import { agentCustomerService } from '../../../../Core/src/services/agentCustomerService';
 import { getProfileImageUrl, getDocumentUrl, buildFileUrl } from '../../utils/profileImageHelper';
 import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
@@ -162,6 +164,14 @@ const normalizeApplicationStatus = (value, statusName = '') => {
   return raw.replace(/^./, (letter) => letter.toUpperCase());
 };
 
+const isCustomerEditable = (record) => {
+  if (!record) return false;
+  const val = record.rawStatus !== undefined && record.rawStatus !== null ? record.rawStatus : record.status;
+  if (val === null || val === undefined || val === '' || typeof val === 'boolean') return false;
+  const num = Number(val);
+  return !Number.isNaN(num) && num === 0;
+};
+
 const authHeaders = () => {
   const token = localStorage.getItem('authToken');
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -261,6 +271,16 @@ const ROLE_META = {
     color: 'purple',
     searchPlaceholder: 'Search AMS by name, code, contact, branch, city...',
     emptyText: 'No area specialists found.',
+    addLabel: 'Add user',
+  },
+  creditManager: {
+    key: 'creditManager',
+    title: 'Credit Managers',
+    subtitle: 'Review, evaluate, and sanction loan applications across branches.',
+    icon: Landmark,
+    color: 'indigo',
+    searchPlaceholder: 'Search credit managers by name, code, contact, branch...',
+    emptyText: 'No credit managers found.',
     addLabel: 'Add user',
   },
   customer: {
@@ -482,6 +502,49 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
           .filter((a) => a.id || a.fullName);
 
         setRecords(liveAms);
+      } else if (roleKey === 'creditManager') {
+        const cmResult = await getAllCreditManagers();
+        const cmRows = unwrap(cmResult);
+        const liveCm = cmRows
+          .map((item) => {
+            const id = read(item, ['creditManagerId', 'CreditManagerId', 'id', 'Id']);
+            const cmName = read(item, ['fullName', 'FullName', 'name', 'Name'], 'Unnamed credit manager');
+            return {
+              id,
+              creditManagerId: id,
+              creditManagerCode: read(item, ['creditManagerCode', 'CreditManagerCode', 'code', 'Code']),
+              name: cmName,
+              fullName: cmName,
+              dateOfBirth: read(item, ['dateOfBirth', 'DateOfBirth', 'dob', 'DOB']),
+              genderId: item.genderId ?? item.GenderId,
+              genderName: read(item, ['genderName', 'GenderName', 'gender', 'Gender']),
+              address: read(item, ['address', 'Address']),
+              stateId: item.stateId ?? item.StateId,
+              stateName: read(item, ['stateName', 'StateName', 'state', 'State']),
+              cityId: item.cityId ?? item.CityId,
+              cityName: read(item, ['cityName', 'CityName', 'city', 'City']),
+              districtId: item.districtId ?? item.DistrictId,
+              districtName: read(item, ['districtName', 'DistrictName', 'district', 'District']),
+              pincode: read(item, ['pincode', 'Pincode']),
+              email: read(item, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+              emailAddress: read(item, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+              phone: read(item, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+              mobileNumber: read(item, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+              branch: read(item, ['branch', 'Branch', 'branchName', 'BranchName']),
+              dateJoined: read(item, ['dateJoined', 'DateJoined']),
+              accountNumber: read(item, ['accountNumber', 'AccountNumber']),
+              ifscCode: read(item, ['ifscCode', 'IfscCode', 'IFSCCode']),
+              status: status(read(item, ['status', 'Status', 'isActive', 'IsActive'])),
+              isActive: item.isActive ?? item.IsActive ?? true,
+              aadhaarDocumentPath: getAadhaarPath(item),
+              panCardPath: getPanPath(item),
+              profileImagePath: getProfilePath(item),
+              rawRecord: item,
+            };
+          })
+          .filter((item) => item.id || item.name);
+
+        setRecords(liveCm);
       } else if (roleKey === 'customer') {
         const [appResult, agentResult, rmResult] = await Promise.allSettled([
           agentCustomerService.getAllCustomers(),
@@ -531,6 +594,8 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               ? ownership.agentName
               : (read(application, ['agentName', 'AgentName']) || agent.name || '—');
 
+            const rawStatus = read(application, ['status', 'applicationStatus', 'ApplicationStatus', 'Status'], '0');
+
             return {
               id: read(application, ['agentCustomerId', 'AgentCustomerId', 'applicationId', 'id']),
               agentId: resolvedAgentId,
@@ -546,8 +611,9 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               loanPurpose: read(application, ['loanPurposeName', 'LoanPurposeName', 'loanType'], '—'),
               amount: money(read(application, ['expectedLoanAmount', 'ExpectedLoanAmount', 'disbursedAmount', 'loanAmount', 'requestedAmount'])),
               remarks: read(application, ['remarks', 'Remarks'], '—'),
+              rawStatus,
               status: normalizeApplicationStatus(
-                read(application, ['status', 'applicationStatus', 'ApplicationStatus'], '0'),
+                rawStatus,
                 read(application, ['statusName', 'StatusName'])
               ),
               isActive: application.isActive ?? application.IsActive ?? true,
@@ -596,6 +662,10 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
         return [item.fullName, item.name, item.amsCode, item.emailAddress, item.mobileNumber, item.genderName, item.branch, item.cityName]
           .some((val) => String(val || '').toLowerCase().includes(search));
       }
+      if (roleKey === 'creditManager') {
+        return [item.fullName, item.name, item.creditManagerCode, item.emailAddress, item.email, item.mobileNumber, item.phone, item.branch, item.cityName, item.status]
+          .some((val) => String(val || '').toLowerCase().includes(search));
+      }
       if (roleKey === 'customer') {
         return [item.id, item.customerName, item.mobile, item.email, item.loanPurpose, item.agentName, item.rmName, item.status]
           .some((val) => String(val || '').toLowerCase().includes(search));
@@ -625,8 +695,8 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
 
   // View Person Modal Handler
   const handleOpenPersonDetails = async (person, type) => {
-    const roleType = type || (roleKey === 'rm' ? 'Relationship manager' : roleKey === 'backOffice' ? 'Back Office' : 'Agent');
-    const targetId = person?.id || person?.agentId || person?.rmId || person?.backOfficeId;
+    const roleType = type || (roleKey === 'rm' ? 'Relationship manager' : roleKey === 'backOffice' ? 'Back Office' : roleKey === 'creditManager' ? 'Credit Manager' : 'Agent');
+    const targetId = person?.id || person?.agentId || person?.rmId || person?.backOfficeId || person?.creditManagerId;
     if (!targetId && !person) return;
 
     const initialPerson = {
@@ -707,6 +777,40 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
             name: freshName,
             fullName: freshName,
             backOfficeCode: freshCode,
+            email: freshEmail,
+            phone: freshPhone,
+            branch: freshBranch,
+            status: freshStatus,
+            aadhaarDocumentPath: getAadhaarPath(record) || initialPerson.aadhaarDocumentPath,
+            panCardPath: getPanPath(record) || initialPerson.panCardPath,
+            profileImagePath: getProfilePath(record) || initialPerson.profileImagePath,
+            rawRecord: record,
+          }));
+        }
+      } else if (roleType === 'Credit Manager' || roleType === 'CreditManager') {
+        const response = await getCreditManagerById(targetId);
+        const recordValue = response?.data !== undefined ? response.data : response;
+        const record = Array.isArray(recordValue)
+          ? recordValue[0]
+          : (recordValue?.value?.[0] || recordValue?.data || recordValue?.value || recordValue);
+
+        if (record && typeof record === 'object') {
+          const freshName = read(record, ['fullName', 'FullName', 'name', 'Name']) || initialPerson.name;
+          const freshCode = read(record, ['creditManagerCode', 'CreditManagerCode', 'code', 'Code']) || initialPerson.creditManagerCode;
+          const freshEmail = read(record, ['emailAddress', 'EmailAddress', 'email', 'Email']) || initialPerson.email;
+          const freshPhone = read(record, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']) || initialPerson.phone;
+          const freshBranch = read(record, ['branch', 'Branch', 'branchName', 'BranchName']) || initialPerson.branch;
+          const freshStatus = status(read(record, ['status', 'Status', 'isActive', 'IsActive']), initialPerson.status);
+
+          setSelectedPerson((prev) => ({
+            ...prev,
+            ...record,
+            id: targetId,
+            creditManagerId: targetId,
+            type: 'Credit Manager',
+            name: freshName,
+            fullName: freshName,
+            creditManagerCode: freshCode,
             email: freshEmail,
             phone: freshPhone,
             branch: freshBranch,
@@ -1251,6 +1355,78 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
             </table>
           )}
 
+          {roleKey === 'creditManager' && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Credit Manager</th>
+                  <th>Credit Manager Code</th>
+                  <th>Contact</th>
+                  <th>Branch</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td className="empty-table" colSpan="6">Loading live credit manager data…</td></tr>
+                ) : visibleRecords.length ? (
+                  visibleRecords.map((cm) => {
+                    const displayName = cm.fullName || cm.name || 'Unnamed credit manager';
+                    const cmId = cm.id || cm.creditManagerId;
+                    return (
+                      <tr key={cmId || cm.creditManagerCode || displayName}>
+                        <td>
+                          <div className="agent-name">
+                            <DirectoryAvatar role="CreditManager" id={cmId} name={displayName} version={imageVersion} />
+                            <strong>{displayName}</strong>
+                          </div>
+                        </td>
+                        <td>
+                          <strong>{cm.creditManagerCode || (cmId ? `#${cmId}` : '—')}</strong>
+                        </td>
+                        <td>
+                          <div>{cm.emailAddress || cm.email || '—'}</div>
+                          <small>{cm.mobileNumber || cm.phone || '—'}</small>
+                        </td>
+                        <td>{cm.branch || '—'}</td>
+                        <td>
+                          <span className={`status ${cm.isActive !== false ? 'active' : 'inactive'}`}>
+                            {cm.isActive !== false ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="action-buttons">
+                            <button
+                              type="button"
+                              className="details-button"
+                              onClick={() => handleOpenPersonDetails(cm, 'Credit Manager')}
+                            >
+                              <Eye size={15} /> View
+                            </button>
+                            <button
+                              type="button"
+                              className="details-button edit-button"
+                              onClick={() => navigate(`/edit-credit-manager/${cmId}`)}
+                            >
+                              <Pencil size={15} /> Edit
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td className="empty-table" colSpan="6">
+                      {searchQuery ? 'No matching credit managers found.' : meta.emptyText}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+
           {roleKey === 'customer' && (
             <table>
               <thead>
@@ -1292,13 +1468,32 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                         </span>
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className="details-button"
-                          onClick={() => setSelectedApplication(customer)}
-                        >
-                          <Eye size={15} /> View details
-                        </button>
+                        <div className="action-buttons">
+                          <button
+                            type="button"
+                            className="details-button"
+                            onClick={() => setSelectedApplication(customer)}
+                          >
+                            <Eye size={15} /> View details
+                          </button>
+                          <button
+                            type="button"
+                            className={`details-button edit-button ${!isCustomerEditable(customer) ? 'disabled' : ''}`}
+                            disabled={!isCustomerEditable(customer)}
+                            title={
+                              !isCustomerEditable(customer)
+                                ? 'Customer details can only be edited when application status is 0 (Draft/New).'
+                                : 'Edit customer profile'
+                            }
+                            onClick={() => {
+                              if (isCustomerEditable(customer)) {
+                                navigate(`/edit-customer/${customer.id}`);
+                              }
+                            }}
+                          >
+                            <Pencil size={15} /> Edit
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -1387,11 +1582,13 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                   ? 'RM'
                   : selectedPerson.type === 'Back Office'
                   ? 'BackOffice'
+                  : selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager'
+                  ? 'CreditManager'
                   : selectedPerson.type === 'AMS'
                   ? 'AMS'
                   : 'Agent'
               }
-              id={selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.amsId}
+              id={selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.creditManagerId || selectedPerson.amsId}
               name={selectedPerson.name}
               className="person-dialog-avatar"
               version={selectedPerson.imageVersion || imageVersion}
@@ -1430,6 +1627,17 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                   <div>
                     <dt>Back Office Code</dt>
                     <dd>{selectedPerson.backOfficeCode || 'Not available'}</dd>
+                  </div>
+                </>
+              ) : selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager' ? (
+                <>
+                  <div>
+                    <dt>Branch</dt>
+                    <dd>{selectedPerson.branch || 'Not available'}</dd>
+                  </div>
+                  <div>
+                    <dt>Credit Manager Code</dt>
+                    <dd>{selectedPerson.creditManagerCode || 'Not available'}</dd>
                   </div>
                 </>
               ) : (
@@ -1473,10 +1681,12 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                             ? 'RM'
                             : selectedPerson.type === 'Back Office'
                             ? 'BackOffice'
+                            : selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager'
+                            ? 'CreditManager'
                             : selectedPerson.type === 'AMS'
                             ? 'AMS'
                             : 'Agent';
-                        const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.amsId;
+                        const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.creditManagerId || selectedPerson.amsId;
                         handlePreviewDocument(
                           'Aadhaar Card',
                           getAadhaarPath(selectedPerson) || selectedPerson.aadhaarDocumentPath,
@@ -1515,10 +1725,12 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                             ? 'RM'
                             : selectedPerson.type === 'Back Office'
                             ? 'BackOffice'
+                            : selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager'
+                            ? 'CreditManager'
                             : selectedPerson.type === 'AMS'
                             ? 'AMS'
                             : 'Agent';
-                        const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.amsId;
+                        const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.creditManagerId || selectedPerson.amsId;
                         handlePreviewDocument(
                           'PAN Card',
                           getPanPath(selectedPerson) || selectedPerson.panCardPath,
@@ -1552,10 +1764,12 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                           ? 'RM'
                           : selectedPerson.type === 'Back Office'
                           ? 'BackOffice'
+                          : selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager'
+                          ? 'CreditManager'
                           : selectedPerson.type === 'AMS'
                           ? 'AMS'
                           : 'Agent';
-                      const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.amsId;
+                      const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.creditManagerId || selectedPerson.amsId;
                       handlePreviewDocument(
                         'Profile Image',
                         getProfilePath(selectedPerson) || selectedPerson.profileImagePath,
@@ -1583,12 +1797,14 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                     navigate(`/edit-agent/${selectedPerson.id}`);
                   } else if (selectedPerson.type === 'Back Office') {
                     navigate(`/edit-back-office/${selectedPerson.id}`);
+                  } else if (selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager') {
+                    navigate(`/edit-credit-manager/${selectedPerson.id}`);
                   } else {
                     navigate(`/edit-relationship-manager/${selectedPerson.id}`);
                   }
                 }}
               >
-                <Pencil size={16} /> Edit {selectedPerson.type === 'Agent' ? 'agent' : selectedPerson.type === 'Back Office' ? 'back office' : 'RM'}
+                <Pencil size={16} /> Edit {selectedPerson.type === 'Agent' ? 'agent' : selectedPerson.type === 'Back Office' ? 'back office' : selectedPerson.type === 'Credit Manager' ? 'credit manager' : 'RM'}
               </button>
             </div>
           </section>
@@ -1675,6 +1891,19 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               <button className="masters-btn-secondary" onClick={() => setSelectedApplication(null)}>
                 Close
               </button>
+              {isCustomerEditable(selectedApplication) && (
+                <button
+                  type="button"
+                  className="masters-btn-primary"
+                  onClick={() => {
+                    const id = selectedApplication.id;
+                    setSelectedApplication(null);
+                    navigate(`/edit-customer/${id}`);
+                  }}
+                >
+                  <Pencil size={15} /> Edit Customer
+                </button>
+              )}
             </div>
           </section>
         </div>

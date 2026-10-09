@@ -23,6 +23,7 @@ import Modal from '../../components/Modal/Modal';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { formatDateTime, toIstDateInput } from '../../utils/dateHelper';
 import ApplicationTopSummary from '../../components/ApplicationTopSummary/ApplicationTopSummary';
+import rmCustomerService from '../../services/rmCustomerService';
 import './CustomerRegistration.css';
 
 function digitsOnly(value) {
@@ -607,6 +608,7 @@ export default function CustomerRegistration() {
   const [errors, setErrors] = useState({});
   const [errorPopup, setErrorPopup] = useState(null);
   const hasUserEditedRef = useRef(false);
+  const aadhaarPrefillLoadedRef = useRef('');
   const prevAppIdRef = useRef(appId);
 
   const [isLoadingMasters, setIsLoadingMasters] = useState(false);
@@ -716,6 +718,43 @@ export default function CustomerRegistration() {
   const appData = useMemo(() => getApplication(appId), [getApplication, appId, applications]);
   const coApplicantCount = getApplicantCount(appData);
   const applicationSteps = useMemo(() => APPLICATION_WIZARD_STEPS, []);
+
+  useEffect(() => {
+    const kyc = appData?.sections?.kycDocuments?.applicant || appData?.kycDocuments?.applicant || {};
+    const kycDocumentId = kyc.kycDocumentId || kyc.applicationKYCDocumentId || kyc.ApplicationKYCDocumentId;
+    if (!kycDocumentId || aadhaarPrefillLoadedRef.current === String(kycDocumentId)) return;
+
+    let active = true;
+    (async () => {
+      try {
+        const response = await rmCustomerService.getAadhaarPersonalPrefill(kycDocumentId);
+        const data = response?.data?.data || response?.data?.value || response?.data || response?.value || response;
+        const person = Array.isArray(data) ? data[0] : data;
+        if (!active || !person) return;
+        aadhaarPrefillLoadedRef.current = String(kycDocumentId);
+        setForm((prev) => {
+          const applicant = {
+            ...prev.applicant,
+            relationshipWithApplicant: person.relationshipId ?? person.RelationshipId ?? prev.applicant.relationshipWithApplicant,
+            title: person.titleId ?? person.TitleId ?? prev.applicant.title,
+            firstName: person.firstName ?? person.FirstName ?? prev.applicant.firstName,
+            middleName: person.middleName ?? person.MiddleName ?? prev.applicant.middleName,
+            lastName: person.lastName ?? person.LastName ?? prev.applicant.lastName,
+            fatherOrSpouseName: person.fatherSpouseName ?? person.FatherSpouseName ?? prev.applicant.fatherOrSpouseName,
+            dateOfBirth: person.dateOfBirth ?? person.DateOfBirth ?? prev.applicant.dateOfBirth,
+            gender: person.genderId ?? person.GenderId ?? prev.applicant.gender,
+            mobileNo: person.mobileNumber ?? person.MobileNumber ?? person.mobile ?? person.Mobile ?? person.aadhaarLinkedMobileNumber ?? person.AadhaarLinkedMobileNumber ?? prev.applicant.mobileNo,
+          };
+          const next = { ...prev, applicant };
+          saveApplication(appId, buildRegistrationPayload(next, getApplication(appId), applicantHeaderName));
+          return next;
+        });
+      } catch (error) {
+        console.error('Unable to load Aadhaar personal prefill:', error);
+      }
+    })();
+    return () => { active = false; };
+  }, [appData, appId, getApplication, saveApplication, applicantHeaderName]);
 
   const resolvedApplicationProductDetailsId = useMemo(() => {
     const raw = (

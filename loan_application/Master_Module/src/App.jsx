@@ -51,6 +51,8 @@ import AgentCreate from './pages/Agent/AgentCreate';
 import RelationshipManagerCreate from './pages/RelationshipManager/RelationshipManagerCreate';
 import AMSCreate from './pages/AMS/AMSCreate';
 import BackOfficeCreate from './pages/BackOffice/BackOfficeCreate';
+import CreditManagerCreate from './pages/CreditManager/CreditManagerCreate';
+import CustomerEdit from './pages/Customer/CustomerEdit';
 import CreateUser from './pages/CreateUser/CreateUser';
 import AMSDashboard from './pages/AMSDashboard/AMSDashboard';
 import { Application360 } from './pages/Application360/Application360';
@@ -92,6 +94,7 @@ function App() {
             <Route path="relationship-managers" element={<PeopleDirectoryPage roleKey="rm" />} />
             <Route path="back-office" element={<PeopleDirectoryPage roleKey="backOffice" />} />
             <Route path="ams" element={<PeopleDirectoryPage roleKey="ams" />} />
+            <Route path="credit-managers" element={<PeopleDirectoryPage roleKey="creditManager" />} />
             <Route path="customers" element={<PeopleDirectoryPage roleKey="customer" />} />
             <Route path="application-360" element={<Application360 />} />
             <Route path="ams-dashboard" element={<AMSDashboard />} />
@@ -100,6 +103,9 @@ function App() {
             <Route path="edit-agent/:agentId" element={<AgentCreate onSuccessRedirect="/dashboard" />} />
             <Route path="create-relationship-manager" element={<RelationshipManagerCreate />} />
             <Route path="edit-relationship-manager/:rmId" element={<RelationshipManagerCreate />} />
+            <Route path="create-credit-manager" element={<CreditManagerCreate />} />
+            <Route path="edit-credit-manager/:cmId" element={<CreditManagerCreate />} />
+            <Route path="edit-customer/:customerId" element={<CustomerEdit />} />
             <Route path="edit-ams/:amsId" element={<AMSCreate />} />
             <Route path="edit-back-office/:backOfficeId" element={<BackOfficeCreate />} />
             <Route path="company" element={<CompanyConfiguration />} />

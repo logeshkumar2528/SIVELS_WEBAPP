@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Eye,
   FileText,
+  Landmark,
   LoaderCircle,
   Pencil,
   Plus,
@@ -28,6 +29,7 @@ import { getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
 import { getAllBackOffice, getBackOfficeById } from '../../api/backOfficeApi';
 import { getRelationshipManager } from '../../api/rmApi';
 import { getAgentById } from '../../api/agentApi';
+import { getAllCreditManagers, getCreditManagerById } from '../../api/creditManagerApi';
 import { getProfileImageUrl, getDocumentUrl, buildFileUrl } from '../../utils/profileImageHelper';
 import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
 import './Dashboard.css';
@@ -211,6 +213,7 @@ export function Dashboard() {
   const [rms, setRms] = useState([]);
   const [amsList, setAmsList] = useState([]);
   const [backOfficeList, setBackOfficeList] = useState([]);
+  const [creditManagers, setCreditManagers] = useState([]);
   const [query, setQuery] = useState('');
   const [applicationQuery, setApplicationQuery] = useState('');
   const [applicationStatusFilter, setApplicationStatusFilter] = useState('All');
@@ -230,15 +233,16 @@ export function Dashboard() {
     setError('');
     try {
       const headers = authHeaders();
-      const [agentResult, applicationResult, rmResult, amsResult, backOfficeResult] = await Promise.allSettled([
+      const [agentResult, applicationResult, rmResult, amsResult, backOfficeResult, cmResult] = await Promise.allSettled([
         fetch(`${API_BASE}/AgentMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Agents request failed'))),
         fetch(`${API_BASE}/AgentAddCustomer`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Applications request failed'))),
         fetch(`${API_BASE}/RMMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('RM request failed'))),
         fetch(`${API_BASE}/AMSMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('AMS request failed'))),
         getAllBackOffice(),
+        getAllCreditManagers(),
       ]);
 
-      if ([agentResult, applicationResult, rmResult, amsResult, backOfficeResult].some((result) => result.status === 'rejected')) {
+      if ([agentResult, applicationResult, rmResult, amsResult, backOfficeResult, cmResult].some((result) => result.status === 'rejected')) {
         setError('Some live records could not be loaded. Available data is shown below.');
       }
 
@@ -410,11 +414,33 @@ export function Dashboard() {
         };
       }).filter((item) => item.id || item.name);
 
+      const cmRows = cmResult.status === 'fulfilled' ? unwrap(cmResult.value) : [];
+      const liveCreditManagers = cmRows.map((item) => {
+        const id = read(item, ['creditManagerId', 'CreditManagerId', 'id', 'Id']);
+        const cmName = read(item, ['fullName', 'FullName', 'name', 'Name'], 'Unnamed credit manager');
+        return {
+          id,
+          creditManagerId: id,
+          creditManagerCode: read(item, ['creditManagerCode', 'CreditManagerCode', 'code', 'Code']),
+          name: cmName,
+          fullName: cmName,
+          email: read(item, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+          phone: read(item, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+          branch: read(item, ['branch', 'Branch', 'branchName', 'BranchName']),
+          status: status(read(item, ['status', 'Status', 'isActive', 'IsActive'])),
+          aadhaarDocumentPath: getAadhaarPath(item),
+          panCardPath: getPanPath(item),
+          profileImagePath: getProfilePath(item),
+          rawRecord: item,
+        };
+      }).filter((item) => item.id || item.name);
+
       setAgents(liveAgents);
       setApplications(liveApplications);
       setRms(liveRms);
       setAmsList(liveAms);
       setBackOfficeList(liveBackOffice);
+      setCreditManagers(liveCreditManagers);
       setUpdatedAt(new Date());
     } catch {
       setError('Live dashboard data is unavailable. Check your connection and try again.');
@@ -423,6 +449,7 @@ export function Dashboard() {
       setRms([]);
       setAmsList([]);
       setBackOfficeList([]);
+      setCreditManagers([]);
     } finally {
       setLoading(false);
     }
@@ -490,6 +517,10 @@ export function Dashboard() {
       navigate(`/edit-back-office/${person.id}`);
       return;
     }
+    if (person.type === 'Credit Manager' || person.type === 'CreditManager') {
+      navigate(`/edit-credit-manager/${person.id}`);
+      return;
+    }
     navigate(`/edit-relationship-manager/${person.id}`);
   };
 
@@ -509,7 +540,7 @@ export function Dashboard() {
 
   const handleOpenPersonDetails = async (person, type) => {
     const roleType = type || person?.type || 'Agent';
-    const targetId = person?.id || person?.agentId || person?.rmId || person?.backOfficeId;
+    const targetId = person?.id || person?.agentId || person?.rmId || person?.backOfficeId || person?.creditManagerId;
     if (!targetId && !person) return;
 
     const initialPerson = {
@@ -706,6 +737,69 @@ export function Dashboard() {
                     email: freshEmail,
                     phone: freshPhone,
                     rm: freshRm,
+                    branch: freshBranch,
+                    status: freshStatus,
+                    aadhaarDocumentPath: freshAadhaar,
+                    panCardPath: freshPan,
+                    profileImagePath: freshProfile,
+                    rawRecord: record,
+                  }
+                : item
+            )
+          );
+        }
+      } else if (roleType === 'Credit Manager' || roleType === 'CreditManager') {
+        const response = await getCreditManagerById(targetId);
+        const recordValue = response?.data !== undefined ? response.data : response;
+        const record = Array.isArray(recordValue)
+          ? recordValue[0]
+          : (recordValue?.value?.[0] || recordValue?.data || recordValue?.value || recordValue);
+
+        if (record && typeof record === 'object') {
+          const freshName = read(record, ['fullName', 'FullName', 'name', 'Name']) || initialPerson.name;
+          const freshCode = read(record, ['creditManagerCode', 'CreditManagerCode', 'code', 'Code']) || initialPerson.creditManagerCode;
+          const freshEmail = read(record, ['emailAddress', 'EmailAddress', 'email', 'Email']) || initialPerson.email;
+          const freshPhone = read(record, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']) || initialPerson.phone;
+          const freshBranch = read(record, ['branch', 'Branch', 'branchName', 'BranchName']) || initialPerson.branch;
+          const freshStatus = status(read(record, ['status', 'Status', 'isActive', 'IsActive']), initialPerson.status);
+          const freshAadhaar = getAadhaarPath(record) || initialPerson.aadhaarDocumentPath;
+          const freshPan = getPanPath(record) || initialPerson.panCardPath;
+          const freshProfile = getProfilePath(record) || initialPerson.profileImagePath;
+
+          const updatedPerson = {
+            ...initialPerson,
+            ...record,
+            id: targetId,
+            creditManagerId: targetId,
+            type: 'Credit Manager',
+            name: freshName,
+            fullName: freshName,
+            creditManagerCode: freshCode,
+            email: freshEmail,
+            phone: freshPhone,
+            branch: freshBranch,
+            status: freshStatus,
+            aadhaarDocumentPath: freshAadhaar,
+            panCardPath: freshPan,
+            profileImagePath: freshProfile,
+            rawRecord: record,
+          };
+
+          setSelectedPerson(updatedPerson);
+
+          setCreditManagers((prevList) =>
+            prevList.map((item) =>
+              (item.id === targetId || item.creditManagerId === targetId)
+                ? {
+                    ...item,
+                    ...record,
+                    id: targetId,
+                    creditManagerId: targetId,
+                    name: freshName,
+                    fullName: freshName,
+                    creditManagerCode: freshCode,
+                    email: freshEmail,
+                    phone: freshPhone,
                     branch: freshBranch,
                     status: freshStatus,
                     aadhaarDocumentPath: freshAadhaar,
@@ -1063,7 +1157,31 @@ export function Dashboard() {
             </div>
           </button>
 
-          {/* 5. CUSTOMERS */}
+          {/* 5. CREDIT MANAGERS */}
+          <button
+            type="button"
+            className="people-role-card people-role-card-credit-manager"
+            onClick={() => navigate('/credit-managers')}
+          >
+            <div className="people-role-card-top">
+              <div className="people-role-header-left">
+                <div className="people-role-icon indigo">
+                  <Landmark size={18} />
+                </div>
+                <h3 className="people-role-title">Credit managers</h3>
+              </div>
+              <span className="people-role-badge">{creditManagers.length}</span>
+            </div>
+            <div className="people-role-card-body">
+              <p className="people-role-desc">Review and sanction loan applications</p>
+            </div>
+            <div className="people-role-card-footer">
+              <span>View directory</span>
+              <ArrowRight size={14} />
+            </div>
+          </button>
+
+          {/* 6. CUSTOMERS */}
           <button
             type="button"
             className="people-role-card people-role-card-customer"
@@ -1116,11 +1234,13 @@ export function Dashboard() {
                   ? 'RM'
                   : selectedPerson.type === 'Back Office'
                   ? 'BackOffice'
+                  : selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager'
+                  ? 'CreditManager'
                   : selectedPerson.type === 'AMS'
                   ? 'AMS'
                   : 'Agent'
               }
-              id={selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.amsId}
+              id={selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.creditManagerId || selectedPerson.amsId}
               name={selectedPerson.name}
               className="person-dialog-avatar"
               version={selectedPerson.imageVersion || imageVersion}
@@ -1159,6 +1279,17 @@ export function Dashboard() {
                   <div>
                     <dt>Back Office Code</dt>
                     <dd>{selectedPerson.backOfficeCode || 'Not available'}</dd>
+                  </div>
+                </>
+              ) : selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager' ? (
+                <>
+                  <div>
+                    <dt>Branch</dt>
+                    <dd>{selectedPerson.branch || 'Not available'}</dd>
+                  </div>
+                  <div>
+                    <dt>Credit Manager Code</dt>
+                    <dd>{selectedPerson.creditManagerCode || 'Not available'}</dd>
                   </div>
                 </>
               ) : (
@@ -1202,10 +1333,12 @@ export function Dashboard() {
                             ? 'RM'
                             : selectedPerson.type === 'Back Office'
                             ? 'BackOffice'
+                            : selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager'
+                            ? 'CreditManager'
                             : selectedPerson.type === 'AMS'
                             ? 'AMS'
                             : 'Agent';
-                        const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.amsId;
+                        const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.creditManagerId || selectedPerson.amsId;
                         handlePreviewDocument(
                           'Aadhaar Card',
                           getAadhaarPath(selectedPerson) || selectedPerson.aadhaarDocumentPath,
@@ -1244,10 +1377,12 @@ export function Dashboard() {
                             ? 'RM'
                             : selectedPerson.type === 'Back Office'
                             ? 'BackOffice'
+                            : selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager'
+                            ? 'CreditManager'
                             : selectedPerson.type === 'AMS'
                             ? 'AMS'
                             : 'Agent';
-                        const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.amsId;
+                        const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.creditManagerId || selectedPerson.amsId;
                         handlePreviewDocument(
                           'PAN Card',
                           getPanPath(selectedPerson) || selectedPerson.panCardPath,
@@ -1281,10 +1416,12 @@ export function Dashboard() {
                           ? 'RM'
                           : selectedPerson.type === 'Back Office'
                           ? 'BackOffice'
+                          : selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager'
+                          ? 'CreditManager'
                           : selectedPerson.type === 'AMS'
                           ? 'AMS'
                           : 'Agent';
-                      const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.amsId;
+                      const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.creditManagerId || selectedPerson.amsId;
                       handlePreviewDocument(
                         'Profile Image',
                         getProfilePath(selectedPerson) || selectedPerson.profileImagePath,
@@ -1305,7 +1442,7 @@ export function Dashboard() {
                 Close
               </button>
               <button className="primary-button" onClick={() => openEdit(selectedPerson)}>
-                <Pencil size={16} /> Edit {selectedPerson.type === 'Agent' ? 'agent' : selectedPerson.type === 'Back Office' ? 'back office' : 'RM'}
+                <Pencil size={16} /> Edit {selectedPerson.type === 'Agent' ? 'agent' : selectedPerson.type === 'Back Office' ? 'back office' : selectedPerson.type === 'Credit Manager' ? 'credit manager' : 'RM'}
               </button>
             </div>
           </section>
