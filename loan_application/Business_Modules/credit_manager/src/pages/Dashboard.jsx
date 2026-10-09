@@ -1,203 +1,230 @@
-import React from 'react';
-import { Users, Hourglass, CheckCircle, RotateCcw, Eye, TrendingUp } from 'lucide-react';
-import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import './Dashboard.css';
+import React, { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import StatCard from '../../../back_office/src/back-office/components/StatCard/StatCard';
+import iconMap from '../../../back_office/src/back-office/config/iconMap';
+import '../../../back_office/src/back-office/pages/Dashboard/Dashboard.css';
+import '../../../back_office/src/back-office/pages/SubmitToCredit/SubmitToCredit.css';
+import '../styles/creditManager.css';
+import { ROUTES } from '../config/routeConfig';
+import { useCreditApplications } from '../context/CreditApplicationsContext';
+import {
+  applicationNoColumn,
+  customerColumn,
+  productColumn,
+  amountColumn,
+  rmAgentColumn,
+  statusColumn,
+} from '../components/applicationColumns';
+import { formatCurrency } from '../utils/formatters';
 
-const pieData = [
-  { name: 'Pending Review', value: 12, color: '#f59e0b' },
-  { name: 'Approved', value: 15, color: '#10b981' },
-  { name: 'Rejected', value: 7, color: '#ef4444' },
-  { name: 'Sent to Credit Head', value: 9, color: '#8b5cf6' },
-];
+const RECENT_LIMIT = 5;
+const recentColumns = [applicationNoColumn, customerColumn, productColumn, amountColumn, rmAgentColumn, statusColumn];
 
-const lineData = [
-  { name: '05 Aug', uv: 6 },
-  { name: '06 Aug', uv: 8 },
-  { name: '07 Aug', uv: 7 },
-  { name: '08 Aug', uv: 11 },
-  { name: '09 Aug', uv: 4 },
-  { name: '10 Aug', uv: 8 },
-  { name: '11 Aug', uv: 10 },
-];
+function sumAmount(list) {
+  return list.reduce((total, app) => total + (Number(app.expectedLoanAmount) || 0), 0);
+}
 
-const recentApps = [
-  { id: 'APP-2026-00018', name: 'Karthik Kumar', amount: '₹ 5,00,000', date: '12 Aug 2026', stage: 'Pending Review', statusClass: 'status-pending' },
-  { id: 'APP-2026-00017', name: 'Priya Natarajan', amount: '₹ 3,50,000', date: '12 Aug 2026', stage: 'Pending Review', statusClass: 'status-pending' },
-  { id: 'APP-2026-00016', name: 'Suresh Babu', amount: '₹ 7,50,000', date: '11 Aug 2026', stage: 'Sent to Credit Head', statusClass: 'status-sent' },
-  { id: 'APP-2026-00015', name: 'Meena Lakshmi', amount: '₹ 2,00,000', date: '11 Aug 2026', stage: 'Pending Review', statusClass: 'status-pending' },
-  { id: 'APP-2026-00014', name: 'Rajeshwari R', amount: '₹ 4,00,000', date: '10 Aug 2026', stage: 'Pending Review', statusClass: 'status-pending' },
-];
+export default function Dashboard() {
+  const navigate = useNavigate();
+  const { applications, pending, approved, rejected, counts, loading, error, refetch } = useCreditApplications();
 
-const Dashboard = () => {
+  const FileTextIcon = iconMap['FileText'];
+  const ClockIcon = iconMap['Clock'];
+  const CheckCircleIcon = iconMap['CheckCircle'];
+  const XCircleIcon = iconMap['XCircle'];
+  const BarChartIcon = iconMap['BarChart2'];
+  const WalletIcon = iconMap['Wallet'] || iconMap['BadgeIndianRupee'];
+  const ArrowRightIcon = iconMap['ArrowRight'];
+  const AlertCircleIcon = iconMap['AlertCircle'] || iconMap['AlertTriangle'];
+  const RefreshCwIcon = iconMap['RefreshCw'] || iconMap['RotateCcw'];
+
+  const amounts = useMemo(() => ({
+    received: sumAmount(applications),
+    pending: sumAmount(pending),
+    approved: sumAmount(approved),
+    rejected: sumAmount(rejected),
+  }), [applications, pending, approved, rejected]);
+
+  const recentApps = applications.slice(0, RECENT_LIMIT);
+
   return (
-    <div className="dashboard-container">
-      {/* Metric Cards */}
-      <div className="metric-cards">
-        <div className="metric-card">
-          <div className="metric-icon-wrap" style={{ backgroundColor: '#f3e8ff', color: '#8b5cf6' }}>
-            <Users size={24} />
+    <div className="bo-dashboard">
+      {error && (
+        <div className="bo-table-error-container" role="alert">
+          <div className="bo-error-flex">
+            {AlertCircleIcon && <AlertCircleIcon size={24} className="bo-error-icon" />}
+            <div className="bo-error-content">
+              <h4>Unable to Load Dashboard Data</h4>
+              <p>{error}</p>
+            </div>
           </div>
-          <div className="metric-info">
-            <p className="metric-title">Received Applications</p>
-            <h3 className="metric-value">18</h3>
-            <p className="metric-trend text-green">
-              <TrendingUp size={12} /> +18% vs yesterday
-            </p>
+          <button type="button" className="bo-btn-retry" onClick={refetch}>
+            {RefreshCwIcon && <RefreshCwIcon size={13} />}
+            <span>Retry</span>
+          </button>
+        </div>
+      )}
+
+      {/* SECTION 1 — KPI METRIC CARDS */}
+      <section className="bo-kpi-grid" aria-label="Credit Review KPI Overview">
+        <StatCard
+          icon={FileTextIcon && <FileTextIcon size={22} strokeWidth={1.8} />}
+          title="Received Applications"
+          value={counts.received}
+          description="Sent by Back Office"
+          trend={`${formatCurrency(amounts.received)} Total Value`}
+          trendDirection="neutral"
+          variant="default"
+          onClick={() => navigate(ROUTES.RECEIVED)}
+          loading={loading}
+        />
+        <StatCard
+          icon={ClockIcon && <ClockIcon size={22} strokeWidth={1.8} />}
+          title="Pending Review"
+          value={counts.pending}
+          description="Awaiting Credit Decision"
+          trend={`${formatCurrency(amounts.pending)} In Review`}
+          trendDirection="neutral"
+          variant="warning"
+          onClick={() => navigate(ROUTES.PENDING)}
+          loading={loading}
+        />
+        <StatCard
+          icon={CheckCircleIcon && <CheckCircleIcon size={22} strokeWidth={1.8} />}
+          title="Approved Applications"
+          value={counts.approved}
+          description="Credit Approved"
+          trend={`${formatCurrency(amounts.approved)} Approved`}
+          trendDirection="up"
+          variant="success"
+          onClick={() => navigate(ROUTES.APPROVED)}
+          loading={loading}
+        />
+        <StatCard
+          icon={XCircleIcon && <XCircleIcon size={22} strokeWidth={1.8} />}
+          title="Rejected Applications"
+          value={counts.rejected}
+          description="Declined in Credit Review"
+          trend={`${formatCurrency(amounts.rejected)} Rejected`}
+          trendDirection="down"
+          variant="danger"
+          onClick={() => navigate(ROUTES.REJECTED)}
+          loading={loading}
+        />
+      </section>
+
+      {/* SECTION 2 — PORTFOLIO SNAPSHOT & QUICK ACTIONS */}
+      <section className="bo-summary-panel">
+        <div className="bo-summary-card">
+          <div className="bo-summary-card-header">
+            <div className="bo-summary-icon bo-summary-icon--green">
+              {WalletIcon && <WalletIcon size={20} />}
+            </div>
+            <div>
+              <h3>Credit Portfolio Summary</h3>
+              <p>Loan value of applications under Credit Manager review</p>
+            </div>
+          </div>
+          <div className="bo-summary-amounts">
+            <div className="bo-amount-item">
+              <small>Total Received</small>
+              <strong>{formatCurrency(amounts.received)}</strong>
+            </div>
+            <div className="bo-amount-item is-success">
+              <small>Approved Amount</small>
+              <strong>{formatCurrency(amounts.approved)}</strong>
+            </div>
+            <div className="bo-amount-item is-warning">
+              <small>Pending Review</small>
+              <strong>{formatCurrency(amounts.pending)}</strong>
+            </div>
           </div>
         </div>
 
-        <div className="metric-card">
-          <div className="metric-icon-wrap" style={{ backgroundColor: '#fef3c7', color: '#f59e0b' }}>
-            <Hourglass size={24} />
-          </div>
-          <div className="metric-info">
-            <p className="metric-title">Pending Review</p>
-            <h3 className="metric-value">12</h3>
-            <p className="metric-trend text-green">
-              <TrendingUp size={12} /> +14% vs yesterday
-            </p>
+        <div className="bo-quick-actions-card">
+          <h3>Credit Review Navigation</h3>
+          <p>Quick access to credit review queues</p>
+          <div className="bo-quick-actions-list">
+            <button type="button" className="bo-quick-action-item" onClick={() => navigate(ROUTES.PENDING)}>
+              <div className="bo-qa-icon">{ClockIcon && <ClockIcon size={18} />}</div>
+              <div className="bo-qa-text">
+                <strong>Pending Review Queue</strong>
+                <small>Review {counts.pending} applications awaiting a credit decision</small>
+              </div>
+              {ArrowRightIcon && <ArrowRightIcon size={16} className="bo-qa-arrow" />}
+            </button>
+
+            <button type="button" className="bo-quick-action-item" onClick={() => navigate(ROUTES.APPROVED)}>
+              <div className="bo-qa-icon">{CheckCircleIcon && <CheckCircleIcon size={18} />}</div>
+              <div className="bo-qa-text">
+                <strong>Approved Applications</strong>
+                <small>{counts.approved} applications approved by Credit Manager</small>
+              </div>
+              {ArrowRightIcon && <ArrowRightIcon size={16} className="bo-qa-arrow" />}
+            </button>
+
+            <button type="button" className="bo-quick-action-item" onClick={() => navigate(ROUTES.REPORTS)}>
+              <div className="bo-qa-icon">{BarChartIcon && <BarChartIcon size={18} />}</div>
+              <div className="bo-qa-text">
+                <strong>Credit Reports</strong>
+                <small>Status-wise summary of all {counts.received} received applications</small>
+              </div>
+              {ArrowRightIcon && <ArrowRightIcon size={16} className="bo-qa-arrow" />}
+            </button>
           </div>
         </div>
+      </section>
 
-        <div className="metric-card">
-          <div className="metric-icon-wrap" style={{ backgroundColor: '#d1fae5', color: '#10b981' }}>
-            <CheckCircle size={24} />
+      {/* SECTION 3 — RECENT APPLICATIONS */}
+      <section className="bo-section" aria-label="Recent Applications">
+        <div className="bo-section-header">
+          <div>
+            <h2 className="bo-section-title">Recent Applications</h2>
+            <p className="bo-section-subtitle">Latest applications received from the Back Office</p>
           </div>
-          <div className="metric-info">
-            <p className="metric-title">Approved Applications</p>
-            <h3 className="metric-value">15</h3>
-            <p className="metric-trend text-green">
-              <TrendingUp size={12} /> +20% vs last month
-            </p>
-          </div>
+          <button type="button" className="bo-btn bo-btn--outline" onClick={() => navigate(ROUTES.RECEIVED)}>
+            <span>View All Applications</span>
+            {ArrowRightIcon && <ArrowRightIcon size={16} />}
+          </button>
         </div>
 
-        <div className="metric-card">
-          <div className="metric-icon-wrap" style={{ backgroundColor: '#fee2e2', color: '#ef4444' }}>
-            <RotateCcw size={24} />
-          </div>
-          <div className="metric-info">
-            <p className="metric-title">Rejected Applications</p>
-            <h3 className="metric-value">07</h3>
-            <p className="metric-trend text-green">
-              <TrendingUp size={12} /> +9% vs last month
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Charts Row */}
-      <div className="charts-row">
-        <div className="chart-card pie-chart-card">
-          <h3 className="chart-title">Application Status Overview</h3>
-          <div className="pie-chart-container">
-            <div className="pie-chart-wrapper">
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={90}
-                    paddingAngle={2}
-                    dataKey="value"
-                    stroke="none"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+        <div className="stc-table-card">
+          {loading ? (
+            <div className="bo-table-loading-container" aria-live="polite">
+              <div className="bo-loading-spinner" aria-hidden="true" />
+              <p className="bo-loading-text">Loading recent applications...</p>
+            </div>
+          ) : (
+            <div className="stc-table-scroll">
+              <table className="stc-table">
+                <thead>
+                  <tr>
+                    {recentColumns.map((col) => (
+                      <th key={col.key}>{col.header}</th>
                     ))}
-                  </Pie>
-                  <RechartsTooltip />
-                </PieChart>
-              </ResponsiveContainer>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentApps.map((app) => (
+                    <tr key={app.agentCustomerId ?? app.id}>
+                      {recentColumns.map((col) => (
+                        <td key={col.key}>{col.render(app)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                  {recentApps.length === 0 && (
+                    <tr>
+                      <td colSpan={recentColumns.length} className="cm-empty-cell">
+                        No applications have been sent to the Credit Manager yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-            <div className="pie-chart-legend">
-              {pieData.map((item, index) => (
-                <div className="legend-item" key={index}>
-                  <div className="legend-label">
-                    <span className="legend-dot" style={{ backgroundColor: item.color }}></span>
-                    {item.name}
-                  </div>
-                  <span className="legend-value">{item.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
-
-        <div className="chart-card line-chart-card">
-          <div className="chart-header">
-            <h3 className="chart-title">Applications Received (Last 7 Days)</h3>
-            <select className="chart-select">
-              <option>Last 7 Days</option>
-              <option>Last 30 Days</option>
-            </select>
-          </div>
-          <div className="line-chart-wrapper">
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={lineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dx={-10} />
-                <RechartsTooltip 
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }} 
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="uv" 
-                  stroke="#10b981" 
-                  strokeWidth={3} 
-                  dot={{ r: 4, fill: '#10b981', strokeWidth: 0 }} 
-                  activeDot={{ r: 6 }} 
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* Table Row */}
-      <div className="table-card">
-        <div className="table-header">
-          <h3 className="table-title">Recent Applications</h3>
-          <button className="btn-view-all">View All</button>
-        </div>
-        <div className="table-responsive">
-          <table className="recent-table">
-            <thead>
-              <tr>
-                <th>Application ID</th>
-                <th>Customer Name</th>
-                <th>Loan Amount</th>
-                <th>Received Date</th>
-                <th>Current Stage</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentApps.map((app, index) => (
-                <tr key={index}>
-                  <td className="font-medium">{app.id}</td>
-                  <td>{app.name}</td>
-                  <td>{app.amount}</td>
-                  <td>{app.date}</td>
-                  <td>
-                    <span className={`status-badge ${app.statusClass}`}>{app.stage}</span>
-                  </td>
-                  <td>
-                    <button className="btn-action">
-                      <Eye size={16} /> View
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      </section>
     </div>
   );
-};
-
-export default Dashboard;
+}

@@ -30,6 +30,7 @@ import CustomerMonitoring from '../pages/CustomerMonitoring/CustomerMonitoring';
 import CustomerVerification from '../pages/CustomerVerification/CustomerVerification';
 import SubmitToCredit from '../pages/SubmitToCredit/SubmitToCredit';
 import SubmitToCreditDetail from '../pages/SubmitToCredit/SubmitToCreditDetail';
+import ReturnedByCredit from '../pages/ReturnedByCredit/ReturnedByCredit';
 import Profile from '../pages/Profile/Profile';
 import PdfView from '../../../../rm_modules/src/pages/PdfView/PdfView';
 import { ApplicationDraftProvider } from '../../../../rm_modules/src/state/ApplicationDraftContext';
@@ -245,6 +246,21 @@ export default function AppRoutes() {
                 subtitle="Review submitted loan application form and Back Office verification report before submission."
               >
                 <SubmitToCreditDetail />
+              </LayoutWrapper>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ---- Returned by Credit Manager (Queue - Protected) ---- */}
+        <Route
+          path={ROUTES.RETURNED_BY_CREDIT}
+          element={
+            <ProtectedRoute>
+              <LayoutWrapper
+                title="Returned by Credit Manager"
+                subtitle="Applications the Credit Manager sent back for correction, with the remarks on what to fix."
+              >
+                <ReturnedByCredit />
               </LayoutWrapper>
             </ProtectedRoute>
           }

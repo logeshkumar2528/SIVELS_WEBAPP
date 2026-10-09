@@ -38,6 +38,7 @@ import Sidebar from '../../components/Sidebar/Sidebar';
 import Header  from '../../components/Header/Header';
 import { NAV_ITEMS } from '../../config/navConfig';
 import { useCustomerQueue } from '../../hooks/useCustomerQueue';
+import { useCreditReturns } from '../../hooks/useCreditReturns';
 import './MainLayout.css';
 
 /* ==========================================
@@ -194,6 +195,7 @@ function MainLayout({
      Computed values
   ------------------------------------------ */
   const { customers, rmsCount, agentsCount, districtsCount } = useCustomerQueue();
+  const { returnedApplications } = useCreditReturns(customers);
   const liveBadgeCounts = useMemo(() => {
     const customerMonitoring = customers.length;
     const submitToCredit = customers.filter((c) => Boolean(c.isCreditReady || c.isUnderwritingReady)).length;
@@ -203,9 +205,10 @@ function MainLayout({
       agentMonitoring: agentsCount,
       customerMonitoring,
       submitToCredit,
+      returnedByCredit: returnedApplications.length,
       ...badgeCounts,
     };
-  }, [customers, rmsCount, agentsCount, districtsCount, badgeCounts]);
+  }, [customers, rmsCount, agentsCount, districtsCount, returnedApplications.length, badgeCounts]);
 
   const todayDate = formatHeaderDate(new Date());
   const fallbackUser = getCurrentUser();

@@ -29,6 +29,7 @@ export const ROUTES = {
   CUSTOMER_VIEW_FORM:   `${BASE}/customers/:customerId/view-form`,
   SUBMIT_TO_CREDIT:     `${BASE}/submit-to-credit`,
   SUBMIT_TO_CREDIT_DETAIL: `${BASE}/submit-to-credit/:customerId`,
+  RETURNED_BY_CREDIT:   `${BASE}/returned-by-credit`,
 
   /* ==========================================
      ACCOUNT & SYSTEM
@@ -54,6 +55,7 @@ export const buildRoute = {
   customerViewForm: (customerId) => `${BASE}/customers/${customerId}/view-form`,
   submitToCredit: () => ROUTES.SUBMIT_TO_CREDIT,
   submitToCreditDetail: (customerId) => `${BASE}/submit-to-credit/${customerId}`,
+  returnedByCredit: () => ROUTES.RETURNED_BY_CREDIT,
   profile: () => ROUTES.PROFILE,
   logout: () => ROUTES.LOGOUT,
 };
