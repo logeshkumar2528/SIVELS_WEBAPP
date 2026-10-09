@@ -27,4 +27,6 @@ export const CREDIT_MANAGER_ENDPOINTS = {
 
   CREDIT_RETURN_ITEMS_BY_CUSTOMER: (agentCustomerId) =>
     `/ApplicationCreditReturnItem/by-customer/${encodeURIComponent(agentCustomerId)}`,
+  CREDIT_RETURN_ITEM_ACCEPT: (itemId) =>
+    `/ApplicationCreditReturnItem/${encodeURIComponent(itemId)}/accept`,
 };

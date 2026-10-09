@@ -22,8 +22,16 @@ import { useCreditReturns } from '../../hooks/useCreditReturns';
 import backOfficeService from '../../api/backOfficeService';
 import { getBackOfficeAuth } from '../../auth/authStorage';
 import Pagination from '../../components/Pagination/Pagination';
+import { getReturnItemStep } from '../../config/creditReturnFields';
+import { RETURN_ITEM_STATUS, RETURN_ITEM_STATUS_META, mapCreditReturnItem } from '../../mappers/creditReturnMapper';
 import '../SubmitToCredit/SubmitToCredit.css';
+import '../../components/CreditReturnPanel/CreditReturnPanel.css';
 import './ReturnedByCredit.css';
+
+/** Verification workspace URL opened at the section the item belongs to. */
+function buildSectionRoute(custId, item) {
+  return `${buildRoute.customerVerification(custId)}?step=${Number(getReturnItemStep(item).visibleNum)}`;
+}
 
 function formatCurrency(amount) {
   const num = Number(amount);
@@ -105,12 +113,14 @@ function IssueResolveRow({ item, disabled, onResolved }) {
     setSaving(true);
     setError('');
     try {
-      await backOfficeService.resolveCreditReturnItem(item.id, {
-        resolvedByUserId: backOfficeId,
-        resolvedByRole: 'BackOffice',
-        resolutionNote: trimmed,
-      });
-      onResolved(item, trimmed);
+      const updated = mapCreditReturnItem(
+        await backOfficeService.resolveCreditReturnItem(item.id, {
+          resolvedByUserId: backOfficeId,
+          resolvedByRole: 'BackOffice',
+          resolutionNote: trimmed,
+        })
+      );
+      onResolved(item, trimmed, updated?.id != null ? updated : null);
     } catch (err) {
       setError(getApiError(err, 'Unable to mark this field as corrected.'));
       setSaving(false);
@@ -120,9 +130,11 @@ function IssueResolveRow({ item, disabled, onResolved }) {
   return (
     <li className={item.isResolved ? 'is-resolved' : 'is-open'}>
       <div className="rbc-issue-title">
-        <strong>{item.sectionName} › {item.fieldLabel}</strong>
-        <span className={`stc-pill ${item.isResolved ? 'stc-pill--verified' : 'stc-pill--pending'}`}>
-          {item.isResolved ? 'Corrected' : 'Open'}
+        <strong>
+          {!item.isResolved && <span className="crp-indicator" aria-hidden="true" />} {item.sectionName} › {item.fieldLabel}
+        </strong>
+        <span className={`crp-pill ${RETURN_ITEM_STATUS_META[item.itemStatus]?.className || 'crp-pill--open'}`}>
+          {RETURN_ITEM_STATUS_META[item.itemStatus]?.label || item.itemStatus}
         </span>
       </div>
       <p className="rbc-issue-text"><span>Credit Manager:</span> {item.issue}</p>
@@ -149,7 +161,7 @@ function IssueResolveRow({ item, disabled, onResolved }) {
             disabled={disabled || saving}
           >
             {CheckIcon && <CheckIcon size={14} />}
-            <span>{saving ? 'Saving...' : 'Mark Corrected'}</span>
+            <span>{saving ? 'Saving...' : 'Resolve'}</span>
           </button>
           {error && <small className="rbc-inline-error">{error}</small>}
         </div>
@@ -171,12 +183,18 @@ function ResendModal({ application, onClose, onSent, onItemResolved }) {
   const openCount = items.filter((item) => !item.isResolved).length;
   const canSend = application.isCreditReady && openCount === 0;
 
-  const handleItemResolved = (resolvedItem, note) => {
+  const handleItemResolved = (resolvedItem, note, updated) => {
     setItems((prev) =>
       prev.map((item) =>
-        item.id === resolvedItem.id
-          ? { ...item, isResolved: true, resolutionNote: note, resolvedAt: new Date().toISOString() }
-          : item
+        item.id !== resolvedItem.id
+          ? item
+          : updated || {
+              ...item,
+              itemStatus: RETURN_ITEM_STATUS.RESOLVED,
+              isResolved: true,
+              resolutionNote: note,
+              resolvedAt: new Date().toISOString(),
+            }
       )
     );
     onItemResolved();
@@ -221,7 +239,7 @@ function ResendModal({ application, onClose, onSent, onItemResolved }) {
     <div className="stc-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="rbc-resend-title">
       <form className={`stc-modal-window rbc-modal${hasItems ? ' rbc-modal--wide' : ''}`} onSubmit={handleSubmit} noValidate>
         <div className="stc-modal-header">
-          <h3 id="rbc-resend-title">Corrections &amp; Send to Credit Manager</h3>
+          <h3 id="rbc-resend-title">Resolve &amp; Resubmit to Credit Manager</h3>
           <button type="button" className="stc-modal-close-btn" onClick={onClose} disabled={submitting} aria-label="Close">
             {XIcon && <XIcon size={20} />}
           </button>
@@ -298,7 +316,7 @@ function ResendModal({ application, onClose, onSent, onItemResolved }) {
                 ? 'Sending...'
                 : openCount > 0
                 ? `${openCount} Field${openCount === 1 ? '' : 's'} Still Open`
-                : 'Send to Credit Manager'}
+                : 'Resubmit to Credit Manager'}
             </span>
           </button>
         </div>
@@ -386,9 +404,10 @@ export default function ReturnedByCredit() {
   const handleSent = (application) => {
     setResendTarget(null);
     setSuccessMessage(
-      `Application ${getAppNo(application)} has been sent again to the Credit Manager for review.`
+      `Application ${getAppNo(application)} has been resubmitted to the Credit Manager for review.`
     );
     refetchQueue();
+    refetchReturns();
   };
 
   return (
@@ -583,14 +602,20 @@ export default function ReturnedByCredit() {
                                 {c.openReturnItems.length} open · {c.returnItems.length - c.openReturnItems.length} corrected
                               </span>
                               {c.returnItems.map((item) => (
-                                <div
+                                <button
                                   key={item.id}
+                                  type="button"
                                   className={`rbc-field-chip${item.isResolved ? ' is-resolved' : ''}`}
-                                  title={item.issue}
+                                  title={`Open ${item.sectionName} to see the Credit Manager remarks`}
+                                  onClick={() => navigate(buildSectionRoute(custId, item))}
+                                  aria-label={`Open ${item.sectionName}${item.isResolved ? '' : ' (action required)'}`}
                                 >
-                                  <strong>{item.sectionName} › {item.fieldLabel}</strong>
+                                  <strong>
+                                    {!item.isResolved && <span className="crp-indicator" aria-hidden="true" />}
+                                    {item.sectionName} › {item.fieldLabel}
+                                  </strong>
                                   <span>{item.issue}</span>
-                                </div>
+                                </button>
                               ))}
                             </div>
                           ) : (
@@ -602,7 +627,13 @@ export default function ReturnedByCredit() {
                             <button
                               type="button"
                               className="rbc-btn-outline"
-                              onClick={() => navigate(buildRoute.customerVerification(custId))}
+                              onClick={() =>
+                                navigate(
+                                  c.openReturnItems.length > 0
+                                    ? buildSectionRoute(custId, c.openReturnItems[0])
+                                    : buildRoute.customerVerification(custId)
+                                )
+                              }
                               aria-label={`Correct entries for application ${appNo}`}
                             >
                               {Edit3Icon && <Edit3Icon size={14} />}
@@ -617,7 +648,7 @@ export default function ReturnedByCredit() {
                             >
                               {SendIcon && <SendIcon size={14} />}
                               <span>
-                                {c.openReturnItems.length > 0 ? 'Mark Corrections' : 'Send to Credit Manager'}
+                                {c.openReturnItems.length > 0 ? 'Resolve Items' : 'Resubmit to Credit Manager'}
                               </span>
                             </button>
                             {!c.isCreditReady && (

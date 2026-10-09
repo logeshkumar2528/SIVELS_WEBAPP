@@ -11,8 +11,8 @@
  *    NOTE: Status >= 3 (Under Review) is NOT an automatic shortcut; the full verification workflow is strictly evaluated.
  *
  * 2. Section 02 - Document Verification:
- *    - Persisted in /api/BackOfficeStepVerification.
- *    - KYC documents are optional. Any number of uploaded/verified documents is accepted.
+ *    - Not a gate. KYC documents vary per customer (some are "Not Required"), so the
+ *      verified count is shown for information only.
  *
  * 3. Section 06 - Legal Opinion:
  *    - Persisted in /api/BackOfficeApplicationDocuments.
@@ -110,13 +110,6 @@ function evaluateReadiness(
   if (isNaN(statusNum) || (statusNum !== 2 && statusNum !== 3)) {
     return false;
   }
-
-  // 2. Document Verification (optional; do not require a fixed document count)
-  const verificationsList = Array.isArray(stepVerifications)
-    ? stepVerifications
-    : (stepVerifications?.value || stepVerifications?.data || []);
-
-  // KYC records may be empty or partial; they no longer block readiness.
 
   // 3. Back Office Application Documents (Legal Opinion, Technical Valuation, CIBIL Report)
   const appDocsList = Array.isArray(applicationDocuments)

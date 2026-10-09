@@ -26,12 +26,19 @@ import CustomerVerification, {
 } from '../../../back_office/src/back-office/pages/CustomerVerification/CustomerVerification';
 import VerificationReportPdf from '../../../back_office/src/back-office/components/VerificationReportPdf/VerificationReportPdf';
 import { setActingIdentity } from '../../../back_office/src/back-office/auth/authStorage';
-import { mapCreditReturnItem } from '../../../back_office/src/back-office/mappers/creditReturnMapper';
-import { buildCreditReturnItemFromStep } from '../../../back_office/src/back-office/config/creditReturnFields';
+import {
+  RETURN_ITEM_STATUS,
+  getAttentionSections,
+  mapCreditReturnItem,
+} from '../../../back_office/src/back-office/mappers/creditReturnMapper';
+import {
+  buildCreditReturnItemFromStep,
+  getReturnItemStep,
+} from '../../../back_office/src/back-office/config/creditReturnFields';
 import '../../../back_office/src/back-office/pages/SubmitToCredit/SubmitToCredit.css';
 import '../styles/creditManager.css';
 import creditManagerService from '../api/creditManagerService';
-import { getCreditManagerAuth } from '../auth/authStorage';
+import { getCreditManagerAuth, getCreditManagerId } from '../auth/authStorage';
 import { ROUTES } from '../config/routeConfig';
 import { useCreditApplications } from '../context/CreditApplicationsContext';
 import {
@@ -43,6 +50,7 @@ import {
 } from '../mappers/creditMapper';
 import CreditDecisionModal, { DECISION_ACTIONS, getErrorMessage } from '../components/CreditDecisionModal';
 import ReturnIssuesList from '../components/ReturnIssuesList';
+import SectionReviewBar from '../components/SectionReviewBar';
 import { getApplicationNo, parseDate } from '../utils/formatters';
 
 const FINAL_ACTION_STEP = '16';
@@ -179,77 +187,6 @@ function useSectionReview(customerId) {
   };
 }
 
-function SectionReviewBar({ section, status, flagCount, isEditing, canEdit, onToggleEdit, onApprove, onUnapprove, onReject, onClearFlags }) {
-  const EditIcon = iconMap['Edit3'];
-  const CheckCircleIcon = iconMap['CheckCircle'];
-  const XCircleIcon = iconMap['XCircle'];
-  const isApproved = status === 'APPROVED';
-  const isFlagged = status === 'FLAGGED';
-
-  return (
-    <div className={`cm-section-bar${isEditing ? ' is-editing' : ''}`}>
-      <div className="cm-section-bar-info">
-        <span className="cm-section-bar-num">{section.visibleNum}</span>
-        <div>
-          <strong>{section.title}</strong>
-          <span>
-            {isEditing
-              ? 'Editing — your changes are saved with the section’s own Save buttons.'
-              : isFlagged
-                ? `${flagCount} flag${flagCount === 1 ? '' : 's'} for the Back Office`
-                : isApproved
-                  ? 'Approved by you'
-                  : 'Review this section, then approve or reject it.'}
-          </span>
-        </div>
-        {status && (
-          <span className={`cm-step-status cm-step-status--${status.toLowerCase()}`}>
-            {isApproved ? '✓ Approved' : '⚑ Rejected'}
-          </span>
-        )}
-      </div>
-
-      {canEdit && (
-        <div className="cm-section-bar-actions">
-          <button
-            type="button"
-            className={`stc-btn-doc ${isEditing ? 'stc-btn-doc--primary' : 'stc-btn-doc--outline'}`}
-            onClick={onToggleEdit}
-          >
-            {EditIcon && <EditIcon size={14} />}
-            <span>{isEditing ? 'Done Editing' : 'Edit'}</span>
-          </button>
-          {isApproved ? (
-            <button type="button" className="stc-btn-doc stc-btn-doc--outline" onClick={onUnapprove}>
-              <span>Undo Approval</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="stc-btn-doc cm-btn-approve"
-              onClick={onApprove}
-              disabled={isFlagged}
-              title={isFlagged ? 'Clear this section’s flags before approving it.' : undefined}
-            >
-              {CheckCircleIcon && <CheckCircleIcon size={14} />}
-              <span>Approve</span>
-            </button>
-          )}
-          <button type="button" className="stc-btn-doc cm-btn-reject" onClick={onReject}>
-            {XCircleIcon && <XCircleIcon size={14} />}
-            <span>{isFlagged ? 'Add Flag' : 'Reject'}</span>
-          </button>
-          {isFlagged && (
-            <button type="button" className="stc-btn-doc stc-btn-doc--outline" onClick={onClearFlags}>
-              <span>Clear Flags</span>
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function PendingFlagsCard({ flags, onRemove, onReturn, canReturn }) {
   const TrashIcon = iconMap['Trash2'];
   const RotateCcwIcon = iconMap['RotateCcw'];
@@ -325,6 +262,7 @@ function CreditDecisionPanel({
   latestDecision,
   latestReturn,
   latestReturnItems,
+  awaitingReviewSections,
   loading,
   error,
   successMessage,
@@ -336,13 +274,16 @@ function CreditDecisionPanel({
   const RotateCcwIcon = iconMap['RotateCcw'];
   const AlertCircleIcon = iconMap['AlertCircle'];
   const XIcon = iconMap['X'];
-  const openCount = latestReturnItems.filter((item) => !item.isResolved).length;
+  const acceptedCount = latestReturnItems.filter((item) => item.itemStatus === RETURN_ITEM_STATUS.ACCEPTED).length;
+  const awaitingReviewCount = awaitingReviewSections.reduce((sum, s) => sum + s.count, 0);
   const allSectionsApproved = review.approvedCount === review.totalSections;
-  const approveBlockedReason = pendingFlags.length
-    ? 'Some sections are rejected. Return the application to the Back Office, or clear the flags first.'
-    : !allSectionsApproved
-      ? `Approve every section first (${review.approvedCount} of ${review.totalSections} approved).`
-      : '';
+  const approveBlockedReason = awaitingReviewCount
+    ? `Review and accept ${awaitingReviewCount} Back Office resolution${awaitingReviewCount === 1 ? '' : 's'} first.`
+    : pendingFlags.length
+      ? 'Some sections are rejected. Return the application to the Back Office, or clear the flags first.'
+      : !allSectionsApproved
+        ? `Approve every section first (${review.approvedCount} of ${review.totalSections} approved).`
+        : '';
 
   return (
     <div className="cm-decision-panel">
@@ -358,6 +299,33 @@ function CreditDecisionPanel({
 
       {error && <div className="cm-form-alert" role="alert">{error}</div>}
 
+      {awaitingReviewSections.length > 0 && (
+        <div className="crp-strip" role="region" aria-label="Back Office resolutions awaiting review">
+          <div className="crp-strip-head">
+            <span className="crp-indicator" aria-hidden="true" />
+            <strong>
+              Resubmitted to Credit Manager · {awaitingReviewCount} Back Office resolution
+              {awaitingReviewCount === 1 ? '' : 's'} awaiting your review
+            </strong>
+          </div>
+          <div className="crp-strip-sections">
+            {awaitingReviewSections.map((section) => (
+              <button
+                key={section.stepId}
+                type="button"
+                className="crp-strip-btn"
+                onClick={() => onOpenSection(section.visibleNum)}
+              >
+                <span className="crp-indicator" aria-hidden="true" />
+                <span className="crp-strip-num">{section.visibleNum}</span>
+                <span>{section.sectionName}</span>
+                <span className="crp-strip-count">{section.count}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {isPending && <SectionChecklistCard review={review} onOpenSection={onOpenSection} />}
 
       {pendingFlags.length > 0 && (
@@ -372,10 +340,10 @@ function CreditDecisionPanel({
       {latestReturnItems.length > 0 && (
         <div className="stc-submit-card">
           <div className="cm-issues-card-head">
-            <h3 className="stc-docs-section-title" style={{ margin: 0 }}>Fields Flagged in Last Return</h3>
+            <h3 className="stc-docs-section-title" style={{ margin: 0 }}>Sections Rejected in Last Return</h3>
             <span className="stc-customer-sub">
               Returned on {formatDateTime(latestReturn?.decidedAt)} ·{' '}
-              {latestReturnItems.length - openCount} of {latestReturnItems.length} corrected
+              {acceptedCount} of {latestReturnItems.length} accepted
             </span>
           </div>
           <ReturnIssuesList items={latestReturnItems} />
@@ -527,7 +495,21 @@ export default function ApplicationReview() {
     if (latestReturn.id == null) return returnItems;
     return returnItems.filter((item) => String(item.decisionId) === String(latestReturn.id));
   }, [latestReturn, returnItems]);
-  const openReturnItemCount = latestReturnItems.filter((item) => !item.isResolved).length;
+  const openReturnItemCount = latestReturnItems.filter((item) => item.itemStatus === RETURN_ITEM_STATUS.OPEN).length;
+  const awaitingReviewSections = useMemo(
+    () => getAttentionSections(returnItems, 'CreditManager'),
+    [returnItems]
+  );
+  const awaitingReviewBySection = useMemo(() => {
+    const counts = {};
+    returnItems.forEach((item) => {
+      if (item.itemStatus !== RETURN_ITEM_STATUS.RESUBMITTED) return;
+      const sectionId = resolveReviewSectionId(getReturnItemStep(item).stepId);
+      counts[sectionId] = (counts[sectionId] || 0) + 1;
+    });
+    return counts;
+  }, [returnItems]);
+  const isResubmitted = isPending && latestDecision?.decision === CREDIT_DECISION.RETURNED;
 
   const handleBack = useCallback(() => {
     if (location.key !== 'default') navigate(-1);
@@ -549,6 +531,7 @@ export default function ApplicationReview() {
         section={section}
         status={review.getStatus(section.id)}
         flagCount={pendingFlags.filter((flag) => flag.stepId === section.id).length}
+        awaitingReviewCount={awaitingReviewBySection[section.id] || 0}
         isEditing={isEditing}
         canEdit={isPending}
         onToggleEdit={onToggleEdit}
@@ -558,6 +541,30 @@ export default function ApplicationReview() {
         onClearFlags={() => review.clearSectionFlags(section.id)}
       />
     ),
+  };
+
+  const handleSectionFlag = (step, { returnNow = false } = {}) => {
+    addFlag(step);
+    if (returnNow && isPending) setActiveAction(DECISION_ACTIONS.RETURN);
+  };
+
+  const handleAcceptReturnItem = async (item, reviewRemarks) => {
+    const creditManagerId = getCreditManagerId();
+    if (!creditManagerId) throw new Error('Your Credit Manager session has expired. Please log in again.');
+    await creditManagerService.acceptCreditReturnItem(item.id, {
+      reviewedByUserId: Number(creditManagerId),
+      reviewedByRole: 'CreditManager',
+      reviewRemarks,
+    });
+    setSuccessMessage(`${item.sectionName} › ${item.fieldLabel}: resolution accepted.`);
+    await loadDecisions();
+  };
+
+  const creditReturn = {
+    items: returnItems,
+    reload: loadDecisions,
+    canAct: isPending,
+    onAccept: handleAcceptReturnItem,
   };
 
   const handleDecisionSubmit = async (action, payload) => {
@@ -575,7 +582,9 @@ export default function ApplicationReview() {
         <div className="cm-review-bar-info">
           <strong>{queueApp ? getApplicationNo(queueApp) : `#${customerId}`}</strong>
           <span>{queueApp?.customerName || ''}</span>
-          {statusMeta ? (
+          {isResubmitted ? (
+            <span className="stc-pill stc-pill--pending">Resubmitted to Credit Manager</span>
+          ) : statusMeta ? (
             <span className={`stc-pill ${statusMeta.className}`}>{statusMeta.label}</span>
           ) : (
             <span className="stc-pill stc-pill--progress">Not with Credit Manager</span>
@@ -583,8 +592,19 @@ export default function ApplicationReview() {
           {openReturnItemCount > 0 && (
             <span className="cm-review-bar-warning">
               {AlertTriangleIcon && <AlertTriangleIcon size={14} />}
-              {openReturnItemCount} flagged field{openReturnItemCount === 1 ? '' : 's'} still open
+              {openReturnItemCount} returned item{openReturnItemCount === 1 ? '' : 's'} still with Back Office
             </span>
+          )}
+          {awaitingReviewSections.length > 0 && (
+            <button
+              type="button"
+              className="cm-review-bar-warning cm-review-bar-flags"
+              onClick={() => goToStep(awaitingReviewSections[0].visibleNum)}
+            >
+              <span className="crp-indicator" aria-hidden="true" />
+              {awaitingReviewSections.reduce((sum, s) => sum + s.count, 0)} resolution
+              {awaitingReviewSections.reduce((sum, s) => sum + s.count, 0) === 1 ? '' : 's'} to review
+            </button>
           )}
           {pendingFlags.length > 0 && (
             <button type="button" className="cm-review-bar-warning cm-review-bar-flags" onClick={goToFinalAction}>
@@ -609,8 +629,9 @@ export default function ApplicationReview() {
         viewerRole="CreditManager"
         onBack={handleBack}
         backLabel="Back to Applications"
-        onCreditManagerFlag={addFlag}
+        onCreditManagerFlag={handleSectionFlag}
         sectionReview={sectionReview}
+        creditReturn={creditReturn}
         finalActionsSlot={
           <CreditDecisionPanel
             isPending={isPending}
@@ -621,6 +642,7 @@ export default function ApplicationReview() {
             latestDecision={latestDecision}
             latestReturn={latestReturn}
             latestReturnItems={latestReturnItems}
+            awaitingReviewSections={awaitingReviewSections}
             loading={decisionLoading}
             error={decisionError}
             successMessage={successMessage}
