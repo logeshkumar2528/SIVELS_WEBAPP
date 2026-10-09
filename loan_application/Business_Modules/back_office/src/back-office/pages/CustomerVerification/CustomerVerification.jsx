@@ -43,12 +43,25 @@ import PdfView from '../../../../../rm_modules/src/pages/PdfView/PdfView';
 import { ApplicationDraftProvider } from '../../../../../rm_modules/src/state/ApplicationDraftContext';
 import { resolveDocumentTypeId, validateApplicantDocumentFile, getDocumentApplicability } from '../../../../../../Core/src/utils/documentTypeHelper';
 import { isApplicationUnderwritingReady } from '../../utils/readinessHelper';
+import {
+  startNormalIncomeSheetMonitor,
+  stopNormalIncomeSheetMonitor,
+  initGoogleOAuthClient,
+  triggerGoogleOAuth,
+  isGoogleOAuthAuthorized,
+} from '../../services/googleSheetsMonitorService';
 import './CustomerVerification.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
 const NORMAL_INCOME_SPREADSHEET_URL =
   import.meta.env.VITE_NORMAL_INCOME_SPREADSHEET_URL ||
-  'https://docs.google.com/spreadsheets/d/15tGw0iBuDaoWL9sGUwoHIbtATfVkWoOh/edit';
+  'https://docs.google.com/spreadsheets/d/1MeYct96mCluWRPmntTcvvZFTPAig87RqkF9vuzW5b3E/edit';
+const GOOGLE_SHEETS_CLIENT_ID = import.meta.env.VITE_GOOGLE_SHEETS_CLIENT_ID || '';
+
+function extractSpreadsheetId(url) {
+  const match = (url || '').match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  return match ? match[1] : '1MeYct96mCluWRPmntTcvvZFTPAig87RqkF9vuzW5b3E';
+}
 
 const ArrowLeftIcon = iconMap['ArrowLeft'];
 const ArrowRightIcon = iconMap['ArrowRight'];
@@ -2022,6 +2035,15 @@ export default function CustomerVerification() {
   const [activeProposedLoan, setActiveProposedLoan] = useState(null);
   const calcSheetRef = useRef(null);
   const rtrResultSectionRef = useRef(null);
+
+  useEffect(() => {
+    if (GOOGLE_SHEETS_CLIENT_ID) {
+      initGoogleOAuthClient(GOOGLE_SHEETS_CLIENT_ID);
+    }
+    return () => {
+      stopNormalIncomeSheetMonitor();
+    };
+  }, []);
 
   const openCalcWorkspace = useCallback((tab = 'inputs') => {
     if (selectedMethodCode === 'ABB') {
@@ -13770,7 +13792,21 @@ export default function CustomerVerification() {
                               onClick={() => {
                                 const nextCode = code || 'INCOME';
                                 if (nextCode === 'NORMAL_INCOME') {
-                                  window.open(NORMAL_INCOME_SPREADSHEET_URL, '_blank', 'noopener,noreferrer');
+                                  const spreadsheetId = extractSpreadsheetId(NORMAL_INCOME_SPREADSHEET_URL);
+                                  if (isGoogleOAuthAuthorized()) {
+                                    window.open(NORMAL_INCOME_SPREADSHEET_URL, '_blank', 'noopener,noreferrer');
+                                    startNormalIncomeSheetMonitor(spreadsheetId, GOOGLE_SHEETS_CLIENT_ID);
+                                  } else {
+                                    triggerGoogleOAuth(GOOGLE_SHEETS_CLIENT_ID, {
+                                      onAuthorized: () => {
+                                        window.open(NORMAL_INCOME_SPREADSHEET_URL, '_blank', 'noopener,noreferrer');
+                                        startNormalIncomeSheetMonitor(spreadsheetId, GOOGLE_SHEETS_CLIENT_ID);
+                                      },
+                                      onError: (err) => {
+                                        console.warn('[Normal Income] Google OAuth authorization was not completed. Monitoring not started.');
+                                      }
+                                    });
+                                  }
                                   return;
                                 }
                                 setSelectedMethodCode(nextCode);
