@@ -216,4 +216,15 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/send-to-credit-manager`,
   APPLICATION_WORKFLOW_HISTORY: (agentCustomerId) =>
     `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/history`,
+
+  // Credit Manager decisions (Approved / Rejected / ReturnedToBackOffice)
+  LATEST_CREDIT_DECISION: (agentCustomerId) =>
+    `/ApplicationCreditDecision/by-customer/${encodeURIComponent(agentCustomerId)}/latest`,
+  CREDIT_MANAGERS: '/CreditManagerMaster',
+
+  // Fields flagged by the Credit Manager on return-to-backoffice
+  CREDIT_RETURN_ITEMS_BY_CUSTOMER: (agentCustomerId) =>
+    `/ApplicationCreditReturnItem/by-customer/${encodeURIComponent(agentCustomerId)}`,
+  CREDIT_RETURN_ITEM_RESOLVE: (itemId) =>
+    `/ApplicationCreditReturnItem/${encodeURIComponent(itemId)}/resolve`,
 };

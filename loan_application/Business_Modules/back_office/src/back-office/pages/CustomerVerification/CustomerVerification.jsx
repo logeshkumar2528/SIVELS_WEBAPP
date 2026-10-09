@@ -247,6 +247,21 @@ const VERIFICATION_WORKFLOW_STEPS = [
   { id: 18, number: 18, visibleNum: '16', title: 'Final Action', subtitle: '', group: 'FINAL ACTION' },
 ];
 
+const FINAL_ACTION_STEP_ID = 18;
+
+/** Sections the Credit Manager reviews (approve / reject / edit) before the final decision. */
+export const CREDIT_REVIEW_SECTIONS = VERIFICATION_WORKFLOW_STEPS
+  .filter((step) => step.id !== FINAL_ACTION_STEP_ID)
+  .map(({ id, visibleNum, title }) => ({ id, visibleNum, title }));
+
+/** Document sub-steps 2-7 all belong to the "Document Verification" section. */
+export const resolveReviewSectionId = (internalStep) =>
+  internalStep >= 2 && internalStep <= 7 ? 2 : internalStep;
+
+/** Buttons that change data; blocked for the Credit Manager until the section is in Edit mode. */
+const CM_EDIT_ACTION_PATTERN =
+  /\b(save|saving|verify|delete|remove|upload|replace|override|use application|use policy|use calculated|add|submit|update|calculate|recalculate|apply|mark|clear|reset|browse)\b/i;
+
 /**
  * Visible Step (1–15) to Internal Step ID Mapping
  */
@@ -1124,7 +1139,24 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
   );
 }
 
-export default function CustomerVerification() {
+/**
+ * @param {object}   props
+ * @param {'BackOffice'|'CreditManager'} [props.viewerRole] - CreditManager hides Back Office-only
+ *   workflow actions (Return to RM / Send to Credit Manager / step rejection to RM).
+ * @param {Function} [props.onBack]        - Overrides the default "Back to Customers" navigation.
+ * @param {string}   [props.backLabel]     - Label for the back button.
+ * @param {React.ReactNode} [props.finalActionsSlot] - Rendered in place of the Back Office
+ *   final action cards when viewerRole is CreditManager.
+ */
+export default function CustomerVerification({
+  viewerRole = 'BackOffice',
+  onBack,
+  backLabel = 'Back to Customers',
+  finalActionsSlot = null,
+  onCreditManagerFlag,
+  sectionReview = null,
+} = {}) {
+  const isCreditManagerView = viewerRole === 'CreditManager';
   const { customerId } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -8745,6 +8777,18 @@ export default function CustomerVerification() {
     manualDocumentIndex = null
   ) => {
     const remarks = (customRemarks !== null ? customRemarks : (stepRemarks[stepNum] || '')).trim();
+    if (isCreditManagerView) {
+      if (!remarks || typeof onCreditManagerFlag !== 'function') return;
+      onCreditManagerFlag({ stepNum, stepLabel, isCoApplicant, issue: remarks });
+      setStepFeedback((prev) => ({
+        ...prev,
+        [stepNum]: {
+          type: 'success',
+          message: `${stepLabel || 'Item'} flagged for the Back Office. It will be sent when you click "Return to Back Office" in Final Action.`,
+        },
+      }));
+      return;
+    }
     if (!remarks) {
       setStepFeedback((prev) => ({
         ...prev,
@@ -8987,6 +9031,87 @@ export default function CustomerVerification() {
       open: false,
       stepNum: null,
       stepLabel: '',
+      customKycId: null,
+      isCoApplicant: false,
+      applicantSequence: null,
+      documentTypeId: null,
+      rejectedDocumentType: null,
+      manualDocumentIndex: null,
+      remarks: '',
+      error: '',
+    });
+  };
+
+  // ── Credit Manager section review (Edit / Approve / Reject per section) ──
+  const [cmEditingSectionId, setCmEditingSectionId] = useState(null);
+  const [cmLockNotice, setCmLockNotice] = useState('');
+  const cmLockNoticeTimer = useRef(null);
+  const reviewSectionId = resolveReviewSectionId(activeStep);
+  const reviewSection = VERIFICATION_WORKFLOW_STEPS.find((step) => step.id === reviewSectionId) || null;
+  const showSectionReview =
+    isCreditManagerView && !!sectionReview && reviewSectionId !== FINAL_ACTION_STEP_ID && !!reviewSection;
+  const isCmSectionLocked = showSectionReview && cmEditingSectionId !== reviewSectionId;
+
+  useEffect(() => {
+    setCmEditingSectionId((prev) => (prev === reviewSectionId ? prev : null));
+    setCmLockNotice('');
+  }, [reviewSectionId]);
+
+  useEffect(() => () => clearTimeout(cmLockNoticeTimer.current), []);
+
+  const showCmLockNotice = () => {
+    setCmLockNotice(
+      sectionReview?.canEdit
+        ? `Click "Edit" on ${reviewSection?.title || 'this section'} to make changes.`
+        : 'This application is no longer pending with you, so it cannot be changed.'
+    );
+    clearTimeout(cmLockNoticeTimer.current);
+    cmLockNoticeTimer.current = setTimeout(() => setCmLockNotice(''), 4000);
+  };
+
+  const isCmEditTarget = (target, container) => {
+    if (!(target instanceof Element) || target.closest('[data-cm-section-bar]')) return false;
+    const field = target.closest('input, select, textarea');
+    if (field && container.contains(field)) return true;
+    const label = target.closest('label[for]');
+    if (label && document.getElementById(label.htmlFor)?.matches('input, select, textarea')) return true;
+    const control = target.closest('button, [role="button"]');
+    if (!control || !container.contains(control)) return false;
+    const text = `${control.textContent || ''} ${control.getAttribute('aria-label') || ''} ${control.title || ''}`;
+    return CM_EDIT_ACTION_PATTERN.test(text);
+  };
+
+  const blockCmLockedInteraction = (e) => {
+    if (!isCmSectionLocked || !isCmEditTarget(e.target, e.currentTarget)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'click' || e.type === 'drop') showCmLockNotice();
+  };
+
+  const blockCmLockedKeys = (e) => {
+    if (!isCmSectionLocked || e.key === 'Tab') return;
+    if (!(e.target instanceof Element) || !e.target.matches('input, select, textarea')) return;
+    if (e.target.closest('[data-cm-section-bar]')) return;
+    e.preventDefault();
+    showCmLockNotice();
+  };
+
+  const cmLockHandlers = isCmSectionLocked
+    ? {
+        onMouseDownCapture: blockCmLockedInteraction,
+        onClickCapture: blockCmLockedInteraction,
+        onKeyDownCapture: blockCmLockedKeys,
+        onPasteCapture: blockCmLockedInteraction,
+        onDropCapture: blockCmLockedInteraction,
+      }
+    : {};
+
+  const openCmSectionReject = () => {
+    if (!reviewSection) return;
+    setRejectConfirmModal({
+      open: true,
+      stepNum: reviewSection.id,
+      stepLabel: reviewSection.title,
       customKycId: null,
       isCoApplicant: false,
       applicantSequence: null,
@@ -10874,7 +10999,8 @@ export default function CustomerVerification() {
   };
 
   const handleBack = () => {
-    navigate(ROUTES.CUSTOMERS);
+    if (onBack) onBack();
+    else navigate(ROUTES.CUSTOMERS);
   };
 
   // ----------------------------------------------------
@@ -10887,7 +11013,7 @@ export default function CustomerVerification() {
           <div className="bo-cv-header-left">
             <button type="button" className="bo-cv-back-btn" onClick={handleBack}>
               {ArrowLeftIcon && <ArrowLeftIcon size={14} />}
-              <span>Back to Customers</span>
+              <span>{backLabel}</span>
             </button>
           </div>
         </header>
@@ -10910,7 +11036,7 @@ export default function CustomerVerification() {
           <div className="bo-cv-header-left">
             <button type="button" className="bo-cv-back-btn" onClick={handleBack}>
               {ArrowLeftIcon && <ArrowLeftIcon size={14} />}
-              <span>Back to Customers</span>
+              <span>{backLabel}</span>
             </button>
           </div>
         </header>
@@ -10929,9 +11055,9 @@ export default function CustomerVerification() {
               <button
                 type="button"
                 className="bo-btn bo-btn--outline"
-                onClick={() => navigate(ROUTES.CUSTOMERS)}
+                onClick={handleBack}
               >
-                <span>Back to Customer Monitoring</span>
+                <span>{backLabel}</span>
               </button>
             </div>
           </div>
@@ -10948,9 +11074,9 @@ export default function CustomerVerification() {
       <div className="bo-cv-page-wrap">
         <header className="bo-cv-header">
           <div className="bo-cv-header-left">
-            <button type="button" className="bo-cv-back-btn" onClick={() => navigate(ROUTES.CUSTOMERS)}>
+            <button type="button" className="bo-cv-back-btn" onClick={handleBack}>
               {ArrowLeftIcon && <ArrowLeftIcon size={14} />}
-              <span>Back to Customers</span>
+              <span>{backLabel}</span>
             </button>
           </div>
         </header>
@@ -10967,10 +11093,10 @@ export default function CustomerVerification() {
             <button
               type="button"
               className="bo-btn bo-btn--primary"
-              onClick={() => navigate(ROUTES.CUSTOMERS)}
+              onClick={handleBack}
             >
               {ArrowLeftIcon && <ArrowLeftIcon size={16} />}
-              <span>Back to Customer Monitoring</span>
+              <span>{backLabel}</span>
             </button>
           </div>
         </div>
@@ -10999,7 +11125,7 @@ export default function CustomerVerification() {
             aria-label="Return to customer monitoring"
           >
             {ArrowLeftIcon && <ArrowLeftIcon size={14} />}
-            <span>Back to Customers</span>
+            <span>{backLabel}</span>
           </button>
         </div>
 
@@ -11132,6 +11258,8 @@ export default function CustomerVerification() {
                 const subtitle = isDocStep
                   ? (allVerified ? `${totalRequired}/${totalRequired} Verified` : `${applicantVerifiedCount}/${totalRequired} Verified`)
                   : step.subtitle;
+                const cmSectionStatus =
+                  isCreditManagerView && sectionReview ? sectionReview.getStatus(step.id) : null;
 
                 return (
                   <li key={step.id} className="bo-cv-step-item">
@@ -11159,7 +11287,11 @@ export default function CustomerVerification() {
                       </div>
 
                       <div className="bo-cv-step-action">
-                        {isDocStep && isSelected ? (
+                        {cmSectionStatus ? (
+                          <span className={`cm-step-status cm-step-status--${cmSectionStatus.toLowerCase()}`}>
+                            {cmSectionStatus === 'APPROVED' ? '✓ Approved' : '⚑ Flagged'}
+                          </span>
+                        ) : isDocStep && isSelected ? (
                           <span
                             className={`bo-cv-sidebar-progress-pill ${
                               allVerified
@@ -11187,7 +11319,27 @@ export default function CustomerVerification() {
         </aside>
 
         {/* ── RIGHT MAIN WORKSPACE: 11-STEP UNDERWRITING CONTENT ─────────── */}
-        <main className="bo-cv-main-content" id="main-verification-content">
+        <main
+          className={`bo-cv-main-content${isCmSectionLocked ? ' cm-section-locked' : ''}${showSectionReview && !isCmSectionLocked ? ' cm-section-editing' : ''}`}
+          id="main-verification-content"
+          {...cmLockHandlers}
+        >
+          {showSectionReview && (
+            <div data-cm-section-bar>
+              {sectionReview.renderBar({
+                section: reviewSection,
+                isEditing: !isCmSectionLocked,
+                onToggleEdit: () =>
+                  setCmEditingSectionId((prev) => (prev === reviewSectionId ? null : reviewSectionId)),
+                onReject: openCmSectionReject,
+              })}
+              {cmLockNotice && (
+                <div className="bo-cv-feedback-alert is-info cm-lock-notice" role="status">
+                  {cmLockNotice}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ══════════════════════════════════════════════════════════════════
               STEP 01: VIEW FORM
@@ -19156,7 +19308,10 @@ export default function CustomerVerification() {
                 </div>
               </div>
 
-              {/* Dual Action Cards */}
+              {/* Dual Action Cards (Credit Manager view renders its own decision panel instead) */}
+              {isCreditManagerView ? (
+                <div style={{ marginBottom: '28px' }}>{finalActionsSlot}</div>
+              ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '28px' }}>
                 {/* Card 1: Return to RM */}
                 <div
@@ -19321,6 +19476,7 @@ export default function CustomerVerification() {
                   </button>
                 </div>
               </div>
+              )}
 
               {/* Workflow History Section */}
               <div
@@ -19548,10 +19704,14 @@ export default function CustomerVerification() {
               </div>
               <div className="bo-cv-confirm-modal-title-group">
                 <h3 id="bo-cv-confirm-modal-title" className="bo-cv-confirm-modal-title">
-                  Return Document to RM
+                  {isCreditManagerView ? 'Flag for Back Office' : 'Return Document to RM'}
                 </h3>
                 <p className="bo-cv-confirm-modal-subtitle">
-                  {rejectConfirmModal.stepLabel ? `Document: ${rejectConfirmModal.stepLabel}` : 'This action will return the document to the RM for re-upload.'}
+                  {rejectConfirmModal.stepLabel
+                    ? `${isCreditManagerView ? 'Item' : 'Document'}: ${rejectConfirmModal.stepLabel}`
+                    : isCreditManagerView
+                      ? 'This item will be added to the list sent with "Return to Back Office".'
+                      : 'This action will return the document to the RM for re-upload.'}
                 </p>
               </div>
               <button
@@ -19567,7 +19727,9 @@ export default function CustomerVerification() {
 
             <div className="bo-cv-confirm-modal-body">
               <p className="bo-cv-confirm-modal-question">
-                Are you sure you want to return this document?
+                {isCreditManagerView
+                  ? 'Describe what the Back Office needs to correct. Flags are sent together when you click "Return to Back Office" in Final Action.'
+                  : 'Are you sure you want to return this document?'}
               </p>
 
               <div className="bo-cv-confirm-remarks-block">
@@ -19586,7 +19748,7 @@ export default function CustomerVerification() {
                       error: val.trim() ? '' : prev.error,
                     }));
                   }}
-                  placeholder="Enter rejection reason / remarks for RM..."
+                  placeholder={isCreditManagerView ? 'What is wrong and what should the Back Office correct?' : 'Enter rejection reason / remarks for RM...'}
                   rows={3}
                   autoFocus
                 />
@@ -19613,7 +19775,7 @@ export default function CustomerVerification() {
                 onClick={handleConfirmReject}
                 disabled={isSubmittingRejection}
               >
-                {isSubmittingRejection ? 'Sending...' : 'Send to RM'}
+                {isCreditManagerView ? 'Add Flag' : isSubmittingRejection ? 'Sending...' : 'Send to RM'}
               </button>
             </div>
           </div>

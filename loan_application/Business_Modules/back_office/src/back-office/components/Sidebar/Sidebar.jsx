@@ -46,6 +46,9 @@ const BADGE_CLASS_MAP = {
   agentMonitoring:    'sidebar-badge--pending',
   customerMonitoring: 'sidebar-badge--review',
   submitToCredit:     'sidebar-badge--approved',
+  returnedByCredit:   'sidebar-badge--return',
+  receivedApplications: 'sidebar-badge--pending',
+  pendingReview:      'sidebar-badge--review',
   newApplications:    'sidebar-badge--new',
   verification:       'sidebar-badge--review',
   fieldInvest:        'sidebar-badge--pending',
@@ -153,7 +156,7 @@ function NavSection({ sectionTitle, items, activeRoute, badgeCounts, onNavigate,
 /* ------------------------------------------
    Sidebar — root component
 ------------------------------------------ */
-function Sidebar({ menu = [], activeRoute = '', badgeCounts = {}, isOpen = false, onNavigate, onClose }) {
+function Sidebar({ menu = [], activeRoute = '', badgeCounts = {}, isOpen = false, onNavigate, onClose, onLogout }) {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   /* Split flat menu into main (scrollable) and bottom (pinned) */
@@ -168,6 +171,10 @@ function Sidebar({ menu = [], activeRoute = '', badgeCounts = {}, isOpen = false
 
   const handleConfirmLogout = () => {
     setShowLogoutModal(false);
+    if (onLogout) {
+      onLogout();
+      return;
+    }
     removeBackOfficeAuth();
     window.location.href = '/login';
   };

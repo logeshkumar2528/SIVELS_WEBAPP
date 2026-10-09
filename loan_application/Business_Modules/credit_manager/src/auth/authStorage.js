@@ -1,11 +1,12 @@
 /**
  * authStorage.js
  * --------------------
- * Isolated authentication storage management for the Credit Manager module.
+ * Authentication session management for the Credit Manager module.
+ * Manages dedicated localStorage keys and coordinates session retrieval.
  *
- * Dedicated Keys:
- *   - 'creditManagerAuth' : Structured session object { isAuthenticated, creditManagerId, userId, ... }
- *   - 'creditManagerData' : Full master record
+ * Keys (written by Core VerifyOTP on login):
+ *   - 'creditManagerData' : Full CreditManagerMaster record
+ *   - 'creditManagerAuth' : Structured session object
  *   - 'creditManagerId'   : Master primary key
  */
 
@@ -13,165 +14,148 @@ export const CREDIT_MANAGER_AUTH_KEY = 'creditManagerAuth';
 export const CREDIT_MANAGER_DATA_KEY = 'creditManagerData';
 export const CREDIT_MANAGER_ID_KEY = 'creditManagerId';
 
+function isCreditManagerRole(role) {
+  const r = String(role || '').toLowerCase();
+  return r.includes('creditmanager') || r.includes('credit_manager') || r.includes('credit manager');
+}
+
+function toValidId(value) {
+  const num = Number(value);
+  return value != null && !isNaN(num) && num > 0 ? num : null;
+}
+
 /**
  * Retrieve current Credit Manager auth state.
- * Checks dedicated 'creditManagerAuth' key, 'creditManagerData', as well as 'sivels_currentUser'.
- *
- * @returns {object|null}
+ * Checks 'creditManagerData', the dedicated 'creditManagerAuth' key, then 'sivels_currentUser'.
  */
 export function getCreditManagerAuth() {
   try {
-    // 1. Check primary structured auth key
+    const cmDataRaw = localStorage.getItem(CREDIT_MANAGER_DATA_KEY);
+    if (cmDataRaw) {
+      const cm = JSON.parse(cmDataRaw);
+      if (cm && typeof cm === 'object') {
+        const cmId = toValidId(
+          cm.creditManagerId ?? cm.CreditManagerId ?? cm.id ?? localStorage.getItem(CREDIT_MANAGER_ID_KEY)
+        );
+        if (cmId) {
+          return {
+            isAuthenticated: true,
+            id: cmId,
+            creditManagerId: cmId,
+            userId: toValidId(cm.userId),
+            name: cm.fullName || cm.name || '',
+            role: 'CreditManager',
+            mobile: cm.mobileNumber || cm.mobile || '',
+            creditManagerCode: cm.creditManagerCode || cm.code || '',
+            email: cm.emailAddress || cm.email || '',
+            loginTimestamp: new Date().toISOString(),
+          };
+        }
+      }
+    }
+
     const raw = localStorage.getItem(CREDIT_MANAGER_AUTH_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.isAuthenticated) {
-        const cmId = parsed.creditManagerId || parsed.id || localStorage.getItem(CREDIT_MANAGER_ID_KEY) || null;
-        return {
-          ...parsed,
-          creditManagerId: cmId ? Number(cmId) : null,
-          id: cmId ? Number(cmId) : null,
-        };
+        const cmId = toValidId(parsed.creditManagerId ?? parsed.id ?? localStorage.getItem(CREDIT_MANAGER_ID_KEY));
+        if (cmId) {
+          return {
+            ...parsed,
+            id: cmId,
+            creditManagerId: cmId,
+            name: parsed.name || parsed.fullName || '',
+            mobile: parsed.mobile || parsed.mobileNumber || '',
+          };
+        }
       }
     }
 
-    // 2. Check creditManagerData
-    const dataRaw = localStorage.getItem(CREDIT_MANAGER_DATA_KEY);
-    if (dataRaw) {
-      const cm = JSON.parse(dataRaw);
-      if (cm && typeof cm === 'object') {
-        const cmId = cm.creditManagerId || cm.id || localStorage.getItem(CREDIT_MANAGER_ID_KEY) || null;
-        return {
-          isAuthenticated: Boolean(cmId),
-          creditManagerId: cmId ? Number(cmId) : null,
-          id: cmId ? Number(cmId) : null,
-          userId: cm.userId ? Number(cm.userId) : null,
-          creditManagerCode: cm.creditManagerCode || cm.code || '',
-          fullName: cm.fullName || cm.name || 'Credit Manager',
-          mobileNumber: cm.mobileNumber || cm.mobile || '',
-          emailAddress: cm.emailAddress || cm.email || '',
-          branch: cm.branch || '',
-          role: 'CreditManager',
-          loginTimestamp: new Date().toISOString(),
-        };
-      }
-    }
-
-    // 3. Check sivels_currentUser
     const userRaw = localStorage.getItem('sivels_currentUser');
     if (userRaw) {
       const user = JSON.parse(userRaw);
-      const role = String(user?.role || '').toLowerCase();
-      if (role.includes('credit') || role.includes('creditmanager') || role.includes('credit_manager')) {
-        const cmId = user.creditManagerId || user.id || localStorage.getItem(CREDIT_MANAGER_ID_KEY) || null;
+      if (!isCreditManagerRole(user?.role)) {
+        // Explicitly non-Credit Manager user in sivels_currentUser - do not use
+        return null;
+      }
+      const cmId = toValidId(user.creditManagerId ?? user.id ?? localStorage.getItem(CREDIT_MANAGER_ID_KEY));
+      if (cmId) {
         return {
-          isAuthenticated: Boolean(cmId),
-          creditManagerId: cmId ? Number(cmId) : null,
-          id: cmId ? Number(cmId) : null,
-          userId: user.userId ? Number(user.userId) : null,
-          creditManagerCode: user.creditManagerCode || user.code || '',
-          fullName: user.fullName || user.name || 'Credit Manager',
-          mobileNumber: user.mobileNumber || user.mobile || '',
-          emailAddress: user.emailAddress || user.email || '',
-          branch: user.branch || '',
+          isAuthenticated: true,
+          id: cmId,
+          creditManagerId: cmId,
+          userId: toValidId(user.userId),
+          name: user.fullName || user.name || '',
           role: 'CreditManager',
+          mobile: user.mobileNumber || user.mobile || '',
+          creditManagerCode: user.creditManagerCode || user.code || '',
           loginTimestamp: new Date().toISOString(),
         };
       }
     }
-
     return null;
-  } catch (err) {
-    console.warn('[authStorage] Error parsing Credit Manager auth:', err);
-    return null;
-  }
-}
-
-/**
- * Retrieve raw Credit Manager master data object from session.
- *
- * @returns {object|null}
- */
-export function getCreditManagerData() {
-  try {
-    const raw = localStorage.getItem(CREDIT_MANAGER_DATA_KEY);
-    return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
 /**
- * Retrieve authenticated Credit Manager primary key ID.
- *
- * @returns {number|null}
- */
-export function getCreditManagerId() {
-  const auth = getCreditManagerAuth();
-  if (auth?.creditManagerId && !isNaN(Number(auth.creditManagerId))) {
-    return Number(auth.creditManagerId);
-  }
-  const rawId = localStorage.getItem(CREDIT_MANAGER_ID_KEY);
-  if (rawId && !isNaN(Number(rawId)) && Number(rawId) > 0) {
-    return Number(rawId);
-  }
-  return null;
-}
-
-/**
- * Checks if the current session has an active, authenticated Credit Manager.
- *
- * @returns {boolean}
- */
-export function isCreditManagerAuthenticated() {
-  const auth = getCreditManagerAuth();
-  return Boolean(auth && auth.isAuthenticated && auth.creditManagerId);
-}
-
-/**
- * Save / update Credit Manager auth state in localStorage.
- *
- * @param {object} authData
+ * Persist Credit Manager auth state.
  */
 export function setCreditManagerAuth(authData) {
   try {
-    if (!authData) return;
-    const cmId = authData.creditManagerId || authData.id || null;
+    const cmId = toValidId(authData?.creditManagerId ?? authData?.id);
     const payload = {
       isAuthenticated: true,
-      creditManagerId: cmId ? Number(cmId) : null,
-      userId: authData.userId ? Number(authData.userId) : null,
-      creditManagerCode: authData.creditManagerCode || authData.code || '',
-      fullName: authData.fullName || authData.name || 'Credit Manager',
-      mobileNumber: authData.mobileNumber || authData.mobile || '',
-      emailAddress: authData.emailAddress || authData.email || '',
-      branch: authData.branch || '',
+      id: cmId,
+      creditManagerId: cmId,
+      userId: toValidId(authData?.userId),
+      name: authData?.name || authData?.fullName || '',
       role: 'CreditManager',
-      loginTimestamp: authData.loginTimestamp || new Date().toISOString(),
+      mobile: authData?.mobile || authData?.mobileNumber || '',
+      creditManagerCode: authData?.creditManagerCode || authData?.code || '',
+      loginTimestamp: new Date().toISOString(),
     };
-
     localStorage.setItem(CREDIT_MANAGER_AUTH_KEY, JSON.stringify(payload));
     if (cmId) {
       localStorage.setItem(CREDIT_MANAGER_ID_KEY, String(cmId));
     }
-  } catch (err) {
-    console.warn('[authStorage] Error saving Credit Manager auth:', err);
+    return payload;
+  } catch {
+    return null;
   }
 }
 
 /**
- * Clear Credit Manager session and redirect to login.
- * Removes only Credit Manager-specific keys and common user session.
+ * Clear ONLY Credit Manager authentication storage.
+ * Strictly avoids localStorage.clear() to prevent affecting other modules.
  */
-export function clearCreditManagerAuth() {
+export function removeCreditManagerAuth() {
   try {
     localStorage.removeItem(CREDIT_MANAGER_AUTH_KEY);
     localStorage.removeItem(CREDIT_MANAGER_DATA_KEY);
     localStorage.removeItem(CREDIT_MANAGER_ID_KEY);
-    localStorage.removeItem('sivels_currentUser');
-    localStorage.removeItem('authToken');
-  } catch (err) {
-    console.warn('[authStorage] Error clearing Credit Manager auth:', err);
-  }
-  window.location.href = '/login';
+
+    const userRaw = localStorage.getItem('sivels_currentUser');
+    if (userRaw) {
+      const user = JSON.parse(userRaw);
+      if (isCreditManagerRole(user?.role)) {
+        localStorage.removeItem('sivels_currentUser');
+      }
+    }
+  } catch {}
+}
+
+/**
+ * Resolve the authenticated Credit Manager primary key.
+ */
+export function getCreditManagerId() {
+  return getCreditManagerAuth()?.creditManagerId ?? null;
+}
+
+/**
+ * Check whether Credit Manager session is currently authenticated.
+ */
+export function isCreditManagerAuthenticated() {
+  return Boolean(getCreditManagerAuth()?.isAuthenticated);
 }

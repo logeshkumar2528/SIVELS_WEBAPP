@@ -1,0 +1,313 @@
+/*
+ * ReturnedByCredit.css
+ * --------------------
+ * Additions on top of SubmitToCredit.css for the Returned by Credit Manager queue.
+ */
+
+.rbc-remarks-cell {
+  min-width: 220px;
+  max-width: 340px;
+}
+
+.rbc-remarks {
+  display: block;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Flagged field chips (table) ── */
+.rbc-field-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rbc-field-count {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.rbc-field-chip {
+  display: flex;
+  flex-direction: column;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.rbc-field-chip strong {
+  color: #9a3412;
+}
+
+.rbc-field-chip span {
+  color: #475569;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rbc-field-chip.is-resolved {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.rbc-field-chip.is-resolved strong {
+  color: #0f7a4c;
+  text-decoration: line-through;
+}
+
+/* ── Issue list (modal) ── */
+.rbc-modal--wide {
+  max-width: 720px;
+}
+
+.rbc-issue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.rbc-issue-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0.75rem 0.875rem;
+  border-radius: 8px;
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+}
+
+.rbc-issue-list li.is-resolved {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.rbc-issue-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #0f172a;
+}
+
+.rbc-issue-text,
+.rbc-issue-fix {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #475569;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rbc-issue-text span,
+.rbc-issue-fix span {
+  font-weight: 600;
+  color: #334155;
+}
+
+.rbc-issue-fix {
+  color: #0f7a4c;
+}
+
+.rbc-issue-resolve {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rbc-issue-resolve textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.82rem;
+  resize: vertical;
+  background: #ffffff;
+}
+
+.rbc-issue-resolve textarea:focus {
+  outline: none;
+  border-color: #00593b;
+  box-shadow: 0 0 0 3px rgba(0, 89, 59, 0.12);
+}
+
+.rbc-issue-resolve .stc-btn-review {
+  align-self: flex-end;
+}
+
+.rbc-issue-resolve .stc-btn-review:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.rbc-inline-error {
+  color: #dc2626;
+  font-size: 0.75rem;
+}
+
+/* ── Row actions ── */
+.rbc-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 190px;
+}
+
+.rbc-actions .stc-btn-review,
+.rbc-btn-outline {
+  justify-content: center;
+}
+
+.rbc-actions .stc-btn-review:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.rbc-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.45rem 0.85rem;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rbc-btn-outline:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.rbc-not-ready {
+  font-size: 0.72rem;
+  color: #b45309;
+  text-align: center;
+}
+
+/* ── Success banner ── */
+.rbc-success {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.875rem 1rem;
+  border-radius: 8px;
+  background: #effaf2;
+  border: 1px solid #bbf7d0;
+  color: #0f7a4c;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.rbc-success button {
+  margin-left: auto;
+  display: flex;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* ── Resend modal ── */
+.rbc-modal {
+  max-width: 560px;
+}
+
+.rbc-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.rbc-modal-intro {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #334155;
+}
+
+.rbc-modal-cm-remarks,
+.rbc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rbc-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.rbc-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.875rem;
+  color: #0f172a;
+  resize: vertical;
+}
+
+.rbc-field textarea:focus {
+  outline: none;
+  border-color: #00593b;
+  box-shadow: 0 0 0 3px rgba(0, 89, 59, 0.12);
+}
+
+.rbc-hint {
+  align-self: flex-end;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.rbc-error {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 0.825rem;
+}
+
+.rbc-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.rbc-modal-footer .stc-btn-doc {
+  flex: 0 0 auto;
+  min-width: 120px;
+}
+
+.rbc-modal-footer .stc-btn-doc:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
