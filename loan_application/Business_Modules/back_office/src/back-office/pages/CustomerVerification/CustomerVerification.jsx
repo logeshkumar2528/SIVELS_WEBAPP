@@ -39,6 +39,14 @@ import RtrCommonSheet from '../../components/RtrCommonSheet/RtrCommonSheet';
 import DeviationAssessment from '../../components/DeviationAssessment/DeviationAssessment';
 import CustomerDocumentsPanel from '../../components/CustomerDocuments/CustomerDocumentsPanel';
 import CustomerProofVerificationSection from '../../components/CustomerDocuments/CustomerProofVerificationSection';
+import { CreditReturnAttentionStrip, CreditReturnSectionPanel } from '../../components/CreditReturnPanel/CreditReturnPanel';
+import { useCreditReturnItems } from '../../hooks/useCreditReturnItems';
+import { RETURN_ISSUE_MAX } from '../../config/creditReturnFields';
+import {
+  RETURN_ITEM_STATUS,
+  getAttentionSections,
+  groupReturnItemsByStep,
+} from '../../mappers/creditReturnMapper';
 import { FolderOpen } from 'lucide-react';
 import PdfView from '../../../../../rm_modules/src/pages/PdfView/PdfView';
 import { ApplicationDraftProvider } from '../../../../../rm_modules/src/state/ApplicationDraftContext';
@@ -248,6 +256,16 @@ const VERIFICATION_WORKFLOW_STEPS = [
 ];
 
 const FINAL_ACTION_STEP_ID = 18;
+
+const WORKFLOW_ACTION_LABELS = {
+  ReturnedToRM: '↩ Returned to RM (2 → 6)',
+  ResubmittedToBackOffice: '⚡ Resubmitted to BO (6 → 2)',
+  SentToCreditManager: '✓ Sent to Credit Manager (2 → 3)',
+  ResubmittedToCreditManager: '⚡ Resubmitted to Credit Manager (2 → 3)',
+  ReturnedToBackOffice: '↩ Returned to Back Office by Credit Manager (3 → 2)',
+  CreditApproved: '✓ Credit Approved (3 → 4)',
+  CreditRejected: '✕ Credit Rejected (3 → 5)',
+};
 
 /** Sections the Credit Manager reviews (approve / reject / edit) before the final decision. */
 export const CREDIT_REVIEW_SECTIONS = VERIFICATION_WORKFLOW_STEPS
@@ -1147,6 +1165,8 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
  * @param {string}   [props.backLabel]     - Label for the back button.
  * @param {React.ReactNode} [props.finalActionsSlot] - Rendered in place of the Back Office
  *   final action cards when viewerRole is CreditManager.
+ * @param {{ items: object[], reload: Function, canAct: boolean, onAccept: Function }} [props.creditReturn]
+ *   Credit Manager-owned return items. When omitted the workspace loads them itself (Back Office).
  */
 export default function CustomerVerification({
   viewerRole = 'BackOffice',
@@ -1155,6 +1175,7 @@ export default function CustomerVerification({
   finalActionsSlot = null,
   onCreditManagerFlag,
   sectionReview = null,
+  creditReturn = null,
 } = {}) {
   const isCreditManagerView = viewerRole === 'CreditManager';
   const { customerId } = useParams();
@@ -7040,6 +7061,15 @@ export default function CustomerVerification({
       return;
     }
 
+    if (openCreditReturnCount > 0) {
+      setSendToCreditModal((prev) => ({
+        ...prev,
+        error: `${openCreditReturnCount} item${openCreditReturnCount === 1 ? '' : 's'} returned by the Credit Manager ${openCreditReturnCount === 1 ? 'is' : 'are'} still open. Resolve them before resubmitting.`,
+      }));
+      return;
+    }
+
+    const isResubmission = hasResolvedCreditReturns;
     setSendToCreditModal((prev) => ({ ...prev, isSubmitting: true, error: null }));
     try {
       const payload = {
@@ -7052,10 +7082,12 @@ export default function CustomerVerification({
       setSendToCreditModal({ open: false, remarks: '', error: null, isSubmitting: false });
       setWorkflowActionFeedback({
         type: 'success',
-        message: `Application #${custId} has been successfully submitted to Credit Manager. Status transitioned from Logged to HO (2) to Sent to Credit Manager (3: Under Review).`,
+        message: isResubmission
+          ? `Application #${custId} has been resubmitted to the Credit Manager with your resolutions. Status: Resubmitted to Credit Manager (2 → 3).`
+          : `Application #${custId} has been successfully submitted to Credit Manager. Status transitioned from Logged to HO (2) to Sent to Credit Manager (3: Under Review).`,
       });
 
-      await fetchWorkflowHistory();
+      await Promise.all([fetchWorkflowHistory(), reloadCreditReturnItems()]);
     } catch (err) {
       console.error('[CustomerVerification] Failed to send application to Credit Manager:', err);
       const msg = err?.response?.data?.message || err?.response?.data?.title || err?.message || 'Failed to send application to Credit Manager.';
@@ -8774,17 +8806,20 @@ export default function CustomerVerification({
     customDocTypeId = null,
     customRejectedType = null,
     customRemarks = null,
-    manualDocumentIndex = null
+    manualDocumentIndex = null,
+    returnNow = false
   ) => {
     const remarks = (customRemarks !== null ? customRemarks : (stepRemarks[stepNum] || '')).trim();
     if (isCreditManagerView) {
       if (!remarks || typeof onCreditManagerFlag !== 'function') return;
-      onCreditManagerFlag({ stepNum, stepLabel, isCoApplicant, issue: remarks });
+      onCreditManagerFlag({ stepNum, stepLabel, isCoApplicant, issue: remarks }, { returnNow });
       setStepFeedback((prev) => ({
         ...prev,
         [stepNum]: {
           type: 'success',
-          message: `${stepLabel || 'Item'} flagged for the Back Office. It will be sent when you click "Return to Back Office" in Final Action.`,
+          message: returnNow
+            ? `${stepLabel || 'Item'} rejected. Confirm the return to send it to the Back Office.`
+            : `${stepLabel || 'Item'} flagged for the Back Office. It will be sent when you click "Return to Back Office" in Final Action.`,
         },
       }));
       return;
@@ -9106,6 +9141,75 @@ export default function CustomerVerification({
       }
     : {};
 
+  // ── Credit Manager returns: red markers, section panel, resolve (Back Office) / accept (Credit Manager) ──
+  const ownCreditReturn = useCreditReturnItems(customerId, { enabled: !creditReturn });
+  const externalReturnItems = creditReturn?.items;
+  const creditReturnItems = useMemo(
+    () => (creditReturn ? externalReturnItems || [] : ownCreditReturn.items),
+    [creditReturn, externalReturnItems, ownCreditReturn.items]
+  );
+  const reloadCreditReturnItems = creditReturn ? creditReturn.reload : ownCreditReturn.reload;
+  const creditReturnItemsByStep = useMemo(() => groupReturnItemsByStep(creditReturnItems), [creditReturnItems]);
+  const creditReturnAttention = useMemo(
+    () => getAttentionSections(creditReturnItems, viewerRole),
+    [creditReturnItems, viewerRole]
+  );
+  const creditReturnAttentionByStep = useMemo(
+    () => Object.fromEntries(creditReturnAttention.map((s) => [s.stepId, s.count])),
+    [creditReturnAttention]
+  );
+  const openCreditReturnCount = creditReturnItems.filter((item) => item.itemStatus === RETURN_ITEM_STATUS.OPEN).length;
+  const hasResolvedCreditReturns = creditReturnItems.some((item) => item.itemStatus === RETURN_ITEM_STATUS.RESOLVED);
+  const activeReturnStepId = resolveReviewSectionId(activeStep);
+  const activeReturnItems = creditReturnItemsByStep[activeReturnStepId] || [];
+  const activeReturnStepTitle =
+    VERIFICATION_WORKFLOW_STEPS.find((step) => step.id === activeReturnStepId)?.title || 'Section';
+  const canActOnCreditReturns = isCreditManagerView
+    ? !!creditReturn?.canAct
+    : Number(verificationData?.overallStatus) === 2;
+  const creditReturnLockedReason = isCreditManagerView
+    ? 'This application is not pending with you, so resolutions cannot be accepted now.'
+    : 'This application is not with the Back Office right now, so returned items cannot be resolved.';
+  const creditReturnPanelRef = useRef(null);
+  const scrollToReturnPanelRef = useRef(false);
+  const canSendToCreditManager = step13Readiness.isReady && openCreditReturnCount === 0;
+
+  const openCreditReturnSection = useCallback(
+    (stepId) => {
+      scrollToReturnPanelRef.current = true;
+      if (resolveReviewSectionId(activeStep) === stepId) {
+        creditReturnPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        scrollToReturnPanelRef.current = false;
+        return;
+      }
+      navigateToStep(stepId);
+    },
+    [activeStep, navigateToStep]
+  );
+
+  useEffect(() => {
+    if (!scrollToReturnPanelRef.current || !creditReturnPanelRef.current) return;
+    scrollToReturnPanelRef.current = false;
+    creditReturnPanelRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [activeStep, activeReturnItems.length]);
+
+  const handleCreditReturnSubmit = async (item, remarks) => {
+    if (isCreditManagerView) {
+      await creditReturn.onAccept(item, remarks);
+      return;
+    }
+    const backOfficeId = getAuthenticatedBackOfficeId();
+    if (!backOfficeId) {
+      throw new Error('Unable to identify the logged-in Back Office user. Please login again.');
+    }
+    await backOfficeService.resolveCreditReturnItem(item.id, {
+      resolvedByUserId: backOfficeId,
+      resolvedByRole: 'BackOffice',
+      resolutionNote: remarks,
+    });
+    await reloadCreditReturnItems();
+  };
+
   const openCmSectionReject = () => {
     if (!reviewSection) return;
     setRejectConfirmModal({
@@ -9124,7 +9228,7 @@ export default function CustomerVerification({
   };
 
   // Confirm and Execute Return Document to RM (with mandatory remarks validation)
-  const handleConfirmReject = async () => {
+  const handleConfirmReject = async (returnNow = false) => {
     const {
       stepNum,
       stepLabel,
@@ -9171,7 +9275,8 @@ export default function CustomerVerification({
       documentTypeId,
       rejectedDocumentType,
       trimmed,
-      manualDocumentIndex
+      manualDocumentIndex,
+      returnNow === true
     );
   };
 
@@ -11260,6 +11365,7 @@ export default function CustomerVerification({
                   : step.subtitle;
                 const cmSectionStatus =
                   isCreditManagerView && sectionReview ? sectionReview.getStatus(step.id) : null;
+                const returnAttentionCount = creditReturnAttentionByStep[step.id] || 0;
 
                 return (
                   <li key={step.id} className="bo-cv-step-item">
@@ -11275,7 +11381,7 @@ export default function CustomerVerification({
                           navigateToStep(stepNum);
                         }
                       }}
-                      aria-label={`Step ${formattedNum}: ${step.title}. ${isDocStep ? `${applicantVerifiedCount} of ${totalRequired} verified.` : ''} Click to view.`}
+                      aria-label={`Step ${formattedNum}: ${step.title}. ${isDocStep ? `${applicantVerifiedCount} of ${totalRequired} verified.` : ''}${returnAttentionCount ? ' Action required on Credit Manager return.' : ''} Click to view.`}
                     >
                       <div className="bo-cv-step-num-box" aria-hidden="true">
                         {formattedNum}
@@ -11287,7 +11393,19 @@ export default function CustomerVerification({
                       </div>
 
                       <div className="bo-cv-step-action">
-                        {cmSectionStatus ? (
+                        {returnAttentionCount > 0 ? (
+                          <span
+                            className="crp-step-flag"
+                            title={
+                              isCreditManagerView
+                                ? 'Back Office resolution awaiting your review'
+                                : 'Returned by the Credit Manager — action required'
+                            }
+                          >
+                            <span className="crp-indicator" aria-hidden="true" />
+                            {isCreditManagerView ? 'Review' : 'Returned'}
+                          </span>
+                        ) : cmSectionStatus ? (
                           <span className={`cm-step-status cm-step-status--${cmSectionStatus.toLowerCase()}`}>
                             {cmSectionStatus === 'APPROVED' ? '✓ Approved' : '⚑ Flagged'}
                           </span>
@@ -11340,6 +11458,26 @@ export default function CustomerVerification({
               )}
             </div>
           )}
+
+          <div data-cm-section-bar>
+            <CreditReturnAttentionStrip
+              sections={creditReturnAttention}
+              viewerRole={viewerRole}
+              activeStepId={activeReturnStepId}
+              onOpen={openCreditReturnSection}
+            />
+          </div>
+
+          <CreditReturnSectionPanel
+            key={activeReturnStepId}
+            sectionTitle={activeReturnStepTitle}
+            items={activeReturnItems}
+            viewerRole={viewerRole}
+            canAct={canActOnCreditReturns}
+            lockedReason={creditReturnLockedReason}
+            onSubmit={handleCreditReturnSubmit}
+            panelRef={creditReturnPanelRef}
+          />
 
           {/* ══════════════════════════════════════════════════════════════════
               STEP 01: VIEW FORM
@@ -19238,10 +19376,10 @@ export default function CustomerVerification({
                     <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>KYC Document Matrix</div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
                       <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
-                        {step13Readiness.stepVerifsCount}/6 Core KYC
+                        {step13Readiness.stepVerifsCount} Verified
                       </strong>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.stepVerifsCount >= 6 ? '#16a34a' : '#ea580c' }}>
-                        {step13Readiness.stepVerifsCount >= 6 ? '✓ Verified' : 'Incomplete'}
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>
+                        Info only
                       </span>
                     </div>
                   </div>
@@ -19415,7 +19553,7 @@ export default function CustomerVerification({
                       </div>
                       <div>
                         <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: step13Readiness.isReady ? '#14532d' : '#334155' }}>
-                          Send to Credit Manager
+                          {hasResolvedCreditReturns || openCreditReturnCount > 0 ? 'Resubmit to Credit Manager' : 'Send to Credit Manager'}
                         </h4>
                         <span style={{ fontSize: '0.75rem', color: step13Readiness.isReady ? '#15803d' : '#64748b', fontWeight: 500 }}>
                           Status Transition: 2 (Logged to HO) → 3 (Under Review)
@@ -19423,7 +19561,7 @@ export default function CustomerVerification({
                       </div>
                     </div>
                     <p style={{ fontSize: '0.84rem', color: '#475569', lineHeight: 1.5, margin: '0 0 16px' }}>
-                      Forward fully verified and underwritten application file to Credit Manager for credit sanction assessment. Requires 6/6 KYC documents, Legal, Technical, CIBIL, and Eligibility completion.
+                      Forward fully verified and underwritten application file to Credit Manager for credit sanction assessment. Requires Legal, Technical, CIBIL, Eligibility, and Recommendation completion.
                     </p>
                     {!step13Readiness.isReady && (
                       <div
@@ -19443,21 +19581,45 @@ export default function CustomerVerification({
                         <span>Cannot submit: Complete required underwriting steps before forwarding.</span>
                       </div>
                     )}
+                    {openCreditReturnCount > 0 && (
+                      <div className="crp-strip" style={{ marginBottom: '16px' }}>
+                        <div className="crp-strip-head" style={{ marginBottom: creditReturnAttention.length ? '10px' : 0 }}>
+                          <span className="crp-indicator" aria-hidden="true" />
+                          <strong>
+                            {openCreditReturnCount} item{openCreditReturnCount === 1 ? '' : 's'} returned by the Credit Manager must be resolved before resubmitting.
+                          </strong>
+                        </div>
+                        <div className="crp-strip-sections">
+                          {creditReturnAttention.map((section) => (
+                            <button
+                              key={section.stepId}
+                              type="button"
+                              className="crp-strip-btn"
+                              onClick={() => openCreditReturnSection(section.stepId)}
+                            >
+                              <span className="crp-strip-num">{section.visibleNum}</span>
+                              <span>{section.sectionName}</span>
+                              <span className="crp-strip-count">{section.count}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <button
                     type="button"
                     onClick={handleOpenSendToCreditModal}
-                    disabled={!step13Readiness.isReady}
+                    disabled={!canSendToCreditManager}
                     style={{
-                      background: step13Readiness.isReady ? '#059669' : '#cbd5e1',
-                      color: step13Readiness.isReady ? '#ffffff' : '#64748b',
+                      background: canSendToCreditManager ? '#059669' : '#cbd5e1',
+                      color: canSendToCreditManager ? '#ffffff' : '#64748b',
                       border: 'none',
                       borderRadius: '8px',
                       padding: '12px 18px',
                       fontSize: '0.9rem',
                       fontWeight: 600,
-                      cursor: step13Readiness.isReady ? 'pointer' : 'not-allowed',
+                      cursor: canSendToCreditManager ? 'pointer' : 'not-allowed',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -19465,14 +19627,14 @@ export default function CustomerVerification({
                       transition: 'background 0.2s',
                     }}
                     onMouseOver={(e) => {
-                      if (step13Readiness.isReady) e.currentTarget.style.backgroundColor = '#047857';
+                      if (canSendToCreditManager) e.currentTarget.style.backgroundColor = '#047857';
                     }}
                     onMouseOut={(e) => {
-                      if (step13Readiness.isReady) e.currentTarget.style.backgroundColor = '#059669';
+                      if (canSendToCreditManager) e.currentTarget.style.backgroundColor = '#059669';
                     }}
                   >
                     {CheckCircleIcon ? <CheckCircleIcon size={16} /> : <span>✓</span>}
-                    <span>Send to Credit Manager</span>
+                    <span>{hasResolvedCreditReturns ? 'Resubmit to Credit Manager' : 'Send to Credit Manager'}</span>
                   </button>
                 </div>
               </div>
@@ -19573,7 +19735,8 @@ export default function CustomerVerification({
                                   color: isReturn ? '#b45309' : isCredit ? '#15803d' : '#1d4ed8',
                                 }}
                               >
-                                {isReturn ? '↩ Returned to RM (2 → 6)' : isCredit ? '✓ Sent to Credit Manager (2 → 3)' : isResubmit ? '⚡ Resubmitted to BO (6 → 2)' : (item.actionType || 'Workflow Action')}
+                                {WORKFLOW_ACTION_LABELS[item.actionType || item.ActionType] ||
+                                  (isReturn ? '↩ Returned to RM (2 → 6)' : isCredit ? '✓ Sent to Credit Manager (2 → 3)' : isResubmit ? '⚡ Resubmitted to BO (6 → 2)' : (item.actionType || 'Workflow Action'))}
                               </span>
                               <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
                                 by <strong>{role}</strong> (ID: {actorId})
@@ -19704,7 +19867,7 @@ export default function CustomerVerification({
               </div>
               <div className="bo-cv-confirm-modal-title-group">
                 <h3 id="bo-cv-confirm-modal-title" className="bo-cv-confirm-modal-title">
-                  {isCreditManagerView ? 'Flag for Back Office' : 'Return Document to RM'}
+                  {isCreditManagerView ? 'Reject Section' : 'Return Document to RM'}
                 </h3>
                 <p className="bo-cv-confirm-modal-subtitle">
                   {rejectConfirmModal.stepLabel
@@ -19728,7 +19891,7 @@ export default function CustomerVerification({
             <div className="bo-cv-confirm-modal-body">
               <p className="bo-cv-confirm-modal-question">
                 {isCreditManagerView
-                  ? 'Describe what the Back Office needs to correct. Flags are sent together when you click "Return to Back Office" in Final Action.'
+                  ? 'Describe what the Back Office needs to correct. "Reject & Return" sends it (with any other flags) to the Back Office now; "Add Flag Only" keeps reviewing and sends it later from Final Action.'
                   : 'Are you sure you want to return this document?'}
               </p>
 
@@ -19749,6 +19912,7 @@ export default function CustomerVerification({
                     }));
                   }}
                   placeholder={isCreditManagerView ? 'What is wrong and what should the Back Office correct?' : 'Enter rejection reason / remarks for RM...'}
+                  maxLength={isCreditManagerView ? RETURN_ISSUE_MAX : undefined}
                   rows={3}
                   autoFocus
                 />
@@ -19769,13 +19933,23 @@ export default function CustomerVerification({
               >
                 Cancel
               </button>
+              {isCreditManagerView && (
+                <button
+                  type="button"
+                  className="bo-cv-confirm-btn-cancel"
+                  onClick={() => handleConfirmReject(false)}
+                  disabled={isSubmittingRejection}
+                >
+                  Add Flag Only
+                </button>
+              )}
               <button
                 type="button"
                 className="bo-cv-confirm-btn-reject"
-                onClick={handleConfirmReject}
+                onClick={() => handleConfirmReject(isCreditManagerView)}
                 disabled={isSubmittingRejection}
               >
-                {isCreditManagerView ? 'Add Flag' : isSubmittingRejection ? 'Sending...' : 'Send to RM'}
+                {isCreditManagerView ? 'Reject & Return to Back Office' : isSubmittingRejection ? 'Sending...' : 'Send to RM'}
               </button>
             </div>
           </div>

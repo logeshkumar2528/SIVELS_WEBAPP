@@ -11,10 +11,8 @@
  *    NOTE: Status >= 3 (Under Review) is NOT an automatic shortcut; the full verification workflow is strictly evaluated.
  *
  * 2. Section 02 - Document Verification:
- *    - Persisted in /api/BackOfficeStepVerification.
- *    - All 6 core KYC document step codes (PROFILE_IMAGE, AADHAAR, PAN, SALARY_SLIP, BANK_STATEMENT, ZIP_ARCHIVE)
- *      must be verified (isVerified === true) for Primary Applicant (applicantSequence 0).
- *    - If Co-Applicant records exist, their required step codes must also be verified.
+ *    - Not a gate. KYC documents vary per customer (some are "Not Required"), so the
+ *      verified count is shown for information only.
  *
  * 3. Section 06 - Legal Opinion:
  *    - Persisted in /api/BackOfficeApplicationDocuments.
@@ -111,53 +109,6 @@ function evaluateReadiness(
   const statusNum = Number(customer.status);
   if (isNaN(statusNum) || (statusNum !== 2 && statusNum !== 3)) {
     return false;
-  }
-
-  // 2. Document Verification (6/6 KYC Steps in BackOfficeStepVerification)
-  const verificationsList = Array.isArray(stepVerifications)
-    ? stepVerifications
-    : (stepVerifications?.value || stepVerifications?.data || []);
-
-  if (!verificationsList || verificationsList.length === 0) {
-    return false;
-  }
-
-  const activeVerifs = verificationsList.filter((v) => v && v.isActive !== false);
-  if (activeVerifs.length === 0) {
-    return false;
-  }
-
-  // Verify Primary Applicant (sequence 0) has all 6 required step codes verified
-  const primarySteps = new Set(
-    activeVerifs
-      .filter((v) => Number(v.applicantSequence || 0) === 0 && Boolean(v.isVerified))
-      .map((v) => String(v.stepCode || '').trim().toUpperCase())
-  );
-
-  const primaryDocComplete = REQUIRED_DOCUMENT_STEP_CODES.every((code) => primarySteps.has(code));
-  if (!primaryDocComplete) {
-    return false;
-  }
-
-  // Verify Co-Applicants if any are present in step verification records
-  const coApplicantSeqs = [
-    ...new Set(
-      activeVerifs
-        .map((v) => Number(v.applicantSequence || 0))
-        .filter((seq) => seq > 0)
-    ),
-  ];
-
-  for (const seq of coApplicantSeqs) {
-    const coSteps = new Set(
-      activeVerifs
-        .filter((v) => Number(v.applicantSequence) === seq && Boolean(v.isVerified))
-        .map((v) => String(v.stepCode || '').trim().toUpperCase())
-    );
-    const coComplete = REQUIRED_DOCUMENT_STEP_CODES.every((code) => coSteps.has(code));
-    if (!coComplete) {
-      return false;
-    }
   }
 
   // 3. Back Office Application Documents (Legal Opinion, Technical Valuation, CIBIL Report)

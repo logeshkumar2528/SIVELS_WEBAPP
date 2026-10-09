@@ -10,6 +10,9 @@
 
 export const OTHER_FIELD_KEY = 'OTHER';
 
+/** Backend limit for ApplicationCreditReturnItem.Issue. */
+export const RETURN_ISSUE_MAX = 1000;
+
 export const CREDIT_RETURN_SECTIONS = [
   {
     code: 'APPLICATION_DETAILS',
@@ -159,7 +162,7 @@ export const CREDIT_RETURN_SECTIONS = [
   },
   {
     code: 'LEGAL_OPINION',
-    name: 'Legal Opinion (Back Office)',
+    name: 'Legal Report',
     fields: [
       { key: 'LEGAL_OPINION_DOCUMENT', label: 'Legal Opinion Document' },
       { key: 'ADVOCATE_REMARKS', label: 'Advocate Remarks' },
@@ -189,6 +192,40 @@ export const CREDIT_RETURN_SECTIONS = [
       { key: 'ELIGIBILITY', label: 'Eligibility / FOIR Calculation' },
     ],
   },
+  {
+    code: 'HEALTH_CHECK',
+    name: 'Health Check',
+    fields: [{ key: 'HEALTH_CHECK_RESULT', label: 'Health Check Result' }],
+  },
+  {
+    code: 'ASSET_BASE',
+    name: 'Asset Base',
+    fields: [
+      { key: 'ASSET_RECORDS', label: 'Asset Records' },
+      { key: 'ASSET_VALUE', label: 'Asset Value' },
+      { key: 'ASSET_DOCUMENTS', label: 'Asset Documents' },
+    ],
+  },
+  {
+    code: 'RTR_COMMON_SHEET',
+    name: 'RTR Common Sheet',
+    fields: [{ key: 'OBLIGATIONS', label: 'Loan Obligations' }],
+  },
+  {
+    code: 'ELIGIBILITY',
+    name: 'Eligibility Assessment',
+    fields: [{ key: 'ELIGIBILITY_RESULT', label: 'Eligibility Result' }],
+  },
+  {
+    code: 'DEVIATIONS',
+    name: 'Deviations',
+    fields: [{ key: 'DEVIATION_DECISIONS', label: 'Deviation Decisions' }],
+  },
+  {
+    code: 'RECOMMENDATION',
+    name: 'Recommendation Sheet',
+    fields: [{ key: 'RECOMMENDATION_NOTE', label: 'Recommendation' }],
+  },
 ];
 
 export function getCreditReturnSection(code) {
@@ -210,7 +247,62 @@ const VERIFICATION_STEP_SECTION = {
   11: 'LEGAL_OPINION',
   12: 'TECHNICAL_VALUATION',
   13: 'CIBIL',
+  14: 'PD_ASSESSMENT',
+  15: 'RTR_COMMON_SHEET',
+  16: 'ELIGIBILITY',
+  17: 'RECOMMENDATION',
+  19: 'HEALTH_CHECK',
+  20: 'ASSET_BASE',
+  21: 'DEVIATIONS',
 };
+
+/**
+ * Section code -> workspace step that shows it: internal step id (CustomerVerification) and the
+ * visible number used in `?step=`. Form sections without their own step open "View Form".
+ */
+const SECTION_WORKSPACE_STEP = {
+  APPLICATION_DETAILS: { stepId: 1, visibleNum: '01' },
+  PERSONAL_INFORMATION: { stepId: 1, visibleNum: '01' },
+  ADDRESS_DETAILS: { stepId: 1, visibleNum: '01' },
+  EMPLOYMENT_INCOME: { stepId: 1, visibleNum: '01' },
+  BANK_EXISTING_LOANS: { stepId: 1, visibleNum: '01' },
+  COLLATERAL: { stepId: 1, visibleNum: '01' },
+  REFERENCES: { stepId: 1, visibleNum: '01' },
+  SOURCING: { stepId: 1, visibleNum: '01' },
+  SCHEDULE_CHARGES: { stepId: 1, visibleNum: '01' },
+  DOCUMENT_CHECKLIST: { stepId: 1, visibleNum: '01' },
+  DECLARATION: { stepId: 1, visibleNum: '01' },
+  KYC_DOCUMENTS: { stepId: 2, visibleNum: '02' },
+  CO_APPLICANT: { stepId: 2, visibleNum: '02' },
+  FIELD_INVESTIGATION: { stepId: 8, visibleNum: '03' },
+  LEGAL_OPINION: { stepId: 11, visibleNum: '06' },
+  TECHNICAL_VALUATION: { stepId: 12, visibleNum: '07' },
+  CIBIL: { stepId: 13, visibleNum: '08' },
+  HEALTH_CHECK: { stepId: 19, visibleNum: '09' },
+  PD_ASSESSMENT: { stepId: 14, visibleNum: '10' },
+  ASSET_BASE: { stepId: 20, visibleNum: '11' },
+  RTR_COMMON_SHEET: { stepId: 15, visibleNum: '12' },
+  ELIGIBILITY: { stepId: 16, visibleNum: '13' },
+  DEVIATIONS: { stepId: 21, visibleNum: '14' },
+  RECOMMENDATION: { stepId: 17, visibleNum: '15' },
+};
+
+/** The three FI steps share one section code; the flagged label tells them apart. */
+const FIELD_INVESTIGATION_STEPS = {
+  'property fi': { stepId: 8, visibleNum: '03' },
+  'office fi': { stepId: 9, visibleNum: '04' },
+  'residence fi': { stepId: 10, visibleNum: '05' },
+};
+
+/** Workspace step `{ stepId, visibleNum }` where a return item is shown and fixed. */
+export function getReturnItemStep(item) {
+  if (!item) return SECTION_WORKSPACE_STEP.APPLICATION_DETAILS;
+  if (item.sectionCode === 'FIELD_INVESTIGATION') {
+    const match = FIELD_INVESTIGATION_STEPS[String(item.fieldLabel || '').trim().toLowerCase()];
+    if (match) return match;
+  }
+  return SECTION_WORKSPACE_STEP[item.sectionCode] || SECTION_WORKSPACE_STEP.APPLICATION_DETAILS;
+}
 
 /**
  * Builds a return item from a step-level reject raised by the Credit Manager inside
@@ -226,6 +318,6 @@ export function buildCreditReturnItemFromStep({ stepNum, stepLabel, isCoApplican
     sectionName: section.name,
     fieldKey: match ? match.key : OTHER_FIELD_KEY,
     fieldLabel: match ? match.label : label,
-    issue: String(issue || '').trim(),
+    issue: String(issue || '').trim().slice(0, RETURN_ISSUE_MAX),
   };
 }

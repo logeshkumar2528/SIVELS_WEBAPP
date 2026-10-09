@@ -84,6 +84,15 @@ const creditManagerService = {
     }
   },
 
+  /**
+   * Accept the Back Office fix for a resubmitted item (Resubmitted -> Accepted).
+   * Payload: { reviewedByUserId, reviewedByRole: 'CreditManager', reviewRemarks }
+   */
+  acceptCreditReturnItem: async (itemId, payload) => {
+    const response = await axiosInstance.put(CREDIT_MANAGER_ENDPOINTS.CREDIT_RETURN_ITEM_ACCEPT(itemId), payload);
+    return unwrapResponse(response);
+  },
+
   /** Resolves to null when no decision exists yet (backend returns 404). */
   getLatestCreditDecision: async (agentCustomerId) => {
     try {
