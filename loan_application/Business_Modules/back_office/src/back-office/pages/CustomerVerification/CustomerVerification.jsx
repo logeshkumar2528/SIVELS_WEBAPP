@@ -19086,10 +19086,10 @@ export default function CustomerVerification() {
                     <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>KYC Document Matrix</div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
                       <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
-                        {step13Readiness.stepVerifsCount}/6 Core KYC
+                        {step13Readiness.stepVerifsCount} KYC Documents
                       </strong>
                       <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.stepVerifsCount >= 6 ? '#16a34a' : '#ea580c' }}>
-                        {step13Readiness.stepVerifsCount >= 6 ? '✓ Verified' : 'Incomplete'}
+                        ✓ Optional
                       </span>
                     </div>
                   </div>
@@ -19268,7 +19268,7 @@ export default function CustomerVerification() {
                       </div>
                     </div>
                     <p style={{ fontSize: '0.84rem', color: '#475569', lineHeight: 1.5, margin: '0 0 16px' }}>
-                      Forward fully verified and underwritten application file to Credit Manager for credit sanction assessment. Requires 6/6 KYC documents, Legal, Technical, CIBIL, and Eligibility completion.
+                      Forward the underwritten application file to Credit Manager for credit sanction assessment. KYC documents are optional; Legal, Technical, CIBIL, and Eligibility completion are still evaluated.
                     </p>
                     {!step13Readiness.isReady && (
                       <div
