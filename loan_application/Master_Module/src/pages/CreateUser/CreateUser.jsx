@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { ArrowLeft, BriefcaseBusiness, Building2, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { ArrowLeft, BriefcaseBusiness, Building2, Landmark, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AgentCreate from '../Agent/AgentCreate';
 import RelationshipManagerCreate from '../RelationshipManager/RelationshipManagerCreate';
 import AMSCreate from '../AMS/AMSCreate';
 import BackOfficeCreate from '../BackOffice/BackOfficeCreate';
+import CreditManagerCreate from '../CreditManager/CreditManagerCreate';
 import './CreateUser.css';
 
 const USER_TYPES = {
@@ -27,6 +28,11 @@ const USER_TYPES = {
     title: 'Create back office',
     description: 'Set up a back office officer with the RM-style workflow.',
     icon: Building2,
+  },
+  creditManager: {
+    title: 'Create credit manager',
+    description: 'Add a credit manager to evaluate loans and approvals.',
+    icon: Landmark,
   },
 };
 
@@ -65,6 +71,7 @@ export default function CreateUser() {
     if (userType === 'rm') return <RelationshipManagerCreate />;
     if (userType === 'ams') return <AMSCreate />;
     if (userType === 'backOffice') return <BackOfficeCreate />;
+    if (userType === 'creditManager') return <CreditManagerCreate />;
     return <AMSCreate />;
   };
 
@@ -93,6 +100,7 @@ export default function CreateUser() {
           <option value="rm">Create relationship manager</option>
           <option value="ams">Create AMS</option>
           <option value="backOffice">Create back office</option>
+          <option value="creditManager">Create credit manager</option>
         </select>
       </section>
 
