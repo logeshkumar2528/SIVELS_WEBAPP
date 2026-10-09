@@ -302,6 +302,8 @@ export function createAddressTemplate(overrides = {}) {
     landmark: overrides.landmark || '',
     city: overrides.city || '',
     state: overrides.state || '',
+    cityId: overrides.cityId ?? overrides.CityId ?? null,
+    stateId: overrides.stateId ?? overrides.StateId ?? null,
     pincode: overrides.pincode || overrides.Pincode || overrides.postalCode || overrides.PostalCode || overrides.pinCode || overrides.PinCode || '',
     mailingSameAsCurrent: overrides.mailingSameAsCurrent || 'No',
   };

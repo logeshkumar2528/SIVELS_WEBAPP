@@ -371,6 +371,16 @@ export const rmCustomerService = {
     });
     return response.data;
   },
+
+  getAadhaarPersonalPrefill: async (kycDocumentId) => {
+    const response = await axiosInstance.get(`/ApplicationPersonalInformation/aadhaar-prefill/${encodeURIComponent(kycDocumentId)}`);
+    return response.data;
+  },
+
+  getAadhaarAddressPrefill: async (kycDocumentId) => {
+    const response = await axiosInstance.get(`/ApplicationAddressDetails/aadhaar-prefill/${encodeURIComponent(kycDocumentId)}`);
+    return response.data;
+  },
 };
 
 function toList(data) {

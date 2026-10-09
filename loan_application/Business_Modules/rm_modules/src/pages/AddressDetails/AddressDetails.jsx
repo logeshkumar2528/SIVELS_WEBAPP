@@ -11,6 +11,7 @@ import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSect
 import Modal from '../../components/Modal/Modal';
 import CustomerProofButton from '../../components/CustomerProofViewer/CustomerProofButton';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
+import rmCustomerService from '../../services/rmCustomerService';
 import { parseApiErrorBody } from '../../utils/formatUserFacingError';
 import {
   buildSectionUpdate,
@@ -153,8 +154,12 @@ function AddressCard({
             <div className="aw-input-wrapper">
               <Select
                 error={!!errors.city}
-                value={address.city}
-                onChange={(val) => onChange('city', val)}
+                value={address.cityId ?? address.city}
+                onChange={(val) => {
+                  const selected = cityOptions.find((option) => String(option.value) === String(val));
+                  onChange('cityId', val);
+                  onChange('city', selected?.label || '');
+                }}
                 placeholder={isLoadingMasters ? "Loading..." : "Select city"}
                 options={cityOptions}
                 disabled={isLoadingMasters}
@@ -169,8 +174,12 @@ function AddressCard({
             <div className="aw-input-wrapper">
               <Select
                 error={!!errors.state}
-                value={address.state}
-                onChange={(val) => onChange('state', val)}
+                value={address.stateId ?? address.state}
+                onChange={(val) => {
+                  const selected = stateOptions.find((option) => String(option.value) === String(val));
+                  onChange('stateId', val);
+                  onChange('state', selected?.label || '');
+                }}
                 placeholder={isLoadingMasters ? "Loading..." : "Select state"}
                 options={stateOptions}
                 disabled={isLoadingMasters}
@@ -287,6 +296,7 @@ export default function AddressDetails() {
   const [showDocsModal, setShowDocsModal] = useState(false);
   const [fullViewDoc, setFullViewDoc] = useState(null);
   const [aadhaarPreviews, setAadhaarPreviews] = useState({});
+  const aadhaarPrefillLoadedRef = useRef('');
   const blobUrlsRef = useRef([]);
 
   const coApplicantCount = activeCount;
@@ -294,6 +304,45 @@ export default function AddressDetails() {
   const coApplicantKycIdsKey = (appData.sections?.kycDocuments?.coApplicants || appData.kycDocuments?.coApplicants || [])
     .map((c) => c?.kycDocumentId || '')
     .join('-');
+
+  useEffect(() => {
+    const kyc = appData?.sections?.kycDocuments?.applicant || appData?.kycDocuments?.applicant || {};
+    const kycDocumentId = kyc.kycDocumentId || kyc.applicationKYCDocumentId || kyc.ApplicationKYCDocumentId;
+    // The KYC row ID is the source of truth for this prefill endpoint. Some
+    // hydrated application records do not carry the verification-status field,
+    // even though Aadhaar verification has already completed.
+    if (!kycDocumentId || aadhaarPrefillLoadedRef.current === String(kycDocumentId)) return;
+
+    let active = true;
+    (async () => {
+      try {
+        const response = await rmCustomerService.getAadhaarAddressPrefill(kycDocumentId);
+        const data = response?.data?.data || response?.data?.value || response?.data || response?.value || response;
+        const address = Array.isArray(data) ? data[0] : data;
+        if (!active || !address) return;
+        aadhaarPrefillLoadedRef.current = String(kycDocumentId);
+        setForm((prev) => {
+          const applicant = {
+            ...prev.applicant,
+            addressLine1: address.addressLine1 ?? address.AddressLine1 ?? prev.applicant.addressLine1,
+            addressLine2: address.addressLine2 ?? address.AddressLine2 ?? prev.applicant.addressLine2,
+            landmark: address.landmark ?? address.Landmark ?? prev.applicant.landmark,
+            pincode: address.pincode ?? address.Pincode ?? prev.applicant.pincode,
+            state: address.state ?? address.State ?? address.stateName ?? address.StateName ?? prev.applicant.state,
+            city: address.cityOrDistrict ?? address.CityOrDistrict ?? address.city ?? address.cityName ?? address.CityName ?? prev.applicant.city,
+            stateId: address.stateId ?? address.StateId ?? null,
+            cityId: address.cityId ?? address.CityId ?? null,
+          };
+          const next = { ...prev, applicant };
+          saveApplication(appId, buildSectionUpdate(appData, 'addressDetails', next));
+          return next;
+        });
+      } catch (error) {
+        console.error('Unable to load Aadhaar address prefill:', error);
+      }
+    })();
+    return () => { active = false; };
+  }, [appData, appId, saveApplication, coApplicantKycIdsKey]);
 
   useEffect(() => {
     let isMounted = true;
@@ -518,7 +567,7 @@ export default function AddressDetails() {
         }
         usedPersonalInformationIds.add(validPersonalInfoId);
 
-        const resolvedStateId = resolveMasterId(person.state, stateOptions);
+        const resolvedStateId = resolveMasterId(person.stateId, stateOptions) || resolveMasterId(person.state, stateOptions);
         if (!resolvedStateId) {
           setErrorPopup({
             title: 'Invalid State',
@@ -528,7 +577,7 @@ export default function AddressDetails() {
           return;
         }
 
-        const resolvedCityId = resolveMasterId(person.city, cityOptions);
+        const resolvedCityId = resolveMasterId(person.cityId, cityOptions) || resolveMasterId(person.city, cityOptions);
         if (!resolvedCityId) {
           setErrorPopup({
             title: 'Invalid City',
