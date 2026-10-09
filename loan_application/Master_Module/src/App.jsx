@@ -55,6 +55,11 @@ import CreateUser from './pages/CreateUser/CreateUser';
 import AMSDashboard from './pages/AMSDashboard/AMSDashboard';
 import { Application360 } from './pages/Application360/Application360';
 import { PeopleDirectoryPage } from './pages/PeopleDirectory/PeopleDirectoryPage';
+import {
+  GeneralDeviationMaster,
+  CIRDeviationMaster,
+  NegativeFIDeviationMaster,
+} from './pages/masters/DeviationMaster/DeviationMaster';
 
 const routerBasename = (() => {
   const configuredBase = import.meta.env.BASE_URL?.replace(/\/$/, '') || '/';
@@ -142,6 +147,9 @@ function App() {
               <Route path="health-check-type" element={<HealthCheckType />} />
               <Route path="proof-master" element={<ProofMaster />} />
               <Route path="mortgage-status" element={<MortgageStatus />} />
+              <Route path="deviation-list" element={<GeneralDeviationMaster />} />
+              <Route path="cir-deviations" element={<CIRDeviationMaster />} />
+              <Route path="negative-fi-deviations" element={<NegativeFIDeviationMaster />} />
             </Route>
           </Route>
         </Routes>

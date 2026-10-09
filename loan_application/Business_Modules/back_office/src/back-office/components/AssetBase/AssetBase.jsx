@@ -434,9 +434,6 @@ export default function AssetBase({
       <div className="bo-ab-header">
         <div className="bo-ab-header-left">
           <h2 className="bo-ab-title">Asset Base</h2>
-          <p className="bo-ab-subtitle">
-            Capture property and assets considered for the application.
-          </p>
         </div>
         <div className="bo-ab-header-actions">
           <button

@@ -132,6 +132,12 @@ export const backOfficeService = {
     return unwrapResponse(response);
   },
 
+  getRTRNormMasters: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.RTR_NORM_MASTER);
+    return unwrapResponse(response);
+  },
+
+
   /* ==========================================
      4. CUSTOMER / APPLICATION QUEUE APIs
   ========================================== */
@@ -509,6 +515,19 @@ export const backOfficeService = {
     );
     return unwrapResponse(response);
   },
+
+  getDeviationMasters: async () => unwrapResponse(await axiosInstance.get(BACK_OFFICE_ENDPOINTS.DEVIATION_MASTERS)),
+  getCIRDeviationMasters: async () => unwrapResponse(await axiosInstance.get(BACK_OFFICE_ENDPOINTS.CIR_DEVIATION_MASTERS)),
+  getNegativeFIDeviationMasters: async () => unwrapResponse(await axiosInstance.get(BACK_OFFICE_ENDPOINTS.NEGATIVE_FI_DEVIATION_MASTERS)),
+  getApplicationDeviationDecisions: async (id) => unwrapResponse(await axiosInstance.get(BACK_OFFICE_ENDPOINTS.APPLICATION_DEVIATION_DECISIONS(id))),
+  getApplicationCIRDeviationDecisions: async (id) => unwrapResponse(await axiosInstance.get(BACK_OFFICE_ENDPOINTS.APPLICATION_CIR_DEVIATION_DECISIONS(id))),
+  getApplicationNegativeFIDecisions: async (id) => unwrapResponse(await axiosInstance.get(BACK_OFFICE_ENDPOINTS.APPLICATION_NEGATIVE_FI_DECISIONS(id))),
+  saveDeviationDecision: async (id, payload) => unwrapResponse(await axiosInstance.post('/ApplicationDeviationDecision', payload)),
+  updateDeviationDecision: async (id, payload) => unwrapResponse(await axiosInstance.put(`/ApplicationDeviationDecision/${encodeURIComponent(id)}`, payload)),
+  saveCIRDeviationDecision: async (payload) => unwrapResponse(await axiosInstance.post('/ApplicationCIRDeviationDecision', payload)),
+  updateCIRDeviationDecision: async (id, payload) => unwrapResponse(await axiosInstance.put(`/ApplicationCIRDeviationDecision/${encodeURIComponent(id)}`, payload)),
+  saveNegativeFIDecision: async (payload) => unwrapResponse(await axiosInstance.post('/ApplicationNegativeFIDecision', payload)),
+  updateNegativeFIDecision: async (id, payload) => unwrapResponse(await axiosInstance.put(`/ApplicationNegativeFIDecision/${encodeURIComponent(id)}`, payload)),
 
   /**
    * Retrieve authoritative RTR loan obligations summary including live, closure, excluded totals, and proposed loan.
