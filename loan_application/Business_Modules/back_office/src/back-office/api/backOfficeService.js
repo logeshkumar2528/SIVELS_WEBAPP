@@ -132,6 +132,12 @@ export const backOfficeService = {
     return unwrapResponse(response);
   },
 
+  getRTRNormMasters: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.RTR_NORM_MASTER);
+    return unwrapResponse(response);
+  },
+
+
   /* ==========================================
      4. CUSTOMER / APPLICATION QUEUE APIs
   ========================================== */
@@ -509,6 +515,19 @@ export const backOfficeService = {
     );
     return unwrapResponse(response);
   },
+
+  getDeviationMasters: async () => unwrapResponse(await axiosInstance.get(BACK_OFFICE_ENDPOINTS.DEVIATION_MASTERS)),
+  getCIRDeviationMasters: async () => unwrapResponse(await axiosInstance.get(BACK_OFFICE_ENDPOINTS.CIR_DEVIATION_MASTERS)),
+  getNegativeFIDeviationMasters: async () => unwrapResponse(await axiosInstance.get(BACK_OFFICE_ENDPOINTS.NEGATIVE_FI_DEVIATION_MASTERS)),
+  getApplicationDeviationDecisions: async (id) => unwrapResponse(await axiosInstance.get(BACK_OFFICE_ENDPOINTS.APPLICATION_DEVIATION_DECISIONS(id))),
+  getApplicationCIRDeviationDecisions: async (id) => unwrapResponse(await axiosInstance.get(BACK_OFFICE_ENDPOINTS.APPLICATION_CIR_DEVIATION_DECISIONS(id))),
+  getApplicationNegativeFIDecisions: async (id) => unwrapResponse(await axiosInstance.get(BACK_OFFICE_ENDPOINTS.APPLICATION_NEGATIVE_FI_DECISIONS(id))),
+  saveDeviationDecision: async (id, payload) => unwrapResponse(await axiosInstance.post('/ApplicationDeviationDecision', payload)),
+  updateDeviationDecision: async (id, payload) => unwrapResponse(await axiosInstance.put(`/ApplicationDeviationDecision/${encodeURIComponent(id)}`, payload)),
+  saveCIRDeviationDecision: async (payload) => unwrapResponse(await axiosInstance.post('/ApplicationCIRDeviationDecision', payload)),
+  updateCIRDeviationDecision: async (id, payload) => unwrapResponse(await axiosInstance.put(`/ApplicationCIRDeviationDecision/${encodeURIComponent(id)}`, payload)),
+  saveNegativeFIDecision: async (payload) => unwrapResponse(await axiosInstance.post('/ApplicationNegativeFIDecision', payload)),
+  updateNegativeFIDecision: async (id, payload) => unwrapResponse(await axiosInstance.put(`/ApplicationNegativeFIDecision/${encodeURIComponent(id)}`, payload)),
 
   /**
    * Retrieve authoritative RTR loan obligations summary including live, closure, excluded totals, and proposed loan.
@@ -1208,6 +1227,60 @@ export const backOfficeService = {
     const response = await axiosInstance.get(
       BACK_OFFICE_ENDPOINTS.APPLICATION_WORKFLOW_HISTORY(agentCustomerId)
     );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Get the latest Credit Manager decision for an application.
+   * Resolves to null when no decision exists (backend returns 404).
+   * @param {string|number} agentCustomerId
+   */
+  getLatestCreditDecision: async (agentCustomerId) => {
+    try {
+      const response = await axiosInstance.get(
+        BACK_OFFICE_ENDPOINTS.LATEST_CREDIT_DECISION(agentCustomerId)
+      );
+      return unwrapResponse(response);
+    } catch (err) {
+      if (err?.response?.status === 404) return null;
+      throw err;
+    }
+  },
+
+  /**
+   * Get the fields the Credit Manager flagged for an application (all returns, newest first).
+   * Resolves to [] when none exist or the endpoint is not deployed yet (404).
+   * @param {string|number} agentCustomerId
+   */
+  getCreditReturnItems: async (agentCustomerId) => {
+    try {
+      const response = await axiosInstance.get(
+        BACK_OFFICE_ENDPOINTS.CREDIT_RETURN_ITEMS_BY_CUSTOMER(agentCustomerId)
+      );
+      const data = unwrapResponse(response);
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      if (err?.response?.status === 404) return [];
+      throw err;
+    }
+  },
+
+  /**
+   * Mark a flagged field as corrected.
+   * @param {string|number} itemId
+   * @param {object} payload - { resolvedByUserId, resolvedByRole: "BackOffice", resolutionNote }
+   */
+  resolveCreditReturnItem: async (itemId, payload) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.CREDIT_RETURN_ITEM_RESOLVE(itemId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /** Get all Credit Manager master records. */
+  getCreditManagers: async () => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.CREDIT_MANAGERS);
     return unwrapResponse(response);
   },
 };

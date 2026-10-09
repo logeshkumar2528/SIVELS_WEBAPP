@@ -7,11 +7,40 @@
 
 export const BACK_OFFICE_AUTH_KEY = 'backOfficeAuth';
 
+/*
+ * In-memory acting identity used when another module (e.g. Credit Manager) renders Back Office
+ * screens. While set, getBackOfficeAuth() returns it so every save is attributed to that user
+ * instead of a Back Office session left in localStorage.
+ */
+let actingIdentity = null;
+
+/**
+ * @param {{ id: number, name?: string, role: string } | null} identity
+ */
+export function setActingIdentity(identity) {
+  actingIdentity = identity && identity.id ? { ...identity } : null;
+}
+
+export function getActingIdentity() {
+  return actingIdentity;
+}
+
 /**
  * Retrieve current Back Office auth state.
  * Checks dedicated 'backOfficeAuth' key, 'backOfficeData', as well as 'sivels_currentUser'.
  */
 export function getBackOfficeAuth() {
+  if (actingIdentity) {
+    return {
+      isAuthenticated: true,
+      name: actingIdentity.name || '',
+      role: actingIdentity.role,
+      id: actingIdentity.id,
+      backOfficeId: actingIdentity.id,
+      userId: actingIdentity.id,
+      loginTimestamp: new Date().toISOString(),
+    };
+  }
   try {
     const boDataRaw = localStorage.getItem('backOfficeData');
     if (boDataRaw) {

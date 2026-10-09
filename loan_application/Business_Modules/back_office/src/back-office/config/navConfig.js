@@ -85,6 +85,14 @@ export const NAV_ITEMS = [
     badgeKey: 'submitToCredit',
     section:  'OPERATIONS',
   },
+  {
+    id:       'returned-by-credit',
+    label:    'Returned by Credit Manager',
+    icon:     'RotateCcw',
+    route:    ROUTES.RETURNED_BY_CREDIT,
+    badgeKey: 'returnedByCredit',
+    section:  'OPERATIONS',
+  },
 
   /* ==========================================
      BOTTOM (pinned — Profile, Logout)

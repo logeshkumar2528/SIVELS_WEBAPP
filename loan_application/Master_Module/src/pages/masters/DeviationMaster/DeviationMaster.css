@@ -1,0 +1,12 @@
+.deviation-master-page .master-table-container {
+  overflow-x: auto;
+}
+
+.deviation-master-page .master-table {
+  min-width: 980px;
+}
+
+.deviation-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-md, 16px); }
+.deviation-delete-confirm p { margin-bottom: var(--spacing-lg, 20px); }
+.masters-btn-danger { background: #dc2626; color: #fff; border-radius: 8px; padding: 10px 16px; }
+@media (max-width: 640px) { .deviation-form-grid { grid-template-columns: 1fr; } }

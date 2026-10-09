@@ -38,13 +38,14 @@ import './Header.css';
 /* ==========================================
    AVATAR — Renders backend image with initials fallback
 ========================================== */
-function UserAvatar({ name = '', role = 'BackOffice', id = null, avatarUrl = null }) {
+function UserAvatar({ name = '', imageRole = 'BackOffice', id = null, avatarUrl = null }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [imageVersion, setImageVersion] = useState(Date.now());
 
-  // Direct avatar URL or dynamically resolved from BackOffice role + ID
-  const resolvedId = id || (typeof localStorage !== 'undefined' ? localStorage.getItem('backOfficeId') : null);
-  const imageUrl = avatarUrl || (resolvedId ? getProfileImageUrl('BackOffice', resolvedId, imageVersion) : null);
+  // Direct avatar URL or dynamically resolved from image role + ID
+  const isBackOfficeImage = imageRole === 'BackOffice';
+  const resolvedId = id || (isBackOfficeImage && typeof localStorage !== 'undefined' ? localStorage.getItem('backOfficeId') : null);
+  const imageUrl = avatarUrl || (resolvedId ? getProfileImageUrl(imageRole, resolvedId, imageVersion) : null);
 
   useEffect(() => {
     setImageFailed(false);
@@ -72,7 +73,7 @@ function UserAvatar({ name = '', role = 'BackOffice', id = null, avatarUrl = nul
     );
   }
 
-  const initials = getInitials(name, 'BO');
+  const initials = getInitials(name, isBackOfficeImage ? 'BO' : 'U');
 
   return (
     <div className="header-avatar-initials" aria-hidden="true">
@@ -161,7 +162,7 @@ const Header = memo(function Header({
           <div className="header-avatar">
             <UserAvatar
               name={user.name}
-              role={user.role || 'BackOffice'}
+              imageRole={user.imageRole || 'BackOffice'}
               id={user.id || user.backOfficeId}
               avatarUrl={user.avatarUrl}
             />

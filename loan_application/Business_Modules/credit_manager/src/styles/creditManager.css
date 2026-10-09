@@ -1,0 +1,610 @@
+/*
+ * creditManager.css
+ * --------------------
+ * Small Credit Manager additions on top of the shared Back Office styles.
+ */
+
+.cm-pill--rejected {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.cm-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.cm-state--error {
+  color: #dc2626;
+}
+
+.cm-empty-cell {
+  text-align: center;
+  padding: 2.5rem !important;
+  color: #64748b !important;
+}
+
+/* ── Application Review ── */
+.cm-success-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.875rem 1rem;
+  border-radius: 8px;
+  background: #effaf2;
+  border: 1px solid #bbf7d0;
+  color: #0f7a4c;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.cm-success-banner button {
+  margin-left: auto;
+  display: flex;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.cm-decision-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cm-decision-actions .stc-btn-doc {
+  flex: 0 0 auto;
+  min-width: 140px;
+}
+
+.cm-btn-approve {
+  background: #00593b;
+  color: #ffffff;
+}
+
+.cm-btn-approve:hover:not(:disabled) {
+  background: #00472f;
+}
+
+.cm-btn-reject {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.cm-btn-reject:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.cm-btn-return {
+  background: #ffffff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.cm-btn-return:hover:not(:disabled) {
+  background: #eff6ff;
+}
+
+.cm-decision-actions .stc-btn-doc:disabled,
+.cm-decision-footer .stc-btn-doc:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cm-decision-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cm-decision-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cm-decision-text {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #334155;
+  white-space: pre-wrap;
+}
+
+.cm-remarks-cell {
+  max-width: 360px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Decision modal */
+.cm-decision-modal {
+  max-width: 620px;
+}
+
+.cm-decision-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cm-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .cm-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cm-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.cm-form-field--full {
+  grid-column: 1 / -1;
+}
+
+.cm-form-field input,
+.cm-form-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 400;
+  font-size: 0.875rem;
+  color: #0f172a;
+  resize: vertical;
+}
+
+.cm-form-field input:focus,
+.cm-form-field textarea:focus {
+  outline: none;
+  border-color: #00593b;
+  box-shadow: 0 0 0 3px rgba(0, 89, 59, 0.12);
+}
+
+.cm-form-field .cm-input--error {
+  border-color: #dc2626;
+}
+
+.cm-form-field small {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.cm-form-hint {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 400;
+  color: #94a3b8;
+  font-size: 0.75rem;
+}
+
+.cm-form-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 0.825rem;
+}
+
+.cm-decision-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.cm-decision-footer .stc-btn-doc {
+  flex: 0 0 auto;
+  min-width: 120px;
+}
+
+.cm-decision-modal--wide {
+  max-width: 760px;
+}
+
+.cm-form-field select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 400;
+  font-size: 0.875rem;
+  color: #0f172a;
+  background: #ffffff;
+}
+
+.cm-form-field select:focus {
+  outline: none;
+  border-color: #00593b;
+  box-shadow: 0 0 0 3px rgba(0, 89, 59, 0.12);
+}
+
+/* Flagged fields (return to Back Office) */
+.cm-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.cm-issues-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.cm-issues-head small {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.cm-issues-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.cm-issues-add {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.cm-issues-add .stc-btn-doc {
+  flex: 0 0 auto;
+}
+
+.cm-issues-error {
+  color: #dc2626;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.cm-issues-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cm-issues-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 0.75rem 0.875rem;
+  border-radius: 8px;
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+}
+
+.cm-issues-list li > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.cm-issues-list li strong {
+  font-size: 0.85rem;
+  color: #0f172a;
+}
+
+.cm-issues-list li p {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  color: #475569;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cm-issues-list li button {
+  display: flex;
+  background: transparent;
+  border: none;
+  color: #dc2626;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.cm-issues-list--readonly li.is-resolved {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.cm-issue-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.cm-issue-label {
+  font-weight: 600;
+  color: #334155;
+}
+
+.cm-issue-fix {
+  color: #0f7a4c !important;
+}
+
+.cm-issues-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ── Credit Manager workspace (full Back Office verification UI) ── */
+.cm-workspace {
+  display: flex;
+  flex-direction: column;
+}
+
+.cm-review-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0.6rem 1.25rem;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.cm-review-bar-info {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 0.875rem;
+  color: #475569;
+}
+
+.cm-review-bar-info strong {
+  color: #0f172a;
+}
+
+.cm-review-bar-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #b45309;
+}
+
+.cm-review-bar-flags {
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.cm-review-bar-flags:hover {
+  background: #fef3c7;
+}
+
+.cm-review-bar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.cm-review-bar-actions .stc-btn-doc {
+  flex: 0 0 auto;
+}
+
+.cm-decision-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cm-workspace .pdf-controls > button:first-child {
+  display: none;
+}
+
+/* PdfView's back button navigates to RM routes; the modal close replaces it here. */
+.cm-pdf-embed .pdf-controls > button:first-child {
+  display: none;
+}
+
+.cm-days-pill {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #fffbeb;
+  color: #b45309;
+}
+
+/* ── Section review bar (Edit / Approve / Reject per section) ── */
+.cm-section-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 14px 18px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #15803d;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.cm-section-bar.is-editing {
+  border-left-color: #2563eb;
+  background: #eff6ff;
+}
+
+.cm-section-bar-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cm-section-bar-info strong {
+  display: block;
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.cm-section-bar-info span {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.cm-section-bar-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: #ecfdf5;
+  color: #15803d !important;
+  font-weight: 700;
+  font-size: 0.85rem !important;
+}
+
+.cm-section-bar-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cm-section-bar-actions .stc-btn-doc:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cm-step-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem !important;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cm-step-status--approved {
+  background: #dcfce7;
+  color: #15803d !important;
+}
+
+.cm-step-status--flagged {
+  background: #fee2e2;
+  color: #b91c1c !important;
+}
+
+.cm-step-status--pending {
+  background: #f1f5f9;
+  color: #64748b !important;
+}
+
+.cm-lock-notice {
+  margin-bottom: 16px;
+}
+
+.cm-section-locked .bo-cv-step-panel :is(input, textarea, select):not([type='checkbox']):not([type='radio']) {
+  background-color: #f8fafc;
+  cursor: not-allowed;
+}
+
+.cm-section-locked .bo-cv-dropzone-box {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.cm-section-checklist {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+}
+
+.cm-section-checklist button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+.cm-section-checklist button:hover {
+  border-color: #15803d;
+}
+
+.cm-section-checklist .cm-section-bar-num {
+  min-width: 28px;
+  height: 28px;
+  font-size: 0.75rem !important;
+}
+
+.cm-section-checklist-title {
+  flex: 1;
+  font-size: 0.85rem;
+  color: #0f172a;
+}
+
+.cm-approve-blocked {
+  margin: 12px 0 0;
+  font-size: 0.8rem;
+  color: #b45309;
+}
+
+.cm-decision-actions .stc-btn-doc:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

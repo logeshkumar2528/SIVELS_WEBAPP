@@ -24,10 +24,18 @@ export const BACK_OFFICE_ENDPOINTS = {
   PD_VERIFICATION_TYPES: '/PDVerificationTypeMaster',
   HEALTH_CHECK_TYPES: '/health-check-types',
   RTR_LOAN_STATUS_MASTER: '/rtr-loan-status-master',
+  RTR_NORM_MASTER: '/rtr-norm-master',
   PROPERTY_MASTER: '/PropertyMaster',
   PROPERTY_MASTER_BY_ID: (id) => `/PropertyMaster/${encodeURIComponent(id)}`,
   MORTGAGE_STATUS_MASTER: '/MortgageStatusMaster',
   MORTGAGE_STATUS_MASTER_BY_ID: (id) => `/MortgageStatusMaster/${encodeURIComponent(id)}`,
+
+  DEVIATION_MASTERS: '/DeviationMaster',
+  CIR_DEVIATION_MASTERS: '/CIRDeviationMaster',
+  NEGATIVE_FI_DEVIATION_MASTERS: '/NegativeFIDeviationMaster',
+  APPLICATION_DEVIATION_DECISIONS: (applicationProductDetailsId) => `/ApplicationDeviationDecision/by-application/${encodeURIComponent(applicationProductDetailsId)}`,
+  APPLICATION_CIR_DEVIATION_DECISIONS: (applicationProductDetailsId) => `/ApplicationCIRDeviationDecision/by-application/${encodeURIComponent(applicationProductDetailsId)}`,
+  APPLICATION_NEGATIVE_FI_DECISIONS: (applicationProductDetailsId) => `/ApplicationNegativeFIDecision/by-application/${encodeURIComponent(applicationProductDetailsId)}`,
 
   BANKS_ACTIVE: '/masters/bank/active',
   BANK_BRANCHES: '/BankBranch',
@@ -208,4 +216,15 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/send-to-credit-manager`,
   APPLICATION_WORKFLOW_HISTORY: (agentCustomerId) =>
     `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/history`,
+
+  // Credit Manager decisions (Approved / Rejected / ReturnedToBackOffice)
+  LATEST_CREDIT_DECISION: (agentCustomerId) =>
+    `/ApplicationCreditDecision/by-customer/${encodeURIComponent(agentCustomerId)}/latest`,
+  CREDIT_MANAGERS: '/CreditManagerMaster',
+
+  // Fields flagged by the Credit Manager on return-to-backoffice
+  CREDIT_RETURN_ITEMS_BY_CUSTOMER: (agentCustomerId) =>
+    `/ApplicationCreditReturnItem/by-customer/${encodeURIComponent(agentCustomerId)}`,
+  CREDIT_RETURN_ITEM_RESOLVE: (itemId) =>
+    `/ApplicationCreditReturnItem/${encodeURIComponent(itemId)}/resolve`,
 };
