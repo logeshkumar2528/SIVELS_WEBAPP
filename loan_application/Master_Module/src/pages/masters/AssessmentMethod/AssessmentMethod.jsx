@@ -162,9 +162,6 @@ export function AssessmentMethod() {
         </div>
         <div>
           <h1 className="masters-page-title">Assessment Methods</h1>
-          <p className="masters-page-description">
-            Manage assessment methods configuration for loan appraisal.
-          </p>
         </div>
       </header>
 

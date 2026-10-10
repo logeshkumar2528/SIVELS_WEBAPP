@@ -156,9 +156,6 @@ export function RTRNormMaster() {
         </div>
         <div>
           <h1 className="masters-page-title">RTR Norm Master</h1>
-          <p className="masters-page-description">
-            Manage Repayment Track Record underwriting norms, multipliers, and eligibility benchmarks.
-          </p>
         </div>
       </header>
 

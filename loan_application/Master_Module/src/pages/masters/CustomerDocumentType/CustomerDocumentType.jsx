@@ -147,9 +147,6 @@ export function CustomerDocumentType() {
         </div>
         <div>
           <h1 className="masters-page-title">Customer Document Type Master</h1>
-          <p className="masters-page-description">
-            Manage customer document categories such as Address Proof, Income Proof, and Business Proof.
-          </p>
         </div>
       </header>
 

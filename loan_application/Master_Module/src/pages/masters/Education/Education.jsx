@@ -124,9 +124,6 @@ export function Education() {
           </div>
           <div>
           <h1 className="masters-page-title">Education</h1>
-          <p className="masters-page-description">
-            Manage education and qualification configuration.
-          </p>
         </div>
       </header>
 

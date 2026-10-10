@@ -157,9 +157,6 @@ export function BankBranch() {
           </div>
           <div>
           <h1 className="masters-page-title">Bank Branch</h1>
-          <p className="masters-page-description">
-            Manage bank branch configuration.
-          </p>
         </div>
       </header>
 

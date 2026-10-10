@@ -142,9 +142,6 @@ export function DocumentType() {
           </div>
           <div>
           <h1 className="masters-page-title">Document Type Master</h1>
-          <p className="masters-page-description">
-            Manage reusable document types.
-          </p>
         </div>
       </header>
 

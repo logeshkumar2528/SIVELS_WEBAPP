@@ -124,9 +124,6 @@ export function PropertyUsage() {
           </div>
           <div>
           <h1 className="masters-page-title">Property Usage</h1>
-          <p className="masters-page-description">
-            Manage property usage configuration.
-          </p>
         </div>
       </header>
 

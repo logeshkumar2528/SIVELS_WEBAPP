@@ -1028,7 +1028,6 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                   {records.length} {records.length === 1 ? 'record' : 'records'}
                 </span>
               </div>
-              <p className="people-dir-subtitle">{meta.subtitle}</p>
             </div>
 
             <button

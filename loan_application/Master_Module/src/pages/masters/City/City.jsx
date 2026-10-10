@@ -178,9 +178,6 @@ export function City() {
           </div>
           <div>
           <h1 className="masters-page-title">City Master</h1>
-          <p className="masters-page-description">
-            Manage city configuration.
-          </p>
         </div>
       </header>
 

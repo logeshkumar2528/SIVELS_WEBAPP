@@ -137,9 +137,6 @@ export function EmploymentType() {
           </div>
           <div>
           <h1 className="masters-page-title">Employment Types</h1>
-          <p className="masters-page-description">
-            Manage employment type configuration.
-          </p>
         </div>
       </header>
 

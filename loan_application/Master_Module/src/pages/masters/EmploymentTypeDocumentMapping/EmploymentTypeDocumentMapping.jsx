@@ -160,9 +160,6 @@ export function EmploymentTypeDocumentMapping() {
           </div>
           <div>
           <h1 className="masters-page-title">Employment Type Document Mapping</h1>
-          <p className="masters-page-description">
-            Configure documents and verification requirements for each employment type.
-          </p>
         </div>
       </header>
 

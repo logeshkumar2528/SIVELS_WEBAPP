@@ -124,9 +124,6 @@ export function Religion() {
           </div>
           <div>
           <h1 className="masters-page-title">Religion</h1>
-          <p className="masters-page-description">
-            Manage religion configuration.
-          </p>
         </div>
       </header>
 

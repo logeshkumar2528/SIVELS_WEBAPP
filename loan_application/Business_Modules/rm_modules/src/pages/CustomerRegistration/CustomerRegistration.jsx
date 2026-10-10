@@ -1244,7 +1244,6 @@ export default function CustomerRegistration() {
                 <h1 className="ad-page-title">Step 3: Personal Information</h1>
                 <span className="ad-step-badge">Step 3 of 11</span>
               </div>
-              <p className="ad-page-description">Capture the applicant details required for the PDF Section 2 and continue to Address Details.</p>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

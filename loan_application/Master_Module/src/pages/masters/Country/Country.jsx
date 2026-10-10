@@ -160,9 +160,6 @@ export function Country() {
           </div>
           <div>
           <h1 className="masters-page-title">Country Master</h1>
-          <p className="masters-page-description">
-            Manage country configuration.
-          </p>
         </div>
       </header>
 

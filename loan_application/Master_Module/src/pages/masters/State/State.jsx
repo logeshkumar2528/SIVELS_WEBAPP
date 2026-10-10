@@ -157,9 +157,6 @@ export function State() {
           </div>
           <div>
           <h1 className="masters-page-title">State</h1>
-          <p className="masters-page-description">
-            Manage state configuration.
-          </p>
         </div>
       </header>
 

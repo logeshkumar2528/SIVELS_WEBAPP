@@ -156,9 +156,6 @@ export function PDVerificationType() {
         </div>
         <div>
           <h1 className="masters-page-title">PD Verification Types</h1>
-          <p className="masters-page-description">
-            Manage Personal Discussion (PD) verification types configuration.
-          </p>
         </div>
       </header>
 

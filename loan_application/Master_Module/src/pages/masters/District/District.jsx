@@ -181,9 +181,6 @@ export function District() {
           </div>
           <div>
           <h1 className="masters-page-title">District Master</h1>
-          <p className="masters-page-description">
-            Manage district configuration.
-          </p>
         </div>
       </header>
 

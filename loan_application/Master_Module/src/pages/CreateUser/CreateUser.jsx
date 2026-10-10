@@ -88,7 +88,6 @@ export default function CreateUser() {
         <div>
           <span>USER MANAGEMENT</span>
           <h1>Create user</h1>
-          <p>Choose a user type to begin creating a profile.</p>
         </div>
       </header>
 

@@ -113,7 +113,6 @@ export function FOIR() {
         <div className="masters-page-header-icon"><Percent size={24} /></div>
         <div>
           <h1 className="masters-page-title">FOIR Master</h1>
-          <p className="masters-page-description">Manage fixed obligation to income ratio configuration.</p>
         </div>
       </header>
 

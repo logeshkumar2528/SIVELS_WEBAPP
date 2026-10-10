@@ -138,9 +138,6 @@ export function SourcingChannel() {
           </div>
           <div>
           <h1 className="masters-page-title">Sourcing Channel Master</h1>
-          <p className="masters-page-description">
-            Manage sourcing channel configuration.
-          </p>
         </div>
       </header>
 

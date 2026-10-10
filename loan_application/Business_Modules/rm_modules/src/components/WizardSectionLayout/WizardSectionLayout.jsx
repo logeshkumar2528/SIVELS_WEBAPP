@@ -107,7 +107,6 @@ export default function WizardSectionLayout({
                   <h1 className="ad-page-title">{title}</h1>
                   <span className="ad-step-badge">Step {resolvedActiveStep} of {steps.length}</span>
                 </div>
-                <p className="ad-page-description">{subtitle}</p>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

@@ -174,9 +174,6 @@ export function LoanProductVariation() {
           </div>
           <div>
           <h1 className="masters-page-title">Loan Product Variations</h1>
-          <p className="masters-page-description">
-            Manage loan product variation configuration.
-          </p>
         </div>
       </header>
 

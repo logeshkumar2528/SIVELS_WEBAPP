@@ -138,9 +138,6 @@ export function Relationship() {
           </div>
           <div>
           <h1 className="masters-page-title">Relationship Master</h1>
-          <p className="masters-page-description">
-            Manage relationship configuration.
-          </p>
         </div>
       </header>
 

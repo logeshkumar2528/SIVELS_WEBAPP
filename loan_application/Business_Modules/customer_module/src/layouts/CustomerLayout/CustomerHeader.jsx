@@ -26,7 +26,6 @@ export default function CustomerHeader() {
     <header className="customer-header">
       <div className="customer-header-title">
         <h2>Welcome back, {fullName}! 👋</h2>
-        <p>Here's what's happening with your loan account today.</p>
       </div>
 
       <div className="customer-header-actions">

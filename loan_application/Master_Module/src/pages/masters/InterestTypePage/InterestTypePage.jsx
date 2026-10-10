@@ -152,9 +152,6 @@ export function InterestTypePage() {
         </div>
         <div>
           <h1 className="masters-page-title">Interest Types</h1>
-          <p className="masters-page-description">
-            Manage interest types configuration.
-          </p>
         </div>
       </header>
 
