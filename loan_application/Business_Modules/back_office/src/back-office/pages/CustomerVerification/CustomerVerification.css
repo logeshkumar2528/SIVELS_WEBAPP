@@ -14494,3 +14494,157 @@
 .bo-cv-elig-method-chip-text small {
   display: none;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   UNIFIED WORKSPACE: FI & REPORTS (STEPS 03–07)
+   Compact workspace, section dropdown, compact document card & icon actions
+══════════════════════════════════════════════════════════════════════ */
+.bo-cv-unified-workspace-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bo-cv-unified-header {
+  padding-bottom: 14px;
+}
+
+.bo-cv-unified-selector-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.bo-cv-unified-selector-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.bo-cv-unified-select-wrapper {
+  flex: 1;
+  max-width: 420px;
+  position: relative;
+}
+
+.bo-cv-unified-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 38px 8px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #0f172a;
+  background-color: #ffffff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 15px 15px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.bo-cv-unified-select:hover:not(:disabled) {
+  border-color: #94a3b8;
+}
+
+.bo-cv-unified-select:focus {
+  outline: none;
+  border-color: var(--color-primary, #0f7a4c);
+  box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.12);
+}
+
+.bo-cv-unified-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Compact Document Card */
+.bo-cv-file-card--compact {
+  padding: 12px 18px;
+  gap: 12px;
+}
+
+.bo-cv-file-card-actions--compact {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Icon-Only Buttons */
+.bo-btn--icon {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bo-btn--replace {
+  margin: 0;
+  cursor: pointer;
+}
+
+.bo-btn--replace.is-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Compact Remarks Box */
+.bo-cv-step-remarks-box--compact {
+  margin-top: 10px;
+  padding: 14px 18px;
+  gap: 8px;
+}
+
+.bo-cv-step-remarks-box--compact .bo-cv-step-remarks-textarea {
+  min-height: 60px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .bo-cv-unified-selector-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .bo-cv-unified-select-wrapper {
+    max-width: 100%;
+  }
+
+  .bo-cv-file-card--compact {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .bo-cv-file-card-actions--compact {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
