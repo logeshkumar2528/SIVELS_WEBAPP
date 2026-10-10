@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Plus, Pencil, Trash2, Check, X } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import backOfficeService from '../../api/backOfficeService';
 import { getBackOfficeAuth } from '../../auth/authStorage';
 import './AssetBase.css';
 
-const PlusIcon = iconMap['Plus'] || iconMap['FilePlus'];
-const Trash2Icon = iconMap['Trash2'] || iconMap['X'];
-const SaveIcon = iconMap['Save'] || iconMap['Check'];
-const Edit3Icon = iconMap['Edit3'] || iconMap['FileText'];
+const PlusIcon = Plus;
+const PencilIcon = Pencil;
+const Trash2Icon = Trash2;
+const CheckIcon = Check;
+const XIcon = X;
 const RefreshCwIcon = iconMap['RefreshCw'];
 const AlertTriangleIcon = iconMap['AlertTriangle'] || iconMap['AlertCircle'];
 const CheckCircle2Icon = iconMap['CheckCircle2'] || iconMap['CheckCircle'];
-const XIcon = iconMap['X'];
 
 const initialNewAssetForm = {
   propertyId: '',
@@ -517,15 +518,15 @@ export default function AssetBase({
         <table className="bo-ab-table" aria-label="Asset Base Records">
           <thead>
             <tr>
-              <th style={{ width: '40px' }}>#</th>
-              <th style={{ minWidth: '170px' }}>Type of Property</th>
-              <th style={{ minWidth: '200px' }}>Property Address</th>
-              <th style={{ minWidth: '150px' }}>Property Owner</th>
-              <th style={{ minWidth: '140px' }}>Property Usage</th>
-              <th style={{ minWidth: '140px' }}>Market Value (₹)</th>
-              <th style={{ minWidth: '160px' }}>Mortgage Status</th>
-              <th style={{ minWidth: '160px' }}>Mortgaged To Whom</th>
-              <th style={{ width: '110px', textAlign: 'center' }}>Actions</th>
+              <th className="bo-ab-th-idx">#</th>
+              <th className="bo-ab-th-type">Type of Property</th>
+              <th className="bo-ab-th-address">Property Address</th>
+              <th className="bo-ab-th-owner">Property Owner</th>
+              <th className="bo-ab-th-usage">Property Usage</th>
+              <th className="bo-ab-th-market-value">Market Value (₹)</th>
+              <th className="bo-ab-th-mortgage-status">Mortgage Status</th>
+              <th className="bo-ab-th-mortgaged-to">Mortgaged To Whom</th>
+              <th className="bo-ab-th-actions">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -663,7 +664,7 @@ export default function AssetBase({
                           onClick={() => handleSaveEdit(assetId)}
                           disabled={isSaving}
                         >
-                          {SaveIcon && <SaveIcon size={15} />}
+                          {CheckIcon && <CheckIcon size={15} />}
                         </button>
                         <button
                           type="button"
@@ -713,7 +714,7 @@ export default function AssetBase({
                         onClick={() => handleStartEdit(row)}
                         disabled={isSaving || isAdding || editingAssetId != null}
                       >
-                        {Edit3Icon && <Edit3Icon size={14} />}
+                        {PencilIcon && <PencilIcon size={14} />}
                       </button>
                       <button
                         type="button"
@@ -826,7 +827,7 @@ export default function AssetBase({
                       onClick={handleSaveNewAsset}
                       disabled={isSaving}
                     >
-                      {SaveIcon && <SaveIcon size={15} />}
+                      {CheckIcon && <CheckIcon size={15} />}
                     </button>
                     <button
                       type="button"
