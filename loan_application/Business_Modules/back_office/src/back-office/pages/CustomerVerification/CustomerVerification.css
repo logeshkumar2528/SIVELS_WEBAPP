@@ -3981,7 +3981,8 @@
   animation: boCvModalFadeIn 0.18s ease-out;
 }
 
-.bo-cv-confirm-modal-card {
+.bo-cv-confirm-modal-card,
+.bo-cv-confirm-modal-dialog {
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 14px;
@@ -4064,6 +4065,7 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  background: #ffffff;
 }
 
 .bo-cv-confirm-modal-question {
@@ -8150,7 +8152,7 @@
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  padding: 10px 14px;
+  padding: 8px 14px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
@@ -8761,6 +8763,173 @@
   font-size: 13.5px;
   font-weight: 700;
   color: #0f172a;
+}
+
+/* ── Step 02 Scoped Credit Return Panel Responsive Grid & Polish ─────────── */
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) [data-cm-section-bar] .crp-strip,
+.bo-cv-doc-verification-workspace ~ [data-cm-section-bar] .crp-strip {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+}
+
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-panel,
+.bo-cv-doc-verification-workspace ~ .crp-panel {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 8px;
+}
+
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-panel-title h3,
+.bo-cv-doc-verification-workspace ~ .crp-panel-title h3 {
+  font-size: 0.92rem;
+}
+
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-panel-title span,
+.bo-cv-doc-verification-workspace ~ .crp-panel-title span {
+  font-size: 0.76rem;
+}
+
+/* Responsive CSS Grid for Return Items in Step 02 */
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-items,
+.bo-cv-doc-verification-workspace ~ .crp-items {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+@media (min-width: 1360px) {
+  .bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-items,
+  .bo-cv-doc-verification-workspace ~ .crp-items {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 860px) and (max-width: 1359px) {
+  .bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-items,
+  .bo-cv-doc-verification-workspace ~ .crp-items {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 859px) {
+  .bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-items,
+  .bo-cv-doc-verification-workspace ~ .crp-items {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-item,
+.bo-cv-doc-verification-workspace ~ .crp-item {
+  padding: 10px 12px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  align-self: start;
+  box-sizing: border-box;
+}
+
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-item-head,
+.bo-cv-doc-verification-workspace ~ .crp-item-head {
+  margin-bottom: 6px;
+  gap: 6px;
+}
+
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-item-title,
+.bo-cv-doc-verification-workspace ~ .crp-item-title {
+  font-size: 0.84rem;
+}
+
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-pill,
+.bo-cv-doc-verification-workspace ~ .crp-pill {
+  padding: 2px 8px;
+  font-size: 0.68rem;
+}
+
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-entry,
+.bo-cv-doc-verification-workspace ~ .crp-entry {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 5px;
+}
+
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-entry-head,
+.bo-cv-doc-verification-workspace ~ .crp-entry-head {
+  font-size: 0.72rem;
+}
+
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-entry-text,
+.bo-cv-doc-verification-workspace ~ .crp-entry-text {
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-action,
+.bo-cv-doc-verification-workspace ~ .crp-action {
+  margin-top: auto;
+  padding-top: 8px;
+  gap: 4px;
+}
+
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-action textarea,
+.bo-cv-doc-verification-workspace ~ .crp-action textarea {
+  padding: 6px 8px;
+  font-size: 0.8rem;
+}
+
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-btn,
+.bo-cv-doc-verification-workspace ~ .crp-btn {
+  padding: 6px 12px;
+  font-size: 0.78rem;
+}
+
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-note,
+.bo-cv-doc-verification-workspace ~ .crp-note {
+  margin: 6px 0 0;
+  font-size: 0.72rem;
+}
+
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-timeline,
+.bo-cv-doc-verification-workspace ~ .crp-timeline {
+  margin-top: 6px;
+}
+
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-timeline li,
+.bo-cv-doc-verification-workspace ~ .crp-timeline li {
+  padding-bottom: 6px;
+}
+
+/* Unified Document Verification Card — Proofs Section Integration */
+.bo-cv-doc-card--proofs {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.bo-cv-doc-card--proofs .bo-cpv {
+  margin-top: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.bo-cv-doc-card--proofs .bo-cpv-header {
+  padding: 8px 14px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 0;
+}
+
+.bo-cv-doc-card--proofs .bo-cpv-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .bo-cv-doc-verify-meta {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Download, Eye, FolderOpen, RefreshCw, RotateCcw, ShieldCheck, Undo2 } from 'lucide-react';
+import { Download, Eye, FileText, FolderOpen, RefreshCw, RotateCcw, X } from 'lucide-react';
 import {
   REJECTION_STATUS,
   applicantLabel,
@@ -20,10 +20,10 @@ import { downloadDocument, openDocument, readApiError } from '../../../../../../
 import './CustomerProofVerificationSection.css';
 
 const STATUS = {
-  VERIFIED: { label: 'Verified', tone: 'success' },
-  PENDING: { label: 'Pending Review', tone: 'neutral' },
-  RETURNED: { label: 'Returned to RM', tone: 'danger' },
-  RESUBMITTED: { label: 'Resubmitted', tone: 'warning' },
+  VERIFIED: { label: 'Verified', tone: 'verified' },
+  PENDING: { label: 'Pending Review', tone: 'pending' },
+  RETURNED: { label: 'Returned to RM', tone: 'returned' },
+  RESUBMITTED: { label: 'Resubmitted', tone: 'resubmitted' },
 };
 
 function normalizePath(path) {
@@ -35,6 +35,23 @@ function formatDateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function formatFileSize(bytes) {
+  if (!bytes || isNaN(bytes)) return null;
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+}
+
+function isPdfFile(fileName = '') {
+  return String(fileName).toLowerCase().endsWith('.pdf');
+}
+
+function isImageFile(fileName = '') {
+  const lower = String(fileName).toLowerCase();
+  return lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.webp');
 }
 
 /**
@@ -98,8 +115,6 @@ export default function CustomerProofVerificationSection({
   );
 
   const sections = useMemo(() => {
-    // A rejection points at the rejected proof id; after resubmission its CurrentDocumentPath is
-    // the corrected proof's file, which is a new record.
     const rejectionsFor = (proof) => rejections
       .filter((r) => sameId(r.customerDocumentProofId, proof.customerDocumentProofId)
         || (r.currentDocumentPath && normalizePath(r.currentDocumentPath) === normalizePath(proof.filePath)))
@@ -251,149 +266,278 @@ export default function CustomerProofVerificationSection({
         </div>
       </div>
 
-      {loadError && <p className="bo-cpv-message is-error">{loadError}</p>}
+      <div className="bo-cpv-body">
+        {loadError && <p className="bo-cpv-message is-error">{loadError}</p>}
 
-      {!loadError && isLoading && proofs.length === 0 ? (
-        <p className="bo-cpv-empty">Loading customer proofs…</p>
-      ) : !loadError && totals.total === 0 ? (
-        <p className="bo-cpv-empty">No customer proofs have been uploaded for this application.</p>
-      ) : (
-        sections.map((section) => (
-          <div key={section.sequence} className="bo-cpv-person">
-            <div className="bo-cpv-person-head">
-              <span className="bo-cpv-person-label">{section.label}</span>
-              {section.name && <span className="bo-cpv-person-name">{section.name}</span>}
-              <span className="bo-cpv-person-count">{section.verified}/{section.total} verified</span>
+        {!loadError && isLoading && proofs.length === 0 ? (
+          <p className="bo-cpv-empty">Loading customer proofs…</p>
+        ) : !loadError && totals.total === 0 ? (
+          <p className="bo-cpv-empty">No customer proofs have been uploaded for this application.</p>
+        ) : (
+          sections.map((section) => (
+            <div key={section.sequence} className="bo-cpv-person">
+              <div className="bo-cpv-person-head">
+                <span className="bo-cpv-person-label">{section.label}</span>
+                {section.name && <span className="bo-cpv-person-name">{section.name}</span>}
+                <span className="bo-cpv-person-count">{section.verified}/{section.total} verified</span>
+              </div>
+
+              {section.categories.length === 0 ? (
+                <p className="bo-cpv-empty is-inline">No proofs uploaded.</p>
+              ) : (
+                section.categories.map((category) => (
+                  <div key={category.key} className="bo-cpv-category">
+                    <div className="bo-cpv-category-name">
+                      {category.name}
+                      <span className="bo-cpv-category-count">
+                        {category.rows.filter((r) => r.status === STATUS.VERIFIED).length}/{category.rows.length}
+                      </span>
+                    </div>
+
+                    <div className="bo-cv-doc-table-wrapper">
+                      <table className="bo-cv-doc-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: '40px', textAlign: 'center' }}>#</th>
+                            <th style={{ width: '180px' }}>Document</th>
+                            <th style={{ width: '65px', textAlign: 'center' }}>Preview</th>
+                            <th>File Name</th>
+                            <th style={{ width: '115px', textAlign: 'center' }}>Verified</th>
+                            <th style={{ width: '120px', textAlign: 'center' }}>Status</th>
+                            <th style={{ width: '120px', textAlign: 'center' }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {category.rows.map(({ proof, latestRejection, status }, idx) => {
+                            const key = `proof-${proof.customerDocumentProofId}`;
+                            const title = proofName(proof.proofId);
+                            const isPdf = isPdfFile(proof.fileName);
+                            const isImg = isImageFile(proof.fileName);
+                            const fileSizeStr = formatFileSize(proof.fileSize);
+                            const isVerifying = isBusy(key, 'verify') || isBusy(key, 'unverify') || isBusy(key, 'verify-resubmission');
+                            const isCheckboxDisabled = Boolean(busy) || isVerifying || status === STATUS.RETURNED;
+
+                            return (
+                              <tr key={key} className="bo-cv-doc-tr">
+                                <td className="bo-cv-doc-td-num">
+                                  <span className="bo-cv-doc-num-badge">0{idx + 1}</span>
+                                </td>
+                                <td className="bo-cv-doc-td-type">
+                                  <div className="bo-cv-doc-type-cell">
+                                    <div className="bo-cv-doc-type-icon">
+                                      <FileText size={15} />
+                                    </div>
+                                    <span className="bo-cv-doc-type-name">{title}</span>
+                                  </div>
+                                </td>
+                                <td className="bo-cv-doc-td-thumb" style={{ textAlign: 'center' }}>
+                                  <div
+                                    className="bo-cv-doc-thumb-box is-clickable"
+                                    onClick={() => runAction(key, 'view', () => openDocument(loaderFor(proof), proof.fileName))}
+                                    title="Click to preview proof"
+                                  >
+                                    {isPdf ? (
+                                      <div className="bo-cv-doc-thumb-pdf">PDF</div>
+                                    ) : isImg ? (
+                                      <div className="bo-cv-doc-thumb-placeholder">IMG</div>
+                                    ) : (
+                                      <div className="bo-cv-doc-thumb-placeholder">DOC</div>
+                                    )}
+                                    <div className="bo-cv-doc-thumb-hover-overlay">
+                                      <Eye size={12} />
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="bo-cv-doc-td-details">
+                                  <div className="bo-cv-doc-file-info">
+                                    <span className="bo-cv-doc-filename" title={proof.fileName || 'Proof Document'}>
+                                      {proof.fileName || 'Proof Document'}
+                                    </span>
+                                    <div className="bo-cv-doc-file-meta">
+                                      {fileSizeStr && <span>{fileSizeStr}</span>}
+                                      {fileSizeStr && proof.createdAt && <span>•</span>}
+                                      {proof.createdAt && <span>{formatDateTime(proof.createdAt)}</span>}
+                                      {status === STATUS.RETURNED && latestRejection?.rejectionRemarks && (
+                                        <span className="bo-cpv-proof-remarks" style={{ display: 'block', color: '#dc2626' }}>
+                                          Returned: {latestRejection.rejectionRemarks}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="bo-cv-doc-td-verify" style={{ textAlign: 'center' }}>
+                                  <label
+                                    className={`bo-cv-doc-verify-checkbox-label ${isCheckboxDisabled ? 'is-disabled' : ''} ${status === STATUS.VERIFIED ? 'is-checked' : ''}`}
+                                    title={
+                                      status === STATUS.RETURNED
+                                        ? 'Cannot verify: Document is returned to RM'
+                                        : status === STATUS.RESUBMITTED
+                                        ? 'Click to verify resubmitted proof'
+                                        : status === STATUS.VERIFIED
+                                        ? 'Click to unverify proof'
+                                        : 'Click to mark proof as verified'
+                                    }
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="bo-cv-doc-verify-checkbox"
+                                      checked={status === STATUS.VERIFIED}
+                                      disabled={isCheckboxDisabled}
+                                      onChange={() => {
+                                        if (status === STATUS.RESUBMITTED && latestRejection) {
+                                          handleVerifyResubmission(key, latestRejection);
+                                        } else {
+                                          handleVerify(key, proof, status !== STATUS.VERIFIED);
+                                        }
+                                      }}
+                                    />
+                                    <span className={`bo-cv-doc-verify-checkbox-text ${status === STATUS.VERIFIED ? 'is-verified' : ''}`}>
+                                      {status === STATUS.VERIFIED ? 'Verified' : ''}
+                                    </span>
+                                  </label>
+                                </td>
+                                <td className="bo-cv-doc-td-status" style={{ textAlign: 'center' }}>
+                                  <span className={`bo-cv-status-badge bo-cv-status-badge--${status.tone}`}>
+                                    <span className="bo-cv-badge-dot" />
+                                    {status.label}
+                                  </span>
+                                </td>
+                                <td className="bo-cv-doc-td-actions" style={{ textAlign: 'center' }}>
+                                  <div className="bo-cv-doc-actions-group">
+                                    <button
+                                      type="button"
+                                      className="bo-cv-doc-action-btn bo-cv-doc-action-btn--view"
+                                      title="View proof"
+                                      disabled={Boolean(busy)}
+                                      onClick={() => runAction(key, 'view', () => openDocument(loaderFor(proof), proof.fileName))}
+                                    >
+                                      <Eye size={14} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="bo-cv-doc-action-btn bo-cv-doc-action-btn--download"
+                                      title="Download proof"
+                                      disabled={Boolean(busy)}
+                                      onClick={() => runAction(key, 'download', () => downloadDocument(loaderFor(proof), proof.fileName))}
+                                    >
+                                      <Download size={14} />
+                                    </button>
+                                    {status !== STATUS.RETURNED && (
+                                      <button
+                                        type="button"
+                                        className="bo-cv-doc-action-btn bo-cv-doc-action-btn--return"
+                                        title={status === STATUS.PENDING ? 'Return proof to RM' : 'Reject Again'}
+                                        disabled={Boolean(busy) || rejectTarget?.key === key}
+                                        onClick={() => setRejectTarget({ key, proof, title, remarks: '', error: '' })}
+                                      >
+                                        <RotateCcw size={14} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Return Document to RM Modal */}
+      {rejectTarget && (
+        <div
+          className="bo-cv-confirm-modal-backdrop"
+          onClick={() => !isBusy(rejectTarget.key, 'reject') && setRejectTarget(null)}
+        >
+          <div
+            className="bo-cv-confirm-modal-card bo-cv-confirm-modal-dialog"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bo-cpv-reject-title"
+          >
+            <div className="bo-cv-confirm-modal-header">
+              <div className="bo-cv-confirm-modal-icon-badge" style={{ background: '#fef2f2', color: '#dc2626' }}>
+                <RotateCcw size={18} />
+              </div>
+              <div className="bo-cv-confirm-modal-title-group">
+                <h3 id="bo-cpv-reject-title" className="bo-cv-confirm-modal-title">
+                  Return Document to RM
+                </h3>
+                <p className="bo-cv-confirm-modal-subtitle">
+                  Document: {rejectTarget.title}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="bo-cv-confirm-modal-close"
+                onClick={() => setRejectTarget(null)}
+                disabled={isBusy(rejectTarget.key, 'reject')}
+                aria-label="Close modal"
+              >
+                <X size={16} />
+              </button>
             </div>
 
-            {section.categories.length === 0 ? (
-              <p className="bo-cpv-empty is-inline">No proofs uploaded.</p>
-            ) : section.categories.map((category) => (
-              <div key={category.key} className="bo-cpv-category">
-                <div className="bo-cpv-category-name">
-                  {category.name}
-                  <span className="bo-cpv-category-count">
-                    {category.rows.filter((r) => r.status === STATUS.VERIFIED).length}/{category.rows.length}
-                  </span>
-                </div>
+            <div className="bo-cv-confirm-modal-body">
+              <p className="bo-cv-confirm-modal-question">
+                Are you sure you want to return this document to the RM?
+              </p>
 
-                {category.rows.map(({ proof, latestRejection, status }) => {
-                  const key = `proof-${proof.customerDocumentProofId}`;
-                  const title = proofName(proof.proofId);
-                  const message = messages[key];
-                  const isRejecting = rejectTarget?.key === key;
-                  return (
-                    <div key={key} className="bo-cpv-proof">
-                      <div className="bo-cpv-proof-main">
-                        <div className="bo-cpv-proof-info">
-                          <div className="bo-cpv-proof-title-row">
-                            <span className="bo-cpv-proof-title">{title}</span>
-                            <span className={`bo-cpv-badge is-${status.tone}`}>{status.label}</span>
-                          </div>
-                          <span className="bo-cpv-proof-meta">
-                            {proof.fileName || 'File'}
-                            {proof.createdAt ? ` · Uploaded ${formatDateTime(proof.createdAt)}` : ''}
-                            {status === STATUS.VERIFIED && proof.verifiedAt ? ` · Verified ${formatDateTime(proof.verifiedAt)}` : ''}
-                          </span>
-                          {status === STATUS.RETURNED && latestRejection?.rejectionRemarks && (
-                            <span className="bo-cpv-proof-remarks">Returned: {latestRejection.rejectionRemarks}</span>
-                          )}
-                        </div>
-                        <div className="bo-cpv-actions">
-                          <button
-                            type="button"
-                            className="bo-cpv-btn"
-                            disabled={Boolean(busy)}
-                            onClick={() => runAction(key, 'view', () => openDocument(loaderFor(proof), proof.fileName))}
-                          >
-                            <Eye size={14} /> View
-                          </button>
-                          <button
-                            type="button"
-                            className="bo-cpv-btn"
-                            disabled={Boolean(busy)}
-                            onClick={() => runAction(key, 'download', () => downloadDocument(loaderFor(proof), proof.fileName))}
-                          >
-                            <Download size={14} /> Download
-                          </button>
-                          {status === STATUS.RESUBMITTED && latestRejection && (
-                            <button
-                              type="button"
-                              className="bo-cpv-btn is-success"
-                              disabled={Boolean(busy)}
-                              onClick={() => handleVerifyResubmission(key, latestRejection)}
-                            >
-                              <ShieldCheck size={14} /> {isBusy(key, 'verify-resubmission') ? 'Verifying…' : 'Verify'}
-                            </button>
-                          )}
-                          {status === STATUS.PENDING && (
-                            <button
-                              type="button"
-                              className="bo-cpv-btn is-success"
-                              disabled={Boolean(busy)}
-                              onClick={() => handleVerify(key, proof, true)}
-                            >
-                              <CheckCircle2 size={14} /> {isBusy(key, 'verify') ? 'Verifying…' : 'Verify'}
-                            </button>
-                          )}
-                          {status === STATUS.VERIFIED && (
-                            <button
-                              type="button"
-                              className="bo-cpv-btn"
-                              disabled={Boolean(busy)}
-                              onClick={() => handleVerify(key, proof, false)}
-                            >
-                              <Undo2 size={14} /> {isBusy(key, 'unverify') ? 'Resetting…' : 'Unverify'}
-                            </button>
-                          )}
-                          {status !== STATUS.RETURNED && (
-                            <button
-                              type="button"
-                              className="bo-cpv-btn is-danger"
-                              disabled={Boolean(busy) || isRejecting}
-                              onClick={() => setRejectTarget({ key, remarks: '', error: '' })}
-                            >
-                              <RotateCcw size={14} /> {status === STATUS.PENDING ? 'Reject' : 'Reject Again'}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {isRejecting && (
-                        <div className="bo-cpv-reject">
-                          <label className="bo-cpv-reject-label" htmlFor={`${key}-remarks`}>Rejection remarks for RM</label>
-                          <textarea
-                            id={`${key}-remarks`}
-                            className="bo-cpv-reject-input"
-                            rows={2}
-                            value={rejectTarget.remarks}
-                            onChange={(e) => setRejectTarget((prev) => ({ ...prev, remarks: e.target.value, error: '' }))}
-                          />
-                          {rejectTarget.error && <p className="bo-cpv-message is-error">{rejectTarget.error}</p>}
-                          <div className="bo-cpv-reject-actions">
-                            <button type="button" className="bo-cpv-btn" onClick={() => setRejectTarget(null)} disabled={isBusy(key, 'reject')}>
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              className="bo-cpv-btn is-danger-solid"
-                              onClick={() => handleReject(key, proof, title)}
-                              disabled={isBusy(key, 'reject')}
-                            >
-                              {isBusy(key, 'reject') ? 'Returning…' : 'Return to RM'}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {message && <p className={`bo-cpv-message is-${message.type}`}>{message.text}</p>}
-                    </div>
-                  );
-                })}
+              <div className="bo-cv-confirm-remarks-block">
+                <label className="bo-cv-confirm-remarks-label" htmlFor="proof-modal-remarks">
+                  Remarks <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <textarea
+                  id="proof-modal-remarks"
+                  className={`bo-cv-confirm-remarks-textarea ${rejectTarget.error ? 'is-invalid' : ''}`}
+                  value={rejectTarget.remarks || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setRejectTarget((prev) => ({
+                      ...prev,
+                      remarks: val,
+                      error: val.trim() ? '' : prev.error,
+                    }));
+                  }}
+                  placeholder="Enter rejection reason / remarks for RM..."
+                  rows={3}
+                  autoFocus
+                />
+                {rejectTarget.error && (
+                  <div className="bo-cv-confirm-remarks-error">
+                    {rejectTarget.error}
+                  </div>
+                )}
               </div>
-            ))}
+            </div>
+
+            <div className="bo-cv-confirm-modal-footer">
+              <button
+                type="button"
+                className="bo-cv-confirm-btn-cancel"
+                onClick={() => setRejectTarget(null)}
+                disabled={isBusy(rejectTarget.key, 'reject')}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="bo-cv-confirm-btn-reject"
+                onClick={() => handleReject(rejectTarget.key, rejectTarget.proof, rejectTarget.title)}
+                disabled={isBusy(rejectTarget.key, 'reject')}
+              >
+                {isBusy(rejectTarget.key, 'reject') ? 'Sending...' : 'Send to RM'}
+              </button>
+            </div>
           </div>
-        ))
+        </div>
       )}
     </div>
   );

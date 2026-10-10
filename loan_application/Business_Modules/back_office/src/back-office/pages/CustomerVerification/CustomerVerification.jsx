@@ -10963,9 +10963,6 @@ export default function CustomerVerification({
                         {applicantVerifiedCount}/{applicantRequiredCount || 1} VERIFIED
                       </span>
                     </div>
-                    <p className="bo-cv-step-panel-desc">
-                      Consolidated document review workspace. Inspect, verify, or return documents to RM for Applicant and Co-Applicant(s).
-                    </p>
                   </div>
                 </div>
                 <div className="bo-cv-doc-header-right">
@@ -11010,7 +11007,9 @@ export default function CustomerVerification({
                         </tr>
                       </thead>
                       <tbody>
-                        {applicantDocRows.map((row, idx) => {
+                        {applicantDocRows
+                          .filter((row) => row.hasFile)
+                          .map((row, idx) => {
                           const IconComp = row.icon;
                           const isThisRowSaving = savingVerificationKey === `${row.applicantSequence || 0}_${row.stepCode}`;
                           const isCheckboxDisabled =
@@ -11165,69 +11164,61 @@ export default function CustomerVerification({
                 </div>
 
                 {/* ── CARD 2: CO-APPLICANT DOCUMENTS TABLE ── */}
-                <div className="bo-cv-doc-card">
-                  <div className="bo-cv-doc-card-header">
-                    <div className="bo-cv-doc-card-header-left">
-                      <div className="bo-cv-doc-card-icon is-coapp">
-                        {UsersIcon ? <UsersIcon size={18} /> : <span>👥</span>}
-                      </div>
-                      <div>
-                        <h3 className="bo-cv-doc-card-title">Co-Applicant Documents</h3>
-                        {selectedCoApplicant && (
-                          <span className="bo-cv-doc-card-subtitle">
-                            {selectedCoApplicant.customerName || `Co-Applicant ${selectedCoApplicant.number || selectedCoApplicantIndex + 1}`}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="bo-cv-doc-card-header-right">
-                      {coApplicants.length > 1 ? (
-                        <div className="bo-cv-coapp-nav">
-                          <button
-                            type="button"
-                            className="bo-cv-coapp-nav-btn"
-                            disabled={selectedCoApplicantIndex === 0}
-                            onClick={() => setSelectedCoApplicantIndex((prev) => Math.max(0, prev - 1))}
-                            title="Previous Co-Applicant"
-                            aria-label="Previous Co-Applicant"
-                          >
-                            {ChevronLeftIcon ? <ChevronLeftIcon size={16} /> : <span>‹</span>}
-                          </button>
-                          <span className="bo-cv-coapp-nav-label">
-                            Co-Applicant {selectedCoApplicant?.number || selectedCoApplicantIndex + 1}
-                            {selectedCoApplicant?.customerName ? `: ${selectedCoApplicant.customerName}` : ''}
-                          </span>
-                          <span className="bo-cv-coapp-nav-counter">
-                            {selectedCoApplicantIndex + 1}/{coApplicants.length}
-                          </span>
-                          <button
-                            type="button"
-                            className="bo-cv-coapp-nav-btn"
-                            disabled={selectedCoApplicantIndex >= coApplicants.length - 1}
-                            onClick={() => setSelectedCoApplicantIndex((prev) => Math.min(coApplicants.length - 1, prev + 1))}
-                            title="Next Co-Applicant"
-                            aria-label="Next Co-Applicant"
-                          >
-                            {ChevronRightIcon ? <ChevronRightIcon size={16} /> : <span>›</span>}
-                          </button>
+                {coApplicants.length > 0 && (
+                  <div className="bo-cv-doc-card">
+                    <div className="bo-cv-doc-card-header">
+                      <div className="bo-cv-doc-card-header-left">
+                        <div className="bo-cv-doc-card-icon is-coapp">
+                          {UsersIcon ? <UsersIcon size={18} /> : <span>👥</span>}
                         </div>
-                      ) : coApplicants.length === 1 ? (
-                        <span className="bo-cv-doc-card-count-badge">
-                          {selectedCoApplicant?.customerName || 'Co-Applicant 1'} (1 Attached)
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {coApplicants.length === 0 ? (
-                    <div className="bo-cv-doc-empty-card-state">
-                      <div className="bo-cv-doc-empty-icon">
-                        {UsersIcon ? <UsersIcon size={24} /> : <span>👥</span>}
+                        <div>
+                          <h3 className="bo-cv-doc-card-title">Co-Applicant Documents</h3>
+                          {selectedCoApplicant && (
+                            <span className="bo-cv-doc-card-subtitle">
+                              {selectedCoApplicant.customerName || `Co-Applicant ${selectedCoApplicant.number || selectedCoApplicantIndex + 1}`}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <h4>No Co-Applicants Attached</h4>
-                      <p>This loan application does not currently have any co-applicants registered.</p>
+                      <div className="bo-cv-doc-card-header-right">
+                        {coApplicants.length > 1 ? (
+                          <div className="bo-cv-coapp-nav">
+                            <button
+                              type="button"
+                              className="bo-cv-coapp-nav-btn"
+                              disabled={selectedCoApplicantIndex === 0}
+                              onClick={() => setSelectedCoApplicantIndex((prev) => Math.max(0, prev - 1))}
+                              title="Previous Co-Applicant"
+                              aria-label="Previous Co-Applicant"
+                            >
+                              {ChevronLeftIcon ? <ChevronLeftIcon size={16} /> : <span>‹</span>}
+                            </button>
+                            <span className="bo-cv-coapp-nav-label">
+                              Co-Applicant {selectedCoApplicant?.number || selectedCoApplicantIndex + 1}
+                              {selectedCoApplicant?.customerName ? `: ${selectedCoApplicant.customerName}` : ''}
+                            </span>
+                            <span className="bo-cv-coapp-nav-counter">
+                              {selectedCoApplicantIndex + 1}/{coApplicants.length}
+                            </span>
+                            <button
+                              type="button"
+                              className="bo-cv-coapp-nav-btn"
+                              disabled={selectedCoApplicantIndex >= coApplicants.length - 1}
+                              onClick={() => setSelectedCoApplicantIndex((prev) => Math.min(coApplicants.length - 1, prev + 1))}
+                              title="Next Co-Applicant"
+                              aria-label="Next Co-Applicant"
+                            >
+                              {ChevronRightIcon ? <ChevronRightIcon size={16} /> : <span>›</span>}
+                            </button>
+                          </div>
+                        ) : coApplicants.length === 1 ? (
+                          <span className="bo-cv-doc-card-count-badge">
+                            {selectedCoApplicant?.customerName || 'Co-Applicant 1'} (1 Attached)
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
-                  ) : (
+
                     <div className="bo-cv-doc-table-wrapper">
                       <table className="bo-cv-doc-table">
                         <thead>
@@ -11242,7 +11233,9 @@ export default function CustomerVerification({
                           </tr>
                         </thead>
                         <tbody>
-                          {coApplicantDocRows.filter((row) => row.stepCode === 'ZIP_ARCHIVE').map((row, idx) => {
+                          {coApplicantDocRows
+                            .filter((row) => row.hasFile)
+                            .map((row, idx) => {
                             const IconComp = row.icon;
                             const isThisRowSaving = savingVerificationKey === `${row.applicantSequence}_${row.stepCode}`;
                             const isCheckboxDisabled =
@@ -11394,32 +11387,35 @@ export default function CustomerVerification({
                         </tbody>
                       </table>
                     </div>
-                  )}
+                  </div>
+                )}
+
+                {/* ── CARD 3: CUSTOMER PROOFS TABLE ── */}
+                <div className="bo-cv-doc-card bo-cv-doc-card--proofs">
+                  <CustomerProofVerificationSection
+                    agentCustomerId={verificationData?.customerId || verificationData?.agentCustomerId || customerId}
+                    applicationProductDetailsId={resolvedAppProdId || null}
+                    rmId={
+                      verificationData?.rmId ||
+                      verificationData?.customer?.rmId ||
+                      verificationData?.application?.rmId ||
+                      verificationData?.raw?.customer?.rmId ||
+                      verificationData?.raw?.productDetails?.[0]?.rmId ||
+                      verificationData?.raw?.productDetails?.rmId ||
+                      null
+                    }
+                    backOfficeId={getAuthenticatedBackOfficeId()}
+                    applicants={[
+                      { sequence: 0, name: verificationData?.customerName || '' },
+                      ...coApplicants.map((co) => ({ sequence: co.sequence, name: co.name })),
+                    ]}
+                    onChanged={() => {
+                      fetchApplicationRejections();
+                      fetchAllCustomerDocs();
+                    }}
+                  />
                 </div>
               </div>
-
-              <CustomerProofVerificationSection
-                agentCustomerId={verificationData?.customerId || verificationData?.agentCustomerId || customerId}
-                applicationProductDetailsId={resolvedAppProdId || null}
-                rmId={
-                  verificationData?.rmId ||
-                  verificationData?.customer?.rmId ||
-                  verificationData?.application?.rmId ||
-                  verificationData?.raw?.customer?.rmId ||
-                  verificationData?.raw?.productDetails?.[0]?.rmId ||
-                  verificationData?.raw?.productDetails?.rmId ||
-                  null
-                }
-                backOfficeId={getAuthenticatedBackOfficeId()}
-                applicants={[
-                  { sequence: 0, name: verificationData?.customerName || '' },
-                  ...coApplicants.map((co) => ({ sequence: co.sequence, name: co.name })),
-                ]}
-                onChanged={() => {
-                  fetchApplicationRejections();
-                  fetchAllCustomerDocs();
-                }}
-              />
             </div>
           )}
 
