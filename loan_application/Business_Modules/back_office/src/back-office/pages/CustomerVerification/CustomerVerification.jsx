@@ -17050,9 +17050,6 @@ export default function CustomerVerification({
                   <div className="bo-cv-step-badge-num">16</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Final Application Action &amp; Disposition</h2>
-                    <p className="bo-cv-step-panel-desc">
-                      Execute application-level workflow action: return to Relationship Manager for corrections or submit to Credit Manager.
-                    </p>
                   </div>
                 </div>
                 <span className="bo-cv-step-tag-pill">Step 16 of 16</span>
@@ -17063,84 +17060,52 @@ export default function CustomerVerification({
                 <div
                   className={`bo-cv-action-feedback-banner bo-cv-action-feedback-banner--${workflowActionFeedback.type}`}
                   style={{
-                    margin: '16px 0',
-                    padding: '14px 18px',
+                    margin: '8px 0',
+                    padding: '10px 14px',
                     borderRadius: '8px',
                     backgroundColor: workflowActionFeedback.type === 'success' ? '#ecfdf5' : '#fef2f2',
                     border: `1px solid ${workflowActionFeedback.type === 'success' ? '#a7f3d0' : '#fecaca'}`,
                     color: workflowActionFeedback.type === 'success' ? '#065f46' : '#991b1b',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '12px',
-                    fontSize: '0.9rem',
+                    gap: '10px',
+                    fontSize: '0.85rem',
                     fontWeight: 500,
                   }}
                 >
                   {workflowActionFeedback.type === 'success' ? (
-                    CheckCircleIcon ? <CheckCircleIcon size={20} /> : <span>✓</span>
+                    CheckCircleIcon ? <CheckCircleIcon size={18} /> : <span>✓</span>
                   ) : (
-                    AlertCircleIcon ? <AlertCircleIcon size={20} /> : <span>⚠</span>
+                    AlertCircleIcon ? <AlertCircleIcon size={18} /> : <span>⚠</span>
                   )}
                   <span>{workflowActionFeedback.message}</span>
                 </div>
               )}
 
               {/* Underwriting Readiness Summary Card */}
-              <div
-                className="bo-cv-readiness-summary-card"
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '10px',
-                  padding: '20px',
-                  marginBottom: '24px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+              <div className="bo-cv-readiness-summary-card">
+                <div className="bo-cv-readiness-head">
                   <div>
-                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600, color: '#0f172a' }}>
+                    <h3 className="bo-cv-readiness-title">
                       Underwriting &amp; Verification Readiness Assessment
                     </h3>
-                    <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#64748b' }}>
-                      Verification checks evaluated by readiness engine before enabling submission to Credit Manager.
-                    </p>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <button
                       type="button"
+                      className="bo-cv-readiness-btn-refresh"
                       onClick={evaluateStep13Readiness}
                       disabled={step13Readiness.isEvaluating}
-                      style={{
-                        background: '#f8fafc',
-                        border: '1px solid #cbd5e1',
-                        borderRadius: '6px',
-                        padding: '6px 12px',
-                        fontSize: '0.8rem',
-                        fontWeight: 500,
-                        color: '#475569',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                      }}
                     >
-                      {RefreshCwIcon && <RefreshCwIcon size={13} className={step13Readiness.isEvaluating ? 'bo-spin' : ''} />}
+                      {RefreshCwIcon && <RefreshCwIcon size={12} className={step13Readiness.isEvaluating ? 'bo-spin' : ''} />}
                       <span>{step13Readiness.isEvaluating ? 'Re-evaluating...' : 'Refresh Status'}</span>
                     </button>
                     <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '6px 14px',
-                        borderRadius: '20px',
-                        fontSize: '0.82rem',
-                        fontWeight: 600,
-                        backgroundColor: step13Readiness.isReady ? '#dcfce7' : '#fef3c7',
-                        color: step13Readiness.isReady ? '#15803d' : '#b45309',
-                        border: `1px solid ${step13Readiness.isReady ? '#86efac' : '#fde68a'}`,
-                      }}
+                      className={`bo-cv-readiness-status-badge ${
+                        step13Readiness.isReady
+                          ? 'bo-cv-readiness-status-badge--ready'
+                          : 'bo-cv-readiness-status-badge--progress'
+                      }`}
                     >
                       {step13Readiness.isReady ? (
                         <>✓ Underwriting Complete &amp; Credit Ready</>
@@ -17151,82 +17116,90 @@ export default function CustomerVerification({
                   </div>
                 </div>
 
-                {/* Readiness Criteria Grid */}
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                    gap: '12px',
-                    marginTop: '12px',
-                  }}
-                >
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>KYC Document Matrix</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                {/* Readiness Criteria Grid (3 col desktop, 2 col tablet, 1 col mobile) */}
+                <div className="bo-cv-readiness-grid">
+                  <div className="bo-cv-readiness-item">
+                    <div className="bo-cv-readiness-label">KYC Document Matrix</div>
+                    <div className="bo-cv-readiness-data-row">
+                      <strong className="bo-cv-readiness-val">
                         {step13Readiness.stepVerifsCount} Verified
                       </strong>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>
+                      <span className="bo-cv-readiness-status" style={{ color: '#64748b' }}>
                         Info only
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Legal Opinion Report</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                  <div className="bo-cv-readiness-item">
+                    <div className="bo-cv-readiness-label">Legal Opinion Report</div>
+                    <div className="bo-cv-readiness-data-row">
+                      <strong className="bo-cv-readiness-val">
                         {step13Readiness.hasLegal ? 'Uploaded' : 'Missing'}
                       </strong>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.hasLegal ? '#16a34a' : '#ea580c' }}>
+                      <span
+                        className="bo-cv-readiness-status"
+                        style={{ color: step13Readiness.hasLegal ? '#16a34a' : '#ea580c' }}
+                      >
                         {step13Readiness.hasLegal ? '✓ Ready' : 'Pending'}
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Technical Valuation</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                  <div className="bo-cv-readiness-item">
+                    <div className="bo-cv-readiness-label">Technical Valuation</div>
+                    <div className="bo-cv-readiness-data-row">
+                      <strong className="bo-cv-readiness-val">
                         {step13Readiness.hasTechnical ? 'Uploaded' : 'Missing'}
                       </strong>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.hasTechnical ? '#16a34a' : '#ea580c' }}>
+                      <span
+                        className="bo-cv-readiness-status"
+                        style={{ color: step13Readiness.hasTechnical ? '#16a34a' : '#ea580c' }}
+                      >
                         {step13Readiness.hasTechnical ? '✓ Ready' : 'Pending'}
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>CIBIL / Credit Bureau</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                  <div className="bo-cv-readiness-item">
+                    <div className="bo-cv-readiness-label">CIBIL / Credit Bureau</div>
+                    <div className="bo-cv-readiness-data-row">
+                      <strong className="bo-cv-readiness-val">
                         {step13Readiness.hasCibil ? 'Available' : 'Missing'}
                       </strong>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.hasCibil ? '#16a34a' : '#ea580c' }}>
+                      <span
+                        className="bo-cv-readiness-status"
+                        style={{ color: step13Readiness.hasCibil ? '#16a34a' : '#ea580c' }}
+                      >
                         {step13Readiness.hasCibil ? '✓ Ready' : 'Pending'}
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Eligibility Assessment</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                  <div className="bo-cv-readiness-item">
+                    <div className="bo-cv-readiness-label">Eligibility Assessment</div>
+                    <div className="bo-cv-readiness-data-row">
+                      <strong className="bo-cv-readiness-val">
                         {step13Readiness.hasEligibility ? 'Calculated' : 'Pending'}
                       </strong>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.hasEligibility ? '#16a34a' : '#ea580c' }}>
+                      <span
+                        className="bo-cv-readiness-status"
+                        style={{ color: step13Readiness.hasEligibility ? '#16a34a' : '#ea580c' }}
+                      >
                         {step13Readiness.hasEligibility ? '✓ Complete' : 'Pending'}
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Document Rejections</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                  <div className="bo-cv-readiness-item">
+                    <div className="bo-cv-readiness-label">Document Rejections</div>
+                    <div className="bo-cv-readiness-data-row">
+                      <strong className="bo-cv-readiness-val">
                         {step13Readiness.unresolvedRejectionsCount} Unresolved
                       </strong>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.unresolvedRejectionsCount === 0 ? '#16a34a' : '#dc2626' }}>
+                      <span
+                        className="bo-cv-readiness-status"
+                        style={{ color: step13Readiness.unresolvedRejectionsCount === 0 ? '#16a34a' : '#dc2626' }}
+                      >
                         {step13Readiness.unresolvedRejectionsCount === 0 ? '✓ None Active' : 'Must Resolve'}
                       </span>
                     </div>
@@ -17236,142 +17209,76 @@ export default function CustomerVerification({
 
               {/* Dual Action Cards (Credit Manager view renders its own decision panel instead) */}
               {isCreditManagerView ? (
-                <div style={{ marginBottom: '28px' }}>{finalActionsSlot}</div>
+                <div style={{ marginBottom: '20px' }}>{finalActionsSlot}</div>
               ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '28px' }}>
+              <div className="bo-cv-actions-grid">
                 {/* Card 1: Return to RM */}
-                <div
-                  style={{
-                    background: '#ffffff',
-                    border: '1px solid #fde68a',
-                    borderTop: '4px solid #f59e0b',
-                    borderRadius: '10px',
-                    padding: '24px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    boxShadow: '0 2px 4px rgba(245, 158, 11, 0.08)',
-                  }}
-                >
+                <div className="bo-cv-action-card bo-cv-action-card--return">
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                    <div className="bo-cv-action-card-header">
                       <div
-                        style={{
-                          width: '36px',
-                          height: '36px',
-                          borderRadius: '8px',
-                          backgroundColor: '#fef3c7',
-                          color: '#d97706',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
+                        className="bo-cv-action-card-icon"
+                        style={{ backgroundColor: '#fef3c7', color: '#d97706' }}
                       >
-                        {RotateCcwIcon ? <RotateCcwIcon size={20} /> : <span>↩</span>}
+                        {RotateCcwIcon ? <RotateCcwIcon size={16} /> : <span>↩</span>}
                       </div>
-                      <div>
-                        <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#92400e' }}>
-                          Return Application to RM
-                        </h4>
-                        <span style={{ fontSize: '0.75rem', color: '#b45309', fontWeight: 500 }}>
-                          Status Transition: 2 (Logged to HO) → 6 (Returned to RM)
-                        </span>
-                      </div>
+                      <h4 className="bo-cv-action-card-title" style={{ color: '#92400e' }}>
+                        Return Application to RM
+                      </h4>
                     </div>
-                    <p style={{ fontSize: '0.84rem', color: '#475569', lineHeight: 1.5, margin: '0 0 16px' }}>
-                      Remand the complete application back to the Relationship Manager for corrections, missing documents, or applicant data rectifications. Editing access will be re-enabled for the RM. Mandatory remarks required.
+                    <p className="bo-cv-action-card-desc">
+                      Return for corrections. Remarks required.
                     </p>
                   </div>
 
                   <button
                     type="button"
+                    className="bo-cv-btn-action bo-cv-btn-action--return"
                     onClick={handleOpenReturnToRmModal}
-                    style={{
-                      background: '#d97706',
-                      color: '#ffffff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '12px 18px',
-                      fontSize: '0.9rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      transition: 'background 0.2s',
-                    }}
-                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#b45309')}
-                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#d97706')}
                   >
-                    {RotateCcwIcon ? <RotateCcwIcon size={16} /> : <span>↩</span>}
+                    {RotateCcwIcon ? <RotateCcwIcon size={15} /> : <span>↩</span>}
                     <span>Return to Relationship Manager</span>
                   </button>
                 </div>
 
                 {/* Card 2: Send to Credit Manager */}
                 <div
-                  style={{
-                    background: '#ffffff',
-                    border: step13Readiness.isReady ? '1px solid #86efac' : '1px solid #e2e8f0',
-                    borderTop: `4px solid ${step13Readiness.isReady ? '#16a34a' : '#94a3b8'}`,
-                    borderRadius: '10px',
-                    padding: '24px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    boxShadow: step13Readiness.isReady ? '0 2px 4px rgba(22, 163, 74, 0.08)' : '0 1px 3px rgba(0,0,0,0.05)',
-                  }}
+                  className={`bo-cv-action-card ${
+                    step13Readiness.isReady ? 'bo-cv-action-card--send-ready' : 'bo-cv-action-card--send'
+                  }`}
                 >
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                    <div className="bo-cv-action-card-header">
                       <div
+                        className="bo-cv-action-card-icon"
                         style={{
-                          width: '36px',
-                          height: '36px',
-                          borderRadius: '8px',
                           backgroundColor: step13Readiness.isReady ? '#dcfce7' : '#f1f5f9',
                           color: step13Readiness.isReady ? '#16a34a' : '#64748b',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
                         }}
                       >
-                        {SendIcon ? <SendIcon size={20} /> : <span>➤</span>}
+                        {SendIcon ? <SendIcon size={16} /> : <span>➤</span>}
                       </div>
-                      <div>
-                        <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: step13Readiness.isReady ? '#14532d' : '#334155' }}>
-                          {hasResolvedCreditReturns || openCreditReturnCount > 0 ? 'Resubmit to Credit Manager' : 'Send to Credit Manager'}
-                        </h4>
-                        <span style={{ fontSize: '0.75rem', color: step13Readiness.isReady ? '#15803d' : '#64748b', fontWeight: 500 }}>
-                          Status Transition: 2 (Logged to HO) → 3 (Under Review)
-                        </span>
-                      </div>
+                      <h4
+                        className="bo-cv-action-card-title"
+                        style={{ color: step13Readiness.isReady ? '#14532d' : '#334155' }}
+                      >
+                        {hasResolvedCreditReturns || openCreditReturnCount > 0
+                          ? 'Resubmit to Credit Manager'
+                          : 'Send to Credit Manager'}
+                      </h4>
                     </div>
-                    <p style={{ fontSize: '0.84rem', color: '#475569', lineHeight: 1.5, margin: '0 0 16px' }}>
-                      Forward fully verified and underwritten application file to Credit Manager for credit sanction assessment. Requires Legal, Technical, CIBIL, Eligibility, and Recommendation completion.
+                    <p className="bo-cv-action-card-desc">
+                      Forward for credit assessment.
                     </p>
                     {!step13Readiness.isReady && (
-                      <div
-                        style={{
-                          padding: '8px 12px',
-                          borderRadius: '6px',
-                          backgroundColor: '#fef3c7',
-                          color: '#92400e',
-                          fontSize: '0.78rem',
-                          marginBottom: '16px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                        }}
-                      >
-                        {AlertTriangleIcon ? <AlertTriangleIcon size={14} /> : <span>⚠</span>}
+                      <div className="bo-cv-action-warning">
+                        {AlertTriangleIcon ? <AlertTriangleIcon size={13} /> : <span>⚠</span>}
                         <span>Cannot submit: Complete required underwriting steps before forwarding.</span>
                       </div>
                     )}
                     {openCreditReturnCount > 0 && (
-                      <div className="crp-strip" style={{ marginBottom: '16px' }}>
-                        <div className="crp-strip-head" style={{ marginBottom: creditReturnAttention.length ? '10px' : 0 }}>
+                      <div className="crp-strip" style={{ marginBottom: '12px' }}>
+                        <div className="crp-strip-head" style={{ marginBottom: creditReturnAttention.length ? '8px' : 0 }}>
                           <span className="crp-indicator" aria-hidden="true" />
                           <strong>
                             {openCreditReturnCount} item{openCreditReturnCount === 1 ? '' : 's'} returned by the Credit Manager must be resolved before resubmitting.
@@ -17397,31 +17304,15 @@ export default function CustomerVerification({
 
                   <button
                     type="button"
+                    className={`bo-cv-btn-action ${
+                      canSendToCreditManager
+                        ? 'bo-cv-btn-action--send-active'
+                        : 'bo-cv-btn-action--disabled'
+                    }`}
                     onClick={handleOpenSendToCreditModal}
                     disabled={!canSendToCreditManager}
-                    style={{
-                      background: canSendToCreditManager ? '#059669' : '#cbd5e1',
-                      color: canSendToCreditManager ? '#ffffff' : '#64748b',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '12px 18px',
-                      fontSize: '0.9rem',
-                      fontWeight: 600,
-                      cursor: canSendToCreditManager ? 'pointer' : 'not-allowed',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      transition: 'background 0.2s',
-                    }}
-                    onMouseOver={(e) => {
-                      if (canSendToCreditManager) e.currentTarget.style.backgroundColor = '#047857';
-                    }}
-                    onMouseOut={(e) => {
-                      if (canSendToCreditManager) e.currentTarget.style.backgroundColor = '#059669';
-                    }}
                   >
-                    {CheckCircleIcon ? <CheckCircleIcon size={16} /> : <span>✓</span>}
+                    {CheckCircleIcon ? <CheckCircleIcon size={15} /> : <span>✓</span>}
                     <span>{hasResolvedCreditReturns ? 'Resubmit to Credit Manager' : 'Send to Credit Manager'}</span>
                   </button>
                 </div>
@@ -17429,67 +17320,42 @@ export default function CustomerVerification({
               )}
 
               {/* Workflow History Section */}
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '10px',
-                  padding: '24px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600, color: '#0f172a' }}>
-                      Application Workflow History &amp; Audit Trail
-                    </h3>
-                    <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#64748b' }}>
-                      Log of all application returns, resubmissions, and credit manager handoffs for Customer #{resolvedTargetCustomerId}.
-                    </p>
-                  </div>
+              <div className="bo-cv-history-card">
+                <div className="bo-cv-history-head">
+                  <h3 className="bo-cv-history-title">
+                    Application Workflow History &amp; Audit Trail
+                  </h3>
                   <button
                     type="button"
+                    className="bo-cv-readiness-btn-refresh"
                     onClick={fetchWorkflowHistory}
                     disabled={isFetchingWorkflowHistory}
-                    style={{
-                      background: '#f8fafc',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '6px',
-                      padding: '6px 12px',
-                      fontSize: '0.8rem',
-                      fontWeight: 500,
-                      color: '#475569',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                    }}
                   >
-                    {RefreshCwIcon && <RefreshCwIcon size={13} className={isFetchingWorkflowHistory ? 'bo-spin' : ''} />}
+                    {RefreshCwIcon && <RefreshCwIcon size={12} className={isFetchingWorkflowHistory ? 'bo-spin' : ''} />}
                     <span>{isFetchingWorkflowHistory ? 'Refreshing...' : 'Refresh History'}</span>
                   </button>
                 </div>
 
                 {workflowHistoryError && (
-                  <div style={{ padding: '10px 14px', borderRadius: '6px', backgroundColor: '#fef2f2', color: '#b91c1c', fontSize: '0.82rem', marginBottom: '14px' }}>
+                  <div style={{ padding: '8px 12px', borderRadius: '6px', backgroundColor: '#fef2f2', color: '#b91c1c', fontSize: '0.8rem', marginBottom: '10px' }}>
                     {workflowHistoryError}
                   </div>
                 )}
 
                 {isFetchingWorkflowHistory ? (
-                  <div style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '0.88rem' }}>
+                  <div style={{ textAlign: 'center', padding: '24px', color: '#64748b', fontSize: '0.84rem' }}>
                     Loading workflow transition logs...
                   </div>
                 ) : workflowHistory.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '36px 20px', border: '1px dashed #cbd5e1', borderRadius: '8px', color: '#64748b' }}>
-                    <div style={{ fontSize: '1.4rem', marginBottom: '6px' }}>📋</div>
-                    <strong style={{ fontSize: '0.9rem', color: '#334155' }}>No Previous Workflow Transitions</strong>
-                    <p style={{ margin: '4px 0 0', fontSize: '0.82rem' }}>
+                  <div style={{ textAlign: 'center', padding: '24px 16px', border: '1px dashed #cbd5e1', borderRadius: '7px', color: '#64748b' }}>
+                    <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>📋</div>
+                    <strong style={{ fontSize: '0.86rem', color: '#334155' }}>No Previous Workflow Transitions</strong>
+                    <p style={{ margin: '3px 0 0', fontSize: '0.78rem' }}>
                       This application has not undergone any returns or handoffs yet. Actions taken above will appear here in chronological order.
                     </p>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div className="bo-cv-audit-list">
                     {workflowHistory.map((item, idx) => {
                       const actionType = String(item.actionType || item.ActionType || '').toLowerCase();
                       const isReturn = actionType.includes('return') || item.nextStatus === 6;
@@ -17500,42 +17366,43 @@ export default function CustomerVerification({
                       const remarks = item.remarks || item.Remarks || '—';
                       const createdDate = item.createdDate || item.CreatedDate || item.createdAt || item.CreatedAt;
 
+                      const rowModifier = isReturn
+                        ? 'bo-cv-audit-row--return'
+                        : isCredit
+                        ? 'bo-cv-audit-row--credit'
+                        : isResubmit
+                        ? 'bo-cv-audit-row--resubmit'
+                        : '';
+
+                      const badgeModifier = isReturn
+                        ? 'bo-cv-audit-badge--return'
+                        : isCredit
+                        ? 'bo-cv-audit-badge--credit'
+                        : isResubmit
+                        ? 'bo-cv-audit-badge--resubmit'
+                        : '';
+
                       return (
                         <div
                           key={item.workflowTransitionId || item.id || idx}
-                          style={{
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '8px',
-                            padding: '16px',
-                            backgroundColor: isReturn ? '#fffbeb' : isCredit ? '#f0fdf4' : '#f8fafc',
-                            borderLeft: `4px solid ${isReturn ? '#f59e0b' : isCredit ? '#10b981' : '#3b82f6'}`,
-                          }}
+                          className={`bo-cv-audit-row ${rowModifier}`}
                         >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span
-                                style={{
-                                  padding: '4px 10px',
-                                  borderRadius: '12px',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 700,
-                                  backgroundColor: isReturn ? '#fef3c7' : isCredit ? '#dcfce7' : '#dbeafe',
-                                  color: isReturn ? '#b45309' : isCredit ? '#15803d' : '#1d4ed8',
-                                }}
-                              >
+                          <div className="bo-cv-audit-row-header">
+                            <div className="bo-cv-audit-row-meta">
+                              <span className={`bo-cv-audit-badge ${badgeModifier}`}>
                                 {WORKFLOW_ACTION_LABELS[item.actionType || item.ActionType] ||
                                   (isReturn ? '↩ Returned to RM (2 → 6)' : isCredit ? '✓ Sent to Credit Manager (2 → 3)' : isResubmit ? '⚡ Resubmitted to BO (6 → 2)' : (item.actionType || 'Workflow Action'))}
                               </span>
-                              <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                              <span className="bo-cv-audit-actor">
                                 by <strong>{role}</strong> (ID: {actorId})
                               </span>
                             </div>
-                            <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                            <span className="bo-cv-audit-time">
                               {createdDate ? new Date(createdDate).toLocaleString() : '—'}
                             </span>
                           </div>
-                          <div style={{ fontSize: '0.85rem', color: '#334155', lineHeight: 1.5, background: '#ffffff', padding: '10px 14px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                            <span style={{ fontWeight: 600, color: '#475569', marginRight: '6px' }}>Remarks:</span>
+                          <div className="bo-cv-audit-remarks">
+                            <span className="bo-cv-audit-remarks-lbl">Remarks:</span>
                             {remarks}
                           </div>
                         </div>
