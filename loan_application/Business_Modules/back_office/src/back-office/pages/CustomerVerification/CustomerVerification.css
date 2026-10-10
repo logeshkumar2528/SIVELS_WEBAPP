@@ -8765,33 +8765,48 @@
   color: #0f172a;
 }
 
-/* ── Step 02 Scoped Credit Return Panel Responsive Grid & Polish ─────────── */
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) [data-cm-section-bar] .crp-strip,
-.bo-cv-doc-verification-workspace ~ [data-cm-section-bar] .crp-strip {
+/* ── Steps 02, 06, 07 & 08 Scoped Credit Return Panel Responsive Grid & Polish ── */
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) [data-cm-section-bar] .crp-strip,
+.bo-cv-doc-verification-workspace ~ [data-cm-section-bar] .crp-strip,
+.bo-cv-legal-report-panel ~ [data-cm-section-bar] .crp-strip,
+.bo-cv-technical-report-panel ~ [data-cm-section-bar] .crp-strip,
+.bo-cv-cibil-panel ~ [data-cm-section-bar] .crp-strip {
   margin-bottom: 12px;
   padding: 8px 12px;
 }
 
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-panel,
-.bo-cv-doc-verification-workspace ~ .crp-panel {
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-panel,
+.bo-cv-doc-verification-workspace ~ .crp-panel,
+.bo-cv-legal-report-panel ~ .crp-panel,
+.bo-cv-technical-report-panel ~ .crp-panel,
+.bo-cv-cibil-panel ~ .crp-panel {
   margin-bottom: 14px;
   padding: 12px 14px;
   border-radius: 8px;
 }
 
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-panel-title h3,
-.bo-cv-doc-verification-workspace ~ .crp-panel-title h3 {
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-panel-title h3,
+.bo-cv-doc-verification-workspace ~ .crp-panel-title h3,
+.bo-cv-legal-report-panel ~ .crp-panel-title h3,
+.bo-cv-technical-report-panel ~ .crp-panel-title h3,
+.bo-cv-cibil-panel ~ .crp-panel-title h3 {
   font-size: 0.92rem;
 }
 
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-panel-title span,
-.bo-cv-doc-verification-workspace ~ .crp-panel-title span {
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-panel-title span,
+.bo-cv-doc-verification-workspace ~ .crp-panel-title span,
+.bo-cv-legal-report-panel ~ .crp-panel-title span,
+.bo-cv-technical-report-panel ~ .crp-panel-title span,
+.bo-cv-cibil-panel ~ .crp-panel-title span {
   font-size: 0.76rem;
 }
 
-/* Responsive CSS Grid for Return Items in Step 02 */
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-items,
-.bo-cv-doc-verification-workspace ~ .crp-items {
+/* Responsive CSS Grid for Return Items in Steps 02, 06, 07, 08 */
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-items,
+.bo-cv-doc-verification-workspace ~ .crp-items,
+.bo-cv-legal-report-panel ~ .crp-items,
+.bo-cv-technical-report-panel ~ .crp-items,
+.bo-cv-cibil-panel ~ .crp-items {
   margin-top: 10px;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -8800,28 +8815,40 @@
 }
 
 @media (min-width: 1360px) {
-  .bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-items,
-  .bo-cv-doc-verification-workspace ~ .crp-items {
+  .bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-items,
+  .bo-cv-doc-verification-workspace ~ .crp-items,
+  .bo-cv-legal-report-panel ~ .crp-items,
+  .bo-cv-technical-report-panel ~ .crp-items,
+  .bo-cv-cibil-panel ~ .crp-items {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 860px) and (max-width: 1359px) {
-  .bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-items,
-  .bo-cv-doc-verification-workspace ~ .crp-items {
+  .bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-items,
+  .bo-cv-doc-verification-workspace ~ .crp-items,
+  .bo-cv-legal-report-panel ~ .crp-items,
+  .bo-cv-technical-report-panel ~ .crp-items,
+  .bo-cv-cibil-panel ~ .crp-items {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 859px) {
-  .bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-items,
-  .bo-cv-doc-verification-workspace ~ .crp-items {
+  .bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-items,
+  .bo-cv-doc-verification-workspace ~ .crp-items,
+  .bo-cv-legal-report-panel ~ .crp-items,
+  .bo-cv-technical-report-panel ~ .crp-items,
+  .bo-cv-cibil-panel ~ .crp-items {
     grid-template-columns: 1fr;
   }
 }
 
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-item,
-.bo-cv-doc-verification-workspace ~ .crp-item {
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-item,
+.bo-cv-doc-verification-workspace ~ .crp-item,
+.bo-cv-legal-report-panel ~ .crp-item,
+.bo-cv-technical-report-panel ~ .crp-item,
+.bo-cv-cibil-panel ~ .crp-item {
   padding: 10px 12px;
   border-radius: 6px;
   display: flex;
@@ -8831,73 +8858,109 @@
   box-sizing: border-box;
 }
 
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-item-head,
-.bo-cv-doc-verification-workspace ~ .crp-item-head {
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-item-head,
+.bo-cv-doc-verification-workspace ~ .crp-item-head,
+.bo-cv-legal-report-panel ~ .crp-item-head,
+.bo-cv-technical-report-panel ~ .crp-item-head,
+.bo-cv-cibil-panel ~ .crp-item-head {
   margin-bottom: 6px;
   gap: 6px;
 }
 
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-item-title,
-.bo-cv-doc-verification-workspace ~ .crp-item-title {
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-item-title,
+.bo-cv-doc-verification-workspace ~ .crp-item-title,
+.bo-cv-legal-report-panel ~ .crp-item-title,
+.bo-cv-technical-report-panel ~ .crp-item-title,
+.bo-cv-cibil-panel ~ .crp-item-title {
   font-size: 0.84rem;
 }
 
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-pill,
-.bo-cv-doc-verification-workspace ~ .crp-pill {
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-pill,
+.bo-cv-doc-verification-workspace ~ .crp-pill,
+.bo-cv-legal-report-panel ~ .crp-pill,
+.bo-cv-technical-report-panel ~ .crp-pill,
+.bo-cv-cibil-panel ~ .crp-pill {
   padding: 2px 8px;
   font-size: 0.68rem;
 }
 
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-entry,
-.bo-cv-doc-verification-workspace ~ .crp-entry {
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-entry,
+.bo-cv-doc-verification-workspace ~ .crp-entry,
+.bo-cv-legal-report-panel ~ .crp-entry,
+.bo-cv-technical-report-panel ~ .crp-entry,
+.bo-cv-cibil-panel ~ .crp-entry {
   margin-top: 6px;
   padding: 6px 10px;
   border-radius: 5px;
 }
 
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-entry-head,
-.bo-cv-doc-verification-workspace ~ .crp-entry-head {
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-entry-head,
+.bo-cv-doc-verification-workspace ~ .crp-entry-head,
+.bo-cv-legal-report-panel ~ .crp-entry-head,
+.bo-cv-technical-report-panel ~ .crp-entry-head,
+.bo-cv-cibil-panel ~ .crp-entry-head {
   font-size: 0.72rem;
 }
 
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-entry-text,
-.bo-cv-doc-verification-workspace ~ .crp-entry-text {
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-entry-text,
+.bo-cv-doc-verification-workspace ~ .crp-entry-text,
+.bo-cv-legal-report-panel ~ .crp-entry-text,
+.bo-cv-technical-report-panel ~ .crp-entry-text,
+.bo-cv-cibil-panel ~ .crp-entry-text {
   font-size: 0.8rem;
   line-height: 1.4;
 }
 
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-action,
-.bo-cv-doc-verification-workspace ~ .crp-action {
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-action,
+.bo-cv-doc-verification-workspace ~ .crp-action,
+.bo-cv-legal-report-panel ~ .crp-action,
+.bo-cv-technical-report-panel ~ .crp-action,
+.bo-cv-cibil-panel ~ .crp-action {
   margin-top: auto;
   padding-top: 8px;
   gap: 4px;
 }
 
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-action textarea,
-.bo-cv-doc-verification-workspace ~ .crp-action textarea {
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-action textarea,
+.bo-cv-doc-verification-workspace ~ .crp-action textarea,
+.bo-cv-legal-report-panel ~ .crp-action textarea,
+.bo-cv-technical-report-panel ~ .crp-action textarea,
+.bo-cv-cibil-panel ~ .crp-action textarea {
   padding: 6px 8px;
   font-size: 0.8rem;
 }
 
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-btn,
-.bo-cv-doc-verification-workspace ~ .crp-btn {
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-btn,
+.bo-cv-doc-verification-workspace ~ .crp-btn,
+.bo-cv-legal-report-panel ~ .crp-btn,
+.bo-cv-technical-report-panel ~ .crp-btn,
+.bo-cv-cibil-panel ~ .crp-btn {
   padding: 6px 12px;
   font-size: 0.78rem;
 }
 
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-note,
-.bo-cv-doc-verification-workspace ~ .crp-note {
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-note,
+.bo-cv-doc-verification-workspace ~ .crp-note,
+.bo-cv-legal-report-panel ~ .crp-note,
+.bo-cv-technical-report-panel ~ .crp-note,
+.bo-cv-cibil-panel ~ .crp-note {
   margin: 6px 0 0;
   font-size: 0.72rem;
 }
 
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-timeline,
-.bo-cv-doc-verification-workspace ~ .crp-timeline {
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-timeline,
+.bo-cv-doc-verification-workspace ~ .crp-timeline,
+.bo-cv-legal-report-panel ~ .crp-timeline,
+.bo-cv-technical-report-panel ~ .crp-timeline,
+.bo-cv-cibil-panel ~ .crp-timeline {
   margin-top: 6px;
 }
 
-.bo-cv-main-content:has(.bo-cv-doc-verification-workspace) .crp-timeline li,
-.bo-cv-doc-verification-workspace ~ .crp-timeline li {
+.bo-cv-main-content:has(.bo-cv-doc-verification-workspace, .bo-cv-legal-report-panel, .bo-cv-technical-report-panel, .bo-cv-cibil-panel) .crp-timeline li,
+.bo-cv-doc-verification-workspace ~ .crp-timeline li,
+.bo-cv-legal-report-panel ~ .crp-timeline li,
+.bo-cv-technical-report-panel ~ .crp-timeline li,
+.bo-cv-cibil-panel ~ .crp-timeline li {
   padding-bottom: 6px;
 }
 
@@ -11738,31 +11801,542 @@
   align-items: center;
 }
 
-.bo-cv-legal-report-panel > .bo-cv-step-panel-header .bo-cv-step-header-left {
-  align-items: center;
+/* ── Step 06 (Legal Report) & Step 07 (Technical Report) Compact Layout ── */
+.bo-cv-legal-report-panel,
+.bo-cv-technical-report-panel {
+  padding: 16px 20px;
+  gap: 14px;
+  border-radius: 10px;
 }
 
-.bo-cv-legal-report-panel .bo-cv-step-panel-title {
-  margin: 0;
-  line-height: 38px;
+.bo-cv-legal-report-panel > .bo-cv-step-panel-header,
+.bo-cv-technical-report-panel > .bo-cv-step-panel-header {
+  padding-bottom: 12px;
 }
 
+.bo-cv-legal-report-panel > .bo-cv-step-panel-header .bo-cv-step-header-left,
 .bo-cv-technical-report-panel > .bo-cv-step-panel-header .bo-cv-step-header-left {
   align-items: center;
 }
 
+.bo-cv-legal-report-panel .bo-cv-step-badge-num,
+.bo-cv-technical-report-panel .bo-cv-step-badge-num {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+.bo-cv-legal-report-panel .bo-cv-step-panel-title,
 .bo-cv-technical-report-panel .bo-cv-step-panel-title {
   margin: 0;
-  line-height: 38px;
+  font-size: 1.05rem;
+  line-height: 32px;
+}
+
+.bo-cv-legal-report-panel .bo-cv-upload-container,
+.bo-cv-technical-report-panel .bo-cv-upload-container {
+  gap: 10px;
+}
+
+/* Compact Dropzone */
+.bo-cv-legal-report-panel .bo-cv-dropzone-box,
+.bo-cv-technical-report-panel .bo-cv-dropzone-box {
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.bo-cv-legal-report-panel .bo-cv-dropzone-label,
+.bo-cv-technical-report-panel .bo-cv-dropzone-label {
+  padding: 22px 18px;
+  gap: 6px;
+}
+
+.bo-cv-legal-report-panel .bo-cv-dropzone-icon,
+.bo-cv-technical-report-panel .bo-cv-dropzone-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  margin-bottom: 2px;
+}
+
+.bo-cv-legal-report-panel .bo-cv-dropzone-title,
+.bo-cv-technical-report-panel .bo-cv-dropzone-title {
+  font-size: 13.5px;
+}
+
+.bo-cv-legal-report-panel .bo-cv-dropzone-sub,
+.bo-cv-technical-report-panel .bo-cv-dropzone-sub {
+  font-size: 11.5px;
+}
+
+.bo-cv-legal-report-panel .bo-cv-dropzone-types,
+.bo-cv-technical-report-panel .bo-cv-dropzone-types {
+  font-size: 10.5px;
+}
+
+/* Compact File Card */
+.bo-cv-legal-report-panel .bo-cv-file-card,
+.bo-cv-technical-report-panel .bo-cv-file-card {
+  padding: 10px 14px;
+  gap: 12px;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+
+.bo-cv-legal-report-panel .bo-cv-file-card-info,
+.bo-cv-technical-report-panel .bo-cv-file-card-info {
+  gap: 10px;
+}
+
+.bo-cv-legal-report-panel .bo-cv-file-card-icon,
+.bo-cv-technical-report-panel .bo-cv-file-card-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+}
+
+.bo-cv-legal-report-panel .bo-cv-file-name,
+.bo-cv-technical-report-panel .bo-cv-file-name {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.bo-cv-legal-report-panel .bo-cv-file-meta-badges,
+.bo-cv-technical-report-panel .bo-cv-file-meta-badges {
+  gap: 6px;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.bo-cv-legal-report-panel .bo-cv-file-card-actions,
+.bo-cv-technical-report-panel .bo-cv-file-card-actions {
+  gap: 6px;
+}
+
+.bo-cv-legal-report-panel .bo-cv-file-card-actions .bo-btn,
+.bo-cv-technical-report-panel .bo-cv-file-card-actions .bo-btn {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  gap: 4px;
+}
+
+/* Compact Remarks Box */
+.bo-cv-legal-report-panel .bo-cv-step-remarks-box,
+.bo-cv-technical-report-panel .bo-cv-step-remarks-box {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  gap: 6px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.bo-cv-legal-report-panel .bo-cv-step-remarks-label,
+.bo-cv-technical-report-panel .bo-cv-step-remarks-label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #475569;
+}
+
+.bo-cv-legal-report-panel .bo-cv-step-remarks-textarea,
+.bo-cv-technical-report-panel .bo-cv-step-remarks-textarea {
+  min-height: 52px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  border-radius: 6px;
+}
+
+.bo-cv-legal-report-panel .bo-cv-step-remarks-footer,
+.bo-cv-technical-report-panel .bo-cv-step-remarks-footer {
+  margin-top: 4px;
+  gap: 8px;
+}
+
+.bo-cv-legal-report-panel .bo-cv-btn-save-remarks,
+.bo-cv-technical-report-panel .bo-cv-btn-save-remarks {
+  padding: 6px 16px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+/* ── Step 08: CIBIL & Credit Bureau Compact Layout ──────────────────────── */
+.bo-cv-cibil-panel {
+  padding: 16px 20px;
+  gap: 14px;
+  border-radius: 10px;
+}
+
+.bo-cv-cibil-panel > .bo-cv-step-panel-header {
+  padding-bottom: 12px;
 }
 
 .bo-cv-cibil-panel > .bo-cv-step-panel-header .bo-cv-step-header-left {
   align-items: center;
 }
 
+.bo-cv-cibil-panel .bo-cv-step-badge-num {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
 .bo-cv-cibil-panel .bo-cv-step-panel-title {
   margin: 0;
-  line-height: 38px;
+  font-size: 1.05rem;
+  line-height: 32px;
+}
+
+/* Section A: Manual CIBIL PAN Section */
+.bo-cv-cibil-panel .bo-cv-manual-pan-section {
+  padding: 12px 14px;
+  border-radius: 8px;
+  gap: 10px;
+  margin-bottom: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.bo-cv-cibil-panel .bo-cv-manual-pan-title {
+  font-size: 12.5px;
+}
+
+.bo-cv-cibil-panel .bo-cv-manual-pan-upload-row {
+  gap: 10px;
+}
+
+.bo-cv-cibil-panel .bo-cv-manual-pan-btn {
+  padding: 5px 12px;
+  font-size: 11.5px;
+  border-radius: 6px;
+}
+
+.bo-cv-cibil-panel .bo-cv-manual-pan-hint {
+  font-size: 11.5px;
+}
+
+.bo-cv-cibil-panel .bo-cv-manual-pan-card-wrapper {
+  padding: 10px 14px;
+  gap: 12px;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.bo-cv-cibil-panel .bo-cv-manual-pan-card-wrapper .bo-cv-file-card-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+}
+
+.bo-cv-cibil-panel .bo-cv-manual-pan-card-wrapper .bo-cv-file-name {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bo-cv-cibil-panel .bo-cv-manual-pan-card-wrapper .bo-cv-file-card-actions .bo-btn {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.bo-cv-cibil-panel .bo-cv-manual-pan-section .bo-cv-step-remarks-box {
+  margin-top: 8px !important;
+  padding: 10px 12px;
+  border-radius: 8px;
+  gap: 6px;
+}
+
+.bo-cv-cibil-panel .bo-cv-manual-pan-section .bo-cv-step-remarks-label {
+  font-size: 11px;
+}
+
+.bo-cv-cibil-panel .bo-cv-manual-pan-section .bo-cv-step-remarks-textarea {
+  min-height: 50px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  border-radius: 6px;
+}
+
+.bo-cv-cibil-panel .bo-cv-manual-pan-section .bo-cv-btn-save-remarks {
+  padding: 6px 16px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+/* Section B: Credit Bureau Verification */
+.bo-cv-cibil-panel .bo-cv-bureau-card {
+  padding: 16px 18px;
+  gap: 14px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.bo-cv-cibil-panel .bo-cv-card-header {
+  gap: 10px;
+  align-items: center;
+}
+
+.bo-cv-cibil-panel .bo-cv-icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+}
+
+.bo-cv-cibil-panel .bo-cv-card-title {
+  font-size: 14.5px;
+  margin: 0;
+}
+
+.bo-cv-cibil-panel .bo-cv-pan-field-group {
+  padding: 12px 14px;
+  gap: 16px;
+  border-radius: 6px;
+}
+
+.bo-cv-cibil-panel .bo-cv-field-lbl {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.bo-cv-cibil-panel .bo-cv-pan-box-lead {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.bo-cv-cibil-panel .bo-cv-auto-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.bo-cv-cibil-panel .bo-cv-applicant-name {
+  font-size: 13.5px;
+}
+
+.bo-cv-cibil-panel .bo-cv-fetch-btn {
+  padding: 7px 16px;
+  font-size: 12.5px;
+  border-radius: 6px;
+  height: 36px;
+}
+
+/* Bureau Loading State */
+.bo-cv-cibil-panel .bo-cv-loading-card {
+  padding: 16px 18px;
+  gap: 12px;
+}
+
+.bo-cv-cibil-panel .bo-cv-loading-header {
+  gap: 10px;
+}
+
+.bo-cv-cibil-panel .bo-cv-spinner-box {
+  width: 36px;
+  height: 36px;
+}
+
+.bo-cv-cibil-panel .bo-cv-stage-row {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+/* Bureau Success Dashboard */
+.bo-cv-cibil-panel .bo-cv-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bo-cv-cibil-panel .bo-cv-score-section-card {
+  padding: 14px 18px;
+  border-radius: 8px;
+  gap: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.bo-cv-cibil-panel .bo-cv-score-circle {
+  width: 90px;
+  height: 90px;
+  min-width: 90px;
+  padding: 6px;
+  border-radius: 50%;
+}
+
+.bo-cv-cibil-panel .bo-cv-score-kicker {
+  font-size: 8.5px;
+}
+
+.bo-cv-cibil-panel .bo-cv-score-val {
+  font-size: 1.4rem;
+  line-height: 1.1;
+}
+
+.bo-cv-cibil-panel .bo-cv-score-rating-pill {
+  font-size: 9px;
+  padding: 1px 6px;
+}
+
+.bo-cv-cibil-panel .bo-cv-score-range {
+  font-size: 8.5px;
+}
+
+.bo-cv-cibil-panel .bo-cv-health-title {
+  font-size: 14px;
+}
+
+.bo-cv-cibil-panel .bo-cv-risk-tag {
+  font-size: 11px;
+  padding: 2px 7px;
+}
+
+.bo-cv-cibil-panel .bo-cv-health-desc {
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.bo-cv-cibil-panel .bo-cv-refetch-btn {
+  padding: 5px 12px;
+  font-size: 11.5px;
+  border-radius: 6px;
+}
+
+.bo-cv-cibil-panel .bo-cv-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 0;
+}
+
+.bo-cv-cibil-panel .bo-cv-kpi-card {
+  padding: 10px 12px;
+  border-radius: 8px;
+  gap: 2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.bo-cv-cibil-panel .bo-cv-kpi-title {
+  font-size: 11px;
+}
+
+.bo-cv-cibil-panel .bo-cv-kpi-val {
+  font-size: 1.15rem;
+}
+
+.bo-cv-cibil-panel .bo-cv-kpi-sub {
+  font-size: 10.5px;
+}
+
+.bo-cv-cibil-panel .bo-cv-section-box {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-top: 0;
+  gap: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.bo-cv-cibil-panel .bo-cv-section-head {
+  margin-bottom: 6px;
+}
+
+.bo-cv-cibil-panel .bo-cv-section-title {
+  font-size: 13px;
+}
+
+.bo-cv-cibil-panel .bo-cv-count-tag {
+  font-size: 11px;
+  padding: 2px 7px;
+}
+
+.bo-cv-cibil-panel .bo-cv-table th {
+  padding: 7px 10px;
+  font-size: 11px;
+}
+
+.bo-cv-cibil-panel .bo-cv-table td {
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.bo-cv-cibil-panel .bo-cv-cc-grid {
+  gap: 10px;
+}
+
+.bo-cv-cibil-panel .bo-cv-cc-card {
+  padding: 10px 12px;
+  border-radius: 8px;
+  gap: 6px;
+}
+
+.bo-cv-cibil-panel .bo-cv-cc-name {
+  font-size: 12.5px;
+}
+
+.bo-cv-cibil-panel .bo-cv-util-metrics-row {
+  gap: 10px;
+}
+
+.bo-cv-cibil-panel .bo-cv-util-cell {
+  padding: 8px 10px;
+}
+
+.bo-cv-cibil-panel .bo-cv-util-cell small {
+  font-size: 10.5px;
+}
+
+.bo-cv-cibil-panel .bo-cv-util-cell strong {
+  font-size: 12.5px;
+}
+
+.bo-cv-cibil-panel .bo-cv-repay-grid {
+  gap: 8px;
+}
+
+.bo-cv-cibil-panel .bo-cv-repay-cell {
+  padding: 8px 10px;
+}
+
+.bo-cv-cibil-panel .bo-cv-repay-cell small {
+  font-size: 10.5px;
+}
+
+.bo-cv-cibil-panel .bo-cv-repay-cell strong,
+.bo-cv-cibil-panel .bo-cv-repay-cell span {
+  font-size: 12px;
+}
+
+.bo-cv-cibil-panel .bo-cv-insight-box {
+  padding: 12px 16px;
+  border-radius: 8px;
+  gap: 8px;
+}
+
+.bo-cv-cibil-panel .bo-cv-insight-title {
+  font-size: 13px;
+}
+
+.bo-cv-cibil-panel .bo-cv-risk-assess-tag {
+  font-size: 11px;
+}
+
+.bo-cv-cibil-panel .bo-cv-decision-tag {
+  font-size: 11.5px;
+  padding: 3px 8px;
+}
+
+.bo-cv-cibil-panel .bo-cv-highlight-item {
+  padding: 5px 8px;
+  font-size: 11.5px;
+  gap: 6px;
 }
 
 .bo-cv-residence-fi-panel > .bo-cv-step-panel-header .bo-cv-step-header-left {

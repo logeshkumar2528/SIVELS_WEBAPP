@@ -11522,7 +11522,7 @@ export default function CustomerVerification({
                     />
                     <label htmlFor="bo-cv-legal-upload" className="bo-cv-dropzone-label">
                       <div className="bo-cv-dropzone-icon">
-                        {FileTextIcon && <FileTextIcon size={32} />}
+                        {FileTextIcon && <FileTextIcon size={24} />}
                       </div>
                       <strong className="bo-cv-dropzone-title">Upload Legal Opinion Document</strong>
                       <span className="bo-cv-dropzone-sub">
@@ -11590,7 +11590,7 @@ export default function CustomerVerification({
                         <textarea
                           id="bo-cv-legal-remarks-input"
                           className="bo-cv-step-remarks-textarea"
-                          rows={3}
+                          rows={2}
                           placeholder="Enter Legal Opinion remarks..."
                           value={legalOpinion.remarks || ''}
                           onChange={(e) => {
@@ -11661,7 +11661,7 @@ export default function CustomerVerification({
                     />
                     <label htmlFor="bo-cv-tech-upload" className="bo-cv-dropzone-label">
                       <div className="bo-cv-dropzone-icon">
-                        {BuildingIcon && <BuildingIcon size={32} />}
+                        {BuildingIcon && <BuildingIcon size={24} />}
                       </div>
                       <strong className="bo-cv-dropzone-title">Upload Technical Valuation Report</strong>
                       <span className="bo-cv-dropzone-sub">
@@ -11729,7 +11729,7 @@ export default function CustomerVerification({
                         <textarea
                           id="bo-cv-tech-remarks-input"
                           className="bo-cv-step-remarks-textarea"
-                          rows={3}
+                          rows={2}
                           placeholder="Enter Technical Valuation remarks..."
                           value={technicalValue.remarks || ''}
                           onChange={(e) => {
@@ -11870,7 +11870,7 @@ export default function CustomerVerification({
                         <textarea
                           id="bo-cv-cibil-pan-remarks-input"
                           className="bo-cv-step-remarks-textarea"
-                          rows={3}
+                          rows={2}
                           placeholder="Enter Manual CIBIL PAN remarks..."
                           value={manualCibilPan.remarks || ''}
                           onChange={(e) => {
