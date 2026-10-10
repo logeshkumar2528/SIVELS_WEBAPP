@@ -3193,7 +3193,7 @@ export default function PdfView() {
           </table>
 
           {/* DYNAMIC UPLOADED KYC DOCUMENT NAMES */}
-          <div className="pdf-section-title">KYC DOCUMENTS</div>
+          <div className="pdf-section-title">KYC DOCUMENTS AND OTHERS</div>
           <div
             style={{
               display: 'flex',
