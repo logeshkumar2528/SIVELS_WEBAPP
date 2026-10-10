@@ -3591,7 +3591,16 @@ export default function PdfView() {
                 </tr>
               </tbody>
             </table>
-          ) : (
+          ) : collateralList.length === 1 && (
+              collateralList[0]?.typeOfProperty ||
+              collateralList[0]?.propertyName ||
+              collateralList[0]?.locationAddress ||
+              (collateralList[0]?.estimatedValue !== '' &&
+                collateralList[0]?.estimatedValue !== null &&
+                collateralList[0]?.estimatedValue !== undefined) ||
+              collateralList[0]?.usage ||
+              collateralList[0]?.propertyUsageName
+            ) ? (
             <table className="pdf-table">
               <tbody>
                 <tr>
@@ -3619,6 +3628,27 @@ export default function PdfView() {
                       collateralList[0]?.usage ||
                       '-'}
                   </td>
+                </tr>
+              </tbody>
+            </table>
+          ) : (
+            <table className="pdf-table">
+              <tbody>
+                <tr>
+                  <td className="pdf-row-header">Property Type</td>
+                  <td>N/A (Not Applicable)</td>
+                </tr>
+                <tr>
+                  <td className="pdf-row-header">Property Address</td>
+                  <td>N/A (Not Applicable)</td>
+                </tr>
+                <tr>
+                  <td className="pdf-row-header">Estimated Market Value</td>
+                  <td>N/A (Not Applicable)</td>
+                </tr>
+                <tr>
+                  <td className="pdf-row-header">Property Usage</td>
+                  <td>N/A (Not Applicable)</td>
                 </tr>
               </tbody>
             </table>
@@ -3665,25 +3695,8 @@ export default function PdfView() {
             </tbody>
           </table>
 
-          {/* STEP 11: FIELD VERIFICATION */}
-          <div className="pdf-section-title">FIELD VERIFICATION</div>
-          <table className="pdf-table">
-            <tbody>
-              <tr>
-                <td className="pdf-row-header">FI Status</td>
-                <td>{appData.sections?.fieldVerification?.status || '-'}</td>
-              </tr>
-              <tr>
-                <td className="pdf-row-header">FI Remarks</td>
-                <td>
-                  {appData.sections?.fieldVerification?.remarks || '-'}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
           {/* STEP 12: DECLARATION */}
-          <div className="pdf-section-title" style={{ marginTop: '14px' }}>
+          <div className="pdf-section-title">
             12. DECLARATION
           </div>
           <p className="pdf-text-small pdf-text-justify" style={{ margin: '6px 0 12px 0' }}>
@@ -3759,7 +3772,7 @@ export default function PdfView() {
           </div>
 
           {/* CUSTOMER SUPPORT */}
-          <div className="pdf-section-title" style={{ marginTop: '14px' }}>
+          <div className="pdf-section-title">
             CUSTOMER SUPPORT
           </div>
           <div
