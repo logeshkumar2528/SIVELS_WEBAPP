@@ -104,9 +104,6 @@ export function LoanProductCollateral() {
           </div>
           <div>
           <h1 className="masters-page-title">Loan Product Collateral</h1>
-          <p className="masters-page-description">
-            Manage collateral requirements for loan products.
-          </p>
         </div>
       </header>
 

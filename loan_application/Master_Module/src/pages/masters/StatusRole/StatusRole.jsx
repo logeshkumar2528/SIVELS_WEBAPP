@@ -138,9 +138,6 @@ export function StatusRole() {
           </div>
           <div>
           <h1 className="masters-page-title">Status Roles</h1>
-          <p className="masters-page-description">
-            Manage status role configuration.
-          </p>
         </div>
       </header>
 

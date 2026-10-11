@@ -59,7 +59,6 @@ const Header = memo(function Header({
         )}
         <div className="header-title-group">
           <h1 className="header-title">{title}</h1>
-          {subtitle && <p className="header-subtitle">{subtitle}</p>}
         </div>
       </div>
 

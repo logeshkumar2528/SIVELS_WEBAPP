@@ -393,9 +393,6 @@ export function CompanyConfiguration() {
         </div>
         <div>
           <h1 className="masters-page-title">Company Configuration</h1>
-          <p className="masters-page-description">
-            Manage company foundation, finance, communication, and compliance settings.
-          </p>
         </div>
       </header>
 

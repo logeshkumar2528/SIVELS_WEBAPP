@@ -149,9 +149,6 @@ export function MaritalStatus() {
           </div>
           <div>
           <h1 className="masters-page-title">Marital Status</h1>
-          <p className="masters-page-description">
-            Manage marital status configuration.
-          </p>
         </div>
       </header>
 

@@ -160,9 +160,6 @@ export function LoanProduct() {
           </div>
           <div>
           <h1 className="masters-page-title">Loan Products</h1>
-          <p className="masters-page-description">
-            Manage loan product configuration.
-          </p>
         </div>
       </header>
 

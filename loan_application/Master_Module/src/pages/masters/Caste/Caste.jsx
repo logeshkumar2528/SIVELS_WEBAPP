@@ -125,9 +125,6 @@ export function Caste() {
           </div>
           <div>
           <h1 className="masters-page-title">Caste</h1>
-          <p className="masters-page-description">
-            Manage caste configuration and relationships.
-          </p>
         </div>
       </header>
 

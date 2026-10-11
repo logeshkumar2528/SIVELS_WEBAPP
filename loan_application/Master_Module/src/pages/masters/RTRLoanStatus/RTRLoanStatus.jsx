@@ -167,9 +167,6 @@ export function RTRLoanStatus() {
         </div>
         <div>
           <h1 className="masters-page-title">RTR Loan Status Master</h1>
-          <p className="masters-page-description">
-            Manage RTR loan statuses used across RTR obligation sheets.
-          </p>
         </div>
       </header>
 

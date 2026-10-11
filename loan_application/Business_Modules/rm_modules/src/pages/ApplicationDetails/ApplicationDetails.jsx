@@ -1208,7 +1208,6 @@ export default function ApplicationDetails() {
                   <h1 className="ad-page-title">Application & Product Details</h1>
                   <span className="ad-step-badge">Step 1 of 11</span>
                 </div>
-                <p className="ad-page-description">Fill in the primary loan details for verification</p>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

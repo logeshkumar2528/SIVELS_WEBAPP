@@ -167,9 +167,6 @@ export function Bank() {
           </div>
           <div>
           <h1 className="masters-page-title">Bank Master</h1>
-          <p className="masters-page-description">
-            Manage bank configuration.
-          </p>
         </div>
       </header>
 

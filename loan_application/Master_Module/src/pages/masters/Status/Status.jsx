@@ -139,9 +139,6 @@ export function Status() {
           </div>
           <div>
           <h1 className="masters-page-title">Status</h1>
-          <p className="masters-page-description">
-            Manage status configuration.
-          </p>
         </div>
       </header>
 

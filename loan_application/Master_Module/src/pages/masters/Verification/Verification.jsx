@@ -106,9 +106,6 @@ export function Verification() {
           </div>
           <div>
           <h1 className="masters-page-title">Verification</h1>
-          <p className="masters-page-description">
-            Manage verification configuration.
-          </p>
         </div>
       </header>
 

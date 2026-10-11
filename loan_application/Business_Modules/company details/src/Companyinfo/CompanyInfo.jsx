@@ -59,7 +59,6 @@ function CompanyInfo() {
         {/* Page Header */}
         <div className="ci-page-header">
           <h1>Company Details</h1>
-          <p>Learn more about SIVELS FINANCE – your trusted financial partner.</p>
         </div>
 
         {/* ---- About Banner ---- */}

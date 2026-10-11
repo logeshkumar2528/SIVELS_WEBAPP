@@ -1004,9 +1004,6 @@ export function Dashboard() {
         <div className="dashboard-hero-copy">
           <span className="eyebrow">MASTER WORKSPACE</span>
           <h1 className="dashboard-title">Admin dashboard</h1>
-          <p className="dashboard-description">
-            A cleaner operating view for the lending network, built for quick scanning and easy action.
-          </p>
           <div className="dashboard-meta-row">
             <span><Activity size={14} /> Live data</span>
             <span><Users size={14} /> {agents.length} agents</span>

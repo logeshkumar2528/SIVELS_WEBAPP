@@ -160,9 +160,6 @@ export function LoanPurpose() {
           </div>
           <div>
           <h1 className="masters-page-title">Loan Purposes</h1>
-          <p className="masters-page-description">
-            Manage loan purpose configuration.
-          </p>
         </div>
       </header>
 

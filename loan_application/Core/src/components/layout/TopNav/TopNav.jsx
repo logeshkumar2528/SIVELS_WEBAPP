@@ -39,12 +39,6 @@ const TopNav = ({ title, subtitle, headerContent, rightContent, hideProfile = fa
       <div className="topnav-content">
         <div className="topnav-titles">
           <h1 className="topnav-title">{title}</h1>
-          {subtitle && (
-            <>
-              <span className="topnav-subtitle-separator">|</span>
-              <span className="topnav-subtitle">{subtitle}</span>
-            </>
-          )}
         </div>
         
         {headerContent && (

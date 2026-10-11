@@ -101,6 +101,8 @@ const BarChartIcon = iconMap['BarChart3'] || iconMap['BarChart2'] || iconMap['Ba
 const CalculatorIcon = iconMap['Calculator'] || iconMap['BadgeIndianRupee'];
 const ExpandIcon = iconMap['Expand'] || iconMap['ExternalLink'];
 const ZapIcon = iconMap['Zap'];
+const Trash2Icon = iconMap['Trash2'] || iconMap['X'];
+const ExternalLinkIcon = iconMap['ExternalLink'];
 
 function formatCurrency(amount) {
   if (amount === null || amount === undefined || isNaN(amount) || amount === 0) return '₹0';
@@ -10650,6 +10652,10 @@ export default function CustomerVerification({
   const panNumber = verificationData.personalInformation?.panNumber || 'Not Available';
   const statusInfo = getStatusInfo(verificationData.overallStatus);
 
+  const visibleSidebarSteps = VERIFICATION_WORKFLOW_STEPS.filter(
+    (step) => ![9, 10, 11, 12].includes(step.id)
+  );
+
   return (
     <div className="bo-cv-page-wrap">
       {/* ── 1. Compact Verification Header (Real API Data) ──────────────── */}
@@ -10771,34 +10777,46 @@ export default function CustomerVerification({
         )}
 
         {/* ── 15-STEP VERIFICATION WORKFLOW SIDEBAR (SIVELS FINANCE) ── */}
-        <aside className="bo-cv-left-sidebar" aria-label="16-Step Underwriting Verification Workflow">
+        <aside className="bo-cv-left-sidebar" aria-label={`${visibleSidebarSteps.length}-Step Underwriting Verification Workflow`}>
           <div className="bo-cv-sidebar-header">
             <div className="bo-cv-sidebar-heading-row">
               <div>
                 <h2 className="bo-cv-sidebar-title">Verification Steps</h2>
-                <span className="bo-cv-sidebar-subtitle">16-Step Workflow</span>
+                <span className="bo-cv-sidebar-subtitle">{visibleSidebarSteps.length}-Step Workflow</span>
               </div>
-              <span className="bo-cv-step-count">{VERIFICATION_WORKFLOW_STEPS.length}</span>
+              <span className="bo-cv-step-count">{visibleSidebarSteps.length}</span>
             </div>
           </div>
 
           <nav className="bo-cv-steps-nav">
             <ul className="bo-cv-steps-list" role="list">
-              {VERIFICATION_WORKFLOW_STEPS.map((step) => {
+              {visibleSidebarSteps.map((step, index) => {
+                const isUnifiedVerif = step.id === 8;
                 const stepNum = step.number;
                 const isDocStep = step.id === 2;
-                const isSelected = isDocStep
+                const isSelected = isUnifiedVerif
+                  ? [8, 9, 10, 11, 12].includes(activeStep)
+                  : isDocStep
                   ? (activeStep >= 2 && activeStep <= 7)
                   : (activeStep === stepNum);
+
+                const stepTitle = isUnifiedVerif
+                  ? 'Document Verifications'
+                  : isDocStep
+                  ? 'KYC Document Verification'
+                  : step.title;
+                const formattedNum = String(index + 1).padStart(2, '0');
                 const allVerified = allApplicantDocsVerified;
                 const totalRequired = applicantRequiredCount || 1;
-                const formattedNum = step.visibleNum || String(stepNum).padStart(2, '0');
                 const subtitle = isDocStep
                   ? (allVerified ? `${totalRequired}/${totalRequired} Verified` : `${applicantVerifiedCount}/${totalRequired} Verified`)
                   : step.subtitle;
+
                 const cmSectionStatus =
                   isCreditManagerView && sectionReview ? sectionReview.getStatus(step.id) : null;
-                const returnAttentionCount = creditReturnAttentionByStep[step.id] || 0;
+                const returnAttentionCount = isUnifiedVerif
+                  ? [8, 9, 10, 11, 12].reduce((sum, id) => sum + (creditReturnAttentionByStep[id] || 0), 0)
+                  : (creditReturnAttentionByStep[step.id] || 0);
 
                 return (
                   <li key={step.id} className="bo-cv-step-item">
@@ -10806,7 +10824,9 @@ export default function CustomerVerification({
                       type="button"
                       className={`bo-cv-step-card ${isSelected ? 'is-active' : ''}`}
                       onClick={() => {
-                        if (isDocStep) {
+                        if (isUnifiedVerif) {
+                          navigateToStep(8);
+                        } else if (isDocStep) {
                           if (activeStep < 2 || activeStep > 7) {
                             navigateToStep(2);
                           }
@@ -10814,14 +10834,14 @@ export default function CustomerVerification({
                           navigateToStep(stepNum);
                         }
                       }}
-                      aria-label={`Step ${formattedNum}: ${step.title}. ${isDocStep ? `${applicantVerifiedCount} of ${totalRequired} verified.` : ''}${returnAttentionCount ? ' Action required on Credit Manager return.' : ''} Click to view.`}
+                      aria-label={`Step ${formattedNum}: ${stepTitle}.${isDocStep ? ` ${applicantVerifiedCount} of ${totalRequired} verified.` : ''}${returnAttentionCount ? ' Action required on Credit Manager return.' : ''} Click to view.`}
                     >
                       <div className="bo-cv-step-num-box" aria-hidden="true">
                         {formattedNum}
                       </div>
 
                       <div className="bo-cv-step-details">
-                        <strong className="bo-cv-step-name">{step.title}</strong>
+                        <strong className="bo-cv-step-name">{stepTitle}</strong>
                         <span className="bo-cv-step-desc">{subtitle}</span>
                       </div>
 
@@ -10901,16 +10921,18 @@ export default function CustomerVerification({
             />
           </div>
 
-          <CreditReturnSectionPanel
-            key={activeReturnStepId}
-            sectionTitle={activeReturnStepTitle}
-            items={activeReturnItems}
-            viewerRole={viewerRole}
-            canAct={canActOnCreditReturns}
-            lockedReason={creditReturnLockedReason}
-            onSubmit={handleCreditReturnSubmit}
-            panelRef={creditReturnPanelRef}
-          />
+          {![8, 9, 10, 11, 12].includes(activeStep) && (
+            <CreditReturnSectionPanel
+              key={activeReturnStepId}
+              sectionTitle={activeReturnStepTitle}
+              items={activeReturnItems}
+              viewerRole={viewerRole}
+              canAct={canActOnCreditReturns}
+              lockedReason={creditReturnLockedReason}
+              onSubmit={handleCreditReturnSubmit}
+              panelRef={creditReturnPanelRef}
+            />
+          )}
 
           {/* ══════════════════════════════════════════════════════════════════
               STEP 01: VIEW FORM
@@ -10963,9 +10985,6 @@ export default function CustomerVerification({
                         {applicantVerifiedCount}/{applicantRequiredCount || 1} VERIFIED
                       </span>
                     </div>
-                    <p className="bo-cv-step-panel-desc">
-                      Consolidated document review workspace. Inspect, verify, or return documents to RM for Applicant and Co-Applicant(s).
-                    </p>
                   </div>
                 </div>
                 <div className="bo-cv-doc-header-right">
@@ -11010,7 +11029,9 @@ export default function CustomerVerification({
                         </tr>
                       </thead>
                       <tbody>
-                        {applicantDocRows.map((row, idx) => {
+                        {applicantDocRows
+                          .filter((row) => row.hasFile)
+                          .map((row, idx) => {
                           const IconComp = row.icon;
                           const isThisRowSaving = savingVerificationKey === `${row.applicantSequence || 0}_${row.stepCode}`;
                           const isCheckboxDisabled =
@@ -11165,69 +11186,61 @@ export default function CustomerVerification({
                 </div>
 
                 {/* ── CARD 2: CO-APPLICANT DOCUMENTS TABLE ── */}
-                <div className="bo-cv-doc-card">
-                  <div className="bo-cv-doc-card-header">
-                    <div className="bo-cv-doc-card-header-left">
-                      <div className="bo-cv-doc-card-icon is-coapp">
-                        {UsersIcon ? <UsersIcon size={18} /> : <span>👥</span>}
-                      </div>
-                      <div>
-                        <h3 className="bo-cv-doc-card-title">Co-Applicant Documents</h3>
-                        {selectedCoApplicant && (
-                          <span className="bo-cv-doc-card-subtitle">
-                            {selectedCoApplicant.customerName || `Co-Applicant ${selectedCoApplicant.number || selectedCoApplicantIndex + 1}`}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="bo-cv-doc-card-header-right">
-                      {coApplicants.length > 1 ? (
-                        <div className="bo-cv-coapp-nav">
-                          <button
-                            type="button"
-                            className="bo-cv-coapp-nav-btn"
-                            disabled={selectedCoApplicantIndex === 0}
-                            onClick={() => setSelectedCoApplicantIndex((prev) => Math.max(0, prev - 1))}
-                            title="Previous Co-Applicant"
-                            aria-label="Previous Co-Applicant"
-                          >
-                            {ChevronLeftIcon ? <ChevronLeftIcon size={16} /> : <span>‹</span>}
-                          </button>
-                          <span className="bo-cv-coapp-nav-label">
-                            Co-Applicant {selectedCoApplicant?.number || selectedCoApplicantIndex + 1}
-                            {selectedCoApplicant?.customerName ? `: ${selectedCoApplicant.customerName}` : ''}
-                          </span>
-                          <span className="bo-cv-coapp-nav-counter">
-                            {selectedCoApplicantIndex + 1}/{coApplicants.length}
-                          </span>
-                          <button
-                            type="button"
-                            className="bo-cv-coapp-nav-btn"
-                            disabled={selectedCoApplicantIndex >= coApplicants.length - 1}
-                            onClick={() => setSelectedCoApplicantIndex((prev) => Math.min(coApplicants.length - 1, prev + 1))}
-                            title="Next Co-Applicant"
-                            aria-label="Next Co-Applicant"
-                          >
-                            {ChevronRightIcon ? <ChevronRightIcon size={16} /> : <span>›</span>}
-                          </button>
+                {coApplicants.length > 0 && (
+                  <div className="bo-cv-doc-card">
+                    <div className="bo-cv-doc-card-header">
+                      <div className="bo-cv-doc-card-header-left">
+                        <div className="bo-cv-doc-card-icon is-coapp">
+                          {UsersIcon ? <UsersIcon size={18} /> : <span>👥</span>}
                         </div>
-                      ) : coApplicants.length === 1 ? (
-                        <span className="bo-cv-doc-card-count-badge">
-                          {selectedCoApplicant?.customerName || 'Co-Applicant 1'} (1 Attached)
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {coApplicants.length === 0 ? (
-                    <div className="bo-cv-doc-empty-card-state">
-                      <div className="bo-cv-doc-empty-icon">
-                        {UsersIcon ? <UsersIcon size={24} /> : <span>👥</span>}
+                        <div>
+                          <h3 className="bo-cv-doc-card-title">Co-Applicant Documents</h3>
+                          {selectedCoApplicant && (
+                            <span className="bo-cv-doc-card-subtitle">
+                              {selectedCoApplicant.customerName || `Co-Applicant ${selectedCoApplicant.number || selectedCoApplicantIndex + 1}`}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <h4>No Co-Applicants Attached</h4>
-                      <p>This loan application does not currently have any co-applicants registered.</p>
+                      <div className="bo-cv-doc-card-header-right">
+                        {coApplicants.length > 1 ? (
+                          <div className="bo-cv-coapp-nav">
+                            <button
+                              type="button"
+                              className="bo-cv-coapp-nav-btn"
+                              disabled={selectedCoApplicantIndex === 0}
+                              onClick={() => setSelectedCoApplicantIndex((prev) => Math.max(0, prev - 1))}
+                              title="Previous Co-Applicant"
+                              aria-label="Previous Co-Applicant"
+                            >
+                              {ChevronLeftIcon ? <ChevronLeftIcon size={16} /> : <span>‹</span>}
+                            </button>
+                            <span className="bo-cv-coapp-nav-label">
+                              Co-Applicant {selectedCoApplicant?.number || selectedCoApplicantIndex + 1}
+                              {selectedCoApplicant?.customerName ? `: ${selectedCoApplicant.customerName}` : ''}
+                            </span>
+                            <span className="bo-cv-coapp-nav-counter">
+                              {selectedCoApplicantIndex + 1}/{coApplicants.length}
+                            </span>
+                            <button
+                              type="button"
+                              className="bo-cv-coapp-nav-btn"
+                              disabled={selectedCoApplicantIndex >= coApplicants.length - 1}
+                              onClick={() => setSelectedCoApplicantIndex((prev) => Math.min(coApplicants.length - 1, prev + 1))}
+                              title="Next Co-Applicant"
+                              aria-label="Next Co-Applicant"
+                            >
+                              {ChevronRightIcon ? <ChevronRightIcon size={16} /> : <span>›</span>}
+                            </button>
+                          </div>
+                        ) : coApplicants.length === 1 ? (
+                          <span className="bo-cv-doc-card-count-badge">
+                            {selectedCoApplicant?.customerName || 'Co-Applicant 1'} (1 Attached)
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
-                  ) : (
+
                     <div className="bo-cv-doc-table-wrapper">
                       <table className="bo-cv-doc-table">
                         <thead>
@@ -11242,7 +11255,9 @@ export default function CustomerVerification({
                           </tr>
                         </thead>
                         <tbody>
-                          {coApplicantDocRows.filter((row) => row.stepCode === 'ZIP_ARCHIVE').map((row, idx) => {
+                          {coApplicantDocRows
+                            .filter((row) => row.hasFile)
+                            .map((row, idx) => {
                             const IconComp = row.icon;
                             const isThisRowSaving = savingVerificationKey === `${row.applicantSequence}_${row.stepCode}`;
                             const isCheckboxDisabled =
@@ -11394,382 +11409,413 @@ export default function CustomerVerification({
                         </tbody>
                       </table>
                     </div>
-                  )}
+                  </div>
+                )}
+
+                {/* ── CARD 3: CUSTOMER PROOFS TABLE ── */}
+                <div className="bo-cv-doc-card bo-cv-doc-card--proofs">
+                  <CustomerProofVerificationSection
+                    agentCustomerId={verificationData?.customerId || verificationData?.agentCustomerId || customerId}
+                    applicationProductDetailsId={resolvedAppProdId || null}
+                    rmId={
+                      verificationData?.rmId ||
+                      verificationData?.customer?.rmId ||
+                      verificationData?.application?.rmId ||
+                      verificationData?.raw?.customer?.rmId ||
+                      verificationData?.raw?.productDetails?.[0]?.rmId ||
+                      verificationData?.raw?.productDetails?.rmId ||
+                      null
+                    }
+                    backOfficeId={getAuthenticatedBackOfficeId()}
+                    applicants={[
+                      { sequence: 0, name: verificationData?.customerName || '' },
+                      ...coApplicants.map((co) => ({ sequence: co.sequence, name: co.name })),
+                    ]}
+                    onChanged={() => {
+                      fetchApplicationRejections();
+                      fetchAllCustomerDocs();
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              UNIFIED WORKSPACE: VERIFICATIONS (STEPS 03–07)
+          ══════════════════════════════════════════════════════════════════ */}
+          {[8, 9, 10, 11, 12].includes(activeStep) && (
+            <div className="bo-cv-step-panel bo-cv-unified-workspace-panel">
+              {/* 1. Main Header */}
+              <div className="bo-cv-step-panel-header bo-cv-unified-header">
+                <div className="bo-cv-step-header-left">
+                  <div>
+                    <h2 className="bo-cv-step-panel-title">Verifications</h2>
+                  </div>
                 </div>
               </div>
 
-              <CustomerProofVerificationSection
-                agentCustomerId={verificationData?.customerId || verificationData?.agentCustomerId || customerId}
-                applicationProductDetailsId={resolvedAppProdId || null}
-                rmId={
-                  verificationData?.rmId ||
-                  verificationData?.customer?.rmId ||
-                  verificationData?.application?.rmId ||
-                  verificationData?.raw?.customer?.rmId ||
-                  verificationData?.raw?.productDetails?.[0]?.rmId ||
-                  verificationData?.raw?.productDetails?.rmId ||
-                  null
-                }
-                backOfficeId={getAuthenticatedBackOfficeId()}
-                applicants={[
-                  { sequence: 0, name: verificationData?.customerName || '' },
-                  ...coApplicants.map((co) => ({ sequence: co.sequence, name: co.name })),
-                ]}
-                onChanged={() => {
-                  fetchApplicationRejections();
-                  fetchAllCustomerDocs();
-                }}
+              {/* 2. Section Selector Dropdown */}
+              <div className="bo-cv-unified-selector-row">
+                <label htmlFor="bo-cv-unified-step-select" className="bo-cv-unified-selector-label">
+                  Select Section:
+                </label>
+                <div className="bo-cv-unified-select-wrapper">
+                  <select
+                    id="bo-cv-unified-step-select"
+                    className="bo-cv-unified-select"
+                    value={activeStep}
+                    onChange={(e) => navigateToStep(Number(e.target.value))}
+                    aria-label="Select verification section"
+                  >
+                    <option value={8}>Property FI</option>
+                    <option value={9}>Office FI</option>
+                    <option value={10}>Residence FI</option>
+                    <option value={11}>Legal Report</option>
+                    <option value={12}>Technical Report</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 3. Section-Scoped Credit Manager Return Panel */}
+              <CreditReturnSectionPanel
+                key={activeStep}
+                sectionTitle={activeReturnStepTitle}
+                items={creditReturnItemsByStep[activeStep] || []}
+                viewerRole={viewerRole}
+                canAct={canActOnCreditReturns}
+                lockedReason={creditReturnLockedReason}
+                onSubmit={handleCreditReturnSubmit}
+                panelRef={creditReturnPanelRef}
               />
-            </div>
-          )}
 
-          {activeStep === 8 && (
-            <div className="bo-cv-step-panel bo-cv-property-fi-panel">
-              <div className="bo-cv-step-panel-header">
-                <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">03</div>
-                  <div>
-                    <h2 className="bo-cv-step-panel-title">Property FI</h2>
+              {/* 4. Selected Section Content */}
+              <div className="bo-cv-unified-section-content">
+                {/* ── STEP 03: PROPERTY FI ── */}
+                {activeStep === 8 && (
+                  <div className="bo-cv-placeholder-panel">
+                    <div className="bo-cv-placeholder-icon">
+                      {BuildingIcon && <BuildingIcon size={40} />}
+                    </div>
+                    <span className="bo-cv-placeholder-badge">PENDING IMPLEMENTATION</span>
+                    <h3>Property FI — implementation pending</h3>
+                    <p>Property field investigation module integration is scheduled for future underwriting release.</p>
                   </div>
-                </div>
-                <span className="bo-cv-step-tag-pill">Step 03 of 14</span>
-              </div>
+                )}
 
-              <div className="bo-cv-placeholder-panel">
-                <div className="bo-cv-placeholder-icon">
-                  {BuildingIcon && <BuildingIcon size={40} />}
-                </div>
-                <span className="bo-cv-placeholder-badge">PENDING IMPLEMENTATION</span>
-                <h3>Property FI — implementation pending</h3>
-                <p>Property field investigation module integration is scheduled for future underwriting release.</p>
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════════════
-              STEP 09: OFFICE FI (PLACEHOLDER)
-          ══════════════════════════════════════════════════════════════════ */}
-          {activeStep === 9 && (
-            <div className="bo-cv-step-panel bo-cv-office-fi-panel">
-              <div className="bo-cv-step-panel-header">
-                <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">04</div>
-                  <div>
-                    <h2 className="bo-cv-step-panel-title">Office FI</h2>
+                {/* ── STEP 04: OFFICE FI ── */}
+                {activeStep === 9 && (
+                  <div className="bo-cv-placeholder-panel">
+                    <div className="bo-cv-placeholder-icon">
+                      {BuildingIcon && <BuildingIcon size={40} />}
+                    </div>
+                    <span className="bo-cv-placeholder-badge">PENDING IMPLEMENTATION</span>
+                    <h3>Office FI — implementation pending</h3>
+                    <p>Office field investigation module integration is scheduled for future underwriting release.</p>
                   </div>
-                </div>
-                <span className="bo-cv-step-tag-pill">Step 04 of 14</span>
-              </div>
+                )}
 
-              <div className="bo-cv-placeholder-panel">
-                <div className="bo-cv-placeholder-icon">
-                  {BuildingIcon && <BuildingIcon size={40} />}
-                </div>
-                <span className="bo-cv-placeholder-badge">PENDING IMPLEMENTATION</span>
-                <h3>Office FI — implementation pending</h3>
-                <p>Office field investigation module integration is scheduled for future underwriting release.</p>
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════════════
-              STEP 10: RESIDENCE FI (PLACEHOLDER)
-          ══════════════════════════════════════════════════════════════════ */}
-          {activeStep === 10 && (
-            <div className="bo-cv-step-panel bo-cv-residence-fi-panel">
-              <div className="bo-cv-step-panel-header">
-                <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">05</div>
-                  <div>
-                    <h2 className="bo-cv-step-panel-title">Residence FI</h2>
+                {/* ── STEP 05: RESIDENCE FI ── */}
+                {activeStep === 10 && (
+                  <div className="bo-cv-placeholder-panel">
+                    <div className="bo-cv-placeholder-icon">
+                      {BuildingIcon && <BuildingIcon size={40} />}
+                    </div>
+                    <span className="bo-cv-placeholder-badge">PENDING IMPLEMENTATION</span>
+                    <h3>Residence FI — implementation pending</h3>
+                    <p>Residence field investigation module integration is scheduled for future underwriting release.</p>
                   </div>
-                </div>
-                <span className="bo-cv-step-tag-pill">Step 05 of 14</span>
-              </div>
+                )}
 
-              <div className="bo-cv-placeholder-panel">
-                <div className="bo-cv-placeholder-icon">
-                  {BuildingIcon && <BuildingIcon size={40} />}
-                </div>
-                <span className="bo-cv-placeholder-badge">PENDING IMPLEMENTATION</span>
-                <h3>Residence FI — implementation pending</h3>
-                <p>Residence field investigation module integration is scheduled for future underwriting release.</p>
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════════════
-              STEP 09: LEGAL OPINION
-          ══════════════════════════════════════════════════════════════════ */}
-          {activeStep === 11 && (
-            <div className="bo-cv-step-panel bo-cv-legal-report-panel">
-              <div className="bo-cv-step-panel-header">
-                <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">06</div>
-                  <div>
-                    <h2 className="bo-cv-step-panel-title">Legal Report</h2>
-                  </div>
-                </div>
-                <span className="bo-cv-step-tag-pill">Step 06 of 14</span>
-              </div>
-
-              <div className="bo-cv-upload-container">
-                {!legalOpinion.backOfficeApplicationDocumentId && !legalOpinion.file ? (
-                  <div className="bo-cv-dropzone-box">
-                    <input
-                      type="file"
-                      id="bo-cv-legal-upload"
-                      className="bo-cv-file-input"
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
-                      onChange={(e) => handleUploadOrReplaceDocument(e, 'LEGAL_OPINION', legalOpinion, setLegalOpinion)}
-                      disabled={legalOpinion.loading}
-                    />
-                    <label htmlFor="bo-cv-legal-upload" className="bo-cv-dropzone-label">
-                      <div className="bo-cv-dropzone-icon">
-                        {FileTextIcon && <FileTextIcon size={32} />}
+                {/* ── STEP 06: LEGAL REPORT ── */}
+                {activeStep === 11 && (
+                  <div className="bo-cv-upload-container">
+                    {!legalOpinion.backOfficeApplicationDocumentId && !legalOpinion.file ? (
+                      <div className="bo-cv-dropzone-box">
+                        <input
+                          type="file"
+                          id="bo-cv-legal-upload"
+                          className="bo-cv-file-input"
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                          onChange={(e) => handleUploadOrReplaceDocument(e, 'LEGAL_OPINION', legalOpinion, setLegalOpinion)}
+                          disabled={legalOpinion.loading}
+                        />
+                        <label htmlFor="bo-cv-legal-upload" className="bo-cv-dropzone-label">
+                          <div className="bo-cv-dropzone-icon">
+                            {FileTextIcon && <FileTextIcon size={24} />}
+                          </div>
+                          <strong className="bo-cv-dropzone-title">Upload Legal Opinion Document</strong>
+                          <span className="bo-cv-dropzone-sub">
+                            Drag and drop or browse file from your device &bull; Maximum file size 150 MB
+                          </span>
+                          <span className="bo-cv-dropzone-types">Supported formats: PDF, DOC, DOCX, JPG, PNG, WEBP</span>
+                        </label>
                       </div>
-                      <strong className="bo-cv-dropzone-title">Upload Legal Opinion Document</strong>
-                      <span className="bo-cv-dropzone-sub">
-                        Drag and drop or browse file from your device &bull; Maximum file size 150 MB
-                      </span>
-                      <span className="bo-cv-dropzone-types">Supported formats: PDF, DOC, DOCX, JPG, PNG, WEBP</span>
-                    </label>
-                  </div>
-                ) : (
-                  <>
-                    <div className="bo-cv-file-card">
-                      <div className="bo-cv-file-card-info">
-                        <div className="bo-cv-file-card-icon">
-                          {FileCheckIcon && <FileCheckIcon size={26} />}
-                        </div>
-                        <div className="bo-cv-file-card-details">
-                          <h4 className="bo-cv-file-name">{legalOpinion.fileName || legalOpinion.documentTitle || 'Legal Opinion Document'}</h4>
-                          <div className="bo-cv-file-meta-badges">
-                            {legalOpinion.fileSize && (
-                              <span className="bo-cv-file-size">Size: {legalOpinion.fileSize}</span>
-                            )}
-                            {legalOpinion.uploadedAt && (
-                              <span className="bo-cv-file-size">Uploaded: {new Date(legalOpinion.uploadedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                            )}
-                            <span className="bo-cv-file-status-badge">{legalOpinion.documentStatus || 'Uploaded'}</span>
+                    ) : (
+                      <>
+                        <div className="bo-cv-file-card bo-cv-file-card--compact">
+                          <div className="bo-cv-file-card-info">
+                            <div className="bo-cv-file-card-icon">
+                              {FileCheckIcon && <FileCheckIcon size={24} />}
+                            </div>
+                            <div className="bo-cv-file-card-details">
+                              <h4 className="bo-cv-file-name" title={legalOpinion.fileName || legalOpinion.documentTitle || 'Legal Opinion Document'}>
+                                {legalOpinion.fileName || legalOpinion.documentTitle || 'Legal Opinion Document'}
+                              </h4>
+                              <div className="bo-cv-file-meta-badges">
+                                {legalOpinion.fileSize && (
+                                  <span className="bo-cv-file-size">Size: {legalOpinion.fileSize}</span>
+                                )}
+                                {legalOpinion.uploadedAt && (
+                                  <span className="bo-cv-file-size">Uploaded: {new Date(legalOpinion.uploadedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                )}
+                                <span className="bo-cv-file-status-badge">{legalOpinion.documentStatus || 'Uploaded'}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="bo-cv-file-card-actions bo-cv-file-card-actions--compact">
+                            <label
+                              htmlFor="bo-cv-legal-replace"
+                              className={`bo-btn bo-btn--outline bo-btn--sm bo-btn--icon bo-btn--replace${legalOpinion.loading ? ' is-disabled' : ''}`}
+                              title="Replace Legal Opinion Document"
+                              aria-label="Replace Legal Opinion Document"
+                            >
+                              <input
+                                type="file"
+                                id="bo-cv-legal-replace"
+                                className="bo-cv-file-input"
+                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                                onChange={(e) => handleUploadOrReplaceDocument(e, 'LEGAL_OPINION', legalOpinion, setLegalOpinion)}
+                                disabled={legalOpinion.loading}
+                              />
+                              {RefreshCwIcon && <RefreshCwIcon size={14} />}
+                            </label>
+                            <button
+                              type="button"
+                              className="bo-btn bo-btn--outline bo-btn--sm bo-btn--icon"
+                              onClick={() => handleViewBackOfficeDocument(legalOpinion, setLegalOpinion)}
+                              disabled={legalOpinion.loading}
+                              title="View Legal Opinion Document"
+                              aria-label="View Legal Opinion Document"
+                            >
+                              {EyeIcon && <EyeIcon size={14} />}
+                            </button>
+                            <button
+                              type="button"
+                              className="bo-btn bo-btn--outline bo-btn--sm bo-btn--icon"
+                              onClick={() => handleDownloadBackOfficeDocument(legalOpinion, setLegalOpinion)}
+                              disabled={legalOpinion.loading}
+                              title="Download Legal Opinion Document"
+                              aria-label="Download Legal Opinion Document"
+                            >
+                              {DownloadIcon && <DownloadIcon size={14} />}
+                            </button>
+                            <button
+                              type="button"
+                              className="bo-btn bo-btn--outline-danger bo-btn--sm bo-btn--icon"
+                              onClick={() => handleDeleteBackOfficeDocument('LEGAL_OPINION', legalOpinion, setLegalOpinion)}
+                              disabled={legalOpinion.loading}
+                              title="Delete Legal Opinion Document"
+                              aria-label="Delete Legal Opinion Document"
+                            >
+                              {Trash2Icon && <Trash2Icon size={14} />}
+                            </button>
                           </div>
                         </div>
-                      </div>
-                      <div className="bo-cv-file-card-actions">
-                        <button
-                          type="button"
-                          className="bo-btn bo-btn--outline bo-btn--sm"
-                          onClick={() => handleViewBackOfficeDocument(legalOpinion, setLegalOpinion)}
-                          disabled={legalOpinion.loading}
-                        >
-                          {ExternalLinkIcon && <ExternalLinkIcon size={13} />}
-                          <span>{legalOpinion.loading ? 'Loading...' : 'View'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="bo-btn bo-btn--outline bo-btn--sm"
-                          onClick={() => handleDownloadBackOfficeDocument(legalOpinion, setLegalOpinion)}
-                          disabled={legalOpinion.loading}
-                        >
-                          {DownloadIcon && <DownloadIcon size={13} />}
-                          <span>Download</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="bo-btn bo-btn--outline-danger bo-btn--sm"
-                          onClick={() => handleDeleteBackOfficeDocument('LEGAL_OPINION', legalOpinion, setLegalOpinion)}
-                          disabled={legalOpinion.loading}
-                        >
-                          {Trash2Icon && <Trash2Icon size={13} />}
-                          <span>Delete</span>
-                        </button>
-                      </div>
-                    </div>
 
-                    {legalOpinion.backOfficeApplicationDocumentId && (
-                      <div className="bo-cv-step-remarks-box">
-                        <label htmlFor="bo-cv-legal-remarks-input" className="bo-cv-step-remarks-label">
-                          Legal Opinion Remarks
-                        </label>
-                        <textarea
-                          id="bo-cv-legal-remarks-input"
-                          className="bo-cv-step-remarks-textarea"
-                          rows={3}
-                          placeholder="Enter Legal Opinion remarks..."
-                          value={legalOpinion.remarks || ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setLegalOpinion((prev) => ({ ...prev, remarks: val, error: null, successMsg: '' }));
-                          }}
-                          disabled={legalOpinion.savingRemarks}
-                        />
-                        <div className="bo-cv-step-remarks-footer">
-                          {legalOpinion.successMsg && (
-                            <span className="bo-cv-step-remarks-success">
-                              ✓ {legalOpinion.successMsg}
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            className="bo-btn bo-btn--primary bo-btn--sm bo-cv-btn-save-remarks"
-                            onClick={() => handleOpenSaveRemarksConfirm('LEGAL_OPINION', 'Legal Opinion', legalOpinion, setLegalOpinion)}
-                            disabled={legalOpinion.savingRemarks || !(legalOpinion.remarks || '').trim()}
-                          >
-                            {legalOpinion.savingRemarks ? 'Saving...' : 'Save'}
-                          </button>
-                        </div>
+                        {legalOpinion.backOfficeApplicationDocumentId && (
+                          <div className="bo-cv-step-remarks-box bo-cv-step-remarks-box--compact">
+                            <label htmlFor="bo-cv-legal-remarks-input" className="bo-cv-step-remarks-label">
+                              Legal Opinion Remarks
+                            </label>
+                            <textarea
+                              id="bo-cv-legal-remarks-input"
+                              className="bo-cv-step-remarks-textarea"
+                              rows={2}
+                              placeholder="Enter Legal Opinion remarks..."
+                              value={legalOpinion.remarks || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setLegalOpinion((prev) => ({ ...prev, remarks: val, error: null, successMsg: '' }));
+                              }}
+                              disabled={legalOpinion.savingRemarks}
+                            />
+                            <div className="bo-cv-step-remarks-footer">
+                              {legalOpinion.successMsg && (
+                                <span className="bo-cv-step-remarks-success">
+                                  ✓ {legalOpinion.successMsg}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                className="bo-btn bo-btn--primary bo-btn--sm bo-cv-btn-save-remarks"
+                                onClick={() => handleOpenSaveRemarksConfirm('LEGAL_OPINION', 'Legal Opinion', legalOpinion, setLegalOpinion)}
+                                disabled={legalOpinion.savingRemarks || !(legalOpinion.remarks || '').trim()}
+                              >
+                                {legalOpinion.savingRemarks ? 'Saving...' : 'Save'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {legalOpinion.loading && (
+                      <div className="bo-cv-feedback-alert is-info">
+                        Processing Legal Opinion document...
                       </div>
                     )}
-                  </>
-                )}
-
-                {legalOpinion.loading && (
-                  <div className="bo-cv-feedback-alert is-info">
-                    Processing Legal Opinion document...
-                  </div>
-                )}
-                {legalOpinion.error && (
-                  <div className="bo-cv-feedback-alert is-error">
-                    {legalOpinion.error}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════════════
-              STEP 10: TECHNICAL VALUE
-          ══════════════════════════════════════════════════════════════════ */}
-          {activeStep === 12 && (
-            <div className="bo-cv-step-panel bo-cv-technical-report-panel">
-              <div className="bo-cv-step-panel-header">
-                <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">07</div>
-                  <div>
-                    <h2 className="bo-cv-step-panel-title">Technical Report</h2>
-                  </div>
-                </div>
-                <span className="bo-cv-step-tag-pill">Step 07 of 14</span>
-              </div>
-
-              <div className="bo-cv-upload-container">
-                {!technicalValue.backOfficeApplicationDocumentId && !technicalValue.file ? (
-                  <div className="bo-cv-dropzone-box">
-                    <input
-                      type="file"
-                      id="bo-cv-tech-upload"
-                      className="bo-cv-file-input"
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
-                      onChange={(e) => handleUploadOrReplaceDocument(e, 'TECHNICAL_VALUATION', technicalValue, setTechnicalValue)}
-                      disabled={technicalValue.loading}
-                    />
-                    <label htmlFor="bo-cv-tech-upload" className="bo-cv-dropzone-label">
-                      <div className="bo-cv-dropzone-icon">
-                        {BuildingIcon && <BuildingIcon size={32} />}
+                    {legalOpinion.error && (
+                      <div className="bo-cv-feedback-alert is-error">
+                        {legalOpinion.error}
                       </div>
-                      <strong className="bo-cv-dropzone-title">Upload Technical Valuation Report</strong>
-                      <span className="bo-cv-dropzone-sub">
-                        Drag and drop or browse file from your device &bull; Maximum file size 150 MB
-                      </span>
-                      <span className="bo-cv-dropzone-types">Supported formats: PDF, DOC, DOCX, JPG, PNG, WEBP</span>
-                    </label>
+                    )}
                   </div>
-                ) : (
-                  <>
-                    <div className="bo-cv-file-card">
-                      <div className="bo-cv-file-card-info">
-                        <div className="bo-cv-file-card-icon">
-                          {FileCheckIcon && <FileCheckIcon size={26} />}
-                        </div>
-                        <div className="bo-cv-file-card-details">
-                          <h4 className="bo-cv-file-name">{technicalValue.fileName || technicalValue.documentTitle || 'Technical Valuation Document'}</h4>
-                          <div className="bo-cv-file-meta-badges">
-                            {technicalValue.fileSize && (
-                              <span className="bo-cv-file-size">Size: {technicalValue.fileSize}</span>
-                            )}
-                            {technicalValue.uploadedAt && (
-                              <span className="bo-cv-file-size">Uploaded: {new Date(technicalValue.uploadedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                            )}
-                            <span className="bo-cv-file-status-badge">{technicalValue.documentStatus || 'Uploaded'}</span>
+                )}
+
+                {/* ── STEP 07: TECHNICAL REPORT ── */}
+                {activeStep === 12 && (
+                  <div className="bo-cv-upload-container">
+                    {!technicalValue.backOfficeApplicationDocumentId && !technicalValue.file ? (
+                      <div className="bo-cv-dropzone-box">
+                        <input
+                          type="file"
+                          id="bo-cv-tech-upload"
+                          className="bo-cv-file-input"
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                          onChange={(e) => handleUploadOrReplaceDocument(e, 'TECHNICAL_VALUATION', technicalValue, setTechnicalValue)}
+                          disabled={technicalValue.loading}
+                        />
+                        <label htmlFor="bo-cv-tech-upload" className="bo-cv-dropzone-label">
+                          <div className="bo-cv-dropzone-icon">
+                            {BuildingIcon && <BuildingIcon size={24} />}
+                          </div>
+                          <strong className="bo-cv-dropzone-title">Upload Technical Valuation Report</strong>
+                          <span className="bo-cv-dropzone-sub">
+                            Drag and drop or browse file from your device &bull; Maximum file size 150 MB
+                          </span>
+                          <span className="bo-cv-dropzone-types">Supported formats: PDF, DOC, DOCX, JPG, PNG, WEBP</span>
+                        </label>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="bo-cv-file-card bo-cv-file-card--compact">
+                          <div className="bo-cv-file-card-info">
+                            <div className="bo-cv-file-card-icon">
+                              {FileCheckIcon && <FileCheckIcon size={24} />}
+                            </div>
+                            <div className="bo-cv-file-card-details">
+                              <h4 className="bo-cv-file-name" title={technicalValue.fileName || technicalValue.documentTitle || 'Technical Valuation Document'}>
+                                {technicalValue.fileName || technicalValue.documentTitle || 'Technical Valuation Document'}
+                              </h4>
+                              <div className="bo-cv-file-meta-badges">
+                                {technicalValue.fileSize && (
+                                  <span className="bo-cv-file-size">Size: {technicalValue.fileSize}</span>
+                                )}
+                                {technicalValue.uploadedAt && (
+                                  <span className="bo-cv-file-size">Uploaded: {new Date(technicalValue.uploadedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                )}
+                                <span className="bo-cv-file-status-badge">{technicalValue.documentStatus || 'Uploaded'}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="bo-cv-file-card-actions bo-cv-file-card-actions--compact">
+                            <label
+                              htmlFor="bo-cv-tech-replace"
+                              className={`bo-btn bo-btn--outline bo-btn--sm bo-btn--icon bo-btn--replace${technicalValue.loading ? ' is-disabled' : ''}`}
+                              title="Replace Technical Valuation Document"
+                              aria-label="Replace Technical Valuation Document"
+                            >
+                              <input
+                                type="file"
+                                id="bo-cv-tech-replace"
+                                className="bo-cv-file-input"
+                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                                onChange={(e) => handleUploadOrReplaceDocument(e, 'TECHNICAL_VALUATION', technicalValue, setTechnicalValue)}
+                                disabled={technicalValue.loading}
+                              />
+                              {RefreshCwIcon && <RefreshCwIcon size={14} />}
+                            </label>
+                            <button
+                              type="button"
+                              className="bo-btn bo-btn--outline bo-btn--sm bo-btn--icon"
+                              onClick={() => handleViewBackOfficeDocument(technicalValue, setTechnicalValue)}
+                              disabled={technicalValue.loading}
+                              title="View Technical Valuation Document"
+                              aria-label="View Technical Valuation Document"
+                            >
+                              {EyeIcon && <EyeIcon size={14} />}
+                            </button>
+                            <button
+                              type="button"
+                              className="bo-btn bo-btn--outline bo-btn--sm bo-btn--icon"
+                              onClick={() => handleDownloadBackOfficeDocument(technicalValue, setTechnicalValue)}
+                              disabled={technicalValue.loading}
+                              title="Download Technical Valuation Document"
+                              aria-label="Download Technical Valuation Document"
+                            >
+                              {DownloadIcon && <DownloadIcon size={14} />}
+                            </button>
+                            <button
+                              type="button"
+                              className="bo-btn bo-btn--outline-danger bo-btn--sm bo-btn--icon"
+                              onClick={() => handleDeleteBackOfficeDocument('TECHNICAL_VALUATION', technicalValue, setTechnicalValue)}
+                              disabled={technicalValue.loading}
+                              title="Delete Technical Valuation Document"
+                              aria-label="Delete Technical Valuation Document"
+                            >
+                              {Trash2Icon && <Trash2Icon size={14} />}
+                            </button>
                           </div>
                         </div>
-                      </div>
-                      <div className="bo-cv-file-card-actions">
-                        <button
-                          type="button"
-                          className="bo-btn bo-btn--outline bo-btn--sm"
-                          onClick={() => handleViewBackOfficeDocument(technicalValue, setTechnicalValue)}
-                          disabled={technicalValue.loading}
-                        >
-                          {ExternalLinkIcon && <ExternalLinkIcon size={13} />}
-                          <span>{technicalValue.loading ? 'Loading...' : 'View'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="bo-btn bo-btn--outline bo-btn--sm"
-                          onClick={() => handleDownloadBackOfficeDocument(technicalValue, setTechnicalValue)}
-                          disabled={technicalValue.loading}
-                        >
-                          {DownloadIcon && <DownloadIcon size={13} />}
-                          <span>Download</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="bo-btn bo-btn--outline-danger bo-btn--sm"
-                          onClick={() => handleDeleteBackOfficeDocument('TECHNICAL_VALUATION', technicalValue, setTechnicalValue)}
-                          disabled={technicalValue.loading}
-                        >
-                          {Trash2Icon && <Trash2Icon size={13} />}
-                          <span>Delete</span>
-                        </button>
-                      </div>
-                    </div>
 
-                    {technicalValue.backOfficeApplicationDocumentId && (
-                      <div className="bo-cv-step-remarks-box">
-                        <label htmlFor="bo-cv-tech-remarks-input" className="bo-cv-step-remarks-label">
-                          Technical Valuation Remarks
-                        </label>
-                        <textarea
-                          id="bo-cv-tech-remarks-input"
-                          className="bo-cv-step-remarks-textarea"
-                          rows={3}
-                          placeholder="Enter Technical Valuation remarks..."
-                          value={technicalValue.remarks || ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setTechnicalValue((prev) => ({ ...prev, remarks: val, error: null, successMsg: '' }));
-                          }}
-                          disabled={technicalValue.savingRemarks}
-                        />
-                        <div className="bo-cv-step-remarks-footer">
-                          {technicalValue.successMsg && (
-                            <span className="bo-cv-step-remarks-success">
-                              ✓ {technicalValue.successMsg}
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            className="bo-btn bo-btn--primary bo-btn--sm bo-cv-btn-save-remarks"
-                            onClick={() => handleOpenSaveRemarksConfirm('TECHNICAL_VALUATION', 'Technical Valuation', technicalValue, setTechnicalValue)}
-                            disabled={technicalValue.savingRemarks || !(technicalValue.remarks || '').trim()}
-                          >
-                            {technicalValue.savingRemarks ? 'Saving...' : 'Save'}
-                          </button>
-                        </div>
+                        {technicalValue.backOfficeApplicationDocumentId && (
+                          <div className="bo-cv-step-remarks-box bo-cv-step-remarks-box--compact">
+                            <label htmlFor="bo-cv-tech-remarks-input" className="bo-cv-step-remarks-label">
+                              Technical Valuation Remarks
+                            </label>
+                            <textarea
+                              id="bo-cv-tech-remarks-input"
+                              className="bo-cv-step-remarks-textarea"
+                              rows={2}
+                              placeholder="Enter Technical Valuation remarks..."
+                              value={technicalValue.remarks || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setTechnicalValue((prev) => ({ ...prev, remarks: val, error: null, successMsg: '' }));
+                              }}
+                              disabled={technicalValue.savingRemarks}
+                            />
+                            <div className="bo-cv-step-remarks-footer">
+                              {technicalValue.successMsg && (
+                                <span className="bo-cv-step-remarks-success">
+                                  ✓ {technicalValue.successMsg}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                className="bo-btn bo-btn--primary bo-btn--sm bo-cv-btn-save-remarks"
+                                onClick={() => handleOpenSaveRemarksConfirm('TECHNICAL_VALUATION', 'Technical Valuation', technicalValue, setTechnicalValue)}
+                                disabled={technicalValue.savingRemarks || !(technicalValue.remarks || '').trim()}
+                              >
+                                {technicalValue.savingRemarks ? 'Saving...' : 'Save'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {technicalValue.loading && (
+                      <div className="bo-cv-feedback-alert is-info">
+                        Processing Technical Valuation document...
                       </div>
                     )}
-                  </>
-                )}
-
-                {technicalValue.loading && (
-                  <div className="bo-cv-feedback-alert is-info">
-                    Processing Technical Valuation document...
-                  </div>
-                )}
-                {technicalValue.error && (
-                  <div className="bo-cv-feedback-alert is-error">
-                    {technicalValue.error}
+                    {technicalValue.error && (
+                      <div className="bo-cv-feedback-alert is-error">
+                        {technicalValue.error}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -11874,7 +11920,7 @@ export default function CustomerVerification({
                         <textarea
                           id="bo-cv-cibil-pan-remarks-input"
                           className="bo-cv-step-remarks-textarea"
-                          rows={3}
+                          rows={2}
                           placeholder="Enter Manual CIBIL PAN remarks..."
                           value={manualCibilPan.remarks || ''}
                           onChange={(e) => {
@@ -17054,9 +17100,6 @@ export default function CustomerVerification({
                   <div className="bo-cv-step-badge-num">16</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Final Application Action &amp; Disposition</h2>
-                    <p className="bo-cv-step-panel-desc">
-                      Execute application-level workflow action: return to Relationship Manager for corrections or submit to Credit Manager.
-                    </p>
                   </div>
                 </div>
                 <span className="bo-cv-step-tag-pill">Step 16 of 16</span>
@@ -17067,84 +17110,52 @@ export default function CustomerVerification({
                 <div
                   className={`bo-cv-action-feedback-banner bo-cv-action-feedback-banner--${workflowActionFeedback.type}`}
                   style={{
-                    margin: '16px 0',
-                    padding: '14px 18px',
+                    margin: '8px 0',
+                    padding: '10px 14px',
                     borderRadius: '8px',
                     backgroundColor: workflowActionFeedback.type === 'success' ? '#ecfdf5' : '#fef2f2',
                     border: `1px solid ${workflowActionFeedback.type === 'success' ? '#a7f3d0' : '#fecaca'}`,
                     color: workflowActionFeedback.type === 'success' ? '#065f46' : '#991b1b',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '12px',
-                    fontSize: '0.9rem',
+                    gap: '10px',
+                    fontSize: '0.85rem',
                     fontWeight: 500,
                   }}
                 >
                   {workflowActionFeedback.type === 'success' ? (
-                    CheckCircleIcon ? <CheckCircleIcon size={20} /> : <span>✓</span>
+                    CheckCircleIcon ? <CheckCircleIcon size={18} /> : <span>✓</span>
                   ) : (
-                    AlertCircleIcon ? <AlertCircleIcon size={20} /> : <span>⚠</span>
+                    AlertCircleIcon ? <AlertCircleIcon size={18} /> : <span>⚠</span>
                   )}
                   <span>{workflowActionFeedback.message}</span>
                 </div>
               )}
 
               {/* Underwriting Readiness Summary Card */}
-              <div
-                className="bo-cv-readiness-summary-card"
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '10px',
-                  padding: '20px',
-                  marginBottom: '24px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+              <div className="bo-cv-readiness-summary-card">
+                <div className="bo-cv-readiness-head">
                   <div>
-                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600, color: '#0f172a' }}>
+                    <h3 className="bo-cv-readiness-title">
                       Underwriting &amp; Verification Readiness Assessment
                     </h3>
-                    <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#64748b' }}>
-                      Verification checks evaluated by readiness engine before enabling submission to Credit Manager.
-                    </p>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <button
                       type="button"
+                      className="bo-cv-readiness-btn-refresh"
                       onClick={evaluateStep13Readiness}
                       disabled={step13Readiness.isEvaluating}
-                      style={{
-                        background: '#f8fafc',
-                        border: '1px solid #cbd5e1',
-                        borderRadius: '6px',
-                        padding: '6px 12px',
-                        fontSize: '0.8rem',
-                        fontWeight: 500,
-                        color: '#475569',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                      }}
                     >
-                      {RefreshCwIcon && <RefreshCwIcon size={13} className={step13Readiness.isEvaluating ? 'bo-spin' : ''} />}
+                      {RefreshCwIcon && <RefreshCwIcon size={12} className={step13Readiness.isEvaluating ? 'bo-spin' : ''} />}
                       <span>{step13Readiness.isEvaluating ? 'Re-evaluating...' : 'Refresh Status'}</span>
                     </button>
                     <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '6px 14px',
-                        borderRadius: '20px',
-                        fontSize: '0.82rem',
-                        fontWeight: 600,
-                        backgroundColor: step13Readiness.isReady ? '#dcfce7' : '#fef3c7',
-                        color: step13Readiness.isReady ? '#15803d' : '#b45309',
-                        border: `1px solid ${step13Readiness.isReady ? '#86efac' : '#fde68a'}`,
-                      }}
+                      className={`bo-cv-readiness-status-badge ${
+                        step13Readiness.isReady
+                          ? 'bo-cv-readiness-status-badge--ready'
+                          : 'bo-cv-readiness-status-badge--progress'
+                      }`}
                     >
                       {step13Readiness.isReady ? (
                         <>✓ Underwriting Complete &amp; Credit Ready</>
@@ -17155,82 +17166,90 @@ export default function CustomerVerification({
                   </div>
                 </div>
 
-                {/* Readiness Criteria Grid */}
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                    gap: '12px',
-                    marginTop: '12px',
-                  }}
-                >
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>KYC Document Matrix</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                {/* Readiness Criteria Grid (3 col desktop, 2 col tablet, 1 col mobile) */}
+                <div className="bo-cv-readiness-grid">
+                  <div className="bo-cv-readiness-item">
+                    <div className="bo-cv-readiness-label">KYC Document Matrix</div>
+                    <div className="bo-cv-readiness-data-row">
+                      <strong className="bo-cv-readiness-val">
                         {step13Readiness.stepVerifsCount} Verified
                       </strong>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>
+                      <span className="bo-cv-readiness-status" style={{ color: '#64748b' }}>
                         Info only
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Legal Opinion Report</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                  <div className="bo-cv-readiness-item">
+                    <div className="bo-cv-readiness-label">Legal Opinion Report</div>
+                    <div className="bo-cv-readiness-data-row">
+                      <strong className="bo-cv-readiness-val">
                         {step13Readiness.hasLegal ? 'Uploaded' : 'Missing'}
                       </strong>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.hasLegal ? '#16a34a' : '#ea580c' }}>
+                      <span
+                        className="bo-cv-readiness-status"
+                        style={{ color: step13Readiness.hasLegal ? '#16a34a' : '#ea580c' }}
+                      >
                         {step13Readiness.hasLegal ? '✓ Ready' : 'Pending'}
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Technical Valuation</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                  <div className="bo-cv-readiness-item">
+                    <div className="bo-cv-readiness-label">Technical Valuation</div>
+                    <div className="bo-cv-readiness-data-row">
+                      <strong className="bo-cv-readiness-val">
                         {step13Readiness.hasTechnical ? 'Uploaded' : 'Missing'}
                       </strong>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.hasTechnical ? '#16a34a' : '#ea580c' }}>
+                      <span
+                        className="bo-cv-readiness-status"
+                        style={{ color: step13Readiness.hasTechnical ? '#16a34a' : '#ea580c' }}
+                      >
                         {step13Readiness.hasTechnical ? '✓ Ready' : 'Pending'}
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>CIBIL / Credit Bureau</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                  <div className="bo-cv-readiness-item">
+                    <div className="bo-cv-readiness-label">CIBIL / Credit Bureau</div>
+                    <div className="bo-cv-readiness-data-row">
+                      <strong className="bo-cv-readiness-val">
                         {step13Readiness.hasCibil ? 'Available' : 'Missing'}
                       </strong>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.hasCibil ? '#16a34a' : '#ea580c' }}>
+                      <span
+                        className="bo-cv-readiness-status"
+                        style={{ color: step13Readiness.hasCibil ? '#16a34a' : '#ea580c' }}
+                      >
                         {step13Readiness.hasCibil ? '✓ Ready' : 'Pending'}
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Eligibility Assessment</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                  <div className="bo-cv-readiness-item">
+                    <div className="bo-cv-readiness-label">Eligibility Assessment</div>
+                    <div className="bo-cv-readiness-data-row">
+                      <strong className="bo-cv-readiness-val">
                         {step13Readiness.hasEligibility ? 'Calculated' : 'Pending'}
                       </strong>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.hasEligibility ? '#16a34a' : '#ea580c' }}>
+                      <span
+                        className="bo-cv-readiness-status"
+                        style={{ color: step13Readiness.hasEligibility ? '#16a34a' : '#ea580c' }}
+                      >
                         {step13Readiness.hasEligibility ? '✓ Complete' : 'Pending'}
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Document Rejections</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                  <div className="bo-cv-readiness-item">
+                    <div className="bo-cv-readiness-label">Document Rejections</div>
+                    <div className="bo-cv-readiness-data-row">
+                      <strong className="bo-cv-readiness-val">
                         {step13Readiness.unresolvedRejectionsCount} Unresolved
                       </strong>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: step13Readiness.unresolvedRejectionsCount === 0 ? '#16a34a' : '#dc2626' }}>
+                      <span
+                        className="bo-cv-readiness-status"
+                        style={{ color: step13Readiness.unresolvedRejectionsCount === 0 ? '#16a34a' : '#dc2626' }}
+                      >
                         {step13Readiness.unresolvedRejectionsCount === 0 ? '✓ None Active' : 'Must Resolve'}
                       </span>
                     </div>
@@ -17240,142 +17259,76 @@ export default function CustomerVerification({
 
               {/* Dual Action Cards (Credit Manager view renders its own decision panel instead) */}
               {isCreditManagerView ? (
-                <div style={{ marginBottom: '28px' }}>{finalActionsSlot}</div>
+                <div style={{ marginBottom: '20px' }}>{finalActionsSlot}</div>
               ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '28px' }}>
+              <div className="bo-cv-actions-grid">
                 {/* Card 1: Return to RM */}
-                <div
-                  style={{
-                    background: '#ffffff',
-                    border: '1px solid #fde68a',
-                    borderTop: '4px solid #f59e0b',
-                    borderRadius: '10px',
-                    padding: '24px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    boxShadow: '0 2px 4px rgba(245, 158, 11, 0.08)',
-                  }}
-                >
+                <div className="bo-cv-action-card bo-cv-action-card--return">
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                    <div className="bo-cv-action-card-header">
                       <div
-                        style={{
-                          width: '36px',
-                          height: '36px',
-                          borderRadius: '8px',
-                          backgroundColor: '#fef3c7',
-                          color: '#d97706',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
+                        className="bo-cv-action-card-icon"
+                        style={{ backgroundColor: '#fef3c7', color: '#d97706' }}
                       >
-                        {RotateCcwIcon ? <RotateCcwIcon size={20} /> : <span>↩</span>}
+                        {RotateCcwIcon ? <RotateCcwIcon size={16} /> : <span>↩</span>}
                       </div>
-                      <div>
-                        <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#92400e' }}>
-                          Return Application to RM
-                        </h4>
-                        <span style={{ fontSize: '0.75rem', color: '#b45309', fontWeight: 500 }}>
-                          Status Transition: 2 (Logged to HO) → 6 (Returned to RM)
-                        </span>
-                      </div>
+                      <h4 className="bo-cv-action-card-title" style={{ color: '#92400e' }}>
+                        Return Application to RM
+                      </h4>
                     </div>
-                    <p style={{ fontSize: '0.84rem', color: '#475569', lineHeight: 1.5, margin: '0 0 16px' }}>
-                      Remand the complete application back to the Relationship Manager for corrections, missing documents, or applicant data rectifications. Editing access will be re-enabled for the RM. Mandatory remarks required.
+                    <p className="bo-cv-action-card-desc">
+                      Return for corrections. Remarks required.
                     </p>
                   </div>
 
                   <button
                     type="button"
+                    className="bo-cv-btn-action bo-cv-btn-action--return"
                     onClick={handleOpenReturnToRmModal}
-                    style={{
-                      background: '#d97706',
-                      color: '#ffffff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '12px 18px',
-                      fontSize: '0.9rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      transition: 'background 0.2s',
-                    }}
-                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#b45309')}
-                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#d97706')}
                   >
-                    {RotateCcwIcon ? <RotateCcwIcon size={16} /> : <span>↩</span>}
+                    {RotateCcwIcon ? <RotateCcwIcon size={15} /> : <span>↩</span>}
                     <span>Return to Relationship Manager</span>
                   </button>
                 </div>
 
                 {/* Card 2: Send to Credit Manager */}
                 <div
-                  style={{
-                    background: '#ffffff',
-                    border: step13Readiness.isReady ? '1px solid #86efac' : '1px solid #e2e8f0',
-                    borderTop: `4px solid ${step13Readiness.isReady ? '#16a34a' : '#94a3b8'}`,
-                    borderRadius: '10px',
-                    padding: '24px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    boxShadow: step13Readiness.isReady ? '0 2px 4px rgba(22, 163, 74, 0.08)' : '0 1px 3px rgba(0,0,0,0.05)',
-                  }}
+                  className={`bo-cv-action-card ${
+                    step13Readiness.isReady ? 'bo-cv-action-card--send-ready' : 'bo-cv-action-card--send'
+                  }`}
                 >
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                    <div className="bo-cv-action-card-header">
                       <div
+                        className="bo-cv-action-card-icon"
                         style={{
-                          width: '36px',
-                          height: '36px',
-                          borderRadius: '8px',
                           backgroundColor: step13Readiness.isReady ? '#dcfce7' : '#f1f5f9',
                           color: step13Readiness.isReady ? '#16a34a' : '#64748b',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
                         }}
                       >
-                        {SendIcon ? <SendIcon size={20} /> : <span>➤</span>}
+                        {SendIcon ? <SendIcon size={16} /> : <span>➤</span>}
                       </div>
-                      <div>
-                        <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: step13Readiness.isReady ? '#14532d' : '#334155' }}>
-                          {hasResolvedCreditReturns || openCreditReturnCount > 0 ? 'Resubmit to Credit Manager' : 'Send to Credit Manager'}
-                        </h4>
-                        <span style={{ fontSize: '0.75rem', color: step13Readiness.isReady ? '#15803d' : '#64748b', fontWeight: 500 }}>
-                          Status Transition: 2 (Logged to HO) → 3 (Under Review)
-                        </span>
-                      </div>
+                      <h4
+                        className="bo-cv-action-card-title"
+                        style={{ color: step13Readiness.isReady ? '#14532d' : '#334155' }}
+                      >
+                        {hasResolvedCreditReturns || openCreditReturnCount > 0
+                          ? 'Resubmit to Credit Manager'
+                          : 'Send to Credit Manager'}
+                      </h4>
                     </div>
-                    <p style={{ fontSize: '0.84rem', color: '#475569', lineHeight: 1.5, margin: '0 0 16px' }}>
-                      Forward fully verified and underwritten application file to Credit Manager for credit sanction assessment. Requires Legal, Technical, CIBIL, Eligibility, and Recommendation completion.
+                    <p className="bo-cv-action-card-desc">
+                      Forward for credit assessment.
                     </p>
                     {!step13Readiness.isReady && (
-                      <div
-                        style={{
-                          padding: '8px 12px',
-                          borderRadius: '6px',
-                          backgroundColor: '#fef3c7',
-                          color: '#92400e',
-                          fontSize: '0.78rem',
-                          marginBottom: '16px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                        }}
-                      >
-                        {AlertTriangleIcon ? <AlertTriangleIcon size={14} /> : <span>⚠</span>}
+                      <div className="bo-cv-action-warning">
+                        {AlertTriangleIcon ? <AlertTriangleIcon size={13} /> : <span>⚠</span>}
                         <span>Cannot submit: Complete required underwriting steps before forwarding.</span>
                       </div>
                     )}
                     {openCreditReturnCount > 0 && (
-                      <div className="crp-strip" style={{ marginBottom: '16px' }}>
-                        <div className="crp-strip-head" style={{ marginBottom: creditReturnAttention.length ? '10px' : 0 }}>
+                      <div className="crp-strip" style={{ marginBottom: '12px' }}>
+                        <div className="crp-strip-head" style={{ marginBottom: creditReturnAttention.length ? '8px' : 0 }}>
                           <span className="crp-indicator" aria-hidden="true" />
                           <strong>
                             {openCreditReturnCount} item{openCreditReturnCount === 1 ? '' : 's'} returned by the Credit Manager must be resolved before resubmitting.
@@ -17401,31 +17354,15 @@ export default function CustomerVerification({
 
                   <button
                     type="button"
+                    className={`bo-cv-btn-action ${
+                      canSendToCreditManager
+                        ? 'bo-cv-btn-action--send-active'
+                        : 'bo-cv-btn-action--disabled'
+                    }`}
                     onClick={handleOpenSendToCreditModal}
                     disabled={!canSendToCreditManager}
-                    style={{
-                      background: canSendToCreditManager ? '#059669' : '#cbd5e1',
-                      color: canSendToCreditManager ? '#ffffff' : '#64748b',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '12px 18px',
-                      fontSize: '0.9rem',
-                      fontWeight: 600,
-                      cursor: canSendToCreditManager ? 'pointer' : 'not-allowed',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      transition: 'background 0.2s',
-                    }}
-                    onMouseOver={(e) => {
-                      if (canSendToCreditManager) e.currentTarget.style.backgroundColor = '#047857';
-                    }}
-                    onMouseOut={(e) => {
-                      if (canSendToCreditManager) e.currentTarget.style.backgroundColor = '#059669';
-                    }}
                   >
-                    {CheckCircleIcon ? <CheckCircleIcon size={16} /> : <span>✓</span>}
+                    {CheckCircleIcon ? <CheckCircleIcon size={15} /> : <span>✓</span>}
                     <span>{hasResolvedCreditReturns ? 'Resubmit to Credit Manager' : 'Send to Credit Manager'}</span>
                   </button>
                 </div>
@@ -17433,67 +17370,42 @@ export default function CustomerVerification({
               )}
 
               {/* Workflow History Section */}
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '10px',
-                  padding: '24px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600, color: '#0f172a' }}>
-                      Application Workflow History &amp; Audit Trail
-                    </h3>
-                    <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#64748b' }}>
-                      Log of all application returns, resubmissions, and credit manager handoffs for Customer #{resolvedTargetCustomerId}.
-                    </p>
-                  </div>
+              <div className="bo-cv-history-card">
+                <div className="bo-cv-history-head">
+                  <h3 className="bo-cv-history-title">
+                    Application Workflow History &amp; Audit Trail
+                  </h3>
                   <button
                     type="button"
+                    className="bo-cv-readiness-btn-refresh"
                     onClick={fetchWorkflowHistory}
                     disabled={isFetchingWorkflowHistory}
-                    style={{
-                      background: '#f8fafc',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '6px',
-                      padding: '6px 12px',
-                      fontSize: '0.8rem',
-                      fontWeight: 500,
-                      color: '#475569',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                    }}
                   >
-                    {RefreshCwIcon && <RefreshCwIcon size={13} className={isFetchingWorkflowHistory ? 'bo-spin' : ''} />}
+                    {RefreshCwIcon && <RefreshCwIcon size={12} className={isFetchingWorkflowHistory ? 'bo-spin' : ''} />}
                     <span>{isFetchingWorkflowHistory ? 'Refreshing...' : 'Refresh History'}</span>
                   </button>
                 </div>
 
                 {workflowHistoryError && (
-                  <div style={{ padding: '10px 14px', borderRadius: '6px', backgroundColor: '#fef2f2', color: '#b91c1c', fontSize: '0.82rem', marginBottom: '14px' }}>
+                  <div style={{ padding: '8px 12px', borderRadius: '6px', backgroundColor: '#fef2f2', color: '#b91c1c', fontSize: '0.8rem', marginBottom: '10px' }}>
                     {workflowHistoryError}
                   </div>
                 )}
 
                 {isFetchingWorkflowHistory ? (
-                  <div style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '0.88rem' }}>
+                  <div style={{ textAlign: 'center', padding: '24px', color: '#64748b', fontSize: '0.84rem' }}>
                     Loading workflow transition logs...
                   </div>
                 ) : workflowHistory.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '36px 20px', border: '1px dashed #cbd5e1', borderRadius: '8px', color: '#64748b' }}>
-                    <div style={{ fontSize: '1.4rem', marginBottom: '6px' }}>📋</div>
-                    <strong style={{ fontSize: '0.9rem', color: '#334155' }}>No Previous Workflow Transitions</strong>
-                    <p style={{ margin: '4px 0 0', fontSize: '0.82rem' }}>
+                  <div style={{ textAlign: 'center', padding: '24px 16px', border: '1px dashed #cbd5e1', borderRadius: '7px', color: '#64748b' }}>
+                    <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>📋</div>
+                    <strong style={{ fontSize: '0.86rem', color: '#334155' }}>No Previous Workflow Transitions</strong>
+                    <p style={{ margin: '3px 0 0', fontSize: '0.78rem' }}>
                       This application has not undergone any returns or handoffs yet. Actions taken above will appear here in chronological order.
                     </p>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div className="bo-cv-audit-list">
                     {workflowHistory.map((item, idx) => {
                       const actionType = String(item.actionType || item.ActionType || '').toLowerCase();
                       const isReturn = actionType.includes('return') || item.nextStatus === 6;
@@ -17504,42 +17416,43 @@ export default function CustomerVerification({
                       const remarks = item.remarks || item.Remarks || '—';
                       const createdDate = item.createdDate || item.CreatedDate || item.createdAt || item.CreatedAt;
 
+                      const rowModifier = isReturn
+                        ? 'bo-cv-audit-row--return'
+                        : isCredit
+                        ? 'bo-cv-audit-row--credit'
+                        : isResubmit
+                        ? 'bo-cv-audit-row--resubmit'
+                        : '';
+
+                      const badgeModifier = isReturn
+                        ? 'bo-cv-audit-badge--return'
+                        : isCredit
+                        ? 'bo-cv-audit-badge--credit'
+                        : isResubmit
+                        ? 'bo-cv-audit-badge--resubmit'
+                        : '';
+
                       return (
                         <div
                           key={item.workflowTransitionId || item.id || idx}
-                          style={{
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '8px',
-                            padding: '16px',
-                            backgroundColor: isReturn ? '#fffbeb' : isCredit ? '#f0fdf4' : '#f8fafc',
-                            borderLeft: `4px solid ${isReturn ? '#f59e0b' : isCredit ? '#10b981' : '#3b82f6'}`,
-                          }}
+                          className={`bo-cv-audit-row ${rowModifier}`}
                         >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span
-                                style={{
-                                  padding: '4px 10px',
-                                  borderRadius: '12px',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 700,
-                                  backgroundColor: isReturn ? '#fef3c7' : isCredit ? '#dcfce7' : '#dbeafe',
-                                  color: isReturn ? '#b45309' : isCredit ? '#15803d' : '#1d4ed8',
-                                }}
-                              >
+                          <div className="bo-cv-audit-row-header">
+                            <div className="bo-cv-audit-row-meta">
+                              <span className={`bo-cv-audit-badge ${badgeModifier}`}>
                                 {WORKFLOW_ACTION_LABELS[item.actionType || item.ActionType] ||
                                   (isReturn ? '↩ Returned to RM (2 → 6)' : isCredit ? '✓ Sent to Credit Manager (2 → 3)' : isResubmit ? '⚡ Resubmitted to BO (6 → 2)' : (item.actionType || 'Workflow Action'))}
                               </span>
-                              <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                              <span className="bo-cv-audit-actor">
                                 by <strong>{role}</strong> (ID: {actorId})
                               </span>
                             </div>
-                            <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                            <span className="bo-cv-audit-time">
                               {createdDate ? new Date(createdDate).toLocaleString() : '—'}
                             </span>
                           </div>
-                          <div style={{ fontSize: '0.85rem', color: '#334155', lineHeight: 1.5, background: '#ffffff', padding: '10px 14px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                            <span style={{ fontWeight: 600, color: '#475569', marginRight: '6px' }}>Remarks:</span>
+                          <div className="bo-cv-audit-remarks">
+                            <span className="bo-cv-audit-remarks-lbl">Remarks:</span>
                             {remarks}
                           </div>
                         </div>

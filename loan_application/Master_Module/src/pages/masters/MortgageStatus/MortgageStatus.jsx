@@ -147,9 +147,6 @@ export function MortgageStatus() {
         </div>
         <div>
           <h1 className="masters-page-title">Mortgage Status</h1>
-          <p className="masters-page-description">
-            Manage mortgage status configuration.
-          </p>
         </div>
       </header>
 

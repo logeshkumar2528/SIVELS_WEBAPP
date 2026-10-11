@@ -10,7 +10,6 @@ const SectionHeader = memo(function SectionHeader({ breadcrumb, title, subtitle,
           <h2 className="section-header-title">{title}</h2>
           {badge && <span className="section-header-badge">{badge}</span>}
         </div>
-        {subtitle && <p className="section-header-subtitle">{subtitle}</p>}
       </div>
       {action && <div className="section-header-right">{action}</div>}
     </div>

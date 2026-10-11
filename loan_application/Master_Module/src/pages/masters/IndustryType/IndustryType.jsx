@@ -153,9 +153,6 @@ export function IndustryType() {
         </div>
         <div>
           <h1 className="masters-page-title">Industry Types</h1>
-          <p className="masters-page-description">
-            Manage industry type classifications.
-          </p>
         </div>
       </header>
 

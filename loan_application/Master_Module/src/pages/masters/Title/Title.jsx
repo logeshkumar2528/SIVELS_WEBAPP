@@ -138,9 +138,6 @@ export function Title() {
           </div>
           <div>
           <h1 className="masters-page-title">Title Master</h1>
-          <p className="masters-page-description">
-            Manage title configuration.
-          </p>
         </div>
       </header>
 

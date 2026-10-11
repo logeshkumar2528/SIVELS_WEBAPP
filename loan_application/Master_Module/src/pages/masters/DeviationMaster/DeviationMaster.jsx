@@ -142,7 +142,6 @@ export function DeviationMaster({ type = 'general' }) {
         <div className="masters-page-header-icon"><Icon size={24} /></div>
         <div>
           <h1 className="masters-page-title">{config.title}</h1>
-          <p className="masters-page-description">{config.description}</p>
         </div>
       </header>
 

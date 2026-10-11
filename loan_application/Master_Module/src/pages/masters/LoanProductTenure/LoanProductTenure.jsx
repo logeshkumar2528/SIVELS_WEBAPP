@@ -171,9 +171,6 @@ export function LoanProductTenure() {
         </div>
         <div>
           <h1 className="masters-page-title">Loan Product Tenures</h1>
-          <p className="masters-page-description">
-            Manage allowable repayment tenure configurations for loan products.
-          </p>
         </div>
       </header>
 

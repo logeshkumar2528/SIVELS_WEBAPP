@@ -141,9 +141,6 @@ export function HealthCheckType() {
         </div>
         <div>
           <h1 className="masters-page-title">Health Check Type Master</h1>
-          <p className="masters-page-description">
-            Manage health check types used across verification workflows.
-          </p>
         </div>
       </header>
 

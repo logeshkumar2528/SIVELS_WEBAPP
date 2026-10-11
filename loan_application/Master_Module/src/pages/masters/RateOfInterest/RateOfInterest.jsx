@@ -187,9 +187,6 @@ export function RateOfInterest() {
         </div>
         <div>
           <h1 className="masters-page-title">Rate Of Interest Master</h1>
-          <p className="masters-page-description">
-            Manage rate of interest configuration.
-          </p>
         </div>
       </header>
 

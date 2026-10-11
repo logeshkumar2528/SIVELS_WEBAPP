@@ -814,7 +814,6 @@ export default function AMSDashboard() {
                 <ShieldCheck size={14} /> AMS MONITORING CONSOLE
               </span>
               <h1>Good morning, {amsFirstName}</h1>
-              <p>Monitor RM performance, agent activity, and pending work across your assigned districts.</p>
               <div className="ams-scope-line">
                 <MapPinned size={15} /> Viewing {totals.districts} assigned district{totals.districts === 1 ? '' : 's'} <span>•</span> View-only access
               </div>

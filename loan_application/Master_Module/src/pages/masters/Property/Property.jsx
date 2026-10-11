@@ -124,9 +124,6 @@ export function Property() {
           </div>
           <div>
           <h1 className="masters-page-title">Property</h1>
-          <p className="masters-page-description">
-            Manage property type configuration.
-          </p>
         </div>
       </header>
 

@@ -145,9 +145,6 @@ export function Gender() {
           </div>
           <div>
           <h1 className="masters-page-title">Gender</h1>
-          <p className="masters-page-description">
-            Manage gender configuration.
-          </p>
         </div>
       </header>
 

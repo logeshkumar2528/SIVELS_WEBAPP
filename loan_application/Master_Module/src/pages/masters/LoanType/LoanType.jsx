@@ -137,9 +137,6 @@ export function LoanType() {
           </div>
           <div>
           <h1 className="masters-page-title">Loan Types</h1>
-          <p className="masters-page-description">
-            Manage loan type configuration.
-          </p>
         </div>
       </header>
 

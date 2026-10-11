@@ -184,9 +184,6 @@ export function ProofMaster() {
         </div>
         <div>
           <h1 className="masters-page-title">Proof Master</h1>
-          <p className="masters-page-description">
-            Manage document proof definitions and requirements.
-          </p>
         </div>
       </header>
 
