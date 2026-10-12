@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import iconMap from '../../../back_office/src/back-office/config/iconMap';
 import { StatusPill } from './ApplicationQueue';
 import { CM_STATUS } from '../mappers/creditMapper';
@@ -8,6 +8,7 @@ import { formatCurrency, formatDate, getApplicationNo } from '../utils/formatter
 
 function ReviewButton({ app }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const isPending = app.status === CM_STATUS.PENDING;
   const Icon = iconMap[isPending ? 'FileCheck' : 'Eye'];
 
@@ -15,7 +16,11 @@ function ReviewButton({ app }) {
     <button
       type="button"
       className="stc-btn-review"
-      onClick={() => navigate(buildApplicationReviewRoute(app.agentCustomerId))}
+      onClick={() =>
+        navigate(buildApplicationReviewRoute(app.agentCustomerId), {
+          state: { from: location.pathname },
+        })
+      }
       aria-label={`${isPending ? 'Review' : 'View'} application ${getApplicationNo(app)}`}
     >
       {Icon && <Icon size={14} />}

@@ -5,6 +5,7 @@
  */
 
 import { getValue, mapCustomer } from '../../../back_office/src/back-office/mappers/hierarchyMapper';
+import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
 
 /**
  * Application workflow status codes (AgentAddCustomer.status).
@@ -41,9 +42,11 @@ export function isCreditManagerStatus(status) {
   return Object.prototype.hasOwnProperty.call(CM_STATUS_META, Number(status));
 }
 
-export function mapCreditApplication(raw) {
+export function mapCreditApplication(raw, agentsById = {}, rmsById = {}) {
   const customer = mapCustomer(raw);
   if (!customer) return null;
+
+  const ownership = resolveApplicationOwnership(customer, agentsById, rmsById);
 
   const status = Number(customer.status);
   const statusUpdatedAt = getValue(
@@ -73,6 +76,13 @@ export function mapCreditApplication(raw) {
 
   return {
     ...customer,
+    agentId: ownership.agentId ?? customer.agentId,
+    agentName: ownership.agentName && ownership.agentName !== '—' ? ownership.agentName : (customer.agentName || '—'),
+    rmId: ownership.rmId ?? customer.rmId,
+    rmName: ownership.rmName && ownership.rmName !== '—' ? ownership.rmName : (customer.rmName || '—'),
+    sourceType: ownership.sourceType,
+    isDirectRm: ownership.isDirectRm,
+    isAgentCreated: ownership.isAgentCreated,
     loanType: loanProductName || customer.loanType,
     status,
     statusUpdatedAt,

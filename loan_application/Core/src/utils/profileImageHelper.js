@@ -378,6 +378,18 @@ export function getDocumentUrl(role, entityId, documentType = '', storedPath = '
     if (isPan) return `${API_BASE_URL}/AgentMaster/${cleanId}/pan`;
   }
 
+  // 5. Credit Manager: /api/CreditManagerMaster/{creditManagerId}/aadhar and /api/CreditManagerMaster/{creditManagerId}/pan
+  const isCreditManager =
+    normalizedRole === 'creditmanager' ||
+    normalizedRole === 'credit_manager' ||
+    normalizedRole === 'credit manager' ||
+    normalizedRole === 'creditmanagermaster';
+
+  if (isCreditManager && cleanId) {
+    if (isAadhaar) return `${API_BASE_URL}/CreditManagerMaster/${cleanId}/aadhar`;
+    if (isPan) return `${API_BASE_URL}/CreditManagerMaster/${cleanId}/pan`;
+  }
+
   if (storedPath) {
     return buildFileUrl(storedPath);
   }

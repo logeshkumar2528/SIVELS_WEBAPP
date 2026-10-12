@@ -268,10 +268,21 @@ const VERIFICATION_WORKFLOW_STEPS = [
   { id: 14, number: 14, visibleNum: '10', title: 'PD Verification', subtitle: '', group: 'CREDIT & ASSESSMENT' },
   { id: 20, number: 20, visibleNum: '11', title: 'Asset Base', subtitle: '', group: 'CREDIT & ASSESSMENT' },
   { id: 15, number: 15, visibleNum: '12', title: 'RTR Common Sheet', subtitle: '', group: 'CREDIT & ASSESSMENT' },
-  { id: 16, number: 16, visibleNum: '13', title: 'Eligibility Assessment', subtitle: '', group: 'CREDIT & ASSESSMENT' },
-  { id: 21, number: 21, visibleNum: '14', title: 'Deviations', subtitle: '', group: 'CREDIT & ASSESSMENT' },
-  { id: 17, number: 17, visibleNum: '15', title: 'Recommendation Sheet', subtitle: '', group: 'CREDIT & ASSESSMENT' },
-  { id: 18, number: 18, visibleNum: '16', title: 'Final Action', subtitle: '', group: 'FINAL ACTION' },
+  {
+    id: 22,
+    name: 'Banking',
+    shortName: 'Banking',
+    description: 'Bank statement & account analysis',
+    number: 22,
+    visibleNum: '13',
+    title: 'Banking',
+    subtitle: '',
+    group: 'CREDIT & ASSESSMENT'
+  },
+  { id: 16, number: 16, visibleNum: '14', title: 'Eligibility Assessment', subtitle: '', group: 'CREDIT & ASSESSMENT' },
+  { id: 21, number: 21, visibleNum: '15', title: 'Deviations', subtitle: '', group: 'CREDIT & ASSESSMENT' },
+  { id: 17, number: 17, visibleNum: '16', title: 'Recommendation Sheet', subtitle: '', group: 'CREDIT & ASSESSMENT' },
+  { id: 18, number: 18, visibleNum: '17', title: 'Final Action', subtitle: '', group: 'FINAL ACTION' },
 ];
 
 const FINAL_ACTION_STEP_ID = 18;
@@ -311,14 +322,11 @@ const VISIBLE_TO_INTERNAL_STEP = {
   6: 11,
   7: 12,
   8: 13,
-  9: 19,
-  10: 14,
-  11: 20,
-  12: 15,
-  13: 16,
-  14: 21,
-  15: 17,
-  16: 18,
+  9: 22,
+  10: 16,
+  11: 21,
+  12: 17,
+  13: 18,
 };
 
 /**
@@ -341,11 +349,12 @@ const INTERNAL_TO_VISIBLE_STEP = {
   19: 9,
   14: 10,
   20: 11,
-  15: 12,
-  16: 13,
-  17: 15,
-  18: 16,
-  21: 14,
+  15: 8,
+  22: 9,
+  16: 10,
+  21: 11,
+  17: 12,
+  18: 13,
 };
 
 function resolveInternalStepFromQuery(stepParam) {
@@ -12846,6 +12855,19 @@ export default function CustomerVerification({
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
+              STEP 09: BANKING (STANDALONE)
+          ══════════════════════════════════════════════════════════════════ */}
+          {activeStep === 22 && (
+            <div className="bo-cv-step-panel">
+              <BankingEligibilityWorkspace
+                applicationProductDetailsId={calculationAppProdId || resolvedAppProdId}
+                userId={getAuthenticatedBackOfficeId()}
+                onBack={() => navigateToStep(16)}
+              />
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
               STEP 11: ELIGIBILITY ASSESSMENT — COMMAND CENTER
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 16 && (
@@ -14207,12 +14229,11 @@ export default function CustomerVerification({
                     ) : (
                       <div className="bo-cv-elig-method-rail" role="tablist" aria-label="Assessment methods">
                         {(assessmentMethods.length > 0
-                          ? assessmentMethods.filter((m) => (m.methodCode || '').toUpperCase() !== 'ABB' && Number(m.assessmentMethodId) !== 2)
+                          ? assessmentMethods.filter((m) => (m.methodCode || '').toUpperCase() !== 'ABB' && (m.methodCode || '').toUpperCase() !== 'BANKING' && Number(m.assessmentMethodId) !== 2)
                           : [
                               { methodCode: 'INCOME', methodName: 'Income' },
                               { methodCode: 'NORMAL_INCOME', methodName: 'Normal Income' },
                               { methodCode: 'RTR', methodName: 'RTR' },
-                              { methodCode: 'BANKING', methodName: 'Banking' },
                             ]
                         ).map((method) => {
                           const code = (method.methodCode || '').toUpperCase();
@@ -14220,7 +14241,6 @@ export default function CustomerVerification({
                           const isIncome = code === 'INCOME';
                           const isRtr = code === 'RTR';
                           const isNormalIncome = code === 'NORMAL_INCOME';
-                          const isBanking = code === 'BANKING';
                           const shortName = isIncome
                             ? 'Eligibility - Salaried'
                             : isNormalIncome
@@ -14234,8 +14254,6 @@ export default function CustomerVerification({
                               ? 'RTR'
                               : isNormalIncome
                               ? 'Normal Income'
-                              : isBanking
-                              ? 'Banking'
                               : code);
                           return (
                             <button
@@ -14300,8 +14318,6 @@ export default function CustomerVerification({
                                   ? CreditCardIcon && <CreditCardIcon size={15} />
                                   : isNormalIncome
                                   ? TrendingUpIcon && <TrendingUpIcon size={15} />
-                                  : isBanking
-                                  ? BuildingIcon && <BuildingIcon size={15} />
                                   : BuildingIcon && <BuildingIcon size={15} />}
                               </span>
                               <span className="bo-cv-elig-method-chip-text">
