@@ -2093,6 +2093,7 @@ export default function CustomerVerification({
   const [employmentTypesList, setEmploymentTypesList] = useState([]);
   const [calcWorkspaceOpen, setCalcWorkspaceOpen] = useState(false);
   const [bankingWorkspaceOpen, setBankingWorkspaceOpen] = useState(false);
+  const [bankingResultOnly, setBankingResultOnly] = useState(false);
   const [rtrWorkspaceOpen, setRtrWorkspaceOpen] = useState(false);
   const [incomeWorkspaceOpen, setIncomeWorkspaceOpen] = useState(false);
   const [rtrCalculatedTrigger, setRtrCalculatedTrigger] = useState(0);
@@ -6353,6 +6354,7 @@ export default function CustomerVerification({
     saved: null,
     hasUnsavedSheet: false,
   });
+  const [normalIncomeResultOpen, setNormalIncomeResultOpen] = useState(false);
   const normalIncomeSavedJsonRef = useRef(null);
   const normalIncomeLatestRef = useRef(null);
   const normalIncomeSaveTimerRef = useRef(null);
@@ -10783,7 +10785,7 @@ export default function CustomerVerification({
   );
 
   return (
-    <div className="bo-cv-page-wrap">
+    <div className={`bo-cv-page-wrap${normalIncomeResultOpen ? ' is-normal-income-result-page' : ''}`}>
       {/* ── 1. Compact Verification Header (Real API Data) ──────────────── */}
       <header className="bo-cv-header">
         {/* Left: Back button */}
@@ -13440,6 +13442,18 @@ export default function CustomerVerification({
                   </section>
                 </div>
               </div>
+            ) : selectedMethodCode === 'BANKING' && bankingWorkspaceOpen ? (
+              <div className="bo-cv-elig-deck bo-cv-elig-deck--banking-workspace">
+                <BankingEligibilityWorkspace
+                  applicationProductDetailsId={calculationAppProdId}
+                  userId={getAuthenticatedBackOfficeId()}
+                  initialResultOnly={bankingResultOnly}
+                  onBack={() => {
+                    setBankingWorkspaceOpen(false);
+                    setBankingResultOnly(false);
+                  }}
+                />
+              </div>
             ) : selectedMethodCode === 'INCOME' && incomeWorkspaceOpen ? (
               <div className="bo-cv-elig-deck bo-cv-elig-deck--income-workspace">
                 <div className="bo-cv-income-workspace">
@@ -14251,6 +14265,7 @@ export default function CustomerVerification({
                               onClick={() => {
                                 const nextCode = code || 'INCOME';
                                 if (nextCode === 'NORMAL_INCOME') {
+                                  setNormalIncomeResultOpen(false);
                                   const spreadsheetId = extractSpreadsheetId(NORMAL_INCOME_SPREADSHEET_URL);
                                   if (isGoogleOAuthAuthorized()) {
                                     window.open(NORMAL_INCOME_SPREADSHEET_URL, '_blank', 'noopener,noreferrer');
@@ -14275,7 +14290,12 @@ export default function CustomerVerification({
                                   return;
                                 }
                                 setSelectedMethodCode(nextCode);
-                                if (nextCode === 'RTR') {
+                                if (nextCode === 'BANKING') {
+                                  setBankingWorkspaceOpen(true);
+                                  setBankingResultOnly(false);
+                                  setRtrWorkspaceOpen(false);
+                                  setIncomeWorkspaceOpen(false);
+                                } else if (nextCode === 'RTR') {
                                   setRtrWorkspaceOpen(true);
                                   setBankingWorkspaceOpen(false);
                                   setIncomeWorkspaceOpen(false);
@@ -14303,6 +14323,26 @@ export default function CustomerVerification({
                               <span className="bo-cv-elig-method-chip-text">
                                 <strong>{shortName}</strong>
                                 <small>{code}</small>
+                                {isNormalIncome && normalIncomeSync.saved && (
+                                  <span
+                                    className="bo-cv-normal-income-view-btn"
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setNormalIncomeResultOpen(true);
+                                    }}
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Enter' || event.key === ' ') {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        setNormalIncomeResultOpen(true);
+                                      }
+                                    }}
+                                  >
+                                    View Eligibility
+                                  </span>
+                                )}
                               </span>
                             </button>
                           );
@@ -14310,13 +14350,15 @@ export default function CustomerVerification({
                         <button
                           type="button"
                           role="tab"
-                          aria-selected={selectedMethodCode === 'BANKING_ELIGIBILITY'}
-                          className={`bo-cv-elig-method-chip ${selectedMethodCode === 'BANKING_ELIGIBILITY' ? 'is-active' : ''}`}
+                          aria-selected={selectedMethodCode === 'BANKING' || selectedMethodCode === 'BANKING_ELIGIBILITY'}
+                          className={`bo-cv-elig-method-chip ${selectedMethodCode === 'BANKING' || selectedMethodCode === 'BANKING_ELIGIBILITY' ? 'is-active' : ''}`}
                           onClick={() => {
-                            setSelectedMethodCode('BANKING_ELIGIBILITY');
+                            // Reuse the existing Banking workspace renderer for the
+                            // separate Banking Program entry point.
+                            setSelectedMethodCode('BANKING');
                             setBankingWorkspaceOpen(true);
+                            setBankingResultOnly(true);
                             setRtrWorkspaceOpen(false);
-                            setNormalIncomeWorkspaceOpen(false);
                             setIncomeWorkspaceOpen(false);
                           }}
                           disabled={methodsLoading}
@@ -14331,70 +14373,6 @@ export default function CustomerVerification({
                         </button>
                       </div>
                     )}
-                    {(normalIncomeSync.active || normalIncomeSync.saved) && (() => {
-                      const savedSummary = normalIncomeSync.saved?.summary || normalIncomeSync.saved || {};
-                      const savedAt = normalIncomeSync.saved?.updatedAt || normalIncomeSync.saved?.createdAt;
-                      const fmtAmount = (v) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v))
-                        ? '—'
-                        : Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }));
-                      const summaryItems = [
-                        ['Total Income (Annual)', fmtAmount(savedSummary.totalIncomeAnnual)],
-                        ['Eligible Monthly Income', fmtAmount(savedSummary.eligibleMonthlyIncome)],
-                        ['Existing Obligations', fmtAmount(savedSummary.existingMonthlyObligations)],
-                        ['Net Serviceable Income', fmtAmount(savedSummary.netServiceableIncome)],
-                        ['Loan Eligibility (Lacs)', fmtAmount(savedSummary.loanEligibilityLacs)],
-                        ['Proposed Loan (Lacs)', fmtAmount(savedSummary.proposedLoanAmountLacs)],
-                        ['Actual FOIR', savedSummary.actualFoirPercent === null || savedSummary.actualFoirPercent === undefined
-                          ? '—'
-                          : `${fmtAmount(savedSummary.actualFoirPercent)}%`],
-                      ];
-                      const canSaveNow = normalIncomeSync.active
-                        && normalIncomeSync.hasUnsavedSheet
-                        && normalIncomeSync.status !== 'saving'
-                        && normalIncomeSync.status !== 'loading';
-                      return (
-                        <div className={`bo-cv-ni-sync is-${normalIncomeSync.status}`} role="status" aria-live="polite">
-                          <div className="bo-cv-ni-sync-head">
-                            <strong>Normal Income Sheet</strong>
-                            {normalIncomeSync.active && (
-                              <span className="bo-cv-ni-sync-badge">
-                                {{
-                                  loading: 'Connecting',
-                                  connected: 'Connected',
-                                  pending: 'Changes detected',
-                                  saving: 'Saving…',
-                                  saved: 'Saved',
-                                  error: 'Save failed',
-                                }[normalIncomeSync.status] || 'Idle'}
-                              </span>
-                            )}
-                            {canSaveNow && (
-                              <button type="button" className="bo-cv-ni-sync-save" onClick={saveNormalIncomeNow}>
-                                Save current sheet now
-                              </button>
-                            )}
-                          </div>
-                          {normalIncomeSync.message && <p className="bo-cv-ni-sync-msg">{normalIncomeSync.message}</p>}
-                          {normalIncomeSync.saved && (
-                            <>
-                              <div className="bo-cv-ni-sync-grid">
-                                {summaryItems.map(([label, value]) => (
-                                  <div key={label} className="bo-cv-ni-sync-item">
-                                    <span>{label}</span>
-                                    <strong>{value}</strong>
-                                  </div>
-                                ))}
-                              </div>
-                              {savedAt && (
-                                <small className="bo-cv-ni-sync-time">
-                                  Last saved {new Date(savedAt).toLocaleString('en-IN')}
-                                </small>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      );
-                    })()}
                   </div>
 
                   <div className="bo-cv-elig-control-block">
@@ -17666,6 +17644,78 @@ export default function CustomerVerification({
           onClose={handleCloseModal}
         />
       )}
+
+      {normalIncomeResultOpen && normalIncomeSync.saved && (() => {
+        const savedSummary = normalIncomeSync.saved.summary || normalIncomeSync.saved;
+        const parsedSummary = Array.isArray(normalIncomeSync.saved.values)
+          ? buildNormalIncomeSummary(normalIncomeSync.saved.values)
+          : {};
+        const displaySummary = { ...parsedSummary, ...savedSummary };
+        const savedAt = normalIncomeSync.saved.updatedAt || normalIncomeSync.saved.createdAt;
+        const fmtAmount = (value) => (value === null || value === undefined || value === '' || Number.isNaN(Number(value))
+          ? '—'
+          : Number(value).toLocaleString('en-IN', { maximumFractionDigits: 2 }));
+        const rows = [
+          ['A.1', 'PAT', fmtAmount(savedSummary.patFy1), fmtAmount(savedSummary.patFy2), '—'],
+          ['A.2', 'Depreciation', fmtAmount(displaySummary.depreciationFy1), fmtAmount(displaySummary.depreciationFy2), fmtAmount(displaySummary.depreciationConsidered)],
+          ['A.3', 'Salary to partners', fmtAmount(displaySummary.salaryToPartnersFy1), fmtAmount(displaySummary.salaryToPartnersFy2), fmtAmount(displaySummary.salaryToPartnersConsidered)],
+          ['A.4', 'Interest paid to related parties/partners/directors', fmtAmount(displaySummary.interestToRelatedFy1), fmtAmount(displaySummary.interestToRelatedFy2), fmtAmount(displaySummary.interestToRelatedConsidered)],
+          ['A', 'Primary Income P.a. (A.1 to A.5)', fmtAmount(displaySummary.primaryIncomeFy1), fmtAmount(displaySummary.primaryIncomeFy2), fmtAmount(displaySummary.primaryIncome)],
+          ['B', 'Salary Income (if anyone is salaried) P.a.', fmtAmount(displaySummary.salaryIncomeFy1), fmtAmount(displaySummary.salaryIncomeFy2), fmtAmount(displaySummary.salaryIncome)],
+          ['C.1', 'House Property (Per Annum)', fmtAmount(displaySummary.housePropertyFy1), displaySummary.housePropertyFy2 == null ? '—' : `${fmtAmount(displaySummary.housePropertyFy2)}%`, fmtAmount(displaySummary.housePropertyIncome)],
+          ['C.2', 'Agriculture Income (Per Annum)', fmtAmount(displaySummary.agricultureFy1), displaySummary.agricultureFy2 == null ? '—' : `${fmtAmount(displaySummary.agricultureFy2)}%`, fmtAmount(displaySummary.agricultureIncome)],
+          ['C.3', 'Income from Other Sources (Per Annum)', fmtAmount(displaySummary.otherSourcesFy1), displaySummary.otherSourcesFy2 == null ? '—' : `${fmtAmount(displaySummary.otherSourcesFy2)}%`, fmtAmount(displaySummary.otherSourcesIncome)],
+          ['C.4', 'Total Other Income (B.1 + B.2 + B.3)', '—', '—', fmtAmount(displaySummary.totalOtherIncome)],
+          ['C', 'Total Other Income to be considered', 'Restricted to maximum 100% of Business Income', displaySummary.restrictedToBusinessIncome == null ? '—' : (displaySummary.restrictedToBusinessIncome ? 'Yes' : 'No'), fmtAmount(displaySummary.totalOtherIncome)],
+          ['D', 'Total Income (A+B+C) (Per Annum)', '—', '—', fmtAmount(savedSummary.totalIncomeAnnual)],
+          ['E', 'Total Eligible Monthly Income (A+B*FOIR @ 70%+C*60%)/12', '—', '—', fmtAmount(savedSummary.eligibleMonthlyIncome)],
+          ['F', 'Existing Monthly Obligations', '—', '—', fmtAmount(savedSummary.existingMonthlyObligations)],
+          ['G', 'Net Serviceable Income (E-F)', '—', '—', fmtAmount(savedSummary.netServiceableIncome)],
+          ['H', 'EMI Factor @IRR/Tenor', '—', '—', fmtAmount(savedSummary.emiFactor)],
+          ['I', 'Loan Eligibility (G/H)', '—', '—', fmtAmount(savedSummary.loanEligibilityLacs)],
+          ['J', 'Proposed Loan Amount (in lacs)', '—', '—', fmtAmount(savedSummary.proposedLoanAmountLacs)],
+          ['K', 'Actual FOIR', '—', '—', savedSummary.actualFoirPercent == null ? '—' : `${fmtAmount(savedSummary.actualFoirPercent)}%`],
+        ];
+        return (
+          <div
+            className="bo-cv-normal-income-result-page"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bo-cv-normal-income-result-title"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) setNormalIncomeResultOpen(false);
+            }}
+          >
+            <div className="bo-cv-normal-income-result-page-card">
+              <div className="bo-cv-confirm-modal-header">
+                <div className="bo-cv-confirm-modal-title-group">
+                  <h3 id="bo-cv-normal-income-result-title" className="bo-cv-confirm-modal-title">Normal Income Sheet</h3>
+                  <p className="bo-cv-confirm-modal-subtitle">Saved eligibility result</p>
+                </div>
+                <button type="button" className="bo-cv-confirm-modal-close" onClick={() => setNormalIncomeResultOpen(false)} aria-label="Close eligibility result">
+                  {XIcon ? <XIcon size={16} /> : <span>×</span>}
+                </button>
+              </div>
+              <div className="bo-cv-confirm-modal-body">
+                <div className="bo-cv-normal-income-table-wrap">
+                  <table className="bo-cv-normal-income-table">
+                    <thead>
+                      <tr><th>Component</th><th>31/Mar/25</th><th>31/Mar/26</th><th>Considered for Eligibility Amount</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr className="bo-cv-normal-income-section"><td colSpan="4">Primary Income</td></tr>
+                      {rows.slice(0, 6).map(([sr, label, fy1, fy2, considered]) => <tr key={sr}><td>{label}</td><td>{fy1}</td><td>{fy2}</td><td>{considered}</td></tr>)}
+                      <tr className="bo-cv-normal-income-section"><td colSpan="4">Other Income</td></tr>
+                      {rows.slice(6).map(([sr, label, fy1, fy2, considered]) => <tr key={sr}><td>{label}</td><td>{fy1}</td><td>{fy2}</td><td>{considered}</td></tr>)}
+                    </tbody>
+                  </table>
+                </div>
+                {savedAt && <small className="bo-cv-ni-sync-time">Last saved {new Date(savedAt).toLocaleString('en-IN')}</small>}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Health Check Findings Modal ── */}
       {findingsModal.open && (

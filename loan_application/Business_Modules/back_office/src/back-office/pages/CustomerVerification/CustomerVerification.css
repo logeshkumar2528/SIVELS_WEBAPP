@@ -9806,6 +9806,116 @@
   animation: boCvPanelFadeIn 0.22s ease-out;
 }
 
+/* Reference overview layout: compact white panels on a cool blue canvas. */
+.bo-cv-elig-deck {
+  gap: 18px;
+  padding: 8px;
+  background: #eef4fb;
+}
+
+.bo-cv-elig-controls {
+  grid-template-columns: 1.65fr 0.95fr;
+  gap: 14px;
+}
+
+.bo-cv-elig-control-block,
+.bo-cv-elig-ribbon {
+  border-radius: 10px;
+  border-color: #e4ebf5;
+  box-shadow: 0 5px 14px rgba(36, 62, 96, 0.06);
+}
+
+.bo-cv-elig-control-block {
+  padding: 18px 20px;
+  gap: 14px;
+}
+
+.bo-cv-elig-control-label {
+  color: #173b70;
+  font-size: 13px;
+}
+
+.bo-cv-elig-method-rail {
+  gap: 10px;
+}
+
+.bo-cv-elig-method-chip {
+  min-width: 0;
+  min-height: 74px;
+  flex: 1 1 30%;
+  padding: 12px 14px;
+  border-radius: 7px;
+  background: #fff;
+  border-color: #dce7f5;
+}
+
+.bo-cv-elig-method-chip.is-active {
+  border-color: #08a56b;
+  box-shadow: 0 0 0 2px rgba(8, 165, 107, 0.2);
+}
+
+.bo-cv-elig-method-chip-icon,
+.bo-cv-elig-person-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #eefaf4;
+  border-color: transparent;
+}
+
+.bo-cv-elig-method-chip-text strong,
+.bo-cv-elig-person-meta strong {
+  color: #17366c;
+  font-size: 14px;
+  text-align: left;
+}
+
+.bo-cv-elig-method-chip-text {
+  flex: 1 1 auto;
+  align-items: stretch;
+  text-align: left;
+}
+
+.bo-cv-elig-person-rail {
+  gap: 10px;
+}
+
+.bo-cv-elig-person-chip {
+  min-width: 260px;
+  min-height: 74px;
+  padding: 12px 14px;
+  border-radius: 7px;
+  background: #fff;
+  border-color: #9de2c7;
+}
+
+.bo-cv-elig-ribbon {
+  padding: 18px 20px;
+  gap: 14px;
+}
+
+.bo-cv-elig-ribbon-grid {
+  gap: 12px;
+}
+
+.bo-cv-elig-metric {
+  min-height: 92px;
+  justify-content: center;
+  padding: 14px 16px;
+  border-radius: 7px;
+  background: #fff;
+  border-color: #dce7f5;
+}
+
+.bo-cv-elig-metric small {
+  color: #6a80a4;
+}
+
+.bo-cv-elig-metric strong {
+  color: #17366c;
+  font-size: 16px;
+}
+
 .bo-cv-elig-kicker {
   display: inline-block;
   margin-bottom: 8px;
@@ -14574,6 +14684,95 @@
 
 .bo-cv-elig-method-chip-text small {
   display: none;
+}
+
+.bo-cv-normal-income-view-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+  padding: 3px 8px;
+  border: 1px solid #0f8a5f;
+  border-radius: 5px;
+  color: #0f8a5f;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+  cursor: pointer;
+}
+
+.bo-cv-normal-income-view-btn:hover,
+.bo-cv-normal-income-view-btn:focus-visible {
+  color: #fff;
+  background: #0f8a5f;
+  outline: none;
+}
+
+.bo-cv-elig-method-chip .bo-cv-normal-income-view-btn {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+}
+
+.bo-cv-normal-income-result-page {
+  width: 100%;
+  min-height: 100%;
+  padding: 16px;
+  background: #fff;
+}
+
+.bo-cv-page-wrap.is-normal-income-result-page > :not(.bo-cv-normal-income-result-page) {
+  display: none;
+}
+
+.bo-cv-normal-income-result-page-card {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #fff;
+  border: 1px solid #d7dee8;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.bo-cv-normal-income-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #1f2937;
+}
+
+.bo-cv-normal-income-table {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+  color: #111827;
+  font-size: 11px;
+}
+
+.bo-cv-normal-income-table th,
+.bo-cv-normal-income-table td {
+  border: 1px solid #4b5563;
+  padding: 3px 7px;
+  text-align: right;
+}
+
+.bo-cv-normal-income-table th:first-child,
+.bo-cv-normal-income-table td:first-child {
+  min-width: 290px;
+  text-align: left;
+}
+
+.bo-cv-normal-income-table thead th {
+  background: #f3f4f6;
+  font-weight: 700;
+  text-align: center;
+}
+
+.bo-cv-normal-income-table .bo-cv-normal-income-section td {
+  background: #f3f4f6;
+  font-weight: 700;
+  text-align: center;
 }
 
 /* ══════════════════════════════════════════════════════════════════════
