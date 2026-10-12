@@ -658,7 +658,7 @@ function getStatusInfo(status) {
   return { label: 'Pending', className: 'bo-cv-pill-pending' };
 }
 
-function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBack, initialResultOnly = false }) {
+function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBack, initialResultOnly = false, actionsSlot = null }) {
   const emptyMonth = () => ({
     applicationBankingMonthlyDetailsId: null,
     monthYear: '', monthlyCredits: '', monthlyCreditsNonBusiness: '', monthlyDebits: '',
@@ -840,6 +840,7 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
           </div>
         </div>
         <div className="bo-cv-banking-header-right">
+          {actionsSlot}
           <button
             type="button"
             className="bo-btn bo-btn--outline bo-cv-banking-add-btn"
@@ -8732,6 +8733,22 @@ export default function CustomerVerification({
     cmLockNoticeTimer.current = setTimeout(() => setCmLockNotice(''), 4000);
   };
 
+  const renderCreditReviewActions = () => {
+    if (!showSectionReview) return null;
+    return (
+      <div data-cm-section-bar className="cm-header-actions-wrapper">
+        {sectionReview.renderBar({
+          section: reviewSection,
+          isEditing: !isCmSectionLocked,
+          compact: true,
+          onToggleEdit: () =>
+            setCmEditingSectionId((prev) => (prev === reviewSectionId ? null : reviewSectionId)),
+          onReject: openCmSectionReject,
+        })}
+      </div>
+    );
+  };
+
   const isCmEditTarget = (target, container) => {
     if (!(target instanceof Element) || target.closest('[data-cm-section-bar]')) return false;
     const field = target.closest('input, select, textarea');
@@ -10785,7 +10802,11 @@ export default function CustomerVerification({
   );
 
   return (
-    <div className={`bo-cv-page-wrap${normalIncomeResultOpen ? ' is-normal-income-result-page' : ''}`}>
+    <div
+      className={`bo-cv-page-wrap${normalIncomeResultOpen ? ' is-normal-income-result-page' : ''}${
+        isCreditManagerView ? ' cm-credit-manager-view' : ''
+      }`}
+    >
       {/* ── 1. Compact Verification Header (Real API Data) ──────────────── */}
       <header className="bo-cv-header">
         {/* Left: Back button */}
@@ -11023,20 +11044,9 @@ export default function CustomerVerification({
           id="main-verification-content"
           {...cmLockHandlers}
         >
-          {showSectionReview && (
-            <div data-cm-section-bar>
-              {sectionReview.renderBar({
-                section: reviewSection,
-                isEditing: !isCmSectionLocked,
-                onToggleEdit: () =>
-                  setCmEditingSectionId((prev) => (prev === reviewSectionId ? null : reviewSectionId)),
-                onReject: openCmSectionReject,
-              })}
-              {cmLockNotice && (
-                <div className="bo-cv-feedback-alert is-info cm-lock-notice" role="status">
-                  {cmLockNotice}
-                </div>
-              )}
+          {cmLockNotice && (
+            <div data-cm-section-bar className="bo-cv-feedback-alert is-info cm-lock-notice" role="status">
+              {cmLockNotice}
             </div>
           )}
 
@@ -11077,7 +11087,10 @@ export default function CustomerVerification({
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 01 of 13</span>
+                <div className="bo-cv-step-header-right">
+                  {renderCreditReviewActions()}
+                  <span className="bo-cv-step-tag-pill">Step 01 of 13</span>
+                </div>
               </div>
 
               <div className="bo-cv-view-form-embed-wrapper">
@@ -11116,6 +11129,7 @@ export default function CustomerVerification({
                   </div>
                 </div>
                 <div className="bo-cv-doc-header-right">
+                  {renderCreditReviewActions()}
                   <span className="bo-cv-step-tag-pill">Step 02 of 13</span>
                 </div>
               </div>
@@ -11581,6 +11595,9 @@ export default function CustomerVerification({
                     <h2 className="bo-cv-step-panel-title">Verifications</h2>
                   </div>
                 </div>
+                <div className="bo-cv-step-header-right">
+                  {renderCreditReviewActions()}
+                </div>
               </div>
 
               {/* 2. Section Selector Dropdown */}
@@ -11962,7 +11979,10 @@ export default function CustomerVerification({
                     <h2 className="bo-cv-step-panel-title">Credit Bureau &amp; CIBIL Verification</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 04 of 13</span>
+                <div className="bo-cv-step-header-right">
+                  {renderCreditReviewActions()}
+                  <span className="bo-cv-step-tag-pill">Step 04 of 13</span>
+                </div>
               </div>
 
               {/* Manual CIBIL PAN Card Upload Reference Section */}
@@ -12497,7 +12517,10 @@ export default function CustomerVerification({
                     <h2 className="bo-cv-step-panel-title">Health Check</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 05 of 13</span>
+                <div className="bo-cv-step-header-right">
+                  {renderCreditReviewActions()}
+                  <span className="bo-cv-step-tag-pill">Step 05 of 13</span>
+                </div>
               </div>
 
               {renderHealthChecksChecklist(19)}
@@ -12516,7 +12539,10 @@ export default function CustomerVerification({
                     <h2 className="bo-cv-step-panel-title">PD Sheet</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 06 of 13</span>
+                <div className="bo-cv-step-header-right">
+                  {renderCreditReviewActions()}
+                  <span className="bo-cv-step-tag-pill">Step 06 of 13</span>
+                </div>
               </div>
 
               {/* Compact Top Header: PD Mode | Applicant */}
@@ -12840,6 +12866,7 @@ export default function CustomerVerification({
               agentCustomerId={resolvedTargetCustomerId}
               applicantSequence={0}
               currentUserId={getAuthenticatedBackOfficeId()}
+              actionsSlot={renderCreditReviewActions()}
             />
           )}
 
@@ -12851,6 +12878,7 @@ export default function CustomerVerification({
               applicationProductDetailsId={resolvedAppProdId}
               applicantSequence={0}
               currentUserId={getAuthenticatedBackOfficeId()}
+              actionsSlot={renderCreditReviewActions()}
             />
           )}
 
@@ -12863,6 +12891,7 @@ export default function CustomerVerification({
                 applicationProductDetailsId={calculationAppProdId || resolvedAppProdId}
                 userId={getAuthenticatedBackOfficeId()}
                 onBack={() => navigateToStep(16)}
+                actionsSlot={renderCreditReviewActions()}
               />
             </div>
           )}
@@ -14204,6 +14233,11 @@ export default function CustomerVerification({
               </div>
             ) : (
               <div className="bo-cv-elig-deck">
+                {isCreditManagerView && renderCreditReviewActions() && (
+                  <div className="bo-cv-elig-header-bar" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+                    {renderCreditReviewActions()}
+                  </div>
+                )}
                 {/* Controls: Method + Applicant */}
                 <section className="bo-cv-elig-controls" aria-label="Assessment controls">
                   <div className="bo-cv-elig-control-block">
@@ -17222,12 +17256,16 @@ export default function CustomerVerification({
                     <h2 className="bo-cv-step-panel-title">Deviation</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 11 of 13</span>
+                <div className="bo-cv-step-header-right">
+                  {renderCreditReviewActions()}
+                  <span className="bo-cv-step-tag-pill">Step 11 of 13</span>
+                </div>
               </div>
               <DeviationAssessment
                 applicationProductDetailsId={calculationAppProdId}
                 backOfficeId={resolveCalculationAuthInfo().backOfficeId}
                 createdBy={resolveCalculationAuthInfo().userId}
+                showRefresh={!isCreditManagerView}
               />
             </div>
           )}
@@ -17245,7 +17283,10 @@ export default function CustomerVerification({
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 12 of 13</span>
+                <div className="bo-cv-step-header-right">
+                  {renderCreditReviewActions()}
+                  <span className="bo-cv-step-tag-pill">Step 12 of 13</span>
+                </div>
               </div>
 
               <div className="bo-cv-placeholder-panel">

@@ -69,6 +69,7 @@ export default function RtrCommonSheet({
   applicationProductDetailsId = 0,
   applicantSequence = 0,
   currentUserId: propUserId,
+  actionsSlot = null,
 }) {
   // Top Summary Section Groups (Local UI State only, empty strings initially)
   const [summary, setSummary] = useState({
@@ -656,7 +657,10 @@ export default function RtrCommonSheet({
             <h2 className="bo-cv-step-panel-title">RTR Common Sheet</h2>
           </div>
         </div>
-        <span className="bo-cv-step-tag-pill">Step 08 of 13</span>
+        <div className="bo-cv-step-header-right">
+          {actionsSlot}
+          <span className="bo-cv-step-tag-pill">Step 08 of 13</span>
+        </div>
       </div>
 
       <div className="bo-rtr-container">

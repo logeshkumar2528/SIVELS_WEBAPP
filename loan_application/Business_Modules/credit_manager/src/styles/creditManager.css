@@ -510,14 +510,62 @@
 }
 
 .cm-section-bar-actions {
-  display: flex;
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.cm-header-actions-wrapper {
+  display: inline-flex;
+  align-items: center;
+}
+
+.bo-cv-step-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bo-cv-unified-header .bo-cv-step-header-right {
+  margin-left: auto;
+}
+
+/* ── Standardize review buttons in verification headers ── */
+.cm-section-bar-actions .stc-btn-doc {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  font-size: 0.825rem;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 6px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.cm-section-bar-actions .stc-btn-doc svg {
+  flex-shrink: 0;
+  display: block;
 }
 
 .cm-section-bar-actions .stc-btn-doc:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ── Credit Manager Header Cleanup: Hide header subtitle & Step XX of 13 pills ── */
+.cm-credit-manager-view .bo-cv-step-panel-desc,
+.cm-credit-manager-view .bo-cv-step-panel-header .bo-cv-step-tag-pill,
+.cm-credit-manager-view .bo-cv-doc-header-right .bo-cv-step-tag-pill,
+.cm-credit-manager-view .bo-rtr-panel .bo-cv-step-tag-pill {
+  display: none !important;
 }
 
 .cm-step-status {

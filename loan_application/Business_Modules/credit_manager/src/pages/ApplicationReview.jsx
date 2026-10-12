@@ -558,7 +558,7 @@ export default function ApplicationReview() {
   const sectionReview = {
     canEdit: isPending,
     getStatus: review.getStatus,
-    renderBar: ({ section, isEditing, onToggleEdit, onReject }) => (
+    renderBar: ({ section, isEditing, onToggleEdit, onReject, compact = false }) => (
       <SectionReviewBar
         section={section}
         status={review.getStatus(section.id)}
@@ -566,6 +566,7 @@ export default function ApplicationReview() {
         awaitingReviewCount={awaitingReviewBySection[section.id] || 0}
         isEditing={isEditing}
         canEdit={isPending}
+        compact={compact}
         onToggleEdit={onToggleEdit}
         onApprove={() => review.approve(section.id)}
         onUnapprove={() => review.unapprove(section.id)}

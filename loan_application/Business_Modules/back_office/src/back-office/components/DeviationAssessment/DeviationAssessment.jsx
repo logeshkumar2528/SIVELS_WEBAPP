@@ -11,7 +11,7 @@ const decisionValue = (row) => read(row, ['decision', 'Decision'], '');
 const masterId = (row, type) => read(row, type === 'general' ? ['deviationId', 'DeviationId', 'id', 'Id'] : type === 'cir' ? ['cirDeviationId', 'CIRDeviationId', 'id', 'Id'] : ['negativeFIDeviationId', 'NegativeFIDeviationId', 'id', 'Id'], null);
 const decisionMasterId = (row, type) => read(row, type === 'general' ? ['deviationId', 'DeviationId'] : type === 'cir' ? ['cirDeviationId', 'CIRDeviationId'] : ['negativeFIDeviationId', 'NegativeFIDeviationId'], null);
 
-export default function DeviationAssessment({ applicationProductDetailsId, backOfficeId, createdBy }) {
+export default function DeviationAssessment({ applicationProductDetailsId, backOfficeId, createdBy, showRefresh = true }) {
   const [masters, setMasters] = useState({ general: [], cir: [], negativeFi: [] });
   const [decisions, setDecisions] = useState({ general: [], cir: [], negativeFi: [] });
   const [savingKey, setSavingKey] = useState('');
@@ -94,7 +94,9 @@ export default function DeviationAssessment({ applicationProductDetailsId, backO
   ], []);
 
   return <div className="bo-deviation-assessment">
-    <div className="bo-deviation-header"><div /><div className="bo-deviation-header-actions"><button type="button" onClick={load} disabled={isSaving}>Refresh</button></div></div>
+    {showRefresh && (
+      <div className="bo-deviation-header"><div /><div className="bo-deviation-header-actions"><button type="button" onClick={load} disabled={isSaving}>Refresh</button></div></div>
+    )}
     {error && <div className="bo-deviation-error">{error}</div>}
     {section('general', 'Deviation List', generalColumns, masters.general)}
     {section('cir', 'CIR Deviations', [
