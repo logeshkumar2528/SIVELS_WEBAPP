@@ -27,8 +27,7 @@ export const uploadCreditManagerAadhaar = async (id, file, isReplace = false) =>
   const action = isReplace ? 'replace-aadhar' : 'upload-aadhar';
   const response = await axiosInstance[method](
     `/CreditManagerMaster/${action}/${encodeURIComponent(id)}`,
-    formData,
-    { headers: { 'Content-Type': 'multipart/form-data' } }
+    formData
   );
   return response.data;
 };
@@ -40,8 +39,7 @@ export const uploadCreditManagerPan = async (id, file, isReplace = false) => {
   const action = isReplace ? 'replace-pan' : 'upload-pan';
   const response = await axiosInstance[method](
     `/CreditManagerMaster/${action}/${encodeURIComponent(id)}`,
-    formData,
-    { headers: { 'Content-Type': 'multipart/form-data' } }
+    formData
   );
   return response.data;
 };
@@ -53,8 +51,7 @@ export const uploadCreditManagerProfileImage = async (id, file, isReplace = fals
   const action = isReplace ? 'replace-profile-image' : 'upload-profile-image';
   const response = await axiosInstance[method](
     `/CreditManagerMaster/${action}/${encodeURIComponent(id)}`,
-    formData,
-    { headers: { 'Content-Type': 'multipart/form-data' } }
+    formData
   );
   if (typeof window !== 'undefined') {
     try {
