@@ -102,6 +102,8 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/calculation/assessments/by-application/${encodeURIComponent(applicationProductDetailsId)}`,
   CALCULATION_ASSESSMENT_RECOMMENDATION: (loanEligibilityAssessmentId) =>
     `/calculation/assessments/${encodeURIComponent(loanEligibilityAssessmentId)}/recommendation`,
+  ELIGIBILITY_NORMAL_INCOME: (applicationProductDetailsId, agentCustomerId) =>
+    `/EligibilityNormalIncome/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(agentCustomerId)}`,
 
   // Banking analysis and eligibility APIs
   BANKING_DETAILS: (applicationProductDetailsId) =>

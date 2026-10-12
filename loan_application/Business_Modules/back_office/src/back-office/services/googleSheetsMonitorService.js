@@ -365,8 +365,10 @@ export class GoogleSheetsMonitor {
     clientId,
     targetSheetName = TARGET_WORKSHEET_NAME,
     pollIntervalMs = 3000,
-    metadataRefreshCycles = 5
+    metadataRefreshCycles = 5,
+    onSnapshot = null
   }) {
+    this.onSnapshot = typeof onSnapshot === 'function' ? onSnapshot : null;
     this.spreadsheetId = spreadsheetId;
     this.clientId = clientId;
     this.targetSheetName = targetSheetName;
@@ -478,14 +480,28 @@ export class GoogleSheetsMonitor {
 
       const newSnapshot = { sheets: newSnapshotSheets };
 
+      const targetTitle = this.cachedMetadata[0]?.title || this.targetSheetName;
+      let changes = [];
       if (!isInitial && this.lastSnapshot) {
-        diffSpreadsheetSnapshots(this.lastSnapshot, newSnapshot);
+        changes = diffSpreadsheetSnapshots(this.lastSnapshot, newSnapshot);
       } else if (isInitial) {
-        const targetTitle = this.cachedMetadata[0]?.title || this.targetSheetName;
         console.log(`[Normal Income] Initial baseline snapshot established for worksheet: "${targetTitle}"`);
       }
 
       this.lastSnapshot = newSnapshot;
+
+      if (this.onSnapshot && (isInitial || changes.length > 0)) {
+        try {
+          this.onSnapshot({
+            sheetName: targetTitle,
+            grid: newSnapshotSheets[targetTitle] || [],
+            changes,
+            isInitial,
+          });
+        } catch (callbackErr) {
+          console.warn('[Normal Income] Snapshot handler failed:', callbackErr?.message || callbackErr);
+        }
+      }
     } catch (err) {
       if (err.name === 'AbortError') return;
 
@@ -523,18 +539,26 @@ let activeMonitorInstance = null;
  * @param {string} spreadsheetId
  * @param {string} clientId
  * @param {string} [targetSheetName]
+ * @param {{ onSnapshot?: (snapshot: { sheetName: string, grid: string[][], changes: object[], isInitial: boolean }) => void }} [options]
+ *   onSnapshot runs after the baseline read and after every poll that detects cell changes.
  * @returns {GoogleSheetsMonitor}
  */
 export function startNormalIncomeSheetMonitor(
   spreadsheetId,
   clientId,
-  targetSheetName = TARGET_WORKSHEET_NAME
+  targetSheetName = TARGET_WORKSHEET_NAME,
+  { onSnapshot } = {}
 ) {
   if (activeMonitorInstance) {
     activeMonitorInstance.stop();
   }
 
-  activeMonitorInstance = new GoogleSheetsMonitor({ spreadsheetId, clientId, targetSheetName });
+  activeMonitorInstance = new GoogleSheetsMonitor({
+    spreadsheetId,
+    clientId,
+    targetSheetName: targetSheetName || TARGET_WORKSHEET_NAME,
+    onSnapshot,
+  });
   activeMonitorInstance.start();
   return activeMonitorInstance;
 }
