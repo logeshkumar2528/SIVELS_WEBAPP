@@ -17342,130 +17342,132 @@ export default function CustomerVerification({
                 </div>
               )}
 
-              {/* Underwriting Readiness Summary Card */}
-              <div className="bo-cv-readiness-summary-card">
-                <div className="bo-cv-readiness-head">
-                  <div>
-                    <h3 className="bo-cv-readiness-title">
-                      Underwriting &amp; Verification Readiness Assessment
-                    </h3>
+              {/* Underwriting Readiness Summary Card (Hidden in Credit Manager view) */}
+              {!isCreditManagerView && (
+                <div className="bo-cv-readiness-summary-card">
+                  <div className="bo-cv-readiness-head">
+                    <div>
+                      <h3 className="bo-cv-readiness-title">
+                        Underwriting &amp; Verification Readiness Assessment
+                      </h3>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        type="button"
+                        className="bo-cv-readiness-btn-refresh"
+                        onClick={evaluateStep13Readiness}
+                        disabled={step13Readiness.isEvaluating}
+                      >
+                        {RefreshCwIcon && <RefreshCwIcon size={12} className={step13Readiness.isEvaluating ? 'bo-spin' : ''} />}
+                        <span>{step13Readiness.isEvaluating ? 'Re-evaluating...' : 'Refresh Status'}</span>
+                      </button>
+                      <span
+                        className={`bo-cv-readiness-status-badge ${
+                          step13Readiness.isReady
+                            ? 'bo-cv-readiness-status-badge--ready'
+                            : 'bo-cv-readiness-status-badge--progress'
+                        }`}
+                      >
+                        {step13Readiness.isReady ? (
+                          <>✓ Underwriting Complete &amp; Credit Ready</>
+                        ) : (
+                          <>⏳ Underwriting In Progress</>
+                        )}
+                      </span>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <button
-                      type="button"
-                      className="bo-cv-readiness-btn-refresh"
-                      onClick={evaluateStep13Readiness}
-                      disabled={step13Readiness.isEvaluating}
-                    >
-                      {RefreshCwIcon && <RefreshCwIcon size={12} className={step13Readiness.isEvaluating ? 'bo-spin' : ''} />}
-                      <span>{step13Readiness.isEvaluating ? 'Re-evaluating...' : 'Refresh Status'}</span>
-                    </button>
-                    <span
-                      className={`bo-cv-readiness-status-badge ${
-                        step13Readiness.isReady
-                          ? 'bo-cv-readiness-status-badge--ready'
-                          : 'bo-cv-readiness-status-badge--progress'
-                      }`}
-                    >
-                      {step13Readiness.isReady ? (
-                        <>✓ Underwriting Complete &amp; Credit Ready</>
-                      ) : (
-                        <>⏳ Underwriting In Progress</>
-                      )}
-                    </span>
+
+                  {/* Readiness Criteria Grid (3 col desktop, 2 col tablet, 1 col mobile) */}
+                  <div className="bo-cv-readiness-grid">
+                    <div className="bo-cv-readiness-item">
+                      <div className="bo-cv-readiness-label">KYC Document Matrix</div>
+                      <div className="bo-cv-readiness-data-row">
+                        <strong className="bo-cv-readiness-val">
+                          {step13Readiness.stepVerifsCount} Verified
+                        </strong>
+                        <span className="bo-cv-readiness-status" style={{ color: '#64748b' }}>
+                          Info only
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bo-cv-readiness-item">
+                      <div className="bo-cv-readiness-label">Legal Opinion Report</div>
+                      <div className="bo-cv-readiness-data-row">
+                        <strong className="bo-cv-readiness-val">
+                          {step13Readiness.hasLegal ? 'Uploaded' : 'Missing'}
+                        </strong>
+                        <span
+                          className="bo-cv-readiness-status"
+                          style={{ color: step13Readiness.hasLegal ? '#16a34a' : '#ea580c' }}
+                        >
+                          {step13Readiness.hasLegal ? '✓ Ready' : 'Pending'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bo-cv-readiness-item">
+                      <div className="bo-cv-readiness-label">Technical Valuation</div>
+                      <div className="bo-cv-readiness-data-row">
+                        <strong className="bo-cv-readiness-val">
+                          {step13Readiness.hasTechnical ? 'Uploaded' : 'Missing'}
+                        </strong>
+                        <span
+                          className="bo-cv-readiness-status"
+                          style={{ color: step13Readiness.hasTechnical ? '#16a34a' : '#ea580c' }}
+                        >
+                          {step13Readiness.hasTechnical ? '✓ Ready' : 'Pending'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bo-cv-readiness-item">
+                      <div className="bo-cv-readiness-label">CIBIL / Credit Bureau</div>
+                      <div className="bo-cv-readiness-data-row">
+                        <strong className="bo-cv-readiness-val">
+                          {step13Readiness.hasCibil ? 'Available' : 'Missing'}
+                        </strong>
+                        <span
+                          className="bo-cv-readiness-status"
+                          style={{ color: step13Readiness.hasCibil ? '#16a34a' : '#ea580c' }}
+                        >
+                          {step13Readiness.hasCibil ? '✓ Ready' : 'Pending'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bo-cv-readiness-item">
+                      <div className="bo-cv-readiness-label">Eligibility Assessment</div>
+                      <div className="bo-cv-readiness-data-row">
+                        <strong className="bo-cv-readiness-val">
+                          {step13Readiness.hasEligibility ? 'Calculated' : 'Pending'}
+                        </strong>
+                        <span
+                          className="bo-cv-readiness-status"
+                          style={{ color: step13Readiness.hasEligibility ? '#16a34a' : '#ea580c' }}
+                        >
+                          {step13Readiness.hasEligibility ? '✓ Complete' : 'Pending'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bo-cv-readiness-item">
+                      <div className="bo-cv-readiness-label">Document Rejections</div>
+                      <div className="bo-cv-readiness-data-row">
+                        <strong className="bo-cv-readiness-val">
+                          {step13Readiness.unresolvedRejectionsCount} Unresolved
+                        </strong>
+                        <span
+                          className="bo-cv-readiness-status"
+                          style={{ color: step13Readiness.unresolvedRejectionsCount === 0 ? '#16a34a' : '#dc2626' }}
+                        >
+                          {step13Readiness.unresolvedRejectionsCount === 0 ? '✓ None Active' : 'Must Resolve'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-
-                {/* Readiness Criteria Grid (3 col desktop, 2 col tablet, 1 col mobile) */}
-                <div className="bo-cv-readiness-grid">
-                  <div className="bo-cv-readiness-item">
-                    <div className="bo-cv-readiness-label">KYC Document Matrix</div>
-                    <div className="bo-cv-readiness-data-row">
-                      <strong className="bo-cv-readiness-val">
-                        {step13Readiness.stepVerifsCount} Verified
-                      </strong>
-                      <span className="bo-cv-readiness-status" style={{ color: '#64748b' }}>
-                        Info only
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bo-cv-readiness-item">
-                    <div className="bo-cv-readiness-label">Legal Opinion Report</div>
-                    <div className="bo-cv-readiness-data-row">
-                      <strong className="bo-cv-readiness-val">
-                        {step13Readiness.hasLegal ? 'Uploaded' : 'Missing'}
-                      </strong>
-                      <span
-                        className="bo-cv-readiness-status"
-                        style={{ color: step13Readiness.hasLegal ? '#16a34a' : '#ea580c' }}
-                      >
-                        {step13Readiness.hasLegal ? '✓ Ready' : 'Pending'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bo-cv-readiness-item">
-                    <div className="bo-cv-readiness-label">Technical Valuation</div>
-                    <div className="bo-cv-readiness-data-row">
-                      <strong className="bo-cv-readiness-val">
-                        {step13Readiness.hasTechnical ? 'Uploaded' : 'Missing'}
-                      </strong>
-                      <span
-                        className="bo-cv-readiness-status"
-                        style={{ color: step13Readiness.hasTechnical ? '#16a34a' : '#ea580c' }}
-                      >
-                        {step13Readiness.hasTechnical ? '✓ Ready' : 'Pending'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bo-cv-readiness-item">
-                    <div className="bo-cv-readiness-label">CIBIL / Credit Bureau</div>
-                    <div className="bo-cv-readiness-data-row">
-                      <strong className="bo-cv-readiness-val">
-                        {step13Readiness.hasCibil ? 'Available' : 'Missing'}
-                      </strong>
-                      <span
-                        className="bo-cv-readiness-status"
-                        style={{ color: step13Readiness.hasCibil ? '#16a34a' : '#ea580c' }}
-                      >
-                        {step13Readiness.hasCibil ? '✓ Ready' : 'Pending'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bo-cv-readiness-item">
-                    <div className="bo-cv-readiness-label">Eligibility Assessment</div>
-                    <div className="bo-cv-readiness-data-row">
-                      <strong className="bo-cv-readiness-val">
-                        {step13Readiness.hasEligibility ? 'Calculated' : 'Pending'}
-                      </strong>
-                      <span
-                        className="bo-cv-readiness-status"
-                        style={{ color: step13Readiness.hasEligibility ? '#16a34a' : '#ea580c' }}
-                      >
-                        {step13Readiness.hasEligibility ? '✓ Complete' : 'Pending'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bo-cv-readiness-item">
-                    <div className="bo-cv-readiness-label">Document Rejections</div>
-                    <div className="bo-cv-readiness-data-row">
-                      <strong className="bo-cv-readiness-val">
-                        {step13Readiness.unresolvedRejectionsCount} Unresolved
-                      </strong>
-                      <span
-                        className="bo-cv-readiness-status"
-                        style={{ color: step13Readiness.unresolvedRejectionsCount === 0 ? '#16a34a' : '#dc2626' }}
-                      >
-                        {step13Readiness.unresolvedRejectionsCount === 0 ? '✓ None Active' : 'Must Resolve'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              )}
 
               {/* Dual Action Cards (Credit Manager view renders its own decision panel instead) */}
               {isCreditManagerView ? (
