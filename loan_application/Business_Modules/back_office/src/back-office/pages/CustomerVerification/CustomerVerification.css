@@ -9836,17 +9836,26 @@
 }
 
 .bo-cv-elig-method-rail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
 .bo-cv-elig-method-chip {
   min-width: 0;
+  width: 100%;
   min-height: 74px;
   flex: 1 1 30%;
   padding: 12px 14px;
   border-radius: 7px;
   background: #fff;
   border-color: #dce7f5;
+}
+
+@media (max-width: 760px) {
+  .bo-cv-elig-method-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .bo-cv-elig-method-chip.is-active {
@@ -14713,6 +14722,17 @@
   width: 100%;
   box-sizing: border-box;
   margin-top: 6px;
+}
+
+.bo-cv-elig-method-rail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 760px) {
+  .bo-cv-elig-method-rail {
+    grid-template-columns: 1fr;
+  }
 }
 
 .bo-cv-normal-income-result-page {

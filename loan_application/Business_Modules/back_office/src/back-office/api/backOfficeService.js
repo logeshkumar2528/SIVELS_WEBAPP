@@ -542,6 +542,14 @@ export const backOfficeService = {
     return unwrapResponse(response);
   },
 
+  getLoanObligationMonthly: async (obligationId) => unwrapResponse(
+    await axiosInstance.get(BACK_OFFICE_ENDPOINTS.LOAN_OBLIGATION_MONTHLY(obligationId))
+  ),
+
+  saveLoanObligationMonthly: async (obligationId, payload) => unwrapResponse(
+    await axiosInstance.put(BACK_OFFICE_ENDPOINTS.LOAN_OBLIGATION_MONTHLY(obligationId), payload)
+  ),
+
   /* ==========================================
      PROPERTY & MORTGAGE STATUS MASTER APIs
   ========================================== */
