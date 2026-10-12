@@ -611,52 +611,6 @@ export default function ApplicationReview() {
 
   return (
     <div className="cm-workspace">
-      <div className="cm-review-bar">
-        <div className="cm-review-bar-info">
-          <strong>{queueApp ? getApplicationNo(queueApp) : `#${customerId}`}</strong>
-          <span>{queueApp?.customerName || ''}</span>
-          {isResubmitted ? (
-            <span className="stc-pill stc-pill--pending">Resubmitted to Credit Manager</span>
-          ) : statusMeta ? (
-            <span className={`stc-pill ${statusMeta.className}`}>{statusMeta.label}</span>
-          ) : (
-            <span className="stc-pill stc-pill--progress">Not with Credit Manager</span>
-          )}
-          {openReturnItemCount > 0 && (
-            <span className="cm-review-bar-warning">
-              {AlertTriangleIcon && <AlertTriangleIcon size={14} />}
-              {openReturnItemCount} returned item{openReturnItemCount === 1 ? '' : 's'} still with Back Office
-            </span>
-          )}
-          {awaitingReviewSections.length > 0 && (
-            <button
-              type="button"
-              className="cm-review-bar-warning cm-review-bar-flags"
-              onClick={() => goToStep(awaitingReviewSections[0].visibleNum)}
-            >
-              <span className="crp-indicator" aria-hidden="true" />
-              {awaitingReviewSections.reduce((sum, s) => sum + s.count, 0)} resolution
-              {awaitingReviewSections.reduce((sum, s) => sum + s.count, 0) === 1 ? '' : 's'} to review
-            </button>
-          )}
-          {pendingFlags.length > 0 && (
-            <button type="button" className="cm-review-bar-warning cm-review-bar-flags" onClick={goToFinalAction}>
-              {AlertTriangleIcon && <AlertTriangleIcon size={14} />}
-              {pendingFlags.length} flag{pendingFlags.length === 1 ? '' : 's'} for Back Office (not sent)
-            </button>
-          )}
-        </div>
-        <div className="cm-review-bar-actions">
-          <button type="button" className="stc-btn-doc stc-btn-doc--outline" onClick={() => setShowReport(true)}>
-            {ShieldCheckIcon && <ShieldCheckIcon size={14} />}
-            <span>Verification Report</span>
-          </button>
-          <button type="button" className="stc-btn-doc stc-btn-doc--primary" onClick={goToFinalAction}>
-            {FileCheckIcon && <FileCheckIcon size={14} />}
-            <span>{isPending ? 'Make Decision' : 'View Decision'}</span>
-          </button>
-        </div>
-      </div>
 
       <CustomerVerification
         viewerRole="CreditManager"
