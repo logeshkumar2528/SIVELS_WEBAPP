@@ -512,9 +512,41 @@ export default function ApplicationReview() {
   const isResubmitted = isPending && latestDecision?.decision === CREDIT_DECISION.RETURNED;
 
   const handleBack = useCallback(() => {
-    if (location.key !== 'default') navigate(-1);
-    else navigate(isPending ? ROUTES.PENDING : ROUTES.RECEIVED);
-  }, [location.key, navigate, isPending]);
+    // 1. Priority: Validated originating queue route from navigation state
+    const origin = location.state?.from;
+    const validQueues = [
+      ROUTES.RECEIVED,
+      ROUTES.PENDING,
+      ROUTES.APPROVED,
+      ROUTES.REJECTED,
+      `/credit${ROUTES.RECEIVED}`,
+      `/credit${ROUTES.PENDING}`,
+      `/credit${ROUTES.APPROVED}`,
+      `/credit${ROUTES.REJECTED}`,
+    ];
+
+    if (typeof origin === 'string' && validQueues.includes(origin)) {
+      navigate(origin);
+      return;
+    }
+
+    // 2. Fallback: Resolve destination from application's existing status
+    if (status === CM_STATUS.APPROVED) {
+      navigate(ROUTES.APPROVED);
+      return;
+    }
+    if (status === CM_STATUS.REJECTED) {
+      navigate(ROUTES.REJECTED);
+      return;
+    }
+    if (status === CM_STATUS.PENDING) {
+      navigate(ROUTES.PENDING);
+      return;
+    }
+
+    // 3. Final fallback: Received Applications route
+    navigate(ROUTES.RECEIVED);
+  }, [location.state, navigate, status]);
 
   const goToStep = (visibleStep) => {
     const next = new URLSearchParams(searchParams);
