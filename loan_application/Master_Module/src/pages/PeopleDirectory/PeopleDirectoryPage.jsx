@@ -177,7 +177,7 @@ const authHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-function DirectoryAvatar({ role, id, name, className = 'role-avatar', style, version = null }) {
+function DirectoryAvatar({ role, id, name, className = 'role-avatar', style, version = null, imagePath = undefined }) {
   const [error, setError] = useState(false);
   const [liveVersion, setLiveVersion] = useState(version || Date.now());
 
@@ -199,8 +199,10 @@ function DirectoryAvatar({ role, id, name, className = 'role-avatar', style, ver
     return () => window.removeEventListener('profile-image-updated', handleUpdate);
   }, [role]);
 
+  // If imagePath is explicitly provided and is empty/null/false (and no live update occurred), skip image fetch
+  const hasNoExplicitImage = imagePath !== undefined && !imagePath && liveVersion === version;
   const effectiveVersion = version || liveVersion;
-  const imageUrl = getProfileImageUrl(role, id, effectiveVersion);
+  const imageUrl = hasNoExplicitImage ? null : getProfileImageUrl(role, id, effectiveVersion);
 
   useEffect(() => {
     setError(false);
@@ -1377,7 +1379,13 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                       <tr key={cmId || cm.creditManagerCode || displayName}>
                         <td>
                           <div className="agent-name">
-                            <DirectoryAvatar role="CreditManager" id={cmId} name={displayName} version={imageVersion} />
+                            <DirectoryAvatar
+                              role="CreditManager"
+                              id={cmId}
+                              name={displayName}
+                              version={imageVersion}
+                              imagePath={cm.profileImagePath}
+                            />
                             <strong>{displayName}</strong>
                           </div>
                         </td>
@@ -1591,6 +1599,11 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               name={selectedPerson.name}
               className="person-dialog-avatar"
               version={selectedPerson.imageVersion || imageVersion}
+              imagePath={
+                (selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager')
+                  ? (getProfilePath(selectedPerson) || selectedPerson.profileImagePath)
+                  : undefined
+              }
             />
             <span className="eyebrow">{selectedPerson.type}</span>
             <h2>{selectedPerson.name}</h2>
@@ -1751,35 +1764,43 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                     <Camera size={18} className="ams-doc-icon" />
                     <div>
                       <strong>Profile Image</strong>
-                      <small>Photograph uploaded</small>
+                      <small>
+                        {getProfilePath(selectedPerson) || selectedPerson.profileImagePath
+                          ? 'Photograph uploaded'
+                          : 'No image uploaded'}
+                      </small>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="details-button"
-                    onClick={() => {
-                      const personRole =
-                        selectedPerson.type === 'Relationship manager' || selectedPerson.type === 'RM'
-                          ? 'RM'
-                          : selectedPerson.type === 'Back Office'
-                          ? 'BackOffice'
-                          : selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager'
-                          ? 'CreditManager'
-                          : selectedPerson.type === 'AMS'
-                          ? 'AMS'
-                          : 'Agent';
-                      const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.creditManagerId || selectedPerson.amsId;
-                      handlePreviewDocument(
-                        'Profile Image',
-                        getProfilePath(selectedPerson) || selectedPerson.profileImagePath,
-                        personRole,
-                        personId,
-                        selectedPerson.imageVersion || imageVersion
-                      );
-                    }}
-                  >
-                    <Eye size={14} /> View Image
-                  </button>
+                  {(getProfilePath(selectedPerson) || selectedPerson.profileImagePath) ? (
+                    <button
+                      type="button"
+                      className="details-button"
+                      onClick={() => {
+                        const personRole =
+                          selectedPerson.type === 'Relationship manager' || selectedPerson.type === 'RM'
+                            ? 'RM'
+                            : selectedPerson.type === 'Back Office'
+                            ? 'BackOffice'
+                            : selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager'
+                            ? 'CreditManager'
+                            : selectedPerson.type === 'AMS'
+                            ? 'AMS'
+                            : 'Agent';
+                        const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.creditManagerId || selectedPerson.amsId;
+                        handlePreviewDocument(
+                          'Profile Image',
+                          getProfilePath(selectedPerson) || selectedPerson.profileImagePath,
+                          personRole,
+                          personId,
+                          selectedPerson.imageVersion || imageVersion
+                        );
+                      }}
+                    >
+                      <Eye size={14} /> View Image
+                    </button>
+                  ) : (
+                    <span className="ams-doc-missing">Unavailable</span>
+                  )}
                 </div>
               </div>
             </div>

@@ -175,7 +175,18 @@ export default function CreditManagerCreate({ onSuccessRedirect = '/credit-manag
         });
         setIsActive(record.isActive !== false && record.IsActive !== false);
 
-        const aadhaarPath = record.aadhaarDocumentPath || record.aadhaarPath || record.aadhaarCardPath || record.AadhaarDocumentPath || '';
+        const aadhaarPath =
+          record.aadharDocumentPath ||
+          record.AadharDocumentPath ||
+          record.aadhaarDocumentPath ||
+          record.AadhaarDocumentPath ||
+          record.aadharPath ||
+          record.AadharPath ||
+          record.aadhaarPath ||
+          record.AadhaarPath ||
+          record.aadhaarCardPath ||
+          record.aadharCardPath ||
+          '';
         const panPath = record.panCardPath || record.panDocumentPath || record.panPath || record.PanCardPath || '';
         const profilePath = record.profileImagePath || record.profilePath || record.ProfileImagePath || '';
 
@@ -193,7 +204,7 @@ export default function CreditManagerCreate({ onSuccessRedirect = '/credit-manag
           setIsExistingPanPdf(isPdfUrl(panPath));
         }
 
-        if (profilePath || editCmId) {
+        if (profilePath) {
           const directProfileUrl = getProfileImageUrl('CreditManager', editCmId);
           setExistingProfileUrl(directProfileUrl);
         }

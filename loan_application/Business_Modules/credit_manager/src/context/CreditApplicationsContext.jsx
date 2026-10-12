@@ -7,7 +7,9 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import creditManagerService from '../api/creditManagerService';
+import backOfficeService from '../../../back_office/src/back-office/api/backOfficeService';
 import { isCreditManagerAuthenticated } from '../auth/authStorage';
+import { mapAgent, mapRM } from '../../../back_office/src/back-office/mappers/hierarchyMapper';
 import { CM_STATUS, isCreditManagerStatus, mapCreditApplication } from '../mappers/creditMapper';
 import { parseDate } from '../utils/formatters';
 
@@ -33,9 +35,33 @@ export function CreditApplicationsProvider({ children }) {
     setLoading(true);
     setError(null);
     try {
-      const raw = await creditManagerService.getAllApplications();
+      const [appResult, rmResult, agentResult] = await Promise.allSettled([
+        creditManagerService.getAllApplications(),
+        backOfficeService.getAllRMs(),
+        backOfficeService.getAllAgents(),
+      ]);
+
+      if (appResult.status === 'rejected') {
+        throw appResult.reason;
+      }
+
+      const raw = Array.isArray(appResult.value) ? appResult.value : [];
+      const unwrapList = (res) => {
+        if (Array.isArray(res)) return res;
+        return res?.value || res?.data || res?.result || [];
+      };
+
+      const rawRms = rmResult.status === 'fulfilled' ? unwrapList(rmResult.value) : [];
+      const rawAgents = agentResult.status === 'fulfilled' ? unwrapList(agentResult.value) : [];
+
+      const rms = rawRms.map(mapRM).filter(Boolean);
+      const agents = rawAgents.map(mapAgent).filter(Boolean);
+
+      const rmById = new Map(rms.map((rm) => [String(rm.rmId || rm.id), rm]));
+      const agentById = new Map(agents.map((agent) => [String(agent.agentId || agent.id), agent]));
+
       const mapped = raw
-        .map(mapCreditApplication)
+        .map((app) => mapCreditApplication(app, agentById, rmById))
         .filter((app) => app && isCreditManagerStatus(app.status))
         .sort(sortNewestFirst);
       if (isActive()) setApplications(mapped);
