@@ -651,12 +651,12 @@ export default function RtrCommonSheet({
       {/* Panel Header */}
       <div className="bo-cv-step-panel-header">
         <div className="bo-cv-step-header-left">
-          <div className="bo-cv-step-badge-num">11</div>
+          <div className="bo-cv-step-badge-num">08</div>
           <div>
             <h2 className="bo-cv-step-panel-title">RTR Common Sheet</h2>
           </div>
         </div>
-        <span className="bo-cv-step-tag-pill">Step 11 of 14</span>
+        <span className="bo-cv-step-tag-pill">Step 08 of 13</span>
       </div>
 
       <div className="bo-rtr-container">

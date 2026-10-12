@@ -11077,7 +11077,7 @@ export default function CustomerVerification({
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 01 of 14</span>
+                <span className="bo-cv-step-tag-pill">Step 01 of 13</span>
               </div>
 
               <div className="bo-cv-view-form-embed-wrapper">
@@ -11116,7 +11116,7 @@ export default function CustomerVerification({
                   </div>
                 </div>
                 <div className="bo-cv-doc-header-right">
-                  <span className="bo-cv-step-tag-pill">Step 02 of 14</span>
+                  <span className="bo-cv-step-tag-pill">Step 02 of 13</span>
                 </div>
               </div>
 
@@ -11957,12 +11957,12 @@ export default function CustomerVerification({
             <div className="bo-cv-step-panel bo-cv-cibil-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">08</div>
+                  <div className="bo-cv-step-badge-num">04</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Credit Bureau &amp; CIBIL Verification</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 08 of 14</span>
+                <span className="bo-cv-step-tag-pill">Step 04 of 13</span>
               </div>
 
               {/* Manual CIBIL PAN Card Upload Reference Section */}
@@ -12492,12 +12492,12 @@ export default function CustomerVerification({
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">09</div>
+                  <div className="bo-cv-step-badge-num">05</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Health Check</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 09 of 14</span>
+                <span className="bo-cv-step-tag-pill">Step 05 of 13</span>
               </div>
 
               {renderHealthChecksChecklist(19)}
@@ -12511,12 +12511,12 @@ export default function CustomerVerification({
             <div className="bo-cv-step-panel bo-cv-pd-sheet-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">10</div>
+                  <div className="bo-cv-step-badge-num">06</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">PD Sheet</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 10 of 14</span>
+                <span className="bo-cv-step-tag-pill">Step 06 of 13</span>
               </div>
 
               {/* Compact Top Header: PD Mode | Applicant */}
@@ -17217,12 +17217,12 @@ export default function CustomerVerification({
             <div className="bo-cv-step-panel bo-cv-deviation-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">14</div>
+                  <div className="bo-cv-step-badge-num">11</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Deviation</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 14 of 16</span>
+                <span className="bo-cv-step-tag-pill">Step 11 of 13</span>
               </div>
               <DeviationAssessment
                 applicationProductDetailsId={calculationAppProdId}
@@ -17237,7 +17237,7 @@ export default function CustomerVerification({
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">15</div>
+                  <div className="bo-cv-step-badge-num">12</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Recommendation Sheet</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -17245,7 +17245,7 @@ export default function CustomerVerification({
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 15 of 16</span>
+                <span className="bo-cv-step-tag-pill">Step 12 of 13</span>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -17266,12 +17266,12 @@ export default function CustomerVerification({
             <div className="bo-cv-step-panel bo-cv-workflow-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">16</div>
+                  <div className="bo-cv-step-badge-num">13</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Final Application Action &amp; Disposition</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 16 of 16</span>
+                <span className="bo-cv-step-tag-pill">Step 13 of 13</span>
               </div>
 
               {/* Action Feedback Banner */}
