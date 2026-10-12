@@ -14576,6 +14576,89 @@
   display: none;
 }
 
+.bo-cv-normal-income-view-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+  padding: 3px 8px;
+  border: 1px solid #0f8a5f;
+  border-radius: 5px;
+  color: #0f8a5f;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+  cursor: pointer;
+}
+
+.bo-cv-normal-income-view-btn:hover,
+.bo-cv-normal-income-view-btn:focus-visible {
+  color: #fff;
+  background: #0f8a5f;
+  outline: none;
+}
+
+.bo-cv-normal-income-result-page {
+  width: 100%;
+  min-height: 100%;
+  padding: 16px;
+  background: #fff;
+}
+
+.bo-cv-page-wrap.is-normal-income-result-page > :not(.bo-cv-normal-income-result-page) {
+  display: none;
+}
+
+.bo-cv-normal-income-result-page-card {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #fff;
+  border: 1px solid #d7dee8;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.bo-cv-normal-income-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #1f2937;
+}
+
+.bo-cv-normal-income-table {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+  color: #111827;
+  font-size: 11px;
+}
+
+.bo-cv-normal-income-table th,
+.bo-cv-normal-income-table td {
+  border: 1px solid #4b5563;
+  padding: 3px 7px;
+  text-align: right;
+}
+
+.bo-cv-normal-income-table th:first-child,
+.bo-cv-normal-income-table td:first-child {
+  min-width: 290px;
+  text-align: left;
+}
+
+.bo-cv-normal-income-table thead th {
+  background: #f3f4f6;
+  font-weight: 700;
+  text-align: center;
+}
+
+.bo-cv-normal-income-table .bo-cv-normal-income-section td {
+  background: #f3f4f6;
+  font-weight: 700;
+  text-align: center;
+}
+
 /* ══════════════════════════════════════════════════════════════════════
    UNIFIED WORKSPACE: FI & REPORTS (STEPS 03–07)
    Compact workspace, section dropdown, compact document card & icon actions
