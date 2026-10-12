@@ -754,6 +754,38 @@ export const backOfficeService = {
     return unwrapResponse(response);
   },
 
+  /**
+   * Load the saved Google Sheet "Eligibility- Normal Income" snapshot.
+   * Returns null when nothing has been saved yet (404).
+   * @param {string|number} applicationProductDetailsId
+   * @param {string|number} agentCustomerId
+   */
+  getEligibilityNormalIncome: async (applicationProductDetailsId, agentCustomerId) => {
+    try {
+      const response = await axiosInstance.get(
+        BACK_OFFICE_ENDPOINTS.ELIGIBILITY_NORMAL_INCOME(applicationProductDetailsId, agentCustomerId)
+      );
+      return unwrapResponse(response);
+    } catch (err) {
+      if (err?.response?.status === 404) return null;
+      throw err;
+    }
+  },
+
+  /**
+   * Insert or update (upsert) the Normal Income sheet snapshot.
+   * @param {string|number} applicationProductDetailsId
+   * @param {string|number} agentCustomerId
+   * @param {{ sheetName: string, updatedByUserId: number|null, summary: object, values: string[][] }} payload
+   */
+  saveEligibilityNormalIncome: async (applicationProductDetailsId, agentCustomerId, payload) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.ELIGIBILITY_NORMAL_INCOME(applicationProductDetailsId, agentCustomerId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
   /* ==========================================
      8c. RTR (REPAYMENT TRACK RECORD) CALCULATION APIs
   ========================================== */
