@@ -2084,6 +2084,7 @@ export default function CustomerVerification({
   const [employmentTypesList, setEmploymentTypesList] = useState([]);
   const [calcWorkspaceOpen, setCalcWorkspaceOpen] = useState(false);
   const [bankingWorkspaceOpen, setBankingWorkspaceOpen] = useState(false);
+  const [bankingResultOnly, setBankingResultOnly] = useState(false);
   const [rtrWorkspaceOpen, setRtrWorkspaceOpen] = useState(false);
   const [incomeWorkspaceOpen, setIncomeWorkspaceOpen] = useState(false);
   const [rtrCalculatedTrigger, setRtrCalculatedTrigger] = useState(0);
@@ -13423,7 +13424,11 @@ export default function CustomerVerification({
                 <BankingEligibilityWorkspace
                   applicationProductDetailsId={calculationAppProdId}
                   userId={getAuthenticatedBackOfficeId()}
-                  onBack={() => setBankingWorkspaceOpen(false)}
+                  initialResultOnly={bankingResultOnly}
+                  onBack={() => {
+                    setBankingWorkspaceOpen(false);
+                    setBankingResultOnly(false);
+                  }}
                 />
               </div>
             ) : selectedMethodCode === 'INCOME' && incomeWorkspaceOpen ? (
@@ -14267,6 +14272,7 @@ export default function CustomerVerification({
                                 setSelectedMethodCode(nextCode);
                                 if (nextCode === 'BANKING') {
                                   setBankingWorkspaceOpen(true);
+                                  setBankingResultOnly(false);
                                   setRtrWorkspaceOpen(false);
                                   setIncomeWorkspaceOpen(false);
                                 } else if (nextCode === 'RTR') {
@@ -14306,13 +14312,15 @@ export default function CustomerVerification({
                         <button
                           type="button"
                           role="tab"
-                          aria-selected={selectedMethodCode === 'BANKING_ELIGIBILITY'}
-                          className={`bo-cv-elig-method-chip ${selectedMethodCode === 'BANKING_ELIGIBILITY' ? 'is-active' : ''}`}
+                          aria-selected={selectedMethodCode === 'BANKING' || selectedMethodCode === 'BANKING_ELIGIBILITY'}
+                          className={`bo-cv-elig-method-chip ${selectedMethodCode === 'BANKING' || selectedMethodCode === 'BANKING_ELIGIBILITY' ? 'is-active' : ''}`}
                           onClick={() => {
-                            setSelectedMethodCode('BANKING_ELIGIBILITY');
+                            // Reuse the existing Banking workspace renderer for the
+                            // separate Banking Program entry point.
+                            setSelectedMethodCode('BANKING');
                             setBankingWorkspaceOpen(true);
+                            setBankingResultOnly(true);
                             setRtrWorkspaceOpen(false);
-                            setNormalIncomeWorkspaceOpen(false);
                             setIncomeWorkspaceOpen(false);
                           }}
                           disabled={methodsLoading}
