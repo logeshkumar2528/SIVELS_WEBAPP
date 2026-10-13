@@ -29,11 +29,9 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import iconMap from '../../config/iconMap';
 import { ROUTES } from '../../config/routeConfig';
-import { VERIFICATION_STEP_DEFINITIONS } from '../../config/verificationSteps';
 import { useVerificationWorkspace } from '../../hooks/useVerificationWorkspace';
 import backOfficeService from '../../api/backOfficeService';
 import { getBackOfficeAuth } from '../../auth/authStorage';
-import VerificationStepModal from '../../components/Verification/VerificationStepModal';
 import AssetBase from '../../components/AssetBase/AssetBase';
 import RtrCommonSheet from '../../components/RtrCommonSheet/RtrCommonSheet';
 import DeviationAssessment from '../../components/DeviationAssessment/DeviationAssessment';
@@ -50,7 +48,7 @@ import {
 import { FolderOpen } from 'lucide-react';
 import PdfView from '../../../../../rm_modules/src/pages/PdfView/PdfView';
 import { ApplicationDraftProvider } from '../../../../../rm_modules/src/state/ApplicationDraftContext';
-import { resolveDocumentTypeId, validateApplicantDocumentFile, getDocumentApplicability } from '../../../../../../Core/src/utils/documentTypeHelper';
+import { resolveDocumentTypeId, getDocumentApplicability } from '../../../../../../Core/src/utils/documentTypeHelper';
 import { isApplicationUnderwritingReady } from '../../utils/readinessHelper';
 import {
   startNormalIncomeSheetMonitor,
@@ -92,7 +90,6 @@ const CreditCardIcon = iconMap['CreditCard'];
 const TrendingUpIcon = iconMap['TrendingUp'] || iconMap['BadgeIndianRupee'] || iconMap['FileText'];
 const BarChartIcon = iconMap['BarChart3'] || iconMap['BarChart2'] || iconMap['BadgeIndianRupee'];
 const CalculatorIcon = iconMap['Calculator'] || iconMap['BadgeIndianRupee'];
-const ExpandIcon = iconMap['Expand'] || iconMap['ExternalLink'];
 const ZapIcon = iconMap['Zap'];
 const Trash2Icon = iconMap['Trash2'] || iconMap['X'];
 const ExternalLinkIcon = iconMap['ExternalLink'];
@@ -160,13 +157,6 @@ function isDocPdf(doc) {
   if (doc.mimeType === 'application/pdf') return true;
   const name = String(doc.fileName || doc.path || doc.url || '').toLowerCase();
   return /\.pdf$/i.test(name);
-}
-
-function isDocZip(doc) {
-  if (!doc) return false;
-  if (doc.isZip === true) return true;
-  const name = String(doc.fileName || doc.path || doc.url || '').toLowerCase();
-  return /\.(zip|rar|7z)$/i.test(name);
 }
 
 function isApplicantDocumentTuple(row) {
@@ -1239,9 +1229,6 @@ export default function CustomerVerification({
     }, { replace: false });
   }, [setSearchParams]);
 
-  // 3. Preserved Legacy 8-Step Modal State (View-only inspection)
-  const [selectedStepNumber, setSelectedStepNumber] = useState(null);
-
   // Combined applicant / co-applicant documents (AgentCustomerDocument + CustomerDocumentProof)
   const [isDocumentsPanelOpen, setIsDocumentsPanelOpen] = useState(false);
 
@@ -2107,14 +2094,6 @@ export default function CustomerVerification({
       stopNormalIncomeSheetMonitor();
     };
   }, []);
-
-  const openCalcWorkspace = useCallback((tab = 'inputs') => {
-    if (selectedMethodCode === 'ABB') {
-      setSelectedMethodCode('INCOME');
-    }
-    setCalcSheetTab(tab);
-    setCalcWorkspaceOpen(true);
-  }, [selectedMethodCode]);
 
   const saveProposedLoan = async () => {
     const roi = Number(proposedLoan.manualROI);
@@ -4125,10 +4104,6 @@ export default function CustomerVerification({
     });
   };
 
-  const handleRtrObligationLinkChange = (index, value) => {
-    handleRtrLoanRowChange(index, 'applicationLoanObligationDetailsId', value ? Number(value) : null);
-  };
-
   // Handle Add RTR Loan row
   const handleAddRtrLoanRow = () => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -5907,11 +5882,6 @@ export default function CustomerVerification({
     }
   };
 
-  // Top View Form Button handler: activates Step 1
-  const handleViewForm = () => {
-    navigateToStep(1);
-  };
-
   // ----------------------------------------------------
   // Document Resolution & Preview Loader (Old vs New & Dynamic Master)
   // ----------------------------------------------------
@@ -7300,13 +7270,6 @@ export default function CustomerVerification({
       );
     },
     [applicationRejections, profileDocTypeId, aadhaarDocTypeId, panDocTypeId, salarySlipDocTypeId, bankStatementDocTypeId, zipArchiveDocTypeId]
-  );
-
-  const getActiveRejectionForStep = useCallback(
-    (stepNum) => {
-      return getActiveRejectionForApplicant(stepNum);
-    },
-    [getActiveRejectionForApplicant]
   );
 
   const getActiveRejectionForApplicantDoc = useCallback(
@@ -8736,16 +8699,6 @@ export default function CustomerVerification({
     }
   };
 
-  // Helper to generate dynamic rejection confirmation message
-  const getRejectConfirmMessage = (stepLabel) => {
-    if (!stepLabel) return 'Are you sure you want to reject this document?';
-    const labelLower = stepLabel.toLowerCase();
-    if (labelLower.startsWith('co-applicant') || labelLower.startsWith('co-app')) {
-      return `Are you sure you want to reject ${stepLabel}?`;
-    }
-    return `Are you sure you want to reject this ${stepLabel}?`;
-  };
-
   // Open Return to RM Confirmation Modal
   const handleOpenRejectConfirm = (
     stepNum,
@@ -9582,34 +9535,6 @@ export default function CustomerVerification({
         error: err?.response?.data?.message || err?.message || 'Failed to save remarks. Please try again.',
       }));
     }
-  };
-
-  const handleRemoveUploadedFile = (state, setter) => {
-    if (state.fileUrl) {
-      try {
-        URL.revokeObjectURL(state.fileUrl);
-      } catch {}
-    }
-    setter({
-      backOfficeApplicationDocumentId: null,
-      documentType: state.documentType || '',
-      documentTitle: state.documentTitle || '',
-      file: null,
-      fileName: '',
-      fileSize: '',
-      fileUrl: null,
-      isPdf: false,
-      isImage: false,
-      uploadedAt: '',
-      modifiedAt: '',
-      modifiedBy: null,
-      documentStatus: '',
-      remarks: '',
-      loading: false,
-      savingRemarks: false,
-      error: null,
-      successMsg: '',
-    });
   };
 
   const handleDownloadFile = (url, name) => {
@@ -10759,14 +10684,6 @@ export default function CustomerVerification({
     setBureauState('loading');
   };
 
-  const handleOpenStep = (stepNumber) => {
-    setSelectedStepNumber(stepNumber);
-  };
-
-  const handleCloseModal = () => {
-    setSelectedStepNumber(null);
-  };
-
   const handleBack = () => {
     if (onBack) onBack();
     else navigate(ROUTES.CUSTOMERS);
@@ -10873,10 +10790,6 @@ export default function CustomerVerification({
     );
   }
 
-  const selectedStepDef = selectedStepNumber
-    ? VERIFICATION_STEP_DEFINITIONS.find((s) => s.number === selectedStepNumber)
-    : null;
-
   const appDetails = verificationData.applicationDetails || {};
   const panNumber = verificationData.personalInformation?.panNumber || 'Not Available';
   const statusInfo = getStatusInfo(verificationData.overallStatus);
@@ -10957,58 +10870,6 @@ export default function CustomerVerification({
 
       {/* ── 2. Dedicated 2-Column Workspace Body ──────────────────────── */}
       <div className="bo-cv-workspace-body">
-        {/* ── HIDDEN LEGACY 8-STEP SIDEBAR (PRESERVED FOR FUTURE RESTORATION) ── */}
-        {false && (
-          <aside className="bo-cv-left-sidebar" aria-label="Legacy Application Steps">
-            <div className="bo-cv-sidebar-header">
-              <div className="bo-cv-sidebar-heading-row">
-                <div>
-                  <h2 className="bo-cv-sidebar-title">Application Steps</h2>
-                  <span className="bo-cv-sidebar-subtitle">Verification checklist</span>
-                </div>
-                <span className="bo-cv-step-count">08</span>
-              </div>
-            </div>
-
-            <nav className="bo-cv-steps-nav">
-              <ul className="bo-cv-steps-list" role="list">
-                {VERIFICATION_STEP_DEFINITIONS.filter((step) => step.number <= 8).map((step) => {
-                  const stepNum = step.number;
-                  const isSelected = selectedStepNumber === stepNum;
-                  const formattedNum = String(stepNum).padStart(2, '0');
-
-                  return (
-                    <li key={step.id} className="bo-cv-step-item">
-                      <button
-                        type="button"
-                        className={`bo-cv-step-card ${isSelected ? 'is-active' : ''}`}
-                        onClick={() => handleOpenStep(stepNum)}
-                        aria-label={`Step ${stepNum}: ${step.name}. Click to view details.`}
-                      >
-                        <div className="bo-cv-step-num-box" aria-hidden="true">
-                          {formattedNum}
-                        </div>
-
-                        <div className="bo-cv-step-details">
-                          <strong className="bo-cv-step-name">{step.name}</strong>
-                          <span className="bo-cv-step-desc">{step.description}</span>
-                        </div>
-
-                        <div className="bo-cv-step-action">
-                          <span className="bo-cv-view-btn">
-                            {EyeIcon && <EyeIcon size={12} />}
-                            <span>View</span>
-                          </span>
-                        </div>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </nav>
-          </aside>
-        )}
-
         {/* ── 15-STEP VERIFICATION WORKFLOW SIDEBAR (SIVELS FINANCE) ── */}
         <aside className="bo-cv-left-sidebar" aria-label={`${visibleSidebarSteps.length}-Step Underwriting Verification Workflow`}>
           <div className="bo-cv-sidebar-header">
@@ -17819,16 +17680,6 @@ export default function CustomerVerification({
           )}
         </main>
       </div>
-
-      {/* ── View-Only 11-Step Inspection Modal (Single-Fetch Shared Data) ── */}
-      {selectedStepNumber && selectedStepDef && (
-        <VerificationStepModal
-          stepNumber={selectedStepNumber}
-          stepDefinition={selectedStepDef}
-          customerData={verificationData}
-          onClose={handleCloseModal}
-        />
-      )}
 
       {normalIncomeResultOpen && normalIncomeSync.saved && (() => {
         const savedSummary = normalIncomeSync.saved.summary || normalIncomeSync.saved;
