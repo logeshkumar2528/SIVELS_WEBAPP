@@ -293,59 +293,69 @@ const CM_EDIT_ACTION_PATTERN =
   /\b(save|saving|verify|delete|remove|upload|replace|override|use application|use policy|use calculated|add|submit|update|calculate|recalculate|apply|mark|clear|reset|browse)\b/i;
 
 /**
- * Visible Step (1–15) to Internal Step ID Mapping
+ * Visible Step (1–13) to Internal Step ID Mapping
+ * Reflects the 13 visible steps displayed in the underwriting workflow sidebar.
  */
 const VISIBLE_TO_INTERNAL_STEP = {
-  1: 1,
-  2: 2,
-  3: 8,
-  4: 9,
-  5: 10,
-  6: 11,
-  7: 12,
-  8: 13,
-  9: 22,
-  10: 16,
-  11: 21,
-  12: 17,
-  13: 18,
+  1: 1,   // View Form
+  2: 2,   // KYC Document Verification
+  3: 8,   // Unified Verifications (Default: Property FI)
+  4: 13,  // CIBIL Check
+  5: 19,  // Health Check
+  6: 14,  // PD Verification
+  7: 20,  // Asset Base
+  8: 15,  // RTR Common Sheet
+  9: 22,  // Banking
+  10: 16, // Eligibility Assessment
+  11: 21, // Deviations
+  12: 17, // Recommendation Sheet
+  13: 18, // Final Action
 };
 
 /**
- * Internal Step ID to Visible Step (1–15) Mapping
+ * Internal Step ID to Visible Step (1–13) Mapping
+ * Maps all internal workflow IDs and sub-steps to their visible sidebar step number.
  */
 const INTERNAL_TO_VISIBLE_STEP = {
-  1: 1,
-  2: 2,
-  3: 2,
-  4: 2,
-  5: 2,
-  6: 2,
-  7: 2,
-  8: 3,
-  9: 4,
-  10: 5,
-  11: 6,
-  12: 7,
-  13: 8,
-  19: 9,
-  14: 10,
-  20: 11,
-  15: 8,
-  22: 9,
-  16: 10,
-  21: 11,
-  17: 12,
-  18: 13,
+  1: 1,   // View Form
+  2: 2,   // KYC Document Verification (Profile Image)
+  3: 2,   // KYC Document Verification (Aadhaar)
+  4: 2,   // KYC Document Verification (PAN)
+  5: 2,   // KYC Document Verification (Salary Slip)
+  6: 2,   // KYC Document Verification (Bank Statement)
+  7: 2,   // KYC Document Verification (ZIP Archive)
+  8: 3,   // Unified Verifications (Property FI)
+  9: 3,   // Unified Verifications (Office FI)
+  10: 3,  // Unified Verifications (Residence FI)
+  11: 3,  // Unified Verifications (Legal Report)
+  12: 3,  // Unified Verifications (Technical Report)
+  13: 4,  // CIBIL Check
+  19: 5,  // Health Check
+  14: 6,  // PD Verification
+  20: 7,  // Asset Base
+  15: 8,  // RTR Common Sheet
+  22: 9,  // Banking
+  16: 10, // Eligibility Assessment
+  21: 11, // Deviations
+  17: 12, // Recommendation Sheet
+  18: 13, // Final Action
 };
 
 function resolveInternalStepFromQuery(stepParam) {
   if (stepParam == null || stepParam === '') return 1;
   const parsed = Number(stepParam);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 16) {
+  if (!Number.isInteger(parsed) || parsed < 1) {
     return 1;
   }
-  return VISIBLE_TO_INTERNAL_STEP[parsed] ?? 1;
+  // Check if it corresponds to visible sidebar step 1–13
+  if (parsed in VISIBLE_TO_INTERNAL_STEP) {
+    return VISIBLE_TO_INTERNAL_STEP[parsed];
+  }
+  // If an internal step ID was directly passed (e.g. deep link or legacy URL)
+  if (parsed in INTERNAL_TO_VISIBLE_STEP) {
+    return parsed;
+  }
+  return 1;
 }
 
 function resolveVisibleStepFromInternal(internalStep) {
