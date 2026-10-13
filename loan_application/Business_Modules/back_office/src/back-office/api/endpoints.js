@@ -148,6 +148,8 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/calculation/loan-obligations/proposed/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
   LOAN_OBLIGATIONS_SUMMARY: (applicationProductDetailsId, applicantSequence) =>
     `/calculation/loan-obligations/summary/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
+  LOAN_OBLIGATION_MONTHLY: (obligationId) =>
+    `/calculation/loan-obligations/${encodeURIComponent(obligationId)}/monthly`,
 
   // Application Asset Details (Step 11: Asset Base)
   APPLICATION_ASSETS: '/ApplicationAssetDetails',
