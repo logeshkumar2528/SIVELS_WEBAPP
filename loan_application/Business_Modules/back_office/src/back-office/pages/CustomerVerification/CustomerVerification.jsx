@@ -63,15 +63,7 @@ import { buildNormalIncomeSummary, normalizeSheetGrid } from '../../utils/normal
 import './CustomerVerification.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-const NORMAL_INCOME_SPREADSHEET_URL =
-  import.meta.env.VITE_NORMAL_INCOME_SPREADSHEET_URL ||
-  'https://docs.google.com/spreadsheets/d/1MeYct96mCluWRPmntTcvvZFTPAig87RqkF9vuzW5b3E/edit';
 const GOOGLE_SHEETS_CLIENT_ID = import.meta.env.VITE_GOOGLE_SHEETS_CLIENT_ID || '';
-
-function extractSpreadsheetId(url) {
-  const match = (url || '').match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  return match ? match[1] : '1MeYct96mCluWRPmntTcvvZFTPAig87RqkF9vuzW5b3E';
-}
 
 const ArrowLeftIcon = iconMap['ArrowLeft'];
 const ArrowRightIcon = iconMap['ArrowRight'];
@@ -6362,6 +6354,14 @@ export default function CustomerVerification({
 
   useEffect(() => () => clearTimeout(normalIncomeSaveTimerRef.current), []);
 
+  useEffect(() => {
+    stopNormalIncomeSheetMonitor();
+    clearTimeout(normalIncomeSaveTimerRef.current);
+    normalIncomeSavedJsonRef.current = null;
+    normalIncomeLatestRef.current = null;
+    setNormalIncomeSync({ active: false, status: 'idle', message: '', saved: null, hasUnsavedSheet: false });
+  }, [resolvedAppProdId, resolvedTargetCustomerId]);
+
   const loadSavedNormalIncome = useCallback(async () => {
     if (!resolvedAppProdId || !resolvedTargetCustomerId) return null;
     const saved = await backOfficeService.getEligibilityNormalIncome(resolvedAppProdId, resolvedTargetCustomerId);
@@ -6419,19 +6419,17 @@ export default function CustomerVerification({
     normalIncomeLatestRef.current = snapshot;
     const isSameAsSaved = JSON.stringify(normalizeSheetGrid(snapshot.grid)) === normalIncomeSavedJsonRef.current;
 
-    if (snapshot.isInitial) {
-      // The sheet is shared across applications, so the first read is never auto-saved.
-      setNormalIncomeSync((prev) => ({
-        ...prev,
-        status: 'connected',
-        hasUnsavedSheet: !isSameAsSaved,
-        message: isSameAsSaved
-          ? 'Sheet connected. Values match the saved copy; edits will save automatically.'
-          : 'Sheet connected. Edits will save automatically, or save the current sheet now.',
-      }));
+    if (isSameAsSaved) {
+      if (snapshot.isInitial) {
+        setNormalIncomeSync((prev) => ({
+          ...prev,
+          status: 'connected',
+          hasUnsavedSheet: false,
+          message: 'Sheet connected. Edits in the sheet save automatically.',
+        }));
+      }
       return;
     }
-    if (isSameAsSaved) return;
 
     setNormalIncomeSync((prev) => ({ ...prev, status: 'pending', hasUnsavedSheet: true, message: 'Changes detected. Saving shortly...' }));
     clearTimeout(normalIncomeSaveTimerRef.current);
@@ -6440,27 +6438,113 @@ export default function CustomerVerification({
     }, 1500);
   }, [saveNormalIncomeNow]);
 
-  const startNormalIncomeSync = useCallback(async (spreadsheetId) => {
+  // sheetWindow must be opened synchronously in the click handler, otherwise the browser blocks the popup.
+  const startNormalIncomeSync = useCallback(async (sheetWindow) => {
+    const closeSheetWindow = () => {
+      if (sheetWindow && !sheetWindow.closed) sheetWindow.close();
+    };
     if (!resolvedAppProdId || !resolvedTargetCustomerId) {
+      closeSheetWindow();
       setNormalIncomeSync((prev) => ({
         ...prev,
         active: true,
         status: 'error',
-        message: 'Application details are not loaded yet, so sheet values cannot be saved.',
+        message: 'Application details are not loaded yet, so the sheet cannot be opened.',
       }));
       return;
     }
-    setNormalIncomeSync((prev) => ({ ...prev, active: true, status: 'loading', message: 'Loading saved sheet values...' }));
+
+    setNormalIncomeSync((prev) => ({ ...prev, active: true, status: 'loading', message: 'Preparing this application\'s sheet...' }));
+    let sheet;
+    try {
+      sheet = await backOfficeService.getOrCreateNormalIncomeSheet(
+        resolvedAppProdId,
+        resolvedTargetCustomerId,
+        getAuthenticatedBackOfficeId()
+      );
+    } catch (err) {
+      closeSheetWindow();
+      setNormalIncomeSync((prev) => ({
+        ...prev,
+        status: 'error',
+        message: `Could not open the Normal Income sheet: ${err?.response?.data?.message || err?.message || 'server error.'}`,
+      }));
+      return;
+    }
+
+    const spreadsheetId = sheet?.spreadsheetId;
+    const spreadsheetUrl = sheet?.spreadsheetUrl || (spreadsheetId ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit` : '');
+    if (!spreadsheetId) {
+      closeSheetWindow();
+      setNormalIncomeSync((prev) => ({ ...prev, status: 'error', message: 'The server did not return a spreadsheet for this application.' }));
+      return;
+    }
+
+    if (sheetWindow && !sheetWindow.closed) {
+      sheetWindow.opener = null;
+      sheetWindow.location.href = spreadsheetUrl;
+    }
+    setNormalIncomeSync((prev) => ({
+      ...prev,
+      spreadsheetUrl,
+      status: 'loading',
+      message: sheetWindow ? 'Loading saved sheet values...' : 'Pop-up was blocked. Use "Open sheet" to open it.',
+    }));
+
     try {
       await loadSavedNormalIncome();
     } catch (err) {
       console.warn('[Normal Income] Failed to load saved sheet:', err?.message || err);
     }
-    setNormalIncomeSync((prev) => ({ ...prev, status: 'loading', message: 'Connecting to Google Sheet...' }));
     startNormalIncomeSheetMonitor(spreadsheetId, GOOGLE_SHEETS_CLIENT_ID, undefined, {
       onSnapshot: handleNormalIncomeSnapshot,
     });
-  }, [resolvedAppProdId, resolvedTargetCustomerId, loadSavedNormalIncome, handleNormalIncomeSnapshot]);
+  }, [resolvedAppProdId, resolvedTargetCustomerId, getAuthenticatedBackOfficeId, loadSavedNormalIncome, handleNormalIncomeSnapshot]);
+
+  const openNormalIncomeSheet = useCallback(() => {
+    const openBlankTab = () => window.open('about:blank', '_blank');
+    if (isGoogleOAuthAuthorized()) {
+      startNormalIncomeSync(openBlankTab());
+      return;
+    }
+    triggerGoogleOAuth(GOOGLE_SHEETS_CLIENT_ID, {
+      onAuthorized: () => startNormalIncomeSync(openBlankTab()),
+      onError: () => {
+        setNormalIncomeSync((prev) => ({
+          ...prev,
+          active: true,
+          status: 'error',
+          message: 'Google sign-in was not completed. Click Normal Income again to connect the sheet.',
+        }));
+      },
+    });
+  }, [startNormalIncomeSync]);
+
+  const [normalIncomeDownloading, setNormalIncomeDownloading] = useState(false);
+  const downloadNormalIncomeExcel = useCallback(async () => {
+    if (!resolvedAppProdId || !resolvedTargetCustomerId) return;
+    setNormalIncomeDownloading(true);
+    try {
+      const blob = await backOfficeService.downloadEligibilityNormalIncomeExcel(resolvedAppProdId, resolvedTargetCustomerId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `NormalIncome_${resolvedAppProdId}_${resolvedTargetCustomerId}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setNormalIncomeSync((prev) => ({
+        ...prev,
+        message: err?.response?.status === 404
+          ? 'No Excel file has been saved for this application yet.'
+          : `Excel download failed: ${err?.message || 'server error.'}`,
+      }));
+    } finally {
+      setNormalIncomeDownloading(false);
+    }
+  }, [resolvedAppProdId, resolvedTargetCustomerId]);
 
   const fetchWorkflowHistory = useCallback(async () => {
     const custId = resolvedTargetCustomerId;
@@ -14299,28 +14383,7 @@ export default function CustomerVerification({
                               onClick={() => {
                                 const nextCode = code || 'INCOME';
                                 if (nextCode === 'NORMAL_INCOME') {
-                                  setNormalIncomeResultOpen(false);
-                                  const spreadsheetId = extractSpreadsheetId(NORMAL_INCOME_SPREADSHEET_URL);
-                                  if (isGoogleOAuthAuthorized()) {
-                                    window.open(NORMAL_INCOME_SPREADSHEET_URL, '_blank', 'noopener,noreferrer');
-                                    startNormalIncomeSync(spreadsheetId);
-                                  } else {
-                                    triggerGoogleOAuth(GOOGLE_SHEETS_CLIENT_ID, {
-                                      onAuthorized: () => {
-                                        window.open(NORMAL_INCOME_SPREADSHEET_URL, '_blank', 'noopener,noreferrer');
-                                        startNormalIncomeSync(spreadsheetId);
-                                      },
-                                      onError: () => {
-                                        console.warn('[Normal Income] Google OAuth authorization was not completed. Monitoring not started.');
-                                        setNormalIncomeSync((prev) => ({
-                                          ...prev,
-                                          active: true,
-                                          status: 'error',
-                                          message: 'Google sign-in was not completed. Click Normal Income again to connect the sheet.',
-                                        }));
-                                      }
-                                    });
-                                  }
+                                  openNormalIncomeSheet();
                                   return;
                                 }
                                 setSelectedMethodCode(nextCode);
@@ -14407,6 +14470,85 @@ export default function CustomerVerification({
                         </button>
                       </div>
                     )}
+                    {(normalIncomeSync.active || normalIncomeSync.saved) && (() => {
+                      const savedSummary = normalIncomeSync.saved?.summary || normalIncomeSync.saved || {};
+                      const savedAt = normalIncomeSync.saved?.updatedAt || normalIncomeSync.saved?.createdAt;
+                      const fmtAmount = (v) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v))
+                        ? '—'
+                        : Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }));
+                      const summaryItems = [
+                        ['Total Income (Annual)', fmtAmount(savedSummary.totalIncomeAnnual)],
+                        ['Eligible Monthly Income', fmtAmount(savedSummary.eligibleMonthlyIncome)],
+                        ['Existing Obligations', fmtAmount(savedSummary.existingMonthlyObligations)],
+                        ['Net Serviceable Income', fmtAmount(savedSummary.netServiceableIncome)],
+                        ['Loan Eligibility (Lacs)', fmtAmount(savedSummary.loanEligibilityLacs)],
+                        ['Proposed Loan (Lacs)', fmtAmount(savedSummary.proposedLoanAmountLacs)],
+                        ['Actual FOIR', savedSummary.actualFoirPercent === null || savedSummary.actualFoirPercent === undefined
+                          ? '—'
+                          : `${fmtAmount(savedSummary.actualFoirPercent)}%`],
+                      ];
+                      const canRetrySave = normalIncomeSync.status === 'error' && normalIncomeSync.hasUnsavedSheet;
+                      const sheetUrl = normalIncomeSync.spreadsheetUrl || normalIncomeSync.saved?.spreadsheetUrl;
+                      return (
+                        <div className={`bo-cv-ni-sync is-${normalIncomeSync.status}`} role="status" aria-live="polite">
+                          <div className="bo-cv-ni-sync-head">
+                            <strong>Normal Income Sheet</strong>
+                            {normalIncomeSync.active && (
+                              <span className="bo-cv-ni-sync-badge">
+                                {{
+                                  loading: 'Connecting',
+                                  connected: 'Connected',
+                                  pending: 'Changes detected',
+                                  saving: 'Saving…',
+                                  saved: 'Saved',
+                                  error: 'Save failed',
+                                }[normalIncomeSync.status] || 'Idle'}
+                              </span>
+                            )}
+                            <span className="bo-cv-ni-sync-actions">
+                              {canRetrySave && (
+                                <button type="button" className="bo-cv-ni-sync-save" onClick={saveNormalIncomeNow}>
+                                  Retry save
+                                </button>
+                              )}
+                              {sheetUrl && (
+                                <a className="bo-cv-ni-sync-save" href={sheetUrl} target="_blank" rel="noopener noreferrer">
+                                  Open sheet
+                                </a>
+                              )}
+                              {normalIncomeSync.saved?.excelPath && (
+                                <button
+                                  type="button"
+                                  className="bo-cv-ni-sync-save"
+                                  onClick={downloadNormalIncomeExcel}
+                                  disabled={normalIncomeDownloading}
+                                >
+                                  {normalIncomeDownloading ? 'Downloading…' : 'Download Excel'}
+                                </button>
+                              )}
+                            </span>
+                          </div>
+                          {normalIncomeSync.message && <p className="bo-cv-ni-sync-msg">{normalIncomeSync.message}</p>}
+                          {normalIncomeSync.saved && (
+                            <>
+                              <div className="bo-cv-ni-sync-grid">
+                                {summaryItems.map(([label, value]) => (
+                                  <div key={label} className="bo-cv-ni-sync-item">
+                                    <span>{label}</span>
+                                    <strong>{value}</strong>
+                                  </div>
+                                ))}
+                              </div>
+                              {savedAt && (
+                                <small className="bo-cv-ni-sync-time">
+                                  Last saved {new Date(savedAt).toLocaleString('en-IN')}
+                                </small>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="bo-cv-elig-control-block">
