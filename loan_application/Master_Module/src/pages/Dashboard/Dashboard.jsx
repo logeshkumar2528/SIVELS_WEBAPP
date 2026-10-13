@@ -24,6 +24,7 @@ import { getAgentById } from '../../api/agentApi';
 import { getAllCreditManagers, getCreditManagerById } from '../../api/creditManagerApi';
 import { getProfileImageUrl, getDocumentUrl, buildFileUrl } from '../../utils/profileImageHelper';
 import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
+import sivelsLogo from '../../../../Core/src/assets/branding/SivelsFinanceLogo.jpg';
 import './Dashboard.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -986,8 +987,15 @@ export function Dashboard() {
       <section className="admin-unified-card">
         <div className="admin-unified-header">
           <div className="admin-unified-title-block">
-            <span className="eyebrow">MASTER WORKSPACE</span>
-            <h1 className="dashboard-title">Admin Dashboard</h1>
+            <img
+              src={sivelsLogo}
+              alt="Sivels Finance"
+              className="admin-header-logo"
+            />
+            <div className="admin-title-text-wrap">
+              <span className="eyebrow">MASTER WORKSPACE</span>
+              <h1 className="dashboard-title">Admin Dashboard</h1>
+            </div>
           </div>
           <button
             type="button"

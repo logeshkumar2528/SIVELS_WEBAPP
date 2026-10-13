@@ -995,6 +995,28 @@ td small {
   flex-shrink: 0;
 }
 
+.admin-unified-title-block {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.admin-header-logo {
+  height: 44px;
+  max-width: 100px;
+  object-fit: contain;
+  display: block;
+  flex-shrink: 0;
+  border-radius: 6px;
+}
+
+.admin-title-text-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .admin-unified-title-block .eyebrow {
   display: block;
   font-size: 11px;
@@ -1689,6 +1711,11 @@ td small {
 
   .admin-unified-title-block .dashboard-title {
     font-size: 22px;
+  }
+
+  .admin-header-logo {
+    height: 38px;
+    max-width: 85px;
   }
 
   .admin-unified-subheading {
