@@ -473,6 +473,43 @@
   min-width: 135px;
 }
 
+.bo-rtr-th--monthly,
+.bo-rtr-td--monthly {
+  width: 112px;
+  min-width: 112px;
+}
+
+.bo-rtr-td--monthly .bo-rtr-month-latest {
+  margin-bottom: 4px;
+}
+
+.bo-rtr-month-header-control {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 100px;
+}
+
+.bo-rtr-month-header-control span {
+  font-size: 9px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.bo-rtr-month-header-control input {
+  width: 100%;
+  min-width: 0;
+  padding: 3px 4px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.bo-rtr-month-header-control strong {
+  color: #0f172a;
+}
+
 .bo-rtr-th--num-sm,
 .bo-rtr-td--num-sm {
   width: 90px;

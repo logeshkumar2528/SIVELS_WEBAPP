@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import iconMap from '../../config/iconMap';
 import backOfficeService from '../../api/backOfficeService';
 import { getBackOfficeAuth } from '../../auth/authStorage';
@@ -7,6 +7,11 @@ import './RtrCommonSheet.css';
 const PlusIcon = iconMap['Plus'] || iconMap['FilePlus'];
 const Trash2Icon = iconMap['Trash2'] || iconMap['X'];
 const SaveIcon = iconMap['Save'] || iconMap['Check'];
+
+const normalizeLatestMonth = (value) => {
+  const text = String(value || '').trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? `${text.slice(0, 7)}-01` : text;
+};
 
 const createBlankRow = () => ({
   id: `rtr-row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -30,6 +35,9 @@ const createBlankRow = () => ({
   bounceCount: '',
   forValue: '',
   emiDueDay: null,
+  monthlyLatestMonth: '',
+  monthlyMonths: [],
+  monthlyValues: Array(12).fill(''),
   dpd: '',
   rtrComment: '',
 });
@@ -56,8 +64,41 @@ const isRowBlank = (row) => {
     (row.bounceCount === '' || row.bounceCount == null) &&
     !row.forValue &&
     !String(row.dpd || '').trim() &&
-    !String(row.rtrComment || '').trim()
+    !String(row.rtrComment || '').trim() &&
+    !row.monthlyLatestMonth &&
+    !(row.monthlyValues || []).some((value) => value !== '' && value != null)
   );
+};
+
+const normalizeMonthlyResponse = (response) => {
+  const data = response?.data || response?.value || response || {};
+  const isRecordList = Array.isArray(data);
+  const values = isRecordList ? data.map((item) => item?.value ?? item?.monthlyValue ?? item?.amount ?? '') : (data.monthlyValues || data.values || []);
+  const months = isRecordList
+    ? data.map((item) => item?.month || item?.monthYear || item?.monthDate || item?.label || '')
+    : (data.months || data.monthLabels || data.monthlyMonths || []);
+  const uniqueMonths = [];
+  const seenMonths = new Set();
+  months.forEach((month) => {
+    if (!month) return;
+    const parsed = new Date(month);
+    const key = Number.isNaN(parsed.getTime())
+      ? String(month).trim().toLowerCase()
+      : `${parsed.getFullYear()}-${parsed.getMonth()}`;
+    if (seenMonths.has(key)) return;
+    seenMonths.add(key);
+    uniqueMonths.push(month);
+  });
+
+  return {
+    latestMonth: data.latestMonth || data.latest_month || months[0] || '',
+    months: uniqueMonths.slice(0, 12),
+    values: values.map((value) => {
+      if (value == null) return '';
+      if (typeof value === 'object') return String(value.value ?? value.monthlyValue ?? value.amount ?? '');
+      return String(value);
+    }).slice(0, 12),
+  };
 };
 
 /**
@@ -112,6 +153,7 @@ export default function RtrCommonSheet({
   const [obligationsSaving, setObligationsSaving] = useState(false);
   const [obligationsError, setObligationsError] = useState(null);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState(null);
+  const monthlySaveSignaturesRef = useRef(new Map());
 
   // Delete Confirmation State
   const [deleteConfirmRow, setDeleteConfirmRow] = useState(null);
@@ -210,6 +252,17 @@ export default function RtrCommonSheet({
 
   const formatSummaryValue = (value) => (value ? String(value) : '0');
 
+  const formatMonthlyHeader = (value, index) => {
+    if (!value) return `Month ${index + 1}`;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return `${date.toLocaleString('en-US', { month: 'short' })}-${String(date.getFullYear()).slice(-2)}`;
+  };
+
+  const monthlyHeaders = rows[0]?.monthlyMonths?.length
+    ? rows[0].monthlyMonths.slice(0, 12)
+    : Array(12).fill(null);
+
   // Re-resolve status names and codes whenever status master is loaded
   useEffect(() => {
     if (activeStatuses.length > 0) {
@@ -264,7 +317,7 @@ export default function RtrCommonSheet({
       const list = Array.isArray(res) ? res : (res?.data || res?.value || []);
 
       if (list && list.length > 0) {
-        const mapped = list.map((item) => {
+        const mapped = await Promise.all(list.map(async (item) => {
           const statusId =
             item.rtrLoanStatusId != null && item.rtrLoanStatusId !== ''
               ? Number(item.rtrLoanStatusId)
@@ -273,7 +326,7 @@ export default function RtrCommonSheet({
             (s) => Number(s.rtrLoanStatusId) === statusId
           );
 
-          return {
+          const baseRow = {
             id: `rtr-row-saved-${item.applicationLoanObligationDetailsId}`,
             applicationLoanObligationDetailsId: item.applicationLoanObligationDetailsId,
             borrowerName: item.borrowerName ?? '',
@@ -303,8 +356,22 @@ export default function RtrCommonSheet({
             emiDueDay: item.emiDueDay ?? null,
             dpd: item.dpdDetails ?? '',
             rtrComment: item.rtrComments ?? '',
+            monthlyLatestMonth: '',
+            monthlyMonths: [],
+            monthlyValues: Array(12).fill(''),
           };
-        });
+          try {
+            const monthly = normalizeMonthlyResponse(await backOfficeService.getLoanObligationMonthly(item.applicationLoanObligationDetailsId));
+            baseRow.monthlyLatestMonth = formatToDateInput(monthly.latestMonth);
+            baseRow.monthlyMonths = monthly.months;
+            baseRow.monthlyValues = [...monthly.values, ...Array(12).fill('')].slice(0, 12);
+          } catch (monthlyError) {
+            if (monthlyError?.response?.status !== 404) {
+              console.warn('Failed to load monthly RTR values:', monthlyError);
+            }
+          }
+          return baseRow;
+        }));
         setRows(mapped);
       } else {
         setRows([createBlankRow()]);
@@ -463,6 +530,38 @@ export default function RtrCommonSheet({
     );
   };
 
+  const handleMonthlyChange = (rowId, index, value) => {
+    setRows((prev) => prev.map((row) => {
+      if (row.id !== rowId) return row;
+      const monthlyValues = [...(row.monthlyValues || Array(12).fill(''))];
+      monthlyValues[index] = value;
+      return { ...row, monthlyValues };
+    }));
+  };
+
+  const handleLatestMonthChange = async (value) => {
+    setRows((prev) => prev.map((row) => ({ ...row, monthlyLatestMonth: value })));
+    if (!value || obligationsSaving) return;
+
+    const persistedRows = rows.filter((row) => row.applicationLoanObligationDetailsId);
+    if (persistedRows.length === 0) return;
+
+    try {
+      const currentUserId = resolveCurrentUserId();
+      await Promise.all(persistedRows.map(async (row) => {
+        const nextRow = { ...row, monthlyLatestMonth: value };
+        await saveMonthlyValues(row.applicationLoanObligationDetailsId, nextRow, currentUserId);
+        monthlySaveSignaturesRef.current.set(
+          row.applicationLoanObligationDetailsId,
+          monthlySignature(nextRow)
+        );
+      }));
+      await fetchObligations();
+    } catch (err) {
+      setObligationsError(err?.response?.data?.message || err?.message || 'Failed to refresh RTR months.');
+    }
+  };
+
   const calculatedOutstandingTenor = (row) => (
     row.tenor === '' || row.paidTenor === ''
       ? ''
@@ -545,6 +644,22 @@ export default function RtrCommonSheet({
     return payload;
   };
 
+  const saveMonthlyValues = async (obligationId, row, modifiedBy) => {
+    if (!obligationId || !row.monthlyLatestMonth) return;
+    await backOfficeService.saveLoanObligationMonthly(obligationId, {
+      latestMonth: normalizeLatestMonth(row.monthlyLatestMonth),
+      monthlyValues: [...(row.monthlyValues || []), ...Array(12).fill('')]
+        .slice(0, 12)
+        .map((value) => value === '' || value == null ? null : Number(value)),
+      modifiedBy,
+    });
+  };
+
+  const monthlySignature = (row) => JSON.stringify({
+    latestMonth: normalizeLatestMonth(row.monthlyLatestMonth),
+    monthlyValues: [...(row.monthlyValues || []), ...Array(12).fill('')].slice(0, 12),
+  });
+
   // Section-level Save Obligations Handler
   const handleSaveObligations = async () => {
     if (!applicationProductDetailsId || Number(applicationProductDetailsId) <= 0) {
@@ -589,9 +704,11 @@ export default function RtrCommonSheet({
     try {
       // 1. Save meaningful obligation facility rows
       for (const row of meaningfulRows) {
+        let savedObligationId = row.applicationLoanObligationDetailsId;
         if (!row.applicationLoanObligationDetailsId) {
           const payload = toPayload(row, false);
-          await backOfficeService.createLoanObligation(payload);
+          const created = await backOfficeService.createLoanObligation(payload);
+          savedObligationId = created?.applicationLoanObligationDetailsId || created?.id || created?.data?.applicationLoanObligationDetailsId;
           createdCount++;
         } else {
           const payload = toPayload(row, true);
@@ -600,6 +717,13 @@ export default function RtrCommonSheet({
             payload
           );
           updatedCount++;
+        }
+        if (savedObligationId && row.monthlyLatestMonth) {
+          const signature = monthlySignature(row);
+          if (monthlySaveSignaturesRef.current.get(savedObligationId) !== signature) {
+            await saveMonthlyValues(savedObligationId, row, currentUserId);
+            monthlySaveSignaturesRef.current.set(savedObligationId, signature);
+          }
         }
       }
 
@@ -887,6 +1011,7 @@ export default function RtrCommonSheet({
                   <th className="bo-rtr-th bo-rtr-th--num">POS (₹)</th>
                   <th className="bo-rtr-th bo-rtr-th--date">Start Date</th>
                   <th className="bo-rtr-th bo-rtr-th--date">End Date</th>
+                  <th className="bo-rtr-th bo-rtr-th--date">EMI Due Day</th>
                   <th className="bo-rtr-th bo-rtr-th--num-sm">Tenor (Mo)</th>
                   <th className="bo-rtr-th bo-rtr-th--num-sm">Paid Tenor</th>
                   <th className="bo-rtr-th bo-rtr-th--num-sm">O/s Tenor</th>
@@ -895,6 +1020,22 @@ export default function RtrCommonSheet({
                   <th className="bo-rtr-th bo-rtr-th--bounce">Bounce (12m)</th>
                   <th className="bo-rtr-th bo-rtr-th--dpd">DPD in CIBIL</th>
                   <th className="bo-rtr-th bo-rtr-th--comment">Comment on RTR</th>
+                  {monthlyHeaders.map((month, index) => (
+                    <th className="bo-rtr-th bo-rtr-th--monthly" key={`monthly-head-${index}`}>
+                      {index === 0 ? (
+                        <label className="bo-rtr-month-header-control">
+                          <input
+                            type="date"
+                            value={rows[0]?.monthlyLatestMonth || ''}
+                            onChange={(e) => handleLatestMonthChange(e.target.value)}
+                            disabled={obligationsSaving}
+                            aria-label="Select latest month"
+                          />
+                          <strong>{formatMonthlyHeader(month, index)}</strong>
+                        </label>
+                      ) : formatMonthlyHeader(month, index)}
+                    </th>
+                  ))}
                   <th className="bo-rtr-th bo-rtr-th--actions">Actions</th>
                 </tr>
               </thead>
@@ -1055,6 +1196,19 @@ export default function RtrCommonSheet({
                       />
                     </td>
 
+                    <td className="bo-rtr-td bo-rtr-td--date">
+                      <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        placeholder="Day"
+                        className="bo-rtr-input bo-rtr-input-num"
+                        value={row.emiDueDay ?? ''}
+                        onChange={(e) => handleRowChange(row.id, 'emiDueDay', e.target.value)}
+                        disabled={obligationsSaving}
+                      />
+                    </td>
+
                     {/* 12. Tenor (Mo) */}
                     <td className="bo-rtr-td bo-rtr-td--num-sm">
                       <input
@@ -1154,6 +1308,22 @@ export default function RtrCommonSheet({
                         disabled={obligationsSaving}
                       />
                     </td>
+
+                    {monthlyHeaders.map((month, monthIndex) => (
+                      <td className="bo-rtr-td bo-rtr-td--monthly" key={`monthly-value-${row.id}-${monthIndex}`}>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0"
+                          className="bo-rtr-input bo-rtr-input-num"
+                          value={row.monthlyValues?.[monthIndex] ?? ''}
+                          onChange={(e) => handleMonthlyChange(row.id, monthIndex, e.target.value)}
+                          disabled={obligationsSaving}
+                          aria-label={`${formatMonthlyHeader(month, monthIndex)} value`}
+                        />
+                      </td>
+                    ))}
 
                     {/* 20. Actions */}
                     <td className="bo-rtr-td bo-rtr-td--actions">
