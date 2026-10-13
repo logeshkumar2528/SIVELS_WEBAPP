@@ -45,6 +45,7 @@ export default function AssetBase({
   agentCustomerId,
   applicantSequence = 0,
   currentUserId: propUserId,
+  actionsSlot = null,
 }) {
   // Master Data State
   const [propertyMasters, setPropertyMasters] = useState([]);
@@ -437,6 +438,7 @@ export default function AssetBase({
           <h2 className="bo-ab-title">Asset Base</h2>
         </div>
         <div className="bo-ab-header-actions">
+          {actionsSlot}
           <button
             type="button"
             className="bo-ab-btn bo-ab-btn-primary"

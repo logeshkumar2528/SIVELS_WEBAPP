@@ -658,7 +658,7 @@ function getStatusInfo(status) {
   return { label: 'Pending', className: 'bo-cv-pill-pending' };
 }
 
-function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBack, initialResultOnly = false }) {
+function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBack, initialResultOnly = false, actionsSlot = null }) {
   const emptyMonth = () => ({
     applicationBankingMonthlyDetailsId: null,
     monthYear: '', monthlyCredits: '', monthlyCreditsNonBusiness: '', monthlyDebits: '',
@@ -840,6 +840,7 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
           </div>
         </div>
         <div className="bo-cv-banking-header-right">
+          {actionsSlot}
           <button
             type="button"
             className="bo-btn bo-btn--outline bo-cv-banking-add-btn"
@@ -8732,6 +8733,22 @@ export default function CustomerVerification({
     cmLockNoticeTimer.current = setTimeout(() => setCmLockNotice(''), 4000);
   };
 
+  const renderCreditReviewActions = () => {
+    if (!showSectionReview) return null;
+    return (
+      <div data-cm-section-bar className="cm-header-actions-wrapper">
+        {sectionReview.renderBar({
+          section: reviewSection,
+          isEditing: !isCmSectionLocked,
+          compact: true,
+          onToggleEdit: () =>
+            setCmEditingSectionId((prev) => (prev === reviewSectionId ? null : reviewSectionId)),
+          onReject: openCmSectionReject,
+        })}
+      </div>
+    );
+  };
+
   const isCmEditTarget = (target, container) => {
     if (!(target instanceof Element) || target.closest('[data-cm-section-bar]')) return false;
     const field = target.closest('input, select, textarea');
@@ -10785,7 +10802,11 @@ export default function CustomerVerification({
   );
 
   return (
-    <div className={`bo-cv-page-wrap${normalIncomeResultOpen ? ' is-normal-income-result-page' : ''}`}>
+    <div
+      className={`bo-cv-page-wrap${normalIncomeResultOpen ? ' is-normal-income-result-page' : ''}${
+        isCreditManagerView ? ' cm-credit-manager-view' : ''
+      }`}
+    >
       {/* ── 1. Compact Verification Header (Real API Data) ──────────────── */}
       <header className="bo-cv-header">
         {/* Left: Back button */}
@@ -11023,20 +11044,9 @@ export default function CustomerVerification({
           id="main-verification-content"
           {...cmLockHandlers}
         >
-          {showSectionReview && (
-            <div data-cm-section-bar>
-              {sectionReview.renderBar({
-                section: reviewSection,
-                isEditing: !isCmSectionLocked,
-                onToggleEdit: () =>
-                  setCmEditingSectionId((prev) => (prev === reviewSectionId ? null : reviewSectionId)),
-                onReject: openCmSectionReject,
-              })}
-              {cmLockNotice && (
-                <div className="bo-cv-feedback-alert is-info cm-lock-notice" role="status">
-                  {cmLockNotice}
-                </div>
-              )}
+          {cmLockNotice && (
+            <div data-cm-section-bar className="bo-cv-feedback-alert is-info cm-lock-notice" role="status">
+              {cmLockNotice}
             </div>
           )}
 
@@ -11077,7 +11087,10 @@ export default function CustomerVerification({
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 01 of 14</span>
+                <div className="bo-cv-step-header-right">
+                  {renderCreditReviewActions()}
+                  <span className="bo-cv-step-tag-pill">Step 01 of 13</span>
+                </div>
               </div>
 
               <div className="bo-cv-view-form-embed-wrapper">
@@ -11116,7 +11129,8 @@ export default function CustomerVerification({
                   </div>
                 </div>
                 <div className="bo-cv-doc-header-right">
-                  <span className="bo-cv-step-tag-pill">Step 02 of 14</span>
+                  {renderCreditReviewActions()}
+                  <span className="bo-cv-step-tag-pill">Step 02 of 13</span>
                 </div>
               </div>
 
@@ -11581,6 +11595,9 @@ export default function CustomerVerification({
                     <h2 className="bo-cv-step-panel-title">Verifications</h2>
                   </div>
                 </div>
+                <div className="bo-cv-step-header-right">
+                  {renderCreditReviewActions()}
+                </div>
               </div>
 
               {/* 2. Section Selector Dropdown */}
@@ -11957,12 +11974,15 @@ export default function CustomerVerification({
             <div className="bo-cv-step-panel bo-cv-cibil-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">08</div>
+                  <div className="bo-cv-step-badge-num">04</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Credit Bureau &amp; CIBIL Verification</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 08 of 14</span>
+                <div className="bo-cv-step-header-right">
+                  {renderCreditReviewActions()}
+                  <span className="bo-cv-step-tag-pill">Step 04 of 13</span>
+                </div>
               </div>
 
               {/* Manual CIBIL PAN Card Upload Reference Section */}
@@ -12492,12 +12512,15 @@ export default function CustomerVerification({
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">09</div>
+                  <div className="bo-cv-step-badge-num">05</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Health Check</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 09 of 14</span>
+                <div className="bo-cv-step-header-right">
+                  {renderCreditReviewActions()}
+                  <span className="bo-cv-step-tag-pill">Step 05 of 13</span>
+                </div>
               </div>
 
               {renderHealthChecksChecklist(19)}
@@ -12511,12 +12534,15 @@ export default function CustomerVerification({
             <div className="bo-cv-step-panel bo-cv-pd-sheet-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">10</div>
+                  <div className="bo-cv-step-badge-num">06</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">PD Sheet</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 10 of 14</span>
+                <div className="bo-cv-step-header-right">
+                  {renderCreditReviewActions()}
+                  <span className="bo-cv-step-tag-pill">Step 06 of 13</span>
+                </div>
               </div>
 
               {/* Compact Top Header: PD Mode | Applicant */}
@@ -12840,6 +12866,7 @@ export default function CustomerVerification({
               agentCustomerId={resolvedTargetCustomerId}
               applicantSequence={0}
               currentUserId={getAuthenticatedBackOfficeId()}
+              actionsSlot={renderCreditReviewActions()}
             />
           )}
 
@@ -12851,6 +12878,7 @@ export default function CustomerVerification({
               applicationProductDetailsId={resolvedAppProdId}
               applicantSequence={0}
               currentUserId={getAuthenticatedBackOfficeId()}
+              actionsSlot={renderCreditReviewActions()}
             />
           )}
 
@@ -12863,6 +12891,7 @@ export default function CustomerVerification({
                 applicationProductDetailsId={calculationAppProdId || resolvedAppProdId}
                 userId={getAuthenticatedBackOfficeId()}
                 onBack={() => navigateToStep(16)}
+                actionsSlot={renderCreditReviewActions()}
               />
             </div>
           )}
@@ -14204,6 +14233,11 @@ export default function CustomerVerification({
               </div>
             ) : (
               <div className="bo-cv-elig-deck">
+                {isCreditManagerView && renderCreditReviewActions() && (
+                  <div className="bo-cv-elig-header-bar" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+                    {renderCreditReviewActions()}
+                  </div>
+                )}
                 {/* Controls: Method + Applicant */}
                 <section className="bo-cv-elig-controls" aria-label="Assessment controls">
                   <div className="bo-cv-elig-control-block">
@@ -17217,17 +17251,21 @@ export default function CustomerVerification({
             <div className="bo-cv-step-panel bo-cv-deviation-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">14</div>
+                  <div className="bo-cv-step-badge-num">11</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Deviation</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 14 of 16</span>
+                <div className="bo-cv-step-header-right">
+                  {renderCreditReviewActions()}
+                  <span className="bo-cv-step-tag-pill">Step 11 of 13</span>
+                </div>
               </div>
               <DeviationAssessment
                 applicationProductDetailsId={calculationAppProdId}
                 backOfficeId={resolveCalculationAuthInfo().backOfficeId}
                 createdBy={resolveCalculationAuthInfo().userId}
+                showRefresh={!isCreditManagerView}
               />
             </div>
           )}
@@ -17237,7 +17275,7 @@ export default function CustomerVerification({
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">15</div>
+                  <div className="bo-cv-step-badge-num">12</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Recommendation Sheet</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -17245,7 +17283,10 @@ export default function CustomerVerification({
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 15 of 16</span>
+                <div className="bo-cv-step-header-right">
+                  {renderCreditReviewActions()}
+                  <span className="bo-cv-step-tag-pill">Step 12 of 13</span>
+                </div>
               </div>
 
               <div className="bo-cv-placeholder-panel">
@@ -17266,12 +17307,12 @@ export default function CustomerVerification({
             <div className="bo-cv-step-panel bo-cv-workflow-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">16</div>
+                  <div className="bo-cv-step-badge-num">13</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Final Application Action &amp; Disposition</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 16 of 16</span>
+                <span className="bo-cv-step-tag-pill">Step 13 of 13</span>
               </div>
 
               {/* Action Feedback Banner */}
@@ -17301,130 +17342,132 @@ export default function CustomerVerification({
                 </div>
               )}
 
-              {/* Underwriting Readiness Summary Card */}
-              <div className="bo-cv-readiness-summary-card">
-                <div className="bo-cv-readiness-head">
-                  <div>
-                    <h3 className="bo-cv-readiness-title">
-                      Underwriting &amp; Verification Readiness Assessment
-                    </h3>
+              {/* Underwriting Readiness Summary Card (Hidden in Credit Manager view) */}
+              {!isCreditManagerView && (
+                <div className="bo-cv-readiness-summary-card">
+                  <div className="bo-cv-readiness-head">
+                    <div>
+                      <h3 className="bo-cv-readiness-title">
+                        Underwriting &amp; Verification Readiness Assessment
+                      </h3>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        type="button"
+                        className="bo-cv-readiness-btn-refresh"
+                        onClick={evaluateStep13Readiness}
+                        disabled={step13Readiness.isEvaluating}
+                      >
+                        {RefreshCwIcon && <RefreshCwIcon size={12} className={step13Readiness.isEvaluating ? 'bo-spin' : ''} />}
+                        <span>{step13Readiness.isEvaluating ? 'Re-evaluating...' : 'Refresh Status'}</span>
+                      </button>
+                      <span
+                        className={`bo-cv-readiness-status-badge ${
+                          step13Readiness.isReady
+                            ? 'bo-cv-readiness-status-badge--ready'
+                            : 'bo-cv-readiness-status-badge--progress'
+                        }`}
+                      >
+                        {step13Readiness.isReady ? (
+                          <>✓ Underwriting Complete &amp; Credit Ready</>
+                        ) : (
+                          <>⏳ Underwriting In Progress</>
+                        )}
+                      </span>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <button
-                      type="button"
-                      className="bo-cv-readiness-btn-refresh"
-                      onClick={evaluateStep13Readiness}
-                      disabled={step13Readiness.isEvaluating}
-                    >
-                      {RefreshCwIcon && <RefreshCwIcon size={12} className={step13Readiness.isEvaluating ? 'bo-spin' : ''} />}
-                      <span>{step13Readiness.isEvaluating ? 'Re-evaluating...' : 'Refresh Status'}</span>
-                    </button>
-                    <span
-                      className={`bo-cv-readiness-status-badge ${
-                        step13Readiness.isReady
-                          ? 'bo-cv-readiness-status-badge--ready'
-                          : 'bo-cv-readiness-status-badge--progress'
-                      }`}
-                    >
-                      {step13Readiness.isReady ? (
-                        <>✓ Underwriting Complete &amp; Credit Ready</>
-                      ) : (
-                        <>⏳ Underwriting In Progress</>
-                      )}
-                    </span>
+
+                  {/* Readiness Criteria Grid (3 col desktop, 2 col tablet, 1 col mobile) */}
+                  <div className="bo-cv-readiness-grid">
+                    <div className="bo-cv-readiness-item">
+                      <div className="bo-cv-readiness-label">KYC Document Matrix</div>
+                      <div className="bo-cv-readiness-data-row">
+                        <strong className="bo-cv-readiness-val">
+                          {step13Readiness.stepVerifsCount} Verified
+                        </strong>
+                        <span className="bo-cv-readiness-status" style={{ color: '#64748b' }}>
+                          Info only
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bo-cv-readiness-item">
+                      <div className="bo-cv-readiness-label">Legal Opinion Report</div>
+                      <div className="bo-cv-readiness-data-row">
+                        <strong className="bo-cv-readiness-val">
+                          {step13Readiness.hasLegal ? 'Uploaded' : 'Missing'}
+                        </strong>
+                        <span
+                          className="bo-cv-readiness-status"
+                          style={{ color: step13Readiness.hasLegal ? '#16a34a' : '#ea580c' }}
+                        >
+                          {step13Readiness.hasLegal ? '✓ Ready' : 'Pending'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bo-cv-readiness-item">
+                      <div className="bo-cv-readiness-label">Technical Valuation</div>
+                      <div className="bo-cv-readiness-data-row">
+                        <strong className="bo-cv-readiness-val">
+                          {step13Readiness.hasTechnical ? 'Uploaded' : 'Missing'}
+                        </strong>
+                        <span
+                          className="bo-cv-readiness-status"
+                          style={{ color: step13Readiness.hasTechnical ? '#16a34a' : '#ea580c' }}
+                        >
+                          {step13Readiness.hasTechnical ? '✓ Ready' : 'Pending'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bo-cv-readiness-item">
+                      <div className="bo-cv-readiness-label">CIBIL / Credit Bureau</div>
+                      <div className="bo-cv-readiness-data-row">
+                        <strong className="bo-cv-readiness-val">
+                          {step13Readiness.hasCibil ? 'Available' : 'Missing'}
+                        </strong>
+                        <span
+                          className="bo-cv-readiness-status"
+                          style={{ color: step13Readiness.hasCibil ? '#16a34a' : '#ea580c' }}
+                        >
+                          {step13Readiness.hasCibil ? '✓ Ready' : 'Pending'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bo-cv-readiness-item">
+                      <div className="bo-cv-readiness-label">Eligibility Assessment</div>
+                      <div className="bo-cv-readiness-data-row">
+                        <strong className="bo-cv-readiness-val">
+                          {step13Readiness.hasEligibility ? 'Calculated' : 'Pending'}
+                        </strong>
+                        <span
+                          className="bo-cv-readiness-status"
+                          style={{ color: step13Readiness.hasEligibility ? '#16a34a' : '#ea580c' }}
+                        >
+                          {step13Readiness.hasEligibility ? '✓ Complete' : 'Pending'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bo-cv-readiness-item">
+                      <div className="bo-cv-readiness-label">Document Rejections</div>
+                      <div className="bo-cv-readiness-data-row">
+                        <strong className="bo-cv-readiness-val">
+                          {step13Readiness.unresolvedRejectionsCount} Unresolved
+                        </strong>
+                        <span
+                          className="bo-cv-readiness-status"
+                          style={{ color: step13Readiness.unresolvedRejectionsCount === 0 ? '#16a34a' : '#dc2626' }}
+                        >
+                          {step13Readiness.unresolvedRejectionsCount === 0 ? '✓ None Active' : 'Must Resolve'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-
-                {/* Readiness Criteria Grid (3 col desktop, 2 col tablet, 1 col mobile) */}
-                <div className="bo-cv-readiness-grid">
-                  <div className="bo-cv-readiness-item">
-                    <div className="bo-cv-readiness-label">KYC Document Matrix</div>
-                    <div className="bo-cv-readiness-data-row">
-                      <strong className="bo-cv-readiness-val">
-                        {step13Readiness.stepVerifsCount} Verified
-                      </strong>
-                      <span className="bo-cv-readiness-status" style={{ color: '#64748b' }}>
-                        Info only
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bo-cv-readiness-item">
-                    <div className="bo-cv-readiness-label">Legal Opinion Report</div>
-                    <div className="bo-cv-readiness-data-row">
-                      <strong className="bo-cv-readiness-val">
-                        {step13Readiness.hasLegal ? 'Uploaded' : 'Missing'}
-                      </strong>
-                      <span
-                        className="bo-cv-readiness-status"
-                        style={{ color: step13Readiness.hasLegal ? '#16a34a' : '#ea580c' }}
-                      >
-                        {step13Readiness.hasLegal ? '✓ Ready' : 'Pending'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bo-cv-readiness-item">
-                    <div className="bo-cv-readiness-label">Technical Valuation</div>
-                    <div className="bo-cv-readiness-data-row">
-                      <strong className="bo-cv-readiness-val">
-                        {step13Readiness.hasTechnical ? 'Uploaded' : 'Missing'}
-                      </strong>
-                      <span
-                        className="bo-cv-readiness-status"
-                        style={{ color: step13Readiness.hasTechnical ? '#16a34a' : '#ea580c' }}
-                      >
-                        {step13Readiness.hasTechnical ? '✓ Ready' : 'Pending'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bo-cv-readiness-item">
-                    <div className="bo-cv-readiness-label">CIBIL / Credit Bureau</div>
-                    <div className="bo-cv-readiness-data-row">
-                      <strong className="bo-cv-readiness-val">
-                        {step13Readiness.hasCibil ? 'Available' : 'Missing'}
-                      </strong>
-                      <span
-                        className="bo-cv-readiness-status"
-                        style={{ color: step13Readiness.hasCibil ? '#16a34a' : '#ea580c' }}
-                      >
-                        {step13Readiness.hasCibil ? '✓ Ready' : 'Pending'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bo-cv-readiness-item">
-                    <div className="bo-cv-readiness-label">Eligibility Assessment</div>
-                    <div className="bo-cv-readiness-data-row">
-                      <strong className="bo-cv-readiness-val">
-                        {step13Readiness.hasEligibility ? 'Calculated' : 'Pending'}
-                      </strong>
-                      <span
-                        className="bo-cv-readiness-status"
-                        style={{ color: step13Readiness.hasEligibility ? '#16a34a' : '#ea580c' }}
-                      >
-                        {step13Readiness.hasEligibility ? '✓ Complete' : 'Pending'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bo-cv-readiness-item">
-                    <div className="bo-cv-readiness-label">Document Rejections</div>
-                    <div className="bo-cv-readiness-data-row">
-                      <strong className="bo-cv-readiness-val">
-                        {step13Readiness.unresolvedRejectionsCount} Unresolved
-                      </strong>
-                      <span
-                        className="bo-cv-readiness-status"
-                        style={{ color: step13Readiness.unresolvedRejectionsCount === 0 ? '#16a34a' : '#dc2626' }}
-                      >
-                        {step13Readiness.unresolvedRejectionsCount === 0 ? '✓ None Active' : 'Must Resolve'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              )}
 
               {/* Dual Action Cards (Credit Manager view renders its own decision panel instead) */}
               {isCreditManagerView ? (

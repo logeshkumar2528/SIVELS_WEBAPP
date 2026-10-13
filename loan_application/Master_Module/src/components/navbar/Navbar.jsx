@@ -57,6 +57,88 @@ const MASTERS_MENU = [
   { label: 'Company Configuration', path: '/company', icon: Building2 }
 ];
 
+const MASTERS_BY_PATH = MASTERS_MENU.reduce((acc, item) => {
+  acc[item.path] = item;
+  return acc;
+}, {});
+
+const MASTER_CATEGORIES = [
+  {
+    title: 'DOCUMENTS',
+    items: [
+      MASTERS_BY_PATH['/masters/document-type'],
+      MASTERS_BY_PATH['/masters/customer-document-type'],
+      MASTERS_BY_PATH['/masters/proof-master'],
+      MASTERS_BY_PATH['/masters/employment-type-document-mapping'],
+    ].filter(Boolean),
+  },
+  {
+    title: 'LOANS & FINANCE',
+    items: [
+      MASTERS_BY_PATH['/masters/loan-type'],
+      MASTERS_BY_PATH['/masters/loan-product'],
+      MASTERS_BY_PATH['/masters/loan-purpose'],
+      MASTERS_BY_PATH['/masters/loan-transaction-type'],
+      MASTERS_BY_PATH['/masters/loan-product-variation'],
+      MASTERS_BY_PATH['/masters/loan-product-tenure'],
+      MASTERS_BY_PATH['/masters/loan-product-collateral'],
+      MASTERS_BY_PATH['/masters/interest-type'],
+      MASTERS_BY_PATH['/masters/rate-of-interest'],
+      MASTERS_BY_PATH['/masters/foir'],
+      MASTERS_BY_PATH['/masters/rtr-norm-master'],
+      MASTERS_BY_PATH['/masters/rtr-loan-status'],
+    ].filter(Boolean),
+  },
+  {
+    title: 'CUSTOMER DETAILS',
+    items: [
+      MASTERS_BY_PATH['/masters/title'],
+      MASTERS_BY_PATH['/masters/gender'],
+      MASTERS_BY_PATH['/masters/marital-status'],
+      MASTERS_BY_PATH['/masters/relationship'],
+      MASTERS_BY_PATH['/masters/education'],
+      MASTERS_BY_PATH['/masters/religion'],
+      MASTERS_BY_PATH['/masters/caste'],
+    ].filter(Boolean),
+  },
+  {
+    title: 'BANKING & LOCATION',
+    items: [
+      MASTERS_BY_PATH['/masters/bank'],
+      MASTERS_BY_PATH['/masters/bank-branch'],
+      MASTERS_BY_PATH['/masters/country'],
+      MASTERS_BY_PATH['/masters/state'],
+      MASTERS_BY_PATH['/masters/district'],
+      MASTERS_BY_PATH['/masters/city'],
+      MASTERS_BY_PATH['/masters/property'],
+      MASTERS_BY_PATH['/masters/property-usage'],
+    ].filter(Boolean),
+  },
+  {
+    title: 'VERIFICATION',
+    items: [
+      MASTERS_BY_PATH['/masters/verification'],
+      MASTERS_BY_PATH['/masters/pd-verification-type'],
+      MASTERS_BY_PATH['/masters/health-check-type'],
+      MASTERS_BY_PATH['/masters/mortgage-status'],
+      MASTERS_BY_PATH['/masters/deviation-list'],
+      MASTERS_BY_PATH['/masters/cir-deviations'],
+      MASTERS_BY_PATH['/masters/negative-fi-deviations'],
+    ].filter(Boolean),
+  },
+  {
+    title: 'OTHER MASTERS',
+    items: [
+      MASTERS_BY_PATH['/masters/sourcing-channel'],
+      MASTERS_BY_PATH['/masters/employment-type'],
+      MASTERS_BY_PATH['/masters/industry-type'],
+      MASTERS_BY_PATH['/masters/assessment-method'],
+    ].filter(Boolean),
+  },
+];
+
+const COMPANY_CONFIG_ITEM = MASTERS_BY_PATH['/company'];
+
 export function Navbar() {
   const [isMastersOpen, setIsMastersOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -113,9 +195,23 @@ export function Navbar() {
     setSearchTerm('');
   };
 
-  const filteredMasters = MASTERS_MENU.filter(item => 
-    item.label.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+
+  const matchingCategories = MASTER_CATEGORIES.map((category) => ({
+    ...category,
+    items: category.items.filter((item) =>
+      item.label.toLowerCase().includes(normalizedSearch)
+    ),
+  })).filter((category) => category.items.length > 0);
+
+  const isCompanyMatching =
+    COMPANY_CONFIG_ITEM &&
+    (!normalizedSearch || COMPANY_CONFIG_ITEM.label.toLowerCase().includes(normalizedSearch));
+
+  const totalMatchingCount =
+    matchingCategories.reduce((sum, cat) => sum + cat.items.length, 0) +
+    (isCompanyMatching ? 1 : 0);
+
   const goBack = () => window.history.length > 1 ? navigate(-1) : navigate('/dashboard');
 
   const isAmsDashboard = location.pathname.includes('ams-dashboard') || isAmsUser;
@@ -186,26 +282,59 @@ export function Navbar() {
                       autoFocus
                     />
                   </div>
-                  <div className="master-list-grid">
-                    {filteredMasters.map((item) => {
-                      const Icon = item.icon;
-                      const isActive = location.pathname.includes(item.path);
-                      return (
-                        <NavLink
-                          key={item.path}
-                          to={item.path}
-                          className={`dropdown-item ${isActive ? 'active' : ''}`}
-                          onClick={closeMenus}
-                        >
-                          <div className="dropdown-item-left">
-                            {Icon && <Icon size={16} className="dropdown-item-icon" />}
-                            <span>{item.label}</span>
-                          </div>
-                          {isActive && <Check size={16} className="dropdown-item-check" />}
-                        </NavLink>
-                      );
-                    })}
-                    {filteredMasters.length === 0 && (
+                  <div className="master-list-content">
+                    {matchingCategories.map((category) => (
+                      <div key={category.title} className="master-category-section">
+                        <div className="master-category-header">{category.title}</div>
+                        <div className="master-category-grid">
+                          {category.items.map((item) => {
+                            const Icon = item.icon;
+                            const isActive = location.pathname.includes(item.path);
+                            return (
+                              <NavLink
+                                key={item.path}
+                                to={item.path}
+                                className={`dropdown-item ${isActive ? 'active' : ''}`}
+                                onClick={closeMenus}
+                              >
+                                <div className="dropdown-item-left">
+                                  {Icon && <Icon size={16} className="dropdown-item-icon" />}
+                                  <span>{item.label}</span>
+                                </div>
+                                {isActive && <Check size={16} className="dropdown-item-check" />}
+                              </NavLink>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+
+                    {isCompanyMatching && COMPANY_CONFIG_ITEM && (
+                      <div className="master-company-section">
+                        <div className="master-category-header">COMPANY CONFIGURATION</div>
+                        <div className="master-category-grid">
+                          {(() => {
+                            const Icon = COMPANY_CONFIG_ITEM.icon;
+                            const isActive = location.pathname.includes(COMPANY_CONFIG_ITEM.path);
+                            return (
+                              <NavLink
+                                to={COMPANY_CONFIG_ITEM.path}
+                                className={`dropdown-item ${isActive ? 'active' : ''}`}
+                                onClick={closeMenus}
+                              >
+                                <div className="dropdown-item-left">
+                                  {Icon && <Icon size={16} className="dropdown-item-icon" />}
+                                  <span>{COMPANY_CONFIG_ITEM.label}</span>
+                                </div>
+                                {isActive && <Check size={16} className="dropdown-item-check" />}
+                              </NavLink>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    )}
+
+                    {totalMatchingCount === 0 && (
                       <div className="master-no-results">No masters found matching your search.</div>
                     )}
                   </div>

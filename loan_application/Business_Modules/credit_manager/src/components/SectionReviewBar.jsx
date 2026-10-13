@@ -15,6 +15,7 @@ export default function SectionReviewBar({
   awaitingReviewCount = 0,
   isEditing,
   canEdit,
+  compact = false,
   onToggleEdit,
   onApprove,
   onUnapprove,
@@ -31,6 +32,57 @@ export default function SectionReviewBar({
     : awaitingReviewCount > 0
       ? 'Accept or reject the Back Office resolution for this section first.'
       : undefined;
+
+  const actionsMarkup = canEdit && (
+    <div className="cm-section-bar-actions">
+      {status && (
+        <span className={`cm-step-status cm-step-status--${status.toLowerCase()}`}>
+          {isApproved ? '✓ Approved' : '⚑ Rejected'}
+        </span>
+      )}
+      <button
+        type="button"
+        className={`stc-btn-doc ${isEditing ? 'stc-btn-doc--primary' : 'stc-btn-doc--outline'}`}
+        onClick={onToggleEdit}
+      >
+        {EditIcon && <EditIcon size={14} />}
+        <span>{isEditing ? 'Done Editing' : 'Edit'}</span>
+      </button>
+      {isApproved ? (
+        <button type="button" className="stc-btn-doc stc-btn-doc--outline" onClick={onUnapprove}>
+          <span>Undo Approval</span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="stc-btn-doc cm-btn-approve"
+          onClick={onApprove}
+          disabled={!!approveBlockedTitle}
+          title={approveBlockedTitle}
+        >
+          {CheckCircleIcon && <CheckCircleIcon size={14} />}
+          <span>Approve</span>
+        </button>
+      )}
+      <button type="button" className="stc-btn-doc cm-btn-reject" onClick={onReject}>
+        {XCircleIcon && <XCircleIcon size={14} />}
+        <span>{isFlagged ? 'Add Flag' : 'Reject'}</span>
+      </button>
+      {isFlagged && (
+        <button type="button" className="stc-btn-doc stc-btn-doc--outline" onClick={onClearFlags}>
+          <span>Clear Flags</span>
+        </button>
+      )}
+    </div>
+  );
+
+  if (compact) {
+    return actionsMarkup || (status ? (
+      <span className={`cm-step-status cm-step-status--${status.toLowerCase()}`}>
+        {isApproved ? '✓ Approved' : '⚑ Rejected'}
+      </span>
+    ) : null);
+  }
 
   return (
     <div className={`cm-section-bar${isEditing ? ' is-editing' : ''}`}>
@@ -57,43 +109,7 @@ export default function SectionReviewBar({
         )}
       </div>
 
-      {canEdit && (
-        <div className="cm-section-bar-actions">
-          <button
-            type="button"
-            className={`stc-btn-doc ${isEditing ? 'stc-btn-doc--primary' : 'stc-btn-doc--outline'}`}
-            onClick={onToggleEdit}
-          >
-            {EditIcon && <EditIcon size={14} />}
-            <span>{isEditing ? 'Done Editing' : 'Edit'}</span>
-          </button>
-          {isApproved ? (
-            <button type="button" className="stc-btn-doc stc-btn-doc--outline" onClick={onUnapprove}>
-              <span>Undo Approval</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="stc-btn-doc cm-btn-approve"
-              onClick={onApprove}
-              disabled={!!approveBlockedTitle}
-              title={approveBlockedTitle}
-            >
-              {CheckCircleIcon && <CheckCircleIcon size={14} />}
-              <span>Approve</span>
-            </button>
-          )}
-          <button type="button" className="stc-btn-doc cm-btn-reject" onClick={onReject}>
-            {XCircleIcon && <XCircleIcon size={14} />}
-            <span>{isFlagged ? 'Add Flag' : 'Reject'}</span>
-          </button>
-          {isFlagged && (
-            <button type="button" className="stc-btn-doc stc-btn-doc--outline" onClick={onClearFlags}>
-              <span>Clear Flags</span>
-            </button>
-          )}
-        </div>
-      )}
+      {actionsMarkup}
     </div>
   );
 }

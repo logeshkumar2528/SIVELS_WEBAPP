@@ -510,14 +510,62 @@
 }
 
 .cm-section-bar-actions {
-  display: flex;
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.cm-header-actions-wrapper {
+  display: inline-flex;
+  align-items: center;
+}
+
+.bo-cv-step-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bo-cv-unified-header .bo-cv-step-header-right {
+  margin-left: auto;
+}
+
+/* ── Standardize review buttons in verification headers ── */
+.cm-section-bar-actions .stc-btn-doc {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  font-size: 0.825rem;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 6px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.cm-section-bar-actions .stc-btn-doc svg {
+  flex-shrink: 0;
+  display: block;
 }
 
 .cm-section-bar-actions .stc-btn-doc:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ── Credit Manager Header Cleanup: Hide header subtitle & Step XX of 13 pills ── */
+.cm-credit-manager-view .bo-cv-step-panel-desc,
+.cm-credit-manager-view .bo-cv-step-panel-header .bo-cv-step-tag-pill,
+.cm-credit-manager-view .bo-cv-doc-header-right .bo-cv-step-tag-pill,
+.cm-credit-manager-view .bo-rtr-panel .bo-cv-step-tag-pill {
+  display: none !important;
 }
 
 .cm-step-status {
@@ -608,3 +656,161 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ══════════════════════════════════════════════════════════
+   CREDIT MANAGER QUEUES — BACK OFFICE CONSISTENCY
+   Scoped to .stc-page-container to match
+   /backoffice/customers (Customer Monitoring)
+══════════════════════════════════════════════════════════ */
+
+/* 1. Outer container spacing (match .bo-page-container inside .layout-content) */
+.stc-page-container {
+  padding: 0;
+  max-width: 100%;
+  margin: 0;
+  gap: 16px;
+}
+
+/* 2. Controls card & inputs (match .bo-customer-filter-panel) */
+.stc-page-container .stc-controls-card {
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border, #E4EDE7);
+  box-shadow: 0 1px 4px rgba(22, 34, 25, 0.07);
+}
+
+.stc-page-container .stc-search-bar:focus-within,
+.stc-page-container .stc-select-wrap select:focus,
+.stc-page-container .stc-unified-date-box:focus-within {
+  border-color: var(--color-primary, #0F7A4C);
+  box-shadow: 0 0 0 3px rgba(15, 122, 76, 0.12);
+}
+
+.stc-page-container .stc-count-badge {
+  color: var(--color-text-secondary, #64748B);
+}
+
+/* 3. Table card & header (match .bo-table-card & .bo-table-header) */
+.stc-page-container .stc-table-card {
+  border-radius: 12px;
+  border: 1px solid var(--color-border, #E4EDE7);
+  box-shadow: 0 1px 4px rgba(22, 34, 25, 0.07);
+}
+
+.stc-page-container .stc-table-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border, #E4EDE7);
+}
+
+.stc-page-container .stc-table-title {
+  font-size: var(--font-size-md, 14px);
+  color: var(--color-text-primary, #1A2320);
+}
+
+.stc-page-container .stc-table-title svg {
+  color: var(--color-primary, #0F7A4C);
+}
+
+/* 4. Table column headers (match .bo-table th) */
+.stc-page-container .stc-table th {
+  padding: 12px 20px;
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-text-secondary, #3D5245);
+  background-color: var(--color-bg, #F4F7F5);
+  border-bottom: 1px solid var(--color-border, #E4EDE7);
+  letter-spacing: 0.04em;
+  font-family: var(--font-family-base, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+}
+
+/* 5. Table rows & typography (match .bo-table td) */
+.stc-page-container .stc-table td {
+  padding: 14px 20px;
+  font-size: var(--font-size-sm, 12px);
+  border-bottom: 1px solid var(--color-border-light, #F0F5F1);
+  color: var(--color-text-primary, #1A2320);
+}
+
+.stc-page-container .stc-table tr:hover {
+  background-color: var(--color-surface-hover, #F9FBF9);
+}
+
+.stc-page-container .stc-customer-name {
+  font-size: 13px;
+  color: var(--color-text-primary, #1A2320);
+}
+
+.stc-page-container .stc-customer-sub {
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-text-muted, #7A9485);
+}
+
+.stc-page-container .stc-amount-cell {
+  font-size: var(--font-size-sm, 12px);
+  color: var(--color-primary, #0F7A4C);
+}
+
+/* 6. Status pills (full rounded pills matching .bo-cust-status-badge) */
+.stc-page-container .stc-pill,
+.stc-page-container .cm-pill--rejected,
+.stc-page-container .cm-days-pill {
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: var(--font-size-xs, 11px);
+  font-weight: 600;
+  white-space: nowrap;
+  border: none;
+}
+
+.stc-page-container .stc-pill--verified {
+  background-color: var(--color-status-approved-bg, #DCFCE7);
+  color: var(--color-status-approved-text, #166534);
+}
+
+.stc-page-container .stc-pill--progress {
+  background-color: #E0F2FE;
+  color: #0284C7;
+}
+
+.stc-page-container .stc-pill--pending,
+.stc-page-container .cm-days-pill {
+  background-color: var(--color-status-review-bg, #FEF3C7);
+  color: var(--color-status-review-text, #B45309);
+}
+
+.stc-page-container .cm-pill--rejected {
+  background-color: var(--color-status-returned-bg, #FEE2E2);
+  color: var(--color-status-returned-text, #B91C1C);
+}
+
+/* 7. Action buttons (match .bo-verify-btn) */
+.stc-page-container .stc-btn-review {
+  padding: 6px 12px;
+  background-color: var(--color-primary, #0F7A4C);
+  border: 1px solid var(--color-primary, #0F7A4C);
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--font-size-xs, 11px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.stc-page-container .stc-btn-review:hover {
+  background-color: var(--color-primary-hover, #15692F);
+  border-color: var(--color-primary-hover, #15692F);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(15, 122, 76, 0.15);
+}
+
+/* 8. Table header refresh button & empty state */
+.stc-page-container .stc-table-header .stc-btn-reset-filter {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.stc-page-container .cm-empty-cell {
+  padding: 48px 16px !important;
+  font-size: 13px;
+  color: var(--color-text-muted, #94A3B8) !important;
+}
+
+
