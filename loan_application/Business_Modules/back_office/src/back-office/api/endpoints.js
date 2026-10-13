@@ -104,6 +104,10 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/calculation/assessments/${encodeURIComponent(loanEligibilityAssessmentId)}/recommendation`,
   ELIGIBILITY_NORMAL_INCOME: (applicationProductDetailsId, agentCustomerId) =>
     `/EligibilityNormalIncome/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(agentCustomerId)}`,
+  ELIGIBILITY_NORMAL_INCOME_SHEET: (applicationProductDetailsId, agentCustomerId) =>
+    `/EligibilityNormalIncome/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(agentCustomerId)}/sheet`,
+  ELIGIBILITY_NORMAL_INCOME_DOWNLOAD: (applicationProductDetailsId, agentCustomerId) =>
+    `/EligibilityNormalIncome/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(agentCustomerId)}/download`,
 
   // Banking analysis and eligibility APIs
   BANKING_DETAILS: (applicationProductDetailsId) =>

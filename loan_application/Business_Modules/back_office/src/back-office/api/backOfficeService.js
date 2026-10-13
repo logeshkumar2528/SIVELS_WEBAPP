@@ -786,6 +786,29 @@ export const backOfficeService = {
     return unwrapResponse(response);
   },
 
+  /**
+   * Get (or create from the template) the Google Sheet for this application/customer.
+   * @returns {Promise<{ spreadsheetId: string, spreadsheetUrl: string, isNew: boolean }>}
+   */
+  getOrCreateNormalIncomeSheet: async (applicationProductDetailsId, agentCustomerId, updatedByUserId) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.ELIGIBILITY_NORMAL_INCOME_SHEET(applicationProductDetailsId, agentCustomerId),
+      { updatedByUserId: updatedByUserId || null }
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Download the server-generated Normal Income .xlsx as a Blob.
+   */
+  downloadEligibilityNormalIncomeExcel: async (applicationProductDetailsId, agentCustomerId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.ELIGIBILITY_NORMAL_INCOME_DOWNLOAD(applicationProductDetailsId, agentCustomerId),
+      { responseType: 'blob' }
+    );
+    return response.data;
+  },
+
   /* ==========================================
      8c. RTR (REPAYMENT TRACK RECORD) CALCULATION APIs
   ========================================== */
