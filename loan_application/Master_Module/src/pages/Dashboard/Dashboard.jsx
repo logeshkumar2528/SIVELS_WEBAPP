@@ -1,24 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Activity,
-  AlertCircle,
-  ArrowLeft,
-  ArrowRight,
   ArrowUpRight,
   BriefcaseBusiness,
   Building2,
   Camera,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   Eye,
   FileText,
   Landmark,
   LoaderCircle,
   Pencil,
   Plus,
-  RefreshCw,
   Search,
   ShieldCheck,
   Users,
@@ -496,15 +488,6 @@ export function Dashboard() {
     .filter((application) => application.createdAt)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, 5);
-
-  // 5 Stats Cards: RM, Agents, AMS, Applications, Approved Amount
-  const stats = [
-    [Users, 'green', 'Relationship managers', rms.length, 'Live RM master'],
-    [BriefcaseBusiness, 'blue', 'Total agents', agents.length, 'Live agent master'],
-    [ShieldCheck, 'teal', 'Total AMS', amsList.length, 'Live AMS master'],
-    [FileText, 'orange', 'Total applications', applications.length, `${pending.length} pending · ${approved.length} approved`],
-    [CheckCircle2, 'purple', 'Approved amount', formatAmount(approved.reduce((total, application) => total + application.amount, 0)), disbursed.length ? `${disbursed.length} disbursed` : `${approved.length} approved loans`],
-  ];
 
   const openEdit = (person) => {
     if (!person?.id) return;
@@ -1000,61 +983,31 @@ export function Dashboard() {
 
   return (
     <div className="dashboard-page">
-      <section className="dashboard-hero">
-        <div className="dashboard-hero-copy">
-          <span className="eyebrow">MASTER WORKSPACE</span>
-          <h1 className="dashboard-title">Admin dashboard</h1>
-          <div className="dashboard-meta-row">
-            <span><Activity size={14} /> Live data</span>
-            <span><Users size={14} /> {agents.length} agents</span>
-            <span><ShieldCheck size={14} /> {rms.length} RMs</span>
-            {updatedAt && <span><ArrowUpRight size={14} /> Synced {formatDateTimeFriendly(updatedAt)}</span>}
+      <section className="admin-unified-card">
+        <div className="admin-unified-header">
+          <div className="admin-unified-title-block">
+            <span className="eyebrow">MASTER WORKSPACE</span>
+            <h1 className="dashboard-title">Admin Dashboard</h1>
           </div>
+          <button
+            type="button"
+            className="primary-button admin-create-user-btn"
+            onClick={() => navigate('/create-user')}
+          >
+            <Plus size={16} /> Create User
+          </button>
         </div>
-        <div className="dashboard-hero-actions">
-          <button className="masters-btn-secondary dashboard-refresh-button" onClick={loadDashboard} disabled={loading}>
-            <RefreshCw size={17} className={loading ? 'master-spin' : ''} /> Refresh data
-          </button>
-          <button className="primary-button dashboard-create-button" onClick={() => navigate('/create-user')}>
-            <Plus size={18} /> Create user
-          </button>
-          <div className="dashboard-hero-card">
-            <span>Pending</span>
-            <strong>{pending.length}</strong>
-            <small>Applications waiting for action</small>
-          </div>
-        </div>
-      </section>
 
-      {error && <div className="dashboard-error" role="status">{error}</div>}
+        {error && <div className="dashboard-error" role="status">{error}</div>}
 
-      {/* 5 Top Summary Cards */}
-      <section className="stat-grid">
-        {stats.map(([Icon, color, label, value, note]) => (
-          <div className="stat-card" key={label}>
-            <div className={`stat-icon ${color}`}><Icon size={20} /></div>
-            <div>
-              <span>{label}</span>
-              <strong>{value}</strong>
-              <small className={label === 'Total applications' ? 'neutral' : ''}>
-                <ArrowUpRight size={13} /> {note}
-              </small>
-            </div>
-          </div>
-        ))}
-      </section>
+        <hr className="admin-unified-divider" />
 
-      {/* People & Access Section - 5 Compact Role Summary Cards */}
-      <section className="people-workspace">
-        <div className="workspace-heading">
-          <div>
-            <span className="section-kicker">People & access</span>
-            <h2>Manage your lending team</h2>
-            <p>Keep every role visible, easy to scan, and one click away from its next action.</p>
+        <div className="admin-unified-subheading">
+          <div className="admin-subheading-left">
+            <span className="section-kicker">PEOPLE & ACCESS</span>
+            <h2>Manage Your Lending Team</h2>
           </div>
-          <button className="primary-button workspace-add-button" onClick={() => navigate('/create-user')}>
-            <Plus size={17} /> Add user
-          </button>
+          <span className="admin-subheading-badge">6 Directories</span>
         </div>
 
         <div className="people-role-card-grid">
@@ -1064,21 +1017,16 @@ export function Dashboard() {
             className="people-role-card people-role-card-agent"
             onClick={() => navigate('/agents')}
           >
-            <div className="people-role-card-top">
-              <div className="people-role-header-left">
-                <div className="people-role-icon blue">
-                  <BriefcaseBusiness size={18} />
-                </div>
-                <h3 className="people-role-title">Agents</h3>
-              </div>
-              <span className="people-role-badge">{agents.length}</span>
+            <div className="people-role-icon blue">
+              <BriefcaseBusiness size={20} />
             </div>
-            <div className="people-role-card-body">
-              <p className="people-role-desc">Field agents sourcing applications</p>
+            <div className="people-role-info">
+              <h3 className="people-role-title">Agents</h3>
+              <span className="people-role-subtitle">Directory records</span>
             </div>
-            <div className="people-role-card-footer">
-              <span>View directory</span>
-              <ArrowRight size={14} />
+            <div className="people-role-metric">
+              <span className="people-role-count">{agents.length}</span>
+              <ArrowUpRight size={16} className="people-role-arrow" />
             </div>
           </button>
 
@@ -1088,21 +1036,16 @@ export function Dashboard() {
             className="people-role-card people-role-card-rm"
             onClick={() => navigate('/relationship-managers')}
           >
-            <div className="people-role-card-top">
-              <div className="people-role-header-left">
-                <div className="people-role-icon green">
-                  <Users size={18} />
-                </div>
-                <h3 className="people-role-title">Relationship managers</h3>
-              </div>
-              <span className="people-role-badge">{rms.length}</span>
+            <div className="people-role-icon green">
+              <Users size={20} />
             </div>
-            <div className="people-role-card-body">
-              <p className="people-role-desc">Own agent coverage and regional teams</p>
+            <div className="people-role-info">
+              <h3 className="people-role-title">Relationship Managers</h3>
+              <span className="people-role-subtitle">Directory records</span>
             </div>
-            <div className="people-role-card-footer">
-              <span>View directory</span>
-              <ArrowRight size={14} />
+            <div className="people-role-metric">
+              <span className="people-role-count">{rms.length}</span>
+              <ArrowUpRight size={16} className="people-role-arrow" />
             </div>
           </button>
 
@@ -1112,21 +1055,16 @@ export function Dashboard() {
             className="people-role-card people-role-card-back-office"
             onClick={() => navigate('/back-office')}
           >
-            <div className="people-role-card-top">
-              <div className="people-role-header-left">
-                <div className="people-role-icon teal">
-                  <Building2 size={18} />
-                </div>
-                <h3 className="people-role-title">Back office</h3>
-              </div>
-              <span className="people-role-badge">{backOfficeList.length}</span>
+            <div className="people-role-icon teal">
+              <Building2 size={20} />
             </div>
-            <div className="people-role-card-body">
-              <p className="people-role-desc">Support operations and branch verification</p>
+            <div className="people-role-info">
+              <h3 className="people-role-title">Back Office</h3>
+              <span className="people-role-subtitle">Directory records</span>
             </div>
-            <div className="people-role-card-footer">
-              <span>View directory</span>
-              <ArrowRight size={14} />
+            <div className="people-role-metric">
+              <span className="people-role-count">{backOfficeList.length}</span>
+              <ArrowUpRight size={16} className="people-role-arrow" />
             </div>
           </button>
 
@@ -1136,21 +1074,16 @@ export function Dashboard() {
             className="people-role-card people-role-card-ams"
             onClick={() => navigate('/ams')}
           >
-            <div className="people-role-card-top">
-              <div className="people-role-header-left">
-                <div className="people-role-icon purple">
-                  <ShieldCheck size={18} />
-                </div>
-                <h3 className="people-role-title">AMS</h3>
-              </div>
-              <span className="people-role-badge">{amsList.length}</span>
+            <div className="people-role-icon purple">
+              <ShieldCheck size={20} />
             </div>
-            <div className="people-role-card-body">
-              <p className="people-role-desc">Cover districts and local operations</p>
+            <div className="people-role-info">
+              <h3 className="people-role-title">AMS</h3>
+              <span className="people-role-subtitle">Directory records</span>
             </div>
-            <div className="people-role-card-footer">
-              <span>View directory</span>
-              <ArrowRight size={14} />
+            <div className="people-role-metric">
+              <span className="people-role-count">{amsList.length}</span>
+              <ArrowUpRight size={16} className="people-role-arrow" />
             </div>
           </button>
 
@@ -1160,21 +1093,16 @@ export function Dashboard() {
             className="people-role-card people-role-card-credit-manager"
             onClick={() => navigate('/credit-managers')}
           >
-            <div className="people-role-card-top">
-              <div className="people-role-header-left">
-                <div className="people-role-icon indigo">
-                  <Landmark size={18} />
-                </div>
-                <h3 className="people-role-title">Credit managers</h3>
-              </div>
-              <span className="people-role-badge">{creditManagers.length}</span>
+            <div className="people-role-icon indigo">
+              <Landmark size={20} />
             </div>
-            <div className="people-role-card-body">
-              <p className="people-role-desc">Review and sanction loan applications</p>
+            <div className="people-role-info">
+              <h3 className="people-role-title">Credit Managers</h3>
+              <span className="people-role-subtitle">Directory records</span>
             </div>
-            <div className="people-role-card-footer">
-              <span>View directory</span>
-              <ArrowRight size={14} />
+            <div className="people-role-metric">
+              <span className="people-role-count">{creditManagers.length}</span>
+              <ArrowUpRight size={16} className="people-role-arrow" />
             </div>
           </button>
 
@@ -1184,21 +1112,16 @@ export function Dashboard() {
             className="people-role-card people-role-card-customer"
             onClick={() => navigate('/customers')}
           >
-            <div className="people-role-card-top">
-              <div className="people-role-header-left">
-                <div className="people-role-icon orange">
-                  <FileText size={18} />
-                </div>
-                <h3 className="people-role-title">Customers</h3>
-              </div>
-              <span className="people-role-badge">{applications.length}</span>
+            <div className="people-role-icon orange">
+              <FileText size={20} />
             </div>
-            <div className="people-role-card-body">
-              <p className="people-role-desc">Network customer and application records</p>
+            <div className="people-role-info">
+              <h3 className="people-role-title">Customers</h3>
+              <span className="people-role-subtitle">Directory records</span>
             </div>
-            <div className="people-role-card-footer">
-              <span>View directory</span>
-              <ArrowRight size={14} />
+            <div className="people-role-metric">
+              <span className="people-role-count">{applications.length}</span>
+              <ArrowUpRight size={16} className="people-role-arrow" />
             </div>
           </button>
         </div>
