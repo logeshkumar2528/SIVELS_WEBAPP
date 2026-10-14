@@ -17,7 +17,11 @@ import iconMap from '../../config/iconMap';
 import { buildRoute } from '../../config/routeConfig';
 import { useCustomerQueue } from '../../hooks/useCustomerQueue';
 import Pagination from '../../components/Pagination/Pagination';
-import { matchesListingDateCriteria } from '../../../../../../Core/src/utils/dateHelper';
+import {
+  isWithinDateRange,
+  getIstTodayDateString,
+  getIstNDaysAgoDateString,
+} from '../../../../../../Core/src/utils/dateHelper';
 import './CustomerMonitoring.css';
 
 /**
@@ -93,6 +97,33 @@ function getStatusInfo(status) {
   return { label: String(status), className: 'is-pending' };
 }
 
+/**
+ * Standardized listing date predicate for Customer Monitoring:
+ * - When searchActive: searches full dataset (bypasses 30-day default). If custom dates exist, applies custom range.
+ * - When !searchActive: applies custom range if custom dates exist; otherwise applies default latest 30 calendar days (today + previous 29 days in IST).
+ */
+function matchesCustomerMonitoringDateCriteria({
+  dateValue,
+  searchActive = false,
+  fromDate = '',
+  toDate = '',
+}) {
+  const hasCustomDate = Boolean((fromDate && String(fromDate).trim()) || (toDate && String(toDate).trim()));
+
+  if (searchActive) {
+    if (hasCustomDate) {
+      return isWithinDateRange(dateValue, fromDate, toDate);
+    }
+    return true;
+  }
+
+  if (hasCustomDate) {
+    return isWithinDateRange(dateValue, fromDate, toDate);
+  }
+
+  return isWithinDateRange(dateValue, getIstNDaysAgoDateString(29), getIstTodayDateString());
+}
+
 export default function CustomerMonitoring() {
   const navigate = useNavigate();
 
@@ -154,9 +185,9 @@ export default function CustomerMonitoring() {
 
     return customers
       .filter((c) => {
-        // Date Filter
+        // Date Filter (Default: Last 30 Calendar Days in IST)
         const appDate = c.createdAt || c.appliedDate;
-        const matchesDate = matchesListingDateCriteria({
+        const matchesDate = matchesCustomerMonitoringDateCriteria({
           dateValue: appDate,
           searchActive,
           fromDate,
