@@ -841,7 +841,7 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
               onClick={onBack}
               aria-label="Back to Eligibility Assessment"
             >
-              {ArrowLeftIcon && <ArrowLeftIcon size={14} />}
+              {ArrowLeftIcon ? <ArrowLeftIcon size={14} /> : '←'}
               <span>Back to Eligibility Assessment</span>
             </button>
           )}
@@ -1171,7 +1171,7 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
       {result ? (
         <div ref={eligibilitySheetRef} className="bo-cv-banking-results bo-cv-banking-eligibility-sheet">
           <button type="button" className="bo-btn bo-btn--outline bo-cv-banking-sheet-back" onClick={() => (onBack ? onBack() : setEligibilitySheetOpen(false))}>
-            ← Back to Banking
+            ← Back to Eligibility Assessment
           </button>
           <h4>Banking Eligibility</h4>
           <div className="bo-cv-banking-sheet-subtitle">Consolidation of max 3 Banking</div>
@@ -1210,6 +1210,16 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
         </div>
       ) : (
         <div className="bo-cv-banking-results bo-cv-banking-eligibility-sheet bo-cv-banking-empty-state" style={{ padding: '24px', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1', marginTop: '16px' }}>
+          {onBack && (
+            <button
+              type="button"
+              className="bo-btn bo-btn--outline bo-cv-banking-sheet-back"
+              onClick={onBack}
+              style={{ marginBottom: '16px' }}
+            >
+              ← Back to Eligibility Assessment
+            </button>
+          )}
           <h4 style={{ margin: '0 0 8px 0', color: '#334155', fontSize: '15px' }}>Banking Eligibility</h4>
           <p style={{ margin: '0 0 6px 0', color: '#64748b', fontSize: '13px', fontWeight: 500 }}>
             No banking eligibility calculation is available for this customer.
@@ -13130,9 +13140,10 @@ export default function CustomerVerification({
                           type="button"
                           className="bo-cv-rtr-back-btn"
                           onClick={() => setRtrWorkspaceOpen(false)}
+                          aria-label="Back to Eligibility Assessment"
                         >
                           {ArrowLeftIcon ? <ArrowLeftIcon size={16} /> : '←'}
-                          <span>Back</span>
+                          <span>Back to Eligibility Assessment</span>
                         </button>
                         <h2 className="bo-cv-rtr-title">RTR Eligibility Assessment</h2>
                       </div>
@@ -13714,9 +13725,10 @@ export default function CustomerVerification({
                           type="button"
                           className="bo-cv-income-back-btn"
                           onClick={() => setIncomeWorkspaceOpen(false)}
+                          aria-label="Back to Eligibility Assessment"
                         >
                           {ArrowLeftIcon ? <ArrowLeftIcon size={16} /> : '←'}
-                          <span>Back</span>
+                          <span>Back to Eligibility Assessment</span>
                         </button>
                         <h2 className="bo-cv-income-title">Income Method Assessment</h2>
                       </div>
@@ -18046,7 +18058,17 @@ export default function CustomerVerification({
             }}
           >
             <div className="bo-cv-normal-income-result-page-card">
-              <div className="bo-cv-confirm-modal-header">
+              <div className="bo-cv-confirm-modal-header" style={{ alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="bo-btn bo-btn--outline"
+                  onClick={() => setNormalIncomeResultOpen(false)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginRight: '16px', fontSize: '13px', padding: '6px 12px', borderRadius: '8px' }}
+                  aria-label="Back to Eligibility Assessment"
+                >
+                  {ArrowLeftIcon ? <ArrowLeftIcon size={14} /> : '←'}
+                  <span>Back to Eligibility Assessment</span>
+                </button>
                 <div className="bo-cv-confirm-modal-title-group">
                   <h3 id="bo-cv-normal-income-result-title" className="bo-cv-confirm-modal-title">Normal Income Sheet</h3>
                   <p className="bo-cv-confirm-modal-subtitle">Saved eligibility result</p>
