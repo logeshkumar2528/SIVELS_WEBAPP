@@ -642,7 +642,7 @@ function getStatusInfo(status) {
   return { label: 'Pending', className: 'bo-cv-pill-pending' };
 }
 
-function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBack, initialResultOnly = false, actionsSlot = null }) {
+function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBack, initialResultOnly = false, actionsSlot = null, showSaveButton = false }) {
   const emptyMonth = () => ({
     applicationBankingMonthlyDetailsId: null,
     monthYear: '', monthlyCredits: '', monthlyCreditsNonBusiness: '', monthlyDebits: '',
@@ -860,6 +860,23 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
             {PlusIcon ? <PlusIcon size={14} /> : '+'}
             <span>Add Bank</span>
           </button>
+          {showSaveButton && (
+            <button
+              type="button"
+              className="bo-btn bo-btn--primary bo-cv-banking-calc-btn"
+              disabled={busy || analysisLoading}
+              onClick={save}
+            >
+              {busy ? (
+                <>
+                  <span className="bo-cv-btn-spinner" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <span>Save Banking</span>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -13093,6 +13110,7 @@ export default function CustomerVerification({
                 applicationProductDetailsId={resolvedAppProdId || calculationAppProdId}
                 userId={getAuthenticatedBackOfficeId()}
                 actionsSlot={renderCreditReviewActions()}
+                showSaveButton
               />
             </div>
           )}
