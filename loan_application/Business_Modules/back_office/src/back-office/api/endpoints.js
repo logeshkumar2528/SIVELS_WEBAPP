@@ -110,6 +110,10 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/EligibilityNormalIncome/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(agentCustomerId)}/save`,
   ELIGIBILITY_NORMAL_INCOME_DOWNLOAD: (applicationProductDetailsId, agentCustomerId) =>
     `/EligibilityNormalIncome/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(agentCustomerId)}/download`,
+  ELIGIBILITY_NORMAL_INCOME_DESKTOP_SESSION: (applicationProductDetailsId, agentCustomerId) =>
+    `/EligibilityNormalIncome/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(agentCustomerId)}/desktop-session`,
+  ELIGIBILITY_NORMAL_INCOME_SAVE_STATUS: (applicationProductDetailsId, agentCustomerId, backOfficeId) =>
+    `/EligibilityNormalIncome/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(agentCustomerId)}/save-status${backOfficeId != null ? `?backOfficeId=${encodeURIComponent(backOfficeId)}` : ''}`,
 
   // Banking analysis and eligibility APIs
   BANKING_DETAILS: (applicationProductDetailsId) =>

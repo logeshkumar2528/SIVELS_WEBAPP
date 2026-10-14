@@ -832,6 +832,35 @@ export const backOfficeService = {
     return { data: response.data, headers: response.headers };
   },
 
+  /**
+   * Create an authenticated Excel Desktop WebDAV editing session.
+   * @param {string|number} applicationProductDetailsId
+   * @param {string|number} agentCustomerId
+   * @param {number|null} backOfficeId
+   * @returns {Promise<{ fileName: string, editUrl: string, officeUrl: string, expiresAt: string, isNewWorkbook: boolean }>}
+   */
+  createEligibilityNormalIncomeDesktopSession: async (applicationProductDetailsId, agentCustomerId, backOfficeId) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.ELIGIBILITY_NORMAL_INCOME_DESKTOP_SESSION(applicationProductDetailsId, agentCustomerId),
+      { backOfficeId: backOfficeId != null ? Number(backOfficeId) : null }
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Check the current save status and version of the customer workbook.
+   * @param {string|number} applicationProductDetailsId
+   * @param {string|number} agentCustomerId
+   * @param {number|null} backOfficeId
+   * @returns {Promise<{ status: string, version: number, savedAt: string|null, savedByBackOfficeId: number|null, error: string|null, lock: any, eligibilitySheetSnapshotId: any }>}
+   */
+  getEligibilityNormalIncomeSaveStatus: async (applicationProductDetailsId, agentCustomerId, backOfficeId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.ELIGIBILITY_NORMAL_INCOME_SAVE_STATUS(applicationProductDetailsId, agentCustomerId, backOfficeId)
+    );
+    return unwrapResponse(response);
+  },
+
   /* ==========================================
      8c. RTR (REPAYMENT TRACK RECORD) CALCULATION APIs
   ========================================== */
