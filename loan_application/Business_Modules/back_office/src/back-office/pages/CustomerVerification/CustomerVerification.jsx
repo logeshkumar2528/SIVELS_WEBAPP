@@ -670,6 +670,7 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
     bankName: '', accountType: 'Saving', accountNumber: '', isSelectedForEligibility: false,
     createdBy: userId, modifiedBy: userId, monthlyRows: withFixedMonths([]),
   });
+  const activeAppProdIdRef = useRef(applicationProductDetailsId);
   const [banks, setBanks] = useState([emptyBank()]);
   const [analysis, setAnalysis] = useState(null);
   const [eligibility, setEligibility] = useState({ emiStartedInLast3Months: '' });
@@ -690,6 +691,8 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
         backOfficeService.getBankingAnalysis(applicationProductDetailsId),
         backOfficeService.getBankingEligibilityAnalysis(applicationProductDetailsId).catch(() => null),
       ]);
+      if (activeAppProdIdRef.current !== applicationProductDetailsId) return;
+
       setAnalysis(result ? { ...result, eligibility: eligibilityResult || result.eligibility || null } : (eligibilityResult ? { eligibility: eligibilityResult } : null));
       if (eligibilityResult?.emiStartedInLast3Months != null) {
         setEligibility({ emiStartedInLast3Months: String(eligibilityResult.emiStartedInLast3Months) });
@@ -701,21 +704,46 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
           const monthlyRows = await backOfficeService.getBankingMonthlyDetails(row.applicationBankingDetailsId);
           return { ...emptyBank(index + 1), ...existing, ...row, monthlyRows: withFixedMonths(monthlyRows?.length ? monthlyRows : existing?.monthlyRows, monthlyRows?.[0]?.monthYear || existing?.monthlyRows?.[0]?.monthYear || '') };
         }));
+        if (activeAppProdIdRef.current !== applicationProductDetailsId) return;
         setBanks(hydratedBanks);
+      } else {
+        setBanks([emptyBank(1)]);
       }
     } catch (error) {
-      setMessage({ type: 'error', text: error?.response?.data?.message || error?.message || 'Unable to load banking analysis.' });
-    } finally { setAnalysisLoading(false); }
+      if (activeAppProdIdRef.current === applicationProductDetailsId) {
+        setMessage({ type: 'error', text: error?.response?.data?.message || error?.message || 'Unable to load banking analysis.' });
+      }
+    } finally {
+      if (activeAppProdIdRef.current === applicationProductDetailsId) {
+        setAnalysisLoading(false);
+      }
+    }
   };
   useEffect(() => {
-    if (!applicationProductDetailsId) return;
+    activeAppProdIdRef.current = applicationProductDetailsId;
+    if (!applicationProductDetailsId) {
+      setBanks([emptyBank(1)]);
+      setAnalysis(null);
+      setEligibility({ emiStartedInLast3Months: '' });
+      setProposedLoan({ amount: null, roi: null, tenure: null, emi: null });
+      setMessage(null);
+      return;
+    }
+    setBanks([emptyBank(1)]);
+    setAnalysis(null);
+    setEligibility({ emiStartedInLast3Months: '' });
+    setMessage(null);
+
     loadAnalysis().catch(() => {});
-    backOfficeService.getLoanObligationsSummary(applicationProductDetailsId, 0).then((summary) => setProposedLoan({
-      amount: summary?.proposedLoanAmount ?? null,
-      roi: summary?.proposedROI ?? null,
-      tenure: summary?.proposedTenureMonths ?? null,
-      emi: summary?.proposedEMI ?? null,
-    })).catch(() => {});
+    backOfficeService.getLoanObligationsSummary(applicationProductDetailsId, 0).then((summary) => {
+      if (activeAppProdIdRef.current !== applicationProductDetailsId) return;
+      setProposedLoan({
+        amount: summary?.proposedLoanAmount ?? null,
+        roi: summary?.proposedROI ?? null,
+        tenure: summary?.proposedTenureMonths ?? null,
+        emi: summary?.proposedEMI ?? null,
+      });
+    }).catch(() => {});
   }, [applicationProductDetailsId]);
 
   const save = async () => {
@@ -748,8 +776,6 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
       }
       await backOfficeService.saveBankingEligibility(applicationProductDetailsId, { emiStartedInLast3Months: toNumberOrNull(eligibility.emiStartedInLast3Months), createdBy: userId, modifiedBy: userId });
       await loadAnalysis();
-      const result = await backOfficeService.getBankingEligibilityAnalysis(applicationProductDetailsId);
-      setAnalysis((current) => result ? { ...current, eligibility: result } : current);
       setEligibilitySheetOpen(true);
       setMessage({ type: 'success', text: 'Banking details saved and eligibility recalculated.' });
     } catch (error) { setMessage({ type: 'error', text: error?.response?.data?.message || error?.message || 'Unable to save banking details.' }); }
@@ -1124,8 +1150,8 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
         </div>
       </div>
 
-      {/* ── Eligibility Result Card ── */}
-      {result && (
+      {/* ── Eligibility Result Card / Empty State ── */}
+      {result ? (
         <div ref={eligibilitySheetRef} className="bo-cv-banking-results bo-cv-banking-eligibility-sheet">
           <button type="button" className="bo-btn bo-btn--outline bo-cv-banking-sheet-back" onClick={() => (onBack ? onBack() : setEligibilitySheetOpen(false))}>
             ← Back to Banking
@@ -1164,6 +1190,18 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
               <div><span>Loan Eligibility (Rs in Lacs) @ 2 x ABB</span><strong>{displayLoanLacs == null ? '—' : Number(displayLoanLacs).toFixed(2)}</strong></div>
             </div>
           </div>
+        </div>
+      ) : (
+        <div className="bo-cv-banking-results bo-cv-banking-eligibility-sheet bo-cv-banking-empty-state" style={{ padding: '24px', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1', marginTop: '16px' }}>
+          <h4 style={{ margin: '0 0 8px 0', color: '#334155', fontSize: '15px' }}>Banking Eligibility</h4>
+          <p style={{ margin: '0 0 6px 0', color: '#64748b', fontSize: '13px', fontWeight: 500 }}>
+            No banking eligibility calculation is available for this customer.
+          </p>
+          <p style={{ margin: 0, color: '#94a3b8', fontSize: '12px' }}>
+            {selectedBanks.length === 0
+              ? 'Please add and select bank statements in Step 09: Banking, then calculate eligibility.'
+              : 'Enter the required eligibility inputs and click Calculate Eligibility.'}
+          </p>
         </div>
       )}
     </section>
@@ -13051,9 +13089,9 @@ export default function CustomerVerification({
           {activeStep === 22 && (
             <div className="bo-cv-step-panel">
               <BankingEligibilityWorkspace
-                applicationProductDetailsId={calculationAppProdId || resolvedAppProdId}
+                key={`banking-ws-step9-${resolvedAppProdId || calculationAppProdId || 0}-${resolvedTargetCustomerId || 0}`}
+                applicationProductDetailsId={resolvedAppProdId || calculationAppProdId}
                 userId={getAuthenticatedBackOfficeId()}
-                onBack={() => navigateToStep(16)}
                 actionsSlot={renderCreditReviewActions()}
               />
             </div>
@@ -13637,7 +13675,8 @@ export default function CustomerVerification({
             ) : selectedMethodCode === 'BANKING' && bankingWorkspaceOpen ? (
               <div className="bo-cv-elig-deck bo-cv-elig-deck--banking-workspace">
                 <BankingEligibilityWorkspace
-                  applicationProductDetailsId={calculationAppProdId}
+                  key={`banking-ws-step10-${resolvedAppProdId || calculationAppProdId || 0}-${resolvedTargetCustomerId || 0}`}
+                  applicationProductDetailsId={resolvedAppProdId || calculationAppProdId}
                   userId={getAuthenticatedBackOfficeId()}
                   initialResultOnly={bankingResultOnly}
                   onBack={() => {
