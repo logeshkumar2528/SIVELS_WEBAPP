@@ -29,11 +29,9 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import iconMap from '../../config/iconMap';
 import { ROUTES } from '../../config/routeConfig';
-import { VERIFICATION_STEP_DEFINITIONS } from '../../config/verificationSteps';
 import { useVerificationWorkspace } from '../../hooks/useVerificationWorkspace';
 import backOfficeService from '../../api/backOfficeService';
 import { getBackOfficeAuth } from '../../auth/authStorage';
-import VerificationStepModal from '../../components/Verification/VerificationStepModal';
 import AssetBase from '../../components/AssetBase/AssetBase';
 import RtrCommonSheet from '../../components/RtrCommonSheet/RtrCommonSheet';
 import DeviationAssessment from '../../components/DeviationAssessment/DeviationAssessment';
@@ -50,7 +48,7 @@ import {
 import { FolderOpen } from 'lucide-react';
 import PdfView from '../../../../../rm_modules/src/pages/PdfView/PdfView';
 import { ApplicationDraftProvider } from '../../../../../rm_modules/src/state/ApplicationDraftContext';
-import { resolveDocumentTypeId, validateApplicantDocumentFile, getDocumentApplicability } from '../../../../../../Core/src/utils/documentTypeHelper';
+import { resolveDocumentTypeId, getDocumentApplicability } from '../../../../../../Core/src/utils/documentTypeHelper';
 import { isApplicationUnderwritingReady } from '../../utils/readinessHelper';
 import {
   startNormalIncomeSheetMonitor,
@@ -58,8 +56,9 @@ import {
   initGoogleOAuthClient,
   triggerGoogleOAuth,
   isGoogleOAuthAuthorized,
+  fetchLatestTargetWorksheetGrid,
 } from '../../services/googleSheetsMonitorService';
-import { buildNormalIncomeSummary, normalizeSheetGrid } from '../../utils/normalIncomeSheetParser';
+import { normalizeSheetGrid } from '../../utils/normalIncomeSheetParser';
 import './CustomerVerification.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -92,7 +91,6 @@ const CreditCardIcon = iconMap['CreditCard'];
 const TrendingUpIcon = iconMap['TrendingUp'] || iconMap['BadgeIndianRupee'] || iconMap['FileText'];
 const BarChartIcon = iconMap['BarChart3'] || iconMap['BarChart2'] || iconMap['BadgeIndianRupee'];
 const CalculatorIcon = iconMap['Calculator'] || iconMap['BadgeIndianRupee'];
-const ExpandIcon = iconMap['Expand'] || iconMap['ExternalLink'];
 const ZapIcon = iconMap['Zap'];
 const Trash2Icon = iconMap['Trash2'] || iconMap['X'];
 const ExternalLinkIcon = iconMap['ExternalLink'];
@@ -160,13 +158,6 @@ function isDocPdf(doc) {
   if (doc.mimeType === 'application/pdf') return true;
   const name = String(doc.fileName || doc.path || doc.url || '').toLowerCase();
   return /\.pdf$/i.test(name);
-}
-
-function isDocZip(doc) {
-  if (!doc) return false;
-  if (doc.isZip === true) return true;
-  const name = String(doc.fileName || doc.path || doc.url || '').toLowerCase();
-  return /\.(zip|rar|7z)$/i.test(name);
 }
 
 function isApplicantDocumentTuple(row) {
@@ -303,59 +294,69 @@ const CM_EDIT_ACTION_PATTERN =
   /\b(save|saving|verify|delete|remove|upload|replace|override|use application|use policy|use calculated|add|submit|update|calculate|recalculate|apply|mark|clear|reset|browse)\b/i;
 
 /**
- * Visible Step (1–15) to Internal Step ID Mapping
+ * Visible Step (1–13) to Internal Step ID Mapping
+ * Reflects the 13 visible steps displayed in the underwriting workflow sidebar.
  */
 const VISIBLE_TO_INTERNAL_STEP = {
-  1: 1,
-  2: 2,
-  3: 8,
-  4: 9,
-  5: 10,
-  6: 11,
-  7: 12,
-  8: 13,
-  9: 22,
-  10: 16,
-  11: 21,
-  12: 17,
-  13: 18,
+  1: 1,   // View Form
+  2: 2,   // KYC Document Verification
+  3: 8,   // Unified Verifications (Default: Property FI)
+  4: 13,  // CIBIL Check
+  5: 19,  // Health Check
+  6: 14,  // PD Verification
+  7: 20,  // Asset Base
+  8: 15,  // RTR Common Sheet
+  9: 22,  // Banking
+  10: 16, // Eligibility Assessment
+  11: 21, // Deviations
+  12: 17, // Recommendation Sheet
+  13: 18, // Final Action
 };
 
 /**
- * Internal Step ID to Visible Step (1–15) Mapping
+ * Internal Step ID to Visible Step (1–13) Mapping
+ * Maps all internal workflow IDs and sub-steps to their visible sidebar step number.
  */
 const INTERNAL_TO_VISIBLE_STEP = {
-  1: 1,
-  2: 2,
-  3: 2,
-  4: 2,
-  5: 2,
-  6: 2,
-  7: 2,
-  8: 3,
-  9: 4,
-  10: 5,
-  11: 6,
-  12: 7,
-  13: 8,
-  19: 9,
-  14: 10,
-  20: 11,
-  15: 8,
-  22: 9,
-  16: 10,
-  21: 11,
-  17: 12,
-  18: 13,
+  1: 1,   // View Form
+  2: 2,   // KYC Document Verification (Profile Image)
+  3: 2,   // KYC Document Verification (Aadhaar)
+  4: 2,   // KYC Document Verification (PAN)
+  5: 2,   // KYC Document Verification (Salary Slip)
+  6: 2,   // KYC Document Verification (Bank Statement)
+  7: 2,   // KYC Document Verification (ZIP Archive)
+  8: 3,   // Unified Verifications (Property FI)
+  9: 3,   // Unified Verifications (Office FI)
+  10: 3,  // Unified Verifications (Residence FI)
+  11: 3,  // Unified Verifications (Legal Report)
+  12: 3,  // Unified Verifications (Technical Report)
+  13: 4,  // CIBIL Check
+  19: 5,  // Health Check
+  14: 6,  // PD Verification
+  20: 7,  // Asset Base
+  15: 8,  // RTR Common Sheet
+  22: 9,  // Banking
+  16: 10, // Eligibility Assessment
+  21: 11, // Deviations
+  17: 12, // Recommendation Sheet
+  18: 13, // Final Action
 };
 
 function resolveInternalStepFromQuery(stepParam) {
   if (stepParam == null || stepParam === '') return 1;
   const parsed = Number(stepParam);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 16) {
+  if (!Number.isInteger(parsed) || parsed < 1) {
     return 1;
   }
-  return VISIBLE_TO_INTERNAL_STEP[parsed] ?? 1;
+  // Check if it corresponds to visible sidebar step 1–13
+  if (parsed in VISIBLE_TO_INTERNAL_STEP) {
+    return VISIBLE_TO_INTERNAL_STEP[parsed];
+  }
+  // If an internal step ID was directly passed (e.g. deep link or legacy URL)
+  if (parsed in INTERNAL_TO_VISIBLE_STEP) {
+    return parsed;
+  }
+  return 1;
 }
 
 function resolveVisibleStepFromInternal(internalStep) {
@@ -1239,9 +1240,6 @@ export default function CustomerVerification({
     }, { replace: false });
   }, [setSearchParams]);
 
-  // 3. Preserved Legacy 8-Step Modal State (View-only inspection)
-  const [selectedStepNumber, setSelectedStepNumber] = useState(null);
-
   // Combined applicant / co-applicant documents (AgentCustomerDocument + CustomerDocumentProof)
   const [isDocumentsPanelOpen, setIsDocumentsPanelOpen] = useState(false);
 
@@ -2107,14 +2105,6 @@ export default function CustomerVerification({
       stopNormalIncomeSheetMonitor();
     };
   }, []);
-
-  const openCalcWorkspace = useCallback((tab = 'inputs') => {
-    if (selectedMethodCode === 'ABB') {
-      setSelectedMethodCode('INCOME');
-    }
-    setCalcSheetTab(tab);
-    setCalcWorkspaceOpen(true);
-  }, [selectedMethodCode]);
 
   const saveProposedLoan = async () => {
     const roi = Number(proposedLoan.manualROI);
@@ -4125,10 +4115,6 @@ export default function CustomerVerification({
     });
   };
 
-  const handleRtrObligationLinkChange = (index, value) => {
-    handleRtrLoanRowChange(index, 'applicationLoanObligationDetailsId', value ? Number(value) : null);
-  };
-
   // Handle Add RTR Loan row
   const handleAddRtrLoanRow = () => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -5907,11 +5893,6 @@ export default function CustomerVerification({
     }
   };
 
-  // Top View Form Button handler: activates Step 1
-  const handleViewForm = () => {
-    navigateToStep(1);
-  };
-
   // ----------------------------------------------------
   // Document Resolution & Preview Loader (Old vs New & Dynamic Master)
   // ----------------------------------------------------
@@ -6346,74 +6327,202 @@ export default function CustomerVerification({
     message: '',
     saved: null,
     hasUnsavedSheet: false,
+    spreadsheetId: null,
+    spreadsheetUrl: '',
   });
   const [normalIncomeResultOpen, setNormalIncomeResultOpen] = useState(false);
+  const [isSavingWorkbook, setIsSavingWorkbook] = useState(false);
+  const [normalIncomeDownloading, setNormalIncomeDownloading] = useState(false);
+
   const normalIncomeSavedJsonRef = useRef(null);
   const normalIncomeLatestRef = useRef(null);
   const normalIncomeSaveTimerRef = useRef(null);
+  const customerContextRef = useRef('');
+  const putInFlightRef = useRef(false);
+  const pendingPutGridRef = useRef(null);
+  const putSequenceIdRef = useRef(0);
+  const latestAppliedSeqRef = useRef(0);
+  const putQueuePromiseRef = useRef(Promise.resolve());
+  const isSaveTransactionActiveRef = useRef(false);
+  const latestChangesDuringSaveRef = useRef(null);
+
+  // Helper to extract clean error message from backend error responses (message / Message)
+  const extractErrorMessage = (err, fallbackMsg) => {
+    const data = err?.response?.data;
+    if (typeof data === 'string' && data.trim()) return data;
+    const msg = data?.message || data?.Message;
+    if (msg) return String(msg);
+    return err?.message || fallbackMsg;
+  };
+
+  // Grid limits validation (max 1000 rows, 100 columns, 500 characters per cell) without truncation
+  const validateWorksheetGridLimits = useCallback((grid) => {
+    if (!Array.isArray(grid)) return { isValid: true };
+    if (grid.length > 1000) {
+      return {
+        isValid: false,
+        error: `Worksheet exceeds maximum limit of 1,000 rows (found ${grid.length} rows). Please adjust the sheet.`,
+      };
+    }
+    for (let r = 0; r < grid.length; r++) {
+      const row = grid[r];
+      if (!Array.isArray(row)) continue;
+      if (row.length > 100) {
+        return {
+          isValid: false,
+          error: `Row ${r + 1} exceeds maximum limit of 100 columns (found ${row.length} columns). Please adjust the sheet.`,
+        };
+      }
+      for (let c = 0; c < row.length; c++) {
+        const cell = row[c] != null ? String(row[c]) : '';
+        if (cell.length > 500) {
+          return {
+            isValid: false,
+            error: `Cell at row ${r + 1}, column ${c + 1} exceeds maximum limit of 500 characters (${cell.length} characters). Please adjust the cell.`,
+          };
+        }
+      }
+    }
+    return { isValid: true };
+  }, []);
 
   useEffect(() => () => clearTimeout(normalIncomeSaveTimerRef.current), []);
 
+  // Update customer context and tear down old monitor and queued requests on customer/application switch
   useEffect(() => {
+    const newContext = `${resolvedAppProdId}_${resolvedTargetCustomerId}`;
+    customerContextRef.current = newContext;
     stopNormalIncomeSheetMonitor();
     clearTimeout(normalIncomeSaveTimerRef.current);
     normalIncomeSavedJsonRef.current = null;
     normalIncomeLatestRef.current = null;
-    setNormalIncomeSync({ active: false, status: 'idle', message: '', saved: null, hasUnsavedSheet: false });
+    pendingPutGridRef.current = null;
+    latestChangesDuringSaveRef.current = null;
+    isSaveTransactionActiveRef.current = false;
+    putInFlightRef.current = false;
+    putQueuePromiseRef.current = Promise.resolve();
+    setNormalIncomeSync({
+      active: false,
+      status: 'idle',
+      message: '',
+      saved: null,
+      hasUnsavedSheet: false,
+      spreadsheetId: null,
+      spreadsheetUrl: '',
+    });
   }, [resolvedAppProdId, resolvedTargetCustomerId]);
 
   const loadSavedNormalIncome = useCallback(async () => {
     if (!resolvedAppProdId || !resolvedTargetCustomerId) return null;
-    const saved = await backOfficeService.getEligibilityNormalIncome(resolvedAppProdId, resolvedTargetCustomerId);
-    normalIncomeSavedJsonRef.current = saved?.values ? JSON.stringify(normalizeSheetGrid(saved.values)) : null;
-    setNormalIncomeSync((prev) => ({ ...prev, saved }));
-    return saved;
+    const currentContext = `${resolvedAppProdId}_${resolvedTargetCustomerId}`;
+    try {
+      const saved = await backOfficeService.getEligibilityNormalIncome(resolvedAppProdId, resolvedTargetCustomerId);
+      if (customerContextRef.current !== currentContext) return null;
+      normalIncomeSavedJsonRef.current = saved?.values ? JSON.stringify(normalizeSheetGrid(saved.values)) : null;
+      setNormalIncomeSync((prev) => ({
+        ...prev,
+        saved,
+        spreadsheetId: saved?.spreadsheetId || prev.spreadsheetId,
+        spreadsheetUrl: saved?.spreadsheetUrl || prev.spreadsheetUrl,
+      }));
+      return saved;
+    } catch (err) {
+      if (customerContextRef.current !== currentContext) return null;
+      console.warn('[Normal Income] Failed to load saved record:', err?.message || err);
+      return null;
+    }
   }, [resolvedAppProdId, resolvedTargetCustomerId]);
 
   useEffect(() => {
     if (activeStep !== 16 || !resolvedAppProdId || !resolvedTargetCustomerId) return;
-    loadSavedNormalIncome().catch((err) => {
-      console.warn('[Normal Income] Failed to load saved sheet:', err?.message || err);
-    });
+    loadSavedNormalIncome().catch(() => {});
   }, [activeStep, resolvedAppProdId, resolvedTargetCustomerId, loadSavedNormalIncome]);
 
-  const saveNormalIncomeNow = useCallback(async () => {
-    const latest = normalIncomeLatestRef.current;
-    if (!latest || !resolvedAppProdId || !resolvedTargetCustomerId) return;
-    clearTimeout(normalIncomeSaveTimerRef.current);
+  // Serialized, awaitable PUT execution pipeline with boundary validation and stale response guard
+  const executePutPipeline = useCallback(async (gridSnapshot) => {
+    const currentContext = `${resolvedAppProdId}_${resolvedTargetCustomerId}`;
+    if (!gridSnapshot || !resolvedAppProdId || !resolvedTargetCustomerId) return;
+    if (customerContextRef.current !== currentContext) return;
 
-    const values = normalizeSheetGrid(latest.grid);
-    const valuesJson = JSON.stringify(values);
-    setNormalIncomeSync((prev) => ({ ...prev, status: 'saving', message: 'Saving sheet values...' }));
-    try {
-      const response = await backOfficeService.saveEligibilityNormalIncome(resolvedAppProdId, resolvedTargetCustomerId, {
-        sheetName: latest.sheetName || 'Eligibility- Normal Income',
-        updatedByUserId: getAuthenticatedBackOfficeId() || null,
-        summary: buildNormalIncomeSummary(values),
-        values,
-      });
-      normalIncomeSavedJsonRef.current = valuesJson;
-      setNormalIncomeSync((prev) => ({
-        ...prev,
-        status: 'saved',
-        message: 'All sheet changes saved.',
-        hasUnsavedSheet: false,
-        saved: response && typeof response === 'object'
-          ? response
-          : { summary: buildNormalIncomeSummary(values), values, updatedAt: new Date().toISOString() },
-      }));
-    } catch (err) {
-      const status = err?.response?.status;
+    // Validate without truncation
+    const validation = validateWorksheetGridLimits(gridSnapshot.grid);
+    if (!validation.isValid) {
       setNormalIncomeSync((prev) => ({
         ...prev,
         status: 'error',
-        hasUnsavedSheet: true,
-        message: status === 404
-          ? 'Save failed: the EligibilityNormalIncome API is not available on the server yet.'
-          : `Save failed: ${err?.response?.data?.message || err?.message || 'Unable to save sheet values.'}`,
+        message: validation.error,
       }));
+      throw new Error(validation.error);
     }
-  }, [resolvedAppProdId, resolvedTargetCustomerId, getAuthenticatedBackOfficeId]);
+
+    const currentSeq = ++putSequenceIdRef.current;
+    const values = normalizeSheetGrid(gridSnapshot.grid);
+    const valuesJson = JSON.stringify(values);
+
+    setNormalIncomeSync((prev) => ({
+      ...prev,
+      status: 'saving',
+      message: 'Saving sheet values...',
+    }));
+
+    try {
+      const response = await backOfficeService.saveEligibilityNormalIncome(
+        resolvedAppProdId,
+        resolvedTargetCustomerId,
+        {
+          sheetName: gridSnapshot.sheetName || 'Eligibility- Normal Income',
+          updatedByUserId: getAuthenticatedBackOfficeId() || null,
+          values,
+        }
+      );
+
+      // Verify customer context and discard stale responses
+      if (customerContextRef.current === currentContext && currentSeq >= latestAppliedSeqRef.current) {
+        latestAppliedSeqRef.current = currentSeq;
+        normalIncomeSavedJsonRef.current = valuesJson;
+        setNormalIncomeSync((prev) => ({
+          ...prev,
+          status: 'saved',
+          message: 'All sheet changes saved.',
+          hasUnsavedSheet: false,
+          saved: response && typeof response === 'object' ? response : prev.saved,
+        }));
+      }
+      return response;
+    } catch (err) {
+      if (customerContextRef.current === currentContext) {
+        setNormalIncomeSync((prev) => ({
+          ...prev,
+          status: 'error',
+          hasUnsavedSheet: true,
+          message: extractErrorMessage(err, 'Unable to save sheet values.'),
+        }));
+      }
+      throw err;
+    }
+  }, [resolvedAppProdId, resolvedTargetCustomerId, getAuthenticatedBackOfficeId, validateWorksheetGridLimits]);
+
+  // Enqueue a PUT task onto the serial promise chain
+  const enqueuePutTask = useCallback((gridSnapshot) => {
+    const currentContext = `${resolvedAppProdId}_${resolvedTargetCustomerId}`;
+    const nextPromise = putQueuePromiseRef.current
+      .then(async () => {
+        if (customerContextRef.current !== currentContext) return null;
+        putInFlightRef.current = true;
+        try {
+          return await executePutPipeline(gridSnapshot);
+        } finally {
+          putInFlightRef.current = false;
+        }
+      })
+      .catch((err) => {
+        putInFlightRef.current = false;
+        throw err;
+      });
+
+    putQueuePromiseRef.current = nextPromise.catch(() => {});
+    return nextPromise;
+  }, [executePutPipeline, resolvedAppProdId, resolvedTargetCustomerId]);
 
   const handleNormalIncomeSnapshot = useCallback((snapshot) => {
     normalIncomeLatestRef.current = snapshot;
@@ -6431,15 +6540,122 @@ export default function CustomerVerification({
       return;
     }
 
-    setNormalIncomeSync((prev) => ({ ...prev, status: 'pending', hasUnsavedSheet: true, message: 'Changes detected. Saving shortly...' }));
+    // If Save transaction is active, preserve changes without firing background PUT
+    if (isSaveTransactionActiveRef.current) {
+      latestChangesDuringSaveRef.current = snapshot;
+      setNormalIncomeSync((prev) => ({ ...prev, hasUnsavedSheet: true }));
+      return;
+    }
+
+    setNormalIncomeSync((prev) => ({
+      ...prev,
+      status: 'pending',
+      hasUnsavedSheet: true,
+      message: 'Changes detected. Saving shortly...',
+    }));
+
     clearTimeout(normalIncomeSaveTimerRef.current);
     normalIncomeSaveTimerRef.current = setTimeout(() => {
-      saveNormalIncomeNow();
-    }, 1500);
-  }, [saveNormalIncomeNow]);
+      enqueuePutTask(snapshot).catch((err) => {
+        console.warn('[Normal Income] Auto-sync PUT error:', err?.message || err);
+      });
+    }, 2000); // Debounce ~2 seconds
+  }, [enqueuePutTask]);
+
+  // Manual Save: Fetch live A1 grid, validate, await PUT, then call POST /save
+  const saveNormalIncomeWorkbookNow = useCallback(async () => {
+    const currentContext = `${resolvedAppProdId}_${resolvedTargetCustomerId}`;
+    if (isSavingWorkbook || !resolvedAppProdId || !resolvedTargetCustomerId) return;
+    const spreadsheetId = normalIncomeSync.spreadsheetId || normalIncomeSync.saved?.spreadsheetId;
+    if (!spreadsheetId) {
+      setNormalIncomeSync((prev) => ({
+        ...prev,
+        status: 'error',
+        message: 'No Google Sheet is currently associated with this application. Click Normal Income to open the sheet first.',
+      }));
+      return;
+    }
+
+    setIsSavingWorkbook(true);
+    isSaveTransactionActiveRef.current = true;
+    clearTimeout(normalIncomeSaveTimerRef.current);
+    setNormalIncomeSync((prev) => ({ ...prev, status: 'saving', message: 'Awaiting pending synchronization...' }));
+
+    try {
+      // 1. Wait for any currently queued PUT to finish
+      await putQueuePromiseRef.current;
+      if (customerContextRef.current !== currentContext) return;
+
+      // 2. Fetch live A1 grid directly from Google Sheets
+      setNormalIncomeSync((prev) => ({ ...prev, message: 'Fetching latest worksheet data...' }));
+      const liveSnapshot = await fetchLatestTargetWorksheetGrid(spreadsheetId);
+      if (customerContextRef.current !== currentContext) return;
+
+      // 3. Validate without truncation
+      const validation = validateWorksheetGridLimits(liveSnapshot.grid);
+      if (!validation.isValid) {
+        setNormalIncomeSync((prev) => ({ ...prev, status: 'error', message: validation.error }));
+        return;
+      }
+
+      // 4. PUT the validated live grid to backend and await success
+      setNormalIncomeSync((prev) => ({ ...prev, message: 'Synchronizing latest worksheet values with server...' }));
+      await enqueuePutTask(liveSnapshot);
+      if (customerContextRef.current !== currentContext) return;
+
+      // 5. Issue POST /save to finalize the customer Excel workbook
+      setNormalIncomeSync((prev) => ({ ...prev, message: 'Exporting customer Excel workbook...' }));
+      const saveResponse = await backOfficeService.saveEligibilityNormalIncomeWorkbook(
+        resolvedAppProdId,
+        resolvedTargetCustomerId,
+        getAuthenticatedBackOfficeId() || null
+      );
+
+      if (customerContextRef.current !== currentContext) return;
+      const savedRecord = saveResponse && typeof saveResponse === 'object' ? saveResponse : {};
+      const generatedAt = savedRecord?.workbookGeneratedAt || savedRecord?.updatedAt;
+
+      setNormalIncomeSync((prev) => ({
+        ...prev,
+        status: 'saved',
+        message: generatedAt
+          ? `Saved at ${new Date(generatedAt).toLocaleString('en-IN')}`
+          : 'Workbook saved successfully.',
+        hasUnsavedSheet: false,
+        saved: { ...prev.saved, ...savedRecord },
+      }));
+    } catch (err) {
+      if (customerContextRef.current === currentContext) {
+        setNormalIncomeSync((prev) => ({
+          ...prev,
+          status: 'error',
+          message: extractErrorMessage(err, 'Failed to save workbook. Please retry.'),
+        }));
+      }
+    } finally {
+      setIsSavingWorkbook(false);
+      isSaveTransactionActiveRef.current = false;
+      // Synchronize any Google Sheet changes detected during Save
+      if (latestChangesDuringSaveRef.current && customerContextRef.current === currentContext) {
+        const changesSnapshot = latestChangesDuringSaveRef.current;
+        latestChangesDuringSaveRef.current = null;
+        enqueuePutTask(changesSnapshot).catch(() => {});
+      }
+    }
+  }, [
+    isSavingWorkbook,
+    resolvedAppProdId,
+    resolvedTargetCustomerId,
+    normalIncomeSync.spreadsheetId,
+    normalIncomeSync.saved?.spreadsheetId,
+    validateWorksheetGridLimits,
+    enqueuePutTask,
+    getAuthenticatedBackOfficeId,
+  ]);
 
   // sheetWindow must be opened synchronously in the click handler, otherwise the browser blocks the popup.
   const startNormalIncomeSync = useCallback(async (sheetWindow) => {
+    const currentContext = `${resolvedAppProdId}_${resolvedTargetCustomerId}`;
     const closeSheetWindow = () => {
       if (sheetWindow && !sheetWindow.closed) sheetWindow.close();
     };
@@ -6454,7 +6670,7 @@ export default function CustomerVerification({
       return;
     }
 
-    setNormalIncomeSync((prev) => ({ ...prev, active: true, status: 'loading', message: 'Preparing this application\'s sheet...' }));
+    setNormalIncomeSync((prev) => ({ ...prev, active: true, status: 'loading', message: "Preparing this application's sheet..." }));
     let sheet;
     try {
       sheet = await backOfficeService.getOrCreateNormalIncomeSheet(
@@ -6462,13 +6678,19 @@ export default function CustomerVerification({
         resolvedTargetCustomerId,
         getAuthenticatedBackOfficeId()
       );
+      if (customerContextRef.current !== currentContext) {
+        closeSheetWindow();
+        return;
+      }
     } catch (err) {
       closeSheetWindow();
-      setNormalIncomeSync((prev) => ({
-        ...prev,
-        status: 'error',
-        message: `Could not open the Normal Income sheet: ${err?.response?.data?.message || err?.message || 'server error.'}`,
-      }));
+      if (customerContextRef.current === currentContext) {
+        setNormalIncomeSync((prev) => ({
+          ...prev,
+          status: 'error',
+          message: `Could not open the Normal Income sheet: ${extractErrorMessage(err, 'server error.')}`,
+        }));
+      }
       return;
     }
 
@@ -6486,6 +6708,7 @@ export default function CustomerVerification({
     }
     setNormalIncomeSync((prev) => ({
       ...prev,
+      spreadsheetId,
       spreadsheetUrl,
       status: 'loading',
       message: sheetWindow ? 'Loading saved sheet values...' : 'Pop-up was blocked. Use "Open sheet" to open it.',
@@ -6509,37 +6732,59 @@ export default function CustomerVerification({
     }
     triggerGoogleOAuth(GOOGLE_SHEETS_CLIENT_ID, {
       onAuthorized: () => startNormalIncomeSync(openBlankTab()),
-      onError: () => {
+      onError: (err) => {
         setNormalIncomeSync((prev) => ({
           ...prev,
           active: true,
           status: 'error',
-          message: 'Google sign-in was not completed. Click Normal Income again to connect the sheet.',
+          message: err?.message?.includes('access_denied')
+            ? "Google authorization was denied. Please ask your administrator to verify your account in the Google OAuth Console."
+            : 'Google sign-in was not completed. Click Normal Income again to connect the sheet.',
         }));
       },
     });
   }, [startNormalIncomeSync]);
 
-  const [normalIncomeDownloading, setNormalIncomeDownloading] = useState(false);
   const downloadNormalIncomeExcel = useCallback(async () => {
     if (!resolvedAppProdId || !resolvedTargetCustomerId) return;
     setNormalIncomeDownloading(true);
     try {
-      const blob = await backOfficeService.downloadEligibilityNormalIncomeExcel(resolvedAppProdId, resolvedTargetCustomerId);
+      const response = await backOfficeService.downloadEligibilityNormalIncomeExcel(resolvedAppProdId, resolvedTargetCustomerId);
+      const blob = response?.data || response;
+      const headers = response?.headers || {};
+      const disposition = headers['content-disposition'] || headers['Content-Disposition'] || '';
+      let filename = `NormalIncome_${resolvedAppProdId}_${resolvedTargetCustomerId}.xlsx`;
+      const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
+      if (match && match[1]) {
+        filename = match[1].replace(/['"]/g, '').trim();
+      }
+
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `NormalIncome_${resolvedAppProdId}_${resolvedTargetCustomerId}.xlsx`;
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
+      let errorMsg = 'Excel download failed: server error.';
+      if (err?.response?.status === 404) {
+        errorMsg = 'No Excel file has been saved for this application yet. Please click Save first.';
+      } else if (err?.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const parsed = JSON.parse(text);
+          errorMsg = `Excel download failed: ${parsed?.message || parsed?.Message || text}`;
+        } catch {
+          errorMsg = `Excel download failed: ${err.message || 'server error.'}`;
+        }
+      } else {
+        errorMsg = `Excel download failed: ${extractErrorMessage(err, 'server error.')}`;
+      }
       setNormalIncomeSync((prev) => ({
         ...prev,
-        message: err?.response?.status === 404
-          ? 'No Excel file has been saved for this application yet.'
-          : `Excel download failed: ${err?.message || 'server error.'}`,
+        message: errorMsg,
       }));
     } finally {
       setNormalIncomeDownloading(false);
@@ -7300,13 +7545,6 @@ export default function CustomerVerification({
       );
     },
     [applicationRejections, profileDocTypeId, aadhaarDocTypeId, panDocTypeId, salarySlipDocTypeId, bankStatementDocTypeId, zipArchiveDocTypeId]
-  );
-
-  const getActiveRejectionForStep = useCallback(
-    (stepNum) => {
-      return getActiveRejectionForApplicant(stepNum);
-    },
-    [getActiveRejectionForApplicant]
   );
 
   const getActiveRejectionForApplicantDoc = useCallback(
@@ -8736,16 +8974,6 @@ export default function CustomerVerification({
     }
   };
 
-  // Helper to generate dynamic rejection confirmation message
-  const getRejectConfirmMessage = (stepLabel) => {
-    if (!stepLabel) return 'Are you sure you want to reject this document?';
-    const labelLower = stepLabel.toLowerCase();
-    if (labelLower.startsWith('co-applicant') || labelLower.startsWith('co-app')) {
-      return `Are you sure you want to reject ${stepLabel}?`;
-    }
-    return `Are you sure you want to reject this ${stepLabel}?`;
-  };
-
   // Open Return to RM Confirmation Modal
   const handleOpenRejectConfirm = (
     stepNum,
@@ -9582,34 +9810,6 @@ export default function CustomerVerification({
         error: err?.response?.data?.message || err?.message || 'Failed to save remarks. Please try again.',
       }));
     }
-  };
-
-  const handleRemoveUploadedFile = (state, setter) => {
-    if (state.fileUrl) {
-      try {
-        URL.revokeObjectURL(state.fileUrl);
-      } catch {}
-    }
-    setter({
-      backOfficeApplicationDocumentId: null,
-      documentType: state.documentType || '',
-      documentTitle: state.documentTitle || '',
-      file: null,
-      fileName: '',
-      fileSize: '',
-      fileUrl: null,
-      isPdf: false,
-      isImage: false,
-      uploadedAt: '',
-      modifiedAt: '',
-      modifiedBy: null,
-      documentStatus: '',
-      remarks: '',
-      loading: false,
-      savingRemarks: false,
-      error: null,
-      successMsg: '',
-    });
   };
 
   const handleDownloadFile = (url, name) => {
@@ -10759,14 +10959,6 @@ export default function CustomerVerification({
     setBureauState('loading');
   };
 
-  const handleOpenStep = (stepNumber) => {
-    setSelectedStepNumber(stepNumber);
-  };
-
-  const handleCloseModal = () => {
-    setSelectedStepNumber(null);
-  };
-
   const handleBack = () => {
     if (onBack) onBack();
     else navigate(ROUTES.CUSTOMERS);
@@ -10873,10 +11065,6 @@ export default function CustomerVerification({
     );
   }
 
-  const selectedStepDef = selectedStepNumber
-    ? VERIFICATION_STEP_DEFINITIONS.find((s) => s.number === selectedStepNumber)
-    : null;
-
   const appDetails = verificationData.applicationDetails || {};
   const panNumber = verificationData.personalInformation?.panNumber || 'Not Available';
   const statusInfo = getStatusInfo(verificationData.overallStatus);
@@ -10957,58 +11145,6 @@ export default function CustomerVerification({
 
       {/* ── 2. Dedicated 2-Column Workspace Body ──────────────────────── */}
       <div className="bo-cv-workspace-body">
-        {/* ── HIDDEN LEGACY 8-STEP SIDEBAR (PRESERVED FOR FUTURE RESTORATION) ── */}
-        {false && (
-          <aside className="bo-cv-left-sidebar" aria-label="Legacy Application Steps">
-            <div className="bo-cv-sidebar-header">
-              <div className="bo-cv-sidebar-heading-row">
-                <div>
-                  <h2 className="bo-cv-sidebar-title">Application Steps</h2>
-                  <span className="bo-cv-sidebar-subtitle">Verification checklist</span>
-                </div>
-                <span className="bo-cv-step-count">08</span>
-              </div>
-            </div>
-
-            <nav className="bo-cv-steps-nav">
-              <ul className="bo-cv-steps-list" role="list">
-                {VERIFICATION_STEP_DEFINITIONS.filter((step) => step.number <= 8).map((step) => {
-                  const stepNum = step.number;
-                  const isSelected = selectedStepNumber === stepNum;
-                  const formattedNum = String(stepNum).padStart(2, '0');
-
-                  return (
-                    <li key={step.id} className="bo-cv-step-item">
-                      <button
-                        type="button"
-                        className={`bo-cv-step-card ${isSelected ? 'is-active' : ''}`}
-                        onClick={() => handleOpenStep(stepNum)}
-                        aria-label={`Step ${stepNum}: ${step.name}. Click to view details.`}
-                      >
-                        <div className="bo-cv-step-num-box" aria-hidden="true">
-                          {formattedNum}
-                        </div>
-
-                        <div className="bo-cv-step-details">
-                          <strong className="bo-cv-step-name">{step.name}</strong>
-                          <span className="bo-cv-step-desc">{step.description}</span>
-                        </div>
-
-                        <div className="bo-cv-step-action">
-                          <span className="bo-cv-view-btn">
-                            {EyeIcon && <EyeIcon size={12} />}
-                            <span>View</span>
-                          </span>
-                        </div>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </nav>
-          </aside>
-        )}
-
         {/* ── 15-STEP VERIFICATION WORKFLOW SIDEBAR (SIVELS FINANCE) ── */}
         <aside className="bo-cv-left-sidebar" aria-label={`${visibleSidebarSteps.length}-Step Underwriting Verification Workflow`}>
           <div className="bo-cv-sidebar-header">
@@ -14472,7 +14608,7 @@ export default function CustomerVerification({
                     )}
                     {(normalIncomeSync.active || normalIncomeSync.saved) && (() => {
                       const savedSummary = normalIncomeSync.saved?.summary || normalIncomeSync.saved || {};
-                      const savedAt = normalIncomeSync.saved?.updatedAt || normalIncomeSync.saved?.createdAt;
+                      const savedAt = normalIncomeSync.saved?.workbookGeneratedAt || normalIncomeSync.saved?.updatedAt;
                       const fmtAmount = (v) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v))
                         ? '—'
                         : Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }));
@@ -14506,8 +14642,17 @@ export default function CustomerVerification({
                               </span>
                             )}
                             <span className="bo-cv-ni-sync-actions">
+                              <button
+                                type="button"
+                                className="bo-cv-ni-sync-save"
+                                onClick={saveNormalIncomeWorkbookNow}
+                                disabled={isSavingWorkbook}
+                                title="Synchronize sheet changes and save customer Excel workbook"
+                              >
+                                {isSavingWorkbook ? 'Saving…' : 'Save'}
+                              </button>
                               {canRetrySave && (
-                                <button type="button" className="bo-cv-ni-sync-save" onClick={saveNormalIncomeNow}>
+                                <button type="button" className="bo-cv-ni-sync-save" onClick={saveNormalIncomeWorkbookNow} disabled={isSavingWorkbook}>
                                   Retry save
                                 </button>
                               )}
@@ -14541,7 +14686,7 @@ export default function CustomerVerification({
                               </div>
                               {savedAt && (
                                 <small className="bo-cv-ni-sync-time">
-                                  Last saved {new Date(savedAt).toLocaleString('en-IN')}
+                                  Saved at {new Date(savedAt).toLocaleString('en-IN')}
                                 </small>
                               )}
                             </>
@@ -17820,38 +17965,24 @@ export default function CustomerVerification({
         </main>
       </div>
 
-      {/* ── View-Only 11-Step Inspection Modal (Single-Fetch Shared Data) ── */}
-      {selectedStepNumber && selectedStepDef && (
-        <VerificationStepModal
-          stepNumber={selectedStepNumber}
-          stepDefinition={selectedStepDef}
-          customerData={verificationData}
-          onClose={handleCloseModal}
-        />
-      )}
-
       {normalIncomeResultOpen && normalIncomeSync.saved && (() => {
-        const savedSummary = normalIncomeSync.saved.summary || normalIncomeSync.saved;
-        const parsedSummary = Array.isArray(normalIncomeSync.saved.values)
-          ? buildNormalIncomeSummary(normalIncomeSync.saved.values)
-          : {};
-        const displaySummary = { ...parsedSummary, ...savedSummary };
-        const savedAt = normalIncomeSync.saved.updatedAt || normalIncomeSync.saved.createdAt;
+        const savedSummary = normalIncomeSync.saved.summary || normalIncomeSync.saved || {};
+        const savedAt = normalIncomeSync.saved.workbookGeneratedAt || normalIncomeSync.saved.updatedAt;
         const fmtAmount = (value) => (value === null || value === undefined || value === '' || Number.isNaN(Number(value))
           ? '—'
           : Number(value).toLocaleString('en-IN', { maximumFractionDigits: 2 }));
         const rows = [
           ['A.1', 'PAT', fmtAmount(savedSummary.patFy1), fmtAmount(savedSummary.patFy2), '—'],
-          ['A.2', 'Depreciation', fmtAmount(displaySummary.depreciationFy1), fmtAmount(displaySummary.depreciationFy2), fmtAmount(displaySummary.depreciationConsidered)],
-          ['A.3', 'Salary to partners', fmtAmount(displaySummary.salaryToPartnersFy1), fmtAmount(displaySummary.salaryToPartnersFy2), fmtAmount(displaySummary.salaryToPartnersConsidered)],
-          ['A.4', 'Interest paid to related parties/partners/directors', fmtAmount(displaySummary.interestToRelatedFy1), fmtAmount(displaySummary.interestToRelatedFy2), fmtAmount(displaySummary.interestToRelatedConsidered)],
-          ['A', 'Primary Income P.a. (A.1 to A.5)', fmtAmount(displaySummary.primaryIncomeFy1), fmtAmount(displaySummary.primaryIncomeFy2), fmtAmount(displaySummary.primaryIncome)],
-          ['B', 'Salary Income (if anyone is salaried) P.a.', fmtAmount(displaySummary.salaryIncomeFy1), fmtAmount(displaySummary.salaryIncomeFy2), fmtAmount(displaySummary.salaryIncome)],
-          ['C.1', 'House Property (Per Annum)', fmtAmount(displaySummary.housePropertyFy1), displaySummary.housePropertyFy2 == null ? '—' : `${fmtAmount(displaySummary.housePropertyFy2)}%`, fmtAmount(displaySummary.housePropertyIncome)],
-          ['C.2', 'Agriculture Income (Per Annum)', fmtAmount(displaySummary.agricultureFy1), displaySummary.agricultureFy2 == null ? '—' : `${fmtAmount(displaySummary.agricultureFy2)}%`, fmtAmount(displaySummary.agricultureIncome)],
-          ['C.3', 'Income from Other Sources (Per Annum)', fmtAmount(displaySummary.otherSourcesFy1), displaySummary.otherSourcesFy2 == null ? '—' : `${fmtAmount(displaySummary.otherSourcesFy2)}%`, fmtAmount(displaySummary.otherSourcesIncome)],
-          ['C.4', 'Total Other Income (B.1 + B.2 + B.3)', '—', '—', fmtAmount(displaySummary.totalOtherIncome)],
-          ['C', 'Total Other Income to be considered', 'Restricted to maximum 100% of Business Income', displaySummary.restrictedToBusinessIncome == null ? '—' : (displaySummary.restrictedToBusinessIncome ? 'Yes' : 'No'), fmtAmount(displaySummary.totalOtherIncome)],
+          ['A.2', 'Depreciation', fmtAmount(savedSummary.depreciationFy1), fmtAmount(savedSummary.depreciationFy2), fmtAmount(savedSummary.depreciationConsidered)],
+          ['A.3', 'Salary to partners', fmtAmount(savedSummary.salaryToPartnersFy1), fmtAmount(savedSummary.salaryToPartnersFy2), fmtAmount(savedSummary.salaryToPartnersConsidered)],
+          ['A.4', 'Interest paid to related parties/partners/directors', fmtAmount(savedSummary.interestToRelatedFy1), fmtAmount(savedSummary.interestToRelatedFy2), fmtAmount(savedSummary.interestToRelatedConsidered)],
+          ['A', 'Primary Income P.a. (A.1 to A.5)', fmtAmount(savedSummary.primaryIncomeFy1), fmtAmount(savedSummary.primaryIncomeFy2), fmtAmount(savedSummary.primaryIncome)],
+          ['B', 'Salary Income (if anyone is salaried) P.a.', fmtAmount(savedSummary.salaryIncomeFy1), fmtAmount(savedSummary.salaryIncomeFy2), fmtAmount(savedSummary.salaryIncome)],
+          ['C.1', 'House Property (Per Annum)', fmtAmount(savedSummary.housePropertyFy1), savedSummary.housePropertyFy2 == null ? '—' : `${fmtAmount(savedSummary.housePropertyFy2)}%`, fmtAmount(savedSummary.housePropertyIncome)],
+          ['C.2', 'Agriculture Income (Per Annum)', fmtAmount(savedSummary.agricultureFy1), savedSummary.agricultureFy2 == null ? '—' : `${fmtAmount(savedSummary.agricultureFy2)}%`, fmtAmount(savedSummary.agricultureIncome)],
+          ['C.3', 'Income from Other Sources (Per Annum)', fmtAmount(savedSummary.otherSourcesFy1), savedSummary.otherSourcesFy2 == null ? '—' : `${fmtAmount(savedSummary.otherSourcesFy2)}%`, fmtAmount(savedSummary.otherSourcesIncome)],
+          ['C.4', 'Total Other Income (B.1 + B.2 + B.3)', '—', '—', fmtAmount(savedSummary.totalOtherIncome)],
+          ['C', 'Total Other Income to be considered', 'Restricted to maximum 100% of Business Income', savedSummary.restrictedToBusinessIncome == null ? '—' : (savedSummary.restrictedToBusinessIncome ? 'Yes' : 'No'), fmtAmount(savedSummary.totalOtherIncome)],
           ['D', 'Total Income (A+B+C) (Per Annum)', '—', '—', fmtAmount(savedSummary.totalIncomeAnnual)],
           ['E', 'Total Eligible Monthly Income (A+B*FOIR @ 70%+C*60%)/12', '—', '—', fmtAmount(savedSummary.eligibleMonthlyIncome)],
           ['F', 'Existing Monthly Obligations', '—', '—', fmtAmount(savedSummary.existingMonthlyObligations)],
@@ -17895,7 +18026,7 @@ export default function CustomerVerification({
                     </tbody>
                   </table>
                 </div>
-                {savedAt && <small className="bo-cv-ni-sync-time">Last saved {new Date(savedAt).toLocaleString('en-IN')}</small>}
+                {savedAt && <small className="bo-cv-ni-sync-time">Saved at {new Date(savedAt).toLocaleString('en-IN')}</small>}
               </div>
             </div>
           </div>

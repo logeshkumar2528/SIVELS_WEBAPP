@@ -1,10 +1,14 @@
 .dashboard-page {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 0;
   max-width: 1440px;
   margin: 0 auto;
-  padding: 32px max(24px, calc((100vw - 1440px) / 2 + 24px)) 40px;
+  box-sizing: border-box;
+  padding: 18px max(24px, calc((100vw - 1440px) / 2 + 24px)) 18px;
+  min-height: 520px;
+  height: calc(100vh - 64px);
+  height: calc(100dvh - 64px);
 }
 
 .dashboard-header {
@@ -52,34 +56,10 @@
   cursor: wait;
 }
 
-/* Stat Grid - 5 Cards in a Single Row */
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.stat-card,
 .content-card {
   background: #fff;
   border: 1px solid #e0e0e0;
   border-radius: 10px;
-}
-
-.stat-card {
-  padding: 18px 16px;
-  display: flex;
-  gap: 12px;
-  min-width: 0;
-}
-
-.stat-icon {
-  height: 42px;
-  width: 42px;
-  display: grid;
-  place-items: center;
-  border-radius: 9px;
-  flex: 0 0 auto;
 }
 
 .green {
@@ -110,34 +90,6 @@
 .indigo {
   background: #eef2ff;
   color: #4f46e5;
-}
-
-.stat-card span,
-.stat-card small {
-  display: block;
-  color: #6f6f6f;
-  font-size: 13px;
-}
-
-.stat-card strong {
-  font-size: 24px;
-  display: block;
-  margin: 4px 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.stat-card small {
-  color: #198038;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  white-space: nowrap;
-}
-
-.stat-card small.neutral {
-  color: #a86400;
 }
 
 .content-card {
@@ -1019,87 +971,138 @@ td small {
   }
 }
 
-/* Refined dashboard experience */
-.dashboard-hero {
-  display: flex;
-  justify-content: space-between;
-  gap: 22px;
-  padding: 24px;
-  border: 1px solid #dce8df;
-  border-radius: 22px;
-  background:
-    radial-gradient(circle at top right, rgba(36, 161, 72, 0.16), transparent 34%),
-    linear-gradient(135deg, #ffffff 0%, #f6fbf7 100%);
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.06);
-}
-
-.dashboard-hero-copy {
-  max-width: 760px;
-}
-
-.dashboard-meta-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 16px;
-}
-
-.dashboard-meta-row span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: #f4faf6;
-  border: 1px solid #dfece3;
-  color: #14532d;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.dashboard-hero-actions {
+/* Unified Admin Dashboard Card */
+.admin-unified-card {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
-  min-width: 240px;
-}
-
-.dashboard-refresh-button,
-.dashboard-create-button {
-  width: 100%;
-  justify-content: center;
-}
-
-.dashboard-hero-card {
-  width: 100%;
-  padding: 16px 18px;
-  border-radius: 16px;
+  min-height: 0;
+  box-sizing: border-box;
+  padding: 22px 28px;
   border: 1px solid #dce8df;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.05);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top right, rgba(36, 161, 72, 0.12), transparent 30%),
+    linear-gradient(135deg, #ffffff 0%, #f6fbf7 60%, #f7fbff 100%);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.05);
 }
 
-.dashboard-hero-card span {
+.admin-unified-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.admin-unified-title-block {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.admin-header-logo {
+  height: 44px;
+  max-width: 100px;
+  object-fit: contain;
   display: block;
-  color: #6f6f6f;
+  flex-shrink: 0;
+  border-radius: 6px;
+}
+
+.admin-title-text-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.admin-unified-title-block .eyebrow {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  font-weight: 700;
+  color: #24a148;
+}
+
+.admin-unified-title-block .dashboard-title {
+  margin: 4px 0 0;
+  font-size: 26px;
+  line-height: 1.2;
+  color: #161616;
+}
+
+.admin-create-user-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #24a148;
+  color: #ffffff;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+.admin-create-user-btn:hover {
+  background: #198038;
+}
+
+.admin-unified-card .dashboard-error {
+  margin: 12px 0 6px;
+  flex-shrink: 0;
+}
+
+.admin-unified-divider {
+  border: none;
+  border-top: 1px solid #e4ebe6;
+  margin: 14px 0 14px;
+  flex-shrink: 0;
+}
+
+.admin-unified-subheading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  flex-shrink: 0;
+}
+
+.admin-subheading-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-subheading-badge {
   font-size: 12px;
   font-weight: 600;
+  color: #3b5344;
+  background: #f0f6f2;
+  border: 1px solid #dfece3;
+  padding: 4px 12px;
+  border-radius: 999px;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
-.dashboard-hero-card strong {
+.admin-unified-subheading .section-kicker {
   display: block;
-  margin-top: 6px;
-  color: #161616;
-  font-size: 30px;
-  line-height: 1;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  font-weight: 700;
+  color: #24a148;
 }
 
-.dashboard-hero-card small {
-  display: block;
-  margin-top: 6px;
-  color: #6f6f6f;
-  font-size: 12px;
+.admin-unified-subheading h2 {
+  margin: 4px 0 0;
+  color: #18251e;
+  font-size: 20px;
+  letter-spacing: -0.02em;
 }
 
 .primary-button {
@@ -1107,7 +1110,6 @@ td small {
   box-shadow: 0 10px 18px rgba(36, 161, 72, 0.18);
 }
 
-.stat-card,
 .content-card {
   border-radius: 16px;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
@@ -1293,42 +1295,6 @@ td small {
   background: #da1e28;
 }
 
-/* People workspace keeps role management consistent as user counts grow. */
-.people-workspace {
-  margin-top: 22px;
-  padding: 26px;
-  border: 1px solid #e4ebe6;
-  border-radius: 22px;
-  background: linear-gradient(135deg, #f8fcf9 0%, #ffffff 58%, #f7fbff 100%);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
-}
-
-.workspace-heading {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 20px;
-}
-
-.workspace-heading h2 {
-  margin: 0;
-  color: #18251e;
-  font-size: 22px;
-  letter-spacing: -0.02em;
-}
-
-.workspace-heading p {
-  margin: 6px 0 0;
-  color: #718078;
-  font-size: 13px;
-}
-
-.workspace-add-button {
-  flex: 0 0 auto;
-  min-height: 40px;
-  padding: 0 16px;
-}
 
 .role-card-grid {
   display: grid;
@@ -1558,17 +1524,24 @@ td small {
    ========================================================================== */
 
 .people-role-card-grid {
+  flex: 1;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  min-height: 0;
 }
 
 .people-role-card {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
   justify-content: space-between;
-  padding: 16px 18px;
-  min-height: 125px;
+  gap: 16px;
+  padding: 16px 22px;
+  height: 100%;
+  min-height: 72px;
+  box-sizing: border-box;
   background: #ffffff;
   border: 1px solid #e5ece7;
   border-radius: 14px;
@@ -1583,7 +1556,7 @@ td small {
 .people-role-card:hover {
   transform: translateY(-2px);
   border-color: #24a148;
-  box-shadow: 0 10px 22px rgba(36, 161, 72, 0.12);
+  box-shadow: 0 8px 20px rgba(36, 161, 72, 0.12);
 }
 
 .people-role-card:focus-visible {
@@ -1591,7 +1564,7 @@ td small {
   outline-offset: 2px;
 }
 
-/* 6 cards across 3 columns on Desktop (Row 1: Agent, RM, BackOffice; Row 2: AMS, CreditManager, Customer) */
+/* 6 cards across 2 columns on Desktop */
 .people-role-card-agent,
 .people-role-card-rm,
 .people-role-card-back-office,
@@ -1608,51 +1581,28 @@ td small {
 .people-role-card-credit-manager { border-top: 3px solid #4f46e5; }
 .people-role-card-customer { border-top: 3px solid #a86400; }
 
-.people-role-card-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.people-role-header-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
 .people-role-icon {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
+  border-radius: 10px;
   flex-shrink: 0;
 }
 
-.people-role-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #f0f5f1;
-  color: #198038;
-  font-size: 12px;
-  font-weight: 700;
-  border: 1px solid #dfece3;
-  flex-shrink: 0;
-}
-
-.people-role-card-body {
+.people-role-info {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
 }
 
 .people-role-title {
   margin: 0;
   color: #18251e;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.3;
   white-space: nowrap;
@@ -1660,38 +1610,54 @@ td small {
   text-overflow: ellipsis;
 }
 
-.people-role-desc {
-  margin: 4px 0 10px;
-  color: #6f6f6f;
+.people-role-subtitle {
+  color: #718078;
   font-size: 12px;
-  line-height: 1.4;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.people-role-card-footer {
+.people-role-metric {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding-top: 8px;
-  border-top: 1px solid #edf2ef;
-  color: #198038;
-  font-size: 12px;
-  font-weight: 700;
-  transition: color 0.15s ease;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
-.people-role-card:hover .people-role-card-footer {
-  color: #0f7a4c;
+.people-role-count {
+  font-size: 24px;
+  font-weight: 700;
+  color: #161616;
+  line-height: 1;
+  min-width: 20px;
+  text-align: right;
+}
+
+.people-role-arrow {
+  color: #8d8d8d;
+  transition: color 0.18s ease, transform 0.18s ease;
+  display: flex;
+  align-items: center;
+}
+
+.people-role-card:hover .people-role-arrow {
+  color: #24a148;
+  transform: translate(2px, -2px);
 }
 
 @media (max-width: 1050px) {
-  .dashboard-hero {
-    flex-direction: column;
+  .dashboard-page {
+    height: auto;
+    min-height: auto;
+    padding: 16px 20px 24px;
   }
 
-  .dashboard-hero-actions {
-    align-items: stretch;
-    min-width: 0;
-    width: 100%;
+  .admin-unified-card {
+    flex: none;
+    min-height: auto;
   }
 
   .dashboard-main-grid,
@@ -1701,7 +1667,16 @@ td small {
   }
 
   .people-role-card-grid {
+    flex: none;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto;
+    gap: 14px;
+  }
+
+  .people-role-card {
+    height: auto;
+    min-height: 72px;
+    padding: 14px 18px;
   }
 
   .people-role-card-agent,
@@ -1715,21 +1690,37 @@ td small {
 }
 
 @media (max-width: 600px) {
-  .dashboard-hero {
-    padding: 20px;
+  .dashboard-page {
+    padding: 12px 14px 20px;
   }
 
-  .dashboard-title {
-    font-size: 26px;
+  .admin-unified-card {
+    padding: 18px 16px;
   }
 
-  .dashboard-meta-row span {
+  .admin-unified-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .admin-create-user-btn {
     width: 100%;
-    justify-content: flex-start;
+    justify-content: center;
   }
 
-  .stat-grid {
-    grid-template-columns: 1fr;
+  .admin-unified-title-block .dashboard-title {
+    font-size: 22px;
+  }
+
+  .admin-header-logo {
+    height: 38px;
+    max-width: 85px;
+  }
+
+  .admin-unified-subheading {
+    flex-direction: row;
+    align-items: flex-end;
   }
 
   .card-heading {
@@ -1756,13 +1747,15 @@ td small {
     padding: 16px;
   }
 
-  .people-workspace {
-    padding: 16px;
-    border-radius: 17px;
-  }
-
   .people-role-card-grid {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    gap: 10px;
+  }
+
+  .people-role-card {
+    min-height: 68px;
+    padding: 12px 16px;
   }
 
   .people-role-card-agent,
@@ -1772,16 +1765,6 @@ td small {
   .people-role-card-credit-manager,
   .people-role-card-customer {
     grid-column: span 1;
-  }
-
-  .workspace-heading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .workspace-add-button {
-    width: 100%;
-    justify-content: center;
   }
 
   .person-detail-grid {

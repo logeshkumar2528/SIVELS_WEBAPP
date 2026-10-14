@@ -106,6 +106,8 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/EligibilityNormalIncome/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(agentCustomerId)}`,
   ELIGIBILITY_NORMAL_INCOME_SHEET: (applicationProductDetailsId, agentCustomerId) =>
     `/EligibilityNormalIncome/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(agentCustomerId)}/sheet`,
+  ELIGIBILITY_NORMAL_INCOME_SAVE: (applicationProductDetailsId, agentCustomerId) =>
+    `/EligibilityNormalIncome/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(agentCustomerId)}/save`,
   ELIGIBILITY_NORMAL_INCOME_DOWNLOAD: (applicationProductDetailsId, agentCustomerId) =>
     `/EligibilityNormalIncome/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(agentCustomerId)}/download`,
 

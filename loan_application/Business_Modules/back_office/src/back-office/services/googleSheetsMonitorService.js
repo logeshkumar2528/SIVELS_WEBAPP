@@ -238,6 +238,9 @@ export async function fetchSpreadsheetMetadata(
     tokenExpiresAt = 0;
     throw new Error('UNAUTHORIZED');
   }
+  if (res.status === 403 || res.status === 404) {
+    throw new Error("You don't have access to this Normal Income sheet. Ask the admin to add your Google account to the SIVELS Normal Income Shared Drive.");
+  }
   if (!res.ok) {
     throw new Error(`METADATA_FETCH_ERROR_${res.status}`);
   }
@@ -301,6 +304,9 @@ export async function fetchSpreadsheetValuesBatch(spreadsheetId, ranges, token, 
     inMemoryAccessToken = null;
     tokenExpiresAt = 0;
     throw new Error('UNAUTHORIZED');
+  }
+  if (res.status === 403 || res.status === 404) {
+    throw new Error("You don't have access to this Normal Income sheet. Ask the admin to add your Google account to the SIVELS Normal Income Shared Drive.");
   }
   if (!res.ok) {
     throw new Error(`VALUES_FETCH_ERROR_${res.status}`);
@@ -571,4 +577,35 @@ export function stopNormalIncomeSheetMonitor() {
     activeMonitorInstance.stop();
     activeMonitorInstance = null;
   }
+}
+
+/**
+ * Directly fetches the latest grid of the target worksheet ('Eligibility- Normal Income') starting at A1.
+ * Used by the Save workflow to guarantee fresh data before issuing the final PUT.
+ * @param {string} spreadsheetId
+ * @param {string} [targetSheetName]
+ * @returns {Promise<{ sheetName: string, grid: string[][] }>}
+ */
+export async function fetchLatestTargetWorksheetGrid(spreadsheetId, targetSheetName = TARGET_WORKSHEET_NAME) {
+  if (!isGoogleOAuthAuthorized() || !inMemoryAccessToken) {
+    throw new Error('Google OAuth token is not available or expired. Please click Normal Income to re-authenticate.');
+  }
+  const metadata = await fetchSpreadsheetMetadata(
+    spreadsheetId,
+    inMemoryAccessToken,
+    undefined,
+    targetSheetName || TARGET_WORKSHEET_NAME
+  );
+  if (!metadata || metadata.length === 0) {
+    throw new Error(`Target worksheet "${targetSheetName || TARGET_WORKSHEET_NAME}" was not found in the spreadsheet.`);
+  }
+  const valueRanges = await fetchSpreadsheetValuesBatch(
+    spreadsheetId,
+    [metadata[0].boundedRange],
+    inMemoryAccessToken
+  );
+  return {
+    sheetName: metadata[0].title,
+    grid: Array.isArray(valueRanges[0]?.values) ? valueRanges[0].values : [],
+  };
 }
