@@ -781,47 +781,6 @@ export const backOfficeService = {
   },
 
   /**
-   * Insert or update (upsert) the Normal Income sheet snapshot.
-   * @param {string|number} applicationProductDetailsId
-   * @param {string|number} agentCustomerId
-   * @param {{ sheetName: string, updatedByUserId: number|null, values: string[][] }} payload
-   */
-  saveEligibilityNormalIncome: async (applicationProductDetailsId, agentCustomerId, payload) => {
-    const { summary: _omitSummary, ...cleanPayload } = payload || {};
-    const response = await axiosInstance.put(
-      BACK_OFFICE_ENDPOINTS.ELIGIBILITY_NORMAL_INCOME(applicationProductDetailsId, agentCustomerId),
-      cleanPayload
-    );
-    return unwrapResponse(response);
-  },
-
-  /**
-   * Finalize and export the customer-specific Excel (.xlsx) workbook on the backend.
-   * @param {string|number} applicationProductDetailsId
-   * @param {string|number} agentCustomerId
-   * @param {number|null} updatedByUserId
-   */
-  saveEligibilityNormalIncomeWorkbook: async (applicationProductDetailsId, agentCustomerId, updatedByUserId) => {
-    const response = await axiosInstance.post(
-      BACK_OFFICE_ENDPOINTS.ELIGIBILITY_NORMAL_INCOME_SAVE(applicationProductDetailsId, agentCustomerId),
-      { updatedByUserId: updatedByUserId || null }
-    );
-    return unwrapResponse(response);
-  },
-
-  /**
-   * Get (or create from the template) the Google Sheet for this application/customer.
-   * @returns {Promise<{ spreadsheetId: string, spreadsheetUrl: string, isNew: boolean }>}
-   */
-  getOrCreateNormalIncomeSheet: async (applicationProductDetailsId, agentCustomerId, updatedByUserId) => {
-    const response = await axiosInstance.post(
-      BACK_OFFICE_ENDPOINTS.ELIGIBILITY_NORMAL_INCOME_SHEET(applicationProductDetailsId, agentCustomerId),
-      { updatedByUserId: updatedByUserId || null }
-    );
-    return unwrapResponse(response);
-  },
-
-  /**
    * Download the server-generated Normal Income .xlsx as a Blob with headers.
    */
   downloadEligibilityNormalIncomeExcel: async (applicationProductDetailsId, agentCustomerId) => {

@@ -50,19 +50,10 @@ import PdfView from '../../../../../rm_modules/src/pages/PdfView/PdfView';
 import { ApplicationDraftProvider } from '../../../../../rm_modules/src/state/ApplicationDraftContext';
 import { resolveDocumentTypeId, getDocumentApplicability } from '../../../../../../Core/src/utils/documentTypeHelper';
 import { isApplicationUnderwritingReady } from '../../utils/readinessHelper';
-import {
-  startNormalIncomeSheetMonitor,
-  stopNormalIncomeSheetMonitor,
-  initGoogleOAuthClient,
-  triggerGoogleOAuth,
-  isGoogleOAuthAuthorized,
-  fetchLatestTargetWorksheetGrid,
-} from '../../services/googleSheetsMonitorService';
-import { normalizeSheetGrid, buildNormalIncomeSummary } from '../../utils/normalIncomeSheetParser';
+import { buildNormalIncomeSummary } from '../../utils/normalIncomeSheetParser';
 import './CustomerVerification.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-const GOOGLE_SHEETS_CLIENT_ID = import.meta.env.VITE_GOOGLE_SHEETS_CLIENT_ID || '';
 
 const ArrowLeftIcon = iconMap['ArrowLeft'];
 const ArrowRightIcon = iconMap['ArrowRight'];
@@ -2097,14 +2088,6 @@ export default function CustomerVerification({
   const calcSheetRef = useRef(null);
   const rtrResultSectionRef = useRef(null);
 
-  useEffect(() => {
-    if (GOOGLE_SHEETS_CLIENT_ID) {
-      initGoogleOAuthClient(GOOGLE_SHEETS_CLIENT_ID);
-    }
-    return () => {
-      stopNormalIncomeSheetMonitor();
-    };
-  }, []);
 
   const saveProposedLoan = async () => {
     const roi = Number(proposedLoan.manualROI);
@@ -6319,23 +6302,12 @@ export default function CustomerVerification({
   );
 
   // ----------------------------------------------------
-  // Normal Income Google Sheet -> EligibilityNormalIncome (GET on open, PUT on change)
+  // Normal Income — Microsoft Excel Desktop & Eligibility Record
   // ----------------------------------------------------
-  const [normalIncomeSync, setNormalIncomeSync] = useState({
-    active: false,
-    status: 'idle', // idle | loading | connected | pending | saving | saved | error
-    message: '',
-    saved: null,
-    hasUnsavedSheet: false,
-    spreadsheetId: null,
-    spreadsheetUrl: '',
-  });
+  const [savedNormalIncomeRecord, setSavedNormalIncomeRecord] = useState(null);
   const [normalIncomeResultOpen, setNormalIncomeResultOpen] = useState(false);
-  const [isSavingWorkbook, setIsSavingWorkbook] = useState(false);
   const [normalIncomeDownloading, setNormalIncomeDownloading] = useState(false);
 
-  // Feature Flag for Microsoft Excel Desktop integration
-  const isExcelDesktopEnabled = import.meta.env.VITE_NORMAL_INCOME_EXCEL_DESKTOP === 'true';
   const [excelDesktopState, setExcelDesktopState] = useState({
     active: false,
     status: 'idle', // idle | preparing | waiting_for_save | saved | saved_with_errors | failed | locked | expired | error
@@ -6352,18 +6324,7 @@ export default function CustomerVerification({
   const desktopTrackedVersionRef = useRef(0);
   const desktopExpiresAtRef = useRef(null);
   const desktopLastShownErrorRef = useRef('');
-
-  const normalIncomeSavedJsonRef = useRef(null);
-  const normalIncomeLatestRef = useRef(null);
-  const normalIncomeSaveTimerRef = useRef(null);
   const customerContextRef = useRef('');
-  const putInFlightRef = useRef(false);
-  const pendingPutGridRef = useRef(null);
-  const putSequenceIdRef = useRef(0);
-  const latestAppliedSeqRef = useRef(0);
-  const putQueuePromiseRef = useRef(Promise.resolve());
-  const isSaveTransactionActiveRef = useRef(false);
-  const latestChangesDuringSaveRef = useRef(null);
 
   // Helper to extract clean error message from backend error responses (message / Message)
   const extractErrorMessage = (err, fallbackMsg) => {
@@ -6374,71 +6335,22 @@ export default function CustomerVerification({
     return err?.message || fallbackMsg;
   };
 
-  // Grid limits validation (max 1000 rows, 100 columns, 500 characters per cell) without truncation
-  const validateWorksheetGridLimits = useCallback((grid) => {
-    if (!Array.isArray(grid)) return { isValid: true };
-    if (grid.length > 1000) {
-      return {
-        isValid: false,
-        error: `Worksheet exceeds maximum limit of 1,000 rows (found ${grid.length} rows). Please adjust the sheet.`,
-      };
-    }
-    for (let r = 0; r < grid.length; r++) {
-      const row = grid[r];
-      if (!Array.isArray(row)) continue;
-      if (row.length > 100) {
-        return {
-          isValid: false,
-          error: `Row ${r + 1} exceeds maximum limit of 100 columns (found ${row.length} columns). Please adjust the sheet.`,
-        };
-      }
-      for (let c = 0; c < row.length; c++) {
-        const cell = row[c] != null ? String(row[c]) : '';
-        if (cell.length > 500) {
-          return {
-            isValid: false,
-            error: `Cell at row ${r + 1}, column ${c + 1} exceeds maximum limit of 500 characters (${cell.length} characters). Please adjust the cell.`,
-          };
-        }
-      }
-    }
-    return { isValid: true };
-  }, []);
-
   useEffect(() => () => {
-    clearTimeout(normalIncomeSaveTimerRef.current);
     if (desktopPollIntervalRef.current) {
       clearInterval(desktopPollIntervalRef.current);
       desktopPollIntervalRef.current = null;
     }
   }, []);
 
-  // Update customer context and tear down old monitor and queued requests on customer/application switch
+  // Update customer context and reset polling and desktop state on customer/application switch
   useEffect(() => {
     const newContext = `${resolvedAppProdId}_${resolvedTargetCustomerId}`;
     customerContextRef.current = newContext;
-    stopNormalIncomeSheetMonitor();
     if (desktopPollIntervalRef.current) {
       clearInterval(desktopPollIntervalRef.current);
       desktopPollIntervalRef.current = null;
     }
-    clearTimeout(normalIncomeSaveTimerRef.current);
-    normalIncomeSavedJsonRef.current = null;
-    normalIncomeLatestRef.current = null;
-    pendingPutGridRef.current = null;
-    latestChangesDuringSaveRef.current = null;
-    isSaveTransactionActiveRef.current = false;
-    putInFlightRef.current = false;
-    putQueuePromiseRef.current = Promise.resolve();
-    setNormalIncomeSync({
-      active: false,
-      status: 'idle',
-      message: '',
-      saved: null,
-      hasUnsavedSheet: false,
-      spreadsheetId: null,
-      spreadsheetUrl: '',
-    });
+    setSavedNormalIncomeRecord(null);
     setExcelDesktopState({
       active: false,
       status: 'idle',
@@ -6461,13 +6373,7 @@ export default function CustomerVerification({
     try {
       const saved = await backOfficeService.getEligibilityNormalIncome(resolvedAppProdId, resolvedTargetCustomerId);
       if (customerContextRef.current !== currentContext) return null;
-      normalIncomeSavedJsonRef.current = saved?.values ? JSON.stringify(normalizeSheetGrid(saved.values)) : null;
-      setNormalIncomeSync((prev) => ({
-        ...prev,
-        saved,
-        spreadsheetId: saved?.spreadsheetId || prev.spreadsheetId,
-        spreadsheetUrl: saved?.spreadsheetUrl || prev.spreadsheetUrl,
-      }));
+      setSavedNormalIncomeRecord(saved || null);
       return saved;
     } catch (err) {
       if (customerContextRef.current !== currentContext) return null;
@@ -6480,313 +6386,6 @@ export default function CustomerVerification({
     if (activeStep !== 16 || !resolvedAppProdId || !resolvedTargetCustomerId) return;
     loadSavedNormalIncome().catch(() => {});
   }, [activeStep, resolvedAppProdId, resolvedTargetCustomerId, loadSavedNormalIncome]);
-
-  // Serialized, awaitable PUT execution pipeline with boundary validation and stale response guard
-  const executePutPipeline = useCallback(async (gridSnapshot) => {
-    const currentContext = `${resolvedAppProdId}_${resolvedTargetCustomerId}`;
-    if (!gridSnapshot || !resolvedAppProdId || !resolvedTargetCustomerId) return;
-    if (customerContextRef.current !== currentContext) return;
-
-    // Validate without truncation
-    const validation = validateWorksheetGridLimits(gridSnapshot.grid);
-    if (!validation.isValid) {
-      setNormalIncomeSync((prev) => ({
-        ...prev,
-        status: 'error',
-        message: validation.error,
-      }));
-      throw new Error(validation.error);
-    }
-
-    const currentSeq = ++putSequenceIdRef.current;
-    const values = normalizeSheetGrid(gridSnapshot.grid);
-    const valuesJson = JSON.stringify(values);
-
-    setNormalIncomeSync((prev) => ({
-      ...prev,
-      status: 'saving',
-      message: 'Saving sheet values...',
-    }));
-
-    try {
-      const response = await backOfficeService.saveEligibilityNormalIncome(
-        resolvedAppProdId,
-        resolvedTargetCustomerId,
-        {
-          sheetName: gridSnapshot.sheetName || 'Eligibility- Normal Income',
-          updatedByUserId: getAuthenticatedBackOfficeId() || null,
-          values,
-        }
-      );
-
-      // Verify customer context and discard stale responses
-      if (customerContextRef.current === currentContext && currentSeq >= latestAppliedSeqRef.current) {
-        latestAppliedSeqRef.current = currentSeq;
-        normalIncomeSavedJsonRef.current = valuesJson;
-        setNormalIncomeSync((prev) => ({
-          ...prev,
-          status: 'saved',
-          message: 'All sheet changes saved.',
-          hasUnsavedSheet: false,
-          saved: response && typeof response === 'object' ? response : prev.saved,
-        }));
-      }
-      return response;
-    } catch (err) {
-      if (customerContextRef.current === currentContext) {
-        setNormalIncomeSync((prev) => ({
-          ...prev,
-          status: 'error',
-          hasUnsavedSheet: true,
-          message: extractErrorMessage(err, 'Unable to save sheet values.'),
-        }));
-      }
-      throw err;
-    }
-  }, [resolvedAppProdId, resolvedTargetCustomerId, getAuthenticatedBackOfficeId, validateWorksheetGridLimits]);
-
-  // Enqueue a PUT task onto the serial promise chain
-  const enqueuePutTask = useCallback((gridSnapshot) => {
-    const currentContext = `${resolvedAppProdId}_${resolvedTargetCustomerId}`;
-    const nextPromise = putQueuePromiseRef.current
-      .then(async () => {
-        if (customerContextRef.current !== currentContext) return null;
-        putInFlightRef.current = true;
-        try {
-          return await executePutPipeline(gridSnapshot);
-        } finally {
-          putInFlightRef.current = false;
-        }
-      })
-      .catch((err) => {
-        putInFlightRef.current = false;
-        throw err;
-      });
-
-    putQueuePromiseRef.current = nextPromise.catch(() => {});
-    return nextPromise;
-  }, [executePutPipeline, resolvedAppProdId, resolvedTargetCustomerId]);
-
-  const handleNormalIncomeSnapshot = useCallback((snapshot) => {
-    normalIncomeLatestRef.current = snapshot;
-    const isSameAsSaved = JSON.stringify(normalizeSheetGrid(snapshot.grid)) === normalIncomeSavedJsonRef.current;
-
-    if (isSameAsSaved) {
-      if (snapshot.isInitial) {
-        setNormalIncomeSync((prev) => ({
-          ...prev,
-          status: 'connected',
-          hasUnsavedSheet: false,
-          message: 'Sheet connected. Edits in the sheet save automatically.',
-        }));
-      }
-      return;
-    }
-
-    // If Save transaction is active, preserve changes without firing background PUT
-    if (isSaveTransactionActiveRef.current) {
-      latestChangesDuringSaveRef.current = snapshot;
-      setNormalIncomeSync((prev) => ({ ...prev, hasUnsavedSheet: true }));
-      return;
-    }
-
-    setNormalIncomeSync((prev) => ({
-      ...prev,
-      status: 'pending',
-      hasUnsavedSheet: true,
-      message: 'Changes detected. Saving shortly...',
-    }));
-
-    clearTimeout(normalIncomeSaveTimerRef.current);
-    normalIncomeSaveTimerRef.current = setTimeout(() => {
-      enqueuePutTask(snapshot).catch((err) => {
-        console.warn('[Normal Income] Auto-sync PUT error:', err?.message || err);
-      });
-    }, 2000); // Debounce ~2 seconds
-  }, [enqueuePutTask]);
-
-  // Manual Save: Fetch live A1 grid, validate, await PUT, then call POST /save
-  const saveNormalIncomeWorkbookNow = useCallback(async () => {
-    const currentContext = `${resolvedAppProdId}_${resolvedTargetCustomerId}`;
-    if (isSavingWorkbook || !resolvedAppProdId || !resolvedTargetCustomerId) return;
-    const spreadsheetId = normalIncomeSync.spreadsheetId || normalIncomeSync.saved?.spreadsheetId;
-    if (!spreadsheetId) {
-      setNormalIncomeSync((prev) => ({
-        ...prev,
-        status: 'error',
-        message: 'No Google Sheet is currently associated with this application. Click Normal Income to open the sheet first.',
-      }));
-      return;
-    }
-
-    setIsSavingWorkbook(true);
-    isSaveTransactionActiveRef.current = true;
-    clearTimeout(normalIncomeSaveTimerRef.current);
-    setNormalIncomeSync((prev) => ({ ...prev, status: 'saving', message: 'Awaiting pending synchronization...' }));
-
-    try {
-      // 1. Wait for any currently queued PUT to finish
-      await putQueuePromiseRef.current;
-      if (customerContextRef.current !== currentContext) return;
-
-      // 2. Fetch live A1 grid directly from Google Sheets
-      setNormalIncomeSync((prev) => ({ ...prev, message: 'Fetching latest worksheet data...' }));
-      const liveSnapshot = await fetchLatestTargetWorksheetGrid(spreadsheetId);
-      if (customerContextRef.current !== currentContext) return;
-
-      // 3. Validate without truncation
-      const validation = validateWorksheetGridLimits(liveSnapshot.grid);
-      if (!validation.isValid) {
-        setNormalIncomeSync((prev) => ({ ...prev, status: 'error', message: validation.error }));
-        return;
-      }
-
-      // 4. PUT the validated live grid to backend and await success
-      setNormalIncomeSync((prev) => ({ ...prev, message: 'Synchronizing latest worksheet values with server...' }));
-      await enqueuePutTask(liveSnapshot);
-      if (customerContextRef.current !== currentContext) return;
-
-      // 5. Issue POST /save to finalize the customer Excel workbook
-      setNormalIncomeSync((prev) => ({ ...prev, message: 'Exporting customer Excel workbook...' }));
-      const saveResponse = await backOfficeService.saveEligibilityNormalIncomeWorkbook(
-        resolvedAppProdId,
-        resolvedTargetCustomerId,
-        getAuthenticatedBackOfficeId() || null
-      );
-
-      if (customerContextRef.current !== currentContext) return;
-      const savedRecord = saveResponse && typeof saveResponse === 'object' ? saveResponse : {};
-      const generatedAt = savedRecord?.workbookGeneratedAt || savedRecord?.updatedAt;
-
-      setNormalIncomeSync((prev) => ({
-        ...prev,
-        status: 'saved',
-        message: generatedAt
-          ? `Saved at ${new Date(generatedAt).toLocaleString('en-IN')}`
-          : 'Workbook saved successfully.',
-        hasUnsavedSheet: false,
-        saved: { ...prev.saved, ...savedRecord },
-      }));
-    } catch (err) {
-      if (customerContextRef.current === currentContext) {
-        setNormalIncomeSync((prev) => ({
-          ...prev,
-          status: 'error',
-          message: extractErrorMessage(err, 'Failed to save workbook. Please retry.'),
-        }));
-      }
-    } finally {
-      setIsSavingWorkbook(false);
-      isSaveTransactionActiveRef.current = false;
-      // Synchronize any Google Sheet changes detected during Save
-      if (latestChangesDuringSaveRef.current && customerContextRef.current === currentContext) {
-        const changesSnapshot = latestChangesDuringSaveRef.current;
-        latestChangesDuringSaveRef.current = null;
-        enqueuePutTask(changesSnapshot).catch(() => {});
-      }
-    }
-  }, [
-    isSavingWorkbook,
-    resolvedAppProdId,
-    resolvedTargetCustomerId,
-    normalIncomeSync.spreadsheetId,
-    normalIncomeSync.saved?.spreadsheetId,
-    validateWorksheetGridLimits,
-    enqueuePutTask,
-    getAuthenticatedBackOfficeId,
-  ]);
-
-  // sheetWindow must be opened synchronously in the click handler, otherwise the browser blocks the popup.
-  const startNormalIncomeSync = useCallback(async (sheetWindow) => {
-    const currentContext = `${resolvedAppProdId}_${resolvedTargetCustomerId}`;
-    const closeSheetWindow = () => {
-      if (sheetWindow && !sheetWindow.closed) sheetWindow.close();
-    };
-    if (!resolvedAppProdId || !resolvedTargetCustomerId) {
-      closeSheetWindow();
-      setNormalIncomeSync((prev) => ({
-        ...prev,
-        active: true,
-        status: 'error',
-        message: 'Application details are not loaded yet, so the sheet cannot be opened.',
-      }));
-      return;
-    }
-
-    setNormalIncomeSync((prev) => ({ ...prev, active: true, status: 'loading', message: "Preparing this application's sheet..." }));
-    let sheet;
-    try {
-      sheet = await backOfficeService.getOrCreateNormalIncomeSheet(
-        resolvedAppProdId,
-        resolvedTargetCustomerId,
-        getAuthenticatedBackOfficeId()
-      );
-      if (customerContextRef.current !== currentContext) {
-        closeSheetWindow();
-        return;
-      }
-    } catch (err) {
-      closeSheetWindow();
-      if (customerContextRef.current === currentContext) {
-        setNormalIncomeSync((prev) => ({
-          ...prev,
-          status: 'error',
-          message: `Could not open the Normal Income sheet: ${extractErrorMessage(err, 'server error.')}`,
-        }));
-      }
-      return;
-    }
-
-    const spreadsheetId = sheet?.spreadsheetId;
-    const spreadsheetUrl = sheet?.spreadsheetUrl || (spreadsheetId ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit` : '');
-    if (!spreadsheetId) {
-      closeSheetWindow();
-      setNormalIncomeSync((prev) => ({ ...prev, status: 'error', message: 'The server did not return a spreadsheet for this application.' }));
-      return;
-    }
-
-    if (sheetWindow && !sheetWindow.closed) {
-      sheetWindow.opener = null;
-      sheetWindow.location.href = spreadsheetUrl;
-    }
-    setNormalIncomeSync((prev) => ({
-      ...prev,
-      spreadsheetId,
-      spreadsheetUrl,
-      status: 'loading',
-      message: sheetWindow ? 'Loading saved sheet values...' : 'Pop-up was blocked. Use "Open sheet" to open it.',
-    }));
-
-    try {
-      await loadSavedNormalIncome();
-    } catch (err) {
-      console.warn('[Normal Income] Failed to load saved sheet:', err?.message || err);
-    }
-    startNormalIncomeSheetMonitor(spreadsheetId, GOOGLE_SHEETS_CLIENT_ID, undefined, {
-      onSnapshot: handleNormalIncomeSnapshot,
-    });
-  }, [resolvedAppProdId, resolvedTargetCustomerId, getAuthenticatedBackOfficeId, loadSavedNormalIncome, handleNormalIncomeSnapshot]);
-
-  const openNormalIncomeSheet = useCallback(() => {
-    const openBlankTab = () => window.open('about:blank', '_blank');
-    if (isGoogleOAuthAuthorized()) {
-      startNormalIncomeSync(openBlankTab());
-      return;
-    }
-    triggerGoogleOAuth(GOOGLE_SHEETS_CLIENT_ID, {
-      onAuthorized: () => startNormalIncomeSync(openBlankTab()),
-      onError: (err) => {
-        setNormalIncomeSync((prev) => ({
-          ...prev,
-          active: true,
-          status: 'error',
-          message: err?.message?.includes('access_denied')
-            ? "Google authorization was denied. Please ask your administrator to verify your account in the Google OAuth Console."
-            : 'Google sign-in was not completed. Click Normal Income again to connect the sheet.',
-        }));
-      },
-    });
-  }, [startNormalIncomeSync]);
 
   const downloadNormalIncomeExcel = useCallback(async () => {
     if (!resolvedAppProdId || !resolvedTargetCustomerId) return;
@@ -6813,7 +6412,7 @@ export default function CustomerVerification({
     } catch (err) {
       let errorMsg = 'Excel download failed: server error.';
       if (err?.response?.status === 404) {
-        errorMsg = 'No Excel file has been saved for this application yet. Please click Save first.';
+        errorMsg = 'No Excel file has been saved for this application yet. Please edit and save in Excel Desktop first.';
       } else if (err?.response?.data instanceof Blob) {
         try {
           const text = await err.response.data.text();
@@ -6825,9 +6424,9 @@ export default function CustomerVerification({
       } else {
         errorMsg = `Excel download failed: ${extractErrorMessage(err, 'server error.')}`;
       }
-      setNormalIncomeSync((prev) => ({
+      setExcelDesktopState((prev) => ({
         ...prev,
-        message: errorMsg,
+        error: errorMsg,
       }));
     } finally {
       setNormalIncomeDownloading(false);
@@ -7117,7 +6716,6 @@ export default function CustomerVerification({
 
   // Resume polling immediately when tab becomes visible; pause when hidden
   useEffect(() => {
-    if (!isExcelDesktopEnabled) return;
     const handleVisibilityChange = () => {
       if (!document.hidden && excelDesktopState.active) {
         pollDesktopSaveStatus({ force: true }).catch(() => {});
@@ -7127,15 +6725,14 @@ export default function CustomerVerification({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isExcelDesktopEnabled, excelDesktopState.active, pollDesktopSaveStatus]);
+  }, [excelDesktopState.active, pollDesktopSaveStatus]);
 
   // Stop desktop polling when leaving Step 16 or switching to another assessment method
   useEffect(() => {
-    if (!isExcelDesktopEnabled) return;
     if (activeStep !== 16 || selectedMethodCode !== 'NORMAL_INCOME') {
       stopDesktopPolling();
     }
-  }, [isExcelDesktopEnabled, activeStep, selectedMethodCode, stopDesktopPolling]);
+  }, [activeStep, selectedMethodCode, stopDesktopPolling]);
 
   const fetchWorkflowHistory = useCallback(async () => {
     const custId = resolvedTargetCustomerId;
@@ -14865,15 +14462,11 @@ export default function CustomerVerification({
                               onClick={() => {
                                 const nextCode = code || 'INCOME';
                                 if (nextCode === 'NORMAL_INCOME') {
-                                  if (isExcelDesktopEnabled) {
-                                    setSelectedMethodCode('NORMAL_INCOME');
-                                    setBankingWorkspaceOpen(false);
-                                    setRtrWorkspaceOpen(false);
-                                    setIncomeWorkspaceOpen(false);
-                                    launchNormalIncomeExcelDesktop();
-                                  } else {
-                                    openNormalIncomeSheet();
-                                  }
+                                  setSelectedMethodCode('NORMAL_INCOME');
+                                  setBankingWorkspaceOpen(false);
+                                  setRtrWorkspaceOpen(false);
+                                  setIncomeWorkspaceOpen(false);
+                                  launchNormalIncomeExcelDesktop();
                                   return;
                                 }
                                 setSelectedMethodCode(nextCode);
@@ -14910,7 +14503,7 @@ export default function CustomerVerification({
                               <span className="bo-cv-elig-method-chip-text">
                                 <strong>{shortName}</strong>
                                 <small>{code}</small>
-                                {isNormalIncome && normalIncomeSync.saved && (
+                                {isNormalIncome && savedNormalIncomeRecord && (
                                   <span
                                     className="bo-cv-normal-income-view-btn"
                                     role="button"
@@ -14960,203 +14553,112 @@ export default function CustomerVerification({
                         </button>
                       </div>
                     )}
-                    {isExcelDesktopEnabled ? (
-                      (excelDesktopState.active || normalIncomeSync.saved) && (() => {
-                        const savedSummary = normalIncomeSync.saved?.summary || normalIncomeSync.saved || {};
-                        const savedAt = excelDesktopState.savedAt || normalIncomeSync.saved?.workbookGeneratedAt || normalIncomeSync.saved?.updatedAt;
-                        const fmtAmount = (v) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v))
+                    {(excelDesktopState.active || savedNormalIncomeRecord) && (() => {
+                      const savedSummary = savedNormalIncomeRecord?.summary || savedNormalIncomeRecord || {};
+                      const savedAt = excelDesktopState.savedAt || savedNormalIncomeRecord?.workbookGeneratedAt || savedNormalIncomeRecord?.updatedAt;
+                      const fmtAmount = (v) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v))
+                        ? '—'
+                        : Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }));
+                      const summaryItems = [
+                        ['Total Income (Annual)', fmtAmount(savedSummary.totalIncomeAnnual)],
+                        ['Eligible Monthly Income', fmtAmount(savedSummary.eligibleMonthlyIncome)],
+                        ['Existing Obligations', fmtAmount(savedSummary.existingMonthlyObligations)],
+                        ['Net Serviceable Income', fmtAmount(savedSummary.netServiceableIncome)],
+                        ['Loan Eligibility (Lacs)', fmtAmount(savedSummary.loanEligibilityLacs)],
+                        ['Proposed Loan (Lacs)', fmtAmount(savedSummary.proposedLoanAmountLacs)],
+                        ['Actual FOIR', savedSummary.actualFoirPercent === null || savedSummary.actualFoirPercent === undefined
                           ? '—'
-                          : Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }));
-                        const summaryItems = [
-                          ['Total Income (Annual)', fmtAmount(savedSummary.totalIncomeAnnual)],
-                          ['Eligible Monthly Income', fmtAmount(savedSummary.eligibleMonthlyIncome)],
-                          ['Existing Obligations', fmtAmount(savedSummary.existingMonthlyObligations)],
-                          ['Net Serviceable Income', fmtAmount(savedSummary.netServiceableIncome)],
-                          ['Loan Eligibility (Lacs)', fmtAmount(savedSummary.loanEligibilityLacs)],
-                          ['Proposed Loan (Lacs)', fmtAmount(savedSummary.proposedLoanAmountLacs)],
-                          ['Actual FOIR', savedSummary.actualFoirPercent === null || savedSummary.actualFoirPercent === undefined
-                            ? '—'
-                            : `${fmtAmount(savedSummary.actualFoirPercent)}%`],
-                        ];
-                        const badgeLabel = {
-                          preparing: 'Opening Excel…',
-                          waiting_for_save: 'Waiting for save',
-                          saved: 'Saved',
-                          saved_with_errors: 'Saved with errors',
-                          failed: 'Failed',
-                          locked: 'Being edited by another user',
-                          expired: 'Session expired',
-                          error: 'Error',
-                          idle: normalIncomeSync.saved ? 'Saved' : 'Idle',
-                        }[excelDesktopState.status] || (normalIncomeSync.saved ? 'Saved' : 'Idle');
+                          : `${fmtAmount(savedSummary.actualFoirPercent)}%`],
+                      ];
+                      const badgeLabel = {
+                        preparing: 'Opening Excel…',
+                        waiting_for_save: 'Waiting for save',
+                        saved: 'Saved',
+                        saved_with_errors: 'Saved with errors',
+                        failed: 'Failed',
+                        locked: 'Being edited by another user',
+                        expired: 'Session expired',
+                        error: 'Error',
+                        idle: savedNormalIncomeRecord ? 'Saved' : 'Idle',
+                      }[excelDesktopState.status] || (savedNormalIncomeRecord ? 'Saved' : 'Idle');
 
-                        return (
-                          <div className={`bo-cv-ni-sync is-${excelDesktopState.status}`} role="status" aria-live="polite">
-                            <div className="bo-cv-ni-sync-head">
-                              <strong>Normal Income — Microsoft Excel Desktop</strong>
-                              <span className="bo-cv-ni-sync-badge">{badgeLabel}</span>
-                              <span className="bo-cv-ni-sync-actions">
+                      return (
+                        <div className={`bo-cv-ni-sync is-${excelDesktopState.status}`} role="status" aria-live="polite">
+                          <div className="bo-cv-ni-sync-head">
+                            <strong>Normal Income — Microsoft Excel Desktop</strong>
+                            <span className="bo-cv-ni-sync-badge">{badgeLabel}</span>
+                            <span className="bo-cv-ni-sync-actions">
+                              <button
+                                type="button"
+                                className="bo-cv-ni-sync-save"
+                                onClick={() => pollDesktopSaveStatus({ force: true })}
+                                title="Check server for latest save status"
+                              >
+                                {RefreshCwIcon && <RefreshCwIcon size={12} style={{ marginRight: '4px' }} />}
+                                Refresh
+                              </button>
+                              <button
+                                type="button"
+                                className="bo-cv-ni-sync-save"
+                                onClick={launchNormalIncomeExcelDesktop}
+                                title="Open customer workbook in Microsoft Excel Desktop"
+                              >
+                                Open in Excel
+                              </button>
+                              {savedNormalIncomeRecord && (
                                 <button
                                   type="button"
                                   className="bo-cv-ni-sync-save"
-                                  onClick={() => pollDesktopSaveStatus({ force: true })}
-                                  title="Check server for latest save status"
+                                  onClick={() => setNormalIncomeResultOpen(true)}
+                                  title="View detailed saved eligibility result"
                                 >
-                                  {RefreshCwIcon && <RefreshCwIcon size={12} style={{ marginRight: '4px' }} />}
-                                  Refresh
+                                  View Eligibility
                                 </button>
-                                <button
-                                  type="button"
-                                  className="bo-cv-ni-sync-save"
-                                  onClick={launchNormalIncomeExcelDesktop}
-                                  title="Open customer workbook in Microsoft Excel Desktop"
-                                >
-                                  Open in Excel
-                                </button>
-                                {normalIncomeSync.saved && (
-                                  <button
-                                    type="button"
-                                    className="bo-cv-ni-sync-save"
-                                    onClick={() => setNormalIncomeResultOpen(true)}
-                                    title="View detailed saved eligibility result"
-                                  >
-                                    View Eligibility
-                                  </button>
-                                )}
-                                {normalIncomeSync.saved?.excelPath && (
-                                  <button
-                                    type="button"
-                                    className="bo-cv-ni-sync-save"
-                                    onClick={downloadNormalIncomeExcel}
-                                    disabled={normalIncomeDownloading}
-                                  >
-                                    {normalIncomeDownloading ? 'Downloading…' : 'Download Excel'}
-                                  </button>
-                                )}
-                              </span>
-                            </div>
-                            {excelDesktopState.message && <p className="bo-cv-ni-sync-msg">{excelDesktopState.message}</p>}
-                            {excelDesktopState.error && (
-                              <p className="bo-cv-ni-sync-msg" style={{ color: '#d32f2f' }}>
-                                {excelDesktopState.error}
-                              </p>
-                            )}
-                            <div style={{ margin: '8px 0', padding: '8px 12px', background: '#f8fafc', borderRadius: '4px', fontSize: '12px', color: '#475569', borderLeft: '3px solid #0284c7' }}>
-                              <div style={{ fontWeight: 600, marginBottom: '2px', color: '#0f172a' }}>Instructions:</div>
-                              <div>1. Microsoft Excel will open automatically.</div>
-                              <div>2. Edit the worksheet and press <strong>Ctrl+S</strong> to save.</div>
-                              <div>3. Assessment results will appear here automatically.</div>
-                            </div>
-                            {normalIncomeSync.saved && (
-                              <>
-                                <div className="bo-cv-ni-sync-grid">
-                                  {summaryItems.map(([label, value]) => (
-                                    <div key={label} className="bo-cv-ni-sync-item">
-                                      <span>{label}</span>
-                                      <strong>{value}</strong>
-                                    </div>
-                                  ))}
-                                </div>
-                                {savedAt && (
-                                  <small className="bo-cv-ni-sync-time">
-                                    Saved at {new Date(savedAt).toLocaleString('en-IN')}
-                                  </small>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        );
-                      })()
-                    ) : (
-                      (normalIncomeSync.active || normalIncomeSync.saved) && (() => {
-                        const savedSummary = normalIncomeSync.saved?.summary || normalIncomeSync.saved || {};
-                        const savedAt = normalIncomeSync.saved?.workbookGeneratedAt || normalIncomeSync.saved?.updatedAt;
-                        const fmtAmount = (v) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v))
-                          ? '—'
-                          : Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }));
-                        const summaryItems = [
-                          ['Total Income (Annual)', fmtAmount(savedSummary.totalIncomeAnnual)],
-                          ['Eligible Monthly Income', fmtAmount(savedSummary.eligibleMonthlyIncome)],
-                          ['Existing Obligations', fmtAmount(savedSummary.existingMonthlyObligations)],
-                          ['Net Serviceable Income', fmtAmount(savedSummary.netServiceableIncome)],
-                          ['Loan Eligibility (Lacs)', fmtAmount(savedSummary.loanEligibilityLacs)],
-                          ['Proposed Loan (Lacs)', fmtAmount(savedSummary.proposedLoanAmountLacs)],
-                          ['Actual FOIR', savedSummary.actualFoirPercent === null || savedSummary.actualFoirPercent === undefined
-                            ? '—'
-                            : `${fmtAmount(savedSummary.actualFoirPercent)}%`],
-                        ];
-                        const canRetrySave = normalIncomeSync.status === 'error' && normalIncomeSync.hasUnsavedSheet;
-                        const sheetUrl = normalIncomeSync.spreadsheetUrl || normalIncomeSync.saved?.spreadsheetUrl;
-                        return (
-                          <div className={`bo-cv-ni-sync is-${normalIncomeSync.status}`} role="status" aria-live="polite">
-                            <div className="bo-cv-ni-sync-head">
-                              <strong>Normal Income Sheet</strong>
-                              {normalIncomeSync.active && (
-                                <span className="bo-cv-ni-sync-badge">
-                                  {{
-                                    loading: 'Connecting',
-                                    connected: 'Connected',
-                                    pending: 'Changes detected',
-                                    saving: 'Saving…',
-                                    saved: 'Saved',
-                                    error: 'Save failed',
-                                  }[normalIncomeSync.status] || 'Idle'}
-                                </span>
                               )}
-                              <span className="bo-cv-ni-sync-actions">
+                              {savedNormalIncomeRecord?.excelPath && (
                                 <button
                                   type="button"
                                   className="bo-cv-ni-sync-save"
-                                  onClick={saveNormalIncomeWorkbookNow}
-                                  disabled={isSavingWorkbook}
-                                  title="Synchronize sheet changes and save customer Excel workbook"
+                                  onClick={downloadNormalIncomeExcel}
+                                  disabled={normalIncomeDownloading}
                                 >
-                                  {isSavingWorkbook ? 'Saving…' : 'Save'}
+                                  {normalIncomeDownloading ? 'Downloading…' : 'Download Excel'}
                                 </button>
-                                {canRetrySave && (
-                                  <button type="button" className="bo-cv-ni-sync-save" onClick={saveNormalIncomeWorkbookNow} disabled={isSavingWorkbook}>
-                                    Retry save
-                                  </button>
-                                )}
-                                {sheetUrl && (
-                                  <a className="bo-cv-ni-sync-save" href={sheetUrl} target="_blank" rel="noopener noreferrer">
-                                    Open sheet
-                                  </a>
-                                )}
-                                {normalIncomeSync.saved?.excelPath && (
-                                  <button
-                                    type="button"
-                                    className="bo-cv-ni-sync-save"
-                                    onClick={downloadNormalIncomeExcel}
-                                    disabled={normalIncomeDownloading}
-                                  >
-                                    {normalIncomeDownloading ? 'Downloading…' : 'Download Excel'}
-                                  </button>
-                                )}
-                              </span>
-                            </div>
-                            {normalIncomeSync.message && <p className="bo-cv-ni-sync-msg">{normalIncomeSync.message}</p>}
-                            {normalIncomeSync.saved && (
-                              <>
-                                <div className="bo-cv-ni-sync-grid">
-                                  {summaryItems.map(([label, value]) => (
-                                    <div key={label} className="bo-cv-ni-sync-item">
-                                      <span>{label}</span>
-                                      <strong>{value}</strong>
-                                    </div>
-                                  ))}
-                                </div>
-                                {savedAt && (
-                                  <small className="bo-cv-ni-sync-time">
-                                    Saved at {new Date(savedAt).toLocaleString('en-IN')}
-                                  </small>
-                                )}
-                              </>
-                            )}
+                              )}
+                            </span>
                           </div>
-                        );
-                      })()
-                    )}
+                          {excelDesktopState.message && <p className="bo-cv-ni-sync-msg">{excelDesktopState.message}</p>}
+                          {excelDesktopState.error && (
+                            <p className="bo-cv-ni-sync-msg" style={{ color: '#d32f2f' }}>
+                              {excelDesktopState.error}
+                            </p>
+                          )}
+                          <div style={{ margin: '8px 0', padding: '8px 12px', background: '#f8fafc', borderRadius: '4px', fontSize: '12px', color: '#475569', borderLeft: '3px solid #0284c7' }}>
+                            <div style={{ fontWeight: 600, marginBottom: '2px', color: '#0f172a' }}>Instructions:</div>
+                            <div>1. Microsoft Excel will open automatically.</div>
+                            <div>2. Edit the worksheet and press <strong>Ctrl+S</strong> to save.</div>
+                            <div>3. Assessment results will appear here automatically.</div>
+                          </div>
+                          {savedNormalIncomeRecord && (
+                            <>
+                              <div className="bo-cv-ni-sync-grid">
+                                {summaryItems.map(([label, value]) => (
+                                  <div key={label} className="bo-cv-ni-sync-item">
+                                    <span>{label}</span>
+                                    <strong>{value}</strong>
+                                  </div>
+                                ))}
+                              </div>
+                              {savedAt && (
+                                <small className="bo-cv-ni-sync-time">
+                                  Saved at {new Date(savedAt).toLocaleString('en-IN')}
+                                </small>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="bo-cv-elig-control-block">
@@ -18428,10 +17930,10 @@ export default function CustomerVerification({
         </main>
       </div>
 
-      {normalIncomeResultOpen && normalIncomeSync.saved && (() => {
-        const backendSummary = normalIncomeSync.saved.summary || normalIncomeSync.saved || {};
+      {normalIncomeResultOpen && savedNormalIncomeRecord && (() => {
+        const backendSummary = savedNormalIncomeRecord.summary || savedNormalIncomeRecord || {};
         const savedSummary = { ...backendSummary };
-        const rawGrid = normalIncomeSync.saved?.values;
+        const rawGrid = savedNormalIncomeRecord?.values;
         const isValidGrid = Array.isArray(rawGrid) &&
           rawGrid.length > 0 &&
           rawGrid.every((row) => Array.isArray(row)) &&
@@ -18451,7 +17953,7 @@ export default function CustomerVerification({
             }
           }
         }
-        const savedAt = normalIncomeSync.saved.workbookGeneratedAt || normalIncomeSync.saved.updatedAt;
+        const savedAt = savedNormalIncomeRecord.workbookGeneratedAt || savedNormalIncomeRecord.updatedAt;
         const fmtAmount = (value) => (value === null || value === undefined || value === '' || Number.isNaN(Number(value))
           ? '—'
           : Number(value).toLocaleString('en-IN', { maximumFractionDigits: 2 }));
