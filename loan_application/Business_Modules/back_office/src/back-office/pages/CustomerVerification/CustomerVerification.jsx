@@ -58,7 +58,7 @@ import {
   isGoogleOAuthAuthorized,
   fetchLatestTargetWorksheetGrid,
 } from '../../services/googleSheetsMonitorService';
-import { normalizeSheetGrid } from '../../utils/normalIncomeSheetParser';
+import { normalizeSheetGrid, buildNormalIncomeSummary } from '../../utils/normalIncomeSheetParser';
 import './CustomerVerification.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -17966,7 +17966,28 @@ export default function CustomerVerification({
       </div>
 
       {normalIncomeResultOpen && normalIncomeSync.saved && (() => {
-        const savedSummary = normalIncomeSync.saved.summary || normalIncomeSync.saved || {};
+        const backendSummary = normalIncomeSync.saved.summary || normalIncomeSync.saved || {};
+        const savedSummary = { ...backendSummary };
+        const rawGrid = normalIncomeSync.saved?.values;
+        const isValidGrid = Array.isArray(rawGrid) &&
+          rawGrid.length > 0 &&
+          rawGrid.every((row) => Array.isArray(row)) &&
+          rawGrid.some((row) =>
+            row.some((cell) => {
+              const text = String(cell ?? '').trim().toUpperCase();
+              return text === 'SR. NO.' || text === 'SR.NO.' || text === 'SR NO' || text === 'A.1' || text === 'PAT';
+            })
+          );
+
+        if (isValidGrid) {
+          const isValEmpty = (v) => v === undefined || v === null || v === '' || (typeof v === 'number' && Number.isNaN(v));
+          const parsedGridSummary = buildNormalIncomeSummary(rawGrid) || {};
+          for (const [key, parsedVal] of Object.entries(parsedGridSummary)) {
+            if (isValEmpty(savedSummary[key]) && !isValEmpty(parsedVal)) {
+              savedSummary[key] = parsedVal;
+            }
+          }
+        }
         const savedAt = normalIncomeSync.saved.workbookGeneratedAt || normalIncomeSync.saved.updatedAt;
         const fmtAmount = (value) => (value === null || value === undefined || value === '' || Number.isNaN(Number(value))
           ? '—'
