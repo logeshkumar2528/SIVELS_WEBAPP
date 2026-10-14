@@ -4081,11 +4081,13 @@ export default function CustomerVerification({
       if (isSelected) selectedCount++;
     });
 
-    // The EMI entered in the RTR Common Sheet is the authoritative
-    // obligation for Income Method, even while the rest of a row is being
-    // completed or is not eligible for the summary counts above.
+    // Existing obligations must match the Excel flow: only active Live loans
+    // (RTR status id 1) are included. Closed/BT loans, personal obligations,
+    // and the proposed SIVELS loan must not reduce serviceable income.
     rtrDraftLoans.forEach((l) => {
-      totalEmi += Number(l.emiAmount) || 0;
+      if (l.isActive !== false && Number(l.rtrLoanStatusId) === 1) {
+        totalEmi += Number(l.emiAmount) || 0;
+      }
     });
 
     return {
@@ -4521,6 +4523,33 @@ export default function CustomerVerification({
 
   // Current active assessment based on applicant sequence and method
   const currentAssessment = useMemo(() => {
+    // The calculation endpoint response is authoritative immediately after a
+    // calculation. Prefer it over the assessment GET cache, which can still
+    // contain the previous assessment until the backend list is refreshed.
+    if (lastCalculationResponse) {
+      const responseApplicant = lastCalculationResponse.applicantSequence == null
+        ? null
+        : Number(lastCalculationResponse.applicantSequence);
+      const responseMethod = lastCalculationResponse.assessmentMethodId == null
+        ? null
+        : Number(lastCalculationResponse.assessmentMethodId);
+      const activeApplicant = Number(selectedApplicantSequence);
+      const activeMethod = selectedMethodCode === 'ABB'
+        ? 2
+        : selectedMethodCode === 'RTR'
+        ? 3
+        : selectedMethodCode === 'NORMAL_INCOME'
+        ? Number(assessmentMethods.find((m) => (m.methodCode || '').toUpperCase() === 'NORMAL_INCOME')?.assessmentMethodId || 4)
+        : 1;
+
+      if (
+        (responseApplicant == null || responseApplicant === activeApplicant) &&
+        (responseMethod == null || responseMethod === activeMethod)
+      ) {
+        return lastCalculationResponse;
+      }
+    }
+
     if (!Array.isArray(assessmentsList) || assessmentsList.length === 0) return null;
     let currentMethodId = 1;
     if (selectedMethodCode === 'ABB') currentMethodId = 2;
@@ -4543,7 +4572,7 @@ export default function CustomerVerification({
       (a, b) => new Date(b.calculatedAt || b.createdAt || 0) - new Date(a.calculatedAt || a.createdAt || 0)
     );
     return sorted[0];
-  }, [assessmentsList, selectedApplicantSequence, selectedMethodCode, assessmentMethods]);
+  }, [assessmentsList, selectedApplicantSequence, selectedMethodCode, assessmentMethods, lastCalculationResponse]);
 
   const basePolicyFoir = useMemo(() => {
     if (selectedMethodCode !== 'INCOME' && selectedMethodCode !== 'NORMAL_INCOME') {
@@ -4877,7 +4906,10 @@ export default function CustomerVerification({
       // explicitly entered Back Office override, but never inherit a different
       // FOIR master value (such as 65%) for the default calculation.
       finalManualFoir = finalManualFoir ?? 60;
-      finalManualObligation = finalManualObligation ?? Number(rtrSummaryMetrics.totalEmi || 0);
+      // Leave the obligation override null by default. The calculation API
+      // must derive existing EMI from active Live, FOIR-applicable loans in
+      // the RTR obligation summary. Only an explicitly entered manual
+      // override should populate this field.
 
       const proposedRoi = latestProposedLoan?.proposedROI ?? latestProposedLoan?.proposedRoi ?? latestProposedLoan?.ProposedROI;
       const proposedTenure = latestProposedLoan?.proposedTenureMonths ?? latestProposedLoan?.proposedTenure ?? latestProposedLoan?.ProposedTenureMonths;
@@ -4921,13 +4953,11 @@ export default function CustomerVerification({
         manualAnnualSalaryIncome: selectedMethodCode === 'NORMAL_INCOME'
           ? (currentCalcSettings.manualAnnualSalaryIncome === '' ? 0 : Number(currentCalcSettings.manualAnnualSalaryIncome))
           : null,
-        recommendedLoanAmount: selectedMethodCode === 'INCOME'
-          ? Number(
-            latestProposedLoan?.proposedLoanAmount
-              ?? latestProposedLoan?.recommendedLoanAmount
-              ?? latestProposedLoan?.ProposedLoanAmount
-          ) || null
-          : finalRecommendedAmount,
+        // The calculation endpoint must calculate eligibility first. The
+        // proposed/recommended amount is validated and saved separately after
+        // eligibility is available; sending it here causes a 400 when it is
+        // greater than the newly calculated eligible amount.
+        recommendedLoanAmount: finalRecommendedAmount,
         restrictOtherIncomeToSalary: selectedMethodCode === 'INCOME'
           ? (currentCalcSettings.restrictOtherIncomeToSalary !== false)
           : false,
