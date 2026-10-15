@@ -934,7 +934,7 @@ function ExecutiveEmployeeRecordModal({
                               records: person.customerList || []
                             })}
                           >
-                            View Customers ({person.applications})
+                            View Customers
                           </button>
                         )}
                       </div>
@@ -964,7 +964,7 @@ function ExecutiveEmployeeRecordModal({
                             records: person.assignedAgentsList || []
                           })}
                         >
-                          View Agents ({person.agents || person.assignedAgentsCount})
+                          View Agents
                         </button>
                       )}
                     </div>
@@ -2087,7 +2087,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                                 records: agent.customerList || []
                               })}
                             >
-                              View Customers ({agent.applications})
+                              View Customers
                             </button>
                           )}
                         </div>
@@ -2174,7 +2174,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                                 records: rm.assignedAgentsList || []
                               })}
                             >
-                              View Agents ({rm.agents})
+                              View Agents
                             </button>
                           )}
                         </div>
