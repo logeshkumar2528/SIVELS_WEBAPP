@@ -492,7 +492,8 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
         );
 
         const appsByAgent = appRows.reduce((map, app) => {
-          const aId = read(app, ['agentId', 'AgentId', 'assignedAgentId']);
+          const ownership = resolveApplicationOwnership(app);
+          const aId = ownership.isAgentCreated ? ownership.agentId : null;
           if (aId) map.set(String(aId), (map.get(String(aId)) || 0) + 1);
           return map;
         }, new Map());
