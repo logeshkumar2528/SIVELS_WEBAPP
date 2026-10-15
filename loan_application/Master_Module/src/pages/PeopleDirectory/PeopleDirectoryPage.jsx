@@ -155,10 +155,18 @@ const normalizeApplicationStatus = (value, statusName = '') => {
   if (named.includes('new') || named.includes('draft')) return 'New';
   if (named.includes('disburs')) return 'Disbursed';
 
-  const numeric = Number(value);
-  if (numeric === 2) return 'Approved';
-  if (numeric === 1) return 'Pending';
-  if (numeric === 0) return 'New';
+  if (value !== null && value !== undefined && value !== '') {
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric)) {
+      if (numeric === 6) return 'Returned';
+      if (numeric === 5) return 'Rejected';
+      if (numeric === 4) return 'Approved';
+      if (numeric === 3) return 'Under Review';
+      if (numeric === 2) return 'Logged to HO';
+      if (numeric === 1) return 'Pending';
+      if (numeric === 0) return 'New';
+    }
+  }
 
   const raw = String(value || '').trim();
   if (!raw || raw.toLowerCase() === 'draft') return 'New';
@@ -401,7 +409,7 @@ const ROLE_META = {
     subtitle: 'Network customer and application records.',
     icon: FileText,
     color: 'orange',
-    searchPlaceholder: 'Search customers by name, mobile, loan purpose, status...',
+    searchPlaceholder: 'Search customers by name, mobile, loan product, status...',
     emptyText: 'No customer records found.',
     addLabel: 'Add user',
   },
@@ -1561,7 +1569,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                 <tr>
                   <th>App / Customer ID</th>
                   <th>Customer</th>
-                  <th>Loan Purpose</th>
+                  <th>Loan Product</th>
                   <th>Expected Amount</th>
                   <th>Agent / RM</th>
                   <th>Status</th>
@@ -2002,7 +2010,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                 <dd>{selectedApplication.email}</dd>
               </div>
               <div>
-                <dt>Loan purpose</dt>
+                <dt>Loan product</dt>
                 <dd>{selectedApplication.loanPurpose}</dd>
               </div>
               <div>

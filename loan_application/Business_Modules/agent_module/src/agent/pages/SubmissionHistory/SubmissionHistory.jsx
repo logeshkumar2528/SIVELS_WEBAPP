@@ -37,6 +37,8 @@ const STATUS_OPTIONS = [
   { value: 'Under Review', label: 'CM Pending' },
   { value: 'Returned', label: 'BO Returned' },
   { value: 'Logged to HO', label: 'Logged to HO' },
+  { value: 'Approved', label: 'Approved' },
+  { value: 'Rejected', label: 'Rejected' },
 ]
 
 const getStatusType = (status) => {

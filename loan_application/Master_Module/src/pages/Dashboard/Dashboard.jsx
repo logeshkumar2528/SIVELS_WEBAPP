@@ -174,10 +174,18 @@ const normalizeApplicationStatus = (value, statusName = '') => {
   if (named.includes('new') || named.includes('draft')) return 'New';
   if (named.includes('disburs')) return 'Disbursed';
 
-  const numeric = Number(value);
-  if (numeric === 2) return 'Approved';
-  if (numeric === 1) return 'Pending';
-  if (numeric === 0) return 'New';
+  if (value !== null && value !== undefined && value !== '') {
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric)) {
+      if (numeric === 6) return 'Returned';
+      if (numeric === 5) return 'Rejected';
+      if (numeric === 4) return 'Approved';
+      if (numeric === 3) return 'Under Review';
+      if (numeric === 2) return 'Logged to HO';
+      if (numeric === 1) return 'Pending';
+      if (numeric === 0) return 'New';
+    }
+  }
 
   const raw = String(value || '').trim();
   if (!raw || raw.toLowerCase() === 'draft') return 'New';
@@ -475,7 +483,7 @@ export function Dashboard() {
     });
   }, [applications, applicationQuery, applicationStatusFilter]);
 
-  const pending = applications.filter((application) => /pending|review|new|submitted/i.test(application.status));
+  const pending = applications.filter((application) => /pending|review|new|submitted|logged to ho/i.test(application.status));
   const approved = applications.filter((application) => /approved/i.test(application.status));
   const disbursed = applications.filter((application) => /disburs/i.test(application.status));
   const coverage = rms.map((rm) => ({
