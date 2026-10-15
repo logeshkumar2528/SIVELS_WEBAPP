@@ -26,6 +26,7 @@ import { getAllBackOffice, getBackOfficeById } from '../../api/backOfficeApi';
 import { getAllAMS, getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
 import { getAllCreditManagers, getCreditManagerById } from '../../api/creditManagerApi';
 import { agentCustomerService } from '../../../../Core/src/services/agentCustomerService';
+import { selectLatestCustomerPhotoDoc } from '../../../../Core/src/utils/documentTypeHelper';
 import { getProfileImageUrl, getDocumentUrl, buildFileUrl } from '../../utils/profileImageHelper';
 import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
 import './PeopleDirectory.css';
@@ -234,6 +235,115 @@ function DirectoryAvatar({ role, id, name, className = 'role-avatar', style, ver
   return <span className={className} style={style}>{initials(name)}</span>;
 }
 
+const customerPhotoCache = new Map();
+
+function CustomerDirectoryAvatar({ customerId, name, className = 'role-avatar', style }) {
+  const [photoUrl, setPhotoUrl] = useState(() => {
+    const idKey = String(customerId || '');
+    return idKey ? (customerPhotoCache.get(idKey) || null) : null;
+  });
+
+  useEffect(() => {
+    if (!customerId) return;
+    const idKey = String(customerId);
+
+    if (customerPhotoCache.has(idKey)) {
+      setPhotoUrl(customerPhotoCache.get(idKey));
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadCustomerPhoto() {
+      try {
+        const docsRes = await agentCustomerService.getDocumentsByCustomerId(customerId);
+        const docs = Array.isArray(docsRes) ? docsRes : (docsRes?.data || docsRes?.value || []);
+        const photoDoc = selectLatestCustomerPhotoDoc(docs);
+
+        if (!photoDoc) {
+          if (isMounted) setPhotoUrl(null);
+          return;
+        }
+
+        const docId = photoDoc.agentCustomerDocumentId ?? photoDoc.AgentCustomerDocumentId ?? photoDoc.id;
+        if (!docId) {
+          if (isMounted) setPhotoUrl(null);
+          return;
+        }
+
+        const blob = await agentCustomerService.downloadDocument(docId);
+        if (blob && blob.size > 0) {
+          let mimeType = blob.type && blob.type !== 'application/octet-stream' ? blob.type : 'image/jpeg';
+          const fileName = String(photoDoc.fileName || photoDoc.documentName || photoDoc.filePath || '').toLowerCase();
+          if (fileName.endsWith('.png')) mimeType = 'image/png';
+          else if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg')) mimeType = 'image/jpeg';
+          else if (fileName.endsWith('.webp')) mimeType = 'image/webp';
+
+          const typedBlob = blob.type === mimeType ? blob : new Blob([blob], { type: mimeType });
+          const objectUrl = URL.createObjectURL(typedBlob);
+
+          // Only cache successful downloads
+          customerPhotoCache.set(idKey, objectUrl);
+
+          if (isMounted) {
+            setPhotoUrl(objectUrl);
+          }
+        } else {
+          if (isMounted) setPhotoUrl(null);
+        }
+      } catch {
+        // Do not cache failed requests permanently
+        if (isMounted) {
+          setPhotoUrl(null);
+        }
+      }
+    }
+
+    loadCustomerPhoto();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [customerId]);
+
+  const handleImageError = () => {
+    const idKey = String(customerId || '');
+    if (idKey && customerPhotoCache.has(idKey)) {
+      const url = customerPhotoCache.get(idKey);
+      if (url && url.startsWith('blob:')) {
+        try { URL.revokeObjectURL(url); } catch (_) {}
+      }
+      customerPhotoCache.delete(idKey);
+    }
+    setPhotoUrl(null);
+  };
+
+  if (photoUrl) {
+    return (
+      <span
+        className={className}
+        style={{
+          overflow: 'hidden',
+          padding: 0,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          ...style,
+        }}
+      >
+        <img
+          src={photoUrl}
+          alt={name ? `${name} avatar` : 'Customer avatar'}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+          onError={handleImageError}
+        />
+      </span>
+    );
+  }
+
+  return <span className={className} style={style}>{initials(name)}</span>;
+}
+
 const ROLE_META = {
   agent: {
     key: 'agent',
@@ -334,6 +444,16 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
   useEffect(() => {
     return () => {
       cleanupBlobUrls();
+      customerPhotoCache.forEach((url) => {
+        try {
+          if (url && url.startsWith('blob:')) {
+            URL.revokeObjectURL(url);
+          }
+        } catch (e) {
+          // ignore
+        }
+      });
+      customerPhotoCache.clear();
     };
   }, [cleanupBlobUrls]);
 
@@ -600,6 +720,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
 
             return {
               id: read(application, ['agentCustomerId', 'AgentCustomerId', 'applicationId', 'id']),
+              customerCode: read(application, ['customerCode', 'CustomerCode'], ''),
               agentId: resolvedAgentId,
               agentName: resolvedAgentName,
               agentPhone: agent.phone || '—',
@@ -610,7 +731,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               mobile: read(application, ['mobileNumber', 'MobileNumber', 'mobile'], '—'),
               email: read(application, ['email', 'Email', 'emailAddress'], '—'),
               employmentType: read(application, ['employmentTypeName', 'EmploymentTypeName'], '—'),
-              loanPurpose: read(application, ['loanPurposeName', 'LoanPurposeName', 'loanType'], '—'),
+              loanPurpose: read(application, ['loanProductName', 'LoanProductName', 'loanPurposeName', 'LoanPurposeName', 'loanType'], '—'),
               amount: money(read(application, ['expectedLoanAmount', 'ExpectedLoanAmount', 'disbursedAmount', 'loanAmount', 'requestedAmount'])),
               remarks: read(application, ['remarks', 'Remarks'], '—'),
               rawStatus,
@@ -669,7 +790,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
           .some((val) => String(val || '').toLowerCase().includes(search));
       }
       if (roleKey === 'customer') {
-        return [item.id, item.customerName, item.mobile, item.email, item.loanPurpose, item.agentName, item.rmName, item.status]
+        return [item.id, item.customerCode, item.customerName, item.mobile, item.email, item.loanPurpose, item.agentName, item.rmName, item.status]
           .some((val) => String(val || '').toLowerCase().includes(search));
       }
       return true;
@@ -1453,10 +1574,13 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                 ) : visibleRecords.length ? (
                   visibleRecords.map((customer) => (
                     <tr key={customer.id}>
-                      <td><strong>#{customer.id}</strong></td>
+                      <td><strong>{customer.customerCode || `#${customer.id}`}</strong></td>
                       <td>
                         <div className="agent-name">
-                          <span>{initials(customer.customerName)}</span>
+                          <CustomerDirectoryAvatar
+                            customerId={customer.id}
+                            name={customer.customerName}
+                          />
                           <div>
                             <strong>{customer.customerName}</strong>
                             <small>{customer.mobile}</small>
@@ -1852,8 +1976,18 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
             >
               <X size={18} />
             </button>
-            <div className="person-dialog-avatar">{initials(selectedApplication.customerName)}</div>
-            <span className="eyebrow">Application #{selectedApplication.id}</span>
+            <div className="person-dialog-avatar" style={{ overflow: 'hidden', padding: 0 }}>
+              <CustomerDirectoryAvatar
+                customerId={selectedApplication.id}
+                name={selectedApplication.customerName}
+                style={{ width: '100%', height: '100%', borderRadius: 'inherit' }}
+              />
+            </div>
+            <span className="eyebrow">
+              {selectedApplication.customerCode
+                ? `Customer ${selectedApplication.customerCode} (App #${selectedApplication.id})`
+                : `Application #${selectedApplication.id}`}
+            </span>
             <h2>{selectedApplication.customerName}</h2>
             <span className={`status ${selectedApplication.status.toLowerCase().replace(/\s+/g, '-')}`}>
               {selectedApplication.status}
