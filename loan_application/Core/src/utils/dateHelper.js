@@ -149,15 +149,19 @@ export function getIstNDaysAgoDateString(n = 6) {
 
 /**
  * Evaluates whether an explicit date value falls on today or within the
- * previous 6 calendar days (inclusive 7-day window) in IST.
+ * previous 29 calendar days (inclusive 30-day window) in IST.
  * Returns false if dateValue is invalid or missing.
  */
-export function isWithinLast7CalendarDays(dateValue) {
+export function isWithinLast30CalendarDays(dateValue) {
   const itemDateStr = getIstCalendarDateString(dateValue);
+
   if (!itemDateStr) return false;
+
   const todayStr = getIstTodayDateString();
-  const sevenDaysAgoStr = getIstNDaysAgoDateString(6);
-  return itemDateStr >= sevenDaysAgoStr && itemDateStr <= todayStr;
+  const thirtyDaysAgoStr = getIstNDaysAgoDateString(29);
+
+  return itemDateStr >= thirtyDaysAgoStr &&
+         itemDateStr <= todayStr;
 }
 
 /**
@@ -185,8 +189,8 @@ export function isWithinDateRange(dateValue, fromDate, toDate) {
 
 /**
  * Standardized listing date predicate:
- * - When searchActive: searches full dataset (bypasses 7-day default). If custom dates exist, applies custom range.
- * - When !searchActive: applies custom range if custom dates exist; otherwise applies default latest 7 calendar days.
+ * - When searchActive: searches full dataset (bypasses 30-day default). If custom dates exist, applies custom range.
+ * - When !searchActive: applies custom range if custom dates exist; otherwise applies default latest 30 calendar days.
  */
 export function matchesListingDateCriteria({
   dateValue,
@@ -207,7 +211,7 @@ export function matchesListingDateCriteria({
     return isWithinDateRange(dateValue, fromDate, toDate);
   }
 
-  return isWithinLast7CalendarDays(dateValue);
+  return isWithinLast30CalendarDays(dateValue);
 }
 
 export { IST_TIMEZONE };
