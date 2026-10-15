@@ -222,12 +222,14 @@ export function Navbar() {
     '/back-office',
     '/ams',
     '/credit-managers',
+    '/credit-heads',
     '/customers',
     '/master/agents',
     '/master/relationship-managers',
     '/master/back-office',
     '/master/ams',
     '/master/credit-managers',
+    '/master/credit-heads',
     '/master/customers'
   ];
 

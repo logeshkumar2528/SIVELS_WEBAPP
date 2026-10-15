@@ -22,6 +22,7 @@ import { getAllBackOffice, getBackOfficeById } from '../../api/backOfficeApi';
 import { getRelationshipManager } from '../../api/rmApi';
 import { getAgentById } from '../../api/agentApi';
 import { getAllCreditManagers, getCreditManagerById } from '../../api/creditManagerApi';
+import { getAllCreditHeads } from '../../api/creditHeadApi';
 import { getProfileImageUrl, getDocumentUrl, buildFileUrl } from '../../utils/profileImageHelper';
 import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
 import sivelsLogo from '../../../../Core/src/assets/branding/SivelsFinanceLogo.jpg';
@@ -215,6 +216,7 @@ export function Dashboard() {
   const [amsList, setAmsList] = useState([]);
   const [backOfficeList, setBackOfficeList] = useState([]);
   const [creditManagers, setCreditManagers] = useState([]);
+  const [creditHeads, setCreditHeads] = useState([]);
   const [query, setQuery] = useState('');
   const [applicationQuery, setApplicationQuery] = useState('');
   const [applicationStatusFilter, setApplicationStatusFilter] = useState('All');
@@ -234,16 +236,17 @@ export function Dashboard() {
     setError('');
     try {
       const headers = authHeaders();
-      const [agentResult, applicationResult, rmResult, amsResult, backOfficeResult, cmResult] = await Promise.allSettled([
+      const [agentResult, applicationResult, rmResult, amsResult, backOfficeResult, cmResult, chResult] = await Promise.allSettled([
         fetch(`${API_BASE}/AgentMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Agents request failed'))),
         fetch(`${API_BASE}/AgentAddCustomer`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Applications request failed'))),
         fetch(`${API_BASE}/RMMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('RM request failed'))),
         fetch(`${API_BASE}/AMSMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('AMS request failed'))),
         getAllBackOffice(),
         getAllCreditManagers(),
+        getAllCreditHeads(),
       ]);
 
-      if ([agentResult, applicationResult, rmResult, amsResult, backOfficeResult, cmResult].some((result) => result.status === 'rejected')) {
+      if ([agentResult, applicationResult, rmResult, amsResult, backOfficeResult, cmResult, chResult].some((result) => result.status === 'rejected')) {
         setError('Some live records could not be loaded. Available data is shown below.');
       }
 
@@ -436,12 +439,34 @@ export function Dashboard() {
         };
       }).filter((item) => item.id || item.name);
 
+      const chRows = chResult.status === 'fulfilled' ? unwrap(chResult.value) : [];
+      const liveCreditHeads = chRows.map((item) => {
+        const id = read(item, ['creditHeadId', 'CreditHeadId', 'id', 'Id']);
+        const chName = read(item, ['fullName', 'FullName', 'name', 'Name'], 'Unnamed credit head');
+        return {
+          id,
+          creditHeadId: id,
+          creditHeadCode: read(item, ['creditHeadCode', 'CreditHeadCode', 'code', 'Code']),
+          name: chName,
+          fullName: chName,
+          email: read(item, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+          phone: read(item, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+          branch: read(item, ['branch', 'Branch', 'branchName', 'BranchName']),
+          status: status(read(item, ['status', 'Status', 'isActive', 'IsActive'])),
+          aadhaarDocumentPath: getAadhaarPath(item),
+          panCardPath: getPanPath(item),
+          profileImagePath: getProfilePath(item),
+          rawRecord: item,
+        };
+      }).filter((item) => item.id || item.name);
+
       setAgents(liveAgents);
       setApplications(liveApplications);
       setRms(liveRms);
       setAmsList(liveAms);
       setBackOfficeList(liveBackOffice);
       setCreditManagers(liveCreditManagers);
+      setCreditHeads(liveCreditHeads);
       setUpdatedAt(new Date());
     } catch {
       setError('Live dashboard data is unavailable. Check your connection and try again.');
@@ -451,6 +476,7 @@ export function Dashboard() {
       setAmsList([]);
       setBackOfficeList([]);
       setCreditManagers([]);
+      setCreditHeads([]);
     } finally {
       setLoading(false);
     }
@@ -1023,7 +1049,7 @@ export function Dashboard() {
             <span className="section-kicker">PEOPLE & ACCESS</span>
             <h2>Manage Your Lending Team</h2>
           </div>
-          <span className="admin-subheading-badge">6 Directories</span>
+          <span className="admin-subheading-badge">7 Directories</span>
         </div>
 
         <div className="people-role-card-grid">
@@ -1122,7 +1148,26 @@ export function Dashboard() {
             </div>
           </button>
 
-          {/* 6. CUSTOMERS */}
+          {/* 6. CREDIT HEADS */}
+          <button
+            type="button"
+            className="people-role-card people-role-card-credit-head"
+            onClick={() => navigate('/credit-heads')}
+          >
+            <div className="people-role-icon indigo">
+              <Landmark size={20} />
+            </div>
+            <div className="people-role-info">
+              <h3 className="people-role-title">Credit Heads</h3>
+              <span className="people-role-subtitle">Directory records</span>
+            </div>
+            <div className="people-role-metric">
+              <span className="people-role-count">{creditHeads.length}</span>
+              <ArrowUpRight size={16} className="people-role-arrow" />
+            </div>
+          </button>
+
+          {/* 7. CUSTOMERS */}
           <button
             type="button"
             className="people-role-card people-role-card-customer"

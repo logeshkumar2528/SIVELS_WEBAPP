@@ -25,6 +25,7 @@ import { getAllRelationshipManagers, getRelationshipManager } from '../../api/rm
 import { getAllBackOffice, getBackOfficeById } from '../../api/backOfficeApi';
 import { getAllAMS, getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
 import { getAllCreditManagers, getCreditManagerById } from '../../api/creditManagerApi';
+import { getAllCreditHeads, getCreditHeadById } from '../../api/creditHeadApi';
 import { agentCustomerService } from '../../../../Core/src/services/agentCustomerService';
 import { selectLatestCustomerPhotoDoc } from '../../../../Core/src/utils/documentTypeHelper';
 import { getProfileImageUrl, getDocumentUrl, buildFileUrl } from '../../utils/profileImageHelper';
@@ -710,6 +711,7 @@ export function ExecutiveEmployeeRecordModal({
 
   const normRole = useMemo(() => {
     const t = String(roleType || person?.type || '').toLowerCase();
+    if (t.includes('credithead') || t.includes('credit head')) return 'CreditHead';
     if (t.includes('agent')) return 'Agent';
     if (t.includes('relation') || t === 'rm') return 'RM';
     if (t.includes('back')) return 'BackOffice';
@@ -725,6 +727,7 @@ export function ExecutiveEmployeeRecordModal({
       case 'BackOffice': return 'Back Office';
       case 'AMS': return 'Area Sourcing Manager (ASM)';
       case 'CreditManager': return 'Credit Manager';
+      case 'CreditHead': return 'Credit Head';
       default: return roleType || 'Employee';
     }
   }, [normRole, roleType]);
@@ -735,6 +738,7 @@ export function ExecutiveEmployeeRecordModal({
     person?.rmId ||
     person?.backOfficeId ||
     person?.creditManagerId ||
+    person?.creditHeadId ||
     person?.amsId ||
     person?.AmsId;
 
@@ -754,6 +758,8 @@ export function ExecutiveEmployeeRecordModal({
         return read(person, ['amsCode', 'AmsCode', 'code', 'Code']);
       case 'CreditManager':
         return read(person, ['creditManagerCode', 'CreditManagerCode', 'code', 'Code']);
+      case 'CreditHead':
+        return read(person, ['creditHeadCode', 'CreditHeadCode', 'code', 'Code']);
       default:
         return read(person, ['code', 'Code']);
     }
@@ -1273,6 +1279,16 @@ const ROLE_META = {
     emptyText: 'No credit managers found.',
     addLabel: 'Add user',
   },
+  creditHead: {
+    key: 'creditHead',
+    title: 'Credit Heads',
+    subtitle: 'Review, sanction, and oversee senior credit approvals and portfolio health.',
+    icon: Landmark,
+    color: 'indigo',
+    searchPlaceholder: 'Search credit heads by name, code, contact, branch...',
+    emptyText: 'No credit heads found.',
+    addLabel: 'Add user',
+  },
   customer: {
     key: 'customer',
     title: 'Customers',
@@ -1615,6 +1631,49 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
           .filter((item) => item.id || item.name);
 
         setRecords(liveCm);
+      } else if (roleKey === 'creditHead') {
+        const chResult = await getAllCreditHeads();
+        const chRows = unwrap(chResult);
+        const liveCh = chRows
+          .map((item) => {
+            const id = read(item, ['creditHeadId', 'CreditHeadId', 'id', 'Id']);
+            const chName = read(item, ['fullName', 'FullName', 'name', 'Name'], 'Unnamed credit head');
+            return {
+              id,
+              creditHeadId: id,
+              creditHeadCode: read(item, ['creditHeadCode', 'CreditHeadCode', 'code', 'Code']),
+              name: chName,
+              fullName: chName,
+              dateOfBirth: read(item, ['dateOfBirth', 'DateOfBirth', 'dob', 'DOB']),
+              genderId: item.genderId ?? item.GenderId,
+              genderName: read(item, ['genderName', 'GenderName', 'gender', 'Gender']),
+              address: read(item, ['address', 'Address']),
+              stateId: item.stateId ?? item.StateId,
+              stateName: read(item, ['stateName', 'StateName', 'state', 'State']),
+              cityId: item.cityId ?? item.CityId,
+              cityName: read(item, ['cityName', 'CityName', 'city', 'City']),
+              districtId: item.districtId ?? item.DistrictId,
+              districtName: read(item, ['districtName', 'DistrictName', 'district', 'District']),
+              pincode: read(item, ['pincode', 'Pincode']),
+              email: read(item, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+              emailAddress: read(item, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+              phone: read(item, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+              mobileNumber: read(item, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+              branch: read(item, ['branch', 'Branch', 'branchName', 'BranchName']),
+              dateJoined: read(item, ['dateJoined', 'DateJoined']),
+              accountNumber: read(item, ['accountNumber', 'AccountNumber']),
+              ifscCode: read(item, ['ifscCode', 'IfscCode', 'IFSCCode']),
+              status: status(read(item, ['status', 'Status', 'isActive', 'IsActive'])),
+              isActive: item.isActive ?? item.IsActive ?? true,
+              aadhaarDocumentPath: getAadhaarPath(item),
+              panCardPath: getPanPath(item),
+              profileImagePath: getProfilePath(item),
+              rawRecord: item,
+            };
+          })
+          .filter((item) => item.id || item.name);
+
+        setRecords(liveCh);
       } else if (roleKey === 'customer') {
         const [appResult, agentResult, rmResult] = await Promise.allSettled([
           agentCustomerService.getAllCustomers(),
@@ -1737,6 +1796,10 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
         return [item.fullName, item.name, item.creditManagerCode, item.emailAddress, item.email, item.mobileNumber, item.phone, item.branch, item.cityName, item.status]
           .some((val) => String(val || '').toLowerCase().includes(search));
       }
+      if (roleKey === 'creditHead') {
+        return [item.fullName, item.name, item.creditHeadCode, item.emailAddress, item.email, item.mobileNumber, item.phone, item.branch, item.cityName, item.status]
+          .some((val) => String(val || '').toLowerCase().includes(search));
+      }
       if (roleKey === 'customer') {
         return [item.id, item.customerCode, item.customerName, item.mobile, item.email, item.loanPurpose, item.agentName, item.rmName, item.status]
           .some((val) => String(val || '').toLowerCase().includes(search));
@@ -1766,8 +1829,8 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
 
   // View Person Modal Handler
   const handleOpenPersonDetails = async (person, type) => {
-    const roleType = type || (roleKey === 'rm' ? 'Relationship manager' : roleKey === 'backOffice' ? 'Back Office' : roleKey === 'creditManager' ? 'Credit Manager' : 'Agent');
-    const targetId = person?.id || person?.agentId || person?.rmId || person?.backOfficeId || person?.creditManagerId;
+    const roleType = type || (roleKey === 'rm' ? 'Relationship manager' : roleKey === 'backOffice' ? 'Back Office' : roleKey === 'creditHead' ? 'Credit Head' : roleKey === 'creditManager' ? 'Credit Manager' : 'Agent');
+    const targetId = person?.id || person?.agentId || person?.rmId || person?.backOfficeId || person?.creditManagerId || person?.creditHeadId;
     if (!targetId && !person) return;
 
     const rawIsActive = person?.isActive ?? person?.IsActive;
@@ -1887,6 +1950,40 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
             name: freshName,
             fullName: freshName,
             creditManagerCode: freshCode,
+            email: freshEmail,
+            phone: freshPhone,
+            branch: freshBranch,
+            status: freshStatus,
+            aadhaarDocumentPath: getAadhaarPath(record) || initialPerson.aadhaarDocumentPath,
+            panCardPath: getPanPath(record) || initialPerson.panCardPath,
+            profileImagePath: getProfilePath(record) || initialPerson.profileImagePath,
+            rawRecord: record,
+          }));
+        }
+      } else if (roleType === 'Credit Head' || roleType === 'CreditHead') {
+        const response = await getCreditHeadById(targetId);
+        const recordValue = response?.data !== undefined ? response.data : response;
+        const record = Array.isArray(recordValue)
+          ? recordValue[0]
+          : (recordValue?.value?.[0] || recordValue?.data || recordValue?.value || recordValue);
+
+        if (record && typeof record === 'object') {
+          const freshName = read(record, ['fullName', 'FullName', 'name', 'Name']) || initialPerson.name;
+          const freshCode = read(record, ['creditHeadCode', 'CreditHeadCode', 'code', 'Code']) || initialPerson.creditHeadCode;
+          const freshEmail = read(record, ['emailAddress', 'EmailAddress', 'email', 'Email']) || initialPerson.email;
+          const freshPhone = read(record, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']) || initialPerson.phone;
+          const freshBranch = read(record, ['branch', 'Branch', 'branchName', 'BranchName']) || initialPerson.branch;
+          const freshStatus = status(read(record, ['status', 'Status', 'isActive', 'IsActive']), initialPerson.status);
+
+          setSelectedPerson((prev) => ({
+            ...prev,
+            ...record,
+            id: targetId,
+            creditHeadId: targetId,
+            type: 'Credit Head',
+            name: freshName,
+            fullName: freshName,
+            creditHeadCode: freshCode,
             email: freshEmail,
             phone: freshPhone,
             branch: freshBranch,
@@ -2537,6 +2634,84 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                   <tr>
                     <td className="empty-table" colSpan="6">
                       {searchQuery ? 'No matching credit managers found.' : meta.emptyText}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {roleKey === 'creditHead' && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Credit Head</th>
+                  <th>Credit Head Code</th>
+                  <th>Contact</th>
+                  <th>Branch</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td className="empty-table" colSpan="6">Loading live credit head data…</td></tr>
+                ) : visibleRecords.length ? (
+                  visibleRecords.map((ch) => {
+                    const displayName = ch.fullName || ch.name || 'Unnamed credit head';
+                    const chId = ch.id || ch.creditHeadId;
+                    return (
+                      <tr key={chId || ch.creditHeadCode || displayName}>
+                        <td>
+                          <div className="agent-name">
+                            <DirectoryAvatar
+                              role="CreditHead"
+                              id={chId}
+                              name={displayName}
+                              version={imageVersion}
+                              imagePath={ch.profileImagePath}
+                            />
+                            <strong>{displayName}</strong>
+                          </div>
+                        </td>
+                        <td>
+                          <strong>{ch.creditHeadCode || (chId ? `#${chId}` : '—')}</strong>
+                        </td>
+                        <td>
+                          <div>{ch.emailAddress || ch.email || '—'}</div>
+                          <small>{ch.mobileNumber || ch.phone || '—'}</small>
+                        </td>
+                        <td>{ch.branch || '—'}</td>
+                        <td>
+                          <span className={`status ${ch.isActive !== false ? 'active' : 'inactive'}`}>
+                            {ch.isActive !== false ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="action-buttons">
+                            <button
+                              type="button"
+                              className="details-button"
+                              onClick={() => handleOpenPersonDetails(ch, 'Credit Head')}
+                            >
+                              <Eye size={15} /> View
+                            </button>
+                            <button
+                              type="button"
+                              className="details-button edit-button"
+                              onClick={() => navigate(`/edit-credit-head/${chId}`)}
+                            >
+                              <Pencil size={15} /> Edit
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td className="empty-table" colSpan="6">
+                      {searchQuery ? 'No matching credit heads found.' : meta.emptyText}
                     </td>
                   </tr>
                 )}
