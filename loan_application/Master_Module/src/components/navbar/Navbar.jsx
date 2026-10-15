@@ -159,6 +159,9 @@ export function Navbar() {
     localStorage.removeItem('sivels_currentUser');
     localStorage.removeItem('sivels_permissions');
     localStorage.removeItem('sivels_roles');
+    localStorage.removeItem('creditHeadAuth');
+    localStorage.removeItem('creditHeadData');
+    localStorage.removeItem('creditHeadId');
     window.location.href = '/login';
   };
 

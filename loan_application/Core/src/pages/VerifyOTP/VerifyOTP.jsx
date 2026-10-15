@@ -312,6 +312,62 @@ export default function VerifyOTP() {
           };
           localStorage.setItem('sivels_currentUser', JSON.stringify(cmUserData));
           resolvedDestination = '/credit';
+        } else if (
+          resolvedModule === 'CreditHead' ||
+          resolvedModule === 'Credit Head' ||
+          String(result?.role || '').toLowerCase() === 'credithead' ||
+          String(result?.role || '').toLowerCase() === 'credit_head'
+        ) {
+          const chAccount = result?.creditHead || resolvedAccount || {};
+          const chId = chAccount?.creditHeadId ?? chAccount?.CreditHeadId ?? chAccount?.id;
+          const uId = result?.userId ?? chAccount?.userId ?? null;
+
+          if (!chId) {
+            setErrorMessage('Valid Credit Head record could not be resolved. Please log in again.');
+            showToast('error', 'Authentication failed', 'Valid Credit Head record could not be resolved.');
+            return;
+          }
+
+          const creditHeadData = {
+            ...chAccount,
+            ...(uId ? { userId: Number(uId) } : {}),
+            creditHeadId: Number(chId),
+            mobileNumber: cleanMobile,
+            role: 'CreditHead',
+          };
+
+          localStorage.setItem('creditHeadData', JSON.stringify(creditHeadData));
+          localStorage.setItem('creditHeadId', String(chId));
+
+          const creditHeadAuth = {
+            isAuthenticated: true,
+            creditHeadId: Number(chId),
+            id: Number(chId),
+            userId: uId ? Number(uId) : null,
+            creditHeadCode: chAccount?.creditHeadCode || chAccount?.code || '',
+            fullName: chAccount?.fullName || chAccount?.name || 'Credit Head',
+            mobileNumber: cleanMobile,
+            emailAddress: chAccount?.emailAddress || chAccount?.email || '',
+            branch: chAccount?.branch || '',
+            role: 'CreditHead',
+            isActive: chAccount?.isActive !== false,
+            loginTimestamp: new Date().toISOString(),
+          };
+
+          localStorage.setItem('creditHeadAuth', JSON.stringify(creditHeadAuth));
+
+          const chUserData = {
+            ...creditHeadData,
+            userId: uId ? Number(uId) : null,
+            creditHeadId: Number(chId),
+            creditHeadCode: chAccount?.creditHeadCode || chAccount?.code || '',
+            fullName: chAccount?.fullName || chAccount?.name || 'Credit Head',
+            role: 'CreditHead',
+            mobileNumber: cleanMobile,
+            isActive: chAccount?.isActive !== false,
+          };
+          localStorage.setItem('sivels_currentUser', JSON.stringify(chUserData));
+          resolvedDestination = '/credit-head/dashboard';
         }
 
         // 6. Brief pause to allow success toast to display before page transition
