@@ -379,6 +379,158 @@ function CustomerDirectoryAvatar({ customerId, name, className = 'role-avatar', 
   return <span className={className} style={style}>{initials(name)}</span>;
 }
 
+function SublistRecordsModal({ modalData, onClose }) {
+  if (!modalData) return null;
+  const { title, type, records = [] } = modalData;
+  const isCustomer = type === 'customers';
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="exec-record-backdrop"
+      role="presentation"
+      style={{ zIndex: 1200 }}
+      onMouseDown={onClose}
+    >
+      <section
+        className="exec-record-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        style={{
+          maxWidth: '640px',
+          width: '92%',
+          maxHeight: '85vh',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: '#FFFFFF',
+          borderRadius: '10px',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)'
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <header
+          style={{
+            background: 'linear-gradient(135deg, #0F3E2E 0%, #16533D 100%)',
+            color: '#FFFFFF',
+            padding: '16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderBottom: '1px solid rgba(255,255,255,0.1)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Users size={18} style={{ color: '#86EFAC' }} />
+            <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#FFFFFF' }}>{title}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#FFFFFF',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '4px',
+              borderRadius: '4px',
+              opacity: 0.85
+            }}
+          >
+            <X size={18} />
+          </button>
+        </header>
+
+        <div style={{ padding: '16px 20px', overflowY: 'auto', overflowX: 'hidden', flex: 1, backgroundColor: '#FFFFFF' }}>
+          {records.length === 0 ? (
+            <div style={{ padding: '30px', textAlign: 'center', color: '#64748B', fontSize: '14px' }}>
+              No {isCustomer ? 'customers' : 'agents'} found.
+            </div>
+          ) : (
+            <table
+              style={{
+                width: '100%',
+                minWidth: '0px',
+                tableLayout: 'fixed',
+                borderCollapse: 'collapse',
+                fontSize: '13px'
+              }}
+            >
+              <thead>
+                <tr style={{ borderBottom: '2px solid #E2E8F0', backgroundColor: '#F8FAFC', textAlign: 'left' }}>
+                  <th style={{ padding: '10px 12px', width: '60px', color: '#475569', fontWeight: 600 }}>S.No</th>
+                  <th style={{ padding: '10px 12px', color: '#475569', fontWeight: 600, overflowWrap: 'break-word' }}>
+                    {isCustomer ? 'Customer Name' : 'Agent Name'}
+                  </th>
+                  <th style={{ padding: '10px 12px', width: '160px', color: '#475569', fontWeight: 600, overflowWrap: 'break-word' }}>
+                    {isCustomer ? 'Customer Code' : 'Agent Code'}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {records.map((item, idx) => (
+                  <tr
+                    key={item.id || idx}
+                    style={{
+                      borderBottom: '1px solid #E2E8F0',
+                      backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA'
+                    }}
+                  >
+                    <td style={{ padding: '10px 12px', color: '#64748B', fontWeight: 500, verticalAlign: 'middle' }}>
+                      {item.sNo || idx + 1}
+                    </td>
+                    <td style={{ padding: '10px 12px', color: '#0F172A', fontWeight: 600, verticalAlign: 'middle', overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+                      {item.name || '—'}
+                    </td>
+                    <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: '#166534', fontWeight: 600, verticalAlign: 'middle', overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+                      {item.code || '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <footer
+          style={{
+            padding: '12px 20px',
+            backgroundColor: '#F8FAFC',
+            borderTop: '1px solid #E2E8F0',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}
+        >
+          <span style={{ fontSize: '12px', color: '#64748B' }}>
+            Total: <strong>{records.length}</strong> {records.length === 1 ? (isCustomer ? 'Customer' : 'Agent') : (isCustomer ? 'Customers' : 'Agents')}
+          </span>
+          <button
+            type="button"
+            className="details-button"
+            onClick={onClose}
+            style={{ padding: '6px 16px', fontSize: '13px' }}
+          >
+            Close
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 function ExecutiveEmployeeRecordModal({
   person,
   roleType,
@@ -387,6 +539,7 @@ function ExecutiveEmployeeRecordModal({
   locations = null,
   onClose,
   onPreviewDocument,
+  onViewSublist = null,
 }) {
   if (!person) return null;
 
@@ -766,9 +919,25 @@ function ExecutiveEmployeeRecordModal({
                     </div>
                     <div className="exec-field">
                       <span className="exec-field-label">Sourced Applications</span>
-                      <span className="exec-field-value highlight">
-                        {person.applications !== undefined && person.applications !== null ? String(person.applications) : '0'}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span className="exec-field-value highlight">
+                          {person.applications !== undefined && person.applications !== null ? String(person.applications) : '0'}
+                        </span>
+                        {Number(person.applications || 0) > 0 && (
+                          <button
+                            type="button"
+                            className="details-button"
+                            style={{ padding: '2px 8px', fontSize: '11px', height: 'auto', lineHeight: '1.3' }}
+                            onClick={() => onViewSublist?.({
+                              title: `Customers — ${fullName}`,
+                              type: 'customers',
+                              records: person.customerList || []
+                            })}
+                          >
+                            View Customers ({person.applications})
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </>
                 )}
@@ -776,13 +945,29 @@ function ExecutiveEmployeeRecordModal({
                 {normRole === 'RM' && (
                   <div className="exec-field">
                     <span className="exec-field-label">Assigned Agents</span>
-                    <span className="exec-field-value">
-                      {person.agents !== undefined && person.agents !== null
-                        ? String(person.agents)
-                        : person.assignedAgentsCount !== undefined
-                        ? String(person.assignedAgentsCount)
-                        : '—'}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span className="exec-field-value">
+                        {person.agents !== undefined && person.agents !== null
+                          ? String(person.agents)
+                          : person.assignedAgentsCount !== undefined
+                          ? String(person.assignedAgentsCount)
+                          : '—'}
+                      </span>
+                      {Number(person.agents || person.assignedAgentsCount || 0) > 0 && (
+                        <button
+                          type="button"
+                          className="details-button"
+                          style={{ padding: '2px 8px', fontSize: '11px', height: 'auto', lineHeight: '1.3' }}
+                          onClick={() => onViewSublist?.({
+                            title: `Assigned Agents — ${fullName}`,
+                            type: 'agents',
+                            records: person.assignedAgentsList || []
+                          })}
+                        >
+                          View Agents ({person.agents || person.assignedAgentsCount})
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -803,10 +988,7 @@ function ExecutiveEmployeeRecordModal({
                 {normRole === 'AMS' && (
                   <div className="exec-field exec-field-full">
                     <span className="exec-field-label">Assigned Districts</span>
-                    <span className="exec-field-value">
-                      {formatDistrictList(person.districts || person.districtNames)}
-                    </span>
-                    {((person.districts && person.districts.length > 0) || (person.districtNames && person.districtNames.length > 0)) && (
+                    {((person.districts && person.districts.length > 0) || (person.districtNames && person.districtNames.length > 0)) ? (
                       <div className="exec-district-pills">
                         {(person.districts || person.districtNames).map((d, i) => (
                           <span key={d?.districtId || i} className="exec-district-pill">
@@ -814,6 +996,8 @@ function ExecutiveEmployeeRecordModal({
                           </span>
                         ))}
                       </div>
+                    ) : (
+                      <span className="exec-field-value">—</span>
                     )}
                   </div>
                 )}
@@ -1018,6 +1202,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
   const [previewDoc, setPreviewDoc] = useState(null);
   const [imageVersion, setImageVersion] = useState(() => Date.now());
   const [locations, setLocations] = useState(() => locationLookupCache || { states: [], cities: [], districts: [] });
+  const [sublistModal, setSublistModal] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -1088,18 +1273,50 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
           })
         );
 
-        const appsByAgent = appRows.reduce((map, app) => {
+        const appsByAgent = new Map();
+        const appRecordsByAgent = new Map();
+
+        appRows.forEach((app) => {
           const ownership = resolveApplicationOwnership(app);
           const aId = ownership.isAgentCreated ? ownership.agentId : null;
-          if (aId) map.set(String(aId), (map.get(String(aId)) || 0) + 1);
-          return map;
-        }, new Map());
+          if (aId) {
+            const key = String(aId);
+            appsByAgent.set(key, (appsByAgent.get(key) || 0) + 1);
+            if (!appRecordsByAgent.has(key)) {
+              appRecordsByAgent.set(key, []);
+            }
+            appRecordsByAgent.get(key).push(app);
+          }
+        });
 
         const liveAgents = agentRows
           .map((agent) => {
             const rmId = read(agent, ['rmId', 'RMId', 'relationshipManagerId', 'RelationshipManagerId', 'createdBy']);
             const id = read(agent, ['agentId', 'AgentId', 'id', 'Id']);
             const agentName = read(agent, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name'], 'Unnamed agent');
+            const rawApps = appRecordsByAgent.get(String(id)) || [];
+            const sortedApps = [...rawApps].sort((a, b) => {
+              const idA = Number(a?.agentCustomerId ?? a?.id ?? 0);
+              const idB = Number(b?.agentCustomerId ?? b?.id ?? 0);
+              if (idA && idB && idA !== idB) return idA - idB;
+              const nameA = String(read(a, ['fullName', 'FullName', 'customerName', 'name', 'Name']) || '');
+              const nameB = String(read(b, ['fullName', 'FullName', 'customerName', 'name', 'Name']) || '');
+              return nameA.localeCompare(nameB);
+            });
+            const customerList = sortedApps.map((app, index) => {
+              const custName = read(app, ['fullName', 'FullName', 'customerName', 'name', 'Name'], 'Unknown Customer');
+              const rawCode = read(app, ['customerCode', 'CustomerCode', 'appId', 'AppId']);
+              const codeVal = (rawCode && String(rawCode).trim() && String(rawCode).trim() !== 'null' && String(rawCode).trim() !== 'undefined')
+                ? String(rawCode).trim()
+                : '—';
+              return {
+                sNo: index + 1,
+                id: app?.agentCustomerId ?? app?.id,
+                name: custName,
+                code: codeVal,
+              };
+            });
+
             return {
               id,
               agentId: id,
@@ -1113,6 +1330,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               branch: read(agent, ['branch', 'Branch', 'branchName', 'BranchName']),
               status: status(read(agent, ['status', 'Status', 'isActive', 'IsActive'])),
               applications: appsByAgent.get(String(id)) || 0,
+              customerList,
               aadhaarDocumentPath: getAadhaarPath(agent),
               panCardPath: getPanPath(agent),
               profileImagePath: getProfilePath(agent),
@@ -1138,11 +1356,32 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               read(rm, ['fullName', 'FullName', 'rmName', 'RMName', 'name', 'Name']) ||
               `${read(rm, ['firstName', 'FirstName'], '')} ${read(rm, ['lastName', 'LastName'], '')}`.trim() ||
               'Unnamed RM';
-            const assignedAgentsCount = agentRows.filter((agent) => {
+            const matchedAgents = agentRows.filter((agent) => {
               const aRmId = read(agent, ['rmId', 'RMId', 'relationshipManagerId', 'RelationshipManagerId', 'createdBy']);
               const aRmName = read(agent, ['relationshipManager', 'RelationshipManager', 'rmName', 'RMName']);
               return String(aRmId) === String(id) || aRmName === rmName;
-            }).length;
+            });
+            const sortedAgents = [...matchedAgents].sort((a, b) => {
+              const idA = Number(read(a, ['agentId', 'AgentId', 'id', 'Id']) || 0);
+              const idB = Number(read(b, ['agentId', 'AgentId', 'id', 'Id']) || 0);
+              if (idA && idB && idA !== idB) return idA - idB;
+              const nameA = String(read(a, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name']) || '');
+              const nameB = String(read(b, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name']) || '');
+              return nameA.localeCompare(nameB);
+            });
+            const assignedAgentsList = sortedAgents.map((agent, index) => {
+              const agentName = read(agent, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name'], 'Unnamed agent');
+              const rawAgentCode = read(agent, ['agentCode', 'AgentCode', 'code', 'Code']);
+              const codeVal = (rawAgentCode && String(rawAgentCode).trim() && String(rawAgentCode).trim() !== 'null' && String(rawAgentCode).trim() !== 'undefined')
+                ? String(rawAgentCode).trim()
+                : '—';
+              return {
+                sNo: index + 1,
+                id: read(agent, ['agentId', 'AgentId', 'id', 'Id']),
+                name: agentName,
+                code: codeVal,
+              };
+            });
 
             return {
               id,
@@ -1153,7 +1392,8 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               phone: read(rm, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
               branch: read(rm, ['branch', 'Branch', 'branchName', 'BranchName']),
               status: status(read(rm, ['status', 'Status', 'isActive', 'IsActive'])),
-              agents: assignedAgentsCount,
+              agents: assignedAgentsList.length,
+              assignedAgentsList,
               aadhaarDocumentPath: getAadhaarPath(rm),
               panCardPath: getPanPath(rm),
               profileImagePath: getProfilePath(rm),
@@ -1833,7 +2073,25 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                         <small>{agent.phone || '—'}</small>
                       </td>
                       <td>{agent.rm || 'Unassigned'}</td>
-                      <td><strong>{agent.applications || 0}</strong></td>
+                      <td>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', whiteSpace: 'nowrap' }}>
+                          <strong style={{ color: '#111827', fontSize: '13px' }}>{agent.applications || 0}</strong>
+                          {Number(agent.applications || 0) > 0 && (
+                            <button
+                              type="button"
+                              className="details-button"
+                              style={{ padding: '3px 8px', fontSize: '12px', height: 'auto', lineHeight: '1.2' }}
+                              onClick={() => setSublistModal({
+                                title: `Customers — ${agent.name}`,
+                                type: 'customers',
+                                records: agent.customerList || []
+                              })}
+                            >
+                              View Customers ({agent.applications})
+                            </button>
+                          )}
+                        </div>
+                      </td>
                       <td>
                         <span className={`status ${String(agent.status || 'active').toLowerCase().replace(/\s+/g, '-')}`}>
                           {agent.status || 'Active'}
@@ -1900,8 +2158,26 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                       </td>
                       <td>{rm.branch || '—'}</td>
                       <td>
-                        <strong>{rm.agents || 0}</strong>
-                        <small style={{ display: 'block' }}>{rm.agents === 1 ? 'agent' : 'agents'}</small>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: '13px', color: '#374151', display: 'inline-flex', alignItems: 'baseline', gap: '4px' }}>
+                            <strong style={{ color: '#111827' }}>{rm.agents || 0}</strong>
+                            <span style={{ color: '#6B7280', fontSize: '12px' }}>{rm.agents === 1 ? 'agent' : 'agents'}</span>
+                          </span>
+                          {Number(rm.agents || 0) > 0 && (
+                            <button
+                              type="button"
+                              className="details-button"
+                              style={{ padding: '3px 8px', fontSize: '12px', height: 'auto', lineHeight: '1.2' }}
+                              onClick={() => setSublistModal({
+                                title: `Assigned Agents — ${rm.name}`,
+                                type: 'agents',
+                                records: rm.assignedAgentsList || []
+                              })}
+                            >
+                              View Agents ({rm.agents})
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td>
                         <span className={`status ${String(rm.status || 'active').toLowerCase().replace(/\s+/g, '-')}`}>
@@ -2306,6 +2582,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
           locations={locations}
           onClose={() => setSelectedPerson(null)}
           onPreviewDocument={handlePreviewDocument}
+          onViewSublist={setSublistModal}
         />
       )}
 
@@ -2427,6 +2704,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
           locations={locations}
           onClose={() => setSelectedAms(null)}
           onPreviewDocument={handlePreviewDocument}
+          onViewSublist={setSublistModal}
         />
       )}
 
@@ -2527,6 +2805,14 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Sublist Records Modal (View Customers / View Agents) */}
+      {sublistModal && (
+        <SublistRecordsModal
+          modalData={sublistModal}
+          onClose={() => setSublistModal(null)}
+        />
       )}
     </div>
   );
