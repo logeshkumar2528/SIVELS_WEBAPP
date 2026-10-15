@@ -29,6 +29,9 @@ import { agentCustomerService } from '../../../../Core/src/services/agentCustome
 import { selectLatestCustomerPhotoDoc } from '../../../../Core/src/utils/documentTypeHelper';
 import { getProfileImageUrl, getDocumentUrl, buildFileUrl } from '../../utils/profileImageHelper';
 import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
+import { getStates } from '../../api/masters/stateApi';
+import { getCities } from '../../api/masters/cityApi';
+import { getDistricts } from '../../api/masters/districtApi';
 import './PeopleDirectory.css';
 import '../Dashboard/Dashboard.css';
 
@@ -40,6 +43,30 @@ const unwrap = (response) => {
   if (Array.isArray(response?.value)) return response.value;
   if (Array.isArray(response?.data?.value)) return response.data.value;
   return [];
+};
+
+// Module-level cached promises/data to ensure location lookups are fetched once across the Master directory session
+let locationLookupCache = null;
+let locationLookupPromise = null;
+
+const fetchLocationLookups = () => {
+  if (locationLookupCache) return Promise.resolve(locationLookupCache);
+  if (!locationLookupPromise) {
+    locationLookupPromise = Promise.allSettled([getStates(), getCities(), getDistricts()])
+      .then(([statesRes, citiesRes, districtsRes]) => {
+        locationLookupCache = {
+          states: statesRes.status === 'fulfilled' ? unwrap(statesRes.value) : [],
+          cities: citiesRes.status === 'fulfilled' ? unwrap(citiesRes.value) : [],
+          districts: districtsRes.status === 'fulfilled' ? unwrap(districtsRes.value) : [],
+        };
+        return locationLookupCache;
+      })
+      .catch(() => {
+        locationLookupCache = { states: [], cities: [], districts: [] };
+        return locationLookupCache;
+      });
+  }
+  return locationLookupPromise;
 };
 
 const read = (record, keys, fallback = '') =>
@@ -357,10 +384,74 @@ function ExecutiveEmployeeRecordModal({
   roleType,
   loading = false,
   imageVersion = null,
+  locations = null,
   onClose,
   onPreviewDocument,
 }) {
   if (!person) return null;
+
+  const [activeLocations, setActiveLocations] = useState(() => locations || locationLookupCache || { states: [], cities: [], districts: [] });
+
+  useEffect(() => {
+    if (locations && (locations.states?.length || locations.cities?.length || locations.districts?.length)) {
+      setActiveLocations(locations);
+      return;
+    }
+    let isMounted = true;
+    fetchLocationLookups().then((data) => {
+      if (isMounted && data) {
+        setActiveLocations(data);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [locations]);
+
+  const stateLookupMap = useMemo(() => {
+    const list = activeLocations?.states || [];
+    const map = new Map();
+    list.forEach((item) => {
+      const id = item?.stateId ?? item?.id ?? item?.StateId;
+      const name = item?.stateName ?? item?.name ?? item?.StateName;
+      if (id !== undefined && id !== null && name && typeof name === 'string') {
+        const cleanName = name.trim();
+        map.set(String(id).trim(), cleanName);
+        map.set(Number(id), cleanName);
+      }
+    });
+    return map;
+  }, [activeLocations?.states]);
+
+  const cityLookupMap = useMemo(() => {
+    const list = activeLocations?.cities || [];
+    const map = new Map();
+    list.forEach((item) => {
+      const id = item?.cityId ?? item?.id ?? item?.CityId;
+      const name = item?.cityName ?? item?.name ?? item?.CityName;
+      if (id !== undefined && id !== null && name && typeof name === 'string') {
+        const cleanName = name.trim();
+        map.set(String(id).trim(), cleanName);
+        map.set(Number(id), cleanName);
+      }
+    });
+    return map;
+  }, [activeLocations?.cities]);
+
+  const districtLookupMap = useMemo(() => {
+    const list = activeLocations?.districts || [];
+    const map = new Map();
+    list.forEach((item) => {
+      const id = item?.districtId ?? item?.id ?? item?.DistrictId;
+      const name = item?.districtName ?? item?.name ?? item?.DistrictName;
+      if (id !== undefined && id !== null && name && typeof name === 'string') {
+        const cleanName = name.trim();
+        map.set(String(id).trim(), cleanName);
+        map.set(Number(id), cleanName);
+      }
+    });
+    return map;
+  }, [activeLocations?.districts]);
 
   const normRole = useMemo(() => {
     const t = String(roleType || person?.type || '').toLowerCase();
@@ -445,20 +536,69 @@ function ExecutiveEmployeeRecordModal({
     return '—';
   }, [person]);
 
-  const cityVal = read(person, ['cityName', 'CityName', 'city', 'City']) || (person?.cityId ? `City ID: ${person.cityId}` : '');
-  const districtVal = read(person, ['districtName', 'DistrictName', 'district', 'District']) || (person?.districtId ? `District ID: ${person.districtId}` : '');
-  const stateVal = read(person, ['stateName', 'StateName', 'state', 'State']) || (person?.stateId ? `State ID: ${person.stateId}` : '');
+  const cityVal = useMemo(() => {
+    const existingName = read(person, ['cityName', 'CityName', 'city', 'City']);
+    if (existingName && typeof existingName === 'string' && existingName.trim() && !/^city\s*id/i.test(existingName.trim())) {
+      if (isNaN(Number(existingName.trim()))) {
+        return existingName.trim();
+      }
+    }
+    const rawId = person?.cityId ?? person?.CityId;
+    if (rawId !== undefined && rawId !== null && rawId !== '') {
+      const resolved = cityLookupMap.get(String(rawId).trim()) ?? cityLookupMap.get(Number(rawId));
+      if (resolved) return resolved;
+    }
+    if (existingName && typeof existingName === 'string' && existingName.trim() && !/^city\s*id/i.test(existingName.trim())) {
+      return existingName.trim();
+    }
+    return '';
+  }, [person, cityLookupMap]);
+
+  const districtVal = useMemo(() => {
+    const existingName = read(person, ['districtName', 'DistrictName', 'district', 'District']);
+    if (existingName && typeof existingName === 'string' && existingName.trim() && !/^district\s*id/i.test(existingName.trim())) {
+      if (isNaN(Number(existingName.trim()))) {
+        return existingName.trim();
+      }
+    }
+    const rawId = person?.districtId ?? person?.DistrictId;
+    if (rawId !== undefined && rawId !== null && rawId !== '') {
+      const resolved = districtLookupMap.get(String(rawId).trim()) ?? districtLookupMap.get(Number(rawId));
+      if (resolved) return resolved;
+    }
+    if (existingName && typeof existingName === 'string' && existingName.trim() && !/^district\s*id/i.test(existingName.trim())) {
+      return existingName.trim();
+    }
+    return '';
+  }, [person, districtLookupMap]);
+
+  const stateVal = useMemo(() => {
+    const existingName = read(person, ['stateName', 'StateName', 'state', 'State']);
+    if (existingName && typeof existingName === 'string' && existingName.trim() && !/^state\s*id/i.test(existingName.trim())) {
+      if (isNaN(Number(existingName.trim()))) {
+        return existingName.trim();
+      }
+    }
+    const rawId = person?.stateId ?? person?.StateId;
+    if (rawId !== undefined && rawId !== null && rawId !== '') {
+      const resolved = stateLookupMap.get(String(rawId).trim()) ?? stateLookupMap.get(Number(rawId));
+      if (resolved) return resolved;
+    }
+    if (existingName && typeof existingName === 'string' && existingName.trim() && !/^state\s*id/i.test(existingName.trim())) {
+      return existingName.trim();
+    }
+    return '';
+  }, [person, stateLookupMap]);
+
   const pincodeVal = read(person, ['pincode', 'Pincode', 'postalCode']);
   const departmentVal = read(person, ['department', 'Department', 'departmentName', 'DepartmentName']);
 
-  const maskedAccount = useMemo(() => {
+  const bankAccount = useMemo(() => {
     const raw = read(person, ['bankAccountNumber', 'BankAccountNumber', 'accountNumber', 'AccountNumber']);
-    if (!raw) return '—';
-    const clean = String(raw).replace(/\s+/g, '').trim();
+    if (raw === undefined || raw === null) return '—';
+    const clean = String(raw).trim();
     if (!clean || clean.toLowerCase() === 'null' || clean.toLowerCase() === 'undefined') return '—';
-    if (clean.length <= 4) return `•••• ${clean}`;
-    const last4 = clean.slice(-4);
-    return `•••• •••• ${last4}`;
+    return clean;
   }, [person]);
 
   const ifscCode = read(person, ['ifscCode', 'IfscCode', 'IFSCCode', 'ifsc', 'IFSC']) || '—';
@@ -646,10 +786,10 @@ function ExecutiveEmployeeRecordModal({
                   </div>
                 )}
 
-                {(normRole === 'BackOffice' || normRole === 'CreditManager') && districtVal && (
+                {(normRole === 'BackOffice' || normRole === 'CreditManager') && (
                   <div className="exec-field">
                     <span className="exec-field-label">District</span>
-                    <span className="exec-field-value">{districtVal}</span>
+                    <span className="exec-field-value">{districtVal || '—'}</span>
                   </div>
                 )}
 
@@ -689,7 +829,7 @@ function ExecutiveEmployeeRecordModal({
               <div className="exec-grid-4col">
                 <div className="exec-field exec-field-span-2">
                   <span className="exec-field-label">Bank Account Number</span>
-                  <span className="exec-field-value monospace">{maskedAccount}</span>
+                  <span className="exec-field-value monospace">{bankAccount}</span>
                 </div>
                 <div className="exec-field exec-field-span-2">
                   <span className="exec-field-label">IFSC Code</span>
@@ -877,6 +1017,19 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
   const [loadingAmsModal, setLoadingAmsModal] = useState(false);
   const [previewDoc, setPreviewDoc] = useState(null);
   const [imageVersion, setImageVersion] = useState(() => Date.now());
+  const [locations, setLocations] = useState(() => locationLookupCache || { states: [], cities: [], districts: [] });
+
+  useEffect(() => {
+    let active = true;
+    fetchLocationLookups().then((data) => {
+      if (active && data) {
+        setLocations(data);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const blobUrlsRef = useRef([]);
 
@@ -2150,6 +2303,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
           person={selectedPerson}
           roleType={selectedPerson.type}
           imageVersion={selectedPerson.imageVersion || imageVersion}
+          locations={locations}
           onClose={() => setSelectedPerson(null)}
           onPreviewDocument={handlePreviewDocument}
         />
@@ -2270,6 +2424,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
           roleType="AMS"
           loading={loadingAmsModal}
           imageVersion={selectedAms.imageVersion || imageVersion}
+          locations={locations}
           onClose={() => setSelectedAms(null)}
           onPreviewDocument={handlePreviewDocument}
         />
