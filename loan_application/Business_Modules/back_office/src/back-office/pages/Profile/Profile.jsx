@@ -1,20 +1,9 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import iconMap from '../../config/iconMap';
 import { useBackOfficeProfile } from '../../hooks/useBackOfficeProfile';
-import { getProfileImageUrl, getInitials, updateProfileImage } from '../../utils/profileImageHelper';
+import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
+import { formatDate } from '../../../../../../Core/src/utils/dateHelper';
 import './Profile.css';
-
-function ProfileField({ icon: Icon, label, value }) {
-  return (
-    <div className="bo-profile-field">
-      <span className="bo-profile-field-icon"><Icon size={17} /></span>
-      <div>
-        <span className="bo-profile-field-label">{label}</span>
-        <strong>{value || 'Not Available'}</strong>
-      </div>
-    </div>
-  );
-}
 
 function ProfileSkeleton() {
   return (
@@ -28,12 +17,6 @@ function ProfileSkeleton() {
 export default function Profile() {
   const { profile, loading, error, refetch } = useBackOfficeProfile();
   const [imageFailed, setImageFailed] = useState(false);
-  const [imageVersion, setImageVersion] = useState(Date.now());
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState('');
-  const [uploadSuccess, setUploadSuccess] = useState('');
-  const fileInputRef = useRef(null);
 
   const UserIcon = iconMap.UserCircle || iconMap.User;
   const MailIcon = iconMap.Mail;
@@ -43,7 +26,8 @@ export default function Profile() {
   const ShieldIcon = iconMap.ShieldCheck;
   const RefreshIcon = iconMap.RefreshCw;
   const CheckIcon = iconMap.CheckCircle2 || iconMap.Check;
-  const CameraIcon = iconMap.Camera || iconMap.UserRound;
+  const CalendarIcon = iconMap.Calendar;
+  const MapPinIcon = iconMap.MapPin;
 
   const targetId =
     profile?.backOfficeId ||
@@ -51,68 +35,26 @@ export default function Profile() {
     (typeof localStorage !== 'undefined' ? localStorage.getItem('backOfficeId') : null);
 
   const imageUrl = useMemo(() => {
-    return targetId ? getProfileImageUrl('BackOffice', targetId, imageVersion) : null;
-  }, [targetId, imageVersion]);
+    return targetId ? getProfileImageUrl('BackOffice', targetId) : null;
+  }, [targetId]);
 
   useEffect(() => {
     setImageFailed(false);
   }, [imageUrl]);
 
-  useEffect(() => {
-    return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-    };
-  }, [previewUrl]);
-
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploadError('');
-    setUploadSuccess('');
-
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(file.type?.toLowerCase())) {
-      setUploadError('Please select a valid image (JPEG, PNG, WebP).');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
-    if (!targetId) {
-      setUploadError('Back Office identity not found. Cannot update photo.');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
-    const localUrl = URL.createObjectURL(file);
-    setPreviewUrl(localUrl);
-    setIsUploading(true);
-
-    try {
-      await updateProfileImage('BackOffice', targetId, file);
-      setImageVersion(Date.now());
-      setImageFailed(false);
-      setUploadSuccess('Profile image updated successfully!');
-      setTimeout(() => setUploadSuccess(''), 4000);
-    } catch (err) {
-      console.error('Failed to update back office profile image:', err);
-      setUploadError(err.message || 'Failed to update profile image. Please try again.');
-    } finally {
-      setIsUploading(false);
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-      setPreviewUrl(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
-  };
-
-  const showImage = Boolean((previewUrl || imageUrl) && !imageFailed);
+  const showImage = Boolean(imageUrl && !imageFailed);
   const statusClass = profile?.isActive ? 'is-active' : 'is-inactive';
+  const statusLabel = profile?.status || (profile?.isActive ? 'Active' : 'Inactive');
+
+  const formattedDob = formatDate(profile?.dateOfBirth, '—');
+  const formattedDateJoined = formatDate(profile?.dateJoined, '—');
+  const fullAddress = [
+    profile?.address,
+    profile?.cityName,
+    profile?.districtName,
+    profile?.stateName,
+    profile?.pincode,
+  ].filter(Boolean).join(', ') || '—';
 
   if (loading) return <ProfileSkeleton />;
 
@@ -133,102 +75,172 @@ export default function Profile() {
   }
 
   return (
-    <div className="bo-profile-page">
-      <section className="bo-profile-hero">
-        <div className="bo-profile-hero-glow" aria-hidden="true" />
-        <div className="bo-profile-hero-content">
-          <div className="bo-profile-avatar-wrap">
+    <div className="bo-profile-dashboard">
+      <div className="bo-profile-grid-layout">
+        {/* LEFT — Dark-green employee identity panel */}
+        <aside className="bo-identity-panel">
+          <div className="bo-identity-avatar-wrap">
             {showImage ? (
               <img
-                src={previewUrl || imageUrl}
-                alt={profile.fullName || 'Back Office User'}
-                className="bo-profile-avatar-image"
+                src={imageUrl}
+                alt={profile?.fullName || 'Back Office'}
+                className="bo-identity-avatar-img"
                 onError={() => setImageFailed(true)}
               />
-            ) : null}
-            <div className={`bo-profile-avatar ${showImage ? 'is-hidden' : ''}`}>
-              {getInitials(profile.fullName, 'BO')}
-            </div>
-            <span className="bo-profile-avatar-check"><CheckIcon size={13} /></span>
+            ) : (
+              <span className="bo-identity-initials">
+                {getInitials(profile?.fullName, 'BO')}
+              </span>
+            )}
+          </div>
 
-            <button
-              type="button"
-              className="bo-profile-avatar-edit-btn"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              title="Change profile photo"
-              aria-label="Change profile photo"
-            >
-              {isUploading ? <RefreshIcon size={12} className="bo-spin-icon" /> : (CameraIcon ? <CameraIcon size={12} /> : <span>📷</span>)}
-            </button>
+          <h2 className="bo-identity-name">{profile?.fullName || '—'}</h2>
 
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept="image/jpeg,image/jpg,image/png,image/webp"
-              style={{ display: 'none' }}
-            />
+          <div className="bo-identity-code-badge">
+            <BadgeIcon size={13} />
+            <span>{profile?.employeeCode || profile?.backOfficeCode || '—'}</span>
           </div>
-          <div className="bo-profile-identity">
-            <span className="bo-profile-eyebrow">Back office account</span>
-            <h2>{profile.fullName}</h2>
-            <p>{profile.role}</p>
-            <div className="bo-profile-hero-meta">
-              <span>{profile.backOfficeCode || profile.employeeCode}</span>
-              <span className={`bo-profile-status ${statusClass}`}><i /> {profile.status}</span>
-            </div>
-            {uploadError && <div className="bo-profile-upload-msg is-error">{uploadError}</div>}
-            {uploadSuccess && <div className="bo-profile-upload-msg is-success">{uploadSuccess}</div>}
-          </div>
-        </div>
-        <div className="bo-profile-hero-note">
-          <ShieldIcon size={18} />
-          <span>Secure operational access</span>
-        </div>
-      </section>
 
-      <div className="bo-profile-layout">
-        <main className="bo-profile-main-card">
-          <div className="bo-profile-card-heading">
-            <div>
-              <span className="bo-profile-eyebrow">Account details</span>
-              <h3>Personal &amp; work information</h3>
-            </div>
-            <span className="bo-profile-live-pill"><i /> Live from API</span>
-          </div>
-          <div className="bo-profile-fields-grid">
-            <ProfileField icon={UserIcon} label="Full name" value={profile.fullName} />
-            <ProfileField icon={BadgeIcon} label="Employee code" value={profile.employeeCode || profile.backOfficeCode} />
-            <ProfileField icon={MailIcon} label="Email address" value={profile.emailAddress || profile.email} />
-            <ProfileField icon={PhoneIcon} label="Mobile number" value={profile.mobileNumber || profile.mobile} />
-            <ProfileField icon={BuildingIcon} label="Branch" value={profile.branch} />
-            <ProfileField icon={ShieldIcon} label="Access role" value={profile.role} />
-          </div>
-        </main>
+          <p className="bo-identity-role">{profile?.role || 'Operations Team'}</p>
 
-        <aside className="bo-profile-access-card">
-          <div className="bo-profile-card-heading">
-            <div>
-              <span className="bo-profile-eyebrow">Permissions</span>
-              <h3>Access scope</h3>
-            </div>
-            <span className="bo-profile-access-icon"><ShieldIcon size={17} /></span>
+          <div className={`bo-identity-status-pill ${statusClass}`}>
+            <span className="bo-identity-status-dot" />
+            <span>{statusLabel}</span>
           </div>
-          {profile.permissions?.length ? (
-            <ul className="bo-profile-permissions">
-              {profile.permissions.map((permission) => (
-                <li key={permission}><CheckIcon size={15} /><span>{permission}</span></li>
-              ))}
-            </ul>
-          ) : (
-            <div className="bo-profile-no-permissions">
-              <ShieldIcon size={20} />
-              <strong>Role-based access enabled</strong>
-              <span>No individual permissions were returned by the API.</span>
+
+          <div className="bo-identity-divider" />
+
+          <div className="bo-identity-meta-list">
+            <div className="bo-identity-meta-item">
+              <BuildingIcon size={14} className="bo-identity-meta-icon" />
+              <div className="bo-identity-meta-content">
+                <span className="bo-identity-meta-label">Branch</span>
+                <span className="bo-identity-meta-value">{profile?.branch || '—'}</span>
+              </div>
             </div>
-          )}
+
+            <div className="bo-identity-meta-item">
+              <ShieldIcon size={14} className="bo-identity-meta-icon" />
+              <div className="bo-identity-meta-content">
+                <span className="bo-identity-meta-label">Department</span>
+                <span className="bo-identity-meta-value">{profile?.department || 'Operations'}</span>
+              </div>
+            </div>
+
+            <div className="bo-identity-meta-item">
+              <CalendarIcon size={14} className="bo-identity-meta-icon" />
+              <div className="bo-identity-meta-content">
+                <span className="bo-identity-meta-label">Member Since</span>
+                <span className="bo-identity-meta-value">{formattedDateJoined}</span>
+              </div>
+            </div>
+          </div>
         </aside>
+
+        {/* RIGHT — One unified sage-green information panel */}
+        <main className="bo-sage-panel">
+          {/* Section 1: Personal Information */}
+          <section className="bo-sage-section">
+            <div className="bo-sage-section-header">
+              <UserIcon size={14} className="bo-sage-section-icon" />
+              <h3>Personal Information</h3>
+            </div>
+            <div className="bo-sage-row bo-sage-row-alt-1">
+              <div className="bo-sage-field-item">
+                <span className="bo-sage-label">Full Name</span>
+                <span className="bo-sage-value">{profile?.fullName || '—'}</span>
+              </div>
+              <div className="bo-sage-field-item">
+                <span className="bo-sage-label">Date of Birth</span>
+                <span className="bo-sage-value">{formattedDob}</span>
+              </div>
+            </div>
+            <div className="bo-sage-row bo-sage-row-alt-2">
+              <div className="bo-sage-field-item">
+                <span className="bo-sage-label">Gender</span>
+                <span className="bo-sage-value">{profile?.gender || '—'}</span>
+              </div>
+              <div className="bo-sage-field-item">
+                <span className="bo-sage-label">Joining Date</span>
+                <span className="bo-sage-value">{formattedDateJoined}</span>
+              </div>
+            </div>
+          </section>
+
+          {/* Section 2: Contact & Location */}
+          <section className="bo-sage-section">
+            <div className="bo-sage-section-header">
+              <MapPinIcon size={14} className="bo-sage-section-icon" />
+              <h3>Contact &amp; Location</h3>
+            </div>
+            <div className="bo-sage-row bo-sage-row-alt-1">
+              <div className="bo-sage-field-item">
+                <span className="bo-sage-label">Mobile Number</span>
+                <span className="bo-sage-value">{profile?.mobileNumber || profile?.mobile || '—'}</span>
+              </div>
+              <div className="bo-sage-field-item">
+                <span className="bo-sage-label">Email Address</span>
+                <span className="bo-sage-value">{profile?.emailAddress || profile?.email || '—'}</span>
+              </div>
+            </div>
+            <div className="bo-sage-row bo-sage-row-alt-2">
+              <div className="bo-sage-field-item">
+                <span className="bo-sage-label">Residential Address</span>
+                <span className="bo-sage-value">{profile?.address || '—'}</span>
+              </div>
+              <div className="bo-sage-field-item">
+                <span className="bo-sage-label">Location</span>
+                <span className="bo-sage-value">{[profile?.cityName, profile?.districtName, profile?.stateName, profile?.pincode].filter(Boolean).join(', ') || '—'}</span>
+              </div>
+            </div>
+          </section>
+
+          {/* Section 3: Work Information */}
+          <section className="bo-sage-section">
+            <div className="bo-sage-section-header">
+              <ShieldIcon size={14} className="bo-sage-section-icon" />
+              <h3>Work Information</h3>
+            </div>
+            <div className="bo-sage-row bo-sage-row-alt-1">
+              <div className="bo-sage-field-item">
+                <span className="bo-sage-label">Employee Code</span>
+                <span className="bo-sage-value">{profile?.employeeCode || profile?.backOfficeCode || '—'}</span>
+              </div>
+              <div className="bo-sage-field-item">
+                <span className="bo-sage-label">Role / Designation</span>
+                <span className="bo-sage-value">{profile?.role || 'Operations Team'}</span>
+              </div>
+            </div>
+            <div className="bo-sage-row bo-sage-row-alt-2">
+              <div className="bo-sage-field-item">
+                <span className="bo-sage-label">Assigned Branch</span>
+                <span className="bo-sage-value">{profile?.branch || '—'}</span>
+              </div>
+              <div className="bo-sage-field-item">
+                <span className="bo-sage-label">Department</span>
+                <span className="bo-sage-value">{profile?.department || 'Operations'}</span>
+              </div>
+            </div>
+            <div className="bo-sage-row bo-sage-row-alt-1">
+              <div className="bo-sage-field-item bo-sage-col-full">
+                <span className="bo-sage-label">Access Scope &amp; Permissions</span>
+                <div className="bo-sage-permissions-wrap">
+                  {profile?.permissions?.length ? (
+                    profile.permissions.map((perm, idx) => (
+                      <span key={idx} className="bo-sage-perm-tag">
+                        <CheckIcon size={12} /> {perm}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="bo-sage-perm-tag is-role">
+                      <ShieldIcon size={12} /> Role-based operational access &amp; verification
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
       </div>
     </div>
   );
