@@ -49,7 +49,7 @@ const unwrap = (response) => {
 let locationLookupCache = null;
 let locationLookupPromise = null;
 
-const fetchLocationLookups = () => {
+export const fetchLocationLookups = () => {
   if (locationLookupCache) return Promise.resolve(locationLookupCache);
   if (!locationLookupPromise) {
     locationLookupPromise = Promise.allSettled([getStates(), getCities(), getDistricts()])
@@ -99,7 +99,7 @@ const formatAmount = (amount) =>
       }).format(amount)
     : '—';
 
-const getAadhaarPath = (record) =>
+export const getAadhaarPath = (record) =>
   read(record, [
     'aadhaarDocumentPath',
     'AadhaarDocumentPath',
@@ -115,7 +115,7 @@ const getAadhaarPath = (record) =>
     'AadharCardPath',
   ]);
 
-const getPanPath = (record) =>
+export const getPanPath = (record) =>
   read(record, [
     'panCardPath',
     'PanCardPath',
@@ -128,7 +128,7 @@ const getPanPath = (record) =>
     'PANPath',
   ]);
 
-const getProfilePath = (record) =>
+export const getProfilePath = (record) =>
   read(record, [
     'profileImagePath',
     'ProfileImagePath',
@@ -140,7 +140,7 @@ const getProfilePath = (record) =>
     'ProfilePicturePath',
   ]);
 
-const isPdfFile = (urlOrPath = '') => {
+export const isPdfFile = (urlOrPath = '') => {
   if (!urlOrPath) return false;
   return /\.pdf(\?.*)?$/i.test(String(urlOrPath));
 };
@@ -531,7 +531,109 @@ function SublistRecordsModal({ modalData, onClose }) {
   );
 }
 
-function ExecutiveEmployeeRecordModal({
+export function DocumentPreviewLightbox({ previewDoc, onClose }) {
+  if (!previewDoc) return null;
+
+  return (
+    <div
+      className="ams-doc-preview-backdrop"
+      role="presentation"
+      onMouseDown={onClose}
+    >
+      <div
+        className="ams-doc-preview-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={previewDoc.title || 'Document Preview'}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="ams-doc-preview-header">
+          <h3>
+            {previewDoc.isPdf ? <FileText size={18} /> : <Camera size={18} />}
+            {previewDoc.title || 'Document Preview'}
+          </h3>
+          <div className="ams-doc-preview-header-actions">
+            {previewDoc.url && (
+              <a
+                href={previewDoc.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ams-doc-newtab-btn"
+                title="Open in new window or tab"
+              >
+                <ArrowUpRight size={14} /> Open in New Tab
+              </a>
+            )}
+            <button
+              type="button"
+              className="ams-doc-preview-close"
+              onClick={onClose}
+              aria-label="Close preview"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="ams-doc-preview-body">
+          {previewDoc.loading ? (
+            <div className="doc-loading-container">
+              <LoaderCircle size={28} className="doc-spin-icon" />
+              <span>Loading document preview...</span>
+            </div>
+          ) : previewDoc.isPdf ? (
+            <div className="ams-doc-iframe-container">
+              <iframe
+                src={previewDoc.url}
+                title={previewDoc.title || 'PDF Preview'}
+                className="ams-doc-iframe"
+              />
+              <div className="ams-doc-fallback-bar">
+                <span>Trouble viewing PDF?</span>
+                <a
+                  href={previewDoc.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ams-doc-newtab-btn"
+                >
+                  <ArrowUpRight size={13} /> Open in new tab
+                </a>
+              </div>
+            </div>
+          ) : (
+            <div className="ams-doc-image-container">
+              <img
+                src={previewDoc.url}
+                alt={previewDoc.title || 'Preview'}
+                className="ams-doc-image"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const errBox = document.getElementById('dir-doc-img-error');
+                  if (errBox) errBox.style.display = 'flex';
+                }}
+              />
+              <div id="dir-doc-img-error" className="ams-doc-error-box" style={{ display: 'none' }}>
+                <p>Unable to load image preview directly.</p>
+                {previewDoc.url && (
+                  <a
+                    href={previewDoc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ams-doc-newtab-btn"
+                  >
+                    <ArrowUpRight size={14} /> Open Image in New Tab
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ExecutiveEmployeeRecordModal({
   person,
   roleType,
   loading = false,
@@ -621,7 +723,7 @@ function ExecutiveEmployeeRecordModal({
       case 'Agent': return 'Agent';
       case 'RM': return 'Relationship Manager';
       case 'BackOffice': return 'Back Office';
-      case 'AMS': return 'Area Management Specialist';
+      case 'AMS': return 'Area Sourcing Manager (ASM)';
       case 'CreditManager': return 'Credit Manager';
       default: return roleType || 'Employee';
     }
@@ -638,7 +740,7 @@ function ExecutiveEmployeeRecordModal({
 
   const fullName =
     read(person, ['fullName', 'FullName', 'agentName', 'rmName', 'name', 'Name']) ||
-    (normRole === 'AMS' ? 'Unnamed AMS' : 'Unnamed Employee');
+    (normRole === 'AMS' ? 'Unnamed ASM' : 'Unnamed Employee');
 
   const employeeCode = useMemo(() => {
     switch (normRole) {
@@ -1153,11 +1255,11 @@ const ROLE_META = {
   },
   ams: {
     key: 'ams',
-    title: 'Area Specialists (AMS)',
+    title: 'Area Specialists (ASM)',
     subtitle: 'Cover designated districts, local channels, and regional operations.',
     icon: ShieldCheck,
     color: 'purple',
-    searchPlaceholder: 'Search AMS by name, code, contact, branch, city...',
+    searchPlaceholder: 'Search ASM by name, code, contact, branch, city...',
     emptyText: 'No area specialists found.',
     addLabel: 'Add user',
   },
@@ -1435,7 +1537,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
         const liveAms = amsRows
           .map((item) => {
             const id = read(item, ['amsId', 'AmsId', 'id', 'Id']);
-            const fullName = read(item, ['fullName', 'FullName', 'name', 'Name'], 'Unnamed AMS');
+            const fullName = read(item, ['fullName', 'FullName', 'name', 'Name'], 'Unnamed ASM');
             return {
               id,
               amsId: id,
@@ -2292,7 +2394,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               <thead>
                 <tr>
                   <th>Specialist</th>
-                  <th>AMS Code</th>
+                  <th>ASM Code</th>
                   <th>Contact</th>
                   <th>Gender / Details</th>
                   <th>Branch / Location</th>
@@ -2302,7 +2404,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td className="empty-table" colSpan="7">Loading live AMS data…</td></tr>
+                  <tr><td className="empty-table" colSpan="7">Loading live ASM data…</td></tr>
                 ) : visibleRecords.length ? (
                   visibleRecords.map((ams) => {
                     const displayName = ams.fullName || ams.name || 'Unnamed specialist';
@@ -2710,101 +2812,10 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
 
       {/* Dedicated Document / Image Preview Lightbox */}
       {previewDoc && (
-        <div
-          className="ams-doc-preview-backdrop"
-          role="presentation"
-          onMouseDown={handleClosePreview}
-        >
-          <div
-            className="ams-doc-preview-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-label={previewDoc.title || 'Document Preview'}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <div className="ams-doc-preview-header">
-              <h3>
-                {previewDoc.isPdf ? <FileText size={18} /> : <Camera size={18} />}
-                {previewDoc.title || 'Document Preview'}
-              </h3>
-              <div className="ams-doc-preview-header-actions">
-                {previewDoc.url && (
-                  <a
-                    href={previewDoc.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ams-doc-newtab-btn"
-                    title="Open in new window or tab"
-                  >
-                    <ArrowUpRight size={14} /> Open in New Tab
-                  </a>
-                )}
-                <button
-                  type="button"
-                  className="ams-doc-preview-close"
-                  onClick={handleClosePreview}
-                  aria-label="Close preview"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
-
-            <div className="ams-doc-preview-body">
-              {previewDoc.loading ? (
-                <div className="doc-loading-container">
-                  <LoaderCircle size={28} className="doc-spin-icon" />
-                  <span>Loading document preview...</span>
-                </div>
-              ) : previewDoc.isPdf ? (
-                <div className="ams-doc-iframe-container">
-                  <iframe
-                    src={previewDoc.url}
-                    title={previewDoc.title || 'PDF Preview'}
-                    className="ams-doc-iframe"
-                  />
-                  <div className="ams-doc-fallback-bar">
-                    <span>Trouble viewing PDF?</span>
-                    <a
-                      href={previewDoc.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ams-doc-newtab-btn"
-                    >
-                      <ArrowUpRight size={13} /> Open in new tab
-                    </a>
-                  </div>
-                </div>
-              ) : (
-                <div className="ams-doc-image-container">
-                  <img
-                    src={previewDoc.url}
-                    alt={previewDoc.title || 'Preview'}
-                    className="ams-doc-image"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                      const errBox = document.getElementById('dir-doc-img-error');
-                      if (errBox) errBox.style.display = 'flex';
-                    }}
-                  />
-                  <div id="dir-doc-img-error" className="ams-doc-error-box" style={{ display: 'none' }}>
-                    <p>Unable to load image preview directly.</p>
-                    {previewDoc.url && (
-                      <a
-                        href={previewDoc.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="ams-doc-newtab-btn"
-                      >
-                        <ArrowUpRight size={14} /> Open Image in New Tab
-                      </a>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <DocumentPreviewLightbox
+          previewDoc={previewDoc}
+          onClose={handleClosePreview}
+        />
       )}
 
       {/* Sublist Records Modal (View Customers / View Agents) */}

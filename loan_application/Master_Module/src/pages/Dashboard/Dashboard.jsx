@@ -1094,7 +1094,7 @@ export function Dashboard() {
               <ShieldCheck size={20} />
             </div>
             <div className="people-role-info">
-              <h3 className="people-role-title">AMS</h3>
+              <h3 className="people-role-title">ASM</h3>
               <span className="people-role-subtitle">Directory records</span>
             </div>
             <div className="people-role-metric">
@@ -1481,13 +1481,13 @@ export function Dashboard() {
             className="person-dialog ams-details-dialog"
             role="dialog"
             aria-modal="true"
-            aria-label="Area Management Specialist details"
+            aria-label="Area Sourcing Manager (ASM) details"
             onMouseDown={(event) => event.stopPropagation()}
           >
             <button
               className="person-dialog-close"
               onClick={() => setSelectedAms(null)}
-              aria-label="Close AMS details"
+              aria-label="Close ASM details"
             >
               <X size={18} />
             </button>
@@ -1502,7 +1502,7 @@ export function Dashboard() {
                 version={selectedAms.imageVersion || imageVersion}
               />
               <div className="ams-modal-title-block">
-                <span className="eyebrow">AREA MANAGEMENT SPECIALIST</span>
+                <span className="eyebrow">AREA SOURCING MANAGER (ASM)</span>
                 <h2>{selectedAms.fullName}</h2>
                 <div className="ams-badge-row">
                   {selectedAms.amsCode && (
@@ -1528,7 +1528,7 @@ export function Dashboard() {
                       <dd>{selectedAms.fullName || '—'}</dd>
                     </div>
                     <div>
-                      <dt>AMS Code</dt>
+                      <dt>ASM Code</dt>
                       <dd>{selectedAms.amsCode || '—'}</dd>
                     </div>
                     <div>
@@ -1736,7 +1736,7 @@ export function Dashboard() {
                 Close
               </button>
               <button className="primary-button" onClick={() => openEditAms(selectedAms)}>
-                <Pencil size={16} /> Edit AMS
+                <Pencil size={16} /> Edit ASM
               </button>
             </div>
           </section>

@@ -1,30 +1,36 @@
-import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertCircle,
+  ArrowLeft,
   BarChart3,
+  Briefcase,
+  Building2,
+  Calendar,
   CheckCircle2,
   ChevronRight,
   ClipboardList,
   Coins,
   Eye,
   FileClock,
+  FileText,
   Filter,
+  Landmark,
   LayoutDashboard,
   Loader2,
   LogOut,
+  Mail,
+  MapPin,
   MapPinned,
   Menu,
+  Phone,
   RefreshCw,
   Search,
   ShieldCheck,
-  Users,
+  UserCheck,
   UserRound,
+  Users,
   X,
-  Building2,
-  Phone,
-  Mail,
-  Camera,
 } from 'lucide-react';
 import logoImg from '../../../../Core/src/assets/branding/Logo.png';
 import { getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
@@ -32,8 +38,10 @@ import { getAllRelationshipManagers } from '../../api/rmApi';
 import { getAllAgents } from '../../api/agentApi';
 import { agentCustomerService } from '../../../../Core/src/services/agentCustomerService';
 import axiosInstance from '../../api/axiosInstance';
-import { getProfileImageUrl, updateProfileImage } from '../../utils/profileImageHelper';
+import { getProfileImageUrl } from '../../utils/profileImageHelper';
 import { MasterModal } from '../../components/masters/MasterModal/MasterModal';
+import { fetchLocationLookups } from '../PeopleDirectory/PeopleDirectoryPage';
+import '../PeopleDirectory/PeopleDirectory.css';
 import './AMSDashboard.css';
 
 const unwrap = (response) => {
@@ -58,6 +66,25 @@ const initials = (name = '') =>
     .slice(0, 2)
     .map((part) => part[0].toUpperCase())
     .join('') || 'AM';
+
+const formatDob = (dob) => {
+  if (!dob) return '—';
+  try {
+    const d = new Date(dob);
+    if (isNaN(d.getTime())) return String(dob).slice(0, 10);
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return String(dob);
+  }
+};
+
+const formatPhone = (phone = '') => {
+  if (!phone) return '—';
+  const clean = String(phone).trim();
+  const digits = clean.replace(/\D/g, '');
+  if (digits.length === 10) return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
+  return clean || '—';
+};
 
 function AmsAvatar({ role, id, name, className = 'ams-person-avatar', version = null }) {
   const [error, setError] = useState(false);
@@ -154,11 +181,11 @@ const getLoggedInAmsInfo = () => {
       amsData?.name ||
       (isUserAms ? (user?.fullName || user?.name) : null) ||
       user?.fullName ||
-      'AMS Officer';
+      'ASM Officer';
     const amsCode =
       amsData?.amsCode ||
       (isUserAms ? (user?.amsCode || user?.code) : null) ||
-      (amsId ? `AMS${String(amsId).padStart(4, '0')}` : 'AMS0001');
+      '';
     const mobileNumber =
       amsData?.mobileNumber ||
       amsData?.phone ||
@@ -174,7 +201,7 @@ const getLoggedInAmsInfo = () => {
     const branch = amsData?.branch || (isUserAms ? user?.branch : null) || user?.branch || '';
     return { amsId, fullName, amsCode, mobileNumber, emailAddress, branch };
   } catch {
-    return { amsId: null, fullName: 'AMS Officer', amsCode: 'AMS0001', mobileNumber: '', emailAddress: '', branch: '' };
+    return { amsId: null, fullName: 'ASM Officer', amsCode: '', mobileNumber: '', emailAddress: '', branch: '' };
   }
 };
 
@@ -208,53 +235,25 @@ export default function AMSDashboard() {
     window.location.href = '/login';
   };
 
-  // AMS Profile Image Upload State
-  const [amsImageVersion, setAmsImageVersion] = useState(Date.now());
-  const [isUploadingAmsImage, setIsUploadingAmsImage] = useState(false);
-  const [amsImageError, setAmsImageError] = useState('');
-  const [amsImageSuccess, setAmsImageSuccess] = useState('');
-  const amsFileInputRef = useRef(null);
-
+  const [amsImageVersion] = useState(Date.now());
+  const [profileImageFailed, setProfileImageFailed] = useState(false);
   const sessionUser = useMemo(() => getLoggedInAmsInfo(), []);
   const currentAmsId = sessionUser.amsId;
 
-  const handleAmsImageChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Locations lookup for resolving City, District, State names
+  const [locations, setLocations] = useState(null);
 
-    setAmsImageError('');
-    setAmsImageSuccess('');
+  useEffect(() => {
+    let isMounted = true;
+    fetchLocationLookups().then((data) => {
+      if (isMounted && data) setLocations(data);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(file.type?.toLowerCase())) {
-      setAmsImageError('Please select a valid image (JPEG, PNG, WebP).');
-      if (amsFileInputRef.current) amsFileInputRef.current.value = '';
-      return;
-    }
 
-    if (!currentAmsId) {
-      setAmsImageError('AMS identity not found. Cannot update photo.');
-      if (amsFileInputRef.current) amsFileInputRef.current.value = '';
-      return;
-    }
-
-    setIsUploadingAmsImage(true);
-
-    try {
-      await updateProfileImage('AMS', currentAmsId, file);
-      setAmsImageVersion(Date.now());
-      setAmsImageSuccess('Profile photo updated!');
-      setTimeout(() => setAmsImageSuccess(''), 4000);
-    } catch (err) {
-      console.error('Failed to update AMS profile image:', err);
-      setAmsImageError(err.message || 'Failed to update photo. Please try again.');
-    } finally {
-      setIsUploadingAmsImage(false);
-      if (amsFileInputRef.current) {
-        amsFileInputRef.current.value = '';
-      }
-    }
-  };
 
   const loadDashboardData = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) {
@@ -311,7 +310,9 @@ export default function AMSDashboard() {
 
       // Process Profile
       if (profileRes.status === 'fulfilled' && profileRes.value) {
-        setAmsProfile(profileRes.value);
+        const val = profileRes.value?.data !== undefined ? profileRes.value.data : profileRes.value;
+        const profileRecord = Array.isArray(val) ? val[0] : (val?.value?.[0] || val);
+        setAmsProfile(profileRecord);
       }
 
       setLastUpdated(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }));
@@ -329,9 +330,9 @@ export default function AMSDashboard() {
   }, [loadDashboardData]);
 
   // AMS Identity Details
-  const amsName = amsProfile?.fullName || amsProfile?.name || sessionUser.fullName || 'AMS Officer';
+  const amsName = amsProfile?.fullName || amsProfile?.name || sessionUser.fullName || 'ASM Officer';
   const amsFirstName = amsName.split(' ')[0] || 'User';
-  const amsCode = amsProfile?.amsCode || amsProfile?.code || sessionUser.amsCode || 'AMS0001';
+  const amsCode = amsProfile?.amsCode || amsProfile?.code || sessionUser.amsCode || '—';
 
   // Normalize Applications
   const liveApplications = useMemo(() => {
@@ -443,6 +444,108 @@ export default function AMSDashboard() {
       };
     }).filter((d) => d.districtId);
   }, [rawDistricts]);
+
+  // Profile Values for Full-Page Layout
+  const profileFullName = amsProfile?.fullName || amsProfile?.name || sessionUser.fullName || 'ASM Officer';
+  const profileAmsCode = amsProfile?.amsCode || amsProfile?.code || sessionUser.amsCode || '—';
+  const profileStatusInfo = useMemo(() => {
+    const raw = amsProfile?.isActive ?? amsProfile?.IsActive ?? amsProfile?.status ?? amsProfile?.Status;
+    if (raw === true || raw === 1 || raw === '1') {
+      return { isActive: true, label: 'Active' };
+    }
+    if (raw === false || raw === 0 || raw === '0') {
+      return { isActive: false, label: 'Inactive' };
+    }
+    if (typeof raw === 'string' && raw.trim()) {
+      const lower = raw.trim().toLowerCase();
+      if (lower === 'active' || lower === 'enabled') {
+        return { isActive: true, label: 'Active' };
+      }
+      if (lower === 'inactive' || lower === 'disabled' || lower === 'suspended') {
+        return { isActive: false, label: 'Inactive' };
+      }
+      return { isActive: false, label: raw.trim() };
+    }
+    return { isActive: false, label: '—' };
+  }, [amsProfile]);
+  const profileBranch = read(amsProfile, ['branch', 'Branch', 'branchName', 'BranchName']) || sessionUser.branch || '';
+  const profileDateJoined = read(amsProfile, ['dateJoined', 'DateJoined', 'joiningDate', 'createdAt']);
+  const profileDob = read(amsProfile, ['dateOfBirth', 'DateOfBirth', 'dob']);
+  const profileMobile = read(amsProfile, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']) || sessionUser.mobileNumber || '';
+  const profileEmail = read(amsProfile, ['emailAddress', 'EmailAddress', 'email', 'Email']) || sessionUser.emailAddress || '';
+  const profileAddress = read(amsProfile, ['address', 'Address']);
+  const profilePincode = read(amsProfile, ['pincode', 'Pincode']);
+
+  const profileGender = useMemo(() => {
+    const raw = read(amsProfile, ['genderName', 'GenderName', 'gender', 'Gender']);
+    if (raw && typeof raw === 'string' && raw.trim()) return raw.trim();
+    const id = amsProfile?.genderId ?? amsProfile?.GenderId;
+    if (id === 1 || id === '1') return 'Male';
+    if (id === 2 || id === '2') return 'Female';
+    if (id === 3 || id === '3') return 'Other';
+    return '—';
+  }, [amsProfile]);
+
+  const profileCity = useMemo(() => {
+    const raw = read(amsProfile, ['cityName', 'CityName', 'city', 'City']);
+    if (raw && isNaN(Number(String(raw).trim())) && !/^city\s*id/i.test(String(raw).trim())) {
+      return String(raw).trim();
+    }
+    const id = amsProfile?.cityId ?? amsProfile?.CityId;
+    if (id !== undefined && id !== null && locations?.cities) {
+      const match = locations.cities.find((c) => String(c.cityId ?? c.id) === String(id));
+      if (match) return match.cityName || match.name || '';
+    }
+    return raw || '';
+  }, [amsProfile, locations]);
+
+  const profileDistrict = useMemo(() => {
+    const raw = read(amsProfile, ['districtName', 'DistrictName', 'district', 'District']);
+    if (raw && isNaN(Number(String(raw).trim())) && !/^district\s*id/i.test(String(raw).trim())) {
+      return String(raw).trim();
+    }
+    const id = amsProfile?.districtId ?? amsProfile?.DistrictId;
+    if (id !== undefined && id !== null && locations?.districts) {
+      const match = locations.districts.find((d) => String(d.districtId ?? d.id) === String(id));
+      if (match) return match.districtName || match.name || '';
+    }
+    return raw || '';
+  }, [amsProfile, locations]);
+
+  const profileState = useMemo(() => {
+    const raw = read(amsProfile, ['stateName', 'StateName', 'state', 'State']);
+    if (raw && isNaN(Number(String(raw).trim())) && !/^state\s*id/i.test(String(raw).trim())) {
+      return String(raw).trim();
+    }
+    const id = amsProfile?.stateId ?? amsProfile?.StateId;
+    if (id !== undefined && id !== null && locations?.states) {
+      const match = locations.states.find((s) => String(s.stateId ?? s.id) === String(id));
+      if (match) return match.stateName || match.name || '';
+    }
+    return raw || '';
+  }, [amsProfile, locations]);
+
+  const profileLocationSummary = useMemo(() => {
+    const parts = [
+      profileCity,
+      profileDistrict,
+      profileState,
+      profilePincode ? `PIN: ${profilePincode}` : '',
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : '—';
+  }, [profileCity, profileDistrict, profileState, profilePincode]);
+
+  const profileBankAccount = useMemo(() => {
+    const raw = read(amsProfile, ['bankAccountNumber', 'BankAccountNumber', 'accountNumber', 'AccountNumber']);
+    if (raw === undefined || raw === null) return '—';
+    const clean = String(raw).trim();
+    if (!clean || clean.toLowerCase() === 'null' || clean.toLowerCase() === 'undefined') return '—';
+    return clean;
+  }, [amsProfile]);
+
+  const profileIfscCode = read(amsProfile, ['ifscCode', 'IfscCode', 'IFSCCode', 'ifsc', 'IFSC']) || '—';
+
+  const profileImageUrl = currentAmsId ? getProfileImageUrl('AMS', currentAmsId, amsImageVersion) : null;
 
   // Build Central Scoped Hierarchy via useMemo
   const {
@@ -694,8 +797,14 @@ export default function AMSDashboard() {
   const goToView = (view) => {
     setActiveView(view);
     setSidebarOpen(false);
-    const target = document.getElementById(`ams-${view}`) || (view === 'applications' ? document.querySelector('.ams-bottom-grid') : null);
-    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (view !== 'profile') {
+      setTimeout(() => {
+        const target = document.getElementById(`ams-${view}`) || (view === 'applications' ? document.querySelector('.ams-bottom-grid') : null);
+        target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   if (loading) {
@@ -703,7 +812,7 @@ export default function AMSDashboard() {
       <div className="ams-dashboard-shell">
         <div className="ams-dashboard-loading" style={{ width: '100%' }}>
           <Loader2 size={38} className="ams-spin" />
-          <p>Loading live AMS monitoring data...</p>
+          <p>Loading live ASM monitoring data...</p>
         </div>
       </div>
     );
@@ -731,10 +840,10 @@ export default function AMSDashboard() {
           <AmsAvatar role="AMS" id={currentAmsId} name={amsName} className="ams-sidebar-avatar" />
           <span>
             <strong>{amsName}</strong>
-            <small>AMS · {totals.districts} district{totals.districts === 1 ? '' : 's'}</small>
+            <small>ASM · {totals.districts} district{totals.districts === 1 ? '' : 's'}</small>
           </span>
         </div>
-        <nav className="ams-sidebar-nav" aria-label="AMS dashboard navigation">
+        <nav className="ams-sidebar-nav" aria-label="ASM dashboard navigation">
           <span className="ams-sidebar-label">MONITORING</span>
           <button
             type="button"
@@ -770,6 +879,13 @@ export default function AMSDashboard() {
             onClick={() => goToView('applications')}
           >
             <FileClock size={17} /> Application status
+          </button>
+          <button
+            type="button"
+            className={activeView === 'profile' ? 'is-active' : ''}
+            onClick={() => goToView('profile')}
+          >
+            <UserCheck size={17} /> Profile
           </button>
         </nav>
         <div className="ams-sidebar-bottom">
@@ -807,11 +923,220 @@ export default function AMSDashboard() {
           </div>
         )}
 
-        <div id="ams-overview">
+        {activeView === 'profile' ? (
+          <div id="ams-profile" className="asm-profile-dashboard">
+            <div className="asm-profile-top-bar">
+              <button
+                type="button"
+                className="asm-profile-back-btn"
+                onClick={() => goToView('overview')}
+              >
+                <ArrowLeft size={15} /> Back to Dashboard
+              </button>
+              <span className="asm-profile-badge">
+                <ShieldCheck size={14} /> ASM Employee Record · View-Only
+              </span>
+            </div>
+
+            <div className="asm-profile-grid-layout">
+              {/* LEFT — Dark-green employee identity panel */}
+              <aside className="asm-identity-panel">
+                <div className="asm-identity-avatar-wrap">
+                  {profileImageUrl && !profileImageFailed ? (
+                    <img
+                      src={profileImageUrl}
+                      alt={profileFullName}
+                      className="asm-identity-avatar-img"
+                      onError={() => setProfileImageFailed(true)}
+                    />
+                  ) : (
+                    <span className="asm-identity-initials">
+                      {initials(profileFullName)}
+                    </span>
+                  )}
+                </div>
+
+                <h2 className="asm-identity-name">{profileFullName}</h2>
+
+                <div className="asm-identity-code-badge">
+                  <ShieldCheck size={13} />
+                  <span>{profileAmsCode}</span>
+                </div>
+
+                <p className="asm-identity-role">Area Sourcing Manager (ASM)</p>
+
+                <div className={`asm-identity-status-pill ${profileStatusInfo.isActive ? 'is-active' : 'is-inactive'}`}>
+                  <span className="asm-identity-status-dot" />
+                  <span>{profileStatusInfo.label}</span>
+                </div>
+
+                <div className="asm-identity-divider" />
+
+                <div className="asm-identity-meta-list">
+                  <div className="asm-identity-meta-item">
+                    <Building2 size={14} className="asm-identity-meta-icon" />
+                    <div className="asm-identity-meta-content">
+                      <span className="asm-identity-meta-label">Branch</span>
+                      <span className="asm-identity-meta-value">{profileBranch || '—'}</span>
+                    </div>
+                  </div>
+
+                  <div className="asm-identity-meta-item">
+                    <ShieldCheck size={14} className="asm-identity-meta-icon" />
+                    <div className="asm-identity-meta-content">
+                      <span className="asm-identity-meta-label">Department</span>
+                      <span className="asm-identity-meta-value">Area Management &amp; Sourcing</span>
+                    </div>
+                  </div>
+
+                  <div className="asm-identity-meta-item">
+                    <Calendar size={14} className="asm-identity-meta-icon" />
+                    <div className="asm-identity-meta-content">
+                      <span className="asm-identity-meta-label">Member Since</span>
+                      <span className="asm-identity-meta-value">{formatDob(profileDateJoined)}</span>
+                    </div>
+                  </div>
+                </div>
+              </aside>
+
+              {/* RIGHT — Unified Sage-Green information panel */}
+              <main className="asm-sage-panel">
+                {/* Section 1: Personal Information */}
+                <section className="asm-sage-section">
+                  <div className="asm-sage-section-header">
+                    <UserRound size={14} className="asm-sage-section-icon" />
+                    <h3>Personal Information</h3>
+                  </div>
+                  <div className="asm-sage-row asm-sage-row-alt-1">
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">Full Name</span>
+                      <span className="asm-sage-value">{profileFullName}</span>
+                    </div>
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">Date of Birth</span>
+                      <span className="asm-sage-value">{formatDob(profileDob)}</span>
+                    </div>
+                  </div>
+                  <div className="asm-sage-row asm-sage-row-alt-2">
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">Gender</span>
+                      <span className="asm-sage-value">{profileGender}</span>
+                    </div>
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">Joining Date</span>
+                      <span className="asm-sage-value">{formatDob(profileDateJoined)}</span>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Section 2: Contact & Location */}
+                <section className="asm-sage-section">
+                  <div className="asm-sage-section-header">
+                    <MapPin size={14} className="asm-sage-section-icon" />
+                    <h3>Contact &amp; Location</h3>
+                  </div>
+                  <div className="asm-sage-row asm-sage-row-alt-1">
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">Mobile Number</span>
+                      <span className="asm-sage-value">{formatPhone(profileMobile)}</span>
+                    </div>
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">Email Address</span>
+                      <span className="asm-sage-value">{profileEmail || '—'}</span>
+                    </div>
+                  </div>
+                  <div className="asm-sage-row asm-sage-row-alt-2">
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">Residential Address</span>
+                      <span className="asm-sage-value">{profileAddress || '—'}</span>
+                    </div>
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">Location</span>
+                      <span className="asm-sage-value">{profileLocationSummary}</span>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Section 3: Work & Organization */}
+                <section className="asm-sage-section">
+                  <div className="asm-sage-section-header">
+                    <Briefcase size={14} className="asm-sage-section-icon" />
+                    <h3>Work &amp; Organization</h3>
+                  </div>
+                  <div className="asm-sage-row asm-sage-row-alt-1">
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">Area Sourcing Manager Code</span>
+                      <span className="asm-sage-value">{profileAmsCode}</span>
+                    </div>
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">Role / Designation</span>
+                      <span className="asm-sage-value">Area Sourcing Manager (ASM)</span>
+                    </div>
+                  </div>
+                  <div className="asm-sage-row asm-sage-row-alt-2">
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">Assigned Branch</span>
+                      <span className="asm-sage-value">{profileBranch || '—'}</span>
+                    </div>
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">Operational Territory</span>
+                      <span className="asm-sage-value">{liveDistricts.length} Assigned District{liveDistricts.length === 1 ? '' : 's'}</span>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Section 4: Assigned Districts */}
+                <section className="asm-sage-section">
+                  <div className="asm-sage-section-header">
+                    <MapPinned size={14} className="asm-sage-section-icon" />
+                    <h3>Assigned Districts</h3>
+                  </div>
+                  <div className="asm-sage-row asm-sage-row-alt-1">
+                    <div className="asm-sage-field-item asm-sage-col-full">
+                      <span className="asm-sage-label">Operating Districts</span>
+                      <div className="asm-districts-wrap">
+                        {liveDistricts.length > 0 ? (
+                          liveDistricts.map((d, i) => (
+                            <span key={d?.districtId || i} className="asm-district-badge">
+                              <MapPinned size={12} />
+                              {typeof d === 'string' ? d : d?.name || d?.districtName || `District #${d?.districtId || i}`}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="asm-sage-value">—</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Section 5: Banking Information */}
+                <section className="asm-sage-section">
+                  <div className="asm-sage-section-header">
+                    <Landmark size={14} className="asm-sage-section-icon" />
+                    <h3>Banking Information</h3>
+                  </div>
+                  <div className="asm-sage-row asm-sage-row-alt-1">
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">Bank Account Number</span>
+                      <span className="asm-sage-value monospace">{profileBankAccount}</span>
+                    </div>
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">IFSC Code</span>
+                      <span className="asm-sage-value monospace">{profileIfscCode}</span>
+                    </div>
+                  </div>
+                </section>
+              </main>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div id="ams-overview">
           <header className="ams-dashboard-hero">
             <div className="ams-dashboard-hero-copy">
               <span className="ams-dashboard-eyebrow">
-                <ShieldCheck size={14} /> AMS MONITORING CONSOLE
+                <ShieldCheck size={14} /> ASM MONITORING CONSOLE
               </span>
               <h1>Good morning, {amsFirstName}</h1>
               <div className="ams-scope-line">
@@ -819,34 +1144,6 @@ export default function AMSDashboard() {
               </div>
             </div>
             <div className="ams-dashboard-hero-side">
-              <div className="ams-account-badge">
-                <div className="ams-account-avatar-wrapper" style={{ position: 'relative' }}>
-                  <AmsAvatar role="AMS" id={currentAmsId} name={amsName} className="ams-account-avatar" version={amsImageVersion} />
-                  <button
-                    type="button"
-                    className="ams-avatar-edit-btn"
-                    onClick={() => amsFileInputRef.current?.click()}
-                    disabled={isUploadingAmsImage}
-                    title="Change profile photo"
-                    aria-label="Change profile photo"
-                  >
-                    {isUploadingAmsImage ? <Loader2 size={11} className="ams-spin" /> : <Camera size={11} />}
-                  </button>
-                  <input
-                    type="file"
-                    ref={amsFileInputRef}
-                    onChange={handleAmsImageChange}
-                    accept="image/jpeg,image/jpg,image/png,image/webp"
-                    style={{ display: 'none' }}
-                  />
-                </div>
-                <span>
-                  <strong>{amsCode}</strong>
-                  <small>Area Management Specialist</small>
-                  {amsImageError && <span style={{ color: '#dc2626', fontSize: '10px', display: 'block', fontWeight: 600 }}>{amsImageError}</span>}
-                  {amsImageSuccess && <span style={{ color: '#16a34a', fontSize: '10px', display: 'block', fontWeight: 600 }}>{amsImageSuccess}</span>}
-                </span>
-              </div>
               <button
                 type="button"
                 className="ams-refresh-button"
@@ -898,7 +1195,7 @@ export default function AMSDashboard() {
 
             {assignedDistrictsWithData.length === 0 ? (
               <div className="ams-empty-card-state">
-                No districts are currently mapped to this AMS user.
+                No districts are currently mapped to this ASM user.
               </div>
             ) : (
               <div className="ams-district-cards">
@@ -1280,6 +1577,8 @@ export default function AMSDashboard() {
             </div>
           </div>
         </section>
+          </>
+        )}
 
         {selectedAgent && (
           <div
@@ -1413,6 +1712,8 @@ export default function AMSDashboard() {
           </div>
         )}
       </main>
+
+
 
       {showLogoutModal && (
         <MasterModal

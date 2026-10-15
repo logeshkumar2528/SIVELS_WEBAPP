@@ -214,7 +214,7 @@ export function Navbar() {
 
   const goBack = () => window.history.length > 1 ? navigate(-1) : navigate('/dashboard');
 
-  const isAmsDashboard = location.pathname.includes('ams-dashboard') || isAmsUser;
+  const isAmsDashboard = location.pathname.includes('ams-dashboard');
 
   const directoryRoutes = [
     '/agents',
