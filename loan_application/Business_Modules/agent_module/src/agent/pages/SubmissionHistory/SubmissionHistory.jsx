@@ -25,6 +25,7 @@ import {
 import { formatDateTime, matchesListingDateCriteria } from '../../../../../../Core/src/utils/dateHelper'
 import { getApiErrorMessage } from '../../../../../../Core/src/utils/apiErrorHandler'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
+import { useAuth } from '../../../../../../Core/src/context/AuthContext'
 import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
 import { normalizeApplicationStatus } from '../../../../../rm_modules/src/utils/rmContext'
 import './SubmissionHistory.css'
@@ -51,6 +52,7 @@ const getStatusType = (status) => {
 
 function SubmissionHistory() {
   const navigate = useNavigate()
+  const { currentUser } = useAuth()
   
   // Asynchronously resolve the true agentId based on logged-in user
   const { agentId, loadingAgent } = useAgentIdentity()
@@ -174,8 +176,12 @@ function SubmissionHistory() {
   }
 
   useEffect(() => {
-    if (!loadingAgent && agentId) {
-      fetchSubmissions()
+    if (!loadingAgent) {
+      if (agentId) {
+        fetchSubmissions()
+      } else {
+        setLoading(false)
+      }
     }
   }, [agentId, loadingAgent])
 
@@ -573,9 +579,28 @@ function SubmissionHistory() {
         )}
 
         {/* Data Table Area */}
-        {loading ? (
+        {loadingAgent || loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
             Loading submission history...
+          </div>
+        ) : !agentId ? (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
+            <p style={{ color: '#0f172a', fontWeight: 600, fontSize: '16px', marginBottom: '6px' }}>
+              {currentUser?.role && String(currentUser.role).toLowerCase() !== 'agent'
+                ? `Logged in as ${currentUser.role}. Agent access is required.`
+                : 'Unable to establish Agent identity.'}
+            </p>
+            <p style={{ fontSize: '14px', marginBottom: '14px' }}>
+              Please log in with an Agent account to view submission history.
+            </p>
+            <button
+              type="button"
+              className="std-btn std-btn-primary"
+              onClick={() => navigate('/login')}
+              style={{ padding: '6px 14px', borderRadius: '4px', cursor: 'pointer' }}
+            >
+              Go to Login
+            </button>
           </div>
         ) : error ? (
           <div style={{ padding: '40px', textAlign: 'center', color: '#dc2626' }}>
@@ -688,7 +713,7 @@ function SubmissionHistory() {
         )}
 
         {/* Standalone Pagination Component */}
-        {!loading && !error && filteredSubmissions.length > 0 && (
+        {!loadingAgent && !loading && !error && agentId && filteredSubmissions.length > 0 && (
           <Pagination
             currentPage={currentPage}
             totalItems={totalItems}
