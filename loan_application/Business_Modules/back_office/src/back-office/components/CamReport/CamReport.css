@@ -115,14 +115,14 @@
   flex-direction: column;
 }
 
-.cam-page::before {
-  content: 'CREDIT APPROVAL MEMORANDUM';
+.cam-page-label {
   position: absolute;
   top: 18px;
   left: 42px;
   font-size: 9px;
   font-weight: var(--font-weight-bold, 700);
   letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--cam-primary);
 }
 
@@ -136,7 +136,6 @@
   background: var(--cam-border);
 }
 
-.cam-cover::before,
 .cam-cover::after {
   display: none;
 }

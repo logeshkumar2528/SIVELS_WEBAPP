@@ -5,86 +5,33 @@
  * (application form, PD assessment, eligibility, banking, RTR, asset base, health checks,
  * deviations and workflow history). Values that are not captured anywhere yet are left blank.
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
-import axiosInstance from '../../../../../../Core/src/api/axiosInstance';
-import backOfficeService, { unwrapResponse } from '../../api/backOfficeService';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import backOfficeService from '../../api/backOfficeService';
 import { buildNormalIncomeSummary } from '../../utils/normalIncomeSheetParser';
-import LogoImage from '../../../../../../Core/src/assets/branding/SivelsFinanceLogo.jpg';
-import './CamReport.css';
-
-const BRAND_NAME = 'Sivels Finance';
-
-const toList = (res) => {
-  if (Array.isArray(res)) return res;
-  const inner = res?.value ?? res?.data ?? res?.items ?? res?.assets;
-  return Array.isArray(inner) ? inner : [];
-};
-
-const settledValue = (result) => (result?.status === 'fulfilled' ? result.value : null);
-
-const getMaster = async (path) => unwrapResponse(await axiosInstance.get(path));
-
-const firstRecord = (v) => (Array.isArray(v) ? v[0] : v) || null;
-
-const nameById = (list, idKey, nameKey, id) => {
-  if (id == null || id === '') return null;
-  const row = (list || []).find((item) => String(item?.[idKey]) === String(id));
-  return row ? row[nameKey] : null;
-};
-
-const isBlank = (v) =>
-  v == null ||
-  (typeof v === 'string' && ['', 'not available', 'n/a', '—'].includes(v.trim().toLowerCase()));
-
-const pick = (obj, keys) => {
-  if (!obj) return null;
-  for (const key of keys) {
-    if (!isBlank(obj[key])) return obj[key];
-  }
-  return null;
-};
-
-const dash = (v) => (isBlank(v) ? '' : v);
-
-const toNumber = (v) => {
-  if (isBlank(v)) return null;
-  const n = Number(String(v).replace(/[^0-9.-]/g, ''));
-  return Number.isFinite(n) ? n : null;
-};
-
-const fmtINR = (v) => {
-  const n = toNumber(v);
-  return n == null ? '' : n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
-
-const fmtNum = (v, digits = 2) => {
-  const n = toNumber(v);
-  return n == null ? '' : n.toFixed(digits);
-};
-
-const fmtPercent = (v) => {
-  const n = toNumber(v);
-  return n == null ? '' : `${n.toFixed(2)}%`;
-};
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-const fmtDate = (v) => {
-  if (isBlank(v)) return '';
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return String(v);
-  return `${String(d.getDate()).padStart(2, '0')}-${MONTHS[d.getMonth()]}-${d.getFullYear()}`;
-};
-
-const fmtDateTime = (v) => {
-  if (isBlank(v)) return '';
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return String(v);
-  const time = [d.getHours(), d.getMinutes(), d.getSeconds()].map((p) => String(p).padStart(2, '0')).join(':');
-  return `${fmtDate(v)} ${time}`;
-};
+import {
+  BRAND_NAME,
+  LogoImage,
+  toList,
+  settledValue,
+  getMaster,
+  firstRecord,
+  nameById,
+  isBlank,
+  pick,
+  dash,
+  toNumber,
+  fmtINR,
+  fmtNum,
+  fmtPercent,
+  fmtDate,
+  fmtDateTime,
+  CamPage,
+  KvTable,
+  GridTable,
+  SectionTitle,
+  TextBlock,
+  usePrintAndPdf,
+} from './camShared';
 
 const humanize = (v) =>
   isBlank(v) ? '' : String(v).replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').trim();
@@ -143,74 +90,6 @@ const KEY_FINANCIAL_ROWS = [
 
 const HEALTH_CHECK_FALLBACK = ['Google', 'Reference', 'FI', 'Crimecheck', 'Hunter', 'RCU', 'Dedupe', 'PAN Check', 'Aadhar Check', 'CERSAI Check'];
 
-/* ── Layout primitives ─────────────────────────────────────────────── */
-
-function CamPage({ number, footer, children, className = '' }) {
-  return (
-    <section className={`cam-page ${className}`}>
-      <img className="cam-page-brand" src={LogoImage} alt={BRAND_NAME} />
-      <div className="cam-page-body">{children}</div>
-      <footer className="cam-page-footer">
-        <span>{footer}</span>
-        <span>Page {number}</span>
-      </footer>
-    </section>
-  );
-}
-
-function KvTable({ rows }) {
-  return (
-    <table className="cam-table cam-kv">
-      <tbody>
-        {rows.map((row, idx) => (
-          <tr key={idx}>
-            {row.length === 2 ? (
-              <>
-                <th>{row[0]}</th>
-                <td colSpan={3}>{dash(row[1])}</td>
-              </>
-            ) : (
-              <>
-                <th>{row[0]}</th>
-                <td>{dash(row[1])}</td>
-                <th>{row[2]}</th>
-                <td>{dash(row[3])}</td>
-              </>
-            )}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-function GridTable({ headers, rows, emptyRows = 1, footerRow = null }) {
-  const body = rows.length > 0 ? rows : Array.from({ length: emptyRows }, () => headers.map(() => ''));
-  return (
-    <table className="cam-table cam-grid">
-      <thead>
-        <tr>{headers.map((h) => <th key={h}>{h}</th>)}</tr>
-      </thead>
-      <tbody>
-        {body.map((row, idx) => (
-          <tr key={idx}>{row.map((cell, cIdx) => <td key={cIdx}>{dash(cell)}</td>)}</tr>
-        ))}
-        {footerRow && (
-          <tr className="cam-total-row">{footerRow.map((cell, cIdx) => <td key={cIdx}>{dash(cell)}</td>)}</tr>
-        )}
-      </tbody>
-    </table>
-  );
-}
-
-function SectionTitle({ children }) {
-  return <h3 className="cam-section-title">{children}</h3>;
-}
-
-function TextBlock({ value }) {
-  return <div className="cam-text-block">{dash(value)}</div>;
-}
-
 /* ── Main component ────────────────────────────────────────────────── */
 
 export default function CamReport({
@@ -220,16 +99,27 @@ export default function CamReport({
   agentCustomerId,
   healthChecks = {},
   fallbackRecommendation = null,
+  onLoaded,
 }) {
   const reportRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState({});
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportError, setExportError] = useState(null);
+  const exportRef = verificationData?.appId || verificationData?.customerCode || agentCustomerId || 'Application';
+  const { handlePrint, handleDownloadPdf, isExporting, exportError } = usePrintAndPdf(reportRef, {
+    title: 'CAM',
+    fileName: `CAM_${exportRef}.pdf`,
+  });
+
+  useEffect(() => {
+    if (!loading && Object.keys(data).length > 0) onLoaded?.();
+  }, [loading, data, onLoaded]);
 
   useEffect(() => {
     const appProdId = Number(applicationProductDetailsId);
-    if (!appProdId || appProdId <= 0) return undefined;
+    if (!appProdId || appProdId <= 0) {
+      if (verificationData) onLoaded?.();
+      return undefined;
+    }
     let isMounted = true;
 
     const custId = Number(agentCustomerId) > 0 ? Number(agentCustomerId) : null;
@@ -699,61 +589,6 @@ export default function CamReport({
   ]);
 
   const sanctionConditions = [...(recommendation.otherSanctionConditions || []), ...decisionConditions];
-
-  /* ── Export ──────────────────────────────────────────────────────── */
-
-  const handlePrint = useCallback(() => {
-    const root = reportRef.current;
-    if (!root) return;
-    const iframe = document.createElement('iframe');
-    iframe.setAttribute('aria-hidden', 'true');
-    Object.assign(iframe.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0' });
-    document.body.appendChild(iframe);
-
-    const doc = iframe.contentDocument;
-    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-      .map((node) => node.outerHTML)
-      .join('\n');
-    doc.open();
-    doc.write(`<!doctype html><html><head><title>CAM</title>${styles}</head><body style="margin:0;background:#fff">${root.outerHTML}</body></html>`);
-    doc.close();
-
-    setTimeout(() => {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-      setTimeout(() => iframe.remove(), 500);
-    }, 400);
-  }, []);
-
-  const handleDownloadPdf = useCallback(async () => {
-    const root = reportRef.current;
-    if (!root) return;
-    setIsExporting(true);
-    setExportError(null);
-    try {
-      const pages = Array.from(root.querySelectorAll('.cam-page'));
-      let pdf = null;
-      for (const page of pages) {
-        const canvas = await html2canvas(page, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' });
-        const width = 210;
-        const height = Math.max(297, (canvas.height * width) / canvas.width);
-        const imgHeight = (canvas.height * width) / canvas.width;
-        if (!pdf) {
-          pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [width, height], compress: true });
-        } else {
-          pdf.addPage([width, height], 'portrait');
-        }
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, width, imgHeight, undefined, 'FAST');
-      }
-      const ref = verificationData?.appId || verificationData?.customerCode || agentCustomerId || 'Application';
-      pdf?.save(`CAM_${ref}.pdf`);
-    } catch (err) {
-      console.error('[CamReport] Failed to generate PDF:', err);
-      setExportError('Failed to generate PDF. Please try again.');
-    } finally {
-      setIsExporting(false);
-    }
-  }, [verificationData, agentCustomerId]);
 
   /* ── Render ──────────────────────────────────────────────────────── */
 
