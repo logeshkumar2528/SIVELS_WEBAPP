@@ -35,6 +35,8 @@ import { getBackOfficeAuth } from '../../auth/authStorage';
 import AssetBase from '../../components/AssetBase/AssetBase';
 import RtrCommonSheet from '../../components/RtrCommonSheet/RtrCommonSheet';
 import DeviationAssessment from '../../components/DeviationAssessment/DeviationAssessment';
+import CamReport from '../../components/CamReport/CamReport';
+import KfsReport from '../../components/KfsReport/KfsReport';
 import SanctionLetter from '../../components/SanctionLetter/SanctionLetter';
 import CustomerDocumentsPanel from '../../components/CustomerDocuments/CustomerDocumentsPanel';
 import CustomerProofVerificationSection from '../../components/CustomerDocuments/CustomerProofVerificationSection';
@@ -257,12 +259,17 @@ const VERIFICATION_WORKFLOW_STEPS = [
   { id: 16, number: 16, visibleNum: '14', title: 'Eligibility Assessment', subtitle: '', group: 'CREDIT & ASSESSMENT' },
   { id: 21, number: 21, visibleNum: '15', title: 'Deviations', subtitle: '', group: 'CREDIT & ASSESSMENT' },
   { id: 17, number: 17, visibleNum: '16', title: 'Recommendation Sheet', subtitle: '', group: 'CREDIT & ASSESSMENT' },
-  { id: 18, number: 18, visibleNum: '17', title: 'Final Action', subtitle: '', group: 'FINAL ACTION' },
-  { id: 23, number: 23, visibleNum: '18', title: 'Sanction Letter', subtitle: '', group: 'SANCTION' },
+  { id: 23, number: 23, visibleNum: '17', title: 'CAM', subtitle: '', group: 'CREDIT & ASSESSMENT' },
+  { id: 24, number: 24, visibleNum: '18', title: 'KFS', subtitle: 'Key Facts Statement', group: 'CREDIT & ASSESSMENT' },
+  { id: 18, number: 18, visibleNum: '19', title: 'Final Action', subtitle: '', group: 'FINAL ACTION' },
+  { id: 25, number: 25, visibleNum: '20', title: 'Sanction Letter', subtitle: '', group: 'SANCTION' },
 ];
 
 const FINAL_ACTION_STEP_ID = 18;
-const SANCTION_LETTER_STEP_ID = 23;
+const CAM_STEP_ID = 23;
+const KFS_STEP_ID = 24;
+const SANCTION_LETTER_STEP_ID = 25;
+const DOCUMENT_STEP_IDS = [FINAL_ACTION_STEP_ID, CAM_STEP_ID, KFS_STEP_ID, SANCTION_LETTER_STEP_ID];
 
 const WORKFLOW_ACTION_LABELS = {
   ReturnedToRM: '↩ Returned to RM (2 → 6)',
@@ -276,7 +283,7 @@ const WORKFLOW_ACTION_LABELS = {
 
 /** Sections the Credit Manager reviews (approve / reject / edit) before the final decision. */
 export const CREDIT_REVIEW_SECTIONS = VERIFICATION_WORKFLOW_STEPS
-  .filter((step) => step.id !== FINAL_ACTION_STEP_ID && step.id !== SANCTION_LETTER_STEP_ID)
+  .filter((step) => !DOCUMENT_STEP_IDS.includes(step.id))
   .map(({ id, visibleNum, title }) => ({ id, visibleNum, title }));
 
 /** Document sub-steps 2-7 all belong to the "Document Verification" section. */
@@ -288,8 +295,8 @@ const CM_EDIT_ACTION_PATTERN =
   /\b(save|saving|verify|delete|remove|upload|replace|override|use application|use policy|use calculated|add|submit|update|calculate|recalculate|apply|mark|clear|reset|browse)\b/i;
 
 /**
- * Visible Step (1–13) to Internal Step ID Mapping
- * Reflects the 13 visible steps displayed in the underwriting workflow sidebar.
+ * Visible Step (1–16) to Internal Step ID Mapping
+ * Reflects the 16 visible steps displayed in the underwriting workflow sidebar.
  */
 const VISIBLE_TO_INTERNAL_STEP = {
   1: 1,   // View Form
@@ -304,12 +311,14 @@ const VISIBLE_TO_INTERNAL_STEP = {
   10: 16, // Eligibility Assessment
   11: 21, // Deviations
   12: 17, // Recommendation Sheet
-  13: 18, // Final Action
-  14: 23, // Sanction Letter
+  13: 23, // CAM
+  14: 24, // KFS
+  15: 18, // Final Action
+  16: 25, // Sanction Letter
 };
 
 /**
- * Internal Step ID to Visible Step (1–13) Mapping
+ * Internal Step ID to Visible Step (1–16) Mapping
  * Maps all internal workflow IDs and sub-steps to their visible sidebar step number.
  */
 const INTERNAL_TO_VISIBLE_STEP = {
@@ -334,8 +343,10 @@ const INTERNAL_TO_VISIBLE_STEP = {
   16: 10, // Eligibility Assessment
   21: 11, // Deviations
   17: 12, // Recommendation Sheet
-  18: 13, // Final Action
-  23: 14, // Sanction Letter
+  23: 13, // CAM
+  24: 14, // KFS
+  18: 15, // Final Action
+  25: 16, // Sanction Letter
 };
 
 function resolveInternalStepFromQuery(stepParam) {
@@ -9118,8 +9129,7 @@ export default function CustomerVerification({
   const showSectionReview =
     isCreditManagerView &&
     !!sectionReview &&
-    reviewSectionId !== FINAL_ACTION_STEP_ID &&
-    reviewSectionId !== SANCTION_LETTER_STEP_ID &&
+    !DOCUMENT_STEP_IDS.includes(reviewSectionId) &&
     !!reviewSection;
   const isCmSectionLocked = showSectionReview && cmEditingSectionId !== reviewSectionId;
 
@@ -17732,7 +17742,7 @@ export default function CustomerVerification({
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 13 of 15</span>
+                <span className="bo-cv-step-tag-pill">Step 13 of 16</span>
               </div>
               {camGateLocked && (
                 <div className="cm-cam-gate-confirm">
@@ -17775,7 +17785,7 @@ export default function CustomerVerification({
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 14 of 15</span>
+                <span className="bo-cv-step-tag-pill">Step 14 of 16</span>
               </div>
               <KfsReport
                 verificationData={verificationData}
@@ -17786,13 +17796,13 @@ export default function CustomerVerification({
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
-              STEP 14: SANCTION LETTER
+              STEP 16: SANCTION LETTER
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === SANCTION_LETTER_STEP_ID && (
             <div className="bo-cv-step-panel bo-cv-view-form-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">14</div>
+                  <div className="bo-cv-step-badge-num">16</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Sanction Letter</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -17800,7 +17810,7 @@ export default function CustomerVerification({
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 14 of 14</span>
+                <span className="bo-cv-step-tag-pill">Step 16 of 16</span>
               </div>
 
               <SanctionLetter verificationData={verificationData} coApplicants={coApplicants} />
@@ -17808,9 +17818,9 @@ export default function CustomerVerification({
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
-              STEP 16: FINAL APPLICATION ACTION (APPLICATION WORKFLOW)
+              STEP 15: FINAL APPLICATION ACTION (APPLICATION WORKFLOW)
           ══════════════════════════════════════════════════════════════════ */}
-          {activeStep === 18 && (
+          {activeStep === FINAL_ACTION_STEP_ID && (
             <div className="bo-cv-step-panel bo-cv-workflow-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
@@ -17819,7 +17829,7 @@ export default function CustomerVerification({
                     <h2 className="bo-cv-step-panel-title">Final Application Action &amp; Disposition</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 13 of 14</span>
+                <span className="bo-cv-step-tag-pill">Step 15 of 16</span>
               </div>
 
               {/* Action Feedback Banner */}
