@@ -35,6 +35,8 @@ import { getBackOfficeAuth } from '../../auth/authStorage';
 import AssetBase from '../../components/AssetBase/AssetBase';
 import RtrCommonSheet from '../../components/RtrCommonSheet/RtrCommonSheet';
 import DeviationAssessment from '../../components/DeviationAssessment/DeviationAssessment';
+import CamReport from '../../components/CamReport/CamReport';
+import KfsReport from '../../components/KfsReport/KfsReport';
 import CustomerDocumentsPanel from '../../components/CustomerDocuments/CustomerDocumentsPanel';
 import CustomerProofVerificationSection from '../../components/CustomerDocuments/CustomerProofVerificationSection';
 import { CreditReturnAttentionStrip, CreditReturnSectionPanel } from '../../components/CreditReturnPanel/CreditReturnPanel';
@@ -256,10 +258,15 @@ const VERIFICATION_WORKFLOW_STEPS = [
   { id: 16, number: 16, visibleNum: '14', title: 'Eligibility Assessment', subtitle: '', group: 'CREDIT & ASSESSMENT' },
   { id: 21, number: 21, visibleNum: '15', title: 'Deviations', subtitle: '', group: 'CREDIT & ASSESSMENT' },
   { id: 17, number: 17, visibleNum: '16', title: 'Recommendation Sheet', subtitle: '', group: 'CREDIT & ASSESSMENT' },
-  { id: 18, number: 18, visibleNum: '17', title: 'Final Action', subtitle: '', group: 'FINAL ACTION' },
+  { id: 23, number: 23, visibleNum: '17', title: 'CAM', subtitle: '', group: 'CREDIT & ASSESSMENT' },
+  { id: 24, number: 24, visibleNum: '18', title: 'KFS', subtitle: 'Key Facts Statement', group: 'CREDIT & ASSESSMENT' },
+  { id: 18, number: 18, visibleNum: '19', title: 'Final Action', subtitle: '', group: 'FINAL ACTION' },
 ];
 
 const FINAL_ACTION_STEP_ID = 18;
+const CAM_STEP_ID = 23;
+const KFS_STEP_ID = 24;
+const DOCUMENT_STEP_IDS = [FINAL_ACTION_STEP_ID, CAM_STEP_ID, KFS_STEP_ID];
 
 const WORKFLOW_ACTION_LABELS = {
   ReturnedToRM: '↩ Returned to RM (2 → 6)',
@@ -273,7 +280,7 @@ const WORKFLOW_ACTION_LABELS = {
 
 /** Sections the Credit Manager reviews (approve / reject / edit) before the final decision. */
 export const CREDIT_REVIEW_SECTIONS = VERIFICATION_WORKFLOW_STEPS
-  .filter((step) => step.id !== FINAL_ACTION_STEP_ID)
+  .filter((step) => !DOCUMENT_STEP_IDS.includes(step.id))
   .map(({ id, visibleNum, title }) => ({ id, visibleNum, title }));
 
 /** Document sub-steps 2-7 all belong to the "Document Verification" section. */
@@ -301,7 +308,9 @@ const VISIBLE_TO_INTERNAL_STEP = {
   10: 16, // Eligibility Assessment
   11: 21, // Deviations
   12: 17, // Recommendation Sheet
-  13: 18, // Final Action
+  13: 23, // CAM
+  14: 24, // KFS
+  15: 18, // Final Action
 };
 
 /**
@@ -330,7 +339,9 @@ const INTERNAL_TO_VISIBLE_STEP = {
   16: 10, // Eligibility Assessment
   21: 11, // Deviations
   17: 12, // Recommendation Sheet
-  18: 13, // Final Action
+  23: 13, // CAM
+  24: 14, // KFS
+  18: 15, // Final Action
 };
 
 function resolveInternalStepFromQuery(stepParam) {
@@ -1282,8 +1293,29 @@ export default function CustomerVerification({
     });
   }, [searchParams]);
 
+  // Credit Manager must review the CAM before any other section unlocks (remembered per application)
+  const camReviewedKey = `cm-cam-reviewed:${customerId}`;
+  const [camReviewed, setCamReviewed] = useState(() => {
+    try {
+      return localStorage.getItem(camReviewedKey) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [camLoaded, setCamLoaded] = useState(false);
+  const camGateLocked = isCreditManagerView && !camReviewed;
+
+  useEffect(() => {
+    try {
+      setCamReviewed(localStorage.getItem(camReviewedKey) === 'true');
+    } catch {
+      setCamReviewed(false);
+    }
+  }, [camReviewedKey]);
+
   // Navigate to internal step and push to browser history (?step={visibleStep})
   const navigateToStep = useCallback((internalStepNum) => {
+    if (camGateLocked && internalStepNum !== CAM_STEP_ID) return;
     const visibleStep = resolveVisibleStepFromInternal(internalStepNum);
     setActiveStep(internalStepNum);
     setSearchParams((prev) => {
@@ -1294,7 +1326,34 @@ export default function CustomerVerification({
       next.set('step', String(visibleStep));
       return next;
     }, { replace: false });
-  }, [setSearchParams]);
+  }, [setSearchParams, camGateLocked]);
+
+  useEffect(() => {
+    if (!camGateLocked || activeStep === CAM_STEP_ID) return;
+    setActiveStep(CAM_STEP_ID);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('step', String(resolveVisibleStepFromInternal(CAM_STEP_ID)));
+      return next;
+    }, { replace: true });
+  }, [camGateLocked, activeStep, setSearchParams]);
+
+  const handleCamLoaded = useCallback(() => setCamLoaded(true), []);
+
+  const handleCamReviewed = useCallback(() => {
+    try {
+      localStorage.setItem(camReviewedKey, 'true');
+    } catch {
+      // Storage unavailable: unlock for this visit only.
+    }
+    setCamReviewed(true);
+    setActiveStep(1);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('step', '1');
+      return next;
+    }, { replace: false });
+  }, [camReviewedKey, setSearchParams]);
 
   // Combined applicant / co-applicant documents (AgentCustomerDocument + CustomerDocumentProof)
   const [isDocumentsPanelOpen, setIsDocumentsPanelOpen] = useState(false);
@@ -9063,7 +9122,10 @@ export default function CustomerVerification({
   const reviewSectionId = resolveReviewSectionId(activeStep);
   const reviewSection = VERIFICATION_WORKFLOW_STEPS.find((step) => step.id === reviewSectionId) || null;
   const showSectionReview =
-    isCreditManagerView && !!sectionReview && reviewSectionId !== FINAL_ACTION_STEP_ID && !!reviewSection;
+    isCreditManagerView &&
+    !!sectionReview &&
+    !DOCUMENT_STEP_IDS.includes(reviewSectionId) &&
+    !!reviewSection;
   const isCmSectionLocked = showSectionReview && cmEditingSectionId !== reviewSectionId;
 
   useEffect(() => {
@@ -11193,6 +11255,11 @@ export default function CustomerVerification({
               </div>
               <span className="bo-cv-step-count">{visibleSidebarSteps.length}</span>
             </div>
+            {camGateLocked && (
+              <div className="cm-cam-gate-banner" role="status">
+                Review the CAM to unlock other sections
+              </div>
+            )}
           </div>
 
           <nav className="bo-cv-steps-nav">
@@ -11224,13 +11291,17 @@ export default function CustomerVerification({
                 const returnAttentionCount = isUnifiedVerif
                   ? [8, 9, 10, 11, 12].reduce((sum, id) => sum + (creditReturnAttentionByStep[id] || 0), 0)
                   : (creditReturnAttentionByStep[step.id] || 0);
+                const isLocked = camGateLocked && step.id !== CAM_STEP_ID;
 
                 return (
                   <li key={step.id} className="bo-cv-step-item">
                     <button
                       type="button"
-                      className={`bo-cv-step-card ${isSelected ? 'is-active' : ''}`}
+                      className={`bo-cv-step-card ${isSelected ? 'is-active' : ''} ${isLocked ? 'is-locked' : ''}`}
+                      aria-disabled={isLocked || undefined}
+                      title={isLocked ? 'Review the CAM to unlock this section' : undefined}
                       onClick={() => {
+                        if (isLocked) return;
                         if (isUnifiedVerif) {
                           navigateToStep(8);
                         } else if (isDocStep) {
@@ -11253,7 +11324,9 @@ export default function CustomerVerification({
                       </div>
 
                       <div className="bo-cv-step-action">
-                        {returnAttentionCount > 0 ? (
+                        {isLocked ? (
+                          <span className="cm-step-locked-pill">Locked</span>
+                        ) : returnAttentionCount > 0 ? (
                           <span
                             className="crp-step-flag"
                             title={
@@ -11347,7 +11420,7 @@ export default function CustomerVerification({
                 </div>
                 <div className="bo-cv-step-header-right">
                   {renderCreditReviewActions()}
-                  <span className="bo-cv-step-tag-pill">Step 01 of 13</span>
+                  <span className="bo-cv-step-tag-pill">Step 01 of 15</span>
                 </div>
               </div>
 
@@ -11388,7 +11461,7 @@ export default function CustomerVerification({
                 </div>
                 <div className="bo-cv-doc-header-right">
                   {renderCreditReviewActions()}
-                  <span className="bo-cv-step-tag-pill">Step 02 of 13</span>
+                  <span className="bo-cv-step-tag-pill">Step 02 of 15</span>
                 </div>
               </div>
 
@@ -12239,7 +12312,7 @@ export default function CustomerVerification({
                 </div>
                 <div className="bo-cv-step-header-right">
                   {renderCreditReviewActions()}
-                  <span className="bo-cv-step-tag-pill">Step 04 of 13</span>
+                  <span className="bo-cv-step-tag-pill">Step 04 of 15</span>
                 </div>
               </div>
 
@@ -12777,7 +12850,7 @@ export default function CustomerVerification({
                 </div>
                 <div className="bo-cv-step-header-right">
                   {renderCreditReviewActions()}
-                  <span className="bo-cv-step-tag-pill">Step 05 of 13</span>
+                  <span className="bo-cv-step-tag-pill">Step 05 of 15</span>
                 </div>
               </div>
 
@@ -12799,7 +12872,7 @@ export default function CustomerVerification({
                 </div>
                 <div className="bo-cv-step-header-right">
                   {renderCreditReviewActions()}
-                  <span className="bo-cv-step-tag-pill">Step 06 of 13</span>
+                  <span className="bo-cv-step-tag-pill">Step 06 of 15</span>
                 </div>
               </div>
 
@@ -17609,7 +17682,7 @@ export default function CustomerVerification({
                 </div>
                 <div className="bo-cv-step-header-right">
                   {renderCreditReviewActions()}
-                  <span className="bo-cv-step-tag-pill">Step 11 of 13</span>
+                  <span className="bo-cv-step-tag-pill">Step 11 of 15</span>
                 </div>
               </div>
               <DeviationAssessment
@@ -17636,7 +17709,7 @@ export default function CustomerVerification({
                 </div>
                 <div className="bo-cv-step-header-right">
                   {renderCreditReviewActions()}
-                  <span className="bo-cv-step-tag-pill">Step 12 of 13</span>
+                  <span className="bo-cv-step-tag-pill">Step 12 of 15</span>
                 </div>
               </div>
 
@@ -17651,6 +17724,72 @@ export default function CustomerVerification({
             </div>
           )}
 
+          {/* STEP 13: CAM (CREDIT APPROVAL MEMORANDUM) */}
+          {activeStep === CAM_STEP_ID && (
+            <div className="bo-cv-step-panel">
+              <div className="bo-cv-step-panel-header">
+                <div className="bo-cv-step-header-left">
+                  <div className="bo-cv-step-badge-num">13</div>
+                  <div>
+                    <h2 className="bo-cv-step-panel-title">CAM - Credit Approval Memorandum</h2>
+                    <p className="bo-cv-step-panel-desc">
+                      Consolidated credit approval memorandum generated from the verification steps.
+                    </p>
+                  </div>
+                </div>
+                <span className="bo-cv-step-tag-pill">Step 13 of 15</span>
+              </div>
+              {camGateLocked && (
+                <div className="cm-cam-gate-confirm">
+                  <div>
+                    <strong>Review the CAM first</strong>
+                    <span>The other sections unlock once you confirm you have reviewed this memorandum.</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="cm-cam-gate-btn"
+                    disabled={!camLoaded}
+                    onClick={handleCamReviewed}
+                  >
+                    {camLoaded ? 'I have reviewed the CAM - Continue' : 'Loading CAM…'}
+                  </button>
+                </div>
+              )}
+              <CamReport
+                verificationData={verificationData}
+                coApplicants={coApplicants}
+                applicationProductDetailsId={calculationAppProdId}
+                agentCustomerId={resolvedTargetCustomerId}
+                healthChecks={healthChecksByStep[19]}
+                fallbackRecommendation={recommendationSheets[0]}
+                onLoaded={handleCamLoaded}
+              />
+            </div>
+          )}
+
+          {/* STEP 14: KFS (KEY FACTS STATEMENT) */}
+          {activeStep === KFS_STEP_ID && (
+            <div className="bo-cv-step-panel">
+              <div className="bo-cv-step-panel-header">
+                <div className="bo-cv-step-header-left">
+                  <div className="bo-cv-step-badge-num">14</div>
+                  <div>
+                    <h2 className="bo-cv-step-panel-title">KFS - Key Facts Statement</h2>
+                    <p className="bo-cv-step-panel-desc">
+                      Interest, fees, APR and repayment schedule disclosed to the borrower.
+                    </p>
+                  </div>
+                </div>
+                <span className="bo-cv-step-tag-pill">Step 14 of 15</span>
+              </div>
+              <KfsReport
+                verificationData={verificationData}
+                applicationProductDetailsId={calculationAppProdId}
+                agentCustomerId={resolvedTargetCustomerId}
+              />
+            </div>
+          )}
+
           {/* ══════════════════════════════════════════════════════════════════
               STEP 16: FINAL APPLICATION ACTION (APPLICATION WORKFLOW)
           ══════════════════════════════════════════════════════════════════ */}
@@ -17658,12 +17797,12 @@ export default function CustomerVerification({
             <div className="bo-cv-step-panel bo-cv-workflow-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">13</div>
+                  <div className="bo-cv-step-badge-num">15</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Final Application Action &amp; Disposition</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 13 of 13</span>
+                <span className="bo-cv-step-tag-pill">Step 15 of 15</span>
               </div>
 
               {/* Action Feedback Banner */}

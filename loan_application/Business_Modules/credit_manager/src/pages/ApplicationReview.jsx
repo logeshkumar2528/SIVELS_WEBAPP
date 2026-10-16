@@ -53,7 +53,7 @@ import ReturnIssuesList from '../components/ReturnIssuesList';
 import SectionReviewBar from '../components/SectionReviewBar';
 import { getApplicationNo, parseDate } from '../utils/formatters';
 
-const FINAL_ACTION_STEP = '16';
+const FINAL_ACTION_STEP = '15';
 
 function formatRupees(amount) {
   const num = Number(amount);
