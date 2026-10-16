@@ -42,10 +42,10 @@ const createInitialForm = () => ({
 const FIELD_GROUPS = [
   {
     title: 'Personal details',
-    description: 'Basic information used to identify the area management specialist.',
+    description: 'Basic information used to identify the area sourcing manager (ASM).',
     icon: UserRound,
     fields: [
-      ['amsCode', 'AMS Code', 'text'],
+      ['amsCode', 'ASM Code', 'text'],
       ['fullName', 'Full Name', 'text'],
       ['dateOfBirth', 'Date of Birth', 'date'],
       ['genderId', 'Gender', 'select'],
@@ -53,7 +53,7 @@ const FIELD_GROUPS = [
   },
   {
     title: 'Location & contact',
-    description: 'Where the AMS works and how they can be reached.',
+    description: 'Where the ASM works and how they can be reached.',
     icon: MapPin,
     fields: [
       ['address', 'Address', 'text', true],
@@ -68,7 +68,7 @@ const FIELD_GROUPS = [
   },
   {
     title: 'Banking details',
-    description: 'Payment details for the area management specialist.',
+    description: 'Payment details for the area sourcing manager (ASM).',
     icon: Landmark,
     fields: [
       ['accountNumber', 'Account Number', 'text'],
@@ -290,7 +290,7 @@ export default function AMSCreate() {
       } catch (error) {
         if (active) {
           console.error('Failed to load AMS details:', error);
-          toast.error(error?.response?.data?.message || error.message || 'Unable to load AMS details.');
+          toast.error(error?.response?.data?.message || error.message || 'Unable to load ASM details.');
         }
       } finally {
         if (active) setLoadingRecord(false);
@@ -621,18 +621,18 @@ export default function AMSCreate() {
       let targetAmsId = editAmsId || createdAmsId;
 
       if (isEditMode) {
-        setSubmittingStep('Updating AMS...');
+        setSubmittingStep('Updating ASM...');
         await updateAMS(targetAmsId, {
           ...payload,
           amsId: Number(targetAmsId),
         });
       } else {
-        setSubmittingStep('Creating AMS...');
+        setSubmittingStep('Creating ASM...');
         const response = await createAMS(payload);
         const extractedId = extractAmsId(response);
 
         if (!extractedId) {
-          throw new Error('AMS saved, but failed to retrieve AMS ID from server response.');
+          throw new Error('ASM saved, but failed to retrieve ASM ID from server response.');
         }
 
         targetAmsId = extractedId;
@@ -647,7 +647,7 @@ export default function AMSCreate() {
         } catch (err) {
           console.error('Failed to save AMS district mappings:', err);
           const msg = err.response?.data?.message || err.message || 'District mapping failed';
-          throw new Error(`AMS was ${isEditMode ? 'updated' : 'created'} successfully, but District Mapping failed: ${msg}`);
+          throw new Error(`ASM was ${isEditMode ? 'updated' : 'created'} successfully, but District Mapping failed: ${msg}`);
         }
       }
 
@@ -658,7 +658,7 @@ export default function AMSCreate() {
           await uploadAMSAadhaar(targetAmsId, aadhaarFile);
         } catch (err) {
           const msg = err.response?.data?.message || err.message || 'Aadhaar upload failed';
-          throw new Error(`AMS was ${isEditMode ? 'updated' : 'created'} successfully, but Aadhaar Card upload failed: ${msg}`);
+          throw new Error(`ASM was ${isEditMode ? 'updated' : 'created'} successfully, but Aadhaar Card upload failed: ${msg}`);
         }
       }
 
@@ -668,7 +668,7 @@ export default function AMSCreate() {
           await uploadAMSPAN(targetAmsId, panFile);
         } catch (err) {
           const msg = err.response?.data?.message || err.message || 'PAN upload failed';
-          throw new Error(`AMS was ${isEditMode ? 'updated' : 'created'} successfully, but PAN Card upload failed: ${msg}`);
+          throw new Error(`ASM was ${isEditMode ? 'updated' : 'created'} successfully, but PAN Card upload failed: ${msg}`);
         }
       }
 
@@ -691,18 +691,18 @@ export default function AMSCreate() {
           }
         } catch (err) {
           const msg = err.response?.data?.message || err.message || 'Profile Image upload failed';
-          throw new Error(`AMS was ${isEditMode ? 'updated' : 'created'} successfully, but Profile Image upload failed: ${msg}`);
+          throw new Error(`ASM was ${isEditMode ? 'updated' : 'created'} successfully, but Profile Image upload failed: ${msg}`);
         }
       }
 
-      toast.success(isEditMode ? 'AMS updated successfully!' : 'AMS created successfully!');
+      toast.success(isEditMode ? 'ASM updated successfully!' : 'ASM created successfully!');
       navigate('/dashboard');
     } catch (err) {
       console.error('Error in AMS save flow:', err);
       const message =
         err.response?.data?.message ||
         err.message ||
-        `Unable to ${isEditMode ? 'update' : 'create'} AMS. Please check details and try again.`;
+        `Unable to ${isEditMode ? 'update' : 'create'} ASM. Please check details and try again.`;
       toast.error(message);
     } finally {
       setSaving(false);
@@ -811,11 +811,11 @@ export default function AMSCreate() {
         </div>
         <div>
           <span className="rm-eyebrow">TEAM MANAGEMENT</span>
-          <h1>{isEditMode ? 'Edit AMS' : 'Create AMS'}</h1>
+          <h1>{isEditMode ? 'Edit ASM' : 'Create ASM'}</h1>
           <p>
             {isEditMode
-              ? 'Update the area management specialist profile, district mapping, and documents.'
-              : 'Set up a new area management specialist with the same personal, contact, and banking details as an RM.'}
+              ? 'Update the ASM profile, district mapping, and documents.'
+              : 'Set up a new ASM with the same personal, contact, and banking details as an RM.'}
           </p>
         </div>
       </header>
@@ -824,7 +824,7 @@ export default function AMSCreate() {
         <div className="rm-create-card" style={{ display: 'grid', placeItems: 'center', minHeight: '280px' }}>
           <LoaderCircle size={22} className="rm-spinner" />
           <p style={{ marginTop: '10px', color: '#64748b' }}>
-            {loadingRecord ? 'Loading AMS details…' : 'Loading master options…'}
+            {loadingRecord ? 'Loading ASM details…' : 'Loading master options…'}
           </p>
         </div>
       )}
@@ -849,7 +849,7 @@ export default function AMSCreate() {
             <MapPinned size={19} />
             <div>
               <h2>District selection</h2>
-              <p>Select multiple districts for this AMS account. This is the only additional field compared with RM.</p>
+              <p>Select multiple districts for this ASM account. This is the only additional field compared with RM.</p>
             </div>
           </div>
           <div className="ams-district-toolbar">
@@ -920,7 +920,7 @@ export default function AMSCreate() {
             <Building2 size={19} />
             <div>
               <h2>Required Documents</h2>
-              <p>Upload identification documents and photographs for this AMS specialist.</p>
+              <p>Upload identification documents and photographs for this ASM.</p>
             </div>
           </div>
           <div className="doc-upload-grid">
@@ -1004,8 +1004,8 @@ export default function AMSCreate() {
             disabled={saving}
           />
           <span>
-            <strong>Active AMS</strong>
-            <small>Allow this AMS to be assigned to applications in the selected districts.</small>
+            <strong>Active ASM</strong>
+            <small>Allow this ASM to be assigned to applications in the selected districts.</small>
           </span>
         </label>
 
@@ -1021,11 +1021,11 @@ export default function AMSCreate() {
           <button type="submit" className="masters-btn-primary" disabled={saving}>
             {saving ? (
               <>
-                <LoaderCircle size={17} className="rm-spinner" /> {submittingStep || (isEditMode ? 'Updating AMS...' : 'Creating AMS...')}
+                <LoaderCircle size={17} className="rm-spinner" /> {submittingStep || (isEditMode ? 'Updating ASM...' : 'Creating ASM...')}
               </>
             ) : (
               <>
-                <Save size={17} /> {isEditMode ? 'Update AMS' : 'Create AMS'}
+                <Save size={17} /> {isEditMode ? 'Update ASM' : 'Create ASM'}
               </>
             )}
           </button>

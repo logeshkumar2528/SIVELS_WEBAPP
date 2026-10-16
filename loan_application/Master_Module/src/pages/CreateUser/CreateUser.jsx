@@ -6,6 +6,7 @@ import RelationshipManagerCreate from '../RelationshipManager/RelationshipManage
 import AMSCreate from '../AMS/AMSCreate';
 import BackOfficeCreate from '../BackOffice/BackOfficeCreate';
 import CreditManagerCreate from '../CreditManager/CreditManagerCreate';
+import CreditHeadCreate from '../CreditHead/CreditHeadCreate';
 import './CreateUser.css';
 
 const USER_TYPES = {
@@ -32,6 +33,11 @@ const USER_TYPES = {
   creditManager: {
     title: 'Create credit manager',
     description: 'Add a credit manager to evaluate loans and approvals.',
+    icon: Landmark,
+  },
+  creditHead: {
+    title: 'Create credit head',
+    description: 'Add a senior credit head to oversee credit policies and sanctions.',
     icon: Landmark,
   },
 };
@@ -72,6 +78,7 @@ export default function CreateUser() {
     if (userType === 'ams') return <AMSCreate />;
     if (userType === 'backOffice') return <BackOfficeCreate />;
     if (userType === 'creditManager') return <CreditManagerCreate />;
+    if (userType === 'creditHead') return <CreditHeadCreate onSuccessRedirect="/dashboard" />;
     return <AMSCreate />;
   };
 
@@ -100,6 +107,7 @@ export default function CreateUser() {
           <option value="ams">Create AMS</option>
           <option value="backOffice">Create back office</option>
           <option value="creditManager">Create credit manager</option>
+          <option value="creditHead">Create credit head</option>
         </select>
       </section>
 

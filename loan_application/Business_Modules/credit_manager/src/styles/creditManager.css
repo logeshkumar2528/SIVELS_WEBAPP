@@ -597,6 +597,85 @@
   margin-bottom: 16px;
 }
 
+/* CAM-first gate */
+.cm-cam-gate-banner {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-warning-light, #fef3c7);
+  color: #92400e;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.bo-cv-step-card.is-locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bo-cv-step-card.is-locked:hover {
+  background: transparent;
+}
+
+.cm-step-locked-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b !important;
+  font-size: 0.7rem !important;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cm-cam-gate-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background: var(--color-primary-light, #eaf5ee);
+  border: 1px solid var(--color-primary-muted, #a8d5b5);
+  border-left: 4px solid var(--color-primary, #0f7a4c);
+  border-radius: var(--radius-md, 8px);
+}
+
+.cm-cam-gate-confirm > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary, #3d5245);
+}
+
+.cm-cam-gate-confirm strong {
+  font-size: 0.9rem;
+  color: var(--color-text-primary, #1a2320);
+}
+
+.cm-cam-gate-btn {
+  flex-shrink: 0;
+  padding: 9px 16px;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-primary, #0f7a4c);
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cm-cam-gate-btn:hover:not(:disabled) {
+  background: var(--color-primary-hover, #15692f);
+}
+
+.cm-cam-gate-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .cm-section-locked .bo-cv-step-panel :is(input, textarea, select):not([type='checkbox']):not([type='radio']) {
   background-color: #f8fafc;
   cursor: not-allowed;

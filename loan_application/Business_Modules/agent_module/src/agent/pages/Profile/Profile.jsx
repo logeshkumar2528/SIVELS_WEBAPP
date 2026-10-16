@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
-import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
+import { useState, useEffect, useMemo } from 'react';
 import {
   Phone,
   Mail,
@@ -7,230 +6,161 @@ import {
   Shield,
   User,
   CheckCircle2,
-  IdCard,
   Building2,
-  Users,
-  Coins,
   MapPin,
-  X,
-  ChevronRight,
-  Camera,
-  Loader2
-} from 'lucide-react'
-import { useAgentIdentity } from '../../hooks/useAgentIdentity'
-import { useAuth } from '../../../../../../Core/src/context/AuthContext'
-import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
-import { getProfileImageUrl, updateProfileImage } from '../../utils/profileImageHelper'
-import './Profile.css'
+  BadgeIndianRupee
+} from 'lucide-react';
+import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService';
+import { useAgentIdentity } from '../../hooks/useAgentIdentity';
+import { useAuth } from '../../../../../../Core/src/context/AuthContext';
+import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper';
+import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
+import { formatDate } from '../../../../../../Core/src/utils/dateHelper';
+import './Profile.css';
 
-function Profile() {
-  const [imageError, setImageError] = useState(false)
-  const [imageVersion, setImageVersion] = useState(Date.now())
-  const [previewUrl, setPreviewUrl] = useState(null)
-  const [isUploading, setIsUploading] = useState(false)
-  const [uploadError, setUploadError] = useState('')
-  const [uploadSuccess, setUploadSuccess] = useState('')
-  const fileInputRef = useRef(null)
+function ProfileSkeleton() {
+  return (
+    <div className="agent-profile-dashboard agent-profile-skeleton" aria-label="Loading profile">
+      <div className="agent-profile-skeleton-hero" />
+      <div className="agent-profile-skeleton-grid" />
+    </div>
+  );
+}
 
-  const [showCommissionModal, setShowCommissionModal] = useState(false)
-  const [selectedEmiCustomer, setSelectedEmiCustomer] = useState(null)
-  const [customersCount, setCustomersCount] = useState('...')
+function isAgentRole(role) {
+  if (!role) return false;
+  const s = String(role).trim().toLowerCase();
+  return s === 'agent' || s === 'field agent' || s === 'dsa' || s === 'direct selling agent';
+}
 
-  const { currentUser } = useAuth()
-  const { agentData, loadingAgent, agentId } = useAgentIdentity()
+export default function Profile() {
+  const [imageError, setImageError] = useState(false);
+  const [customersCount, setCustomersCount] = useState('...');
 
-  const resolvedAgentId = agentId || agentData?.agentId || agentData?.AgentId || currentUser?.agentId || currentUser?.AgentId || (typeof window !== 'undefined' ? localStorage.getItem('agentId') : null)
-  const profileImageUrl = getProfileImageUrl('Agent', resolvedAgentId, imageVersion)
+  const { currentUser } = useAuth();
+  const { agentData, loadingAgent, agentId, isAgent, isUnauthorized } = useAgentIdentity();
+
+  // Authoritative numeric Agent ID (distinct from alphanumeric Agent Code)
+  const resolvedAgentId =
+    agentId ||
+    agentData?.agentId ||
+    agentData?.AgentId ||
+    (isAgent ? (currentUser?.agentId || currentUser?.AgentId) : null) ||
+    null;
+
+  const profileImageUrl = useMemo(
+    () => (resolvedAgentId ? getProfileImageUrl('Agent', resolvedAgentId) : null),
+    [resolvedAgentId]
+  );
 
   useEffect(() => {
-    setImageError(false)
-  }, [profileImageUrl])
+    setImageError(false);
+  }, [profileImageUrl]);
 
   useEffect(() => {
-    const handleUpdate = (e) => {
-      if (!e.detail?.role || e.detail.role.toLowerCase().includes('agent')) {
-        setImageVersion(e.detail?.timestamp || Date.now())
-        setImageError(false)
-      }
-    }
-    window.addEventListener('profile-image-updated', handleUpdate)
-    return () => window.removeEventListener('profile-image-updated', handleUpdate)
-  }, [])
+    if (loadingAgent || !resolvedAgentId) return;
+    agentCustomerService
+      .getAllCustomers()
+      .then((data) => {
+        const allCustomers = Array.isArray(data)
+          ? data
+          : data?.data || data?.items || data?.result || data?.list || [];
+        const myCustomers = allCustomers.filter((c) => isCustomerOwnedByAgent(c, resolvedAgentId));
+        setCustomersCount(myCustomers.length.toString());
+      })
+      .catch((err) => {
+        console.error('Failed to load customers count', err);
+        setCustomersCount('0');
+      });
+  }, [resolvedAgentId, loadingAgent]);
 
-  useEffect(() => {
-    return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl)
-      }
-    }
-  }, [previewUrl])
-
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    setUploadError('')
-    setUploadSuccess('')
-
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-    if (!allowedTypes.includes(file.type?.toLowerCase())) {
-      setUploadError('Please select a valid image (JPEG, PNG, WebP).')
-      if (fileInputRef.current) fileInputRef.current.value = ''
-      return
-    }
-
-    if (!resolvedAgentId) {
-      setUploadError('Agent identity not found. Cannot update photo.')
-      if (fileInputRef.current) fileInputRef.current.value = ''
-      return
-    }
-
-    const localUrl = URL.createObjectURL(file)
-    setPreviewUrl(localUrl)
-    setIsUploading(true)
-
-    try {
-      await updateProfileImage('Agent', resolvedAgentId, file)
-      setImageVersion(Date.now())
-      setImageError(false)
-      setUploadSuccess('Profile image updated successfully!')
-      setTimeout(() => setUploadSuccess(''), 4000)
-    } catch (err) {
-      console.error('Failed to update agent profile image:', err)
-      setUploadError(err.message || 'Failed to update profile image. Please try again.')
-    } finally {
-      setIsUploading(false)
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl)
-      }
-      setPreviewUrl(null)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
-    }
+  if (loadingAgent) {
+    return <ProfileSkeleton />;
   }
 
-  useEffect(() => {
-    if (loadingAgent || !agentId) return
-    agentCustomerService.getAllCustomers().then(data => {
-      const allCustomers = (Array.isArray(data) ? data : data?.data || data?.items || data?.result || data?.list || [])
-      const myCustomers = allCustomers.filter(c => isCustomerOwnedByAgent(c, agentId))
-      setCustomersCount(myCustomers.length.toString())
-    }).catch(err => {
-      console.error("Failed to load customers count", err)
-      setCustomersCount('0')
-    })
-  }, [agentId, loadingAgent])
-
-  // Payout / commission breakdown data
-  const commissionBreakdown = [
-    { 
-      id: 1, name: 'Rajesh Kumar', loanAmount: '₹5,00,000', commission: '₹15,000', date: '12 Aug 2026',
-      monthlyData: [
-        { month: 'Sep 2026', status: 'Paid', amount: '₹1,500' },
-        { month: 'Oct 2026', status: 'Paid', amount: '₹1,500' },
-        { month: 'Nov 2026', status: 'Pending', amount: '₹1,500' },
-      ]
-    },
-    { 
-      id: 2, name: 'Priya Sharma', loanAmount: '₹3,50,000', commission: '₹10,500', date: '10 Aug 2026',
-      monthlyData: [
-        { month: 'Sep 2026', status: 'Paid', amount: '₹1,050' },
-        { month: 'Oct 2026', status: 'Pending', amount: '₹1,050' },
-      ]
-    },
-    { 
-      id: 3, name: 'Vikram Singh', loanAmount: '₹2,00,000', commission: '₹6,000', date: '05 Aug 2026',
-      monthlyData: [
-        { month: 'Sep 2026', status: 'Paid', amount: '₹600' },
-        { month: 'Oct 2026', status: 'Paid', amount: '₹600' },
-        { month: 'Nov 2026', status: 'Paid', amount: '₹600' },
-        { month: 'Dec 2026', status: 'Pending', amount: '₹600' },
-      ]
-    },
-    { 
-      id: 4, name: 'Anita Desai', loanAmount: '₹4,50,000', commission: '₹13,700', date: '01 Aug 2026',
-      monthlyData: [
-        { month: 'Sep 2026', status: 'Paid', amount: '₹1,370' },
-        { month: 'Oct 2026', status: 'Pending', amount: '₹1,370' },
-      ]
-    },
-  ]
-
-  if (loadingAgent && !agentData && !currentUser) {
+  // Guard: Unauthorized session or non-agent session attempting to access Agent Profile
+  if (!resolvedAgentId) {
+    const isOtherRole = currentUser?.role && !isAgentRole(currentUser.role);
     return (
-      <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
-        Loading profile...
+      <div className="agent-profile-dashboard" style={{ padding: '40px 20px', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ maxWidth: '480px', width: '100%', background: '#ffffff', border: '1px solid #D5E3D8', borderRadius: '16px', padding: '32px 24px', textAlign: 'center', boxShadow: '0 4px 16px rgba(23, 74, 47, 0.06)' }}>
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+            <Shield size={28} />
+          </div>
+          <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#173B28', margin: '0 0 8px 0' }}>
+            {isOtherRole ? 'Unauthorized Access' : 'Agent Identity Not Found'}
+          </h2>
+          <p style={{ fontSize: '13px', color: '#527964', lineHeight: 1.5, margin: '0 0 20px 0' }}>
+            {isOtherRole
+              ? `You are currently logged in with a non-Agent account (${currentUser.role}). Please log in with an authenticated Agent account to access the Agent Profile.`
+              : 'Unable to establish an authenticated Agent identity. Please log in with your registered Agent credentials.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => { window.location.href = '/login'; }}
+            style={{ padding: '9px 22px', borderRadius: '8px', background: '#174A2F', color: '#ffffff', border: 'none', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
+          >
+            Go to Login
+          </button>
+        </div>
       </div>
-    )
+    );
   }
 
+  // Authoritative Agent Name
   const agentName =
     agentData?.fullName ||
     agentData?.FullName ||
     agentData?.name ||
-    currentUser?.fullName ||
-    currentUser?.FullName ||
-    currentUser?.name ||
-    'Agent'
+    (isAgent ? (currentUser?.fullName || currentUser?.FullName || currentUser?.name) : null) ||
+    'Agent';
 
-  const agentRole =
+  // Authoritative Agent Role: Strictly enforce an Agent role, never display CreditManager
+  const rawRole =
     agentData?.role ||
     agentData?.Role ||
-    currentUser?.role ||
-    currentUser?.Role ||
-    'Field Agent'
+    (isAgentRole(currentUser?.role) ? currentUser?.role : null);
 
+  const agentRole = isAgentRole(rawRole)
+    ? (String(rawRole).trim().toLowerCase() === 'agent' ? 'Field Agent' : rawRole)
+    : 'Field Agent';
+
+  // Authoritative Human-Readable Agent Code (e.g. AG00001)
   const agentCode =
     agentData?.agentCode ||
     agentData?.AgentCode ||
     agentData?.code ||
-    currentUser?.agentCode ||
-    currentUser?.AgentCode ||
-    currentUser?.code ||
-    'N/A'
+    (isAgent ? (currentUser?.agentCode || currentUser?.AgentCode || currentUser?.code) : null) ||
+    '—';
 
+  // Assigned Branch
   const agentBranch =
     agentData?.branch ||
     agentData?.Branch ||
     agentData?.branchName ||
     agentData?.BranchName ||
-    currentUser?.branch ||
-    currentUser?.Branch ||
-    currentUser?.branchName ||
-    currentUser?.BranchName ||
-    'N/A'
+    (isAgent ? (currentUser?.branch || currentUser?.Branch || currentUser?.branchName || currentUser?.BranchName) : null) ||
+    '—';
 
+  // Contact Details
   const agentMobile =
     agentData?.mobileNumber ||
     agentData?.MobileNumber ||
     agentData?.mobile ||
     agentData?.Mobile ||
     agentData?.phone ||
-    currentUser?.mobileNumber ||
-    currentUser?.MobileNumber ||
-    currentUser?.mobile ||
-    currentUser?.Mobile ||
-    currentUser?.phone ||
-    'N/A'
+    (isAgent ? (currentUser?.mobileNumber || currentUser?.MobileNumber || currentUser?.mobile || currentUser?.phone) : null) ||
+    '—';
 
   const agentEmail =
     agentData?.emailAddress ||
     agentData?.EmailAddress ||
     agentData?.email ||
     agentData?.Email ||
-    currentUser?.emailAddress ||
-    currentUser?.EmailAddress ||
-    currentUser?.email ||
-    currentUser?.Email ||
-    'N/A'
-  
-  const formatDate = (dateStr) => {
-    if (!dateStr) return 'N/A'
-    const date = new Date(dateStr)
-    return isNaN(date) ? 'N/A' : date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-  }
+    (isAgent ? (currentUser?.emailAddress || currentUser?.EmailAddress || currentUser?.email) : null) ||
+    '—';
 
+  // Dates
   const rawDateJoined =
     agentData?.dateJoined ||
     agentData?.DateJoined ||
@@ -238,543 +168,227 @@ function Profile() {
     agentData?.JoinedDate ||
     agentData?.createdAt ||
     agentData?.CreatedAt ||
-    currentUser?.dateJoined ||
-    currentUser?.DateJoined ||
-    currentUser?.joinedDate ||
-    currentUser?.JoinedDate ||
-    currentUser?.createdAt ||
-    currentUser?.CreatedAt
+    (isAgent ? (currentUser?.dateJoined || currentUser?.DateJoined || currentUser?.joinedDate || currentUser?.createdAt) : null);
 
   const rawDob =
     agentData?.dateOfBirth ||
     agentData?.DateOfBirth ||
     agentData?.dob ||
     agentData?.DOB ||
-    currentUser?.dateOfBirth ||
-    currentUser?.DateOfBirth ||
-    currentUser?.dob ||
-    currentUser?.DOB
+    (isAgent ? (currentUser?.dateOfBirth || currentUser?.DateOfBirth || currentUser?.dob) : null);
 
-  const agentDateJoined = formatDate(rawDateJoined)
-  const agentDob = formatDate(rawDob)
+  const agentDateJoined = formatDate(rawDateJoined, '—');
+  const agentDob = formatDate(rawDob, '—');
 
+  // Gender
   const genderId =
     agentData?.genderId ??
     agentData?.GenderId ??
-    currentUser?.genderId ??
-    currentUser?.GenderId
+    (isAgent ? (currentUser?.genderId ?? currentUser?.GenderId) : null);
 
   const genderName =
     agentData?.genderName ||
     agentData?.GenderName ||
-    currentUser?.genderName ||
-    currentUser?.GenderName
+    (isAgent ? (currentUser?.genderName || currentUser?.GenderName) : null);
 
   const agentGender =
     genderName ||
-    (genderId === 6 || genderId === 1 ? 'Male' : genderId === 7 || genderId === 2 ? 'Female' : 'N/A')
+    (genderId === 6 || genderId === 1 ? 'Male' : genderId === 7 || genderId === 2 ? 'Female' : '—');
 
+  // Residential Address & Location
   const agentAddress =
     agentData?.address ||
     agentData?.Address ||
-    currentUser?.address ||
-    currentUser?.Address ||
-    'N/A'
+    (isAgent ? (currentUser?.address || currentUser?.Address) : null) ||
+    '—';
 
-  const agentState =
-    agentData?.state ||
-    agentData?.State ||
-    currentUser?.state ||
-    currentUser?.State ||
-    'N/A'
+  const fullLocation = [
+    agentData?.cityName || agentData?.city,
+    agentData?.districtName || agentData?.district,
+    agentData?.state || agentData?.State || (isAgent ? (currentUser?.state || currentUser?.State) : null),
+    agentData?.pincode || agentData?.Pincode || (isAgent ? (currentUser?.pincode || currentUser?.Pincode) : null),
+  ].filter(Boolean).join(', ') || '—';
 
-  const agentPincode =
-    agentData?.pincode ||
-    agentData?.Pincode ||
-    currentUser?.pincode ||
-    currentUser?.Pincode ||
-    'N/A'
+  const department =
+    agentData?.department ||
+    agentData?.Department ||
+    'Field Sales & Sourcing';
+
+  const isActive =
+    agentData?.isActive ??
+    agentData?.IsActive ??
+    (agentData?.status ? String(agentData.status).toLowerCase() === 'active' : true);
+
+  const statusClass = isActive ? 'is-active' : 'is-inactive';
+  const statusLabel = isActive ? 'Active' : 'Inactive';
+  const showImage = Boolean(profileImageUrl && !imageError);
 
   return (
-    <div className="profile-page">
-      {/* 1. TOP CARD: PROFILE OVERVIEW (UNCHANGED) */}
-      <div className="profile-card profile-overview-card">
-        {/* Left Section: Avatar + Identity + Metric Tiles */}
-        <div className="profile-overview-left">
-          {/* Identity: Avatar + Name & Role */}
-          <div className="profile-identity-row">
-            <div className="profile-avatar-container" style={{ position: 'relative' }}>
-              <div className="profile-avatar-img" style={{ overflow: 'hidden' }}>
-                {previewUrl ? (
-                  <img
-                    src={previewUrl}
-                    alt={agentName}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                ) : !imageError && profileImageUrl ? (
-                  <img 
-                    src={profileImageUrl} 
-                    alt={agentName} 
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={() => setImageError(true)}
-                  />
-                ) : (
-                  <User size={38} strokeWidth={2} style={{ color: '#1A7A3C' }} />
-                )}
-              </div>
-
-              <button
-                type="button"
-                className="profile-avatar-edit-btn"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                title="Change profile photo"
-                aria-label="Change profile photo"
-              >
-                {isUploading ? <Loader2 size={12} className="profile-spin" /> : <Camera size={12} />}
-              </button>
-
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept="image/jpeg,image/jpg,image/png,image/webp"
-                style={{ display: 'none' }}
+    <div className="agent-profile-dashboard">
+      <div className="agent-profile-grid-layout">
+        {/* LEFT — Dark-green employee identity panel */}
+        <aside className="agent-identity-panel">
+          <div className="agent-identity-avatar-wrap">
+            {showImage ? (
+              <img
+                src={profileImageUrl}
+                alt={agentName}
+                className="agent-identity-avatar-img"
+                onError={() => setImageError(true)}
               />
-            </div>
-
-            <div className="profile-name-block">
-              <h1>{agentName}</h1>
-              <div className="profile-role-row">
-                <span className="profile-role-text">{agentRole}</span>
-                <CheckCircle2 size={15} className="profile-verified-badge" />
-              </div>
-              {uploadError && <div className="profile-upload-status is-error">{uploadError}</div>}
-              {uploadSuccess && <div className="profile-upload-status is-success">{uploadSuccess}</div>}
-            </div>
-          </div>
-
-          {/* Metric Tiles Row */}
-          <div className="profile-pills-row">
-            {/* 1. Agent ID */}
-            <div className="profile-pill profile-pill--green">
-              <div className="profile-pill-icon">
-                <IdCard size={16} />
-              </div>
-              <div className="profile-pill-content">
-                <div className="profile-pill-label">Agent ID</div>
-                <div className="profile-pill-value">{agentCode}</div>
-              </div>
-            </div>
-
-            {/* 2. Branch */}
-            <div className="profile-pill profile-pill--blue">
-              <div className="profile-pill-icon">
-                <Building2 size={16} />
-              </div>
-              <div className="profile-pill-content">
-                <div className="profile-pill-label">Branch</div>
-                <div className="profile-pill-value">{agentBranch}</div>
-              </div>
-            </div>
-
-            {/* 3. Total Customers */}
-            <div className="profile-pill profile-pill--purple">
-              <div className="profile-pill-icon">
-                <Users size={16} />
-              </div>
-              <div className="profile-pill-content">
-                <div className="profile-pill-label">Total Customers</div>
-                <div className="profile-pill-value">{customersCount}</div>
-              </div>
-            </div>
-
-            {/* 4. Total Commission */}
-            <div className="profile-pill profile-pill--orange">
-              <div className="profile-pill-icon">
-                <Coins size={16} />
-              </div>
-              <div className="profile-pill-content profile-pill-commission">
-                <div>
-                  <div className="profile-pill-label">Total Commission</div>
-                  <div className="profile-pill-value">₹45,200</div>
-                </div>
-                <button 
-                  type="button"
-                  className="btn-payout-detail"
-                  onClick={() => setShowCommissionModal(true)}
-                >
-                  View Payout Detail
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Section: Contact & Metadata */}
-        <div className="profile-meta-list">
-          <div className="profile-meta-item">
-            <div className="profile-meta-icon-wrapper">
-              <Phone size={14} />
-            </div>
-            <div className="meta-text">
-              <span className="meta-label">Mobile Number</span>
-              <span className="meta-value">{agentMobile}</span>
-            </div>
-          </div>
-
-          <div className="profile-meta-item">
-            <div className="profile-meta-icon-wrapper">
-              <Mail size={14} />
-            </div>
-            <div className="meta-text">
-              <span className="meta-label">Email Address</span>
-              <span className="meta-value">{agentEmail}</span>
-            </div>
-          </div>
-
-          <div className="profile-meta-item">
-            <div className="profile-meta-icon-wrapper">
-              <Calendar size={14} />
-            </div>
-            <div className="meta-text">
-              <span className="meta-label">Date Joined</span>
-              <span className="meta-value">{agentDateJoined}</span>
-            </div>
-          </div>
-
-          <div className="profile-meta-item">
-            <div className="profile-meta-icon-wrapper">
-              <Shield size={14} />
-            </div>
-            <div className="meta-text">
-              <span className="meta-label">Role</span>
-              <span className="meta-value">{agentRole}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. MIDDLE CARD: PERSONAL INFORMATION (HORIZONTAL 6-COLUMNS) */}
-      <div className="profile-card profile-personal-horizontal-card">
-        <div className="section-card-header">
-          <div className="section-card-title">
-            <div className="section-card-title-icon">
-              <User size={15} />
-            </div>
-            <span>Personal Information</span>
-          </div>
-        </div>
-
-        <div className="personal-info-horizontal-grid">
-          {/* 1. Full Name */}
-          <div className="personal-info-col">
-            <div className="personal-info-col-header">
-              <div className="personal-info-icon-box">
-                <User size={13} />
-              </div>
-              <span className="personal-info-label">Full Name</span>
-            </div>
-            <div className="personal-info-value">{agentName}</div>
-          </div>
-
-          {/* 2. Date of Birth */}
-          <div className="personal-info-col">
-            <div className="personal-info-col-header">
-              <div className="personal-info-icon-box">
-                <Calendar size={13} />
-              </div>
-              <span className="personal-info-label">Date of Birth</span>
-            </div>
-            <div className="personal-info-value">{agentDob}</div>
-          </div>
-
-          {/* 3. Gender */}
-          <div className="personal-info-col">
-            <div className="personal-info-col-header">
-              <div className="personal-info-icon-box">
-                <User size={13} />
-              </div>
-              <span className="personal-info-label">Gender</span>
-            </div>
-            <div className="personal-info-value">{agentGender}</div>
-          </div>
-
-          {/* 4. Address */}
-          <div className="personal-info-col">
-            <div className="personal-info-col-header">
-              <div className="personal-info-icon-box">
-                <MapPin size={13} />
-              </div>
-              <span className="personal-info-label">Address</span>
-            </div>
-            <div className="personal-info-value personal-info-value--address">{agentAddress}</div>
-          </div>
-
-          {/* 5. State */}
-          <div className="personal-info-col">
-            <div className="personal-info-col-header">
-              <div className="personal-info-icon-box">
-                <Building2 size={13} />
-              </div>
-              <span className="personal-info-label">State</span>
-            </div>
-            <div className="personal-info-value">{agentState}</div>
-          </div>
-
-          {/* 6. Pincode */}
-          <div className="personal-info-col personal-info-col--last">
-            <div className="personal-info-col-header">
-              <div className="personal-info-icon-box">
-                <MapPin size={13} />
-              </div>
-              <span className="personal-info-label">Pincode</span>
-            </div>
-            <div className="personal-info-value">{agentPincode}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. BOTTOM CARD: PAYOUT BREAKDOWN (FULL WIDTH) */}
-      <div className="profile-card profile-payout-full-card">
-        <div className="section-card-header">
-          <div className="section-card-title">
-            <div className="section-card-title-icon">
-              <Coins size={15} />
-            </div>
-            <span>Payout Breakdown</span>
-          </div>
-        </div>
-
-        <div className="payout-table-wrapper">
-          <table className="payout-card-table">
-            <thead>
-              <tr>
-                <th>Customer Name</th>
-                <th>Loan Amount</th>
-                <th>Date</th>
-                <th style={{ textAlign: 'center' }}>Total Payout</th>
-                <th style={{ textAlign: 'center' }}>Details</th>
-              </tr>
-            </thead>
-            <tbody>
-              {commissionBreakdown.map((item) => (
-                <tr key={item.id}>
-                  <td className="customer-name-cell">{item.name}</td>
-                  <td>{item.loanAmount}</td>
-                  <td className="payout-date-cell">{item.date}</td>
-                  <td style={{ textAlign: 'center' }}>
-                    <span className="payout-badge">{item.commission}</span>
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    <button 
-                      type="button"
-                      onClick={() => setSelectedEmiCustomer(item)}
-                      className="btn-emi-wise"
-                    >
-                      EMI Wise <ChevronRight size={12} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="payout-card-footer">
-          <div className="payout-footer-left">
-            <CheckCircle2 size={15} className="payout-check-icon" />
-            <span>Total Commission Earned</span>
-          </div>
-          <div className="payout-footer-amount">₹45,200</div>
-        </div>
-      </div>
-
-      {/* COMMISSION MODAL (triggered from Top Card "View Payout Detail") */}
-      {showCommissionModal && (
-        <div className="commission-modal-overlay" onClick={() => setShowCommissionModal(false)}>
-          <div className="commission-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="commission-modal-header">
-              <div className="commission-modal-header-left">
-                <div className="commission-modal-header-icon">
-                  <Coins size={20} />
-                </div>
-                <div>
-                  <h3>Payout Breakdown</h3>
-                  <p>Per customer monthly payout details</p>
-                </div>
-              </div>
-              <button className="close-modal-btn" onClick={() => setShowCommissionModal(false)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="commission-modal-body">
-              <table className="commission-table">
-                <thead>
-                  <tr>
-                    <th>Customer Name</th>
-                    <th>Loan Amount</th>
-                    <th>Date</th>
-                    <th style={{ textAlign: 'right' }}>Total Payout</th>
-                    <th style={{ textAlign: 'center' }}>Details</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {commissionBreakdown.map((item) => (
-                    <tr key={item.id}>
-                      <td style={{ fontWeight: 600 }}>{item.name}</td>
-                      <td>{item.loanAmount}</td>
-                      <td style={{ color: '#64748b' }}>{item.date}</td>
-                      <td style={{ textAlign: 'right' }}>
-                        <span className="commission-row-badge">{item.commission}</span>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <button 
-                          onClick={() => setSelectedEmiCustomer(item)}
-                          style={{
-                            background: '#F0FDF4',
-                            color: '#15803D',
-                            border: '1px solid #bbf7d0',
-                            borderRadius: '6px',
-                            padding: '6px 14px',
-                            fontSize: '11px',
-                            fontWeight: '700',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '6px',
-                            whiteSpace: 'nowrap',
-                            minWidth: '95px',
-                            transition: 'all 0.2s'
-                          }}
-                        >
-                          EMI Wise <ChevronRight size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="commission-modal-footer">
-              <span className="commission-modal-footer-label">
-                <CheckCircle2 size={16} />
-                Total Commission Earned
+            ) : (
+              <span className="agent-identity-initials">
+                {getInitials(agentName, 'AG')}
               </span>
-              <span className="commission-modal-footer-amount">₹45,200</span>
-            </div>
+            )}
           </div>
-        </div>
-      )}
 
-      {/* MONTHLY EMI BREAKDOWN POPUP */}
-      {selectedEmiCustomer && (
-        <div className="commission-modal-overlay" style={{ zIndex: 1010 }} onClick={() => setSelectedEmiCustomer(null)}>
-          <div className="commission-modal-content" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="commission-modal-header">
-              <div className="commission-modal-header-left">
-                <div className="commission-modal-header-icon">
-                  <Calendar size={20} />
-                </div>
-                <div>
-                  <h3>Monthly EMI Payouts</h3>
-                  <p>{selectedEmiCustomer.name} - {selectedEmiCustomer.loanAmount}</p>
-                </div>
-              </div>
-              <button className="close-modal-btn" onClick={() => setSelectedEmiCustomer(null)}>
-                <X size={18} />
-              </button>
-            </div>
-            
-            <div className="commission-modal-body" style={{ padding: '20px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {selectedEmiCustomer.monthlyData.filter(m => m.status === 'Paid').length > 0 ? (
-                  selectedEmiCustomer.monthlyData.filter(m => m.status === 'Paid').map((monthItem, i) => (
-                    <div key={i} style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '14px 16px',
-                      backgroundColor: '#fff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                        <div style={{
-                          width: '38px',
-                          height: '38px',
-                          borderRadius: '6px',
-                          backgroundColor: '#f1f5f9',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}>
-                          <span style={{ fontSize: '10px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase' }}>
-                            {monthItem.month.split(' ')[0]}
-                          </span>
-                          <span style={{ fontSize: '12px', color: '#0f172a', fontWeight: '700' }}>
-                            {monthItem.month.split(' ')[1]}
-                          </span>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '13px', fontWeight: '700', color: '#1e293b' }}>
-                            {monthItem.amount} <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '500' }}>Earned</span>
-                          </div>
-                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                            EMI Status: <span style={{ color: '#059669', fontWeight: '600' }}>Cleared On Time</span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', fontSize: '12px', fontWeight: '700' }}>
-                          <CheckCircle2 size={16} /> Paid to Agent
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div style={{ padding: '30px 20px', textAlign: 'center', color: '#64748b', fontSize: '13px', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
-                    No commission earned yet. Customer has not paid any EMI on time.
-                  </div>
-                )}
+          <h2 className="agent-identity-name">{agentName}</h2>
+
+          <div className="agent-identity-code-badge">
+            <BadgeIndianRupee size={13} />
+            <span>{agentCode}</span>
+          </div>
+
+          <p className="agent-identity-role">{agentRole}</p>
+
+          <div className={`agent-identity-status-pill ${statusClass}`}>
+            <span className="agent-identity-status-dot" />
+            <span>{statusLabel}</span>
+          </div>
+
+          <div className="agent-identity-divider" />
+
+          <div className="agent-identity-meta-list">
+            <div className="agent-identity-meta-item">
+              <Building2 size={14} className="agent-identity-meta-icon" />
+              <div className="agent-identity-meta-content">
+                <span className="agent-identity-meta-label">Branch</span>
+                <span className="agent-identity-meta-value">{agentBranch}</span>
               </div>
             </div>
-            
-            <div className="commission-modal-footer" style={{ justifyContent: 'center', padding: '16px 20px' }}>
-              <button 
-                onClick={() => setSelectedEmiCustomer(null)}
-                style={{
-                  background: '#fff',
-                  color: '#059669',
-                  border: '1px solid #059669',
-                  borderRadius: '6px',
-                  padding: '8px 24px',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  width: '100%',
-                  transition: 'all 0.2s'
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.background = '#f0fdf4';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.background = '#fff';
-                }}
-              >
-                Back to Payout Breakdown
-              </button>
+
+            <div className="agent-identity-meta-item">
+              <Shield size={14} className="agent-identity-meta-icon" />
+              <div className="agent-identity-meta-content">
+                <span className="agent-identity-meta-label">Department</span>
+                <span className="agent-identity-meta-value">{department}</span>
+              </div>
+            </div>
+
+            <div className="agent-identity-meta-item">
+              <Calendar size={14} className="agent-identity-meta-icon" />
+              <div className="agent-identity-meta-content">
+                <span className="agent-identity-meta-label">Member Since</span>
+                <span className="agent-identity-meta-value">{agentDateJoined}</span>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        </aside>
+
+        {/* RIGHT — One unified sage-green information panel */}
+        <main className="agent-sage-panel">
+          {/* Section 1: Personal Information */}
+          <section className="agent-sage-section">
+            <div className="agent-sage-section-header">
+              <User size={14} className="agent-sage-section-icon" />
+              <h3>Personal Information</h3>
+            </div>
+            <div className="agent-sage-row agent-sage-row-alt-1">
+              <div className="agent-sage-field-item">
+                <span className="agent-sage-label">Full Name</span>
+                <span className="agent-sage-value">{agentName}</span>
+              </div>
+              <div className="agent-sage-field-item">
+                <span className="agent-sage-label">Date of Birth</span>
+                <span className="agent-sage-value">{agentDob}</span>
+              </div>
+            </div>
+            <div className="agent-sage-row agent-sage-row-alt-2">
+              <div className="agent-sage-field-item">
+                <span className="agent-sage-label">Gender</span>
+                <span className="agent-sage-value">{agentGender}</span>
+              </div>
+              <div className="agent-sage-field-item">
+                <span className="agent-sage-label">Joining Date</span>
+                <span className="agent-sage-value">{agentDateJoined}</span>
+              </div>
+            </div>
+          </section>
+
+          {/* Section 2: Contact & Location */}
+          <section className="agent-sage-section">
+            <div className="agent-sage-section-header">
+              <MapPin size={14} className="agent-sage-section-icon" />
+              <h3>Contact &amp; Location</h3>
+            </div>
+            <div className="agent-sage-row agent-sage-row-alt-1">
+              <div className="agent-sage-field-item">
+                <span className="agent-sage-label">Mobile Number</span>
+                <span className="agent-sage-value">{agentMobile}</span>
+              </div>
+              <div className="agent-sage-field-item">
+                <span className="agent-sage-label">Email Address</span>
+                <span className="agent-sage-value">{agentEmail}</span>
+              </div>
+            </div>
+            <div className="agent-sage-row agent-sage-row-alt-2">
+              <div className="agent-sage-field-item">
+                <span className="agent-sage-label">Residential Address</span>
+                <span className="agent-sage-value">{agentAddress}</span>
+              </div>
+              <div className="agent-sage-field-item">
+                <span className="agent-sage-label">Location</span>
+                <span className="agent-sage-value">{fullLocation}</span>
+              </div>
+            </div>
+          </section>
+
+          {/* Section 3: Work Information */}
+          <section className="agent-sage-section">
+            <div className="agent-sage-section-header">
+              <Shield size={14} className="agent-sage-section-icon" />
+              <h3>Work Information</h3>
+            </div>
+            <div className="agent-sage-row agent-sage-row-alt-1">
+              <div className="agent-sage-field-item">
+                <span className="agent-sage-label">Agent Code</span>
+                <span className="agent-sage-value">{agentCode}</span>
+              </div>
+              <div className="agent-sage-field-item">
+                <span className="agent-sage-label">Role / Designation</span>
+                <span className="agent-sage-value">{agentRole}</span>
+              </div>
+            </div>
+            <div className="agent-sage-row agent-sage-row-alt-2">
+              <div className="agent-sage-field-item">
+                <span className="agent-sage-label">Assigned Branch</span>
+                <span className="agent-sage-value">{agentBranch}</span>
+              </div>
+              <div className="agent-sage-field-item">
+                <span className="agent-sage-label">Department</span>
+                <span className="agent-sage-value">{department}</span>
+              </div>
+            </div>
+            <div className="agent-sage-row agent-sage-row-alt-1">
+              <div className="agent-sage-field-item agent-sage-col-full">
+                <span className="agent-sage-label">Access Scope &amp; Responsibilities</span>
+                <div className="agent-sage-permissions-wrap">
+                  <span className="agent-sage-perm-tag">
+                    <CheckCircle2 size={12} /> Direct loan application sourcing &amp; onboarding
+                  </span>
+                  <span className="agent-sage-perm-tag">
+                    <CheckCircle2 size={12} /> Customer document verification &amp; submission
+                  </span>
+                  <span className="agent-sage-perm-tag">
+                    <CheckCircle2 size={12} /> Sourced Customers ({customersCount})
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
     </div>
-  )
+  );
 }
-
-export default Profile

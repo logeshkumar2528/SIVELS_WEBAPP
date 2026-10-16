@@ -141,6 +141,17 @@ export function mapCreditManagerProfile(raw) {
   const emailAddress = getValue(source, 'emailAddress', 'EmailAddress', 'email', 'Email') || 'Not Available';
   const branch = getValue(source, 'branch', 'Branch', 'branchName', 'BranchName') || 'Not Available';
   const isActive = getValue(source, 'isActive', 'IsActive', 'status', 'Status') ?? true;
+  const department = getValue(source, 'department', 'Department') || 'Credit & Risk';
+  const dateOfBirth = getValue(source, 'dateOfBirth', 'DateOfBirth', 'dob', 'DOB') || null;
+  const dateJoined = getValue(source, 'dateJoined', 'DateJoined', 'createdAt', 'CreatedAt', 'joiningDate', 'JoiningDate') || null;
+  const genderId = getValue(source, 'genderId', 'GenderId');
+  const rawGenderName = getValue(source, 'genderName', 'GenderName', 'gender', 'Gender');
+  const gender = rawGenderName || (genderId === 1 || genderId === 6 ? 'Male' : genderId === 2 || genderId === 7 ? 'Female' : genderId === 3 ? 'Other' : '');
+  const address = getValue(source, 'address', 'Address') || '';
+  const cityName = getValue(source, 'cityName', 'CityName', 'city', 'City') || '';
+  const districtName = getValue(source, 'districtName', 'DistrictName', 'district', 'District') || '';
+  const stateName = getValue(source, 'stateName', 'StateName', 'state', 'State') || '';
+  const pincode = getValue(source, 'pincode', 'Pincode') || '';
 
   return {
     id: creditManagerId != null ? String(creditManagerId) : '',
@@ -150,9 +161,19 @@ export function mapCreditManagerProfile(raw) {
     mobileNumber: mobileNumber ? String(mobileNumber).replace(/\D/g, '').slice(-10) : 'Not Available',
     emailAddress,
     branch,
+    department,
     role: 'Credit Manager',
     status: isActive ? 'Active' : 'Inactive',
     isActive: Boolean(isActive),
+    dateOfBirth,
+    dateJoined,
+    gender,
+    genderName: gender,
+    address,
+    cityName,
+    districtName,
+    stateName,
+    pincode,
     raw: source,
   };
 }

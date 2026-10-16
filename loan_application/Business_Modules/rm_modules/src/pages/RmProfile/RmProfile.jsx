@@ -1,9 +1,7 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import iconMap from '../../config/iconMap';
-import Breadcrumb from '../../components/Breadcrumb/Breadcrumb';
-import Button from '../../components/Button/Button';
-import { formatDateTime } from '../../utils/dateHelper';
-import { getProfileImageUrl, getInitials, updateProfileImage } from '../../utils/profileImageHelper';
+import { formatDate } from '../../utils/dateHelper';
+import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './RmProfile.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
@@ -11,37 +9,16 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware
 function normalizePhone(phone = '') {
   const digits = String(phone).replace(/\D/g, '');
   if (digits.length === 10) return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
-  return phone || '';
+  return phone || '—';
 }
 
-function buildFallbackProfile(currentUser = {}) {
-  return {
-    employeeId: currentUser.rmCode || currentUser.RmCode || currentUser.RMCode || currentUser.employeeId || '—',
-    name: currentUser.fullName || currentUser.name || 'Relationship Manager',
-    role: currentUser.role || 'Relationship Manager',
-    email: currentUser.emailAddress || currentUser.email || '',
-    phone: normalizePhone(currentUser.mobileNumber || currentUser.phone || ''),
-    location: [currentUser.cityName, currentUser.stateName].filter(Boolean).join(', ') || currentUser.address || '',
-    dob: currentUser.dateOfBirth ? formatDateTime(currentUser.dateOfBirth).split(',')[0] : '',
-    gender: currentUser.genderName || '',
-    language: currentUser.language || 'English',
-    address: [currentUser.address, currentUser.cityName, currentUser.stateName, currentUser.pincode]
-      .filter(Boolean)
-      .join(', '),
-    accessLevel: 'Full Access',
-    lastLogin: '',
-    accountCreated: formatDateTime(currentUser.createdAt || currentUser.dateJoined),
-    stats: {
-      total: 0,
-      approved: 0,
-      approvedPct: '0%',
-      pending: 0,
-      pendingPct: '0%',
-      rejected: 0,
-      rejectedPct: '0%',
-    },
-    activities: [],
-  };
+function ProfileSkeleton() {
+  return (
+    <div className="rm-profile-dashboard rm-profile-skeleton" aria-label="Loading profile">
+      <div className="rm-profile-skeleton-hero" />
+      <div className="rm-profile-skeleton-grid" />
+    </div>
+  );
 }
 
 export default function RmProfile() {
@@ -60,164 +37,73 @@ export default function RmProfile() {
   };
 
   const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
-  const [profile, setProfile] = useState(() => buildFallbackProfile(getCurrentUser()));
   const [activeRmId, setActiveRmId] = useState(() => Number(currentUser?.rmId || currentUser?.RMId || localStorage.getItem('rmId')) || null);
+  const [profileData, setProfileData] = useState(null);
   const [imageFailed, setImageFailed] = useState(false);
-  const [imageVersion, setImageVersion] = useState(Date.now());
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState('');
-  const [uploadSuccess, setUploadSuccess] = useState('');
-  const fileInputRef = useRef(null);
-
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
+  const UserIcon = iconMap['UserCircle'] || iconMap['User'];
+  const MailIcon = iconMap['Mail'];
+  const PhoneIcon = iconMap['Phone'];
+  const BuildingIcon = iconMap['Building2'] || iconMap['Briefcase'];
+  const BadgeIcon = iconMap['BadgeIndianRupee'] || iconMap['ShieldCheck'] || iconMap['Shield'];
+  const ShieldIcon = iconMap['ShieldCheck'] || iconMap['Shield'];
+  const RefreshIcon = iconMap['RefreshCw'] || iconMap['Clock'];
+  const CheckIcon = iconMap['CheckCircle2'] || iconMap['Check'];
+  const CalendarIcon = iconMap['Calendar'] || iconMap['Clock'];
+  const MapPinIcon = iconMap['MapPin'];
+
   const imageUrl = useMemo(() => {
-    return activeRmId ? getProfileImageUrl('RM', activeRmId, imageVersion) : null;
-  }, [activeRmId, imageVersion]);
+    return activeRmId ? getProfileImageUrl('RM', activeRmId) : null;
+  }, [activeRmId]);
 
   useEffect(() => {
     setImageFailed(false);
   }, [imageUrl]);
 
-  useEffect(() => {
-    return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-    };
-  }, [previewUrl]);
-
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploadError('');
-    setUploadSuccess('');
-
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(file.type?.toLowerCase())) {
-      setUploadError('Please select a valid image (JPEG, PNG, WebP).');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
-    if (!activeRmId) {
-      setUploadError('RM identity not found. Cannot update photo.');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
-    const localUrl = URL.createObjectURL(file);
-    setPreviewUrl(localUrl);
-    setIsUploading(true);
+  const fetchProfile = async () => {
+    setIsLoading(true);
+    setLoadError('');
 
     try {
-      await updateProfileImage('RM', activeRmId, file);
-      setImageVersion(Date.now());
-      setImageFailed(false);
-      setUploadSuccess('Profile image updated successfully!');
-      setTimeout(() => setUploadSuccess(''), 4000);
-    } catch (err) {
-      console.error('Failed to update RM profile image:', err);
-      setUploadError(err.message || 'Failed to update profile image. Please try again.');
+      const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+      const authHeaders = {};
+      if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch(`${API_BASE}/RMMaster`, { headers: authHeaders });
+      if (!response.ok) {
+        throw new Error(`Failed to load RM profile (${response.status})`);
+      }
+
+      const data = await response.json();
+      const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);
+      const currentMobile = String(currentUser?.mobileNumber || currentUser?.phone || '').replace(/\D/g, '');
+      const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || localStorage.getItem('rmId') || 0);
+
+      const match =
+        rows.find((row) => Number(row.rmId || row.RMId) === currentRmId) ||
+        rows.find((row) => String(row.mobileNumber || '').replace(/\D/g, '') === currentMobile) ||
+        rows[0];
+
+      if (match) {
+        const resolvedId = Number(match.rmId || match.RMId || currentRmId) || null;
+        setActiveRmId(resolvedId);
+        setProfileData(match);
+      } else {
+        setProfileData(currentUser);
+      }
+    } catch (error) {
+      console.error('Failed to load RM profile:', error);
+      setLoadError('Unable to load live RM profile. Showing available session values.');
+      setProfileData(currentUser);
     } finally {
-      setIsUploading(false);
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-      setPreviewUrl(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      setIsLoading(false);
     }
   };
 
-  const BriefcaseIcon = iconMap['Briefcase'];
-  const MailIcon = iconMap['Mail'];
-  const PhoneIcon = iconMap['Phone'];
-  const MapPinIcon = iconMap['MapPin'];
-  const CheckCircle2Icon = iconMap['CheckCircle2'];
-  const ClockIcon = iconMap['Clock'];
-  const UserIcon = iconMap['User'];
-  const ShieldIcon = iconMap['Shield'];
-  const FileTextIcon = iconMap['FileText'];
-
   useEffect(() => {
-    let active = true;
-
-    async function loadProfile() {
-      setIsLoading(true);
-      setLoadError('');
-
-      try {
-        const response = await fetch(`${API_BASE}/RMMaster`);
-        if (!response.ok) {
-          throw new Error(`Failed to load RM profile (${response.status})`);
-        }
-
-        const data = await response.json();
-        const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);
-        const currentMobile = String(currentUser?.mobileNumber || currentUser?.phone || '').replace(/\D/g, '');
-        const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || localStorage.getItem('rmId') || 0);
-
-        const match =
-          rows.find((row) => Number(row.rmId || row.RMId) === currentRmId) ||
-          rows.find((row) => String(row.mobileNumber || '').replace(/\D/g, '') === currentMobile) ||
-          rows[0];
-
-        if (active && match) {
-          const resolvedId = Number(match.rmId || match.RMId || currentRmId) || null;
-          setActiveRmId(resolvedId);
-          const name = match.fullName || currentUser?.fullName || currentUser?.name || 'Relationship Manager';
-          const employeeId = match.rmCode || match.RmCode || match.RMCode || match.employeeId || '—';
-          const location = [match.branch, match.cityName, match.stateName].filter(Boolean).join(', ');
-
-          setProfile({
-            employeeId,
-            name,
-            role: 'Relationship Manager',
-            email: match.emailAddress || currentUser?.email || '',
-            phone: normalizePhone(match.mobileNumber || currentUser?.mobileNumber || ''),
-            location: location || currentUser?.address || '',
-            dob: match.dateOfBirth ? formatDateTime(match.dateOfBirth).split(',')[0] : '',
-            gender: match.genderName || '',
-            language: currentUser?.language || 'English',
-            address: [match.address, match.cityName, match.stateName, match.pincode].filter(Boolean).join(', '),
-            accessLevel: 'Full Access',
-            lastLogin: formatDateTime(match.modifiedAt || match.createdAt || ''),
-            accountCreated: formatDateTime(match.createdAt || match.dateJoined || ''),
-            stats: {
-              total: 0,
-              approved: 0,
-              approvedPct: '0%',
-              pending: 0,
-              pendingPct: '0%',
-              rejected: 0,
-              rejectedPct: '0%',
-            },
-            activities: [],
-          });
-        }
-      } catch (error) {
-        console.error('Failed to load RM profile:', error);
-        if (active) {
-          setLoadError('Unable to load live RM profile. Showing session values.');
-          setProfile(buildFallbackProfile(currentUser || {}));
-        }
-      } finally {
-        if (active) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    loadProfile();
-
-    return () => {
-      active = false;
-    };
+    fetchProfile();
   }, [currentUser]);
 
   useEffect(() => {
@@ -226,235 +112,274 @@ export default function RmProfile() {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  const displayAddress = useMemo(() => String(profile.address || '').replace('\n', ', '), [profile.address]);
+  if (isLoading && !profileData) {
+    return <ProfileSkeleton />;
+  }
+
+  const showImage = Boolean(imageUrl && !imageFailed);
+
+  const fullName =
+    profileData?.fullName ||
+    profileData?.FullName ||
+    profileData?.name ||
+    currentUser?.fullName ||
+    'Relationship Manager';
+
+  const rmCode =
+    profileData?.rmCode ||
+    profileData?.RmCode ||
+    profileData?.RMCode ||
+    profileData?.employeeCode ||
+    currentUser?.rmCode ||
+    currentUser?.RmCode ||
+    '—';
+
+  const role =
+    profileData?.role ||
+    profileData?.Role ||
+    currentUser?.role ||
+    'Relationship Manager';
+
+  const branch =
+    profileData?.branch ||
+    profileData?.Branch ||
+    profileData?.branchName ||
+    currentUser?.branch ||
+    '—';
+
+  const department =
+    profileData?.department ||
+    profileData?.Department ||
+    'Retail Banking & Loans';
+
+  const mobileNumber = normalizePhone(
+    profileData?.mobileNumber ||
+    profileData?.MobileNumber ||
+    currentUser?.mobileNumber ||
+    currentUser?.phone
+  );
+
+  const emailAddress =
+    profileData?.emailAddress ||
+    profileData?.EmailAddress ||
+    profileData?.email ||
+    currentUser?.emailAddress ||
+    currentUser?.email ||
+    '—';
+
+  const dateOfBirth = profileData?.dateOfBirth || currentUser?.dateOfBirth;
+  const formattedDob = formatDate(dateOfBirth, '—');
+
+  const rawDateJoined =
+    profileData?.dateJoined ||
+    profileData?.DateJoined ||
+    profileData?.createdAt ||
+    profileData?.CreatedAt ||
+    currentUser?.dateJoined ||
+    currentUser?.createdAt;
+  const formattedDateJoined = formatDate(rawDateJoined, '—');
+
+  const gender =
+    profileData?.genderName ||
+    profileData?.GenderName ||
+    profileData?.gender ||
+    profileData?.Gender ||
+    currentUser?.genderName ||
+    currentUser?.gender ||
+    '—';
+
+  const address =
+    profileData?.address ||
+    profileData?.Address ||
+    currentUser?.address ||
+    '—';
+
+  const fullLocation = [
+    profileData?.cityName || profileData?.city,
+    profileData?.districtName || profileData?.district,
+    profileData?.stateName || profileData?.state,
+    profileData?.pincode,
+  ].filter(Boolean).join(', ') || '—';
+
+  const isActive =
+    profileData?.isActive ??
+    profileData?.IsActive ??
+    (profileData?.status ? String(profileData.status).toLowerCase() === 'active' : true);
+
+  const statusClass = isActive ? 'is-active' : 'is-inactive';
+  const statusLabel = isActive ? 'Active' : 'Inactive';
 
   return (
-    <div className="page-container" style={{ gap: '16px', overflowY: 'auto', paddingBottom: '32px' }}>
-      <Breadcrumb items={['Dashboard', 'Profile']} />
-
+    <div className="rm-profile-dashboard">
       {loadError && (
-        <div className="alert alert-warning" style={{ marginBottom: '12px' }}>
+        <div style={{ padding: '6px 12px', background: '#fef3c7', color: '#92400e', fontSize: '12px', borderRadius: '8px', marginBottom: '8px', border: '1px solid #fde68a' }}>
           {loadError}
         </div>
       )}
 
-      <div className="rm-banner">
-        <div className="rm-banner-left">
-          <div className="rm-avatar-wrapper">
-            {previewUrl ? (
-              <img
-                src={previewUrl}
-                alt={profile.name}
-                className="rm-avatar-img"
-              />
-            ) : imageUrl && !imageFailed ? (
+      <div className="rm-profile-grid-layout">
+        {/* LEFT — Dark-green employee identity panel */}
+        <aside className="rm-identity-panel">
+          <div className="rm-identity-avatar-wrap">
+            {showImage ? (
               <img
                 src={imageUrl}
-                alt={profile.name}
-                className="rm-avatar-img"
+                alt={fullName}
+                className="rm-identity-avatar-img"
                 onError={() => setImageFailed(true)}
               />
             ) : (
-              <div
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '50%',
-                  backgroundColor: 'var(--color-primary, #0f766e)',
-                  color: '#ffffff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: '700',
-                  fontSize: '24px',
-                }}
-              >
-                {getInitials(profile.name, 'RM')}
-              </div>
+              <span className="rm-identity-initials">
+                {getInitials(fullName, 'RM')}
+              </span>
             )}
-            <button
-              type="button"
-              className="rm-avatar-badge"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              title="Change profile photo"
-              aria-label="Change profile photo"
-            >
-              {isUploading ? (
-                <ClockIcon size={12} className="rm-spin" />
-              ) : (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-              )}
-            </button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept="image/jpeg,image/jpg,image/png,image/webp"
-              style={{ display: 'none' }}
-            />
           </div>
-          <div className="rm-banner-details">
-            <div className="rm-name-row">
-              <h2 className="rm-name">{isLoading ? 'Loading...' : profile.name}</h2>
-              <span className="rm-role-badge">{profile.role}</span>
+
+          <h2 className="rm-identity-name">{fullName}</h2>
+
+          <div className="rm-identity-code-badge">
+            {BadgeIcon && <BadgeIcon size={13} />}
+            <span>{rmCode}</span>
+          </div>
+
+          <p className="rm-identity-role">{role}</p>
+
+          <div className={`rm-identity-status-pill ${statusClass}`}>
+            <span className="rm-identity-status-dot" />
+            <span>{statusLabel}</span>
+          </div>
+
+          <div className="rm-identity-divider" />
+
+          <div className="rm-identity-meta-list">
+            <div className="rm-identity-meta-item">
+              {BuildingIcon && <BuildingIcon size={14} className="rm-identity-meta-icon" />}
+              <div className="rm-identity-meta-content">
+                <span className="rm-identity-meta-label">Branch</span>
+                <span className="rm-identity-meta-value">{branch}</span>
+              </div>
             </div>
-            {uploadError && <div className="rm-upload-msg is-error">{uploadError}</div>}
-            {uploadSuccess && <div className="rm-upload-msg is-success">{uploadSuccess}</div>}
-            <div className="rm-contact-grid">
-              <div className="rm-contact-item">
-                {BriefcaseIcon && <BriefcaseIcon size={14} className="text-muted" />}
-                <span>RM ID : {isLoading ? 'Loading...' : profile.employeeId}</span>
+
+            <div className="rm-identity-meta-item">
+              {ShieldIcon && <ShieldIcon size={14} className="rm-identity-meta-icon" />}
+              <div className="rm-identity-meta-content">
+                <span className="rm-identity-meta-label">Department</span>
+                <span className="rm-identity-meta-value">{department}</span>
               </div>
-              <div className="rm-contact-item">
-                {MailIcon && <MailIcon size={14} className="text-muted" />}
-                <span>{isLoading ? 'Loading...' : profile.email}</span>
-              </div>
-              <div className="rm-contact-item">
-                {PhoneIcon && <PhoneIcon size={14} className="text-muted" />}
-                <span>{isLoading ? 'Loading...' : profile.phone}</span>
-              </div>
-              <div className="rm-contact-item">
-                {MapPinIcon && <MapPinIcon size={14} className="text-muted" />}
-                <span>{isLoading ? 'Loading...' : profile.location}</span>
+            </div>
+
+            <div className="rm-identity-meta-item">
+              {CalendarIcon && <CalendarIcon size={14} className="rm-identity-meta-icon" />}
+              <div className="rm-identity-meta-content">
+                <span className="rm-identity-meta-label">Member Since</span>
+                <span className="rm-identity-meta-value">{formattedDateJoined}</span>
               </div>
             </div>
           </div>
-        </div>
+        </aside>
 
-        <div className="rm-banner-right">
-          <div className="rm-kpi-card" style={{ borderColor: '#e2e8f0', background: '#f8fafc' }}>
-            <div className="rm-kpi-icon text-success" style={{ background: '#dcfce7' }}>
-              {BriefcaseIcon && <BriefcaseIcon size={20} />}
+        {/* RIGHT — One unified sage-green information panel */}
+        <main className="rm-sage-panel">
+          {/* Section 1: Personal Information */}
+          <section className="rm-sage-section">
+            <div className="rm-sage-section-header">
+              {UserIcon && <UserIcon size={14} className="rm-sage-section-icon" />}
+              <h3>Personal Information</h3>
             </div>
-            <div className="rm-kpi-value">{profile.stats.total}</div>
-            <div className="rm-kpi-label">Total Applications</div>
-            <div className="rm-kpi-sub">All Time</div>
-          </div>
-
-          <div className="rm-kpi-card" style={{ borderColor: '#bfdbfe', background: '#eff6ff' }}>
-            <div className="rm-kpi-icon text-primary" style={{ background: '#dbeafe' }}>
-              {CheckCircle2Icon && <CheckCircle2Icon size={20} />}
-            </div>
-            <div className="rm-kpi-value">{profile.stats.approved}</div>
-            <div className="rm-kpi-label">Logged to HO</div>
-            <div className="rm-kpi-sub text-primary">{profile.stats.approvedPct}</div>
-          </div>
-
-          <div className="rm-kpi-card" style={{ borderColor: '#fed7aa', background: '#fff7ed' }}>
-            <div className="rm-kpi-icon text-warning" style={{ background: '#ffedd5' }}>
-              {ClockIcon && <ClockIcon size={20} />}
-            </div>
-            <div className="rm-kpi-value">{profile.stats.pending}</div>
-            <div className="rm-kpi-label">Pending</div>
-            <div className="rm-kpi-sub text-warning">{profile.stats.pendingPct}</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="rm-tabs">
-        <button className="rm-tab active">Profile Information</button>
-        <button className="rm-tab">Change Password</button>
-        <button className="rm-tab">Notification Preferences</button>
-        <button className="rm-tab">Activity Log</button>
-      </div>
-
-      <div className="rm-content-scrollable">
-        <div className="rm-ribbons-container">
-          <div className="rm-ribbon panel">
-            <div className="rm-watermark">
-              <svg width="200" height="200" viewBox="0 0 100 100" opacity="0.03">
-                <path d="M50 10 L85 25 L85 50 C85 70 50 90 50 90 C50 90 15 70 15 50 L15 25 Z" fill="#166534" />
-                <path d="M40 55 L48 63 L65 40" stroke="#166534" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-              </svg>
-            </div>
-
-            <div className="rm-ribbon-split">
-              <div className="rm-r-left">
-                <div className="rm-r-header text-success">
-                  {UserIcon && <UserIcon size={14} />} Personal Identity
-                </div>
-                <div className="rm-r-grid">
-                  <div className="rm-r-item"><span className="rm-r-label">Name</span><span className="rm-r-val">{profile.name}</span></div>
-                  <div className="rm-r-item"><span className="rm-r-label">Phone</span><span className="rm-r-val">{profile.phone}</span></div>
-                  <div className="rm-r-item"><span className="rm-r-label">Email</span><span className="rm-r-val">{profile.email}</span></div>
-                  <div className="rm-r-item"><span className="rm-r-label">DOB</span><span className="rm-r-val">{profile.dob}</span></div>
-                  <div className="rm-r-item"><span className="rm-r-label">Gender</span><span className="rm-r-val">{profile.gender}</span></div>
-                  <div className="rm-r-item"><span className="rm-r-label">Language</span><span className="rm-r-val">{profile.language}</span></div>
-                </div>
-                <div className="rm-r-item" style={{ marginTop: '12px' }}>
-                  <span className="rm-r-label">Address</span>
-                  <span className="rm-r-val">{displayAddress}</span>
-                </div>
+            <div className="rm-sage-row rm-sage-row-alt-1">
+              <div className="rm-sage-field-item">
+                <span className="rm-sage-label">Full Name</span>
+                <span className="rm-sage-value">{fullName}</span>
               </div>
-
-              <div className="rm-divider-vertical"></div>
-
-              <div className="rm-r-right">
-                <div className="rm-r-header text-primary">
-                  {ShieldIcon && <ShieldIcon size={14} />} Account Security
-                </div>
-                <div className="rm-r-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-                  <div className="rm-r-item"><span className="rm-r-label">System Role</span><span className="rm-r-val">{profile.role}</span></div>
-                  <div className="rm-r-item"><span className="rm-r-label">Access Level</span><span className="rm-r-val">{profile.accessLevel}</span></div>
-                  <div className="rm-r-item"><span className="rm-r-label">Last Login</span><span className="rm-r-val text-muted">{profile.lastLogin}</span></div>
-                  <div className="rm-r-item"><span className="rm-r-label">Account Created</span><span className="rm-r-val text-muted">{profile.accountCreated}</span></div>
-                </div>
+              <div className="rm-sage-field-item">
+                <span className="rm-sage-label">Date of Birth</span>
+                <span className="rm-sage-value">{formattedDob}</span>
               </div>
             </div>
-          </div>
-
-          <div className="rm-ribbon panel">
-            <div className="rm-ribbon-split">
-              <div className="rm-r-left">
-                <div className="rm-r-header text-warning">
-                  {FileTextIcon && <FileTextIcon size={14} />} Application Performance
-                </div>
-                <div className="rm-pill-container">
-                  <div className="rm-stat-pill" style={{ background: '#f0fdf4' }}>
-                    <span className="rm-pill-val text-success">{profile.stats.total}</span>
-                    <span className="rm-pill-label">Total Submitted</span>
-                  </div>
-                  <div className="rm-stat-pill" style={{ background: '#eff6ff' }}>
-                    <span className="rm-pill-val text-primary">{profile.stats.approved}</span>
-                    <span className="rm-pill-label">Logged to HO ({profile.stats.approvedPct})</span>
-                  </div>
-                  <div className="rm-stat-pill" style={{ background: '#fff7ed' }}>
-                    <span className="rm-pill-val text-warning">{profile.stats.pending}</span>
-                    <span className="rm-pill-label">Pending ({profile.stats.pendingPct})</span>
-                  </div>
-                  <div className="rm-stat-pill" style={{ background: '#fef2f2' }}>
-                    <span className="rm-pill-val text-danger">{profile.stats.rejected}</span>
-                    <span className="rm-pill-label">Rejected ({profile.stats.rejectedPct})</span>
-                  </div>
-                </div>
+            <div className="rm-sage-row rm-sage-row-alt-2">
+              <div className="rm-sage-field-item">
+                <span className="rm-sage-label">Gender</span>
+                <span className="rm-sage-value">{gender}</span>
               </div>
+              <div className="rm-sage-field-item">
+                <span className="rm-sage-label">Joining Date</span>
+                <span className="rm-sage-value">{formattedDateJoined}</span>
+              </div>
+            </div>
+          </section>
 
-              <div className="rm-divider-vertical"></div>
+          {/* Section 2: Contact & Location */}
+          <section className="rm-sage-section">
+            <div className="rm-sage-section-header">
+              {MapPinIcon && <MapPinIcon size={14} className="rm-sage-section-icon" />}
+              <h3>Contact &amp; Location</h3>
+            </div>
+            <div className="rm-sage-row rm-sage-row-alt-1">
+              <div className="rm-sage-field-item">
+                <span className="rm-sage-label">Mobile Number</span>
+                <span className="rm-sage-value">{mobileNumber}</span>
+              </div>
+              <div className="rm-sage-field-item">
+                <span className="rm-sage-label">Email Address</span>
+                <span className="rm-sage-value">{emailAddress}</span>
+              </div>
+            </div>
+            <div className="rm-sage-row rm-sage-row-alt-2">
+              <div className="rm-sage-field-item">
+                <span className="rm-sage-label">Residential Address</span>
+                <span className="rm-sage-value">{address}</span>
+              </div>
+              <div className="rm-sage-field-item">
+                <span className="rm-sage-label">Location</span>
+                <span className="rm-sage-value">{fullLocation}</span>
+              </div>
+            </div>
+          </section>
 
-              <div className="rm-r-right">
-                <div className="rm-r-header" style={{ color: '#8b5cf6' }}>
-                  {ClockIcon && <ClockIcon size={14} />} Recent Activity Feed
-                </div>
-                <div className="rm-horizontal-activity">
-                  {profile.activities.slice(0, 2).map((act) => (
-                    <div key={act.id} className="rm-h-act-item">
-                      <div className={`rm-h-act-dot type-${act.type}`}></div>
-                      <div className="rm-h-act-content">
-                        <div className="rm-h-act-text">{act.action}</div>
-                        <div className="rm-h-act-time">{act.time}</div>
-                      </div>
-                    </div>
-                  ))}
+          {/* Section 3: Work Information */}
+          <section className="rm-sage-section">
+            <div className="rm-sage-section-header">
+              {ShieldIcon && <ShieldIcon size={14} className="rm-sage-section-icon" />}
+              <h3>Work Information</h3>
+            </div>
+            <div className="rm-sage-row rm-sage-row-alt-1">
+              <div className="rm-sage-field-item">
+                <span className="rm-sage-label">Relationship Manager Code</span>
+                <span className="rm-sage-value">{rmCode}</span>
+              </div>
+              <div className="rm-sage-field-item">
+                <span className="rm-sage-label">Role / Designation</span>
+                <span className="rm-sage-value">{role}</span>
+              </div>
+            </div>
+            <div className="rm-sage-row rm-sage-row-alt-2">
+              <div className="rm-sage-field-item">
+                <span className="rm-sage-label">Assigned Branch</span>
+                <span className="rm-sage-value">{branch}</span>
+              </div>
+              <div className="rm-sage-field-item">
+                <span className="rm-sage-label">Department</span>
+                <span className="rm-sage-value">{department}</span>
+              </div>
+            </div>
+            <div className="rm-sage-row rm-sage-row-alt-1">
+              <div className="rm-sage-field-item rm-sage-col-full">
+                <span className="rm-sage-label">Access Scope &amp; Responsibilities</span>
+                <div className="rm-sage-permissions-wrap">
+                  <span className="rm-sage-perm-tag">
+                    {CheckIcon && <CheckIcon size={12} />} Customer onboarding &amp; loan sourcing
+                  </span>
+                  <span className="rm-sage-perm-tag">
+                    {CheckIcon && <CheckIcon size={12} />} KYC collection &amp; initial verification
+                  </span>
+                  <span className="rm-sage-perm-tag">
+                    {CheckIcon && <CheckIcon size={12} />} Submission to Back Office &amp; status tracking
+                  </span>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-
-        <div className="rm-footer-copyright">
-          © 2025 Sivels Finance. All rights reserved.
-        </div>
+          </section>
+        </main>
       </div>
     </div>
   );

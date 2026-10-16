@@ -25,9 +25,14 @@ import { getAllRelationshipManagers, getRelationshipManager } from '../../api/rm
 import { getAllBackOffice, getBackOfficeById } from '../../api/backOfficeApi';
 import { getAllAMS, getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
 import { getAllCreditManagers, getCreditManagerById } from '../../api/creditManagerApi';
+import { getAllCreditHeads, getCreditHeadById } from '../../api/creditHeadApi';
 import { agentCustomerService } from '../../../../Core/src/services/agentCustomerService';
+import { selectLatestCustomerPhotoDoc } from '../../../../Core/src/utils/documentTypeHelper';
 import { getProfileImageUrl, getDocumentUrl, buildFileUrl } from '../../utils/profileImageHelper';
 import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
+import { getStates } from '../../api/masters/stateApi';
+import { getCities } from '../../api/masters/cityApi';
+import { getDistricts } from '../../api/masters/districtApi';
 import './PeopleDirectory.css';
 import '../Dashboard/Dashboard.css';
 
@@ -39,6 +44,30 @@ const unwrap = (response) => {
   if (Array.isArray(response?.value)) return response.value;
   if (Array.isArray(response?.data?.value)) return response.data.value;
   return [];
+};
+
+// Module-level cached promises/data to ensure location lookups are fetched once across the Master directory session
+let locationLookupCache = null;
+let locationLookupPromise = null;
+
+export const fetchLocationLookups = () => {
+  if (locationLookupCache) return Promise.resolve(locationLookupCache);
+  if (!locationLookupPromise) {
+    locationLookupPromise = Promise.allSettled([getStates(), getCities(), getDistricts()])
+      .then(([statesRes, citiesRes, districtsRes]) => {
+        locationLookupCache = {
+          states: statesRes.status === 'fulfilled' ? unwrap(statesRes.value) : [],
+          cities: citiesRes.status === 'fulfilled' ? unwrap(citiesRes.value) : [],
+          districts: districtsRes.status === 'fulfilled' ? unwrap(districtsRes.value) : [],
+        };
+        return locationLookupCache;
+      })
+      .catch(() => {
+        locationLookupCache = { states: [], cities: [], districts: [] };
+        return locationLookupCache;
+      });
+  }
+  return locationLookupPromise;
 };
 
 const read = (record, keys, fallback = '') =>
@@ -71,7 +100,7 @@ const formatAmount = (amount) =>
       }).format(amount)
     : '—';
 
-const getAadhaarPath = (record) =>
+export const getAadhaarPath = (record) =>
   read(record, [
     'aadhaarDocumentPath',
     'AadhaarDocumentPath',
@@ -87,7 +116,7 @@ const getAadhaarPath = (record) =>
     'AadharCardPath',
   ]);
 
-const getPanPath = (record) =>
+export const getPanPath = (record) =>
   read(record, [
     'panCardPath',
     'PanCardPath',
@@ -100,7 +129,7 @@ const getPanPath = (record) =>
     'PANPath',
   ]);
 
-const getProfilePath = (record) =>
+export const getProfilePath = (record) =>
   read(record, [
     'profileImagePath',
     'ProfileImagePath',
@@ -112,7 +141,7 @@ const getProfilePath = (record) =>
     'ProfilePicturePath',
   ]);
 
-const isPdfFile = (urlOrPath = '') => {
+export const isPdfFile = (urlOrPath = '') => {
   if (!urlOrPath) return false;
   return /\.pdf(\?.*)?$/i.test(String(urlOrPath));
 };
@@ -154,10 +183,18 @@ const normalizeApplicationStatus = (value, statusName = '') => {
   if (named.includes('new') || named.includes('draft')) return 'New';
   if (named.includes('disburs')) return 'Disbursed';
 
-  const numeric = Number(value);
-  if (numeric === 2) return 'Approved';
-  if (numeric === 1) return 'Pending';
-  if (numeric === 0) return 'New';
+  if (value !== null && value !== undefined && value !== '') {
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric)) {
+      if (numeric === 6) return 'Returned';
+      if (numeric === 5) return 'Rejected';
+      if (numeric === 4) return 'Approved';
+      if (numeric === 3) return 'Under Review';
+      if (numeric === 2) return 'Logged to HO';
+      if (numeric === 1) return 'Pending';
+      if (numeric === 0) return 'New';
+    }
+  }
 
   const raw = String(value || '').trim();
   if (!raw || raw.toLowerCase() === 'draft') return 'New';
@@ -234,6 +271,963 @@ function DirectoryAvatar({ role, id, name, className = 'role-avatar', style, ver
   return <span className={className} style={style}>{initials(name)}</span>;
 }
 
+const customerPhotoCache = new Map();
+
+function CustomerDirectoryAvatar({ customerId, name, className = 'role-avatar', style }) {
+  const [photoUrl, setPhotoUrl] = useState(() => {
+    const idKey = String(customerId || '');
+    return idKey ? (customerPhotoCache.get(idKey) || null) : null;
+  });
+
+  useEffect(() => {
+    if (!customerId) return;
+    const idKey = String(customerId);
+
+    if (customerPhotoCache.has(idKey)) {
+      setPhotoUrl(customerPhotoCache.get(idKey));
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadCustomerPhoto() {
+      try {
+        const docsRes = await agentCustomerService.getDocumentsByCustomerId(customerId);
+        const docs = Array.isArray(docsRes) ? docsRes : (docsRes?.data || docsRes?.value || []);
+        const photoDoc = selectLatestCustomerPhotoDoc(docs);
+
+        if (!photoDoc) {
+          if (isMounted) setPhotoUrl(null);
+          return;
+        }
+
+        const docId = photoDoc.agentCustomerDocumentId ?? photoDoc.AgentCustomerDocumentId ?? photoDoc.id;
+        if (!docId) {
+          if (isMounted) setPhotoUrl(null);
+          return;
+        }
+
+        const blob = await agentCustomerService.downloadDocument(docId);
+        if (blob && blob.size > 0) {
+          let mimeType = blob.type && blob.type !== 'application/octet-stream' ? blob.type : 'image/jpeg';
+          const fileName = String(photoDoc.fileName || photoDoc.documentName || photoDoc.filePath || '').toLowerCase();
+          if (fileName.endsWith('.png')) mimeType = 'image/png';
+          else if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg')) mimeType = 'image/jpeg';
+          else if (fileName.endsWith('.webp')) mimeType = 'image/webp';
+
+          const typedBlob = blob.type === mimeType ? blob : new Blob([blob], { type: mimeType });
+          const objectUrl = URL.createObjectURL(typedBlob);
+
+          // Only cache successful downloads
+          customerPhotoCache.set(idKey, objectUrl);
+
+          if (isMounted) {
+            setPhotoUrl(objectUrl);
+          }
+        } else {
+          if (isMounted) setPhotoUrl(null);
+        }
+      } catch {
+        // Do not cache failed requests permanently
+        if (isMounted) {
+          setPhotoUrl(null);
+        }
+      }
+    }
+
+    loadCustomerPhoto();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [customerId]);
+
+  const handleImageError = () => {
+    const idKey = String(customerId || '');
+    if (idKey && customerPhotoCache.has(idKey)) {
+      const url = customerPhotoCache.get(idKey);
+      if (url && url.startsWith('blob:')) {
+        try { URL.revokeObjectURL(url); } catch (_) {}
+      }
+      customerPhotoCache.delete(idKey);
+    }
+    setPhotoUrl(null);
+  };
+
+  if (photoUrl) {
+    return (
+      <span
+        className={className}
+        style={{
+          overflow: 'hidden',
+          padding: 0,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          ...style,
+        }}
+      >
+        <img
+          src={photoUrl}
+          alt={name ? `${name} avatar` : 'Customer avatar'}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+          onError={handleImageError}
+        />
+      </span>
+    );
+  }
+
+  return <span className={className} style={style}>{initials(name)}</span>;
+}
+
+function SublistRecordsModal({ modalData, onClose }) {
+  if (!modalData) return null;
+  const { title, type, records = [] } = modalData;
+  const isCustomer = type === 'customers';
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="exec-record-backdrop"
+      role="presentation"
+      style={{ zIndex: 1200 }}
+      onMouseDown={onClose}
+    >
+      <section
+        className="exec-record-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        style={{
+          maxWidth: '640px',
+          width: '92%',
+          maxHeight: '85vh',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: '#FFFFFF',
+          borderRadius: '10px',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)'
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <header
+          style={{
+            background: 'linear-gradient(135deg, #0F3E2E 0%, #16533D 100%)',
+            color: '#FFFFFF',
+            padding: '16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderBottom: '1px solid rgba(255,255,255,0.1)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Users size={18} style={{ color: '#86EFAC' }} />
+            <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#FFFFFF' }}>{title}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#FFFFFF',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '4px',
+              borderRadius: '4px',
+              opacity: 0.85
+            }}
+          >
+            <X size={18} />
+          </button>
+        </header>
+
+        <div style={{ padding: '16px 20px', overflowY: 'auto', overflowX: 'hidden', flex: 1, backgroundColor: '#FFFFFF' }}>
+          {records.length === 0 ? (
+            <div style={{ padding: '30px', textAlign: 'center', color: '#64748B', fontSize: '14px' }}>
+              No {isCustomer ? 'customers' : 'agents'} found.
+            </div>
+          ) : (
+            <table
+              style={{
+                width: '100%',
+                minWidth: '0px',
+                tableLayout: 'fixed',
+                borderCollapse: 'collapse',
+                fontSize: '13px'
+              }}
+            >
+              <thead>
+                <tr style={{ borderBottom: '2px solid #E2E8F0', backgroundColor: '#F8FAFC', textAlign: 'left' }}>
+                  <th style={{ padding: '10px 12px', width: '60px', color: '#475569', fontWeight: 600 }}>S.No</th>
+                  <th style={{ padding: '10px 12px', color: '#475569', fontWeight: 600, overflowWrap: 'break-word' }}>
+                    {isCustomer ? 'Customer Name' : 'Agent Name'}
+                  </th>
+                  <th style={{ padding: '10px 12px', width: '160px', color: '#475569', fontWeight: 600, overflowWrap: 'break-word' }}>
+                    {isCustomer ? 'Customer Code' : 'Agent Code'}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {records.map((item, idx) => (
+                  <tr
+                    key={item.id || idx}
+                    style={{
+                      borderBottom: '1px solid #E2E8F0',
+                      backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA'
+                    }}
+                  >
+                    <td style={{ padding: '10px 12px', color: '#64748B', fontWeight: 500, verticalAlign: 'middle' }}>
+                      {item.sNo || idx + 1}
+                    </td>
+                    <td style={{ padding: '10px 12px', color: '#0F172A', fontWeight: 600, verticalAlign: 'middle', overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+                      {item.name || '—'}
+                    </td>
+                    <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: '#166534', fontWeight: 600, verticalAlign: 'middle', overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+                      {item.code || '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <footer
+          style={{
+            padding: '12px 20px',
+            backgroundColor: '#F8FAFC',
+            borderTop: '1px solid #E2E8F0',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}
+        >
+          <span style={{ fontSize: '12px', color: '#64748B' }}>
+            Total: <strong>{records.length}</strong> {records.length === 1 ? (isCustomer ? 'Customer' : 'Agent') : (isCustomer ? 'Customers' : 'Agents')}
+          </span>
+          <button
+            type="button"
+            className="details-button"
+            onClick={onClose}
+            style={{ padding: '6px 16px', fontSize: '13px' }}
+          >
+            Close
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+export function DocumentPreviewLightbox({ previewDoc, onClose }) {
+  if (!previewDoc) return null;
+
+  return (
+    <div
+      className="ams-doc-preview-backdrop"
+      role="presentation"
+      onMouseDown={onClose}
+    >
+      <div
+        className="ams-doc-preview-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={previewDoc.title || 'Document Preview'}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="ams-doc-preview-header">
+          <h3>
+            {previewDoc.isPdf ? <FileText size={18} /> : <Camera size={18} />}
+            {previewDoc.title || 'Document Preview'}
+          </h3>
+          <div className="ams-doc-preview-header-actions">
+            {previewDoc.url && (
+              <a
+                href={previewDoc.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ams-doc-newtab-btn"
+                title="Open in new window or tab"
+              >
+                <ArrowUpRight size={14} /> Open in New Tab
+              </a>
+            )}
+            <button
+              type="button"
+              className="ams-doc-preview-close"
+              onClick={onClose}
+              aria-label="Close preview"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="ams-doc-preview-body">
+          {previewDoc.loading ? (
+            <div className="doc-loading-container">
+              <LoaderCircle size={28} className="doc-spin-icon" />
+              <span>Loading document preview...</span>
+            </div>
+          ) : previewDoc.isPdf ? (
+            <div className="ams-doc-iframe-container">
+              <iframe
+                src={previewDoc.url}
+                title={previewDoc.title || 'PDF Preview'}
+                className="ams-doc-iframe"
+              />
+              <div className="ams-doc-fallback-bar">
+                <span>Trouble viewing PDF?</span>
+                <a
+                  href={previewDoc.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ams-doc-newtab-btn"
+                >
+                  <ArrowUpRight size={13} /> Open in new tab
+                </a>
+              </div>
+            </div>
+          ) : (
+            <div className="ams-doc-image-container">
+              <img
+                src={previewDoc.url}
+                alt={previewDoc.title || 'Preview'}
+                className="ams-doc-image"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const errBox = document.getElementById('dir-doc-img-error');
+                  if (errBox) errBox.style.display = 'flex';
+                }}
+              />
+              <div id="dir-doc-img-error" className="ams-doc-error-box" style={{ display: 'none' }}>
+                <p>Unable to load image preview directly.</p>
+                {previewDoc.url && (
+                  <a
+                    href={previewDoc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ams-doc-newtab-btn"
+                  >
+                    <ArrowUpRight size={14} /> Open Image in New Tab
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ExecutiveEmployeeRecordModal({
+  person,
+  roleType,
+  loading = false,
+  imageVersion = null,
+  locations = null,
+  onClose,
+  onPreviewDocument,
+  onViewSublist = null,
+}) {
+  if (!person) return null;
+
+  const [activeLocations, setActiveLocations] = useState(() => locations || locationLookupCache || { states: [], cities: [], districts: [] });
+
+  useEffect(() => {
+    if (locations && (locations.states?.length || locations.cities?.length || locations.districts?.length)) {
+      setActiveLocations(locations);
+      return;
+    }
+    let isMounted = true;
+    fetchLocationLookups().then((data) => {
+      if (isMounted && data) {
+        setActiveLocations(data);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [locations]);
+
+  const stateLookupMap = useMemo(() => {
+    const list = activeLocations?.states || [];
+    const map = new Map();
+    list.forEach((item) => {
+      const id = item?.stateId ?? item?.id ?? item?.StateId;
+      const name = item?.stateName ?? item?.name ?? item?.StateName;
+      if (id !== undefined && id !== null && name && typeof name === 'string') {
+        const cleanName = name.trim();
+        map.set(String(id).trim(), cleanName);
+        map.set(Number(id), cleanName);
+      }
+    });
+    return map;
+  }, [activeLocations?.states]);
+
+  const cityLookupMap = useMemo(() => {
+    const list = activeLocations?.cities || [];
+    const map = new Map();
+    list.forEach((item) => {
+      const id = item?.cityId ?? item?.id ?? item?.CityId;
+      const name = item?.cityName ?? item?.name ?? item?.CityName;
+      if (id !== undefined && id !== null && name && typeof name === 'string') {
+        const cleanName = name.trim();
+        map.set(String(id).trim(), cleanName);
+        map.set(Number(id), cleanName);
+      }
+    });
+    return map;
+  }, [activeLocations?.cities]);
+
+  const districtLookupMap = useMemo(() => {
+    const list = activeLocations?.districts || [];
+    const map = new Map();
+    list.forEach((item) => {
+      const id = item?.districtId ?? item?.id ?? item?.DistrictId;
+      const name = item?.districtName ?? item?.name ?? item?.DistrictName;
+      if (id !== undefined && id !== null && name && typeof name === 'string') {
+        const cleanName = name.trim();
+        map.set(String(id).trim(), cleanName);
+        map.set(Number(id), cleanName);
+      }
+    });
+    return map;
+  }, [activeLocations?.districts]);
+
+  const normRole = useMemo(() => {
+    const t = String(roleType || person?.type || '').toLowerCase();
+    if (t.includes('credithead') || t.includes('credit head')) return 'CreditHead';
+    if (t.includes('agent')) return 'Agent';
+    if (t.includes('relation') || t === 'rm') return 'RM';
+    if (t.includes('back')) return 'BackOffice';
+    if (t.includes('ams') || t.includes('area')) return 'AMS';
+    if (t.includes('credit')) return 'CreditManager';
+    return 'Agent';
+  }, [roleType, person?.type]);
+
+  const roleTitle = useMemo(() => {
+    switch (normRole) {
+      case 'Agent': return 'Agent';
+      case 'RM': return 'Relationship Manager';
+      case 'BackOffice': return 'Back Office';
+      case 'AMS': return 'Area Sourcing Manager (ASM)';
+      case 'CreditManager': return 'Credit Manager';
+      case 'CreditHead': return 'Credit Head';
+      default: return roleType || 'Employee';
+    }
+  }, [normRole, roleType]);
+
+  const personId =
+    person?.id ||
+    person?.agentId ||
+    person?.rmId ||
+    person?.backOfficeId ||
+    person?.creditManagerId ||
+    person?.creditHeadId ||
+    person?.amsId ||
+    person?.AmsId;
+
+  const fullName =
+    read(person, ['fullName', 'FullName', 'agentName', 'rmName', 'name', 'Name']) ||
+    (normRole === 'AMS' ? 'Unnamed ASM' : 'Unnamed Employee');
+
+  const employeeCode = useMemo(() => {
+    switch (normRole) {
+      case 'Agent':
+        return read(person, ['agentCode', 'AgentCode', 'code', 'Code']);
+      case 'RM':
+        return read(person, ['rmCode', 'RMCode', 'code', 'Code']);
+      case 'BackOffice':
+        return read(person, ['backOfficeCode', 'BackOfficeCode', 'code', 'Code']);
+      case 'AMS':
+        return read(person, ['amsCode', 'AmsCode', 'code', 'Code']);
+      case 'CreditManager':
+        return read(person, ['creditManagerCode', 'CreditManagerCode', 'code', 'Code']);
+      case 'CreditHead':
+        return read(person, ['creditHeadCode', 'CreditHeadCode', 'code', 'Code']);
+      default:
+        return read(person, ['code', 'Code']);
+    }
+  }, [normRole, person]);
+
+  const statusInfo = useMemo(() => {
+    const rawActive = person?.isActive ?? person?.IsActive;
+    if (typeof rawActive === 'boolean') {
+      return { label: rawActive ? 'Active' : 'Inactive', variant: rawActive ? 'active' : 'inactive' };
+    }
+    if (typeof rawActive === 'number') {
+      if (rawActive === 1) return { label: 'Active', variant: 'active' };
+      if (rawActive === 0) return { label: 'Inactive', variant: 'inactive' };
+    }
+    const rawStatus = person?.status ?? person?.Status;
+    if (typeof rawStatus === 'boolean') {
+      return { label: rawStatus ? 'Active' : 'Inactive', variant: rawStatus ? 'active' : 'inactive' };
+    }
+    if (typeof rawStatus === 'string' && rawStatus.trim()) {
+      const s = rawStatus.trim().toLowerCase();
+      if (s === 'active' || s === '1' || s === 'true') return { label: 'Active', variant: 'active' };
+      if (s === 'inactive' || s === '0' || s === 'false') return { label: 'Inactive', variant: 'inactive' };
+      return { label: rawStatus.trim(), variant: 'other' };
+    }
+    return { label: '—', variant: 'unknown' };
+  }, [person]);
+
+  const genderLabel = useMemo(() => {
+    const name = read(person, ['genderName', 'GenderName', 'gender', 'Gender']);
+    if (name && typeof name === 'string' && name.trim()) return name.trim();
+    const id = person?.genderId ?? person?.GenderId;
+    if (id === 1 || id === '1') return 'Male';
+    if (id === 2 || id === '2') return 'Female';
+    if (id === 3 || id === '3') return 'Other';
+    return '—';
+  }, [person]);
+
+  const cityVal = useMemo(() => {
+    const existingName = read(person, ['cityName', 'CityName', 'city', 'City']);
+    if (existingName && typeof existingName === 'string' && existingName.trim() && !/^city\s*id/i.test(existingName.trim())) {
+      if (isNaN(Number(existingName.trim()))) {
+        return existingName.trim();
+      }
+    }
+    const rawId = person?.cityId ?? person?.CityId;
+    if (rawId !== undefined && rawId !== null && rawId !== '') {
+      const resolved = cityLookupMap.get(String(rawId).trim()) ?? cityLookupMap.get(Number(rawId));
+      if (resolved) return resolved;
+    }
+    if (existingName && typeof existingName === 'string' && existingName.trim() && !/^city\s*id/i.test(existingName.trim())) {
+      return existingName.trim();
+    }
+    return '';
+  }, [person, cityLookupMap]);
+
+  const districtVal = useMemo(() => {
+    const existingName = read(person, ['districtName', 'DistrictName', 'district', 'District']);
+    if (existingName && typeof existingName === 'string' && existingName.trim() && !/^district\s*id/i.test(existingName.trim())) {
+      if (isNaN(Number(existingName.trim()))) {
+        return existingName.trim();
+      }
+    }
+    const rawId = person?.districtId ?? person?.DistrictId;
+    if (rawId !== undefined && rawId !== null && rawId !== '') {
+      const resolved = districtLookupMap.get(String(rawId).trim()) ?? districtLookupMap.get(Number(rawId));
+      if (resolved) return resolved;
+    }
+    if (existingName && typeof existingName === 'string' && existingName.trim() && !/^district\s*id/i.test(existingName.trim())) {
+      return existingName.trim();
+    }
+    return '';
+  }, [person, districtLookupMap]);
+
+  const stateVal = useMemo(() => {
+    const existingName = read(person, ['stateName', 'StateName', 'state', 'State']);
+    if (existingName && typeof existingName === 'string' && existingName.trim() && !/^state\s*id/i.test(existingName.trim())) {
+      if (isNaN(Number(existingName.trim()))) {
+        return existingName.trim();
+      }
+    }
+    const rawId = person?.stateId ?? person?.StateId;
+    if (rawId !== undefined && rawId !== null && rawId !== '') {
+      const resolved = stateLookupMap.get(String(rawId).trim()) ?? stateLookupMap.get(Number(rawId));
+      if (resolved) return resolved;
+    }
+    if (existingName && typeof existingName === 'string' && existingName.trim() && !/^state\s*id/i.test(existingName.trim())) {
+      return existingName.trim();
+    }
+    return '';
+  }, [person, stateLookupMap]);
+
+  const pincodeVal = read(person, ['pincode', 'Pincode', 'postalCode']);
+  const departmentVal = read(person, ['department', 'Department', 'departmentName', 'DepartmentName']);
+
+  const bankAccount = useMemo(() => {
+    const raw = read(person, ['bankAccountNumber', 'BankAccountNumber', 'accountNumber', 'AccountNumber']);
+    if (raw === undefined || raw === null) return '—';
+    const clean = String(raw).trim();
+    if (!clean || clean.toLowerCase() === 'null' || clean.toLowerCase() === 'undefined') return '—';
+    return clean;
+  }, [person]);
+
+  const ifscCode = read(person, ['ifscCode', 'IfscCode', 'IFSCCode', 'ifsc', 'IFSC']) || '—';
+
+  const aadhaarPath = getAadhaarPath(person) || person?.aadhaarDocumentPath || '';
+  const panPath = getPanPath(person) || person?.panCardPath || '';
+  const profilePath = getProfilePath(person) || person?.profileImagePath || '';
+
+  return (
+    <div
+      className="exec-record-backdrop"
+      role="presentation"
+      onMouseDown={onClose}
+    >
+      <section
+        className="exec-record-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${roleTitle} details`}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {/* Header: Dark Green Executive Theme */}
+        <div className="exec-record-header">
+          <div className="exec-header-identity">
+            <DirectoryAvatar
+              role={normRole}
+              id={personId}
+              name={fullName}
+              className="exec-header-avatar"
+              version={person.imageVersion || imageVersion}
+              imagePath={profilePath}
+            />
+            <div className="exec-header-text">
+              <h2 className="exec-header-name">{fullName}</h2>
+              <div className="exec-header-meta">
+                <span className="exec-header-role">{roleTitle}</span>
+                {employeeCode && (
+                  <>
+                    <span className="exec-header-dot">•</span>
+                    <span className="exec-header-code">{employeeCode}</span>
+                  </>
+                )}
+                <span className={`exec-header-status-badge ${statusInfo.variant}`}>
+                  {statusInfo.label}
+                </span>
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="exec-dialog-close"
+            onClick={onClose}
+            aria-label="Close details"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        {loading ? (
+          <div className="exec-record-loading">
+            <LoaderCircle size={22} className="spin" style={{ animation: 'spin 1s linear infinite' }} />
+            <span>Loading employee details…</span>
+          </div>
+        ) : (
+          <div className="exec-record-body">
+            {/* Section 1: Personal & Contact Information */}
+            <div className="exec-section">
+              <div className="exec-section-header">
+                <Users size={15} className="exec-section-icon" />
+                <h3 className="exec-section-title">Personal & Contact Information</h3>
+              </div>
+              <div className="exec-grid-4col">
+                <div className="exec-field">
+                  <span className="exec-field-label">Full Name</span>
+                  <span className="exec-field-value">{fullName}</span>
+                </div>
+                <div className="exec-field">
+                  <span className="exec-field-label">Date of Birth</span>
+                  <span className="exec-field-value">
+                    {formatDob(read(person, ['dateOfBirth', 'DateOfBirth', 'dob']))}
+                  </span>
+                </div>
+                <div className="exec-field">
+                  <span className="exec-field-label">Gender</span>
+                  <span className="exec-field-value">{genderLabel}</span>
+                </div>
+                <div className="exec-field">
+                  <span className="exec-field-label">Mobile Number</span>
+                  <span className="exec-field-value">
+                    {read(person, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']) || '—'}
+                  </span>
+                </div>
+                <div className="exec-field exec-field-span-2">
+                  <span className="exec-field-label">Email Address</span>
+                  <span className="exec-field-value">
+                    {read(person, ['emailAddress', 'EmailAddress', 'email', 'Email']) || '—'}
+                  </span>
+                </div>
+                <div className="exec-field exec-field-span-2">
+                  <span className="exec-field-label">Residential Address</span>
+                  <span className="exec-field-value">
+                    {read(person, ['address', 'Address', 'streetAddress']) || '—'}
+                  </span>
+                </div>
+                {(cityVal || normRole !== 'Agent') && (
+                  <div className="exec-field">
+                    <span className="exec-field-label">City</span>
+                    <span className="exec-field-value">{cityVal || '—'}</span>
+                  </div>
+                )}
+                {(districtVal || normRole === 'BackOffice' || normRole === 'CreditManager') && (
+                  <div className="exec-field">
+                    <span className="exec-field-label">District</span>
+                    <span className="exec-field-value">{districtVal || '—'}</span>
+                  </div>
+                )}
+                <div className="exec-field">
+                  <span className="exec-field-label">State</span>
+                  <span className="exec-field-value">{stateVal || '—'}</span>
+                </div>
+                <div className="exec-field">
+                  <span className="exec-field-label">Pincode</span>
+                  <span className="exec-field-value monospace">{pincodeVal || '—'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2: Work & Organization */}
+            <div className="exec-section">
+              <div className="exec-section-header">
+                <BriefcaseBusiness size={15} className="exec-section-icon" />
+                <h3 className="exec-section-title">Work & Organization</h3>
+              </div>
+              <div className="exec-grid-4col">
+                <div className="exec-field">
+                  <span className="exec-field-label">Employee Code</span>
+                  <span className="exec-field-value highlight">{employeeCode || '—'}</span>
+                </div>
+                <div className="exec-field">
+                  <span className="exec-field-label">Role / Designation</span>
+                  <span className="exec-field-value">{roleTitle}</span>
+                </div>
+                <div className="exec-field">
+                  <span className="exec-field-label">Branch</span>
+                  <span className="exec-field-value">
+                    {read(person, ['branch', 'Branch', 'branchName', 'BranchName']) || '—'}
+                  </span>
+                </div>
+                <div className="exec-field">
+                  <span className="exec-field-label">Date Joined</span>
+                  <span className="exec-field-value">
+                    {formatDob(read(person, ['dateJoined', 'DateJoined', 'joiningDate']))}
+                  </span>
+                </div>
+
+                {/* Role-Specific Fields */}
+                {normRole === 'Agent' && (
+                  <>
+                    <div className="exec-field">
+                      <span className="exec-field-label">Assigned Relationship Manager</span>
+                      <span className="exec-field-value">
+                        {read(person, ['rm', 'relationshipManager', 'RelationshipManager', 'rmName', 'RMName']) || 'Unassigned'}
+                      </span>
+                    </div>
+                    <div className="exec-field">
+                      <span className="exec-field-label">Sourced Applications</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span className="exec-field-value highlight">
+                          {person.applications !== undefined && person.applications !== null ? String(person.applications) : '0'}
+                        </span>
+                        {Number(person.applications || 0) > 0 && (
+                          <button
+                            type="button"
+                            className="details-button"
+                            style={{ padding: '2px 8px', fontSize: '11px', height: 'auto', lineHeight: '1.3' }}
+                            onClick={() => onViewSublist?.({
+                              title: `Customers — ${fullName}`,
+                              type: 'customers',
+                              records: person.customerList || []
+                            })}
+                          >
+                            View Customers
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {normRole === 'RM' && (
+                  <div className="exec-field">
+                    <span className="exec-field-label">Assigned Agents</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span className="exec-field-value">
+                        {person.agents !== undefined && person.agents !== null
+                          ? String(person.agents)
+                          : person.assignedAgentsCount !== undefined
+                          ? String(person.assignedAgentsCount)
+                          : '—'}
+                      </span>
+                      {Number(person.agents || person.assignedAgentsCount || 0) > 0 && (
+                        <button
+                          type="button"
+                          className="details-button"
+                          style={{ padding: '2px 8px', fontSize: '11px', height: 'auto', lineHeight: '1.3' }}
+                          onClick={() => onViewSublist?.({
+                            title: `Assigned Agents — ${fullName}`,
+                            type: 'agents',
+                            records: person.assignedAgentsList || []
+                          })}
+                        >
+                          View Agents
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {(normRole === 'BackOffice' || normRole === 'CreditManager') && (
+                  <div className="exec-field">
+                    <span className="exec-field-label">District</span>
+                    <span className="exec-field-value">{districtVal || '—'}</span>
+                  </div>
+                )}
+
+                {departmentVal && (
+                  <div className="exec-field">
+                    <span className="exec-field-label">Department</span>
+                    <span className="exec-field-value">{departmentVal}</span>
+                  </div>
+                )}
+
+                {normRole === 'AMS' && (
+                  <div className="exec-field exec-field-full">
+                    <span className="exec-field-label">Assigned Districts</span>
+                    {((person.districts && person.districts.length > 0) || (person.districtNames && person.districtNames.length > 0)) ? (
+                      <div className="exec-district-pills">
+                        {(person.districts || person.districtNames).map((d, i) => (
+                          <span key={d?.districtId || i} className="exec-district-pill">
+                            {typeof d === 'string' ? d : d?.districtName || d?.name || `District #${d?.districtId || i}`}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="exec-field-value">—</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Section 3: Banking Information */}
+            <div className="exec-section exec-section-compact">
+              <div className="exec-section-header">
+                <Landmark size={15} className="exec-section-icon" />
+                <h3 className="exec-section-title">Banking Information</h3>
+              </div>
+              <div className="exec-grid-4col">
+                <div className="exec-field exec-field-span-2">
+                  <span className="exec-field-label">Bank Account Number</span>
+                  <span className="exec-field-value monospace">{bankAccount}</span>
+                </div>
+                <div className="exec-field exec-field-span-2">
+                  <span className="exec-field-label">IFSC Code</span>
+                  <span className="exec-field-value monospace">{ifscCode}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 4: KYC & Documents */}
+            <div className="exec-section">
+              <div className="exec-section-header">
+                <FileText size={15} className="exec-section-icon" />
+                <h3 className="exec-section-title">KYC & Documents</h3>
+              </div>
+              <div className="exec-docs-grid-3col">
+                {/* Aadhaar Card */}
+                <div className="exec-doc-card">
+                  <div className="exec-doc-card-info">
+                    <FileText size={18} className="exec-doc-icon" />
+                    <div className="exec-doc-text">
+                      <strong className="exec-doc-title">Aadhaar Card</strong>
+                      <span className="exec-doc-subtext">
+                        {aadhaarPath ? 'Document uploaded' : 'No document uploaded'}
+                      </span>
+                    </div>
+                  </div>
+                  {aadhaarPath ? (
+                    <button
+                      type="button"
+                      className="exec-doc-view-btn"
+                      onClick={() => onPreviewDocument('Aadhaar Card', aadhaarPath, normRole, personId)}
+                    >
+                      <Eye size={13} /> View Document
+                    </button>
+                  ) : (
+                    <span className="exec-doc-unavailable">Unavailable</span>
+                  )}
+                </div>
+
+                {/* PAN Card */}
+                <div className="exec-doc-card">
+                  <div className="exec-doc-card-info">
+                    <FileText size={18} className="exec-doc-icon" />
+                    <div className="exec-doc-text">
+                      <strong className="exec-doc-title">PAN Card</strong>
+                      <span className="exec-doc-subtext">
+                        {panPath ? 'Document uploaded' : 'No document uploaded'}
+                      </span>
+                    </div>
+                  </div>
+                  {panPath ? (
+                    <button
+                      type="button"
+                      className="exec-doc-view-btn"
+                      onClick={() => onPreviewDocument('PAN Card', panPath, normRole, personId)}
+                    >
+                      <Eye size={13} /> View Document
+                    </button>
+                  ) : (
+                    <span className="exec-doc-unavailable">Unavailable</span>
+                  )}
+                </div>
+
+                {/* Profile Image */}
+                <div className="exec-doc-card">
+                  <div className="exec-doc-card-info">
+                    <Camera size={18} className="exec-doc-icon" />
+                    <div className="exec-doc-text">
+                      <strong className="exec-doc-title">Profile Image</strong>
+                      <span className="exec-doc-subtext">
+                        {profilePath ? 'Photograph uploaded' : 'No image uploaded'}
+                      </span>
+                    </div>
+                  </div>
+                  {profilePath ? (
+                    <button
+                      type="button"
+                      className="exec-doc-view-btn"
+                      onClick={() => onPreviewDocument('Profile Image', profilePath, normRole, personId, person.imageVersion || imageVersion)}
+                    >
+                      <Eye size={13} /> View Image
+                    </button>
+                  ) : (
+                    <span className="exec-doc-unavailable">Unavailable</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Footer: Purely View-Only */}
+        <div className="exec-record-footer">
+          <button
+            type="button"
+            className="exec-footer-close-btn"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 const ROLE_META = {
   agent: {
     key: 'agent',
@@ -267,11 +1261,11 @@ const ROLE_META = {
   },
   ams: {
     key: 'ams',
-    title: 'Area Specialists (AMS)',
+    title: 'Area Specialists (ASM)',
     subtitle: 'Cover designated districts, local channels, and regional operations.',
     icon: ShieldCheck,
     color: 'purple',
-    searchPlaceholder: 'Search AMS by name, code, contact, branch, city...',
+    searchPlaceholder: 'Search ASM by name, code, contact, branch, city...',
     emptyText: 'No area specialists found.',
     addLabel: 'Add user',
   },
@@ -285,13 +1279,23 @@ const ROLE_META = {
     emptyText: 'No credit managers found.',
     addLabel: 'Add user',
   },
+  creditHead: {
+    key: 'creditHead',
+    title: 'Credit Heads',
+    subtitle: 'Review, sanction, and oversee senior credit approvals and portfolio health.',
+    icon: Landmark,
+    color: 'indigo',
+    searchPlaceholder: 'Search credit heads by name, code, contact, branch...',
+    emptyText: 'No credit heads found.',
+    addLabel: 'Add user',
+  },
   customer: {
     key: 'customer',
     title: 'Customers',
     subtitle: 'Network customer and application records.',
     icon: FileText,
     color: 'orange',
-    searchPlaceholder: 'Search customers by name, mobile, loan purpose, status...',
+    searchPlaceholder: 'Search customers by name, mobile, loan product, status...',
     emptyText: 'No customer records found.',
     addLabel: 'Add user',
   },
@@ -315,6 +1319,20 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
   const [loadingAmsModal, setLoadingAmsModal] = useState(false);
   const [previewDoc, setPreviewDoc] = useState(null);
   const [imageVersion, setImageVersion] = useState(() => Date.now());
+  const [locations, setLocations] = useState(() => locationLookupCache || { states: [], cities: [], districts: [] });
+  const [sublistModal, setSublistModal] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    fetchLocationLookups().then((data) => {
+      if (active && data) {
+        setLocations(data);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const blobUrlsRef = useRef([]);
 
@@ -334,6 +1352,16 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
   useEffect(() => {
     return () => {
       cleanupBlobUrls();
+      customerPhotoCache.forEach((url) => {
+        try {
+          if (url && url.startsWith('blob:')) {
+            URL.revokeObjectURL(url);
+          }
+        } catch (e) {
+          // ignore
+        }
+      });
+      customerPhotoCache.clear();
     };
   }, [cleanupBlobUrls]);
 
@@ -363,17 +1391,50 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
           })
         );
 
-        const appsByAgent = appRows.reduce((map, app) => {
-          const aId = read(app, ['agentId', 'AgentId', 'assignedAgentId']);
-          if (aId) map.set(String(aId), (map.get(String(aId)) || 0) + 1);
-          return map;
-        }, new Map());
+        const appsByAgent = new Map();
+        const appRecordsByAgent = new Map();
+
+        appRows.forEach((app) => {
+          const ownership = resolveApplicationOwnership(app);
+          const aId = ownership.isAgentCreated ? ownership.agentId : null;
+          if (aId) {
+            const key = String(aId);
+            appsByAgent.set(key, (appsByAgent.get(key) || 0) + 1);
+            if (!appRecordsByAgent.has(key)) {
+              appRecordsByAgent.set(key, []);
+            }
+            appRecordsByAgent.get(key).push(app);
+          }
+        });
 
         const liveAgents = agentRows
           .map((agent) => {
             const rmId = read(agent, ['rmId', 'RMId', 'relationshipManagerId', 'RelationshipManagerId', 'createdBy']);
             const id = read(agent, ['agentId', 'AgentId', 'id', 'Id']);
             const agentName = read(agent, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name'], 'Unnamed agent');
+            const rawApps = appRecordsByAgent.get(String(id)) || [];
+            const sortedApps = [...rawApps].sort((a, b) => {
+              const idA = Number(a?.agentCustomerId ?? a?.id ?? 0);
+              const idB = Number(b?.agentCustomerId ?? b?.id ?? 0);
+              if (idA && idB && idA !== idB) return idA - idB;
+              const nameA = String(read(a, ['fullName', 'FullName', 'customerName', 'name', 'Name']) || '');
+              const nameB = String(read(b, ['fullName', 'FullName', 'customerName', 'name', 'Name']) || '');
+              return nameA.localeCompare(nameB);
+            });
+            const customerList = sortedApps.map((app, index) => {
+              const custName = read(app, ['fullName', 'FullName', 'customerName', 'name', 'Name'], 'Unknown Customer');
+              const rawCode = read(app, ['customerCode', 'CustomerCode', 'appId', 'AppId']);
+              const codeVal = (rawCode && String(rawCode).trim() && String(rawCode).trim() !== 'null' && String(rawCode).trim() !== 'undefined')
+                ? String(rawCode).trim()
+                : '—';
+              return {
+                sNo: index + 1,
+                id: app?.agentCustomerId ?? app?.id,
+                name: custName,
+                code: codeVal,
+              };
+            });
+
             return {
               id,
               agentId: id,
@@ -387,6 +1448,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               branch: read(agent, ['branch', 'Branch', 'branchName', 'BranchName']),
               status: status(read(agent, ['status', 'Status', 'isActive', 'IsActive'])),
               applications: appsByAgent.get(String(id)) || 0,
+              customerList,
               aadhaarDocumentPath: getAadhaarPath(agent),
               panCardPath: getPanPath(agent),
               profileImagePath: getProfilePath(agent),
@@ -412,11 +1474,32 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               read(rm, ['fullName', 'FullName', 'rmName', 'RMName', 'name', 'Name']) ||
               `${read(rm, ['firstName', 'FirstName'], '')} ${read(rm, ['lastName', 'LastName'], '')}`.trim() ||
               'Unnamed RM';
-            const assignedAgentsCount = agentRows.filter((agent) => {
+            const matchedAgents = agentRows.filter((agent) => {
               const aRmId = read(agent, ['rmId', 'RMId', 'relationshipManagerId', 'RelationshipManagerId', 'createdBy']);
               const aRmName = read(agent, ['relationshipManager', 'RelationshipManager', 'rmName', 'RMName']);
               return String(aRmId) === String(id) || aRmName === rmName;
-            }).length;
+            });
+            const sortedAgents = [...matchedAgents].sort((a, b) => {
+              const idA = Number(read(a, ['agentId', 'AgentId', 'id', 'Id']) || 0);
+              const idB = Number(read(b, ['agentId', 'AgentId', 'id', 'Id']) || 0);
+              if (idA && idB && idA !== idB) return idA - idB;
+              const nameA = String(read(a, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name']) || '');
+              const nameB = String(read(b, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name']) || '');
+              return nameA.localeCompare(nameB);
+            });
+            const assignedAgentsList = sortedAgents.map((agent, index) => {
+              const agentName = read(agent, ['fullName', 'FullName', 'agentName', 'AgentName', 'name', 'Name'], 'Unnamed agent');
+              const rawAgentCode = read(agent, ['agentCode', 'AgentCode', 'code', 'Code']);
+              const codeVal = (rawAgentCode && String(rawAgentCode).trim() && String(rawAgentCode).trim() !== 'null' && String(rawAgentCode).trim() !== 'undefined')
+                ? String(rawAgentCode).trim()
+                : '—';
+              return {
+                sNo: index + 1,
+                id: read(agent, ['agentId', 'AgentId', 'id', 'Id']),
+                name: agentName,
+                code: codeVal,
+              };
+            });
 
             return {
               id,
@@ -427,7 +1510,8 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               phone: read(rm, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
               branch: read(rm, ['branch', 'Branch', 'branchName', 'BranchName']),
               status: status(read(rm, ['status', 'Status', 'isActive', 'IsActive'])),
-              agents: assignedAgentsCount,
+              agents: assignedAgentsList.length,
+              assignedAgentsList,
               aadhaarDocumentPath: getAadhaarPath(rm),
               panCardPath: getPanPath(rm),
               profileImagePath: getProfilePath(rm),
@@ -469,7 +1553,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
         const liveAms = amsRows
           .map((item) => {
             const id = read(item, ['amsId', 'AmsId', 'id', 'Id']);
-            const fullName = read(item, ['fullName', 'FullName', 'name', 'Name'], 'Unnamed AMS');
+            const fullName = read(item, ['fullName', 'FullName', 'name', 'Name'], 'Unnamed ASM');
             return {
               id,
               amsId: id,
@@ -547,6 +1631,49 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
           .filter((item) => item.id || item.name);
 
         setRecords(liveCm);
+      } else if (roleKey === 'creditHead') {
+        const chResult = await getAllCreditHeads();
+        const chRows = unwrap(chResult);
+        const liveCh = chRows
+          .map((item) => {
+            const id = read(item, ['creditHeadId', 'CreditHeadId', 'id', 'Id']);
+            const chName = read(item, ['fullName', 'FullName', 'name', 'Name'], 'Unnamed credit head');
+            return {
+              id,
+              creditHeadId: id,
+              creditHeadCode: read(item, ['creditHeadCode', 'CreditHeadCode', 'code', 'Code']),
+              name: chName,
+              fullName: chName,
+              dateOfBirth: read(item, ['dateOfBirth', 'DateOfBirth', 'dob', 'DOB']),
+              genderId: item.genderId ?? item.GenderId,
+              genderName: read(item, ['genderName', 'GenderName', 'gender', 'Gender']),
+              address: read(item, ['address', 'Address']),
+              stateId: item.stateId ?? item.StateId,
+              stateName: read(item, ['stateName', 'StateName', 'state', 'State']),
+              cityId: item.cityId ?? item.CityId,
+              cityName: read(item, ['cityName', 'CityName', 'city', 'City']),
+              districtId: item.districtId ?? item.DistrictId,
+              districtName: read(item, ['districtName', 'DistrictName', 'district', 'District']),
+              pincode: read(item, ['pincode', 'Pincode']),
+              email: read(item, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+              emailAddress: read(item, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+              phone: read(item, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+              mobileNumber: read(item, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+              branch: read(item, ['branch', 'Branch', 'branchName', 'BranchName']),
+              dateJoined: read(item, ['dateJoined', 'DateJoined']),
+              accountNumber: read(item, ['accountNumber', 'AccountNumber']),
+              ifscCode: read(item, ['ifscCode', 'IfscCode', 'IFSCCode']),
+              status: status(read(item, ['status', 'Status', 'isActive', 'IsActive'])),
+              isActive: item.isActive ?? item.IsActive ?? true,
+              aadhaarDocumentPath: getAadhaarPath(item),
+              panCardPath: getPanPath(item),
+              profileImagePath: getProfilePath(item),
+              rawRecord: item,
+            };
+          })
+          .filter((item) => item.id || item.name);
+
+        setRecords(liveCh);
       } else if (roleKey === 'customer') {
         const [appResult, agentResult, rmResult] = await Promise.allSettled([
           agentCustomerService.getAllCustomers(),
@@ -600,6 +1727,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
 
             return {
               id: read(application, ['agentCustomerId', 'AgentCustomerId', 'applicationId', 'id']),
+              customerCode: read(application, ['customerCode', 'CustomerCode'], ''),
               agentId: resolvedAgentId,
               agentName: resolvedAgentName,
               agentPhone: agent.phone || '—',
@@ -610,7 +1738,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               mobile: read(application, ['mobileNumber', 'MobileNumber', 'mobile'], '—'),
               email: read(application, ['email', 'Email', 'emailAddress'], '—'),
               employmentType: read(application, ['employmentTypeName', 'EmploymentTypeName'], '—'),
-              loanPurpose: read(application, ['loanPurposeName', 'LoanPurposeName', 'loanType'], '—'),
+              loanPurpose: read(application, ['loanProductName', 'LoanProductName', 'loanPurposeName', 'LoanPurposeName', 'loanType'], '—'),
               amount: money(read(application, ['expectedLoanAmount', 'ExpectedLoanAmount', 'disbursedAmount', 'loanAmount', 'requestedAmount'])),
               remarks: read(application, ['remarks', 'Remarks'], '—'),
               rawStatus,
@@ -668,8 +1796,12 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
         return [item.fullName, item.name, item.creditManagerCode, item.emailAddress, item.email, item.mobileNumber, item.phone, item.branch, item.cityName, item.status]
           .some((val) => String(val || '').toLowerCase().includes(search));
       }
+      if (roleKey === 'creditHead') {
+        return [item.fullName, item.name, item.creditHeadCode, item.emailAddress, item.email, item.mobileNumber, item.phone, item.branch, item.cityName, item.status]
+          .some((val) => String(val || '').toLowerCase().includes(search));
+      }
       if (roleKey === 'customer') {
-        return [item.id, item.customerName, item.mobile, item.email, item.loanPurpose, item.agentName, item.rmName, item.status]
+        return [item.id, item.customerCode, item.customerName, item.mobile, item.email, item.loanPurpose, item.agentName, item.rmName, item.status]
           .some((val) => String(val || '').toLowerCase().includes(search));
       }
       return true;
@@ -697,9 +1829,14 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
 
   // View Person Modal Handler
   const handleOpenPersonDetails = async (person, type) => {
-    const roleType = type || (roleKey === 'rm' ? 'Relationship manager' : roleKey === 'backOffice' ? 'Back Office' : roleKey === 'creditManager' ? 'Credit Manager' : 'Agent');
-    const targetId = person?.id || person?.agentId || person?.rmId || person?.backOfficeId || person?.creditManagerId;
+    const roleType = type || (roleKey === 'rm' ? 'Relationship manager' : roleKey === 'backOffice' ? 'Back Office' : roleKey === 'creditHead' ? 'Credit Head' : roleKey === 'creditManager' ? 'Credit Manager' : 'Agent');
+    const targetId = person?.id || person?.agentId || person?.rmId || person?.backOfficeId || person?.creditManagerId || person?.creditHeadId;
     if (!targetId && !person) return;
+
+    const rawIsActive = person?.isActive ?? person?.IsActive;
+    const initialStatus = typeof rawIsActive === 'boolean'
+      ? (rawIsActive ? 'Active' : 'Inactive')
+      : (person?.status ? String(person.status) : '—');
 
     const initialPerson = {
       ...person,
@@ -707,9 +1844,9 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
       id: targetId || person?.id,
       name: person?.name || person?.fullName || 'Unnamed',
       fullName: person?.fullName || person?.name || 'Unnamed',
-      email: person?.email || person?.emailAddress || 'Not available',
-      phone: person?.phone || person?.mobileNumber || 'Not available',
-      status: person?.status || 'Active',
+      email: person?.email || person?.emailAddress || '—',
+      phone: person?.phone || person?.mobileNumber || '—',
+      status: initialStatus,
       branch: person?.branch || '',
       aadhaarDocumentPath: getAadhaarPath(person),
       panCardPath: getPanPath(person),
@@ -823,6 +1960,40 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
             rawRecord: record,
           }));
         }
+      } else if (roleType === 'Credit Head' || roleType === 'CreditHead') {
+        const response = await getCreditHeadById(targetId);
+        const recordValue = response?.data !== undefined ? response.data : response;
+        const record = Array.isArray(recordValue)
+          ? recordValue[0]
+          : (recordValue?.value?.[0] || recordValue?.data || recordValue?.value || recordValue);
+
+        if (record && typeof record === 'object') {
+          const freshName = read(record, ['fullName', 'FullName', 'name', 'Name']) || initialPerson.name;
+          const freshCode = read(record, ['creditHeadCode', 'CreditHeadCode', 'code', 'Code']) || initialPerson.creditHeadCode;
+          const freshEmail = read(record, ['emailAddress', 'EmailAddress', 'email', 'Email']) || initialPerson.email;
+          const freshPhone = read(record, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']) || initialPerson.phone;
+          const freshBranch = read(record, ['branch', 'Branch', 'branchName', 'BranchName']) || initialPerson.branch;
+          const freshStatus = status(read(record, ['status', 'Status', 'isActive', 'IsActive']), initialPerson.status);
+
+          setSelectedPerson((prev) => ({
+            ...prev,
+            ...record,
+            id: targetId,
+            creditHeadId: targetId,
+            type: 'Credit Head',
+            name: freshName,
+            fullName: freshName,
+            creditHeadCode: freshCode,
+            email: freshEmail,
+            phone: freshPhone,
+            branch: freshBranch,
+            status: freshStatus,
+            aadhaarDocumentPath: getAadhaarPath(record) || initialPerson.aadhaarDocumentPath,
+            panCardPath: getPanPath(record) || initialPerson.panCardPath,
+            profileImagePath: getProfilePath(record) || initialPerson.profileImagePath,
+            rawRecord: record,
+          }));
+        }
       } else if (roleType === 'Agent') {
         const response = await getAgentById(targetId);
         const recordValue = response?.data !== undefined ? response.data : response;
@@ -918,7 +2089,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
         emailAddress: read(currentRecord, ['emailAddress', 'EmailAddress', 'email', 'Email'], ams.emailAddress || ''),
         branch: read(currentRecord, ['branch', 'Branch', 'branchName', 'BranchName'], ams.branch || ''),
         dateJoined: read(currentRecord, ['dateJoined', 'DateJoined'], ams.dateJoined || ''),
-        isActive: currentRecord.isActive ?? currentRecord.IsActive ?? ams.isActive ?? true,
+        isActive: currentRecord.isActive ?? currentRecord.IsActive ?? ams.isActive,
         accountNumber: read(currentRecord, ['accountNumber', 'AccountNumber'], ams.accountNumber || ''),
         ifscCode: read(currentRecord, ['ifscCode', 'IfscCode'], ams.ifscCode || ''),
         aadhaarDocumentPath: getAadhaarPath(currentRecord) || ams.aadhaarDocumentPath || '',
@@ -1101,7 +2272,25 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                         <small>{agent.phone || '—'}</small>
                       </td>
                       <td>{agent.rm || 'Unassigned'}</td>
-                      <td><strong>{agent.applications || 0}</strong></td>
+                      <td>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', whiteSpace: 'nowrap' }}>
+                          <strong style={{ color: '#111827', fontSize: '13px' }}>{agent.applications || 0}</strong>
+                          {Number(agent.applications || 0) > 0 && (
+                            <button
+                              type="button"
+                              className="details-button"
+                              style={{ padding: '3px 8px', fontSize: '12px', height: 'auto', lineHeight: '1.2' }}
+                              onClick={() => setSublistModal({
+                                title: `Customers — ${agent.name}`,
+                                type: 'customers',
+                                records: agent.customerList || []
+                              })}
+                            >
+                              View Customers
+                            </button>
+                          )}
+                        </div>
+                      </td>
                       <td>
                         <span className={`status ${String(agent.status || 'active').toLowerCase().replace(/\s+/g, '-')}`}>
                           {agent.status || 'Active'}
@@ -1168,8 +2357,26 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                       </td>
                       <td>{rm.branch || '—'}</td>
                       <td>
-                        <strong>{rm.agents || 0}</strong>
-                        <small style={{ display: 'block' }}>{rm.agents === 1 ? 'agent' : 'agents'}</small>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: '13px', color: '#374151', display: 'inline-flex', alignItems: 'baseline', gap: '4px' }}>
+                            <strong style={{ color: '#111827' }}>{rm.agents || 0}</strong>
+                            <span style={{ color: '#6B7280', fontSize: '12px' }}>{rm.agents === 1 ? 'agent' : 'agents'}</span>
+                          </span>
+                          {Number(rm.agents || 0) > 0 && (
+                            <button
+                              type="button"
+                              className="details-button"
+                              style={{ padding: '3px 8px', fontSize: '12px', height: 'auto', lineHeight: '1.2' }}
+                              onClick={() => setSublistModal({
+                                title: `Assigned Agents — ${rm.name}`,
+                                type: 'agents',
+                                records: rm.assignedAgentsList || []
+                              })}
+                            >
+                              View Agents
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td>
                         <span className={`status ${String(rm.status || 'active').toLowerCase().replace(/\s+/g, '-')}`}>
@@ -1284,7 +2491,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               <thead>
                 <tr>
                   <th>Specialist</th>
-                  <th>AMS Code</th>
+                  <th>ASM Code</th>
                   <th>Contact</th>
                   <th>Gender / Details</th>
                   <th>Branch / Location</th>
@@ -1294,7 +2501,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td className="empty-table" colSpan="7">Loading live AMS data…</td></tr>
+                  <tr><td className="empty-table" colSpan="7">Loading live ASM data…</td></tr>
                 ) : visibleRecords.length ? (
                   visibleRecords.map((ams) => {
                     const displayName = ams.fullName || ams.name || 'Unnamed specialist';
@@ -1434,13 +2641,91 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
             </table>
           )}
 
+          {roleKey === 'creditHead' && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Credit Head</th>
+                  <th>Credit Head Code</th>
+                  <th>Contact</th>
+                  <th>Branch</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td className="empty-table" colSpan="6">Loading live credit head data…</td></tr>
+                ) : visibleRecords.length ? (
+                  visibleRecords.map((ch) => {
+                    const displayName = ch.fullName || ch.name || 'Unnamed credit head';
+                    const chId = ch.id || ch.creditHeadId;
+                    return (
+                      <tr key={chId || ch.creditHeadCode || displayName}>
+                        <td>
+                          <div className="agent-name">
+                            <DirectoryAvatar
+                              role="CreditHead"
+                              id={chId}
+                              name={displayName}
+                              version={imageVersion}
+                              imagePath={ch.profileImagePath}
+                            />
+                            <strong>{displayName}</strong>
+                          </div>
+                        </td>
+                        <td>
+                          <strong>{ch.creditHeadCode || (chId ? `#${chId}` : '—')}</strong>
+                        </td>
+                        <td>
+                          <div>{ch.emailAddress || ch.email || '—'}</div>
+                          <small>{ch.mobileNumber || ch.phone || '—'}</small>
+                        </td>
+                        <td>{ch.branch || '—'}</td>
+                        <td>
+                          <span className={`status ${ch.isActive !== false ? 'active' : 'inactive'}`}>
+                            {ch.isActive !== false ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="action-buttons">
+                            <button
+                              type="button"
+                              className="details-button"
+                              onClick={() => handleOpenPersonDetails(ch, 'Credit Head')}
+                            >
+                              <Eye size={15} /> View
+                            </button>
+                            <button
+                              type="button"
+                              className="details-button edit-button"
+                              onClick={() => navigate(`/edit-credit-head/${chId}`)}
+                            >
+                              <Pencil size={15} /> Edit
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td className="empty-table" colSpan="6">
+                      {searchQuery ? 'No matching credit heads found.' : meta.emptyText}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+
           {roleKey === 'customer' && (
             <table>
               <thead>
                 <tr>
                   <th>App / Customer ID</th>
                   <th>Customer</th>
-                  <th>Loan Purpose</th>
+                  <th>Loan Product</th>
                   <th>Expected Amount</th>
                   <th>Agent / RM</th>
                   <th>Status</th>
@@ -1453,10 +2738,13 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                 ) : visibleRecords.length ? (
                   visibleRecords.map((customer) => (
                     <tr key={customer.id}>
-                      <td><strong>#{customer.id}</strong></td>
+                      <td><strong>{customer.customerCode || `#${customer.id}`}</strong></td>
                       <td>
                         <div className="agent-name">
-                          <span>{initials(customer.customerName)}</span>
+                          <CustomerDirectoryAvatar
+                            customerId={customer.id}
+                            name={customer.customerName}
+                          />
                           <div>
                             <strong>{customer.customerName}</strong>
                             <small>{customer.mobile}</small>
@@ -1562,273 +2850,17 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
         )}
       </div>
 
-      {/* RM / Agent / Back Office Details Modal */}
+      {/* Executive Employee Record Modal (Agent, RM, Back Office, Credit Manager) */}
       {selectedPerson && (
-        <div
-          className="person-dialog-backdrop"
-          role="presentation"
-          onMouseDown={() => setSelectedPerson(null)}
-        >
-          <section
-            className="person-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-label={`${selectedPerson.type} details`}
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <button
-              className="person-dialog-close"
-              onClick={() => setSelectedPerson(null)}
-              aria-label="Close details"
-            >
-              <X size={18} />
-            </button>
-            <DirectoryAvatar
-              role={
-                selectedPerson.type === 'Relationship manager' || selectedPerson.type === 'RM'
-                  ? 'RM'
-                  : selectedPerson.type === 'Back Office'
-                  ? 'BackOffice'
-                  : selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager'
-                  ? 'CreditManager'
-                  : selectedPerson.type === 'AMS'
-                  ? 'AMS'
-                  : 'Agent'
-              }
-              id={selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.creditManagerId || selectedPerson.amsId}
-              name={selectedPerson.name}
-              className="person-dialog-avatar"
-              version={selectedPerson.imageVersion || imageVersion}
-              imagePath={
-                (selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager')
-                  ? (getProfilePath(selectedPerson) || selectedPerson.profileImagePath)
-                  : undefined
-              }
-            />
-            <span className="eyebrow">{selectedPerson.type}</span>
-            <h2>{selectedPerson.name}</h2>
-            <span className={`status ${String(selectedPerson.status || 'active').toLowerCase()}`}>
-              {selectedPerson.status || 'Active'}
-            </span>
-            <dl className="person-detail-grid">
-              <div>
-                <dt>Email</dt>
-                <dd>{selectedPerson.email || 'Not available'}</dd>
-              </div>
-              <div>
-                <dt>Phone</dt>
-                <dd>{selectedPerson.phone || 'Not available'}</dd>
-              </div>
-              {selectedPerson.type === 'Agent' ? (
-                <>
-                  <div>
-                    <dt>Assigned RM</dt>
-                    <dd>{selectedPerson.rm}</dd>
-                  </div>
-                  <div>
-                    <dt>Applications</dt>
-                    <dd>{selectedPerson.applications}</dd>
-                  </div>
-                </>
-              ) : selectedPerson.type === 'Back Office' ? (
-                <>
-                  <div>
-                    <dt>Branch</dt>
-                    <dd>{selectedPerson.branch || 'Not available'}</dd>
-                  </div>
-                  <div>
-                    <dt>Back Office Code</dt>
-                    <dd>{selectedPerson.backOfficeCode || 'Not available'}</dd>
-                  </div>
-                </>
-              ) : selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager' ? (
-                <>
-                  <div>
-                    <dt>Branch</dt>
-                    <dd>{selectedPerson.branch || 'Not available'}</dd>
-                  </div>
-                  <div>
-                    <dt>Credit Manager Code</dt>
-                    <dd>{selectedPerson.creditManagerCode || 'Not available'}</dd>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <dt>Branch</dt>
-                    <dd>{selectedPerson.branch || 'Not available'}</dd>
-                  </div>
-                  <div>
-                    <dt>Assigned agents</dt>
-                    <dd>{selectedPerson.agents}</dd>
-                  </div>
-                </>
-              )}
-            </dl>
-
-            {/* Documents Section */}
-            <div className="ams-modal-section" style={{ width: '100%', marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
-              <h3 className="ams-section-title">Documents</h3>
-              <div className="ams-doc-links-grid">
-                {/* Aadhaar Card */}
-                <div className="ams-doc-card">
-                  <div className="ams-doc-card-info">
-                    <FileText size={18} className="ams-doc-icon" />
-                    <div>
-                      <strong>Aadhaar Card</strong>
-                      <small>
-                        {getAadhaarPath(selectedPerson) || selectedPerson.aadhaarDocumentPath
-                          ? 'Document uploaded'
-                          : 'No document uploaded'}
-                      </small>
-                    </div>
-                  </div>
-                  {(getAadhaarPath(selectedPerson) || selectedPerson.aadhaarDocumentPath) ? (
-                    <button
-                      type="button"
-                      className="details-button"
-                      onClick={() => {
-                        const personRole =
-                          selectedPerson.type === 'Relationship manager' || selectedPerson.type === 'RM'
-                            ? 'RM'
-                            : selectedPerson.type === 'Back Office'
-                            ? 'BackOffice'
-                            : selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager'
-                            ? 'CreditManager'
-                            : selectedPerson.type === 'AMS'
-                            ? 'AMS'
-                            : 'Agent';
-                        const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.creditManagerId || selectedPerson.amsId;
-                        handlePreviewDocument(
-                          'Aadhaar Card',
-                          getAadhaarPath(selectedPerson) || selectedPerson.aadhaarDocumentPath,
-                          personRole,
-                          personId
-                        );
-                      }}
-                    >
-                      <Eye size={14} /> View Document
-                    </button>
-                  ) : (
-                    <span className="ams-doc-missing">Unavailable</span>
-                  )}
-                </div>
-
-                {/* PAN Card */}
-                <div className="ams-doc-card">
-                  <div className="ams-doc-card-info">
-                    <FileText size={18} className="ams-doc-icon" />
-                    <div>
-                      <strong>PAN Card</strong>
-                      <small>
-                        {getPanPath(selectedPerson) || selectedPerson.panCardPath
-                          ? 'Document uploaded'
-                          : 'No document uploaded'}
-                      </small>
-                    </div>
-                  </div>
-                  {(getPanPath(selectedPerson) || selectedPerson.panCardPath) ? (
-                    <button
-                      type="button"
-                      className="details-button"
-                      onClick={() => {
-                        const personRole =
-                          selectedPerson.type === 'Relationship manager' || selectedPerson.type === 'RM'
-                            ? 'RM'
-                            : selectedPerson.type === 'Back Office'
-                            ? 'BackOffice'
-                            : selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager'
-                            ? 'CreditManager'
-                            : selectedPerson.type === 'AMS'
-                            ? 'AMS'
-                            : 'Agent';
-                        const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.creditManagerId || selectedPerson.amsId;
-                        handlePreviewDocument(
-                          'PAN Card',
-                          getPanPath(selectedPerson) || selectedPerson.panCardPath,
-                          personRole,
-                          personId
-                        );
-                      }}
-                    >
-                      <Eye size={14} /> View Document
-                    </button>
-                  ) : (
-                    <span className="ams-doc-missing">Unavailable</span>
-                  )}
-                </div>
-
-                {/* Profile Image */}
-                <div className="ams-doc-card">
-                  <div className="ams-doc-card-info">
-                    <Camera size={18} className="ams-doc-icon" />
-                    <div>
-                      <strong>Profile Image</strong>
-                      <small>
-                        {getProfilePath(selectedPerson) || selectedPerson.profileImagePath
-                          ? 'Photograph uploaded'
-                          : 'No image uploaded'}
-                      </small>
-                    </div>
-                  </div>
-                  {(getProfilePath(selectedPerson) || selectedPerson.profileImagePath) ? (
-                    <button
-                      type="button"
-                      className="details-button"
-                      onClick={() => {
-                        const personRole =
-                          selectedPerson.type === 'Relationship manager' || selectedPerson.type === 'RM'
-                            ? 'RM'
-                            : selectedPerson.type === 'Back Office'
-                            ? 'BackOffice'
-                            : selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager'
-                            ? 'CreditManager'
-                            : selectedPerson.type === 'AMS'
-                            ? 'AMS'
-                            : 'Agent';
-                        const personId = selectedPerson.id || selectedPerson.agentId || selectedPerson.rmId || selectedPerson.backOfficeId || selectedPerson.creditManagerId || selectedPerson.amsId;
-                        handlePreviewDocument(
-                          'Profile Image',
-                          getProfilePath(selectedPerson) || selectedPerson.profileImagePath,
-                          personRole,
-                          personId,
-                          selectedPerson.imageVersion || imageVersion
-                        );
-                      }}
-                    >
-                      <Eye size={14} /> View Image
-                    </button>
-                  ) : (
-                    <span className="ams-doc-missing">Unavailable</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="person-dialog-actions">
-              <button className="masters-btn-secondary" onClick={() => setSelectedPerson(null)}>
-                Close
-              </button>
-              <button
-                className="primary-button"
-                onClick={() => {
-                  setSelectedPerson(null);
-                  if (selectedPerson.type === 'Agent') {
-                    navigate(`/edit-agent/${selectedPerson.id}`);
-                  } else if (selectedPerson.type === 'Back Office') {
-                    navigate(`/edit-back-office/${selectedPerson.id}`);
-                  } else if (selectedPerson.type === 'Credit Manager' || selectedPerson.type === 'CreditManager') {
-                    navigate(`/edit-credit-manager/${selectedPerson.id}`);
-                  } else {
-                    navigate(`/edit-relationship-manager/${selectedPerson.id}`);
-                  }
-                }}
-              >
-                <Pencil size={16} /> Edit {selectedPerson.type === 'Agent' ? 'agent' : selectedPerson.type === 'Back Office' ? 'back office' : selectedPerson.type === 'Credit Manager' ? 'credit manager' : 'RM'}
-              </button>
-            </div>
-          </section>
-        </div>
+        <ExecutiveEmployeeRecordModal
+          person={selectedPerson}
+          roleType={selectedPerson.type}
+          imageVersion={selectedPerson.imageVersion || imageVersion}
+          locations={locations}
+          onClose={() => setSelectedPerson(null)}
+          onPreviewDocument={handlePreviewDocument}
+          onViewSublist={setSublistModal}
+        />
       )}
 
       {/* Customer / Application Details Modal */}
@@ -1852,8 +2884,18 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
             >
               <X size={18} />
             </button>
-            <div className="person-dialog-avatar">{initials(selectedApplication.customerName)}</div>
-            <span className="eyebrow">Application #{selectedApplication.id}</span>
+            <div className="person-dialog-avatar" style={{ overflow: 'hidden', padding: 0 }}>
+              <CustomerDirectoryAvatar
+                customerId={selectedApplication.id}
+                name={selectedApplication.customerName}
+                style={{ width: '100%', height: '100%', borderRadius: 'inherit' }}
+              />
+            </div>
+            <span className="eyebrow">
+              {selectedApplication.customerCode
+                ? `Customer ${selectedApplication.customerCode} (App #${selectedApplication.id})`
+                : `Application #${selectedApplication.id}`}
+            </span>
             <h2>{selectedApplication.customerName}</h2>
             <span className={`status ${selectedApplication.status.toLowerCase().replace(/\s+/g, '-')}`}>
               {selectedApplication.status}
@@ -1868,7 +2910,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                 <dd>{selectedApplication.email}</dd>
               </div>
               <div>
-                <dt>Loan purpose</dt>
+                <dt>Loan product</dt>
                 <dd>{selectedApplication.loanPurpose}</dd>
               </div>
               <div>
@@ -1929,383 +2971,34 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
         </div>
       )}
 
-      {/* AMS Full Details Modal */}
+      {/* Executive Employee Record Modal (AMS) */}
       {selectedAms && (
-        <div
-          className="person-dialog-backdrop"
-          role="presentation"
-          onMouseDown={() => setSelectedAms(null)}
-        >
-          <section
-            className="person-dialog ams-details-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Area Management Specialist details"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <button
-              className="person-dialog-close"
-              onClick={() => setSelectedAms(null)}
-              aria-label="Close AMS details"
-            >
-              <X size={18} />
-            </button>
-
-            {/* Modal Header */}
-            <div className="ams-modal-header">
-              <DirectoryAvatar
-                role="AMS"
-                id={selectedAms.amsId || selectedAms.id}
-                name={selectedAms.fullName}
-                className="person-dialog-avatar ams-modal-avatar"
-                version={selectedAms.imageVersion || imageVersion}
-              />
-              <div className="ams-modal-title-block">
-                <span className="eyebrow">AREA MANAGEMENT SPECIALIST</span>
-                <h2>{selectedAms.fullName}</h2>
-                <div className="ams-badge-row">
-                  {selectedAms.amsCode && (
-                    <span className="ams-code-badge">Code: {selectedAms.amsCode}</span>
-                  )}
-                  <span className={`status ${selectedAms.isActive !== false ? 'active' : 'inactive'}`}>
-                    {selectedAms.isActive !== false ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {loadingAmsModal ? (
-              <p className="loading-line">Loading details…</p>
-            ) : (
-              <div className="ams-modal-scrollable">
-                {/* Personal Information */}
-                <div className="ams-modal-section">
-                  <h3 className="ams-section-title">Personal Information</h3>
-                  <dl className="person-detail-grid">
-                    <div>
-                      <dt>Full Name</dt>
-                      <dd>{selectedAms.fullName || '—'}</dd>
-                    </div>
-                    <div>
-                      <dt>AMS Code</dt>
-                      <dd>{selectedAms.amsCode || '—'}</dd>
-                    </div>
-                    <div>
-                      <dt>Date of Birth</dt>
-                      <dd>{formatDob(selectedAms.dateOfBirth)}</dd>
-                    </div>
-                    <div>
-                      <dt>Gender</dt>
-                      <dd>
-                        {selectedAms.genderName ||
-                          (selectedAms.genderId === 1
-                            ? 'Male'
-                            : selectedAms.genderId === 2
-                            ? 'Female'
-                            : selectedAms.genderId === 3
-                            ? 'Other'
-                            : '—')}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Mobile Number</dt>
-                      <dd>{selectedAms.mobileNumber || '—'}</dd>
-                    </div>
-                    <div>
-                      <dt>Email Address</dt>
-                      <dd>{selectedAms.emailAddress || '—'}</dd>
-                    </div>
-                  </dl>
-                </div>
-
-                {/* Location Information */}
-                <div className="ams-modal-section">
-                  <h3 className="ams-section-title">Location Information</h3>
-                  <dl className="person-detail-grid">
-                    <div className="full-width">
-                      <dt>Address</dt>
-                      <dd>{selectedAms.address || '—'}</dd>
-                    </div>
-                    <div>
-                      <dt>State</dt>
-                      <dd>{selectedAms.stateName || (selectedAms.stateId ? `State ID: ${selectedAms.stateId}` : '—')}</dd>
-                    </div>
-                    <div>
-                      <dt>City</dt>
-                      <dd>{selectedAms.cityName || (selectedAms.cityId ? `City ID: ${selectedAms.cityId}` : '—')}</dd>
-                    </div>
-                    <div>
-                      <dt>Pincode</dt>
-                      <dd>{selectedAms.pincode || '—'}</dd>
-                    </div>
-                    <div>
-                      <dt>Branch</dt>
-                      <dd>{selectedAms.branch || '—'}</dd>
-                    </div>
-                    <div className="full-width">
-                      <dt>Districts</dt>
-                      <dd>
-                        {formatDistrictList(selectedAms.districts || selectedAms.districtNames)}
-                      </dd>
-                    </div>
-                  </dl>
-                </div>
-
-                {/* Employment & Banking */}
-                <div className="ams-modal-section">
-                  <h3 className="ams-section-title">Employment & Banking</h3>
-                  <dl className="person-detail-grid">
-                    <div>
-                      <dt>Date Joined</dt>
-                      <dd>{formatDateTimeFriendly(selectedAms.dateJoined) || '—'}</dd>
-                    </div>
-                    <div>
-                      <dt>Status</dt>
-                      <dd>{selectedAms.isActive !== false ? 'Active' : 'Inactive'}</dd>
-                    </div>
-                    <div>
-                      <dt>Account Number</dt>
-                      <dd>{selectedAms.accountNumber || '—'}</dd>
-                    </div>
-                    <div>
-                      <dt>IFSC Code</dt>
-                      <dd>{selectedAms.ifscCode || '—'}</dd>
-                    </div>
-                  </dl>
-                </div>
-
-                {/* Assigned Districts (if available) */}
-                {((selectedAms.districts && selectedAms.districts.length > 0) || (selectedAms.districtNames && selectedAms.districtNames.length > 0)) && (
-                  <div className="ams-modal-section">
-                    <h3 className="ams-section-title">Assigned Districts</h3>
-                    <div className="ams-district-pills">
-                      {(selectedAms.districts || selectedAms.districtNames).map((d, i) => (
-                        <span key={d.districtId || i} className="ams-summary-pill">
-                          {typeof d === 'string' ? d : d.districtName || d.name || `District #${d.districtId || i}`}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Documents Section */}
-                <div className="ams-modal-section">
-                  <h3 className="ams-section-title">Documents</h3>
-                  <div className="ams-doc-links-grid">
-                    {/* Aadhaar Card */}
-                    <div className="ams-doc-card">
-                      <div className="ams-doc-card-info">
-                        <FileText size={18} className="ams-doc-icon" />
-                        <div>
-                          <strong>Aadhaar Card</strong>
-                          <small>
-                            {getAadhaarPath(selectedAms) || selectedAms.aadhaarDocumentPath
-                              ? 'Document uploaded'
-                              : 'No document uploaded'}
-                          </small>
-                        </div>
-                      </div>
-                      {(getAadhaarPath(selectedAms) || selectedAms.aadhaarDocumentPath) ? (
-                        <button
-                          type="button"
-                          className="details-button"
-                          onClick={() =>
-                            handlePreviewDocument(
-                              'Aadhaar Card',
-                              getAadhaarPath(selectedAms) || selectedAms.aadhaarDocumentPath,
-                              'AMS',
-                              selectedAms.amsId || selectedAms.id || selectedAms.AmsId
-                            )
-                          }
-                        >
-                          <Eye size={14} /> View Document
-                        </button>
-                      ) : (
-                        <span className="ams-doc-missing">Unavailable</span>
-                      )}
-                    </div>
-
-                    {/* PAN Card */}
-                    <div className="ams-doc-card">
-                      <div className="ams-doc-card-info">
-                        <FileText size={18} className="ams-doc-icon" />
-                        <div>
-                          <strong>PAN Card</strong>
-                          <small>
-                            {getPanPath(selectedAms) || selectedAms.panCardPath
-                              ? 'Document uploaded'
-                              : 'No document uploaded'}
-                          </small>
-                        </div>
-                      </div>
-                      {(getPanPath(selectedAms) || selectedAms.panCardPath) ? (
-                        <button
-                          type="button"
-                          className="details-button"
-                          onClick={() =>
-                            handlePreviewDocument(
-                              'PAN Card',
-                              getPanPath(selectedAms) || selectedAms.panCardPath,
-                              'AMS',
-                              selectedAms.amsId || selectedAms.id || selectedAms.AmsId
-                            )
-                          }
-                        >
-                          <Eye size={14} /> View Document
-                        </button>
-                      ) : (
-                        <span className="ams-doc-missing">Unavailable</span>
-                      )}
-                    </div>
-
-                    {/* Profile Image */}
-                    {(getProfilePath(selectedAms) || selectedAms.profileImagePath) && (
-                      <div className="ams-doc-card">
-                        <div className="ams-doc-card-info">
-                          <Camera size={18} className="ams-doc-icon" />
-                          <div>
-                            <strong>Profile Image</strong>
-                            <small>Photograph uploaded</small>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          className="details-button"
-                          onClick={() =>
-                            handlePreviewDocument(
-                              'Profile Image',
-                              getProfilePath(selectedAms) || selectedAms.profileImagePath,
-                              'AMS',
-                              selectedAms.amsId || selectedAms.id || selectedAms.AmsId,
-                              selectedAms.imageVersion || imageVersion
-                            )
-                          }
-                        >
-                          <Eye size={14} /> View Image
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="person-dialog-actions">
-              <button className="masters-btn-secondary" onClick={() => setSelectedAms(null)}>
-                Close
-              </button>
-              <button
-                className="primary-button"
-                onClick={() => {
-                  const targetId = selectedAms.id || selectedAms.amsId || selectedAms.AmsId;
-                  setSelectedAms(null);
-                  navigate(`/edit-ams/${targetId}`);
-                }}
-              >
-                <Pencil size={16} /> Edit AMS
-              </button>
-            </div>
-          </section>
-        </div>
+        <ExecutiveEmployeeRecordModal
+          person={selectedAms}
+          roleType="AMS"
+          loading={loadingAmsModal}
+          imageVersion={selectedAms.imageVersion || imageVersion}
+          locations={locations}
+          onClose={() => setSelectedAms(null)}
+          onPreviewDocument={handlePreviewDocument}
+          onViewSublist={setSublistModal}
+        />
       )}
 
       {/* Dedicated Document / Image Preview Lightbox */}
       {previewDoc && (
-        <div
-          className="ams-doc-preview-backdrop"
-          role="presentation"
-          onMouseDown={handleClosePreview}
-        >
-          <div
-            className="ams-doc-preview-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-label={previewDoc.title || 'Document Preview'}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <div className="ams-doc-preview-header">
-              <h3>
-                {previewDoc.isPdf ? <FileText size={18} /> : <Camera size={18} />}
-                {previewDoc.title || 'Document Preview'}
-              </h3>
-              <div className="ams-doc-preview-header-actions">
-                {previewDoc.url && (
-                  <a
-                    href={previewDoc.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ams-doc-newtab-btn"
-                    title="Open in new window or tab"
-                  >
-                    <ArrowUpRight size={14} /> Open in New Tab
-                  </a>
-                )}
-                <button
-                  type="button"
-                  className="ams-doc-preview-close"
-                  onClick={handleClosePreview}
-                  aria-label="Close preview"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
+        <DocumentPreviewLightbox
+          previewDoc={previewDoc}
+          onClose={handleClosePreview}
+        />
+      )}
 
-            <div className="ams-doc-preview-body">
-              {previewDoc.loading ? (
-                <div className="doc-loading-container">
-                  <LoaderCircle size={28} className="doc-spin-icon" />
-                  <span>Loading document preview...</span>
-                </div>
-              ) : previewDoc.isPdf ? (
-                <div className="ams-doc-iframe-container">
-                  <iframe
-                    src={previewDoc.url}
-                    title={previewDoc.title || 'PDF Preview'}
-                    className="ams-doc-iframe"
-                  />
-                  <div className="ams-doc-fallback-bar">
-                    <span>Trouble viewing PDF?</span>
-                    <a
-                      href={previewDoc.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ams-doc-newtab-btn"
-                    >
-                      <ArrowUpRight size={13} /> Open in new tab
-                    </a>
-                  </div>
-                </div>
-              ) : (
-                <div className="ams-doc-image-container">
-                  <img
-                    src={previewDoc.url}
-                    alt={previewDoc.title || 'Preview'}
-                    className="ams-doc-image"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                      const errBox = document.getElementById('dir-doc-img-error');
-                      if (errBox) errBox.style.display = 'flex';
-                    }}
-                  />
-                  <div id="dir-doc-img-error" className="ams-doc-error-box" style={{ display: 'none' }}>
-                    <p>Unable to load image preview directly.</p>
-                    {previewDoc.url && (
-                      <a
-                        href={previewDoc.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="ams-doc-newtab-btn"
-                      >
-                        <ArrowUpRight size={14} /> Open Image in New Tab
-                      </a>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+      {/* Sublist Records Modal (View Customers / View Agents) */}
+      {sublistModal && (
+        <SublistRecordsModal
+          modalData={sublistModal}
+          onClose={() => setSublistModal(null)}
+        />
       )}
     </div>
   );
