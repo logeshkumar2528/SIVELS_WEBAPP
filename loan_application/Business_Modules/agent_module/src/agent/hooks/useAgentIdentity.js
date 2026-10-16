@@ -78,29 +78,156 @@ function getCachedAgentStorage(currentUser) {
   }
 }
 
-export function useAgentIdentity() {
-  const { currentUser } = useAuth();
-  
-  const isAgent = isAgentSession(currentUser);
-  const isUnauthorized = Boolean(currentUser && !isAgent);
+/**
+ * Safely parse JSON from localStorage without throwing.
+ */
+function safeGetItem(key) {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 
-  // Synchronously seed identity only if current user is an Agent
-  const directId = getDirectAgentId(currentUser);
-  const { cachedId, cachedData } = isAgent ? getCachedAgentStorage(currentUser) : { cachedId: null, cachedData: null };
+/**
+ * Extract numeric millisecond timestamp from an object.
+ */
+function getTimestampMs(obj) {
+  if (!obj || typeof obj !== 'object') return 0;
+  const ts = obj.loginTimestamp || obj.timestamp || obj.createdAt;
+  if (!ts) return 0;
+  const ms = new Date(ts).getTime();
+  return isNaN(ms) ? 0 : ms;
+}
+
+/**
+ * Determine the authoritative Agent session.
+ * Compares login recency against other role sessions in localStorage.
+ *
+ * Rules:
+ * 1. If currentUser is already a verified Agent session, return it as authoritative.
+ * 2. If currentUser represents another role (e.g. BackOffice), check if an authentic Agent
+ *    session was established MORE RECENTLY (by loginTimestamp).
+ *    - If Agent login is newer, restore and synchronize the Agent session.
+ *    - If non-Agent login is newer or equal, reject Agent access (isUnauthorized = true).
+ * 3. If currentUser is null or unassigned on refresh, check if agentAuth exists and is
+ *    newer or equal to any other module sessions.
+ */
+function resolveAuthoritativeAgentSession(currentUser) {
+  if (typeof window === 'undefined') {
+    return { session: null, isAgent: false, isUnauthorized: false, shouldSync: false };
+  }
+
+  // 1. If currentUser is actively and legitimately an Agent
+  if (currentUser && isAgentSession(currentUser)) {
+    return { session: currentUser, isAgent: true, isUnauthorized: false, shouldSync: false };
+  }
+
+  // 2. Read stored sessions
+  const agentAuth = safeGetItem('agentAuth');
+  const agentData = safeGetItem('agentData');
+  const rawAgentId = localStorage.getItem('agentId');
+
+  const boAuth = safeGetItem('backOfficeAuth');
+  const boData = safeGetItem('backOfficeData');
+  const rmAuth = safeGetItem('rmAuth') || safeGetItem('rmData');
+  const cmAuth = safeGetItem('creditManagerAuth') || safeGetItem('creditManagerData');
+  const chAuth = safeGetItem('creditHeadAuth') || safeGetItem('creditHeadData');
+  const amsAuth = safeGetItem('amsAuth') || safeGetItem('amsData');
+
+  const agentTs = Math.max(getTimestampMs(agentAuth), getTimestampMs(agentData));
+  const boTs = Math.max(getTimestampMs(boAuth), getTimestampMs(boData));
+  const rmTs = getTimestampMs(rmAuth);
+  const cmTs = getTimestampMs(cmAuth);
+  const chTs = getTimestampMs(chAuth);
+  const amsTs = getTimestampMs(amsAuth);
+  const currentTs = getTimestampMs(currentUser);
+
+  const maxNonAgentTs = Math.max(boTs, rmTs, cmTs, chTs, amsTs, currentTs);
+
+  const hasAgentRecord = Boolean(
+    (agentAuth && agentAuth.isAuthenticated) ||
+    agentData?.agentId || agentData?.AgentId || agentData?.agentCode ||
+    rawAgentId
+  );
+
+  // If currentUser is an explicit non-Agent role (e.g. BackOffice)
+  if (currentUser && !isAgentSession(currentUser)) {
+    // If Agent session was created strictly MORE RECENTLY than the non-Agent session:
+    if (hasAgentRecord && agentTs > 0 && agentTs > maxNonAgentTs) {
+      const restored = {
+        ...(agentData || {}),
+        ...(agentAuth || {}),
+        role: 'Agent',
+        agentId: agentAuth?.agentId || agentData?.agentId || rawAgentId,
+        agentCode: agentAuth?.agentCode || agentData?.agentCode || '',
+        fullName: agentAuth?.fullName || agentAuth?.name || agentData?.fullName || agentData?.name || '',
+      };
+      return { session: restored, isAgent: true, isUnauthorized: false, shouldSync: true };
+    }
+
+    // Otherwise, the non-Agent session is authoritative: strictly disallow Agent access
+    return { session: null, isAgent: false, isUnauthorized: true, shouldSync: false };
+  }
+
+  // If currentUser is null (e.g. initial refresh before state hydration or cleared currentUser)
+  if (hasAgentRecord) {
+    if (agentTs >= maxNonAgentTs) {
+      const restored = {
+        ...(agentData || {}),
+        ...(agentAuth || {}),
+        role: 'Agent',
+        agentId: agentAuth?.agentId || agentData?.agentId || rawAgentId,
+        agentCode: agentAuth?.agentCode || agentData?.agentCode || '',
+        fullName: agentAuth?.fullName || agentAuth?.name || agentData?.fullName || agentData?.name || '',
+      };
+      return { session: restored, isAgent: true, isUnauthorized: false, shouldSync: true };
+    } else {
+      // Non-agent session was more recent
+      return { session: null, isAgent: false, isUnauthorized: true, shouldSync: false };
+    }
+  }
+
+  return { session: null, isAgent: false, isUnauthorized: false, shouldSync: false };
+}
+
+export function useAgentIdentity() {
+  const { currentUser, setCurrentUser } = useAuth();
+  
+  const authResolution = resolveAuthoritativeAgentSession(currentUser);
+  const activeAgentUser = authResolution.session;
+  const isAgent = authResolution.isAgent;
+  const isUnauthorized = authResolution.isUnauthorized;
+
+  // Synchronously seed identity only if authoritative session is Agent
+  const directId = getDirectAgentId(activeAgentUser);
+  const { cachedId, cachedData } = isAgent ? getCachedAgentStorage(activeAgentUser) : { cachedId: null, cachedData: null };
   
   const initialAgentId = directId ? String(directId) : cachedId;
-  const initialAgentData = isAgent ? (cachedData || (directId ? currentUser : null)) : null;
+  const initialAgentData = isAgent ? (cachedData || (directId ? activeAgentUser : null)) : null;
 
   const [agentId, setAgentId] = useState(initialAgentId);
   const [agentData, setAgentData] = useState(initialAgentData);
   const [loading, setLoading] = useState(isAgent && !initialAgentId);
+
+  // Synchronize AuthContext if authoritative session needed restoration
+  useEffect(() => {
+    if (authResolution.shouldSync && activeAgentUser && setCurrentUser) {
+      setCurrentUser(activeAgentUser);
+      try {
+        localStorage.setItem('sivels_currentUser', JSON.stringify(activeAgentUser));
+      } catch {}
+    }
+  }, [authResolution.shouldSync, activeAgentUser, setCurrentUser]);
 
   useEffect(() => {
     let isMounted = true;
 
     async function fetchIdentity() {
       // If not logged in, or logged in as a non-Agent (RM, BackOffice, etc.), do not resolve agent identity
-      if (!currentUser || !isAgentSession(currentUser)) {
+      if (!isAgent || !activeAgentUser) {
         if (isMounted) {
           setAgentId(null);
           setAgentData(null);
@@ -109,13 +236,13 @@ export function useAgentIdentity() {
         return;
       }
 
-      const knownAgentId = currentUser.agentId ?? currentUser.AgentId ?? cachedId;
+      const knownAgentId = activeAgentUser.agentId ?? activeAgentUser.AgentId ?? cachedId;
 
       // Case A: If agentId is already known from login / auth session / verified storage
       if (knownAgentId) {
         if (isMounted) {
           setAgentId(String(knownAgentId));
-          setAgentData((prev) => prev || cachedData || currentUser);
+          setAgentData((prev) => prev || cachedData || activeAgentUser);
         }
         try {
           const detailsRes = await axiosInstance.get(`/AgentMaster/${knownAgentId}`);
@@ -124,7 +251,7 @@ export function useAgentIdentity() {
             if (details && typeof details === 'object' && !Array.isArray(details)) {
               setAgentData(details);
             } else {
-              setAgentData((prev) => prev || cachedData || currentUser);
+              setAgentData((prev) => prev || cachedData || activeAgentUser);
             }
           }
         } catch (detailErr) {
@@ -137,8 +264,8 @@ export function useAgentIdentity() {
             const found = Array.isArray(list) ? list.find((a) => {
               const aid = a.agentId ?? a.AgentId ?? a.id ?? a.Id;
               if (aid && String(aid) === String(knownAgentId)) return true;
-              if (currentUser?.mobileNumber) {
-                return isMobileMatch(extractRecordMobile(a), currentUser.mobileNumber);
+              if (activeAgentUser?.mobileNumber) {
+                return isMobileMatch(extractRecordMobile(a), activeAgentUser.mobileNumber);
               }
               return false;
             }) : null;
@@ -147,13 +274,13 @@ export function useAgentIdentity() {
               if (found) {
                 setAgentData(found);
               } else {
-                setAgentData((prev) => prev || cachedData || currentUser);
+                setAgentData((prev) => prev || cachedData || activeAgentUser);
               }
             }
           } catch (listErr) {
             console.error("Failed to fetch AgentMaster list fallback", listErr);
             if (isMounted) {
-              setAgentData((prev) => prev || cachedData || currentUser);
+              setAgentData((prev) => prev || cachedData || activeAgentUser);
             }
           }
         } finally {
@@ -165,7 +292,7 @@ export function useAgentIdentity() {
       }
 
       // Case B: Only if agentId is absent, fallback to scanning /AgentMaster with normalized mobile comparison
-      if (!currentUser.mobileNumber) {
+      if (!activeAgentUser.mobileNumber) {
         if (isMounted) {
           setAgentId(null);
           setAgentData(null);
@@ -180,7 +307,7 @@ export function useAgentIdentity() {
         const rawAgents = Array.isArray(agents) ? agents : (agents?.data || []);
         const match = Array.isArray(rawAgents) ? rawAgents.find((a) => {
           const recordMobile = extractRecordMobile(a);
-          return isMobileMatch(recordMobile, currentUser.mobileNumber);
+          return isMobileMatch(recordMobile, activeAgentUser.mobileNumber);
         }) : null;
 
         if (isMounted) {
@@ -224,7 +351,7 @@ export function useAgentIdentity() {
     return () => {
       isMounted = false;
     };
-  }, [currentUser]);
+  }, [currentUser, activeAgentUser, isAgent, cachedId]);
 
   return { agentId, agentData, loadingAgent: loading, isAgent, isUnauthorized };
 }

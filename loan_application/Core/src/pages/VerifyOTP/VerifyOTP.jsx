@@ -8,6 +8,126 @@ import { useAuth } from '../../context/AuthContext';
 import { useLoading } from '../../context/LoadingContext';
 import './VerifyOTP.css';
 
+function purgeConflictingRoleSessions(currentRole) {
+  const norm = String(currentRole || '').toLowerCase();
+  if (norm === 'agent') {
+    localStorage.removeItem('backOfficeAuth');
+    localStorage.removeItem('backOfficeData');
+    localStorage.removeItem('backOfficeId');
+    localStorage.removeItem('creditManagerAuth');
+    localStorage.removeItem('creditManagerData');
+    localStorage.removeItem('creditManagerId');
+    localStorage.removeItem('creditHeadAuth');
+    localStorage.removeItem('creditHeadData');
+    localStorage.removeItem('creditHeadId');
+    localStorage.removeItem('rmData');
+    localStorage.removeItem('rmId');
+    localStorage.removeItem('amsData');
+    localStorage.removeItem('amsId');
+    localStorage.removeItem('customerData');
+    localStorage.removeItem('customerId');
+  } else if (norm === 'backoffice' || norm === 'operations') {
+    localStorage.removeItem('agentAuth');
+    localStorage.removeItem('agentData');
+    localStorage.removeItem('agentId');
+    localStorage.removeItem('creditManagerAuth');
+    localStorage.removeItem('creditManagerData');
+    localStorage.removeItem('creditManagerId');
+    localStorage.removeItem('creditHeadAuth');
+    localStorage.removeItem('creditHeadData');
+    localStorage.removeItem('creditHeadId');
+    localStorage.removeItem('rmData');
+    localStorage.removeItem('rmId');
+    localStorage.removeItem('amsData');
+    localStorage.removeItem('amsId');
+    localStorage.removeItem('customerData');
+    localStorage.removeItem('customerId');
+  } else if (norm === 'rm' || norm === 'relationship') {
+    localStorage.removeItem('agentAuth');
+    localStorage.removeItem('agentData');
+    localStorage.removeItem('agentId');
+    localStorage.removeItem('backOfficeAuth');
+    localStorage.removeItem('backOfficeData');
+    localStorage.removeItem('backOfficeId');
+    localStorage.removeItem('creditManagerAuth');
+    localStorage.removeItem('creditManagerData');
+    localStorage.removeItem('creditManagerId');
+    localStorage.removeItem('creditHeadAuth');
+    localStorage.removeItem('creditHeadData');
+    localStorage.removeItem('creditHeadId');
+    localStorage.removeItem('amsData');
+    localStorage.removeItem('amsId');
+    localStorage.removeItem('customerData');
+    localStorage.removeItem('customerId');
+  } else if (norm === 'creditmanager' || norm === 'credit_manager') {
+    localStorage.removeItem('agentAuth');
+    localStorage.removeItem('agentData');
+    localStorage.removeItem('agentId');
+    localStorage.removeItem('backOfficeAuth');
+    localStorage.removeItem('backOfficeData');
+    localStorage.removeItem('backOfficeId');
+    localStorage.removeItem('creditHeadAuth');
+    localStorage.removeItem('creditHeadData');
+    localStorage.removeItem('creditHeadId');
+    localStorage.removeItem('rmData');
+    localStorage.removeItem('rmId');
+    localStorage.removeItem('amsData');
+    localStorage.removeItem('amsId');
+    localStorage.removeItem('customerData');
+    localStorage.removeItem('customerId');
+  } else if (norm === 'credithead' || norm === 'credit_head') {
+    localStorage.removeItem('agentAuth');
+    localStorage.removeItem('agentData');
+    localStorage.removeItem('agentId');
+    localStorage.removeItem('backOfficeAuth');
+    localStorage.removeItem('backOfficeData');
+    localStorage.removeItem('backOfficeId');
+    localStorage.removeItem('creditManagerAuth');
+    localStorage.removeItem('creditManagerData');
+    localStorage.removeItem('creditManagerId');
+    localStorage.removeItem('rmData');
+    localStorage.removeItem('rmId');
+    localStorage.removeItem('amsData');
+    localStorage.removeItem('amsId');
+    localStorage.removeItem('customerData');
+    localStorage.removeItem('customerId');
+  } else if (norm === 'customer') {
+    localStorage.removeItem('agentAuth');
+    localStorage.removeItem('agentData');
+    localStorage.removeItem('agentId');
+    localStorage.removeItem('backOfficeAuth');
+    localStorage.removeItem('backOfficeData');
+    localStorage.removeItem('backOfficeId');
+    localStorage.removeItem('creditManagerAuth');
+    localStorage.removeItem('creditManagerData');
+    localStorage.removeItem('creditManagerId');
+    localStorage.removeItem('creditHeadAuth');
+    localStorage.removeItem('creditHeadData');
+    localStorage.removeItem('creditHeadId');
+    localStorage.removeItem('rmData');
+    localStorage.removeItem('rmId');
+    localStorage.removeItem('amsData');
+    localStorage.removeItem('amsId');
+  } else if (norm === 'ams') {
+    localStorage.removeItem('agentAuth');
+    localStorage.removeItem('agentData');
+    localStorage.removeItem('agentId');
+    localStorage.removeItem('backOfficeAuth');
+    localStorage.removeItem('backOfficeData');
+    localStorage.removeItem('backOfficeId');
+    localStorage.removeItem('creditManagerAuth');
+    localStorage.removeItem('creditManagerData');
+    localStorage.removeItem('creditManagerId');
+    localStorage.removeItem('creditHeadAuth');
+    localStorage.removeItem('creditHeadData');
+    localStorage.removeItem('creditHeadId');
+    localStorage.removeItem('rmData');
+    localStorage.removeItem('rmId');
+    localStorage.removeItem('customerData');
+    localStorage.removeItem('customerId');
+  }
+}
+
 export default function VerifyOTP() {
   const OTP_LENGTH = CONSTANTS.OTP_LENGTH || 6;
 
@@ -206,15 +326,20 @@ export default function VerifyOTP() {
         }
 
         // 4. Construct user profile & set auth session
+        const loginTimestamp = new Date().toISOString();
         const userData = {
           ...resolvedAccount,
           mobileNumber: cleanMobile,
           role: resolvedModule,
+          loginTimestamp,
         };
 
         login(userData, result || {});
 
-        // 5. Persist common tokens & module-specific data
+        // 5. Cleanly purge stale sessions from conflicting modules
+        purgeConflictingRoleSessions(resolvedModule);
+
+        // 6. Persist common tokens & module-specific data
         const token = result?.token || result?.accessToken || result?.access_token || result?.data?.token;
         if (token) {
           localStorage.setItem('authToken', token);
@@ -227,6 +352,17 @@ export default function VerifyOTP() {
           if (agentId) {
             localStorage.setItem('agentId', String(agentId));
           }
+          localStorage.setItem('agentAuth', JSON.stringify({
+            isAuthenticated: true,
+            agentId: agentId ? Number(agentId) : null,
+            id: agentId ? Number(agentId) : null,
+            agentCode: resolvedAccount?.agentCode || resolvedAccount?.AgentCode || '',
+            name: resolvedAccount?.fullName || resolvedAccount?.name || '',
+            fullName: resolvedAccount?.fullName || resolvedAccount?.name || '',
+            role: 'Agent',
+            mobile: cleanMobile,
+            loginTimestamp,
+          }));
         } else if (resolvedModule === 'RM') {
           localStorage.setItem('rmData', JSON.stringify(resolvedAccount));
           const rmId = resolvedAccount?.rmId ?? resolvedAccount?.RMId ?? resolvedAccount?.id;

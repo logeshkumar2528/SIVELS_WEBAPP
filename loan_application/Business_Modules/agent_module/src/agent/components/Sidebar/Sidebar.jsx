@@ -49,6 +49,9 @@ function Sidebar({ isOpen = false, onClose, badgeCounts = {} }) {
     localStorage.removeItem('sivels_currentUser')
     localStorage.removeItem('sivels_permissions')
     localStorage.removeItem('sivels_roles')
+    localStorage.removeItem('agentAuth')
+    localStorage.removeItem('agentData')
+    localStorage.removeItem('agentId')
     window.location.href = '/login'
   }
 
