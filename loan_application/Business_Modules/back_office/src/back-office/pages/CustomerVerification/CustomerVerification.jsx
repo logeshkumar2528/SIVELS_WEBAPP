@@ -35,8 +35,7 @@ import { getBackOfficeAuth } from '../../auth/authStorage';
 import AssetBase from '../../components/AssetBase/AssetBase';
 import RtrCommonSheet from '../../components/RtrCommonSheet/RtrCommonSheet';
 import DeviationAssessment from '../../components/DeviationAssessment/DeviationAssessment';
-import CamReport from '../../components/CamReport/CamReport';
-import KfsReport from '../../components/KfsReport/KfsReport';
+import SanctionLetter from '../../components/SanctionLetter/SanctionLetter';
 import CustomerDocumentsPanel from '../../components/CustomerDocuments/CustomerDocumentsPanel';
 import CustomerProofVerificationSection from '../../components/CustomerDocuments/CustomerProofVerificationSection';
 import { CreditReturnAttentionStrip, CreditReturnSectionPanel } from '../../components/CreditReturnPanel/CreditReturnPanel';
@@ -258,15 +257,12 @@ const VERIFICATION_WORKFLOW_STEPS = [
   { id: 16, number: 16, visibleNum: '14', title: 'Eligibility Assessment', subtitle: '', group: 'CREDIT & ASSESSMENT' },
   { id: 21, number: 21, visibleNum: '15', title: 'Deviations', subtitle: '', group: 'CREDIT & ASSESSMENT' },
   { id: 17, number: 17, visibleNum: '16', title: 'Recommendation Sheet', subtitle: '', group: 'CREDIT & ASSESSMENT' },
-  { id: 23, number: 23, visibleNum: '17', title: 'CAM', subtitle: '', group: 'CREDIT & ASSESSMENT' },
-  { id: 24, number: 24, visibleNum: '18', title: 'KFS', subtitle: 'Key Facts Statement', group: 'CREDIT & ASSESSMENT' },
-  { id: 18, number: 18, visibleNum: '19', title: 'Final Action', subtitle: '', group: 'FINAL ACTION' },
+  { id: 18, number: 18, visibleNum: '17', title: 'Final Action', subtitle: '', group: 'FINAL ACTION' },
+  { id: 23, number: 23, visibleNum: '18', title: 'Sanction Letter', subtitle: '', group: 'SANCTION' },
 ];
 
 const FINAL_ACTION_STEP_ID = 18;
-const CAM_STEP_ID = 23;
-const KFS_STEP_ID = 24;
-const DOCUMENT_STEP_IDS = [FINAL_ACTION_STEP_ID, CAM_STEP_ID, KFS_STEP_ID];
+const SANCTION_LETTER_STEP_ID = 23;
 
 const WORKFLOW_ACTION_LABELS = {
   ReturnedToRM: '↩ Returned to RM (2 → 6)',
@@ -280,7 +276,7 @@ const WORKFLOW_ACTION_LABELS = {
 
 /** Sections the Credit Manager reviews (approve / reject / edit) before the final decision. */
 export const CREDIT_REVIEW_SECTIONS = VERIFICATION_WORKFLOW_STEPS
-  .filter((step) => !DOCUMENT_STEP_IDS.includes(step.id))
+  .filter((step) => step.id !== FINAL_ACTION_STEP_ID && step.id !== SANCTION_LETTER_STEP_ID)
   .map(({ id, visibleNum, title }) => ({ id, visibleNum, title }));
 
 /** Document sub-steps 2-7 all belong to the "Document Verification" section. */
@@ -308,9 +304,8 @@ const VISIBLE_TO_INTERNAL_STEP = {
   10: 16, // Eligibility Assessment
   11: 21, // Deviations
   12: 17, // Recommendation Sheet
-  13: 23, // CAM
-  14: 24, // KFS
-  15: 18, // Final Action
+  13: 18, // Final Action
+  14: 23, // Sanction Letter
 };
 
 /**
@@ -339,9 +334,8 @@ const INTERNAL_TO_VISIBLE_STEP = {
   16: 10, // Eligibility Assessment
   21: 11, // Deviations
   17: 12, // Recommendation Sheet
-  23: 13, // CAM
-  24: 14, // KFS
-  18: 15, // Final Action
+  18: 13, // Final Action
+  23: 14, // Sanction Letter
 };
 
 function resolveInternalStepFromQuery(stepParam) {
@@ -9124,7 +9118,8 @@ export default function CustomerVerification({
   const showSectionReview =
     isCreditManagerView &&
     !!sectionReview &&
-    !DOCUMENT_STEP_IDS.includes(reviewSectionId) &&
+    reviewSectionId !== FINAL_ACTION_STEP_ID &&
+    reviewSectionId !== SANCTION_LETTER_STEP_ID &&
     !!reviewSection;
   const isCmSectionLocked = showSectionReview && cmEditingSectionId !== reviewSectionId;
 
@@ -11420,7 +11415,7 @@ export default function CustomerVerification({
                 </div>
                 <div className="bo-cv-step-header-right">
                   {renderCreditReviewActions()}
-                  <span className="bo-cv-step-tag-pill">Step 01 of 15</span>
+                  <span className="bo-cv-step-tag-pill">Step 01 of 14</span>
                 </div>
               </div>
 
@@ -11461,7 +11456,7 @@ export default function CustomerVerification({
                 </div>
                 <div className="bo-cv-doc-header-right">
                   {renderCreditReviewActions()}
-                  <span className="bo-cv-step-tag-pill">Step 02 of 15</span>
+                  <span className="bo-cv-step-tag-pill">Step 02 of 14</span>
                 </div>
               </div>
 
@@ -12312,7 +12307,7 @@ export default function CustomerVerification({
                 </div>
                 <div className="bo-cv-step-header-right">
                   {renderCreditReviewActions()}
-                  <span className="bo-cv-step-tag-pill">Step 04 of 15</span>
+                  <span className="bo-cv-step-tag-pill">Step 04 of 14</span>
                 </div>
               </div>
 
@@ -12850,7 +12845,7 @@ export default function CustomerVerification({
                 </div>
                 <div className="bo-cv-step-header-right">
                   {renderCreditReviewActions()}
-                  <span className="bo-cv-step-tag-pill">Step 05 of 15</span>
+                  <span className="bo-cv-step-tag-pill">Step 05 of 14</span>
                 </div>
               </div>
 
@@ -12872,7 +12867,7 @@ export default function CustomerVerification({
                 </div>
                 <div className="bo-cv-step-header-right">
                   {renderCreditReviewActions()}
-                  <span className="bo-cv-step-tag-pill">Step 06 of 15</span>
+                  <span className="bo-cv-step-tag-pill">Step 06 of 14</span>
                 </div>
               </div>
 
@@ -17682,7 +17677,7 @@ export default function CustomerVerification({
                 </div>
                 <div className="bo-cv-step-header-right">
                   {renderCreditReviewActions()}
-                  <span className="bo-cv-step-tag-pill">Step 11 of 15</span>
+                  <span className="bo-cv-step-tag-pill">Step 11 of 14</span>
                 </div>
               </div>
               <DeviationAssessment
@@ -17709,7 +17704,7 @@ export default function CustomerVerification({
                 </div>
                 <div className="bo-cv-step-header-right">
                   {renderCreditReviewActions()}
-                  <span className="bo-cv-step-tag-pill">Step 12 of 15</span>
+                  <span className="bo-cv-step-tag-pill">Step 12 of 14</span>
                 </div>
               </div>
 
@@ -17791,6 +17786,28 @@ export default function CustomerVerification({
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
+              STEP 14: SANCTION LETTER
+          ══════════════════════════════════════════════════════════════════ */}
+          {activeStep === SANCTION_LETTER_STEP_ID && (
+            <div className="bo-cv-step-panel bo-cv-view-form-panel">
+              <div className="bo-cv-step-panel-header">
+                <div className="bo-cv-step-header-left">
+                  <div className="bo-cv-step-badge-num">14</div>
+                  <div>
+                    <h2 className="bo-cv-step-panel-title">Sanction Letter</h2>
+                    <p className="bo-cv-step-panel-desc">
+                      Sivels Finance sanction letter generated from this application&apos;s details.
+                    </p>
+                  </div>
+                </div>
+                <span className="bo-cv-step-tag-pill">Step 14 of 14</span>
+              </div>
+
+              <SanctionLetter verificationData={verificationData} coApplicants={coApplicants} />
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
               STEP 16: FINAL APPLICATION ACTION (APPLICATION WORKFLOW)
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 18 && (
@@ -17802,7 +17819,7 @@ export default function CustomerVerification({
                     <h2 className="bo-cv-step-panel-title">Final Application Action &amp; Disposition</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 15 of 15</span>
+                <span className="bo-cv-step-tag-pill">Step 13 of 14</span>
               </div>
 
               {/* Action Feedback Banner */}
