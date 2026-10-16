@@ -1,4 +1,4 @@
-.ams-dashboard-shell{display:flex;min-height:100vh;background:#f7faf8}.ams-sidebar{position:fixed;inset:0 auto 0 0;z-index:120;width:244px;padding:18px 13px 14px;background:#123b2b;border-right:1px solid #0f3024;color:#d9f0df;display:flex;flex-direction:column}.ams-sidebar-brand{display:flex;align-items:center;gap:9px;height:52px;padding:0 8px;border-bottom:1px solid #ffffff18}.ams-sidebar-brand img{width:32px;height:32px;object-fit:contain;border-radius:5px}.ams-sidebar-brand strong,.ams-sidebar-brand small{display:block}.ams-sidebar-brand strong{color:#fff;font-size:15px;letter-spacing:.08em}.ams-sidebar-brand small{margin-top:2px;color:#9ecb8f;font-size:9px;letter-spacing:.18em}.ams-sidebar-profile{display:flex;align-items:center;gap:9px;margin:18px 7px 25px;padding:11px 9px;border:1px solid #ffffff18;border-radius:11px;background:#ffffff0d}.ams-sidebar-avatar{display:grid;place-items:center;width:31px;height:31px;border-radius:9px;background:#24a148;color:#fff;font-size:10px;font-weight:800}.ams-sidebar-profile strong,.ams-sidebar-profile small{display:block}.ams-sidebar-profile strong{font-size:12px;color:#fff}.ams-sidebar-profile small{margin-top:3px;color:#9fbea8;font-size:10px}.ams-sidebar-nav{display:flex;flex-direction:column;gap:4px}.ams-sidebar-label{padding:0 12px 8px;color:#83aa8f;font-size:9px;font-weight:800;letter-spacing:.13em}.ams-sidebar-nav button,.ams-sidebar-logout{display:flex;align-items:center;gap:10px;width:100%;min-height:41px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:#b7d2be;text-align:left;font-size:12px;font-weight:600}.ams-sidebar-nav button:hover,.ams-sidebar-nav button.is-active{background:#ffffff18;color:#fff}.ams-sidebar-nav button.is-active{box-shadow:inset 3px 0 #5bd17b}.ams-sidebar-nav button b{margin-left:auto;padding:2px 7px;border-radius:999px;background:#f7c75d;color:#523500;font-size:10px}.ams-sidebar-bottom{display:flex;flex-direction:column;gap:12px;margin-top:auto}.ams-sidebar-scope{display:flex;align-items:flex-start;gap:8px;padding:11px 9px;border-radius:10px;background:#0d3022;color:#8be1a1}.ams-sidebar-scope span{display:block}.ams-sidebar-scope strong,.ams-sidebar-scope small{display:block}.ams-sidebar-scope strong{color:#d9f0df;font-size:10px}.ams-sidebar-scope small{margin-top:3px;color:#83aa8f;font-size:9px}.ams-sidebar-logout{color:#9fbea8!important}.ams-sidebar-logout:hover{background:#ffffff12;color:#fff!important}.ams-dashboard-page{width:calc(100% - 244px);margin-left:244px;max-width:1280px;padding:30px 30px 52px;background:#f7faf8;color:#172033;min-height:100vh}.ams-mobile-menu,.ams-sidebar-backdrop{display:none}
+.ams-dashboard-shell{display:flex;min-height:100vh;background:#f7faf8}.ams-sidebar{position:fixed;inset:0 auto 0 0;z-index:120;width:244px;padding:18px 13px 14px;background:#123b2b;border-right:1px solid #0f3024;color:#d9f0df;display:flex;flex-direction:column}.ams-sidebar-brand{display:flex;align-items:center;gap:9px;height:52px;padding:0 8px;border-bottom:1px solid #ffffff18}.ams-sidebar-brand img{width:32px;height:32px;object-fit:contain;border-radius:5px}.ams-sidebar-brand strong,.ams-sidebar-brand small{display:block}.ams-sidebar-brand strong{color:#fff;font-size:15px;letter-spacing:.08em}.ams-sidebar-brand small{margin-top:2px;color:#9ecb8f;font-size:9px;letter-spacing:.18em}.ams-sidebar-profile{display:flex;align-items:center;gap:9px;margin:18px 7px 25px;padding:11px 9px;border:1px solid #ffffff18;border-radius:11px;background:#ffffff0d}.ams-sidebar-avatar{display:grid;place-items:center;width:31px;height:31px;border-radius:9px;background:#24a148;color:#fff;font-size:10px;font-weight:800}.ams-sidebar-profile strong,.ams-sidebar-profile small{display:block}.ams-sidebar-profile strong{font-size:12px;color:#fff}.ams-sidebar-profile small{margin-top:3px;color:#9fbea8;font-size:10px}.ams-sidebar-nav{display:flex;flex-direction:column;gap:4px}.ams-sidebar-label{padding:0 12px 8px;color:#83aa8f;font-size:9px;font-weight:800;letter-spacing:.13em}.ams-sidebar-nav button,.ams-sidebar-logout{display:flex;align-items:center;gap:10px;width:100%;min-height:41px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:#b7d2be;text-align:left;font-size:12px;font-weight:600}.ams-sidebar-nav button:hover,.ams-sidebar-nav button.is-active{background:#ffffff18;color:#fff}.ams-sidebar-nav button.is-active{box-shadow:inset 3px 0 #5bd17b}.ams-sidebar-nav button b{margin-left:auto;padding:2px 7px;border-radius:999px;background:#f7c75d;color:#523500;font-size:10px}.ams-sidebar-bottom{display:flex;flex-direction:column;gap:12px;margin-top:auto}.ams-sidebar-scope{display:flex;align-items:flex-start;gap:8px;padding:11px 9px;border-radius:10px;background:#0d3022;color:#8be1a1}.ams-sidebar-scope span{display:block}.ams-sidebar-scope strong,.ams-sidebar-scope small{display:block}.ams-sidebar-scope strong{color:#d9f0df;font-size:10px}.ams-sidebar-scope small{margin-top:3px;color:#83aa8f;font-size:9px}.ams-sidebar-logout{color:#9fbea8!important}.ams-sidebar-logout:hover{background:#ffffff12;color:#fff!important}.ams-dashboard-page{box-sizing:border-box;min-width:0;width:calc(100% - 244px);margin-left:244px;max-width:1280px;padding:30px 30px 52px;background:#f7faf8;color:#172033;min-height:100vh}.ams-mobile-menu,.ams-sidebar-backdrop{display:none}
 .ams-dashboard-hero{display:flex;justify-content:space-between;gap:30px;padding:30px;border:1px solid #d9eadf;border-radius:22px;background:linear-gradient(125deg,#f4fcf6 0%,#fff 58%,#eef8f1 100%);box-shadow:0 10px 30px #164e2b0d;margin-bottom:20px}
 .ams-dashboard-hero-copy{max-width:760px}.ams-dashboard-eyebrow{display:inline-flex;align-items:center;gap:7px;color:#198038;font-size:11px;font-weight:800;letter-spacing:.12em}.ams-dashboard-hero h1{margin:9px 0 7px;font-size:30px;letter-spacing:-.035em;color:#0f172a}.ams-dashboard-hero p{margin:0;color:#64748b;font-size:14px}.ams-scope-line{display:flex;align-items:center;gap:8px;margin-top:17px;color:#14532d;font-size:12px;font-weight:700}.ams-scope-line span{color:#aac9b2}.ams-dashboard-hero-side{display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:18px}.ams-account-badge{display:flex;align-items:center;gap:10px}.ams-account-avatar{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:#198038;color:#fff;font-weight:800;font-size:13px}.ams-account-badge strong,.ams-account-badge small{display:block}.ams-account-badge strong{font-size:13px}.ams-account-badge small{margin-top:3px;color:#64748b;font-size:11px}.ams-refresh-button{display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:0 12px;border:1px solid #cce3d2;border-radius:8px;background:#fff;color:#198038;font-size:12px;font-weight:700}.ams-refresh-button:hover{background:#effaf2}
 .ams-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}.ams-summary-card{position:relative;padding:18px;border:1px solid #e0e8e3;border-radius:16px;background:#fff;min-height:116px;overflow:hidden}.ams-summary-card:after{content:"";position:absolute;right:-24px;bottom:-28px;width:94px;height:94px;border-radius:50%;background:#f3f9f4}.ams-summary-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;margin-bottom:12px}.ams-summary-card span{display:block;color:#64748b;font-size:12px}.ams-summary-card strong{display:block;margin:3px 0;color:#0f172a;font-size:25px;letter-spacing:-.03em}.ams-summary-card small{color:#94a3b8;font-size:11px}.ams-summary-card.is-green .ams-summary-icon{background:#defbe6;color:#198038}.ams-summary-card.is-blue .ams-summary-icon{background:#e5f6ff;color:#0072c3}.ams-summary-card.is-orange .ams-summary-icon{background:#fff4d6;color:#a86400}.ams-summary-card.is-red .ams-summary-icon{background:#fff1f1;color:#c62828}
@@ -64,4 +64,371 @@
 .ams-avatar-edit-btn:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+/* ==========================================================================
+   ASM MY PROFILE — FULL-PAGE DESIGN 4 SAGE GREEN STYLES
+   Visual reference: RM Profile (/rm/profile)
+   ========================================================================== */
+
+.asm-profile-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.asm-profile-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  background: #ffffff;
+  border: 1px solid #d9eadf;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(20, 83, 45, 0.04);
+}
+
+.asm-profile-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  background: #f0f7f2;
+  border: 1px solid #cce3d2;
+  border-radius: 8px;
+  color: #16533d;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.asm-profile-back-btn:hover {
+  background: #16533d;
+  color: #ffffff;
+  border-color: #16533d;
+}
+
+.asm-profile-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #16533d;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.asm-profile-grid-layout {
+  display: grid;
+  grid-template-columns: 290px minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* LEFT — Dark-green employee identity panel */
+.asm-identity-panel {
+  background: linear-gradient(165deg, #092615 0%, #0d381e 50%, #082112 100%);
+  border: 1px solid rgba(74, 222, 128, 0.22);
+  border-radius: 16px;
+  padding: 24px 20px;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-shadow: 0 8px 24px -4px rgba(9, 38, 21, 0.35);
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.asm-identity-avatar-wrap {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  margin-bottom: 14px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.asm-identity-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.asm-identity-initials {
+  font-size: 32px;
+  font-weight: 700;
+  color: #86efac;
+  letter-spacing: 0.05em;
+  user-select: none;
+}
+
+.asm-identity-name {
+  font-size: 19px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 6px 0;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.asm-identity-code-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: #bbf7d0;
+  margin-bottom: 8px;
+}
+
+.asm-identity-role {
+  font-size: 13px;
+  color: #86efac;
+  font-weight: 600;
+  margin: 0 0 10px 0;
+}
+
+.asm-identity-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 16px;
+}
+
+.asm-identity-status-pill.is-active {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.35);
+}
+
+.asm-identity-status-pill.is-inactive {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.asm-identity-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.asm-identity-divider {
+  width: 100%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  margin-bottom: 16px;
+}
+
+.asm-identity-meta-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.asm-identity-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.asm-identity-meta-icon {
+  color: #86efac;
+  flex-shrink: 0;
+}
+
+.asm-identity-meta-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.asm-identity-meta-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+}
+
+.asm-identity-meta-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* RIGHT — Unified Sage-Green information panel */
+.asm-sage-panel {
+  background-color: #EAF2EB;
+  border: 1px solid #D5E3D8;
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  box-shadow: 0 4px 16px rgba(23, 74, 47, 0.05);
+  min-width: 0;
+}
+
+.asm-sage-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.asm-sage-section-header {
+  background-color: #D9E9DE;
+  border-bottom: 1px solid #D5E3D8;
+  border-top: 1px solid #D5E3D8;
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.asm-sage-section:first-child .asm-sage-section-header {
+  border-top: none;
+}
+
+.asm-sage-section-header h3 {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #174A2F;
+  margin: 0;
+}
+
+.asm-sage-section-icon {
+  color: #174A2F;
+  flex-shrink: 0;
+}
+
+.asm-sage-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 11px 18px;
+  border-bottom: 1px solid #D5E3D8;
+  align-items: center;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.asm-sage-row-alt-1 {
+  background-color: #F4F8F4;
+}
+
+.asm-sage-row-alt-2 {
+  background-color: #EAF2EB;
+}
+
+.asm-sage-section:last-child .asm-sage-row:last-child {
+  border-bottom: none;
+}
+
+.asm-sage-field-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.asm-sage-col-full {
+  grid-column: span 2;
+}
+
+.asm-sage-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #527964;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.asm-sage-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #173B28;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+.asm-sage-value.monospace {
+  font-family: monospace;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+}
+
+.asm-districts-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.asm-district-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: #D9E9DE;
+  color: #174A2F;
+  border: 1px solid #C4DBCB;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 1024px) {
+  .asm-profile-grid-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .asm-sage-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .asm-sage-col-full {
+    grid-column: span 1;
+  }
 }

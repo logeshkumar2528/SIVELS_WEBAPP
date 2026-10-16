@@ -159,6 +159,9 @@ export function Navbar() {
     localStorage.removeItem('sivels_currentUser');
     localStorage.removeItem('sivels_permissions');
     localStorage.removeItem('sivels_roles');
+    localStorage.removeItem('creditHeadAuth');
+    localStorage.removeItem('creditHeadData');
+    localStorage.removeItem('creditHeadId');
     window.location.href = '/login';
   };
 
@@ -214,7 +217,30 @@ export function Navbar() {
 
   const goBack = () => window.history.length > 1 ? navigate(-1) : navigate('/dashboard');
 
-  const isAmsDashboard = location.pathname.includes('ams-dashboard') || isAmsUser;
+  const isAmsDashboard = location.pathname.includes('ams-dashboard');
+
+  const directoryRoutes = [
+    '/agents',
+    '/relationship-managers',
+    '/back-office',
+    '/ams',
+    '/credit-managers',
+    '/credit-heads',
+    '/customers',
+    '/master/agents',
+    '/master/relationship-managers',
+    '/master/back-office',
+    '/master/ams',
+    '/master/credit-managers',
+    '/master/credit-heads',
+    '/master/customers'
+  ];
+
+  const normalizedPath = location.pathname.replace(/\/+$/, '');
+
+  const isDirectoryPage = directoryRoutes.includes(normalizedPath);
+
+  const showNavBack = location.pathname !== '/dashboard' && !location.pathname.endsWith('/dashboard') && !isDirectoryPage;
 
   return (
     <nav className="top-navbar">
@@ -239,7 +265,11 @@ export function Navbar() {
 
         {!isAmsDashboard && (
           <div className={`navbar-navigation ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
-            {location.pathname !== '/dashboard' && <button className="nav-back" onClick={goBack}><ArrowLeft size={16} /> Back</button>}
+            {showNavBack && (
+              <button className="nav-back" onClick={goBack}>
+                <ArrowLeft size={16} /> Back
+              </button>
+            )}
             <NavLink
               to="/dashboard"
               className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}

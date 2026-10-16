@@ -8,7 +8,7 @@ export {
   getIstCalendarDateString,
   getIstTodayDateString,
   getIstNDaysAgoDateString,
-  isWithinLast7CalendarDays,
+  isWithinLast30CalendarDays,
   isWithinDateRange,
   matchesListingDateCriteria,
 } from '../../../../Core/src/utils/dateHelper';
