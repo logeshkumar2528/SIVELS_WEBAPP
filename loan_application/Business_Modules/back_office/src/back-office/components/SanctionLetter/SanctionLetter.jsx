@@ -8,13 +8,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { Download } from 'lucide-react';
+import { Download, Printer } from 'lucide-react';
 import backOfficeService from '../../api/backOfficeService';
 import SivelsLogo from '../../../../../../Core/src/assets/branding/SivelsFinanceLogo.jpg';
 import './SanctionLetter.css';
 
 const COMPANY = 'Sivels Holdings (P) Ltd';
 const COMPANY_ADDRESS = 'New No. 86, Old No. 1091, Periyar EVR High Road, Chennai - 600007.';
+const COMPANY_CIN = 'U65921TN2012PTC084410';
 const COMPANY_GSTIN = '33AARCS0202L1ZF';
 const PAGE_FOOTER = 'Signed, Stamped and Accepted by all the Borrower(s)/Co-Applicant(s)/Guarantor(s)';
 const EMPTY = '—';
@@ -377,6 +378,7 @@ export default function SanctionLetter({
 }) {
   const pageRefs = useRef([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [downloadError, setDownloadError] = useState('');
   const [savedPdSheet, setSavedPdSheet] = useState(null);
   const [pdSheetLoading, setPdSheetLoading] = useState(false);
@@ -423,28 +425,82 @@ export default function SanctionLetter({
     pageRefs.current[index] = el;
   };
 
-  const handleDownload = async () => {
-    if (isGenerating) return;
-    setIsGenerating(true);
-    setDownloadError('');
+  const capturePages = async () => {
     // html2canvas measures the text baseline with a hidden <img> on the live document; Tailwind's
-    // `img { display: block }` skews that measurement and shifts all text down in the PDF.
+    // `img { display: block }` skews that measurement and shifts all text down in the output.
     const metricsFix = document.createElement('style');
     metricsFix.textContent =
       'body > div[style*="visibility: hidden"][style*="white-space: nowrap"] > img { display: inline !important; }';
     document.head.appendChild(metricsFix);
     try {
+      const canvases = [];
+      for (const page of pageRefs.current.filter(Boolean)) {
+        canvases.push(
+          await html2canvas(page, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false })
+        );
+      }
+      return canvases;
+    } finally {
+      metricsFix.remove();
+    }
+  };
+
+  const handlePrint = async () => {
+    if (isGenerating) return;
+    setIsGenerating(true);
+    setIsPrinting(true);
+    setDownloadError('');
+    try {
+      const canvases = await capturePages();
+      const images = canvases.map((canvas) => canvas.toDataURL('image/jpeg', 0.95));
+
+      const frame = document.createElement('iframe');
+      frame.setAttribute('aria-hidden', 'true');
+      Object.assign(frame.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0' });
+      document.body.appendChild(frame);
+
+      const doc = frame.contentDocument;
+      doc.open();
+      doc.write(`<!DOCTYPE html><html><head><title>Sanction Letter ${data.refNo || ''}</title><style>
+        @page { size: A4 portrait; margin: 0; }
+        html, body { margin: 0; padding: 0; }
+        .page { width: 210mm; height: 297mm; display: flex; justify-content: center; align-items: flex-start;
+          page-break-after: always; break-after: page; overflow: hidden; }
+        .page:last-child { page-break-after: auto; break-after: auto; }
+        img { max-width: 210mm; max-height: 297mm; }
+      </style></head><body>${images.map((src) => `<div class="page"><img src="${src}" /></div>`).join('')}</body></html>`);
+      doc.close();
+
+      await Promise.all(
+        Array.from(doc.images).map((img) =>
+          img.complete ? Promise.resolve() : new Promise((resolve) => { img.onload = resolve; img.onerror = resolve; })
+        )
+      );
+      const cleanup = () => setTimeout(() => frame.remove(), 500);
+      frame.contentWindow.addEventListener('afterprint', cleanup, { once: true });
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+      setTimeout(() => frame.isConnected && frame.remove(), 60000);
+    } catch (err) {
+      console.error('[SanctionLetter] Print failed:', err);
+      setDownloadError('Failed to prepare the Sanction Letter for printing. Please try again.');
+    } finally {
+      setIsPrinting(false);
+      setIsGenerating(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (isGenerating) return;
+    setIsGenerating(true);
+    setDownloadError('');
+    try {
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
       const pageWidth = 210;
       const pageHeight = 297;
-      const pages = pageRefs.current.filter(Boolean);
-      for (let i = 0; i < pages.length; i += 1) {
-        const canvas = await html2canvas(pages[i], {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          logging: false,
-        });
+      const canvases = await capturePages();
+      for (let i = 0; i < canvases.length; i += 1) {
+        const canvas = canvases[i];
         let imgWidth = pageWidth;
         let imgHeight = (canvas.height * pageWidth) / canvas.width;
         if (imgHeight > pageHeight) {
@@ -468,7 +524,6 @@ export default function SanctionLetter({
       console.error('[SanctionLetter] PDF generation failed:', err);
       setDownloadError('Failed to generate the Sanction Letter PDF. Please try again.');
     } finally {
-      metricsFix.remove();
       setIsGenerating(false);
     }
   };
@@ -486,9 +541,18 @@ export default function SanctionLetter({
     <div className="sl-wrapper">
       <div className="sl-controls">
         {downloadError && <span className="sl-error">{downloadError}</span>}
+        <button
+          type="button"
+          className="sl-download-btn sl-print-btn"
+          onClick={handlePrint}
+          disabled={isGenerating}
+        >
+          <Printer size={14} />
+          <span>{isPrinting ? 'Preparing...' : 'Print'}</span>
+        </button>
         <button type="button" className="sl-download-btn" onClick={handleDownload} disabled={isGenerating}>
           <Download size={14} />
-          <span>{isGenerating ? 'Generating PDF...' : 'Download PDF'}</span>
+          <span>{isGenerating && !isPrinting ? 'Generating PDF...' : 'Download PDF'}</span>
         </button>
       </div>
 
@@ -502,6 +566,7 @@ export default function SanctionLetter({
               <div>
                 <strong>{COMPANY}</strong>
                 <span>Registered Office: {COMPANY_ADDRESS}</span>
+                <span>CIN: {COMPANY_CIN}</span>
                 <span>GSTIN: {COMPANY_GSTIN}</span>
               </div>
             </div>

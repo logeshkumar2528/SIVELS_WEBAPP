@@ -32,6 +32,12 @@
   cursor: pointer;
 }
 
+.sl-print-btn {
+  background-color: #ffffff;
+  color: var(--color-primary, #0F7A4C);
+  border: 1px solid var(--color-primary, #0F7A4C);
+}
+
 .sl-download-btn:hover:not(:disabled) {
   filter: brightness(0.92);
 }
