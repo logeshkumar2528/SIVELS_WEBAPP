@@ -105,7 +105,12 @@ function KfsPage({ children }) {
   );
 }
 
-function ScheduleTable({ rows }) {
+function ScheduleTable({ rows, totalRows = rows, showTotals = false }) {
+  const totals = totalRows.reduce((sum, row) => ({
+    interest: sum.interest + Number(row.interest || 0),
+    principal: sum.principal + Number(row.principal || 0),
+    emi: sum.emi + Number(row.emi || 0),
+  }), { interest: 0, principal: 0, emi: 0 });
   return (
     <table className="kfs-table kfs-schedule">
       <thead>
@@ -134,6 +139,17 @@ function ScheduleTable({ rows }) {
           ))
         )}
       </tbody>
+      {showTotals && rows.length > 0 && (
+        <tfoot>
+          <tr>
+            <th colSpan={2}>Total</th>
+            <th>{totals.interest.toLocaleString('en-IN')}</th>
+            <th>{totals.principal.toLocaleString('en-IN')}</th>
+            <th>{totals.emi.toLocaleString('en-IN')}</th>
+            <th>—</th>
+          </tr>
+        </tfoot>
+      )}
     </table>
   );
 }
@@ -817,12 +833,12 @@ export default function KfsReport({ verificationData, applicationProductDetailsI
           </table>
 
           <p className="kfs-schedule-title">Repayment Schedule/Amortization Schedule</p>
-          <ScheduleTable rows={firstScheduleRows} />
+          <ScheduleTable rows={firstScheduleRows} totalRows={totals.schedule} showTotals={restScheduleRows.length === 0} />
         </KfsPage>
 
         {schedulePages.map((rows, idx) => (
           <KfsPage key={`schedule-${idx}`}>
-            <ScheduleTable rows={rows} />
+            <ScheduleTable rows={rows} totalRows={totals.schedule} showTotals={idx === schedulePages.length - 1} />
           </KfsPage>
         ))}
 
