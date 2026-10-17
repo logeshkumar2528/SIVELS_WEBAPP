@@ -8,6 +8,7 @@ export const MASTER_DASHBOARD     = '/master/dashboard';
 export const BACKOFFICE_DASHBOARD = '/backoffice/dashboard';
 export const CREDIT_MANAGER_DASHBOARD = '/credit';
 export const CREDIT_HEAD_DASHBOARD = '/credit-head/dashboard';
+export const WALLET_DASHBOARD     = '/aadhaar-wallet';
 
 /**
  * Normalizes any mobile number string to 10 digits for consistent comparison:
@@ -185,9 +186,9 @@ export async function detectAccountModule(mobileNumber) {
   }
 
   // Fetch all master APIs concurrently
-  let agentRes, rmRes, amsRes, customerRes, backOfficeRes, creditManagerRes, creditHeadRes;
+  let agentRes, rmRes, amsRes, customerRes, backOfficeRes, creditManagerRes, creditHeadRes, walletRes;
   try {
-    [agentRes, rmRes, amsRes, customerRes, backOfficeRes, creditManagerRes, creditHeadRes] = await Promise.allSettled([
+    [agentRes, rmRes, amsRes, customerRes, backOfficeRes, creditManagerRes, creditHeadRes, walletRes] = await Promise.allSettled([
       axiosInstance.get('/AgentMaster'),
       axiosInstance.get('/RMMaster'),
       axiosInstance.get('/AMSMaster'),
@@ -195,6 +196,7 @@ export async function detectAccountModule(mobileNumber) {
       axiosInstance.get('/BackOfficeMaster'),
       axiosInstance.get('/CreditManagerMaster'),
       axiosInstance.get('/CreditHeadMaster'),
+      axiosInstance.get(`/wallet/access/${encodeURIComponent(normalizedMobile)}`, { withCredentials: true }),
     ]);
   } catch (err) {
     console.error('[ModuleDetection] Network error fetching masters:', err);
@@ -215,6 +217,18 @@ export async function detectAccountModule(mobileNumber) {
   const backOfficeData = unwrapResponse(backOfficeRes);
   const creditManagerData = unwrapResponse(creditManagerRes);
   const creditHeadData = unwrapResponse(creditHeadRes);
+  const walletAccess = walletRes.status === 'fulfilled' ? walletRes.value?.data : null;
+
+  if (walletAccess?.hasAccess === true && walletAccess?.canViewWallet !== false) {
+    return {
+      status: 'FOUND',
+      role: 'Wallet',
+      module: 'AadhaarWallet',
+      destination: WALLET_DASHBOARD,
+      accountData: { mobileNumber: normalizedMobile, fullName: walletAccess.fullName || '', ...walletAccess },
+      error: null,
+    };
+  }
 
   console.log("CreditHead API response:", creditHeadData);
   console.log("BackOffice API response:", backOfficeData);
@@ -224,7 +238,7 @@ export async function detectAccountModule(mobileNumber) {
   console.log("AMS API response:", amsData);
 
   // Check if all master lookups failed to connect
-  const anyFulfilled = [agentRes, rmRes, amsRes, customerRes, backOfficeRes, creditManagerRes, creditHeadRes].some((r) => r.status === 'fulfilled');
+  const anyFulfilled = [agentRes, rmRes, amsRes, customerRes, backOfficeRes, creditManagerRes, creditHeadRes, walletRes].some((r) => r.status === 'fulfilled');
   if (!anyFulfilled) {
     if (normalizedMobile === '9345638126') {
       return {
