@@ -1,3 +1,13 @@
+/* Key Facts Statement — View Form palette on the shared CAM page canvas */
+
+.kfs-report {
+  --kfs-primary: var(--color-primary, #0f7a4c);
+  --kfs-primary-light: #eaf5ee;
+  --kfs-border: #94a3b8;
+  --kfs-text: #0f172a;
+  --kfs-label: #334155;
+}
+
 .kfs-notice {
   padding: 10px 14px;
   border-radius: var(--radius-md, 8px);
@@ -7,55 +17,272 @@
   font-weight: var(--font-weight-semibold, 600);
 }
 
+/* ── Page ──────────────────────────────────────────────── */
+
+.cam-page.kfs-page {
+  padding: 26px 40px 36px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--kfs-text);
+  border: none;
+  border-radius: 0;
+}
+
+.cam-page.kfs-page::after {
+  display: none;
+}
+
+.kfs-page-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+
+.kfs-header-logo {
+  height: 42px;
+  width: auto;
+}
+
+.kfs-page-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kfs-page-body > * {
+  margin: 0 !important;
+}
+
+/* ── Headings ──────────────────────────────────────────── */
+
 .kfs-date {
-  margin: 0;
   text-align: right;
-  font-weight: var(--font-weight-semibold, 600);
+  font-weight: 700;
+  text-decoration: underline;
 }
 
 .kfs-title {
-  margin: 4px 0 12px;
+  margin-top: 18px !important;
   text-align: center;
-  font-size: 18px;
-  font-weight: var(--font-weight-bold, 700);
-  color: var(--cam-primary);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  color: var(--kfs-text);
 }
 
-.kfs-numbered .kfs-no {
-  width: 22px;
+.kfs-part-title,
+.kfs-schedule-title,
+.kfs-annexure-title {
   text-align: center;
-  font-weight: var(--font-weight-bold, 700);
-  background: var(--cam-primary-light);
+  text-decoration: underline;
 }
 
-.kfs-numbered th {
-  width: 24%;
+.kfs-part-title {
+  margin: 8px 0 !important;
+}
+
+.kfs-schedule-title {
+  margin-top: 14px !important;
+  font-size: 11.5px;
+  text-decoration: none;
+}
+
+.kfs-annexure-title {
+  font-weight: 700;
+  text-decoration: none;
+  margin-bottom: 8px !important;
+}
+
+/* ── Tables ────────────────────────────────────────────── */
+
+.kfs-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.kfs-table th,
+.kfs-table td {
+  border: 1px solid var(--kfs-border);
+  padding: 5px 8px;
+  vertical-align: middle;
+  text-align: left;
+  word-wrap: break-word;
+}
+
+.kfs-table thead th {
+  background: var(--kfs-primary-light);
+  font-weight: 700;
+  text-align: center;
+}
+
+.kfs-no {
+  text-align: center !important;
+}
+
+.kfs-col-no {
+  width: 6%;
+}
+
+.kfs-col-label {
+  width: 47%;
+}
+
+.kfs-col-p1a {
+  width: 26%;
+}
+
+.kfs-col-p1b {
+  width: 21%;
+}
+
+.kfs-col-p1c {
+  width: 18%;
+}
+
+.kfs-col-fee-name {
+  width: 18%;
+}
+
+.kfs-col-gro {
+  width: 28%;
+}
+
+.kfs-strong {
+  font-weight: 700;
+}
+
+.kfs-center,
+.kfs-center-all td {
+  text-align: center !important;
+}
+
+.kfs-indent {
+  padding-left: 28px;
+}
+
+.kfs-gap {
+  margin-top: 10px;
+}
+
+.kfs-floating td {
+  text-align: center;
+}
+
+.kfs-floating thead th {
+  font-weight: 400;
+}
+
+.kfs-fees td:nth-child(n + 3) {
+  text-align: center;
+}
+
+.kfs-fees thead th {
+  font-weight: 400;
+}
+
+/* Table nested inside a cell: outer edges hidden so it sits flush in the cell */
+.kfs-table .kfs-nested-cell {
+  padding: 8px;
+}
+
+.kfs-nested {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.kfs-nested td {
+  border: 1px solid var(--kfs-border);
+  padding: 5px 8px;
+}
+
+.kfs-computation thead th {
+  text-align: center;
 }
 
 .kfs-schedule th,
 .kfs-schedule td {
   padding: 2px 6px;
   font-size: 9.5px;
-  text-align: right;
+  text-align: center;
 }
 
-.kfs-schedule th:nth-child(-n + 2),
-.kfs-schedule td:nth-child(-n + 2) {
-  text-align: left;
-}
+/* ── Annexure ──────────────────────────────────────────── */
 
-.kfs-text p {
-  margin: 0 0 8px;
+.kfs-annexure {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   text-align: justify;
 }
 
-.kfs-footnotes {
+.kfs-annexure p {
   margin: 0;
-  padding-left: 18px;
-  font-size: 9.5px;
-  color: var(--cam-text-secondary);
 }
 
-.kfs-footnotes li {
-  margin-bottom: 4px;
+.kfs-level {
+  font-weight: 700;
+  margin-top: 6px !important;
+}
+
+.kfs-level-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 14px;
+}
+
+.kfs-lettered {
+  display: flex;
+  gap: 6px;
+}
+
+.kfs-lettered > span {
+  flex: 0 0 14px;
+}
+
+.kfs-lettered > div {
+  flex: 1;
+}
+
+.kfs-contact,
+.kfs-address {
+  display: flex;
+  flex-direction: column;
+  margin-top: 12px;
+}
+
+.kfs-contact {
+  padding-left: 14px;
+}
+
+.kfs-address {
+  padding-left: 22px;
+  text-align: left;
+}
+
+.kfs-level-body .kfs-address {
+  padding-left: 0;
+  margin-top: 0;
+}
+
+.kfs-footnotes {
+  border: 1px solid var(--kfs-border);
+  margin-top: 14px !important;
+  font-size: 9.5px;
+  font-style: italic;
+  font-weight: 700;
+}
+
+.kfs-footnotes p {
+  margin: 0;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--kfs-border);
+}
+
+.kfs-footnotes p:last-child {
+  border-bottom: none;
 }

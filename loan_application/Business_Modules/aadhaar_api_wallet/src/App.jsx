@@ -3,13 +3,48 @@ import { getLoggedInUser, walletService } from './api/walletService';
 import { buildDailyUsageAxis } from './usage';
 
 const LOW_BALANCE_LIMIT = 500;
-const VERIFICATION_COST = 2.95;
+const VERIFICATION_COST = 3.54;
+const VERIFICATION_BASE_COST = 3;
+const VERIFICATION_GST_RATE = 0.18;
 const money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const count = new Intl.NumberFormat('en-IN');
 const dateTime = new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-const shortDate = new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short' });
+const weekday = new Intl.DateTimeFormat('en-IN', { weekday: 'short' });
+const longDate = new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 const formatMoney = (value) => money.format(Number(value) || 0);
 const toDate = (value) => value ? new Date(value) : null;
 const formatDateTime = (value) => { const date = toDate(value); return date && !Number.isNaN(date.valueOf()) ? dateTime.format(date) : '—'; };
+
+const Icon = ({ children, size = 18, className = '' }) => (
+  <svg className={`wl-icon ${className}`} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    {children}
+  </svg>
+);
+const RefreshIcon = (p) => <Icon {...p}><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16" /><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8" /><path d="M21 3v5h-5" /><path d="M3 21v-5h5" /></Icon>;
+const SyncIcon = (p) => <Icon {...p}><path d="M17 2l4 4-4 4" /><path d="M3 11V9a3 3 0 0 1 3-3h15" /><path d="M7 22l-4-4 4-4" /><path d="M21 13v2a3 3 0 0 1-3 3H3" /></Icon>;
+const ActivityIcon = (p) => <Icon {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></Icon>;
+const LayersIcon = (p) => <Icon {...p}><path d="M12 2 2 7l10 5 10-5-10-5z" /><path d="m2 17 10 5 10-5" /><path d="m2 12 10 5 10-5" /></Icon>;
+const TagIcon = (p) => <Icon {...p}><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z" /><circle cx="7" cy="7" r="1.5" /></Icon>;
+const InfoIcon = (p) => <Icon {...p}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></Icon>;
+const AlertIcon = (p) => <Icon {...p}><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4" /><path d="M12 17h.01" /></Icon>;
+const CheckIcon = (p) => <Icon {...p}><circle cx="12" cy="12" r="10" /><path d="m8 12 3 3 5-6" /></Icon>;
+const LockIcon = (p) => <Icon {...p}><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></Icon>;
+const CloseIcon = (p) => <Icon {...p}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>;
+const ShieldIcon = (p) => <Icon {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></Icon>;
+
+function BalanceAmount({ value }) {
+  const parts = money.formatToParts(Number(value) || 0);
+  const symbol = parts.filter((p) => p.type === 'currency').map((p) => p.value).join('');
+  const whole = parts.filter((p) => ['integer', 'group', 'minusSign'].includes(p.type)).map((p) => p.value).join('');
+  const fraction = parts.filter((p) => p.type === 'fraction').map((p) => p.value).join('');
+  return (
+    <span className="wl-amount">
+      <span className="wl-amount-symbol">{symbol}</span>
+      <span className="wl-amount-whole">{whole}</span>
+      {fraction && <span className="wl-amount-fraction">.{fraction}</span>}
+    </span>
+  );
+}
 
 function App() {
   const [{ fullName }, setUser] = useState(getLoggedInUser);
@@ -30,26 +65,228 @@ function App() {
 
   const rawDailyUsage = Array.isArray(summary?.dailyUsage) ? summary.dailyUsage : [];
   const daily = useMemo(() => buildDailyUsageAxis(rawDailyUsage), [summary]);
-  const totalCalls = daily.reduce((sum, item) => sum + item.calls, 0), totalCost = daily.reduce((sum, item) => sum + item.cost, 0), maxCalls = Math.max(...daily.map((item) => item.calls), 1);
+  const totalCalls = daily.reduce((sum, item) => sum + item.calls, 0), totalCost = daily.reduce((sum, item) => sum + item.cost, 0);
   const hasUsageRows = rawDailyUsage.length > 0;
   const hasRenderableUsage = daily.some((item) => item.calls > 0 || item.cost > 0);
   if (import.meta.env.DEV && hasUsageRows && !hasRenderableUsage) console.warn('[AadhaarWallet] dailyUsage did not match the local 14-day axis:', rawDailyUsage);
 
-  if (loading) return <main className="wallet-page"><div className="skeleton-header"/><div className="skeleton-hero"/><div className="skeleton-stats"><i/><i/><i/></div><div className="skeleton-chart"/></main>;
-  if (access && !access.hasAccess) return <main className="wallet-page"><div className="state-card denied"><span className="state-icon">!</span><h1>You do not have access to this page</h1><p>Your account is not permitted to view the Business Wallet.</p></div></main>;
+  if (loading) {
+    return (
+      <main className="wl-page" aria-busy="true">
+        <div className="wl-skeleton wl-skeleton-header" />
+        <div className="wl-skeleton-hero"><i className="wl-skeleton" /><i className="wl-skeleton" /></div>
+        <div className="wl-skeleton-stats"><i className="wl-skeleton" /><i className="wl-skeleton" /><i className="wl-skeleton" /></div>
+        <div className="wl-skeleton wl-skeleton-chart" />
+      </main>
+    );
+  }
+
+  if (access && !access.hasAccess) {
+    return (
+      <main className="wl-page wl-page-center">
+        <div className="wl-state-card">
+          <span className="wl-state-icon"><LockIcon size={26} /></span>
+          <h1>You do not have access to this page</h1>
+          <p>Your account is not permitted to view the Business Wallet. Contact your administrator if you need access.</p>
+        </div>
+      </main>
+    );
+  }
 
   const needsBaseline = Boolean(summary?.needsBaseline), balance = Number(summary?.estimatedBalance), low = !needsBaseline && balance < LOW_BALANCE_LIMIT;
-  return <main className="wallet-page">
-    {error && <div className="top-error" role="alert"><span className="state-icon">!</span><div><strong>Unable to update wallet</strong><p>{error}</p></div><button onClick={() => load(true)}>Retry</button></div>}
-    {success && <div className="success-banner" role="status">✓ {success}</div>}
-    <header className="wallet-header"><div><p className="eyebrow">IDSPAY / VERIFICATION SERVICES</p><h1>Aadhaar API Wallet</h1><p>IDSPay prepaid wallet - estimated balance</p></div><div className="header-actions"><span>Updated {formatDateTime(summary?.baselineSyncedAt)}</span><button className="refresh-button" onClick={() => load(true)} disabled={refreshing}>↻ {refreshing ? 'Refreshing…' : 'Refresh'}</button></div></header>
-    {low && <div className="low-banner"><span className="state-icon">!</span><strong>Low balance - top up the IDSPay wallet soon</strong></div>}
-    <section className={`hero-card${low ? ' is-low' : ''}`}><div className="hero-content"><div className="hero-label">Estimated wallet balance <span className="estimate-badge">Estimate</span></div>{needsBaseline ? <div className="needs-baseline">Enter the starting balance to begin</div> : <div className={`hero-value${low ? ' warning-value' : ''}`}>{formatMoney(balance)}</div>}<p>Based on the balance you entered on {formatDateTime(summary?.baselineSyncedAt)} minus verifications since then.</p></div><button className="primary-button" onClick={openSync}>{needsBaseline ? 'Enter starting balance' : 'Sync with portal balance'}</button></section>
-    <section className="stats-grid"><div className="stat-card"><span className="stat-label">Used since last sync</span><strong>{formatMoney(summary?.usedSinceSync)}</strong><small>{summary?.callsSinceSync ?? 0} verifications</small></div><div className="stat-card"><span className="stat-label">Starting balance</span><strong>{formatMoney(summary?.baselineBalance)}</strong><small>Synced {formatDateTime(summary?.baselineSyncedAt)}</small></div><div className="stat-card"><span className="stat-label">Cost per verification</span><strong>{formatMoney(VERIFICATION_COST)}</strong><small>Rs 2.50 + 18% GST</small></div></section>
-    <section className="usage-card"><div className="section-heading"><div><h2>Last 14 days</h2><p>All verifications, including those before the last sync.</p></div><div className="usage-total"><strong>{totalCalls}</strong><span>verifications</span></div></div>{!hasUsageRows ? <div className="empty-state">No verification usage recorded in the last 14 days.</div> : !hasRenderableUsage ? <div className="usage-inline-error">Daily usage was received, but no valid rows could be displayed.</div> : <><div className="chart" aria-label="Verification calls for the last 14 days">{daily.map((item) => <div className="bar-column" key={item.key} title={`${item.calls} calls · ${formatMoney(item.cost)}`}><span className="bar-value">{item.calls || ''}</span><div className="bar-track"><i style={{ height: `${(item.calls / maxCalls) * 100}%` }}/></div><small>{shortDate.format(item.date)}</small></div>)}</div><div className="usage-table"><div className="table-row table-head"><span>Date</span><span>Calls</span><span>Cost</span></div>{daily.map((item) => <div className="table-row" key={`table-${item.key}`}><span>{item.date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span><span>{item.calls}</span><strong>{formatMoney(item.cost)}</strong></div>)}<div className="table-row total-row"><strong>Total</strong><strong>{totalCalls}</strong><strong>{formatMoney(totalCost)}</strong></div></div></>}</section>
-    <footer className="wallet-footer">This is an estimate calculated from our own verification log. The IDSPay portal shows the real balance.</footer>
-    {syncOpen && <div className="modal-backdrop" role="presentation"><div className="sync-modal" role="dialog" aria-modal="true" aria-labelledby="sync-title"><button className="modal-close" onClick={() => setSyncOpen(false)} aria-label="Close">×</button><h2 id="sync-title">Sync portal balance</h2><p>Enter the Business Wallet balance shown on the IDSPay portal. Do this after every top-up, and whenever the estimate looks wrong.</p>{!syncConfirm ? <><label htmlFor="sync-balance">Portal balance</label><input id="sync-balance" type="number" min="0" step="0.01" value={syncValue} onChange={(event) => setSyncValue(event.target.value)} placeholder="0.00"/><button className="primary-button full-button" disabled={!syncValue || Number(syncValue) < 0} onClick={() => setSyncConfirm(true)}>Continue</button></> : <><div className="confirm-box">Set the starting balance to <strong>{formatMoney(syncValue)}?</strong></div><div className="modal-actions"><button className="secondary-button" onClick={() => setSyncConfirm(false)}>Back</button><button className="primary-button" onClick={saveBaseline} disabled={saving}>{saving ? 'Saving…' : 'Confirm sync'}</button></div></>}</div></div>}
-  </main>;
+  const remainingVerifications = !summary || needsBaseline || !Number.isFinite(balance) ? null : Math.max(0, Math.floor(balance / VERIFICATION_COST));
+  const status = !summary
+    ? { tone: 'neutral', label: 'Unavailable' }
+    : needsBaseline
+    ? { tone: 'neutral', label: 'Setup required' }
+    : low ? { tone: 'warning', label: 'Low balance' } : { tone: 'success', label: 'Healthy' };
+  const todayKey = daily[daily.length - 1]?.key;
+
+  return (
+    <main className="wl-page">
+      {error && (
+        <div className="wl-alert wl-alert-error" role="alert">
+          <AlertIcon size={20} />
+          <div className="wl-alert-body"><strong>Unable to update wallet</strong><p>{error}</p></div>
+          <button type="button" className="wl-btn wl-btn-danger-ghost" onClick={() => load(true)}>Retry</button>
+        </div>
+      )}
+      {success && (
+        <div className="wl-alert wl-alert-success" role="status">
+          <CheckIcon size={20} />
+          <div className="wl-alert-body"><strong>{success}</strong></div>
+        </div>
+      )}
+
+      <header className="wl-header">
+        <div className="wl-header-text">
+          <nav className="wl-breadcrumb" aria-label="Breadcrumb">
+            <span>IDSPay</span><span className="wl-breadcrumb-sep">/</span><span>Verification Services</span>
+          </nav>
+          <h1>Aadhaar API Wallet</h1>
+        </div>
+        <div className="wl-header-actions">
+        </div>
+      </header>
+
+      {low && (
+        <div className="wl-alert wl-alert-warning" role="status">
+          <AlertIcon size={20} />
+          <div className="wl-alert-body">
+            <strong>Low balance — top up the IDSPay wallet soon</strong>
+            <p>The estimated balance is below {formatMoney(LOW_BALANCE_LIMIT)}. Sync the portal balance after topping up.</p>
+          </div>
+        </div>
+      )}
+
+      <section className="wl-overview">
+        <div className={`wl-balance-card${low ? ' is-low' : ''}`}>
+          <div className="wl-balance-top">
+            <div className="wl-balance-label">
+              Balance
+            </div>
+          </div>
+          {needsBaseline
+            ? <div className="wl-balance-empty">Enter the starting balance to begin</div>
+            : <div className="wl-balance-value"><BalanceAmount value={balance} /></div>}
+          <div className="wl-balance-actions">
+            <button type="button" className="wl-btn wl-btn-light" onClick={openSync}>
+              <SyncIcon size={16} />
+              {needsBaseline ? 'Enter starting balance' : 'Sync with portal balance'}
+            </button>
+          </div>
+        </div>
+
+        <aside className="wl-health-card">
+          <div className="wl-card-head">
+            <h2>Wallet health</h2>
+            <span className={`wl-pill wl-pill-${status.tone}`}><span className={`wl-dot wl-dot-${status.tone}`} />{status.label}</span>
+          </div>
+          <dl className="wl-health-list">
+            <div>
+              <dt>Verifications remaining</dt>
+              <dd>{remainingVerifications === null ? '—' : `≈ ${count.format(remainingVerifications)}`}</dd>
+            </div>
+            <div>
+              <dt>Low-balance alert</dt>
+              <dd>Below {formatMoney(LOW_BALANCE_LIMIT)}</dd>
+            </div>
+            <div>
+              <dt>Verifications since sync</dt>
+              <dd>{count.format(summary?.callsSinceSync ?? 0)}</dd>
+            </div>
+          </dl>
+        </aside>
+      </section>
+
+      <section className="wl-stats">
+        <article className="wl-stat">
+          <span className="wl-stat-icon wl-tone-rose"><ActivityIcon size={18} /></span>
+          <div>
+            <span className="wl-stat-label">Used since last sync</span>
+            <strong className="wl-stat-value">{formatMoney(summary?.usedSinceSync)}</strong>
+            <span className="wl-stat-meta">{summary?.callsSinceSync ?? 0} verifications</span>
+          </div>
+        </article>
+        <article className="wl-stat">
+          <span className="wl-stat-icon wl-tone-green"><LayersIcon size={18} /></span>
+          <div>
+            <span className="wl-stat-label">Starting balance</span>
+            <strong className="wl-stat-value">{formatMoney(summary?.baselineBalance)}</strong>
+            <span className="wl-stat-meta">Synced {formatDateTime(summary?.baselineSyncedAt)}</span>
+          </div>
+        </article>
+        <article className="wl-stat">
+          <span className="wl-stat-icon wl-tone-blue"><TagIcon size={18} /></span>
+          <div>
+            <span className="wl-stat-label">Cost per verification</span>
+            <strong className="wl-stat-value">{formatMoney(VERIFICATION_COST)}</strong>
+            <span className="wl-stat-meta">₹3.00 + 18% GST</span>
+          </div>
+        </article>
+      </section>
+
+      <section className="wl-usage-card">
+        <div className="wl-usage-head">
+          <div>
+            <h2>Daily breakdown</h2>
+          </div>
+        </div>
+
+        {!hasUsageRows ? (
+          <div className="wl-empty">
+            <span className="wl-empty-icon"><ActivityIcon size={24} /></span>
+            <strong>No activity yet</strong>
+            <p>No verification usage recorded in the last 14 days.</p>
+          </div>
+        ) : !hasRenderableUsage ? (
+          <div className="wl-alert wl-alert-warning wl-inline-alert"><AlertIcon size={18} /><div className="wl-alert-body"><p>Daily usage was received, but no valid rows could be displayed.</p></div></div>
+        ) : (
+          <>
+            <div className="wl-table-wrap">
+              <table className="wl-table">
+                <thead>
+                  <tr><th>Date</th><th>Day</th><th className="wl-center">No. of Aadhaar verified</th><th className="wl-center">Cost per verification</th><th className="wl-num">GST</th><th className="wl-num">Total</th></tr>
+                </thead>
+                <tbody>
+                  {[...daily].reverse().map((item) => (
+                    <tr key={`table-${item.key}`} className={item.calls === 0 ? 'is-muted' : ''}>
+                      <td>{longDate.format(item.date)}{item.key === todayKey && <span className="wl-pill wl-pill-neutral wl-pill-sm">Today</span>}</td>
+                      <td>{weekday.format(item.date)}</td>
+                      <td className="wl-center">{item.calls}</td>
+                      <td className="wl-center wl-cost">{formatMoney(item.calls * VERIFICATION_BASE_COST)}</td>
+                      <td className="wl-num wl-cost">{formatMoney(item.calls * VERIFICATION_BASE_COST * VERIFICATION_GST_RATE)}</td>
+                      <td className="wl-num wl-cost">{formatMoney(item.cost)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr><td colSpan={2}>Total</td><td className="wl-center">{totalCalls}</td><td className="wl-center">{formatMoney(totalCalls * VERIFICATION_BASE_COST)}</td><td className="wl-num">{formatMoney(totalCalls * VERIFICATION_BASE_COST * VERIFICATION_GST_RATE)}</td><td className="wl-num">{formatMoney(totalCost)}</td></tr>
+                </tfoot>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
+
+      {syncOpen && (
+        <div className="wl-modal-backdrop" role="presentation">
+          <div className="wl-modal" role="dialog" aria-modal="true" aria-labelledby="sync-title">
+            <button type="button" className="wl-modal-close" onClick={() => setSyncOpen(false)} aria-label="Close"><CloseIcon size={18} /></button>
+            <span className="wl-modal-icon"><SyncIcon size={20} /></span>
+            <h2 id="sync-title">Sync portal balance</h2>
+            <p>Enter the Business Wallet balance shown on the IDSPay portal. Do this after every top-up, and whenever the estimate looks wrong.</p>
+            {!syncConfirm ? (
+              <>
+                <label htmlFor="sync-balance">Portal balance</label>
+                <div className="wl-input-group">
+                  <span className="wl-input-prefix">₹</span>
+                  <input id="sync-balance" type="number" min="0" step="0.01" value={syncValue} onChange={(event) => setSyncValue(event.target.value)} placeholder="0.00" autoFocus />
+                </div>
+                <span className="wl-input-hint">Up to 2 decimal places.</span>
+                <div className="wl-modal-actions">
+                  <button type="button" className="wl-btn wl-btn-outline" onClick={() => setSyncOpen(false)}>Cancel</button>
+                  <button type="button" className="wl-btn wl-btn-primary" disabled={!syncValue || Number(syncValue) < 0} onClick={() => setSyncConfirm(true)}>Continue</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="wl-confirm">
+                  <span>New starting balance</span>
+                  <strong>{formatMoney(syncValue)}</strong>
+                  <small>The estimate will be recalculated from this amount.</small>
+                </div>
+                <div className="wl-modal-actions">
+                  <button type="button" className="wl-btn wl-btn-outline" onClick={() => setSyncConfirm(false)}>Back</button>
+                  <button type="button" className="wl-btn wl-btn-primary" onClick={saveBaseline} disabled={saving}>{saving ? 'Saving…' : 'Confirm sync'}</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </main>
+  );
 }
 
 export default App;
