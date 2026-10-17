@@ -17813,7 +17813,13 @@ export default function CustomerVerification({
                 <span className="bo-cv-step-tag-pill">Step 16 of 16</span>
               </div>
 
-              <SanctionLetter verificationData={verificationData} coApplicants={coApplicants} />
+              <SanctionLetter
+                verificationData={verificationData}
+                coApplicants={coApplicants}
+                applicationProductDetailsId={calculationAppProdId}
+                unsavedPdSheet={recommendationSheets[0]}
+                pdDoneBy={getBackOfficeAuth()?.name || ''}
+              />
             </div>
           )}
 

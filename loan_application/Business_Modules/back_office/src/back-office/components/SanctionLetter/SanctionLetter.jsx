@@ -5,10 +5,11 @@
  * in the Customer Verification workspace. Laid out as A4 pages and downloadable as PDF.
  */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Download } from 'lucide-react';
+import backOfficeService from '../../api/backOfficeService';
 import SivelsLogo from '../../../../../../Core/src/assets/branding/SivelsFinanceLogo.jpg';
 import './SanctionLetter.css';
 
@@ -206,6 +207,89 @@ function buildLetterData(verificationData, coApplicants) {
   };
 }
 
+/** Maps a saved PD assessment record to the PD sheet shape used on the verification page. */
+function normalizePdRecord(record) {
+  const resolved = Array.isArray(record) ? record[0] : record;
+  if (!resolved || typeof resolved !== 'object') return null;
+  const rawConditions = resolved.sanctionConditions ?? resolved.SanctionConditions ?? [];
+  return {
+    pdVisitDate: pick(resolved, 'dateOfPdVisit', 'DateOfPdVisit'),
+    pdDoneBy: pick(resolved, 'pdDoneBy', 'PdDoneBy', 'createdByName', 'CreatedByName'),
+    pdAddress: pick(resolved, 'pdAddress', 'PdAddress'),
+    personalDiscussionSiteVisit: pick(resolved, 'personalDiscussionSiteVisit', 'PersonalDiscussionSiteVisit'),
+    endUse: pick(resolved, 'endUse', 'EndUse'),
+    disbursementTransaction: pick(resolved, 'disbursementTransaction', 'DisbursementTransaction'),
+    applicantProfile: pick(resolved, 'applicantProfile', 'ApplicantProfile'),
+    coApplicantProfile: pick(resolved, 'coApplicantProfile', 'CoApplicantProfile'),
+    bureauReport: pick(resolved, 'bureauReport', 'BureauReport'),
+    proposedCollateral: pick(resolved, 'proposedCollateral', 'ProposedCollateral'),
+    legalAndTechnical: pick(resolved, 'legalTechnicalReview', 'LegalTechnicalReview'),
+    strengths: pick(resolved, 'strengths', 'Strengths'),
+    concerns: pick(resolved, 'concerns', 'Concerns'),
+    recommendation: pick(resolved, 'recommendation', 'Recommendation', 'finalRemarks', 'FinalRemarks'),
+    otherSanctionConditions: toList(rawConditions)
+      .filter((c) => c && c.isActive !== false && c.IsActive !== false)
+      .map((c) => (typeof c === 'string' ? c : c.conditionText ?? c.ConditionText ?? '')),
+  };
+}
+
+function hasPdContent(sheet) {
+  if (!sheet) return false;
+  return Object.entries(sheet).some(([key, value]) => (
+    key === 'otherSanctionConditions'
+      ? toList(value).some((c) => clean(c))
+      : key !== 'id' && key !== 'pdDoneBy' && clean(value)
+  ));
+}
+
+function PdPoint({ label, value }) {
+  return (
+    <>
+      <strong>{label}:</strong> <span className="sl-pd-value">{value}</span>
+    </>
+  );
+}
+
+/** PD sheet fields 1–13 that have a value; empty fields are left out. */
+function buildPdPoints(sheet, pdDoneBy) {
+  const s = sheet || {};
+  const fields = [
+    ['date', 'Date of PD Visit', formatLetterDate(s.pdVisitDate) || clean(s.pdVisitDate)],
+    ['by', 'PD Done By', clean(s.pdDoneBy) || clean(pdDoneBy)],
+    ['addr', 'Address Where PD Was Conducted', clean(s.pdAddress)],
+    ['visit', 'Personal Discussion / Site Visit', clean(s.personalDiscussionSiteVisit)],
+    ['enduse', 'End Use of the Loan', clean(s.endUse)],
+    ['disb', 'Disbursement Transaction', clean(s.disbursementTransaction)],
+    ['app', 'Applicant Profile', clean(s.applicantProfile)],
+    ['coapp', 'Co-Applicant Profile', clean(s.coApplicantProfile)],
+    ['bureau', 'About Bureau Report of Applicant & Co-Applicant', clean(s.bureauReport)],
+    ['collateral', null, null],
+    ['str', 'Strengths', clean(s.strengths)],
+    ['con', 'Concerns (If Any)', clean(s.concerns)],
+    ['rec', 'Recommendation', clean(s.recommendation)],
+  ];
+
+  const collateralItems = [
+    ['c', 'Proposed Collateral Details', clean(s.proposedCollateral)],
+    ['l', 'Legal & Technical Review', clean(s.legalAndTechnical)],
+  ]
+    .filter(([, , value]) => value)
+    .map(([key, label, value]) => <PdPoint key={key} label={label} value={value} />);
+
+  return fields.flatMap(([key, label, value]) => {
+    if (key === 'collateral') {
+      if (collateralItems.length === 0) return [];
+      return [
+        <React.Fragment key={key}>
+          <strong>About Proposed Collateral (Including Legal and Technical):</strong>
+          <BulletList items={collateralItems} />
+        </React.Fragment>,
+      ];
+    }
+    return value ? [<PdPoint key={key} label={label} value={value} />] : [];
+  });
+}
+
 function PageHeader() {
   return (
     <div className="sl-page-header">
@@ -284,10 +368,50 @@ function BulletList({ items }) {
   );
 }
 
-export default function SanctionLetter({ verificationData, coApplicants = [] }) {
+export default function SanctionLetter({
+  verificationData,
+  coApplicants = [],
+  applicationProductDetailsId,
+  unsavedPdSheet = null,
+  pdDoneBy = '',
+}) {
   const pageRefs = useRef([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [downloadError, setDownloadError] = useState('');
+  const [savedPdSheet, setSavedPdSheet] = useState(null);
+  const [pdSheetLoading, setPdSheetLoading] = useState(false);
+
+  useEffect(() => {
+    const appProdId = Number(applicationProductDetailsId);
+    if (!appProdId || appProdId <= 0) {
+      setSavedPdSheet(null);
+      return undefined;
+    }
+    let isMounted = true;
+    setPdSheetLoading(true);
+    backOfficeService
+      .getPdAssessmentByApplication(appProdId)
+      .then((record) => {
+        if (isMounted) setSavedPdSheet(normalizePdRecord(record));
+      })
+      .catch((err) => {
+        console.warn('[SanctionLetter] No PD assessment found for this application:', err?.message || err);
+        if (isMounted) setSavedPdSheet(null);
+      })
+      .finally(() => {
+        if (isMounted) setPdSheetLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [applicationProductDetailsId]);
+
+  const pdSheet = hasPdContent(savedPdSheet) ? savedPdSheet : unsavedPdSheet;
+  const pdPoints = useMemo(() => buildPdPoints(pdSheet, pdDoneBy), [pdSheet, pdDoneBy]);
+  const specificConditions = useMemo(
+    () => toList(pdSheet?.otherSanctionConditions).map(clean).filter(Boolean),
+    [pdSheet]
+  );
 
   const data = useMemo(
     () => buildLetterData(verificationData, coApplicants),
@@ -352,8 +476,6 @@ export default function SanctionLetter({ verificationData, coApplicants = [] }) 
   const disbursementText = `The loan will be disbursed in a single tranche of ${formatRupees(data.loanAmount)} in favour of ${
     data.borrowerDisplayName || 'the Borrower'
   }${data.hasCollateral ? `, against upfront creation of charge in favour of ${COMPANY}` : ''}.`;
-
-  const rentalPropertyText = data.collateralRows[0]?.address || 'the collateral property';
 
   const signatories = [
     { name: data.borrowerDisplayName, role: 'Borrower' },
@@ -627,24 +749,25 @@ export default function SanctionLetter({ verificationData, coApplicants = [] }) 
                 />
               </TermRow>
               <TermRow label="Other Specific Conditions / Compliance">
-                <NumberedList
-                  items={[
-                    'The Borrower shall provide all documents required for opening an escrow account.',
-                    'Repayment shall be made through an escrow account within 30 days. Until the escrow account is opened, repayment will be collected from the account in which the rentals are deposited.',
-                    'An undertaking is to be obtained from the tenant to deposit rentals in the escrow account.',
-                    'A tenant NOC is to be obtained and documented.',
-                    `Hypothecation of present and future rentals from ${rentalPropertyText}.`,
-                    'Property insurance and keyman insurance are to be taken for the applicants and co-applicants.',
-                    'Legal and technical vetting is to be completed.',
-                    `The collateral property must be freehold, with an upfront MODT in favour of ${COMPANY} and an NDC from the existing lender obtained upfront.`,
-                    'The lease agreement must be registered for a minimum of 10 years, and a copy documented upfront along with proof of security deposit collection.',
-                    'Subject to credit checks – FI, RCU and TrackWizz.',
-                    'A DSRA equivalent to two EMIs is to be collected within 30 days of disbursement.',
-                    'An end-use declaration is to be documented.',
-                    'LTV is to be restricted to 65%.',
-                    'The TrackWizz report is to be documented.',
-                  ]}
-                />
+                {pdSheetLoading && !hasPdContent(pdSheet) ? (
+                  <span className="sl-muted">Loading PD sheet details...</span>
+                ) : pdPoints.length > 0 || specificConditions.length > 0 ? (
+                  <NumberedList
+                    items={[
+                      ...pdPoints,
+                      ...(specificConditions.length > 0
+                        ? [
+                            <React.Fragment key="case-specific">
+                              <strong>Case Specific Sanction Condition:</strong>
+                              <BulletList items={specificConditions} />
+                            </React.Fragment>,
+                          ]
+                        : []),
+                    ]}
+                  />
+                ) : (
+                  <span className="sl-muted">Nil</span>
+                )}
               </TermRow>
             </tbody>
           </table>

@@ -287,6 +287,10 @@
   color: #64748b;
 }
 
+.sl-pd-value {
+  white-space: pre-line;
+}
+
 .sl-signatory {
   display: flex;
   flex-direction: column;
