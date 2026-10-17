@@ -36,6 +36,7 @@ import AssetBase from '../../components/AssetBase/AssetBase';
 import RtrCommonSheet from '../../components/RtrCommonSheet/RtrCommonSheet';
 import DeviationAssessment from '../../components/DeviationAssessment/DeviationAssessment';
 import CamReport from '../../components/CamReport/CamReport';
+import RecommendationSheet from '../../components/RecommendationSheet/RecommendationSheet';
 import KfsReport from '../../components/KfsReport/KfsReport';
 import SanctionLetter from '../../components/SanctionLetter/SanctionLetter';
 import CustomerDocumentsPanel from '../../components/CustomerDocuments/CustomerDocumentsPanel';
@@ -267,6 +268,8 @@ const VERIFICATION_WORKFLOW_STEPS = [
 
 const FINAL_ACTION_STEP_ID = 18;
 const CAM_STEP_ID = 23;
+/** CAM is kept for future use; while false it is hidden from the sidebar and its review gate is off. */
+const SHOW_CAM_STEP = false;
 const KFS_STEP_ID = 24;
 const SANCTION_LETTER_STEP_ID = 25;
 const DOCUMENT_STEP_IDS = [FINAL_ACTION_STEP_ID, CAM_STEP_ID, KFS_STEP_ID, SANCTION_LETTER_STEP_ID];
@@ -311,10 +314,9 @@ const VISIBLE_TO_INTERNAL_STEP = {
   10: 16, // Eligibility Assessment
   11: 21, // Deviations
   12: 17, // Recommendation Sheet
-  13: 23, // CAM
-  14: 24, // KFS
-  15: 18, // Final Action
-  16: 25, // Sanction Letter
+  13: 24, // KFS
+  14: 18, // Final Action
+  15: 25, // Sanction Letter
 };
 
 /**
@@ -343,10 +345,9 @@ const INTERNAL_TO_VISIBLE_STEP = {
   16: 10, // Eligibility Assessment
   21: 11, // Deviations
   17: 12, // Recommendation Sheet
-  23: 13, // CAM
-  24: 14, // KFS
-  18: 15, // Final Action
-  25: 16, // Sanction Letter
+  24: 13, // KFS
+  18: 14, // Final Action
+  25: 15, // Sanction Letter
 };
 
 function resolveInternalStepFromQuery(stepParam) {
@@ -1308,7 +1309,7 @@ export default function CustomerVerification({
     }
   });
   const [camLoaded, setCamLoaded] = useState(false);
-  const camGateLocked = isCreditManagerView && !camReviewed;
+  const camGateLocked = SHOW_CAM_STEP && isCreditManagerView && !camReviewed;
 
   useEffect(() => {
     try {
@@ -11175,7 +11176,7 @@ export default function CustomerVerification({
   const statusInfo = getStatusInfo(verificationData.overallStatus);
 
   const visibleSidebarSteps = VERIFICATION_WORKFLOW_STEPS.filter(
-    (step) => ![9, 10, 11, 12].includes(step.id)
+    (step) => ![9, 10, 11, 12].includes(step.id) && (SHOW_CAM_STEP || step.id !== CAM_STEP_ID)
   );
 
   return (
@@ -17701,7 +17702,7 @@ export default function CustomerVerification({
 
           {/* STEP 15: RECOMMENDATION SHEET */}
           {activeStep === 17 && (
-            <div className="bo-cv-step-panel">
+            <div className="bo-cv-step-panel bo-cv-view-form-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
                   <div className="bo-cv-step-badge-num">12</div>
@@ -17718,14 +17719,14 @@ export default function CustomerVerification({
                 </div>
               </div>
 
-              <div className="bo-cv-placeholder-panel">
-                <div className="bo-cv-placeholder-icon">
-                  {ShieldCheckIcon && <ShieldCheckIcon size={40} />}
-                </div>
-                <span className="bo-cv-placeholder-badge">CREDIT RECOMMENDATION</span>
-                <h3>Credit Recommendation Sheet</h3>
-                <p>Final credit underwriter recommendation and approval decision summary.</p>
-              </div>
+              <RecommendationSheet
+                verificationData={verificationData}
+                coApplicants={coApplicants}
+                applicationProductDetailsId={calculationAppProdId}
+                agentCustomerId={resolvedTargetCustomerId}
+                healthChecks={healthChecksByStep[19]}
+                unsavedPdSheet={recommendationSheets[0]}
+              />
             </div>
           )}
 
@@ -17777,7 +17778,7 @@ export default function CustomerVerification({
             <div className="bo-cv-step-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">14</div>
+                  <div className="bo-cv-step-badge-num">13</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">KFS - Key Facts Statement</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -17785,7 +17786,7 @@ export default function CustomerVerification({
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 14 of 16</span>
+                <span className="bo-cv-step-tag-pill">Step 13 of 15</span>
               </div>
               <KfsReport
                 verificationData={verificationData}
@@ -17802,7 +17803,7 @@ export default function CustomerVerification({
             <div className="bo-cv-step-panel bo-cv-view-form-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">16</div>
+                  <div className="bo-cv-step-badge-num">15</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Sanction Letter</h2>
                     <p className="bo-cv-step-panel-desc">
@@ -17810,7 +17811,7 @@ export default function CustomerVerification({
                     </p>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 16 of 16</span>
+                <span className="bo-cv-step-tag-pill">Step 15 of 15</span>
               </div>
 
               <SanctionLetter
@@ -17830,12 +17831,12 @@ export default function CustomerVerification({
             <div className="bo-cv-step-panel bo-cv-workflow-panel">
               <div className="bo-cv-step-panel-header">
                 <div className="bo-cv-step-header-left">
-                  <div className="bo-cv-step-badge-num">15</div>
+                  <div className="bo-cv-step-badge-num">14</div>
                   <div>
                     <h2 className="bo-cv-step-panel-title">Final Application Action &amp; Disposition</h2>
                   </div>
                 </div>
-                <span className="bo-cv-step-tag-pill">Step 15 of 16</span>
+                <span className="bo-cv-step-tag-pill">Step 14 of 15</span>
               </div>
 
               {/* Action Feedback Banner */}

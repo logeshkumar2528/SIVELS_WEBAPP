@@ -1,0 +1,283 @@
+/* Recommendation Sheet (LAP CAM) — View Form palette on the shared CAM page canvas */
+
+.rs-report {
+  --rs-primary: var(--color-primary, #0f7a4c);
+  --rs-primary-light: #eaf5ee;
+  --rs-border: #94a3b8;
+  --rs-border-light: #cbd5e1;
+  --rs-label-bg: #f8fafc;
+  --rs-text: #0f172a;
+  --rs-label: #334155;
+  --rs-muted: #64748b;
+}
+
+/* ── Page ──────────────────────────────────────────────── */
+
+.cam-page.rs-page {
+  padding: 26px 34px 34px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--rs-text);
+  border: none;
+  border-radius: 0;
+}
+
+.cam-page.rs-page::after {
+  display: none;
+}
+
+.rs-page-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.rs-header-logo {
+  height: 40px;
+  width: auto;
+}
+
+.rs-page-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rs-page-body > * {
+  margin: 0 !important;
+}
+
+/* ── Cover ─────────────────────────────────────────────── */
+
+.rs-cover .rs-page-body {
+  align-items: center;
+  gap: 0;
+}
+
+.rs-cover-logo-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 150px !important;
+}
+
+.rs-cover-logo {
+  height: 80px;
+  width: auto;
+}
+
+.rs-cover-title {
+  width: 86%;
+  margin-top: 46px !important;
+  padding: 10px 0;
+  border-top: 1px solid var(--rs-primary);
+  border-bottom: 1px solid var(--rs-primary);
+  text-align: center;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--rs-label);
+}
+
+.rs-cover-table {
+  width: 90%;
+  margin-top: 80px !important;
+}
+
+.rs-cover-table th {
+  width: 22%;
+  font-weight: 400;
+  color: var(--rs-muted);
+}
+
+.rs-cover-table td {
+  color: var(--rs-label);
+}
+
+.rs-cover-date {
+  margin-top: auto !important;
+  margin-bottom: 70px !important;
+  font-size: 14px;
+  letter-spacing: 0.03em;
+  color: var(--rs-muted);
+}
+
+/* ── Tables ────────────────────────────────────────────── */
+
+.rs-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.rs-table th,
+.rs-table td {
+  border: 1px solid var(--rs-border);
+  padding: 4px 7px;
+  vertical-align: middle;
+  text-align: left;
+  word-wrap: break-word;
+}
+
+.rs-kv > tbody > tr > th {
+  background: var(--rs-label-bg);
+  color: var(--rs-label);
+  font-weight: 700;
+}
+
+.rs-col-label {
+  width: 19%;
+}
+
+.rs-col-value {
+  width: 31%;
+}
+
+.rs-caption,
+.rs-table-title {
+  background: var(--rs-primary);
+  color: #ffffff;
+  font-weight: 700;
+  text-align: center !important;
+  text-decoration: underline;
+}
+
+.rs-grid thead th {
+  background: var(--rs-primary-light);
+  color: var(--rs-text);
+  font-weight: 700;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.rs-grid tbody td {
+  vertical-align: top;
+}
+
+.rs-table .rs-nil-row,
+.rs-inner-table .rs-nil-row {
+  text-align: center;
+}
+
+.rs-total-row td {
+  background: var(--rs-primary-light);
+  font-weight: 700;
+}
+
+/* Tables nested inside a key/value cell (applicant, co-applicant, security) */
+.rs-inner-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  border: 2px solid var(--rs-text);
+}
+
+.rs-inner-table th,
+.rs-inner-table td {
+  border: 1px solid var(--rs-border);
+  padding: 2px 6px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.rs-inner-table th {
+  background: var(--rs-primary-light);
+  font-weight: 700;
+}
+
+.rs-security-table {
+  border-width: 1px;
+}
+
+.rs-security-table th {
+  text-align: center;
+}
+
+.rs-security-table td:nth-child(n + 2) {
+  text-align: center;
+}
+
+.rs-security-table td:first-child {
+  text-align: justify;
+}
+
+.rs-eligibility .rs-col-letter {
+  width: 9%;
+}
+
+.rs-eligibility .rs-col-amount {
+  width: 24%;
+}
+
+.rs-num {
+  text-align: right !important;
+}
+
+.rs-strong-row td {
+  font-weight: 700;
+}
+
+.rs-rtr-table td:nth-child(n + 4) {
+  text-align: center;
+}
+
+.rs-health-table td:nth-child(3) {
+  text-align: right;
+}
+
+.rs-signoff {
+  margin-top: 4px !important;
+}
+
+.rs-signoff .rs-col-signoff {
+  width: 46%;
+}
+
+.rs-signoff td {
+  height: 42px;
+}
+
+.rs-signoff .rs-signoff-group {
+  height: auto;
+  padding: 2px 7px;
+  background: var(--rs-primary-light);
+  font-weight: 700;
+}
+
+/* ── Text ──────────────────────────────────────────────── */
+
+.rs-sub-heading {
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: underline;
+  color: var(--rs-text);
+}
+
+.rs-paragraph {
+  text-align: justify;
+  white-space: pre-line;
+}
+
+.rs-lines {
+  white-space: pre-line;
+}
+
+.rs-block {
+  display: block;
+}
+
+.rs-underline {
+  text-decoration: underline;
+}
+
+.rs-note-indent {
+  padding-left: 12px;
+}
+
+.rs-recommendation {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 30px;
+  margin-top: 16px !important;
+}
