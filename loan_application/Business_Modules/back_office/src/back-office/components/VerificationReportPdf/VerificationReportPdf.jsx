@@ -15,6 +15,9 @@
  * PDF Engine: html2canvas + jsPDF (Continuous A4-width canvas layout)
  */
 
+import { apiFetch } from '../../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../../../Core/src/auth/tokenStore';
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import html2canvas from 'html2canvas';
@@ -24,7 +27,7 @@ import { mapApplicationFullDetails } from '../../mappers/verificationMapper';
 import iconMap from '../../config/iconMap';
 import './VerificationReportPdf.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+const API_BASE = API_BASE_URL;
 
 function formatCurrency(amount) {
   if (amount === null || amount === undefined || isNaN(amount) || amount === 0) return '₹0';
@@ -137,7 +140,7 @@ export default function VerificationReportPdf({
       );
 
       // Supplementary parallel fetches
-      const token = localStorage.getItem('authToken');
+      const token = getAccessToken();
       const authHeaders = {};
       if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
@@ -146,8 +149,8 @@ export default function VerificationReportPdf({
         appProdId > 0 ? backOfficeService.getApplicationDocuments(appProdId) : Promise.resolve([]),
         appProdId > 0 ? backOfficeService.getDocumentRejectionsByApplication(appProdId) : Promise.resolve([]),
         appProdId > 0 ? backOfficeService.getAssessmentsByApplication(appProdId) : Promise.resolve([]),
-        fetch(`${API_BASE}/ApplicationKYCDocuments`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : [])),
-        fetch(`${API_BASE}/ApplicationPersonalInformation`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : [])),
+        apiFetch(`${API_BASE}/ApplicationKYCDocuments`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : [])),
+        apiFetch(`${API_BASE}/ApplicationPersonalInformation`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : [])),
       ]);
 
       // Map step verifications (Primary Applicant: applicantSequence === 0)

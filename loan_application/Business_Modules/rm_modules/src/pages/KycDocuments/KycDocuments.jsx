@@ -1,3 +1,7 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../../Core/src/auth/tokenStore';
+import { needsAuthedFetch } from '../../../../../Core/src/auth/useAuthedObjectUrl';
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -40,7 +44,7 @@ import { replaceManualDocument, manualDocumentPath, documentPaths, overlayPendin
 import CustomerProofModal from './CustomerProofModal';
 import './KycDocuments.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+const API_BASE = API_BASE_URL;
 
 export const CANONICAL_CATEGORY_META = {
   PROFILE: { order: 1, name: 'Profile Image', defaultExt: 'jpg', isPdf: false },
@@ -602,11 +606,11 @@ function KycCard({
     }
 
     try {
-      const token = localStorage.getItem('authToken');
+      const token = getAccessToken();
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(downloadUrl, { headers });
+      const res = await apiFetch(downloadUrl, { headers });
       if (res.ok) {
         const blob = await res.blob();
         const blobUrl = URL.createObjectURL(blob);
@@ -623,7 +627,7 @@ function KycCard({
       console.warn('Direct fetch download failed, fallback to direct window open:', err);
     }
 
-    window.open(downloadUrl, '_blank');
+    if (!needsAuthedFetch(downloadUrl)) window.open(downloadUrl, '_blank');
   };
 
   const handleDocumentTypeChange = (value) => {
@@ -1067,10 +1071,10 @@ export default function KycDocuments() {
     if (!agentDoc) return;
     const docId = agentDoc.agentCustomerDocumentId || agentDoc.id;
     try {
-      const token = localStorage.getItem('authToken');
+      const token = getAccessToken();
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch(`${API_BASE}/AgentCustomerDocument/download/${docId}`, { headers });
+      const res = await apiFetch(`${API_BASE}/AgentCustomerDocument/download/${docId}`, { headers });
       if (!res.ok) throw new Error(`Download failed with HTTP ${res.status}`);
       const blob = await res.blob();
       if (!blob || blob.size === 0) throw new Error('File is empty');
@@ -1257,7 +1261,7 @@ export default function KycDocuments() {
   useEffect(() => {
     async function fetchMaster(endpoint, idField, nameField, setState) {
       try {
-        const res = await fetch(`${API_BASE}/${endpoint}`);
+        const res = await apiFetch(`${API_BASE}/${endpoint}`);
         if (res.ok) {
           const data = await res.json();
           setState(data.map((item) => ({ value: item[idField], label: item[nameField], raw: item })));
@@ -1273,7 +1277,7 @@ export default function KycDocuments() {
         fetchMaster('VerificationMaster', 'verificationId', 'verificationName', setVerificationOptions),
         (async () => {
           try {
-            const res = await fetch(`${API_BASE}/EmploymentTypeDocumentMapping`);
+            const res = await apiFetch(`${API_BASE}/EmploymentTypeDocumentMapping`);
             if (res.ok) {
               const data = await res.json();
               setEmploymentTypeDocMappings(Array.isArray(data) ? data : []);
@@ -1386,7 +1390,7 @@ export default function KycDocuments() {
     setKycRecordsLoaded(false);
     async function fetchSupplementaryKyc() {
       if (!appId) return;
-      const token = localStorage.getItem('authToken');
+      const token = getAccessToken();
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -1402,7 +1406,7 @@ export default function KycDocuments() {
 
       if (!targetCustomerId && appId) {
         try {
-          const custRes = await fetch(`${API_BASE}/AgentAddCustomer/${appId}`, { headers });
+          const custRes = await apiFetch(`${API_BASE}/AgentAddCustomer/${appId}`, { headers });
           if (custRes.ok) {
             const custData = await custRes.json();
             const record = Array.isArray(custData) ? custData[0] : (custData?.value ? custData.value[0] : custData);
@@ -1416,7 +1420,7 @@ export default function KycDocuments() {
       }
 
       try {
-        const kycRes = await fetch(`${API_BASE}/ApplicationKYCDocuments`, { headers });
+        const kycRes = await apiFetch(`${API_BASE}/ApplicationKYCDocuments`, { headers });
         if (kycRes.ok && isMounted) {
           const allKyc = await kycRes.json();
           if (!isMounted) return;
@@ -1645,14 +1649,14 @@ export default function KycDocuments() {
 
     let isMounted = true;
     async function hydrateAllKyc() {
-      const token = localStorage.getItem('authToken');
+      const token = getAccessToken();
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       // 1. Hydrate Applicant
       if (applicantKycId && !hydratedKycIdsRef.current.has(applicantKycId)) {
         try {
-          const res = await fetch(`${API_BASE}/ApplicationKYCDocuments/${applicantKycId}`, { headers });
+          const res = await apiFetch(`${API_BASE}/ApplicationKYCDocuments/${applicantKycId}`, { headers });
           if (res.ok && isMounted) {
             const data = await res.json();
             if (!isMounted) return;
@@ -1735,7 +1739,7 @@ export default function KycDocuments() {
         const coKycId = coApplicantKycIds[i];
         if (coKycId && !hydratedKycIdsRef.current.has(coKycId)) {
           try {
-            const res = await fetch(`${API_BASE}/ApplicationKYCDocuments/${coKycId}`, { headers });
+            const res = await apiFetch(`${API_BASE}/ApplicationKYCDocuments/${coKycId}`, { headers });
             if (res.ok && isMounted) {
               const data = await res.json();
               if (!isMounted) return;
@@ -1830,7 +1834,7 @@ export default function KycDocuments() {
 
     let isMounted = true;
     async function hydrateApplicantDocs() {
-      const token = localStorage.getItem('authToken');
+      const token = getAccessToken();
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -1852,7 +1856,7 @@ export default function KycDocuments() {
 
           // 1. Try dedicated sub-route
           try {
-            const res = await fetch(`${API_BASE}/ApplicationKYCDocuments/${applicantKycId}/${route}`, { headers });
+            const res = await apiFetch(`${API_BASE}/ApplicationKYCDocuments/${applicantKycId}/${route}`, { headers });
             if (res.ok && isMounted) {
               const b = await res.blob();
               if (b && b.size > 0) {
@@ -1873,7 +1877,7 @@ export default function KycDocuments() {
           // 2. Fallback to download by canonical path
           if (!blob && cleanPath) {
             try {
-              const dlRes = await fetch(`${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`, { headers });
+              const dlRes = await apiFetch(`${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`, { headers });
               if (dlRes.ok && isMounted) {
                 const b = await dlRes.blob();
                 if (b && b.size > 0) {
@@ -1954,7 +1958,7 @@ export default function KycDocuments() {
 
     if (!resolvedId && appId) {
       try {
-        const res = await fetch(`${API_BASE}/AgentAddCustomer/${appId}`);
+        const res = await apiFetch(`${API_BASE}/AgentAddCustomer/${appId}`);
         if (res.ok) {
           const data = await res.json();
           const record = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
@@ -2009,11 +2013,11 @@ export default function KycDocuments() {
       if (!agentCustId) return;
 
       try {
-        const token = localStorage.getItem('authToken');
+        const token = getAccessToken();
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const res = await fetch(`${API_BASE}/AgentCustomerDocument/bycustomer/${agentCustId}`, { headers });
+        const res = await apiFetch(`${API_BASE}/AgentCustomerDocument/bycustomer/${agentCustId}`, { headers });
         if (!res.ok || !isMounted) return;
 
         const data = await res.json();
@@ -2331,7 +2335,7 @@ export default function KycDocuments() {
     }
 
     try {
-      const token = localStorage.getItem('authToken');
+      const token = getAccessToken();
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -2342,7 +2346,7 @@ export default function KycDocuments() {
           const matchCust = cleanPath.match(/AgentCustomers\/(\d+)\//i);
           if (matchCust && matchCust[1]) {
             try {
-              const agentListRes = await fetch(`${API_BASE}/AgentCustomerDocument/bycustomer/${matchCust[1]}`, { headers });
+              const agentListRes = await apiFetch(`${API_BASE}/AgentCustomerDocument/bycustomer/${matchCust[1]}`, { headers });
               if (agentListRes.ok) {
                 const listData = await agentListRes.json();
                 const list = Array.isArray(listData) ? listData : (listData?.data || listData?.value || []);
@@ -2358,7 +2362,7 @@ export default function KycDocuments() {
 
         if (resolvedDocId) {
           try {
-            const agentRes = await fetch(`${API_BASE}/AgentCustomerDocument/download/${resolvedDocId}`, { headers });
+            const agentRes = await apiFetch(`${API_BASE}/AgentCustomerDocument/download/${resolvedDocId}`, { headers });
             if (agentRes.ok) {
               const rawBlob = await agentRes.blob();
               let mimeType = 'image/jpeg';
@@ -2393,7 +2397,7 @@ export default function KycDocuments() {
         serverPath = `UploadedFiles/${serverPath}`;
       }
 
-      const res = await fetch(`${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(serverPath)}`, { headers });
+      const res = await apiFetch(`${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(serverPath)}`, { headers });
       if (res.status === 404) {
         return {
           url: null,
@@ -2552,7 +2556,7 @@ export default function KycDocuments() {
       console.log('Agent Customer ID:', agentCustomerId);
 
       const headers = {};
-      const token = localStorage.getItem('authToken');
+      const token = getAccessToken();
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
@@ -2561,7 +2565,7 @@ export default function KycDocuments() {
       let documentList = [];
       try {
         const targetUrl = `${API_BASE}/AgentCustomerDocument/bycustomer/${agentCustomerId}`;
-        const res = agentCustomerId ? await fetch(targetUrl, { headers }) : null;
+        const res = agentCustomerId ? await apiFetch(targetUrl, { headers }) : null;
         if (res?.ok) {
           const data = await res.json();
           documentList = Array.isArray(data) ? data : (data?.data || data?.value || data?.items || []);
@@ -2578,7 +2582,7 @@ export default function KycDocuments() {
       let allRejections = [];
       if (productDetailsId) {
         try {
-          const rejRes = await fetch(`${API_BASE}/BackOfficeDocumentRejection/application/${productDetailsId}`, { headers });
+          const rejRes = await apiFetch(`${API_BASE}/BackOfficeDocumentRejection/application/${productDetailsId}`, { headers });
           if (rejRes.ok) {
             const rejData = await rejRes.json();
             allRejections = Array.isArray(rejData) ? rejData : (rejData?.value || rejData?.data || []);
@@ -2614,7 +2618,7 @@ export default function KycDocuments() {
           const dlUrl = `${API_BASE}/AgentCustomerDocument/download/${docId}`;
 
           try {
-            const dlRes = await fetch(dlUrl, { headers });
+            const dlRes = await apiFetch(dlUrl, { headers });
             if (!dlRes.ok) {
               throw new Error(`Download failed with status ${dlRes.status}`);
             }
@@ -2721,7 +2725,7 @@ export default function KycDocuments() {
 
       if (mainKycId) {
         try {
-          const mRes = await fetch(`${API_BASE}/ApplicationKYCDocuments/${mainKycId}`, { headers });
+          const mRes = await apiFetch(`${API_BASE}/ApplicationKYCDocuments/${mainKycId}`, { headers });
           if (mRes.ok) {
             const mData = await mRes.json();
             if (mData && !isApplicantDocumentTuple(mData)) {
@@ -3018,14 +3022,14 @@ export default function KycDocuments() {
         kycId = coSeqRow?.applicationKYCDocumentId ?? coSeqRow?.ApplicationKYCDocumentId ?? null;
       }
 
-      const token = localStorage.getItem('authToken');
+      const token = getAccessToken();
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       // 1. Fetch current KYC record data to ensure latest paths
       let latestKyc = coApp || {};
       try {
-        const kycRes = kycId ? await fetch(`${API_BASE}/ApplicationKYCDocuments/${kycId}`, { headers }) : null;
+        const kycRes = kycId ? await apiFetch(`${API_BASE}/ApplicationKYCDocuments/${kycId}`, { headers }) : null;
         if (kycRes?.ok) {
           const kycData = await kycRes.json();
           if (kycData) {
@@ -3062,12 +3066,12 @@ export default function KycDocuments() {
         if (productDetailsId) {
           rejUrl = `${API_BASE}/BackOfficeDocumentRejection/application/${productDetailsId}`;
         }
-        const rejRes = await fetch(rejUrl, { headers });
+        const rejRes = await apiFetch(rejUrl, { headers });
         if (rejRes.ok) {
           const rejData = await rejRes.json();
           allRejections = Array.isArray(rejData) ? rejData : (rejData?.value || rejData?.data || []);
         } else if (productDetailsId) {
-          const fallbackRes = await fetch(`${API_BASE}/BackOfficeDocumentRejection`, { headers });
+          const fallbackRes = await apiFetch(`${API_BASE}/BackOfficeDocumentRejection`, { headers });
           if (fallbackRes.ok) {
             const fallbackData = await fallbackRes.json();
             allRejections = Array.isArray(fallbackData) ? fallbackData : (fallbackData?.value || fallbackData?.data || []);
@@ -3555,11 +3559,11 @@ export default function KycDocuments() {
       PanCardPath: null,
       ProfileImagePath: null,
       numberOfDocuments: 0,
-      CreatedBy: 1,
+      CreatedBy: getCurrentRMContext().rmId,
     };
 
-    const token = localStorage.getItem('authToken');
-    const response = await fetch(`${API_BASE}/ApplicationKYCDocuments`, {
+    const token = getAccessToken();
+    const response = await apiFetch(`${API_BASE}/ApplicationKYCDocuments`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -3610,7 +3614,7 @@ export default function KycDocuments() {
       return;
     }
 
-    const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+    const token = getAccessToken();
     const authHeaders = {};
     if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
@@ -3618,7 +3622,7 @@ export default function KycDocuments() {
     formData.append('file', file);
 
     const replaceUrl = `${API_BASE}/ApplicationKYCDocuments/${kycId}/manual/${slotIdx}`;
-    const res = await fetch(replaceUrl, {
+    const res = await apiFetch(replaceUrl, {
       method: 'PUT',
       headers: authHeaders,
       body: formData,
@@ -3630,7 +3634,7 @@ export default function KycDocuments() {
     }
 
     // Re-fetch Primary KYC row to refresh DocumentPath while preserving NumberOfDocuments
-    const getRes = await fetch(`${API_BASE}/ApplicationKYCDocuments/${kycId}`, { headers: authHeaders });
+    const getRes = await apiFetch(`${API_BASE}/ApplicationKYCDocuments/${kycId}`, { headers: authHeaders });
     if (getRes.ok) {
       const updatedRow = await getRes.json();
       const newDocPath = updatedRow.documentPath ?? updatedRow.DocumentPath ?? null;
@@ -3877,7 +3881,7 @@ export default function KycDocuments() {
     ];
 
     try {
-      const token = localStorage.getItem('authToken');
+      const token = getAccessToken();
       const authHeaders = {};
       if (token) {
         authHeaders['Authorization'] = `Bearer ${token}`;
@@ -3902,7 +3906,7 @@ export default function KycDocuments() {
         // A previous attempt may have saved identity uploads before a later file failed.
         // Read their current paths before PUT so retrying cannot clear those uploads.
         if (isUpdate) {
-          const latestResponse = await fetch(url, { headers: authHeaders });
+          const latestResponse = await apiFetch(url, { headers: authHeaders });
           if (!latestResponse.ok) throw new Error('Could not load current KYC documents before saving. Please retry.');
           const latest = await latestResponse.json();
           person.aadharDocumentPath = latest.aadharDocumentPath ?? latest.AadharDocumentPath ?? null;
@@ -3927,7 +3931,7 @@ export default function KycDocuments() {
           PanCardPath: person.panCardPath || null,
           ProfileImagePath: person.profileImagePath || null,
           numberOfDocuments: numDocs,
-          CreatedBy: 1,
+          CreatedBy: getCurrentRMContext().rmId,
         };
         if (isUpdate) {
           payload.ApplicationKYCDocumentId = Number(person.kycDocumentId);
@@ -3935,7 +3939,7 @@ export default function KycDocuments() {
 
         console.log(`Saving KYC [${isUpdate ? 'PUT' : 'POST'}]:`, payload);
 
-        const response = await fetch(url, {
+        const response = await apiFetch(url, {
           method: isUpdate ? 'PUT' : 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -4017,14 +4021,14 @@ export default function KycDocuments() {
         rememberPerson(person);
         const recordUrl = API_BASE + '/ApplicationKYCDocuments/' + person.kycDocumentId;
         const readRecord = async () => {
-          const result = await fetch(recordUrl, { headers: authHeaders });
+          const result = await apiFetch(recordUrl, { headers: authHeaders });
           if (!result.ok) throw new Error('Could not verify saved KYC documents. Please retry.');
           return result.json();
         };
         await persistManualUploads({
           person,
           upload: async (body) => {
-            const result = await fetch(recordUrl + '/upload', { method: 'POST', headers: authHeaders, body });
+            const result = await apiFetch(recordUrl + '/upload', { method: 'POST', headers: authHeaders, body });
             if (!result.ok) throw new Error('A document upload failed. Your file is still selected; please retry.');
             return result.status === 204 ? null : result.json().catch(() => null);
           },
@@ -4076,7 +4080,7 @@ export default function KycDocuments() {
               try {
                 const dlHeaders = {};
                 if (token) dlHeaders['Authorization'] = `Bearer ${token}`;
-                const dlRes = await fetch(`${API_BASE}/AgentCustomerDocument/download/${docId}`, { headers: dlHeaders });
+                const dlRes = await apiFetch(`${API_BASE}/AgentCustomerDocument/download/${docId}`, { headers: dlHeaders });
                 if (!dlRes.ok) {
                   throw new Error(`Failed to download Agent ${targetName} document (HTTP ${dlRes.status})`);
                 }
@@ -4114,7 +4118,7 @@ export default function KycDocuments() {
             const uploadHeaders = {};
             if (token) uploadHeaders['Authorization'] = `Bearer ${token}`;
 
-            let uploadResponse = await fetch(uploadUrl, {
+            let uploadResponse = await apiFetch(uploadUrl, {
               method: uploadMethod,
               headers: uploadHeaders,
               body: formData,
@@ -4123,7 +4127,7 @@ export default function KycDocuments() {
             // Fallback retry if method mismatch
             if (!uploadResponse.ok && [400, 404, 405, 409].includes(uploadResponse.status)) {
               const fallbackMethod = uploadMethod === 'POST' ? 'PUT' : 'POST';
-              uploadResponse = await fetch(uploadUrl, {
+              uploadResponse = await apiFetch(uploadUrl, {
                 method: fallbackMethod,
                 headers: uploadHeaders,
                 body: formData,
@@ -4154,7 +4158,7 @@ export default function KycDocuments() {
             // ── Live persistence verification ──────────────────────────────
             let verifiedRow = null;
             try {
-              const verifyRes = await fetch(`${API_BASE}/ApplicationKYCDocuments/${person.kycDocumentId}`, {
+              const verifyRes = await apiFetch(`${API_BASE}/ApplicationKYCDocuments/${person.kycDocumentId}`, {
                 headers: authHeaders,
               });
               if (!verifyRes.ok) {
@@ -4193,13 +4197,13 @@ export default function KycDocuments() {
                     ApplicationKYCDocumentId: Number(person.kycDocumentId),
                     [key === 'profile' ? 'ProfileImagePath' : key === 'aadhaar' ? 'AadharDocumentPath' : 'PanCardPath']: fallbackPath,
                   };
-                  const patchRes = await fetch(`${API_BASE}/ApplicationKYCDocuments/${person.kycDocumentId}`, {
+                  const patchRes = await apiFetch(`${API_BASE}/ApplicationKYCDocuments/${person.kycDocumentId}`, {
                     method: 'PUT',
                     headers: { ...authHeaders, 'Content-Type': 'application/json' },
                     body: JSON.stringify(patchPayload),
                   });
                   if (patchRes.ok) {
-                    const recheck = await fetch(`${API_BASE}/ApplicationKYCDocuments/${person.kycDocumentId}`, { headers: authHeaders });
+                    const recheck = await apiFetch(`${API_BASE}/ApplicationKYCDocuments/${person.kycDocumentId}`, { headers: authHeaders });
                     if (recheck.ok) {
                       const recheckData = await recheck.json();
                       verifiedPath = readCanonicalIdentityPath(recheckData, key);
@@ -4232,7 +4236,7 @@ export default function KycDocuments() {
 
             // Preview refresh only after persistence is confirmed.
             try {
-              const getDocRes = await fetch(`${API_BASE}/ApplicationKYCDocuments/${person.kycDocumentId}/${route}`, {
+              const getDocRes = await apiFetch(`${API_BASE}/ApplicationKYCDocuments/${person.kycDocumentId}/${route}`, {
                 headers: uploadHeaders,
               });
               if (getDocRes.ok) {
@@ -4278,7 +4282,7 @@ export default function KycDocuments() {
           }
 
           if (anyIdentityFileUploaded) {
-            const refreshedKycResponse = await fetch(
+            const refreshedKycResponse = await apiFetch(
               `${API_BASE}/ApplicationKYCDocuments/${person.kycDocumentId}`,
               { headers: authHeaders }
             );
@@ -4326,7 +4330,7 @@ export default function KycDocuments() {
             // Check if application-level tuple already exists
             let existingTuple = null;
             try {
-              const checkRes = await fetch(
+              const checkRes = await apiFetch(
                 `${API_BASE}/ApplicationKYCDocuments/applicant-document?applicationProductDetailsId=${applicationProductDetailsId}&applicantSequence=${personSeq}&documentTypeId=${docTypeId}`,
                 { headers: authHeaders }
               );
@@ -4357,7 +4361,7 @@ export default function KycDocuments() {
                 try {
                   const dlHeaders = {};
                   if (token) dlHeaders['Authorization'] = `Bearer ${token}`;
-                  const dlRes = await fetch(`${API_BASE}/AgentCustomerDocument/download/${docId}`, { headers: dlHeaders });
+                  const dlRes = await apiFetch(`${API_BASE}/AgentCustomerDocument/download/${docId}`, { headers: dlHeaders });
                   if (!dlRes.ok) throw new Error(`Failed to download Agent ${targetName} document (HTTP ${dlRes.status})`);
                   const rawBlob = await dlRes.blob();
                   if (!rawBlob || rawBlob.size === 0) throw new Error(`Agent ${targetName} document file is empty`);
@@ -4410,14 +4414,14 @@ export default function KycDocuments() {
             const uploadHeaders = {};
             if (token) uploadHeaders['Authorization'] = `Bearer ${token}`;
 
-            let uploadResponse = await fetch(uploadUrl, {
+            let uploadResponse = await apiFetch(uploadUrl, {
               method: 'POST',
               headers: uploadHeaders,
               body: formData,
             });
 
             if (!uploadResponse.ok && [400, 404, 405, 409].includes(uploadResponse.status)) {
-              uploadResponse = await fetch(uploadUrl, {
+              uploadResponse = await apiFetch(uploadUrl, {
                 method: 'PUT',
                 headers: uploadHeaders,
                 body: formData,
@@ -4447,7 +4451,7 @@ export default function KycDocuments() {
 
             // Refresh the stored application-level document so the UI shows the saved server file
             try {
-              const getDocRes = await fetch(
+              const getDocRes = await apiFetch(
                 `${API_BASE}/ApplicationKYCDocuments/applicant-document?applicationProductDetailsId=${applicationProductDetailsId}&applicantSequence=${personSeq}&documentTypeId=${docTypeId}`,
                 { headers: uploadHeaders }
               );
@@ -4456,7 +4460,7 @@ export default function KycDocuments() {
                 const savedPath = docRecord?.documentPath || docRecord?.DocumentPath || null;
                 if (savedPath) {
                   const cleanPath = savedPath.replace(/\\/g, '/').replace(/^\/+/, '');
-                  const dlRes = await fetch(
+                  const dlRes = await apiFetch(
                     `${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`,
                     { headers: uploadHeaders }
                   );

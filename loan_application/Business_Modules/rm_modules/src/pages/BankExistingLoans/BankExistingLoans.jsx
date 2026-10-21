@@ -1,3 +1,6 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../../Core/src/auth/tokenStore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Building2, MapPin, CreditCard, Files, RefreshCw, Trash2, Plus } from 'lucide-react';
@@ -20,6 +23,7 @@ import {
 } from '../applicationWizard/flowUtils';
 import { formatIndianAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 import { resolveDocumentTypeId } from '../../../../../Core/src/utils/documentTypeHelper';
+import { getCurrentRMContext } from '../../utils/rmContext';
 
 function hasMeaningfulBankData(bank) {
   if (!bank) return false;
@@ -424,12 +428,12 @@ function PersonBankingSection({
   );
 }
 
-async function syncActiveLoansForBank(bankId, loansToSave, activeCount, baseUrl, currentUserId = 1) {
+async function syncActiveLoansForBank(bankId, loansToSave, activeCount, baseUrl, currentUserId = null) {
   if (!bankId) return loansToSave;
 
   let existingLoans = [];
   try {
-    const res = await fetch(`${baseUrl}/ApplicationBankActiveLoanDetails`);
+    const res = await apiFetch(`${baseUrl}/ApplicationBankActiveLoanDetails`);
     if (res.ok) {
       const data = await res.json();
       const list = Array.isArray(data) ? data : (data?.value ?? data?.data ?? []);
@@ -483,10 +487,10 @@ async function syncActiveLoansForBank(bankId, loansToSave, activeCount, baseUrl,
         totalTenureMonths: totalTenureMonths,
         balanceTenureMonths: balanceTenureMonths,
         status: loan.status || 'Active',
-        modifiedBy: Number(currentUserId) || 1,
+        modifiedBy: Number(currentUserId) || null,
       };
 
-      const putRes = await fetch(`${baseUrl}/ApplicationBankActiveLoanDetails/${loanId}`, {
+      const putRes = await apiFetch(`${baseUrl}/ApplicationBankActiveLoanDetails/${loanId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(putPayload),
@@ -520,10 +524,10 @@ async function syncActiveLoansForBank(bankId, loansToSave, activeCount, baseUrl,
         totalTenureMonths: totalTenureMonths,
         balanceTenureMonths: balanceTenureMonths,
         status: loan.status || 'Active',
-        createdBy: Number(currentUserId) || 1,
+        createdBy: Number(currentUserId) || null,
       };
 
-      const postRes = await fetch(`${baseUrl}/ApplicationBankActiveLoanDetails`, {
+      const postRes = await apiFetch(`${baseUrl}/ApplicationBankActiveLoanDetails`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(postPayload),
@@ -566,7 +570,7 @@ async function syncActiveLoansForBank(bankId, loansToSave, activeCount, baseUrl,
     const lid = existingLoan.applicationBankActiveLoanDetailsId ?? existingLoan.ApplicationBankActiveLoanDetailsId ?? existingLoan.id;
     if (lid && !processedLoanIds.has(String(lid))) {
       try {
-        await fetch(`${baseUrl}/ApplicationBankActiveLoanDetails/${lid}`, {
+        await apiFetch(`${baseUrl}/ApplicationBankActiveLoanDetails/${lid}`, {
           method: 'DELETE',
         });
       } catch (delErr) {
@@ -578,12 +582,12 @@ async function syncActiveLoansForBank(bankId, loansToSave, activeCount, baseUrl,
   return updatedLoansList;
 }
 
-async function syncCreditCardsForBank(bankId, cardsToSave, activeCount, baseUrl, currentUserId = 1) {
+async function syncCreditCardsForBank(bankId, cardsToSave, activeCount, baseUrl, currentUserId = null) {
   if (!bankId) return [];
 
   let existingCards = [];
   try {
-    const res = await fetch(`${baseUrl}/ApplicationBankCreditCardDetails/by-bank/${bankId}`);
+    const res = await apiFetch(`${baseUrl}/ApplicationBankCreditCardDetails/by-bank/${bankId}`);
     if (res.ok) {
       const data = await res.json();
       existingCards = Array.isArray(data) ? data : (data?.value ?? data?.data ?? []);
@@ -617,11 +621,11 @@ async function syncCreditCardsForBank(bankId, cardsToSave, activeCount, baseUrl,
           cardName: cardName,
           cardNumber: cardNumber,
           status: card.status || 'Active',
-          modifiedBy: Number(currentUserId) || 1,
+          modifiedBy: Number(currentUserId) || null,
         };
 
         try {
-          const putRes = await fetch(`${baseUrl}/ApplicationBankCreditCardDetails/${cardId}`, {
+          const putRes = await apiFetch(`${baseUrl}/ApplicationBankCreditCardDetails/${cardId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(putPayload),
@@ -648,11 +652,11 @@ async function syncCreditCardsForBank(bankId, cardsToSave, activeCount, baseUrl,
           cardName: cardName,
           cardNumber: cardNumber,
           status: card.status || 'Active',
-          createdBy: Number(currentUserId) || 1,
+          createdBy: Number(currentUserId) || null,
         };
 
         try {
-          const postRes = await fetch(`${baseUrl}/ApplicationBankCreditCardDetails`, {
+          const postRes = await apiFetch(`${baseUrl}/ApplicationBankCreditCardDetails`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(postPayload),
@@ -692,7 +696,7 @@ async function syncCreditCardsForBank(bankId, cardsToSave, activeCount, baseUrl,
     const cid = existingCard.applicationBankCreditCardDetailsId ?? existingCard.ApplicationBankCreditCardDetailsId ?? existingCard.id;
     if (cid && !processedCardIds.has(String(cid))) {
       try {
-        await fetch(`${baseUrl}/ApplicationBankCreditCardDetails/${cid}`, {
+        await apiFetch(`${baseUrl}/ApplicationBankCreditCardDetails/${cid}`, {
           method: 'DELETE',
         });
       } catch (delErr) {
@@ -735,8 +739,8 @@ export default function BankExistingLoans() {
   useEffect(() => {
     async function fetchMaster(endpoint, idField, nameField, setStateFunc) {
       try {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-        const res = await fetch(`${baseUrl}/${endpoint}`);
+        const baseUrl = API_BASE_URL;
+        const res = await apiFetch(`${baseUrl}/${endpoint}`);
         if (res.ok) {
           const data = await res.json();
           setStateFunc(data.map(item => ({ value: item[idField], label: item[nameField], raw: item })));
@@ -776,7 +780,7 @@ export default function BankExistingLoans() {
         if (!active) return;
         hydratedAppIdRef.current = appId;
         if (hydratedApp) {
-          const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+          const baseUrl = API_BASE_URL;
           const prodId =
             hydratedApp?.applicationProductDetailsId ??
             hydratedApp?.ApplicationProductDetailsId ??
@@ -788,7 +792,7 @@ export default function BankExistingLoans() {
 
           let allActiveLoans = [];
           try {
-            const loanRes = await fetch(`${baseUrl}/ApplicationBankActiveLoanDetails`);
+            const loanRes = await apiFetch(`${baseUrl}/ApplicationBankActiveLoanDetails`);
             if (loanRes.ok) {
               const data = await loanRes.json();
               allActiveLoans = Array.isArray(data) ? data : (data?.value ?? data?.data ?? []);
@@ -805,7 +809,7 @@ export default function BankExistingLoans() {
 
             // 1. Credit Cards Hydration
             try {
-              const res = await fetch(`${baseUrl}/ApplicationBankCreditCardDetails/by-bank/${bankId}`);
+              const res = await apiFetch(`${baseUrl}/ApplicationBankCreditCardDetails/by-bank/${bankId}`);
               if (res.ok) {
                 const data = await res.json();
                 const list = Array.isArray(data) ? data : (data?.value ?? data?.data ?? []);
@@ -899,7 +903,7 @@ export default function BankExistingLoans() {
             let fetchedList = [];
             if (prodId) {
               try {
-                const res = await fetch(`${baseUrl}/ApplicationBankExistingLoanDetails/by-application/${prodId}/${seq}`);
+                const res = await apiFetch(`${baseUrl}/ApplicationBankExistingLoanDetails/by-application/${prodId}/${seq}`);
                 if (res.ok) {
                   const data = await res.json();
                   fetchedList = Array.isArray(data) ? data : (data?.value ?? data?.data ?? []);
@@ -981,11 +985,11 @@ export default function BankExistingLoans() {
 
   useEffect(() => {
     let isMounted = true;
-    const token = localStorage.getItem('authToken');
+    const token = getAccessToken();
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
+    const baseUrl = API_BASE_URL;
 
     // 1. Load Applicant Bank Statement
     resolveLatestApplicantBankStatement({
@@ -1306,10 +1310,10 @@ export default function BankExistingLoans() {
     }
 
     setIsLoadingActiveLoans(true);
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+    const baseUrl = API_BASE_URL;
 
     try {
-      const res = await fetch(`${baseUrl}/ApplicationBankActiveLoanDetails`);
+      const res = await apiFetch(`${baseUrl}/ApplicationBankActiveLoanDetails`);
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data) ? data : (data?.value ?? data?.data ?? data?.result ?? []);
@@ -1497,9 +1501,8 @@ export default function BankExistingLoans() {
 
     if (bankId) {
       setIsSavingLoans(true);
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-      const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || '{}');
-      const currentUserId = Number(currentUser?.rmId || currentUser?.userId || currentUser?.id || 1);
+      const baseUrl = API_BASE_URL;
+      const currentUserId = getCurrentRMContext().rmId;
 
       try {
         const synced = await syncActiveLoansForBank(bankId, finalLoans, count, baseUrl, currentUserId);
@@ -1555,10 +1558,10 @@ export default function BankExistingLoans() {
     }
 
     setIsLoadingCards(true);
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+    const baseUrl = API_BASE_URL;
 
     try {
-      const res = await fetch(`${baseUrl}/ApplicationBankCreditCardDetails/by-bank/${bankId}`);
+      const res = await apiFetch(`${baseUrl}/ApplicationBankCreditCardDetails/by-bank/${bankId}`);
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data) ? data : (data?.value ?? data?.data ?? []);
@@ -1672,9 +1675,8 @@ export default function BankExistingLoans() {
       bank?.ApplicationBankDetailsId;
 
     if (bankId) {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-      const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || '{}');
-      const currentUserId = Number(currentUser?.rmId || currentUser?.userId || currentUser?.id || 1);
+      const baseUrl = API_BASE_URL;
+      const currentUserId = getCurrentRMContext().rmId;
       try {
         const synced = await syncCreditCardsForBank(bankId, finalCards, count, baseUrl, currentUserId);
         if (synced && synced.length > 0) {
@@ -1821,15 +1823,14 @@ export default function BankExistingLoans() {
       }
     }
 
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-    const currentUser = JSON.parse(localStorage.getItem('sivels_currentUser') || '{}');
-    const currentUserId = Number(currentUser?.rmId || currentUser?.userId || currentUser?.id || 1);
+    const baseUrl = API_BASE_URL;
+    const currentUserId = getCurrentRMContext().rmId;
 
     try {
       // 1. Delete removed bank records
       for (const delId of deletedBankIds) {
         try {
-          await fetch(`${baseUrl}/ApplicationBankExistingLoanDetails/${delId}`, {
+          await apiFetch(`${baseUrl}/ApplicationBankExistingLoanDetails/${delId}`, {
             method: 'DELETE',
           });
         } catch (delErr) {
@@ -1884,7 +1885,7 @@ export default function BankExistingLoans() {
             payload.modifiedBy = currentUserId;
           }
 
-          const response = await fetch(url, {
+          const response = await apiFetch(url, {
             method: isUpdate ? 'PUT' : 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),

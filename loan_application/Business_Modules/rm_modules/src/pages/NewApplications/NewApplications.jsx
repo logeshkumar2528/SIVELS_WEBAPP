@@ -1,3 +1,7 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../../Core/src/auth/tokenStore';
+import { handleSessionExpired } from '../../../../../Core/src/auth/authEvents';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Eye, Pencil, Calendar } from 'lucide-react';
@@ -32,7 +36,7 @@ import {
 import { readApiError } from '../../../../../Core/src/utils/documentFileActions';
 import ReturnedDocumentDetails from './ReturnedDocumentDetails';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+const API_BASE = API_BASE_URL;
 
 const normalizeMobile = (value) => String(value || '').replace(/\D/g, '');
 
@@ -243,16 +247,16 @@ export default function NewApplications({ initialFilter = 'All' }) {
     setIsLoading(true);
 
     try {
-      const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+      const token = getAccessToken();
       const authHeaders = {};
       if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
       const [agentRes, customerRes, rmRes, rejectionsRes, appProdRes] = await Promise.all([
-        fetch(`${API_BASE}/AgentMaster`, { headers: authHeaders }),
-        fetch(`${API_BASE}/AgentAddCustomer`, { headers: authHeaders }),
-        fetch(`${API_BASE}/RMMaster`, { headers: authHeaders }).catch(() => null),
-        fetch(`${API_BASE}/BackOfficeDocumentRejection/rm/${rmContext.rmId}/returned`, { headers: authHeaders }).catch(() => null),
-        fetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).catch(() => null),
+        apiFetch(`${API_BASE}/AgentMaster`, { headers: authHeaders }),
+        apiFetch(`${API_BASE}/AgentAddCustomer`, { headers: authHeaders }),
+        apiFetch(`${API_BASE}/RMMaster`, { headers: authHeaders }).catch(() => null),
+        apiFetch(`${API_BASE}/BackOfficeDocumentRejection/rm/${rmContext.rmId}/returned`, { headers: authHeaders }).catch(() => null),
+        apiFetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).catch(() => null),
       ]);
 
       if (!agentRes.ok) {
@@ -506,8 +510,12 @@ export default function NewApplications({ initialFilter = 'All' }) {
     }
 
     const rmContext = getCurrentRMContext();
-    const rmId = Number(rmContext.rmId || 20);
-    const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+    if (!rmContext.rmId) {
+      handleSessionExpired();
+      return;
+    }
+    const rmId = Number(rmContext.rmId);
+    const token = getAccessToken();
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -560,7 +568,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
         let kycId = (rawKycId !== undefined && rawKycId !== null && rawKycId !== '') ? Number(rawKycId) : null;
         if (!kycId && appProdId) {
           try {
-            const kycRes = await fetch(`${API_BASE}/ApplicationKYCDocuments/by-application/${appProdId}`, { headers });
+            const kycRes = await apiFetch(`${API_BASE}/ApplicationKYCDocuments/by-application/${appProdId}`, { headers });
             if (kycRes.ok) {
               const kycData = await kycRes.json();
               const kycArr = resolveApiArray(kycData);
@@ -608,7 +616,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
           formData.append('file', file);
 
           const uploadUrl = `${API_BASE}/ApplicationKYCDocuments/${kycId}/manual/${manualDocumentIndex}`;
-          let uploadRes = await fetch(uploadUrl, {
+          let uploadRes = await apiFetch(uploadUrl, {
             method: 'PUT',
             headers,
             body: formData,
@@ -629,14 +637,14 @@ export default function NewApplications({ initialFilter = 'All' }) {
           formData.append('File', file);
 
           const uploadUrl = `${API_BASE}/ApplicationKYCDocuments/${kycId}/${route}`;
-          let uploadRes = await fetch(uploadUrl, {
+          let uploadRes = await apiFetch(uploadUrl, {
             method: 'POST',
             headers,
             body: formData,
           });
 
           if (!uploadRes.ok && uploadRes.status === 405) {
-            uploadRes = await fetch(uploadUrl, {
+            uploadRes = await apiFetch(uploadUrl, {
               method: 'PUT',
               headers,
               body: formData,
@@ -659,7 +667,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
           else if (rawType.includes('PROPERTY')) targetCategory = 'property';
 
           try {
-            const masterRes = await fetch(`${API_BASE}/DocumentTypeMaster`, { headers });
+            const masterRes = await apiFetch(`${API_BASE}/DocumentTypeMaster`, { headers });
             if (masterRes.ok) {
               const masterData = await masterRes.json();
               const masterList = resolveApiArray(masterData);
@@ -675,7 +683,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
         // Step 2: Dynamically resolve VerificationId from VerificationMaster
         let verificationId = null;
         try {
-          const vRes = await fetch(`${API_BASE}/VerificationMaster`, { headers });
+          const vRes = await apiFetch(`${API_BASE}/VerificationMaster`, { headers });
           if (vRes.ok) {
             const vData = await vRes.json();
             const vList = resolveApiArray(vData);
@@ -694,7 +702,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
         // Step 3: Check whether tuple already exists in ApplicationKYCDocuments
         let tupleExists = false;
         try {
-          const checkRes = await fetch(
+          const checkRes = await apiFetch(
             `${API_BASE}/ApplicationKYCDocuments/applicant-document?applicationProductDetailsId=${appProdId}&applicantSequence=${seq}&documentTypeId=${docTypeId}`,
             { headers }
           );
@@ -721,7 +729,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
         let uploadRes;
 
         if (tupleExists) {
-          uploadRes = await fetch(uploadUrl, {
+          uploadRes = await apiFetch(uploadUrl, {
             method: 'PUT',
             headers,
             body: formData,
@@ -731,7 +739,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
           if (!uploadRes.ok) {
             const errTxt = await uploadRes.text().catch(() => '');
             if (uploadRes.status === 404 || errTxt.includes('No active document was found') || uploadRes.status === 405) {
-              uploadRes = await fetch(uploadUrl, {
+              uploadRes = await apiFetch(uploadUrl, {
                 method: 'POST',
                 headers,
                 body: formData,
@@ -741,7 +749,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
             }
           }
         } else {
-          uploadRes = await fetch(uploadUrl, {
+          uploadRes = await apiFetch(uploadUrl, {
             method: 'POST',
             headers,
             body: formData,
@@ -755,7 +763,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
       }
 
       // Step 2: Call Resubmit on BackOfficeDocumentRejection
-      const resubmitRes = await fetch(`${API_BASE}/BackOfficeDocumentRejection/${rejId}/resubmit`, {
+      const resubmitRes = await apiFetch(`${API_BASE}/BackOfficeDocumentRejection/${rejId}/resubmit`, {
         method: 'PUT',
         headers: {
           ...headers,
@@ -1012,7 +1020,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
               onClick={async () => {
                 if (row.status === 'New') {
                   try {
-                    const getRes = await fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`);
+                    const getRes = await apiFetch(`${API_BASE}/AgentAddCustomer/${applicationId}`);
                     if (getRes.ok) {
                       const data = await getRes.json();
                       const cust = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
@@ -1021,7 +1029,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
                           ...cust,
                           status: 1,
                         };
-                        const putRes = await fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`, {
+                        const putRes = await apiFetch(`${API_BASE}/AgentAddCustomer/${applicationId}`, {
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify(payload),

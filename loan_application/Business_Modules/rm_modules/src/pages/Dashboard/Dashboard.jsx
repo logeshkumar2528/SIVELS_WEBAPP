@@ -12,6 +12,7 @@ import { ROUTES } from '../../config/routeConfig';
 import { useRmDashboardData } from '../../hooks/useRmDashboardData';
 import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './Dashboard.css';
+import AuthImage from '../../../../../Core/src/auth/AuthImage';
 
 function AgentAvatar({ name = '', agentId = null, className = 'agent-avatar-lg', style = {} }) {
   const [failed, setFailed] = useState(false);
@@ -25,7 +26,7 @@ function AgentAvatar({ name = '', agentId = null, className = 'agent-avatar-lg',
 
   if (imageUrl && !failed) {
     return (
-      <img
+      <AuthImage
         src={imageUrl}
         alt={name || 'Agent'}
         className={className}

@@ -18,7 +18,7 @@ import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import ErrorBoundary from '../components/ErrorBoundary/ErrorBoundary';
 import MainLayout from '../layouts/MainLayout/MainLayout';
 import ProtectedRoute from '../auth/ProtectedRoute';
-import { removeBackOfficeAuth } from '../auth/authStorage';
+import { logout } from '../../../../../Core/src/auth/session';
 import { ROUTES } from '../config/routeConfig';
 
 // Global Monitoring Pages
@@ -60,12 +60,11 @@ function LayoutWrapper({ children, title, subtitle }) {
 
 /**
  * LogoutHandler
- * Safely clears Back Office session keys and redirects to /login.
+ * Revokes the session, clears all login keys and redirects to /login.
  */
 function LogoutHandler() {
   React.useEffect(() => {
-    removeBackOfficeAuth();
-    window.location.href = '/login';
+    logout();
   }, []);
 
   return null;

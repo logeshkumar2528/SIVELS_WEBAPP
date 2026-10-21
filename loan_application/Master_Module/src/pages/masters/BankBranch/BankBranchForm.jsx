@@ -144,11 +144,11 @@ export function BankBranchForm({ isOpen, onClose, onSuccess, initialData }) {
 
       if (isEdit) {
         payload.bankBranchId = initialData.bankBranchId;
-        payload.modifiedBy = getCurrentUserId() || 1;
+        payload.modifiedBy = getCurrentUserId();
         await updateBankBranch(initialData.bankBranchId, payload);
         toast.success('Updated successfully');
       } else {
-        payload.createdBy = getCurrentUserId() || 1;
+        payload.createdBy = getCurrentUserId();
         await createBankBranch(payload);
         toast.success('Created successfully');
       }

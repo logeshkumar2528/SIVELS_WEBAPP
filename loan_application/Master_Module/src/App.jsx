@@ -1,6 +1,7 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { LoadingProvider } from '../../Core/src/context/LoadingContext';
+import RequireAuth from '../../Core/src/auth/RequireAuth';
 import { AppLayout } from './components/layout/AppLayout';
 import { Dashboard } from './pages/Dashboard/Dashboard';
 import { InterestTypePage } from './pages/masters/InterestTypePage/InterestTypePage';
@@ -82,87 +83,99 @@ const routerBasename = (() => {
   return '/';
 })();
 
+// AMS users share this module but may only open their own dashboard.
+const isMasterRouteAllowed = (roleCode, pathname) =>
+  roleCode === 'MASTER_ADMIN' || (roleCode === 'AMS' && /(^|\/)ams-dashboard\/?$/.test(pathname));
+
+function MasterAccessGuard({ children }) {
+  const location = useLocation();
+  return (
+    <RequireAuth isAllowed={isMasterRouteAllowed} pathname={location.pathname}>
+      {children}
+    </RequireAuth>
+  );
+}
+
 function App() {
   return (
     <LoadingProvider>
       <BrowserRouter basename={routerBasename}>
         <Toaster position="top-right" />
-        <Routes>
-          <Route path="/" element={<AppLayout />}>
-            <Route index element={<Navigate to="dashboard" replace />} />
-            <Route path="dashboard" element={<Dashboard />} />
-            <Route path="agents" element={<PeopleDirectoryPage roleKey="agent" />} />
-            <Route path="relationship-managers" element={<PeopleDirectoryPage roleKey="rm" />} />
-            <Route path="back-office" element={<PeopleDirectoryPage roleKey="backOffice" />} />
-            <Route path="ams" element={<PeopleDirectoryPage roleKey="ams" />} />
-            <Route path="credit-managers" element={<PeopleDirectoryPage roleKey="creditManager" />} />
-            <Route path="credit-heads" element={<PeopleDirectoryPage roleKey="creditHead" />} />
-            <Route path="customers" element={<PeopleDirectoryPage roleKey="customer" />} />
-            <Route path="application-360" element={<Application360 />} />
-            <Route path="ams-dashboard" element={<AMSDashboard />} />
-            <Route path="create-user" element={<CreateUser />} />
-            <Route path="add-agent" element={<AgentCreate onSuccessRedirect="/dashboard" />} />
-            <Route path="edit-agent/:agentId" element={<AgentCreate onSuccessRedirect="/dashboard" />} />
-            <Route path="create-relationship-manager" element={<RelationshipManagerCreate />} />
-            <Route path="edit-relationship-manager/:rmId" element={<RelationshipManagerCreate />} />
-            <Route path="create-credit-manager" element={<CreditManagerCreate />} />
-            <Route path="edit-credit-manager/:cmId" element={<CreditManagerCreate />} />
-            <Route path="create-credit-head" element={<CreditHeadCreate />} />
-            <Route path="edit-credit-head/:chId" element={<CreditHeadCreate />} />
-            <Route path="edit-customer/:customerId" element={<CustomerEdit />} />
-            <Route path="edit-ams/:amsId" element={<AMSCreate />} />
-            <Route path="edit-back-office/:backOfficeId" element={<BackOfficeCreate />} />
-            <Route path="company" element={<CompanyConfiguration />} />
+        <MasterAccessGuard>
+          <Routes>
+            <Route path="/" element={<AppLayout />}>
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<Dashboard />} />
+              <Route path="agents" element={<PeopleDirectoryPage roleKey="agent" />} />
+              <Route path="relationship-managers" element={<PeopleDirectoryPage roleKey="rm" />} />
+              <Route path="back-office" element={<PeopleDirectoryPage roleKey="backOffice" />} />
+              <Route path="ams" element={<PeopleDirectoryPage roleKey="ams" />} />
+              <Route path="credit-managers" element={<PeopleDirectoryPage roleKey="creditManager" />} />
+              <Route path="customers" element={<PeopleDirectoryPage roleKey="customer" />} />
+              <Route path="application-360" element={<Application360 />} />
+              <Route path="ams-dashboard" element={<AMSDashboard />} />
+              <Route path="create-user" element={<CreateUser />} />
+              <Route path="add-agent" element={<AgentCreate onSuccessRedirect="/dashboard" />} />
+              <Route path="edit-agent/:agentId" element={<AgentCreate onSuccessRedirect="/dashboard" />} />
+              <Route path="create-relationship-manager" element={<RelationshipManagerCreate />} />
+              <Route path="edit-relationship-manager/:rmId" element={<RelationshipManagerCreate />} />
+              <Route path="create-credit-manager" element={<CreditManagerCreate />} />
+              <Route path="edit-credit-manager/:cmId" element={<CreditManagerCreate />} />
+              <Route path="edit-customer/:customerId" element={<CustomerEdit />} />
+              <Route path="edit-ams/:amsId" element={<AMSCreate />} />
+              <Route path="edit-back-office/:backOfficeId" element={<BackOfficeCreate />} />
+              <Route path="company" element={<CompanyConfiguration />} />
             
-            <Route path="masters">
-              <Route index element={<Navigate to="interest-type" replace />} />
-              <Route path="interest-type" element={<InterestTypePage />} />
-              <Route path="title" element={<Title />} />
-              <Route path="relationship" element={<Relationship />} />
-              <Route path="sourcing-channel" element={<SourcingChannel />} />
-              <Route path="document-type" element={<DocumentType />} />
-              <Route path="customer-document-type" element={<CustomerDocumentType />} />
-              <Route path="status-role" element={<StatusRole />} />
-              <Route path="status" element={<Status />} />
-              <Route path="loan-type" element={<LoanType />} />
-              <Route path="loan-product" element={<LoanProduct />} />
-              <Route path="loan-purpose" element={<LoanPurpose />} />
-              <Route path="loan-transaction-type" element={<LoanTransactionType />} />
-              <Route path="gender" element={<Gender />} />
-              <Route path="marital-status" element={<MaritalStatus />} />
-              <Route path="bank-branch" element={<BankBranch />} />
-              <Route path="state" element={<State />} />
-              <Route path="city" element={<City />} />
-              <Route path="employment-type" element={<EmploymentType />} />
-              <Route path="bank" element={<Bank />} />
-              <Route path="country" element={<Country />} />
-              <Route path="district" element={<District />} />
-              <Route path="employment-type-document-mapping" element={<EmploymentTypeDocumentMapping />} />
-              <Route path="loan-product-variation" element={<LoanProductVariation />} />
-              <Route path="verification" element={<Verification />} />
-              <Route path="property" element={<Property />} />
-              <Route path="property-usage" element={<PropertyUsage />} />
-              <Route path="education" element={<Education />} />
-              <Route path="religion" element={<Religion />} />
-              <Route path="caste" element={<Caste />} />
-              <Route path="loan-product-collateral" element={<LoanProductCollateral />} />
-              <Route path="rate-of-interest" element={<RateOfInterest />} />
-              <Route path="foir" element={<FOIR />} />
-              <Route path="industry-type" element={<IndustryType />} />
-              <Route path="loan-product-tenure" element={<LoanProductTenure />} />
-              <Route path="assessment-method" element={<AssessmentMethod />} />
-              <Route path="pd-verification-type" element={<PDVerificationType />} />
-              <Route path="rtr-norm-master" element={<RTRNormMaster />} />
-              <Route path="rtr-loan-status" element={<RTRLoanStatus />} />
-              <Route path="health-check-type" element={<HealthCheckType />} />
-              <Route path="proof-master" element={<ProofMaster />} />
-              <Route path="mortgage-status" element={<MortgageStatus />} />
-              <Route path="deviation-list" element={<GeneralDeviationMaster />} />
-              <Route path="cir-deviations" element={<CIRDeviationMaster />} />
-              <Route path="negative-fi-deviations" element={<NegativeFIDeviationMaster />} />
+              <Route path="masters">
+                <Route index element={<Navigate to="interest-type" replace />} />
+                <Route path="interest-type" element={<InterestTypePage />} />
+                <Route path="title" element={<Title />} />
+                <Route path="relationship" element={<Relationship />} />
+                <Route path="sourcing-channel" element={<SourcingChannel />} />
+                <Route path="document-type" element={<DocumentType />} />
+                <Route path="customer-document-type" element={<CustomerDocumentType />} />
+                <Route path="status-role" element={<StatusRole />} />
+                <Route path="status" element={<Status />} />
+                <Route path="loan-type" element={<LoanType />} />
+                <Route path="loan-product" element={<LoanProduct />} />
+                <Route path="loan-purpose" element={<LoanPurpose />} />
+                <Route path="loan-transaction-type" element={<LoanTransactionType />} />
+                <Route path="gender" element={<Gender />} />
+                <Route path="marital-status" element={<MaritalStatus />} />
+                <Route path="bank-branch" element={<BankBranch />} />
+                <Route path="state" element={<State />} />
+                <Route path="city" element={<City />} />
+                <Route path="employment-type" element={<EmploymentType />} />
+                <Route path="bank" element={<Bank />} />
+                <Route path="country" element={<Country />} />
+                <Route path="district" element={<District />} />
+                <Route path="employment-type-document-mapping" element={<EmploymentTypeDocumentMapping />} />
+                <Route path="loan-product-variation" element={<LoanProductVariation />} />
+                <Route path="verification" element={<Verification />} />
+                <Route path="property" element={<Property />} />
+                <Route path="property-usage" element={<PropertyUsage />} />
+                <Route path="education" element={<Education />} />
+                <Route path="religion" element={<Religion />} />
+                <Route path="caste" element={<Caste />} />
+                <Route path="loan-product-collateral" element={<LoanProductCollateral />} />
+                <Route path="rate-of-interest" element={<RateOfInterest />} />
+                <Route path="foir" element={<FOIR />} />
+                <Route path="industry-type" element={<IndustryType />} />
+                <Route path="loan-product-tenure" element={<LoanProductTenure />} />
+                <Route path="assessment-method" element={<AssessmentMethod />} />
+                <Route path="pd-verification-type" element={<PDVerificationType />} />
+                <Route path="rtr-norm-master" element={<RTRNormMaster />} />
+                <Route path="rtr-loan-status" element={<RTRLoanStatus />} />
+                <Route path="health-check-type" element={<HealthCheckType />} />
+                <Route path="proof-master" element={<ProofMaster />} />
+                <Route path="mortgage-status" element={<MortgageStatus />} />
+                <Route path="deviation-list" element={<GeneralDeviationMaster />} />
+                <Route path="cir-deviations" element={<CIRDeviationMaster />} />
+                <Route path="negative-fi-deviations" element={<NegativeFIDeviationMaster />} />
+              </Route>
             </Route>
-          </Route>
-        </Routes>
+          </Routes>
+        </MasterAccessGuard>
       </BrowserRouter>
     </LoadingProvider>
   );

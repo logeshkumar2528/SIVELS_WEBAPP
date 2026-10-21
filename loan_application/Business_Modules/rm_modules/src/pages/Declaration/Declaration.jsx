@@ -1,3 +1,5 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PenTool, Calendar, User, Briefcase, UserCheck, Phone, CheckCircle } from 'lucide-react';
@@ -13,7 +15,7 @@ import { useLoading } from '../../../../../Core/src/context/LoadingContext';
 import { getCurrentRMContext } from '../../utils/rmContext';
 import { buildApplicationDisplayId, buildSectionUpdate, getSectionState, getApplicantCount, createArray, resolveApplicantName } from '../applicationWizard/flowUtils';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+const API_BASE = API_BASE_URL;
 
 function getTodayDate() {
   return new Date().toISOString().split('T')[0];
@@ -72,7 +74,7 @@ async function fetchLiveRMNameFromApi() {
   const fallbackName = currentRmObj.fullName || currentRmObj.name || '';
 
   try {
-    const res = await fetch(`${API_BASE}/RMMaster`);
+    const res = await apiFetch(`${API_BASE}/RMMaster`);
     if (res.ok) {
       const data = await res.json();
       const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);
@@ -273,7 +275,7 @@ export default function Declaration() {
 
       try {
         // 1. Fetch customer data via GET /AgentAddCustomer/:appId
-        const custResponse = await fetch(`${API_BASE}/AgentAddCustomer/${appId}`);
+        const custResponse = await apiFetch(`${API_BASE}/AgentAddCustomer/${appId}`);
         let customerRecord = null;
         if (custResponse.ok) {
           const custData = await custResponse.json();
@@ -399,7 +401,7 @@ export default function Declaration() {
           throw new Error('Invalid customer ID for final submission.');
         }
 
-        const statusRes = await fetch(`${API_BASE}/AgentAddCustomer/${agentCustomerId}`);
+        const statusRes = await apiFetch(`${API_BASE}/AgentAddCustomer/${agentCustomerId}`);
         if (statusRes.ok) {
           const statusData = await statusRes.json().catch(() => null);
           const customer = statusData?.value ?? statusData?.data ?? statusData;
@@ -425,7 +427,7 @@ export default function Declaration() {
           modifiedBy,
         };
 
-        const putRes = await fetch(`${API_BASE}/AgentAddCustomer/${agentCustomerId}`, {
+        const putRes = await apiFetch(`${API_BASE}/AgentAddCustomer/${agentCustomerId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),

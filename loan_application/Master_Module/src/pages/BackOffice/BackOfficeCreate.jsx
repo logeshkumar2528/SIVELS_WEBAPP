@@ -420,8 +420,8 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
         isActive,
         accountNumber: form.accountNumber.trim(),
         ifscCode: form.ifscCode.trim().toUpperCase(),
-        createdBy: getCurrentUserId() || 1,
-        modifiedBy: getCurrentUserId() || 1,
+        createdBy: getCurrentUserId(),
+        modifiedBy: getCurrentUserId(),
       };
 
       let targetBackOfficeId = editBackOfficeId || null;

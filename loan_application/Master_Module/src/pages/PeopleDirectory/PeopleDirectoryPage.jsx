@@ -1,3 +1,6 @@
+import { apiFetch } from '../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../Core/src/auth/tokenStore';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -35,8 +38,10 @@ import { getCities } from '../../api/masters/cityApi';
 import { getDistricts } from '../../api/masters/districtApi';
 import './PeopleDirectory.css';
 import '../Dashboard/Dashboard.css';
+import AuthImage from '../../../../Core/src/auth/AuthImage';
+import { useAuthedObjectUrl } from '../../../../Core/src/auth/useAuthedObjectUrl';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+const API_BASE = API_BASE_URL;
 
 const unwrap = (response) => {
   if (Array.isArray(response)) return response;
@@ -210,7 +215,7 @@ const isCustomerEditable = (record) => {
 };
 
 const authHeaders = () => {
-  const token = localStorage.getItem('authToken');
+  const token = getAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
@@ -258,7 +263,7 @@ function DirectoryAvatar({ role, id, name, className = 'role-avatar', style, ver
           ...style,
         }}
       >
-        <img
+        <AuthImage
           src={imageUrl}
           alt={`${name || role} avatar`}
           style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
@@ -1318,6 +1323,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
   const [selectedAms, setSelectedAms] = useState(null);
   const [loadingAmsModal, setLoadingAmsModal] = useState(false);
   const [previewDoc, setPreviewDoc] = useState(null);
+  const previewSrc = useAuthedObjectUrl(previewDoc?.url);
   const [imageVersion, setImageVersion] = useState(() => Date.now());
   const [locations, setLocations] = useState(() => locationLookupCache || { states: [], cities: [], districts: [] });
   const [sublistModal, setSublistModal] = useState(null);
@@ -2154,7 +2160,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
 
     try {
       const headers = authHeaders();
-      const response = await fetch(targetUrl, { headers });
+      const response = await apiFetch(targetUrl, { headers });
       if (response.ok) {
         const blob = await response.blob();
         const objectUrl = URL.createObjectURL(blob);
@@ -2987,18 +2993,101 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
 
       {/* Dedicated Document / Image Preview Lightbox */}
       {previewDoc && (
-        <DocumentPreviewLightbox
-          previewDoc={previewDoc}
-          onClose={handleClosePreview}
-        />
-      )}
+        <div
+          className="ams-doc-preview-backdrop"
+          role="presentation"
+          onMouseDown={handleClosePreview}
+        >
+          <div
+            className="ams-doc-preview-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={previewDoc.title || 'Document Preview'}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="ams-doc-preview-header">
+              <h3>
+                {previewDoc.isPdf ? <FileText size={18} /> : <Camera size={18} />}
+                {previewDoc.title || 'Document Preview'}
+              </h3>
+              <div className="ams-doc-preview-header-actions">
+                {previewDoc.url && (
+                  <a
+                    href={previewSrc || undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ams-doc-newtab-btn"
+                    title="Open in new window or tab"
+                  >
+                    <ArrowUpRight size={14} /> Open in New Tab
+                  </a>
+                )}
+                <button
+                  type="button"
+                  className="ams-doc-preview-close"
+                  onClick={handleClosePreview}
+                  aria-label="Close preview"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
 
-      {/* Sublist Records Modal (View Customers / View Agents) */}
-      {sublistModal && (
-        <SublistRecordsModal
-          modalData={sublistModal}
-          onClose={() => setSublistModal(null)}
-        />
+            <div className="ams-doc-preview-body">
+              {previewDoc.loading ? (
+                <div className="doc-loading-container">
+                  <LoaderCircle size={28} className="doc-spin-icon" />
+                  <span>Loading document preview...</span>
+                </div>
+              ) : previewDoc.isPdf ? (
+                <div className="ams-doc-iframe-container">
+                  <iframe
+                    src={previewSrc || undefined}
+                    title={previewDoc.title || 'PDF Preview'}
+                    className="ams-doc-iframe"
+                  />
+                  <div className="ams-doc-fallback-bar">
+                    <span>Trouble viewing PDF?</span>
+                    <a
+                      href={previewSrc || undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ams-doc-newtab-btn"
+                    >
+                      <ArrowUpRight size={13} /> Open in new tab
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <div className="ams-doc-image-container">
+                  <img
+                    src={previewSrc || undefined}
+                    alt={previewDoc.title || 'Preview'}
+                    className="ams-doc-image"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      const errBox = document.getElementById('dir-doc-img-error');
+                      if (errBox) errBox.style.display = 'flex';
+                    }}
+                  />
+                  <div id="dir-doc-img-error" className="ams-doc-error-box" style={{ display: 'none' }}>
+                    <p>Unable to load image preview directly.</p>
+                    {previewDoc.url && (
+                      <a
+                        href={previewSrc || undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ams-doc-newtab-btn"
+                      >
+                        <ArrowUpRight size={14} /> Open Image in New Tab
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

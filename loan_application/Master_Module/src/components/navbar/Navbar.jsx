@@ -9,6 +9,7 @@ import {
   Factory, Clock, Calculator, UserCheck, FileSpreadsheet, Activity, FileCheck, ShieldAlert
 } from 'lucide-react';
 import { MasterModal } from '../masters/MasterModal/MasterModal';
+import { logout } from '../../../../Core/src/auth/session';
 import './Navbar.css';
 
 const MASTERS_MENU = [
@@ -156,13 +157,7 @@ export function Navbar() {
   })();
   const isAmsUser = currentUser?.role === 'AMS';
   const handleLogout = () => {
-    localStorage.removeItem('sivels_currentUser');
-    localStorage.removeItem('sivels_permissions');
-    localStorage.removeItem('sivels_roles');
-    localStorage.removeItem('creditHeadAuth');
-    localStorage.removeItem('creditHeadData');
-    localStorage.removeItem('creditHeadId');
-    window.location.href = '/login';
+    logout();
   };
 
   const isMastersActive = location.pathname.startsWith('/masters');

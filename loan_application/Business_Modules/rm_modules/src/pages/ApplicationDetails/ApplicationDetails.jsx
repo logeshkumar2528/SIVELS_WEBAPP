@@ -1,3 +1,5 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -78,7 +80,7 @@ async function updateCustomerStatusToInProgress(baseUrl, customerId, record = {}
 
   try {
     let baseRecord = record;
-    const getRes = await fetch(`${baseUrl}/AgentAddCustomer/${customerId}`);
+    const getRes = await apiFetch(`${baseUrl}/AgentAddCustomer/${customerId}`);
     if (getRes.ok) {
       const data = await getRes.json();
       const cust = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
@@ -96,7 +98,7 @@ async function updateCustomerStatusToInProgress(baseUrl, customerId, record = {}
       status: 1,
     };
 
-    const putRes = await fetch(`${baseUrl}/AgentAddCustomer/${customerId}`, {
+    const putRes = await apiFetch(`${baseUrl}/AgentAddCustomer/${customerId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -224,7 +226,7 @@ export default function ApplicationDetails() {
     let active = true;
 
     async function loadApplicationFromApi() {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+      const baseUrl = API_BASE_URL;
       setIsLoadingApplication(true);
 
       try {
@@ -278,7 +280,7 @@ export default function ApplicationDetails() {
           if (ownership.isAgentCreated && agentId) {
             // 1. Agent-sourced application
             try {
-              const agentResponse = await fetch(`${baseUrl}/AgentMaster/${agentId}`);
+              const agentResponse = await apiFetch(`${baseUrl}/AgentMaster/${agentId}`);
               if (agentResponse.ok) {
                 const agentData = await agentResponse.json();
                 const agentRecord = Array.isArray(agentData)
@@ -351,7 +353,7 @@ export default function ApplicationDetails() {
           } else if (ownership.isDirectRm && rmId) {
             // 2. Direct RM-sourced application
             try {
-              const rmResponse = await fetch(`${baseUrl}/RMMaster/${rmId}`);
+              const rmResponse = await apiFetch(`${baseUrl}/RMMaster/${rmId}`);
               if (rmResponse.ok) {
                 const rmData = await rmResponse.json();
                 const rmRecord = Array.isArray(rmData)
@@ -447,8 +449,8 @@ export default function ApplicationDetails() {
   useEffect(() => {
     async function fetchMasterData(endpoint, idField, nameField, setOptionsState) {
       try {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-        const response = await fetch(`${baseUrl}/${endpoint}`);
+        const baseUrl = API_BASE_URL;
+        const response = await apiFetch(`${baseUrl}/${endpoint}`);
         if (response.ok) {
           const data = await response.json();
           const options = data.map(item => ({
@@ -683,8 +685,8 @@ export default function ApplicationDetails() {
     async function fetchTenuresForProduct() {
       setIsLoadingTenures(true);
       try {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-        const response = await fetch(`${baseUrl}/masters/LoanProductTenureMaster/product/${encodeURIComponent(productId)}`);
+        const baseUrl = API_BASE_URL;
+        const response = await apiFetch(`${baseUrl}/masters/LoanProductTenureMaster/product/${encodeURIComponent(productId)}`);
         if (response.ok) {
           const data = await response.json();
           const records = Array.isArray(data) ? data : (data?.data || data?.value || data?.result || (data ? [data] : []));
@@ -806,7 +808,7 @@ export default function ApplicationDetails() {
     }
 
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+      const baseUrl = API_BASE_URL;
       const isUpdate = !!appData.applicationProductDetailsId;
       const url = isUpdate 
         ? `${baseUrl}/ApplicationProductDetails/${appData.applicationProductDetailsId}` 
@@ -1079,7 +1081,7 @@ export default function ApplicationDetails() {
 
       console.log('Sending payload to backend:', payload);
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method: isUpdate ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

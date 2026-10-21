@@ -97,7 +97,7 @@ export function HealthCheckTypeForm({
     }
 
     setIsSubmitting(true);
-    const currentUserId = getCurrentUserId() || 1;
+    const currentUserId = getCurrentUserId();
     const recordId = getId(editingRecord);
 
     try {

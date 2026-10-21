@@ -1,3 +1,6 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../../Core/src/auth/tokenStore';
 import { useEffect, useMemo, useState } from 'react';
 import iconMap from '../../config/iconMap';
 import DataTable from '../../components/DataTable/DataTable';
@@ -10,8 +13,9 @@ import { formatDate } from '../../utils/dateHelper';
 import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import { getCurrentRMContext, resolveApiArray } from '../../utils/rmContext';
 import './MyAgents.css';
+import AuthImage from '../../../../../Core/src/auth/AuthImage';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+const API_BASE = API_BASE_URL;
 
 function AgentAvatar({ name = '', agentId = null, className = 'ag-cell-avatar', style = {} }) {
   const [failed, setFailed] = useState(false);
@@ -25,7 +29,7 @@ function AgentAvatar({ name = '', agentId = null, className = 'ag-cell-avatar', 
 
   if (imageUrl && !failed) {
     return (
-      <img
+      <AuthImage
         src={imageUrl}
         alt={name || 'Agent'}
         className={className}
@@ -140,7 +144,7 @@ export default function MyAgents() {
 
   const getAuthHeaders = () => {
     const headers = {};
-    const token = localStorage.getItem('authToken');
+    const token = getAccessToken();
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
@@ -157,7 +161,7 @@ export default function MyAgents() {
       const agentId = row?.raw?.agentId || row?.raw?.AgentId || row?.agentId || row?.raw?.agentCode || row?.id;
       if (!agentId) return;
 
-      const response = await fetch(`${API_BASE}/AgentMaster/${agentId}`, {
+      const response = await apiFetch(`${API_BASE}/AgentMaster/${agentId}`, {
         headers: getAuthHeaders(),
       });
 
@@ -199,9 +203,9 @@ export default function MyAgents() {
       try {
         const authHeaders = getAuthHeaders();
         const [rmResponse, agentsResponse, customerResponse] = await Promise.all([
-          fetch(`${API_BASE}/RMMaster`, { headers: authHeaders }),
-          fetch(`${API_BASE}/AgentMaster`, { headers: authHeaders }),
-          fetch(`${API_BASE}/AgentAddCustomer`, { headers: authHeaders }),
+          apiFetch(`${API_BASE}/RMMaster`, { headers: authHeaders }),
+          apiFetch(`${API_BASE}/AgentMaster`, { headers: authHeaders }),
+          apiFetch(`${API_BASE}/AgentAddCustomer`, { headers: authHeaders }),
         ]);
 
         if (!rmResponse.ok) throw new Error(`Failed to load RM data (${rmResponse.status})`);

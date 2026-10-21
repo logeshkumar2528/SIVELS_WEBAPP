@@ -2,6 +2,7 @@ import { memo, useState } from 'react';
 import iconMap from '../../config/iconMap';
 import logoImg from '../../../../../Core/src/assets/branding/Logo.png';
 import Modal from '../Modal/Modal';
+import { logout } from '../../../../../Core/src/auth/session';
 import './Sidebar.css';
 
 const BADGE_CLASS_MAP = {
@@ -89,12 +90,7 @@ function Sidebar({ menu = [], activeRoute = '', badgeCounts = {}, isOpen = false
 
   const handleConfirmLogout = () => {
     setShowLogoutModal(false);
-    localStorage.removeItem('sivels_currentUser');
-    localStorage.removeItem('sivels_permissions');
-    localStorage.removeItem('sivels_roles');
-    localStorage.removeItem('rmData');
-    localStorage.removeItem('rmId');
-    window.location.href = '/login';
+    logout();
   };
 
   return (

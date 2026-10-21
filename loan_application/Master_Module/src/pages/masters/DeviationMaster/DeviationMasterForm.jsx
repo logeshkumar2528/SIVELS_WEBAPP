@@ -73,7 +73,7 @@ export function DeviationMasterForm({ isOpen, onClose, onSuccess, editingRecord,
       return;
     }
     setSubmitting(true);
-    const userId = getCurrentUserId() || 1;
+    const userId = getCurrentUserId();
     const payload = { ...form, ...(type === 'general' ? { loanProductId: Number(form.loanProductId) } : {}), isActive: form.isActive === true };
     try {
       if (isEdit) await deviationMasterApi[type].update(getId(editingRecord, type), { ...payload, modifiedBy: userId });

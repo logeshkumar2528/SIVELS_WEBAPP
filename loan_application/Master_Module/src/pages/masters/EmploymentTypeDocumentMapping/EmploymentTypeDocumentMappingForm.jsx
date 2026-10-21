@@ -82,7 +82,7 @@ export function EmploymentTypeDocumentMappingForm({
           documentTypeId: hasValue(initialData.documentTypeId) ? Number(initialData.documentTypeId) : null,
           isMandatory,
           isActive,
-          modifiedBy: Number(getCurrentUserId()) || 1
+          modifiedBy: getCurrentUserId()
         };
         
         await updateMapping(initialData.employmentTypeDocumentMappingId, payload);
@@ -93,7 +93,7 @@ export function EmploymentTypeDocumentMappingForm({
           customerDocumentTypeId: Number(customerDocumentTypeId),
           isMandatory,
           isActive,
-          createdBy: Number(getCurrentUserId()) || 1
+          createdBy: getCurrentUserId()
         };
         
         await createMapping(payload);

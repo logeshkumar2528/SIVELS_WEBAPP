@@ -3,7 +3,19 @@ import iconMap from '../../../back_office/src/back-office/config/iconMap';
 import { getProfileImageUrl, getInitials } from '../../../../Core/src/utils/profileImageHelper';
 import { formatDate } from '../../../../Core/src/utils/dateHelper';
 import { useCreditManagerProfile } from '../hooks/useCreditManagerProfile';
-import './MyProfile.css';
+import AuthImage from '../../../../Core/src/auth/AuthImage';
+
+function ProfileField({ icon: Icon, label, value }) {
+  return (
+    <div className="bo-profile-field">
+      <span className="bo-profile-field-icon"><Icon size={17} /></span>
+      <div>
+        <span className="bo-profile-field-label">{label}</span>
+        <strong>{value || 'Not Available'}</strong>
+      </div>
+    </div>
+  );
+}
 
 function ProfileSkeleton() {
   return (
@@ -81,7 +93,7 @@ export default function MyProfile() {
         <aside className="cm-identity-panel">
           <div className="cm-identity-avatar-wrap">
             {showImage ? (
-              <img
+              <AuthImage
                 src={imageUrl}
                 alt={profile?.fullName || 'Credit Manager'}
                 className="cm-identity-avatar-img"

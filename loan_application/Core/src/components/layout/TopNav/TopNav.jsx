@@ -6,6 +6,7 @@ import { ChevronDown, Users, Shield, UserCog, LogOut } from 'lucide-react';
 import userLogo from '../../../assets/user.png';
 import HasPermission from '../../common/HasPermission/HasPermission';
 import ConfirmModal from '../../common/ConfirmModal/ConfirmModal';
+import { logout } from '../../../auth/session';
 
 const TopNav = ({ title, subtitle, headerContent, rightContent, hideProfile = false }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -25,7 +26,7 @@ const TopNav = ({ title, subtitle, headerContent, rightContent, hideProfile = fa
 
   const handleConfirmLogout = () => {
     setShowLogoutModal(false);
-    navigate('/signup');
+    logout();
   };
 
   return (

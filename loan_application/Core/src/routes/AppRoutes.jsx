@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import AuthLayout from '../components/layout/AuthLayout/AuthLayout';
 import CustomerLayout from '../components/layout/CustomerLayout/CustomerLayout';
 import CreateUser from '../pages/Users/CreateUser';
@@ -18,6 +18,7 @@ import UserGroupAssignments from '../pages/Users/UserGroupAssignments';
 import Users from '../pages/Users/Users';
 import CustomerApp from '../../../Business_Modules/customer_module/src/App';
 import EmploymentTypeDocumentMapping from '../pages/EmploymentTypeDocumentMapping/EmploymentTypeDocumentMapping';
+import RequireAuth from '../auth/RequireAuth';
 
 // ─── Placeholder for dashboard pages not yet implemented in Core ───────────
 const PlaceholderPage = ({ title }) => (
@@ -102,7 +103,14 @@ const AppRoutes = () => {
       {/* Agent module is now handled exclusively by Vite multi-module router via agent_module/index.html */}
 
       {/* ── CUSTOMER (Core layout) ──────────────────────────────────────── */}
-      <Route path="/customer" element={<CustomerLayout />}>
+      <Route
+        path="/customer"
+        element={
+          <RequireAuth allowedRoles={['CUSTOMER']}>
+            <CustomerLayout />
+          </RequireAuth>
+        }
+      >
         {customerRoutes.map((route) =>
           route.index ? (
             <Route key="customer-index" index element={route.element} />
@@ -114,9 +122,17 @@ const AppRoutes = () => {
       <Route path="/customer-profile" element={<Navigate to="/customer/profile" replace />} />
 
       {/* ── MANAGEMENT ROUTES ───────────────────────────────────────────── */}
-      {managementRoutes.map((route) => (
-        <Route key={route.path} path={route.path} element={route.element} />
-      ))}
+      <Route
+        element={
+          <RequireAuth allowedRoles={['MASTER_ADMIN']}>
+            <Outlet />
+          </RequireAuth>
+        }
+      >
+        {managementRoutes.map((route) => (
+          <Route key={route.path} path={route.path} element={route.element} />
+        ))}
+      </Route>
 
       {/* ── INTEGRATED BUSINESS MODULES ─────────────────────────────────── */}
       <Route path="/client/*"   element={<CustomerApp />} />

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState } from "react";
+import { clearSession } from "../auth/tokenStore";
 
 
 const AuthContext = createContext(null);
@@ -101,9 +102,7 @@ export const AuthProvider = ({ children }) => {
     setCurrentUser(null);
     setPermissions([]);
     setRoles([]);
-    localStorage.removeItem('sivels_currentUser');
-    localStorage.removeItem('sivels_permissions');
-    localStorage.removeItem('sivels_roles');
+    clearSession();
   };
 
   const hasPermission = (permission) => {

@@ -1,3 +1,6 @@
+import { apiFetch } from '../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../Core/src/auth/tokenStore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -32,8 +35,9 @@ import { getProfileImageUrl } from '../../utils/profileImageHelper';
 import { getFileUrl, isPdfFile, getAadhaarPath, getPanPath, getProfilePath, getDocumentUrl } from '../Dashboard/Dashboard';
 import '../RelationshipManager/RelationshipManagerCreate.css';
 import './AgentCreate.css';
+import { getCurrentUserId } from '../../utils/authHelper';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+const API_BASE = API_BASE_URL;
 
 const GENDER_OPTIONS = [
   { value: 1, label: 'Male' },
@@ -135,7 +139,7 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
 
 
   useEffect(() => {
-    fetch(`${API_BASE}/RMMaster`)
+    apiFetch(`${API_BASE}/RMMaster`)
       .then((response) => (response.ok ? response.json() : []))
       .then((result) => {
         const rows = Array.isArray(result) ? result : result?.data || [];
@@ -164,9 +168,9 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
       setLoadingAgent(true);
       setErrorMessage('');
       try {
-        const token = localStorage.getItem('authToken');
+        const token = getAccessToken();
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const response = await fetch(`${API_BASE}/AgentMaster/${editAgentId}`, { headers });
+        const response = await apiFetch(`${API_BASE}/AgentMaster/${editAgentId}`, { headers });
         if (!response.ok) {
           throw new Error(`Failed to load agent (${response.status})`);
         }
@@ -329,7 +333,7 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
     const headers = {
       'Content-Type': 'application/json',
     };
-    const token = localStorage.getItem('authToken');
+    const token = getAccessToken();
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
@@ -425,7 +429,7 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
       return 'Please enter a valid IFSC code.';
     }
 
-    if (!selectedRmId && !formData.relationshipManager) {
+    if (!(Number(selectedRmId) > 0)) {
       return 'Please select a relationship manager.';
     }
 
@@ -463,7 +467,7 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
     fullName: formData.fullName.trim(),
     dateOfBirth: formData.dateOfBirth,
     genderId: Number(formData.genderId || 0),
-    rmId: Number(selectedRmId || currentRmId || currentUser?.id || 1),
+    rmId: Number(selectedRmId),
     address: formData.address.trim(),
     state: formData.state.trim(),
     pincode: formData.pincode.trim(),
@@ -475,8 +479,8 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
     isActive: existingAgent?.isActive ?? true,
     bankAccountNumber: formData.bankAccountNumber.trim(),
     ifscCode: formData.ifscCode.trim().toUpperCase(),
-    createdBy: existingAgent?.createdBy ?? (currentRmId || Number(currentUser?.id || 1)),
-    modifiedBy: currentRmId || Number(currentUser?.id || 1),
+    createdBy: existingAgent?.createdBy ?? (currentRmId || getCurrentUserId()),
+    modifiedBy: currentRmId || getCurrentUserId(),
   });
 
   const handleSubmit = (e) => {
@@ -502,7 +506,7 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
         const endpoint = isEditMode
           ? `${API_BASE}/AgentMaster/${editAgentId}`
           : `${API_BASE}/AgentMaster`;
-        const response = await fetch(endpoint, {
+        const response = await apiFetch(endpoint, {
           method: isEditMode ? 'PUT' : 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify(payload),

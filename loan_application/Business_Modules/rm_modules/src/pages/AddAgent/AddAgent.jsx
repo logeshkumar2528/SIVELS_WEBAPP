@@ -1,3 +1,6 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../../Core/src/auth/tokenStore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -32,7 +35,7 @@ import { extractErrorItems, parseApiErrorBody } from '../../utils/formatUserFaci
 import { ROUTES } from '../../config/routeConfig';
 import './AddAgent.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+const API_BASE = API_BASE_URL;
 
 const GENDER_OPTIONS = [
   { value: 1, label: 'Male' },
@@ -134,7 +137,7 @@ export default function AddAgent({ onSuccessRedirect, agentId: agentIdProp } = {
   }, [currentBranch, currentRmName, currentUser, isEditMode]);
 
   useEffect(() => {
-    fetch(`${API_BASE}/RMMaster`)
+    apiFetch(`${API_BASE}/RMMaster`)
       .then((response) => response.ok ? response.json() : [])
       .then((result) => {
         const rows = Array.isArray(result) ? result : result?.data || [];
@@ -160,7 +163,7 @@ export default function AddAgent({ onSuccessRedirect, agentId: agentIdProp } = {
       setLoadingAgent(true);
       setErrorMessage('');
       try {
-        const response = await fetch(`${API_BASE}/AgentMaster/${editAgentId}`, {
+        const response = await apiFetch(`${API_BASE}/AgentMaster/${editAgentId}`, {
           headers: getAuthHeaders(),
         });
         if (!response.ok) {
@@ -232,14 +235,14 @@ export default function AddAgent({ onSuccessRedirect, agentId: agentIdProp } = {
     bankAccountNumber: formData.bankAccountNumber.trim(),
     ifscCode: formData.ifscCode.trim().toUpperCase(),
     createdBy: existingAgent?.createdBy ?? (currentRmId || Number(currentUser?.id || currentUser?.userId || 0)),
-    modifiedBy: currentRmId || Number(currentUser?.id || currentUser?.userId || 0) || 1,
+    modifiedBy: currentRmId || Number(currentUser?.id || currentUser?.userId || 0) || null,
   });
 
   const getAuthHeaders = () => {
     const headers = {
       'Content-Type': 'application/json',
     };
-    const token = localStorage.getItem('authToken');
+    const token = getAccessToken();
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
@@ -432,7 +435,7 @@ export default function AddAgent({ onSuccessRedirect, agentId: agentIdProp } = {
         const endpoint = isEditMode
           ? `${API_BASE}/AgentMaster/${editAgentId}`
           : `${API_BASE}/AgentMaster`;
-        const response = await fetch(endpoint, {
+        const response = await apiFetch(endpoint, {
           method: isEditMode ? 'PUT' : 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify(payload),
@@ -494,7 +497,7 @@ export default function AddAgent({ onSuccessRedirect, agentId: agentIdProp } = {
         const formDataUpload = new FormData();
         formDataUpload.append('file', panFile);
 
-        const token = localStorage.getItem('authToken');
+        const token = getAccessToken();
         const uploadHeaders = {};
         if (token) {
           uploadHeaders.Authorization = `Bearer ${token}`;
@@ -502,7 +505,7 @@ export default function AddAgent({ onSuccessRedirect, agentId: agentIdProp } = {
         // NOTE: Do not set Content-Type header so browser automatically sets multipart/form-data boundary
 
         const uploadEndpoint = `${API_BASE}/AgentMaster/${encodeURIComponent(targetAgentId)}/upload-pan`;
-        const uploadResponse = await fetch(uploadEndpoint, {
+        const uploadResponse = await apiFetch(uploadEndpoint, {
           method: 'POST',
           headers: uploadHeaders,
           body: formDataUpload,

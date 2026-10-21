@@ -88,7 +88,7 @@ export function CustomerDocumentTypeForm({ isOpen, onClose, onSuccess, initialDa
 
     setError(null);
     setIsSubmitting(true);
-    const userId = Number(getCurrentUserId()) || 1;
+    const userId = getCurrentUserId();
 
     try {
       if (isEdit) {

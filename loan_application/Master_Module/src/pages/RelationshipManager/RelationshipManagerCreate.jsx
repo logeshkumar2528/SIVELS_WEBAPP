@@ -350,8 +350,8 @@ export default function RelationshipManagerCreate() {
         stateId: Number(form.stateId),
         cityId: Number(form.cityId),
         isActive,
-        createdBy: existingRecord?.createdBy || getCurrentUserId() || 1,
-        modifiedBy: getCurrentUserId() || 1,
+        createdBy: existingRecord?.createdBy || getCurrentUserId(),
+        modifiedBy: getCurrentUserId(),
       };
 
       let targetRmId = rmId || null;

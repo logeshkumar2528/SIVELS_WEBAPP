@@ -19,6 +19,7 @@ import { ROUTES, buildRoute } from '../../config/routeConfig';
 import { useRMDetailData } from '../../hooks/useRMDetailData';
 import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './RMDetail.css';
+import AuthImage from '../../../../../../Core/src/auth/AuthImage';
 
 function BoAvatar({ role, id, name, fallbackInitials, className }) {
   const [error, setError] = useState(false);
@@ -33,7 +34,7 @@ function BoAvatar({ role, id, name, fallbackInitials, className }) {
   if (imageUrl && !error) {
     return (
       <div className={className} style={{ overflow: 'hidden', padding: 0 }}>
-        <img
+        <AuthImage
           src={imageUrl}
           alt={`${name || role} avatar`}
           style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}

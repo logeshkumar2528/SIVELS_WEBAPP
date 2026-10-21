@@ -4,6 +4,7 @@ import { useBackOfficeProfile } from '../../hooks/useBackOfficeProfile';
 import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import { formatDate } from '../../../../../../Core/src/utils/dateHelper';
 import './Profile.css';
+import AuthImage from '../../../../../../Core/src/auth/AuthImage';
 
 function ProfileSkeleton() {
   return (
@@ -81,10 +82,10 @@ export default function Profile() {
         <aside className="bo-identity-panel">
           <div className="bo-identity-avatar-wrap">
             {showImage ? (
-              <img
-                src={imageUrl}
-                alt={profile?.fullName || 'Back Office'}
-                className="bo-identity-avatar-img"
+              <AuthImage
+                src={previewUrl || imageUrl}
+                alt={profile.fullName || 'Back Office User'}
+                className="bo-profile-avatar-image"
                 onError={() => setImageFailed(true)}
               />
             ) : (

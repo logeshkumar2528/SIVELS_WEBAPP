@@ -5,6 +5,7 @@ import { MasterStatusCheckbox } from '../../../components/masters/MasterStatusCh
 import { getLoanProducts } from '../../../api/masters/loanProductApi';
 import { createLoanProductVariation, updateLoanProductVariation } from '../../../api/masters/loanProductVariationApi';
 import { getErrorMessage } from '../../../utils/errorHelper';
+import { getCurrentUserId } from '../../../utils/authHelper';
 
 export function LoanProductVariationForm({ isOpen, onClose, onSuccess, initialData }) {
   const [loanProductId, setLoanProductId] = useState('');
@@ -86,7 +87,7 @@ export function LoanProductVariationForm({ isOpen, onClose, onSuccess, initialDa
           variationCode: trimmedCode,
           variationName: trimmedName,
           isActive,
-          modifiedBy: 1
+          modifiedBy: getCurrentUserId()
         };
         const response = await updateLoanProductVariation(initialData.loanProductVariationId, payload);
         const msg = response?.message || 'Updated successfully';
@@ -97,7 +98,7 @@ export function LoanProductVariationForm({ isOpen, onClose, onSuccess, initialDa
           variationCode: trimmedCode,
           variationName: trimmedName,
           isActive,
-          createdBy: 1
+          createdBy: getCurrentUserId()
         };
         const response = await createLoanProductVariation(payload);
         const msg = response?.message || 'Created successfully';

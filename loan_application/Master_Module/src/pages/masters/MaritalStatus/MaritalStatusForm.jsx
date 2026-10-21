@@ -87,7 +87,7 @@ export function MaritalStatusForm({ isOpen, onClose, onSuccess, initialData }) {
           maritalStatusId: initialData.maritalStatusId,
           maritalStatusCode: trimmedCode,
           maritalStatusName: trimmedName,
-          modifiedBy: getCurrentUserId() || 1,
+          modifiedBy: getCurrentUserId(),
           isActive
         };
         await updateMaritalStatus(initialData.maritalStatusId, payload);
@@ -97,7 +97,7 @@ export function MaritalStatusForm({ isOpen, onClose, onSuccess, initialData }) {
           maritalStatusCode: trimmedCode,
           maritalStatusName: trimmedName,
           isActive,
-          createdBy: getCurrentUserId() || 1
+          createdBy: getCurrentUserId()
         };
         await createMaritalStatus(payload);
         toast.success("Created successfully");

@@ -8,24 +8,36 @@ import {
   CheckCircle2,
   Building2,
   MapPin,
-  BadgeIndianRupee
-} from 'lucide-react';
-import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService';
-import { useAgentIdentity } from '../../hooks/useAgentIdentity';
-import { useAuth } from '../../../../../../Core/src/context/AuthContext';
-import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper';
-import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
-import { formatDate } from '../../../../../../Core/src/utils/dateHelper';
-import './Profile.css';
+  X,
+  ChevronRight,
+  Camera,
+  Loader2
+} from 'lucide-react'
+import { useAgentIdentity } from '../../hooks/useAgentIdentity'
+import { useAuth } from '../../../../../../Core/src/context/AuthContext'
+import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
+import { getProfileImageUrl, updateProfileImage } from '../../utils/profileImageHelper'
+import './Profile.css'
+import AuthImage from '../../../../../../Core/src/auth/AuthImage';
 
-function ProfileSkeleton() {
-  return (
-    <div className="agent-profile-dashboard agent-profile-skeleton" aria-label="Loading profile">
-      <div className="agent-profile-skeleton-hero" />
-      <div className="agent-profile-skeleton-grid" />
-    </div>
-  );
-}
+function Profile() {
+  const [imageError, setImageError] = useState(false)
+  const [imageVersion, setImageVersion] = useState(Date.now())
+  const [previewUrl, setPreviewUrl] = useState(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const [uploadSuccess, setUploadSuccess] = useState('')
+  const fileInputRef = useRef(null)
+
+  const [showCommissionModal, setShowCommissionModal] = useState(false)
+  const [selectedEmiCustomer, setSelectedEmiCustomer] = useState(null)
+  const [customersCount, setCustomersCount] = useState('...')
+
+  const { currentUser } = useAuth()
+  const { agentData, loadingAgent, agentId } = useAgentIdentity()
+
+  const resolvedAgentId = agentId || agentData?.agentId || agentData?.AgentId || currentUser?.agentId || currentUser?.AgentId || (typeof window !== 'undefined' ? localStorage.getItem('agentId') : null)
+  const profileImageUrl = getProfileImageUrl('Agent', resolvedAgentId, imageVersion)
 
 function isAgentRole(role) {
   if (!role) return false;
@@ -224,17 +236,50 @@ export default function Profile() {
   const showImage = Boolean(profileImageUrl && !imageError);
 
   return (
-    <div className="agent-profile-dashboard">
-      <div className="agent-profile-grid-layout">
-        {/* LEFT — Dark-green employee identity panel */}
-        <aside className="agent-identity-panel">
-          <div className="agent-identity-avatar-wrap">
-            {showImage ? (
-              <img
-                src={profileImageUrl}
-                alt={agentName}
-                className="agent-identity-avatar-img"
-                onError={() => setImageError(true)}
+    <div className="profile-page">
+      {/* 1. TOP CARD: PROFILE OVERVIEW (UNCHANGED) */}
+      <div className="profile-card profile-overview-card">
+        {/* Left Section: Avatar + Identity + Metric Tiles */}
+        <div className="profile-overview-left">
+          {/* Identity: Avatar + Name & Role */}
+          <div className="profile-identity-row">
+            <div className="profile-avatar-container" style={{ position: 'relative' }}>
+              <div className="profile-avatar-img" style={{ overflow: 'hidden' }}>
+                {previewUrl ? (
+                  <img
+                    src={previewUrl}
+                    alt={agentName}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : !imageError && profileImageUrl ? (
+                  <AuthImage 
+                    src={profileImageUrl} 
+                    alt={agentName} 
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={() => setImageError(true)}
+                  />
+                ) : (
+                  <User size={38} strokeWidth={2} style={{ color: '#1A7A3C' }} />
+                )}
+              </div>
+
+              <button
+                type="button"
+                className="profile-avatar-edit-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                title="Change profile photo"
+                aria-label="Change profile photo"
+              >
+                {isUploading ? <Loader2 size={12} className="profile-spin" /> : <Camera size={12} />}
+              </button>
+
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="image/jpeg,image/jpg,image/png,image/webp"
+                style={{ display: 'none' }}
               />
             ) : (
               <span className="agent-identity-initials">

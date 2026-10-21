@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import ErrorBoundary from '../components/ErrorBoundary/ErrorBoundary';
 import MainLayout from '../layouts/MainLayout/MainLayout';
@@ -6,6 +7,14 @@ import Dashboard from '../pages/Dashboard/Dashboard';
 import NewInvestment from '../pages/NewInvestment/NewInvestment';
 import CustomerAllocations from '../pages/CustomerAllocations/CustomerAllocations';
 import Profile from '../pages/Profile/Profile';
+import { logout } from '../../../../../Core/src/auth/session';
+
+function LogoutRoute() {
+  useEffect(() => {
+    logout();
+  }, []);
+  return null;
+}
 
 export default function AppRoutes() {
   return (
@@ -50,10 +59,7 @@ export default function AppRoutes() {
           }
         />
 
-        <Route
-          path={ROUTES.LOGOUT}
-          element={<Navigate to={ROUTES.DASHBOARD} replace />}
-        />
+        <Route path={ROUTES.LOGOUT} element={<LogoutRoute />} />
 
         {/* Fallback 404 -> Dashboard */}
         <Route path="*" element={<Navigate to={ROUTES.DASHBOARD} replace />} />

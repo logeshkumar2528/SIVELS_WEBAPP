@@ -1,3 +1,5 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { User, Users, Phone, MapPin } from 'lucide-react';
@@ -10,6 +12,7 @@ import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { buildSectionUpdate, getSectionState } from '../applicationWizard/flowUtils';
+import { getCurrentRMContext } from '../../utils/rmContext';
 
 function buildReferenceState(appData) {
   const saved = getSectionState(appData, 'references', {});
@@ -148,8 +151,8 @@ export default function ReferenceDetails() {
     async function loadMasters() {
       setIsLoadingMasters(true);
       try {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-        const res = await fetch(`${baseUrl}/RelationshipMaster`);
+        const baseUrl = API_BASE_URL;
+        const res = await apiFetch(`${baseUrl}/RelationshipMaster`);
         if (res.ok) {
           const data = await res.json();
           setRelationshipOptions(data.map(item => ({ value: item.relationshipId, label: item.relationshipName, raw: item })));
@@ -221,7 +224,7 @@ export default function ReferenceDetails() {
       return;
     }
 
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+    const baseUrl = API_BASE_URL;
     const prodId = appData.applicationProductDetailsId;
 
     if (!prodId) {
@@ -247,14 +250,14 @@ export default function ReferenceDetails() {
             RelationshipId: Number(ref.data.relationship) || 0,
             MobileNumber: ref.data.mobileNo || '',
             Address: ref.data.address || '',
-            CreatedBy: 1
+            CreatedBy: getCurrentRMContext().rmId
           };
 
           if (isUpdate) {
             payload.ApplicationReferenceDetailsId = Number(ref.data.applicationReferenceDetailsId);
           }
 
-          const response = await fetch(url, {
+          const response = await apiFetch(url, {
             method: isUpdate ? 'PUT' : 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),

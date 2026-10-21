@@ -1,3 +1,6 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../../Core/src/auth/tokenStore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MapPin, Map, Building2, Hash, HelpCircle } from 'lucide-react';
@@ -24,6 +27,7 @@ import {
   loadApplicantAadhaarUrl,
   loadCoApplicantAadhaarUrl,
 } from '../applicationWizard/flowUtils';
+import { getCurrentRMContext } from '../../utils/rmContext';
 
 function resolveMasterId(value, options = []) {
   if (value === null || value === undefined || value === '') return null;
@@ -250,8 +254,8 @@ export default function AddressDetails() {
   useEffect(() => {
     async function fetchMaster(endpoint, idField, nameField, setStateFunc) {
       try {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-        const res = await fetch(`${baseUrl}/${endpoint}`);
+        const baseUrl = API_BASE_URL;
+        const res = await apiFetch(`${baseUrl}/${endpoint}`);
         if (res.ok) {
           const data = await res.json();
           setStateFunc(data.map(item => ({ value: item[idField], label: item[nameField], raw: item })));
@@ -346,11 +350,11 @@ export default function AddressDetails() {
 
   useEffect(() => {
     let isMounted = true;
-    const token = localStorage.getItem('authToken');
+    const token = getAccessToken();
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
+    const baseUrl = API_BASE_URL;
     const kycDocs = appData.sections?.kycDocuments || appData.kycDocuments || {};
 
     // 1. Load Applicant Aadhaar (Latest updated with original Agent-uploaded fallback)
@@ -484,14 +488,14 @@ export default function AddressDetails() {
       return;
     }
 
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+    const baseUrl = API_BASE_URL;
     const allPersons = [
       { ...form.applicant, isPrimary: true },
       ...form.coApplicants.map((co, i) => ({ ...co, index: i, isPrimary: false }))
     ];
 
     try {
-      const token = localStorage.getItem('authToken');
+      const token = getAccessToken();
       const authHeaders = {
         'Content-Type': 'application/json',
       };
@@ -621,7 +625,7 @@ export default function AddressDetails() {
           StateId: resolvedStateId,
           Pincode: person.pincode || person.postalCode || person.Pincode || '',
           MailingAsCurrent: person.mailingSameAsCurrent === 'Yes',
-          CreatedBy: 1,
+          CreatedBy: getCurrentRMContext().rmId,
         };
 
         if (isUpdate) {
@@ -630,7 +634,7 @@ export default function AddressDetails() {
 
         console.log(`Saving Address [${isUpdate ? 'PUT' : 'POST'}]:`, payload);
 
-        const response = await fetch(url, {
+        const response = await apiFetch(url, {
           method: isUpdate ? 'PUT' : 'POST',
           headers: authHeaders,
           body: JSON.stringify(payload),

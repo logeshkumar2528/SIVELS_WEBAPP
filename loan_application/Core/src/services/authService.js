@@ -1,9 +1,27 @@
 import axiosInstance from '../api/axiosInstance';
+import { saveTokens } from '../auth/tokenStore';
+
+function apiErrorMessage(error, fallback) {
+  if (error?.response) {
+    return (
+      error.response.data?.message ||
+      error.response.data?.error ||
+      error.response.data?.title ||
+      fallback
+    );
+  }
+  if (error?.isAxiosError || error?.request) {
+    return 'Network error. Please check your connection and try again.';
+  }
+  return error?.message || fallback;
+}
 
 export const authService = {
   // ──────────────────────────────────────────────────────────────────────────
   // SEND OTP  →  POST /MobileOtp/send-mobile-otp
   // Payload: { phoneNumber: "9876543210", purpose: "Login" }
+  // The backend checks the account exists and is active; failures come back as
+  // { success: false, message }.
   // ──────────────────────────────────────────────────────────────────────────
   sendOtp: async (phoneNumber) => {
     try {
@@ -14,20 +32,15 @@ export const authService = {
 
       return response.data;
     } catch (error) {
-      if (error.response) {
-        const msg =
-          error.response.data?.message ||
-          error.response.data?.error ||
-          `Error ${error.response.status}: Failed to send OTP`;
-        throw new Error(msg);
-      }
-
-      throw new Error('Network error. Please check your connection and try again.');
+      throw new Error(
+        apiErrorMessage(error, `Error ${error?.response?.status ?? ''}: Failed to send OTP`.trim())
+      );
     }
   },
 
   // ──────────────────────────────────────────────────────────────────────────
   // VERIFY MOBILE OTP  →  POST /MobileOtp/verify-mobile-otp
+  // Success has no `success` field: it is identified by the presence of `token`.
   // ──────────────────────────────────────────────────────────────────────────
   verifyMobileOtp: async (mobileNumberOrPayload, maybeOtp) => {
     let mobileNumber = '';
@@ -43,64 +56,29 @@ export const authService = {
       otp = mobileNumberOrPayload || '';
     }
 
+    let data;
     try {
       const response = await axiosInstance.post('/MobileOtp/verify-mobile-otp', {
         mobileNumber: String(mobileNumber).trim(),
         otp: String(otp).trim(),
         purpose: 'Login',
       });
-      const data = response.data;
-
-      // Persist auth token if provided by backend response
-      const token = data?.token || data?.accessToken || data?.access_token || data?.data?.token;
-      if (token) {
-        localStorage.setItem('authToken', token);
-      }
-
-      return data;
+      data = response.data;
     } catch (error) {
-      if (error.response) {
-        const msg =
-          error.response.data?.message ||
-          error.response.data?.error ||
-          error.response.data?.title ||
-          'Invalid OTP. Please check the code and try again.';
-        throw new Error(msg);
-      }
-
-      throw new Error('Network error. Please check your connection and try again.');
+      throw new Error(apiErrorMessage(error, 'Invalid OTP. Please check the code and try again.'));
     }
-  },
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // LOGIN  →  POST /api/user/login
-  // baseURL is already "https://fusiontecsoftware.com/sivels/api", so endpoint = "/user/login"
-  // ──────────────────────────────────────────────────────────────────────────
-  login: async (mobileNumber) => {
-    try {
-      const response = await axiosInstance.post('/user/login', { mobileNumber });
-      const data = response.data;
-
-      // If the backend returns a token, persist it so subsequent requests
-      // (via the existing axiosInstance interceptor) attach it automatically.
-      const token = data?.token || data?.accessToken || data?.access_token;
-      if (token) {
-        localStorage.setItem('authToken', token);
-      }
-
-      return data;
-    } catch (error) {
-      if (error.response) {
-        // Backend returned a structured error — surface the message
-        const msg =
-          error.response.data?.message ||
-          error.response.data?.error ||
-          `Error ${error.response.status}: Login failed`;
-        throw new Error(msg);
-      }
-      // Network / CORS / timeout
-      throw new Error('Network error. Please check your connection and try again.');
+    if (!data?.token) {
+      throw new Error(
+        data?.message ||
+        data?.error ||
+        data?.title ||
+        'Invalid OTP. Please check the code and try again.'
+      );
     }
+
+    saveTokens(data);
+    return data;
   },
 
   register: async (userData) => {
@@ -132,4 +110,3 @@ export const authService = {
     }
   }
 };
-

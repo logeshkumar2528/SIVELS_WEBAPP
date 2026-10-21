@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Smartphone, ShieldCheck, ArrowRight, ChevronDown } from 'lucide-react';
-import { detectAccountModule, normalizeMobileNumber } from '../../services/moduleDetectionService';
+import { normalizeMobileNumber } from '../../services/moduleDetectionService';
 import { authService } from '../../services/authService';
 import { useLoading } from '../../context/LoadingContext';
 import './Login.css';
@@ -21,35 +21,17 @@ export default function Login() {
       setError('');
       try {
         await withLoading(async () => {
-          // Step 1: Detect account and role dynamically from Master APIs
-          const detection = await detectAccountModule(cleanMobile);
+          // The backend checks that the account exists and is active before sending the OTP.
+          const otpResponse = await authService.sendOtp(cleanMobile);
 
-          if (detection.status === 'NOT_FOUND') {
-            setError(detection.error || 'No account found with this mobile number');
+          if (otpResponse?.success === false) {
+            setError(otpResponse.message || 'No account found with this mobile number');
             return;
           }
 
-          if (detection.status === 'ERROR') {
-            setError(detection.error || 'Failed to verify account. Please check your connection and try again.');
-            return;
-          }
-
-          // Step 2: Trigger OTP send after account is confirmed
-          let otpResponse = null;
-          try {
-            otpResponse = await authService.sendOtp(cleanMobile);
-          } catch (otpErr) {
-            console.warn('[Login] OTP send returned notice:', otpErr?.message || otpErr);
-            otpResponse = { success: false, message: otpErr?.message || 'OTP triggered' };
-          }
-
-          // Step 3: Navigate to Verify OTP with detected role and account state
           navigate('/verify', {
             state: {
               mobileNumber: cleanMobile,
-              module: detection.role || detection.module,
-              destination: detection.destination,
-              accountData: detection.accountData,
               otpResponse,
             },
           });

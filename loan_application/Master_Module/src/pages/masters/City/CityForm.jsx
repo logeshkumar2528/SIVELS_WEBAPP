@@ -166,11 +166,11 @@ export function CityForm({ isOpen, onClose, onSuccess, initialData }) {
 
       if (isEdit) {
         payload.cityId = initialData.cityId;
-        payload.modifiedBy = getCurrentUserId() || 1;
+        payload.modifiedBy = getCurrentUserId();
         await updateCity(initialData.cityId, payload);
         toast.success('Updated successfully');
       } else {
-        payload.createdBy = getCurrentUserId() || 1;
+        payload.createdBy = getCurrentUserId();
         await createCity(payload);
         toast.success('Created successfully');
       }

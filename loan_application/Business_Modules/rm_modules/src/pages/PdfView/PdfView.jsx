@@ -1,3 +1,6 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../../Core/src/auth/tokenStore';
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, AlertCircle } from 'lucide-react';
@@ -19,7 +22,7 @@ import { rmCustomerService } from '../../services/rmCustomerService';
 import './PdfView.css';
 import LogoImage from '../../../../../Core/src/assets/branding/SivelsFinanceLogo.jpg';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+const API_BASE = API_BASE_URL;
 
 function extractArray(raw) {
   if (Array.isArray(raw)) return raw;
@@ -54,8 +57,8 @@ async function loadCustomerProofs({ customerId, productDetailsId, categoryMap = 
   if (productDetailsId) query.set('applicationProductDetailsId', String(productDetailsId));
 
   const [proofRes, proofMasterRes] = await Promise.allSettled([
-    fetch(`${API_BASE}/customerdocumentproof?${query}`, { headers }).then((r) => (r.ok ? r.json() : [])),
-    fetch(`${API_BASE}/proofmaster`, { headers }).then((r) => (r.ok ? r.json() : [])),
+    apiFetch(`${API_BASE}/customerdocumentproof?${query}`, { headers }).then((r) => (r.ok ? r.json() : [])),
+    apiFetch(`${API_BASE}/proofmaster`, { headers }).then((r) => (r.ok ? r.json() : [])),
   ]);
   const records = proofRes.status === 'fulfilled' ? extractArray(proofRes.value) : [];
   const proofNames = {};
@@ -281,13 +284,13 @@ export default function PdfView() {
           console.warn('Hydration in PdfView:', hErr);
         }
 
-        const token = localStorage.getItem('authToken');
+        const token = getAccessToken();
         const authHeaders = {};
         if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
         const fetchMaster = async (endpoint, idField, nameField) => {
           try {
-            const res = await fetch(`${API_BASE}/${endpoint}`, { headers: authHeaders });
+            const res = await apiFetch(`${API_BASE}/${endpoint}`, { headers: authHeaders });
             if (res.ok) {
               const data = await res.json();
               const rows = extractArray(data);
@@ -340,8 +343,8 @@ export default function PdfView() {
           kycDetailsRes,
           fullDetailsRes,
         ] = await Promise.allSettled([
-          fetch(`${API_BASE}/AgentAddCustomer/${applicationId}`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
-          fetch(`${API_BASE}/RMMaster`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          apiFetch(`${API_BASE}/AgentAddCustomer/${applicationId}`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          apiFetch(`${API_BASE}/RMMaster`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
           fetchMaster('SourcingChannelMaster', 'sourcingChannelId', 'sourcingChannelName'),
           fetchMaster('LoanProductMaster', 'loanProductId', 'productName'),
           fetchMaster('LoanPurposeMaster', 'loanPurposeId', 'purposeName'),
@@ -362,14 +365,14 @@ export default function PdfView() {
           fetchMaster('masters/IndustryTypeMaster', 'industryTypeId', 'industryTypeName'),
           fetchMaster('City', 'cityId', 'cityName'),
           fetchMaster('State', 'stateId', 'stateName'),
-          fetch(`${API_BASE}/ApplicationEmploymentIncomeDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
-          fetch(`${API_BASE}/ApplicationAddressDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
-          fetch(`${API_BASE}/ApplicationPersonalInformation`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
-          fetch(`${API_BASE}/ApplicationBankExistingLoanDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
-          fetch(`${API_BASE}/ApplicationCollateralDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
-          fetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
-          fetch(`${API_BASE}/ApplicationKYCDocuments`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
-          fetch(`${API_BASE}/ApplicationFullDetails/${applicationId}`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          apiFetch(`${API_BASE}/ApplicationEmploymentIncomeDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          apiFetch(`${API_BASE}/ApplicationAddressDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          apiFetch(`${API_BASE}/ApplicationPersonalInformation`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          apiFetch(`${API_BASE}/ApplicationBankExistingLoanDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          apiFetch(`${API_BASE}/ApplicationCollateralDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          apiFetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          apiFetch(`${API_BASE}/ApplicationKYCDocuments`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          apiFetch(`${API_BASE}/ApplicationFullDetails/${applicationId}`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
         ]);
 
         let resolvedCustomerId = applicationId;
@@ -1095,7 +1098,7 @@ export default function PdfView() {
         // Fetch and download actual uploaded customer documents
         try {
           const headers = {};
-          const token = localStorage.getItem('authToken');
+          const token = getAccessToken();
           if (token) headers['Authorization'] = `Bearer ${token}`;
 
           const candidateIds = [resolvedCustomerId, applicationId, appData.agentCustomerId].filter(Boolean);
@@ -1105,7 +1108,7 @@ export default function PdfView() {
 
           for (const candId of uniqueCandidateIds) {
             try {
-              const res = await fetch(`${API_BASE}/AgentCustomerDocument/bycustomer/${candId}`, { headers });
+              const res = await apiFetch(`${API_BASE}/AgentCustomerDocument/bycustomer/${candId}`, { headers });
               if (res.ok) {
                 const docData = await res.json();
                 const docList = Array.isArray(docData) ? docData : (docData?.data || docData?.value || docData?.items || []);
@@ -1155,7 +1158,7 @@ export default function PdfView() {
                 const isPdf = ext === 'pdf';
 
                 try {
-                  const dlRes = await fetch(`${API_BASE}/AgentCustomerDocument/download/${docId}`, { headers });
+                  const dlRes = await apiFetch(`${API_BASE}/AgentCustomerDocument/download/${docId}`, { headers });
                   if (dlRes.ok) {
                     const rawBlob = await dlRes.blob();
                     let mimeType = 'application/octet-stream';
@@ -1704,7 +1707,7 @@ export default function PdfView() {
 
     setIsApplicantPhotoLoading(true);
     let isMounted = true;
-    const token = localStorage.getItem('authToken');
+    const token = getAccessToken();
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -1714,7 +1717,7 @@ export default function PdfView() {
       // 1. Primary: GET /ApplicationKYCDocuments/{applicantKycId}/profile-image
       if (applicantKycId) {
         try {
-          const res = await fetch(`${API_BASE}/ApplicationKYCDocuments/${applicantKycId}/profile-image`, { headers });
+          const res = await apiFetch(`${API_BASE}/ApplicationKYCDocuments/${applicantKycId}/profile-image`, { headers });
           if (res.ok && isMounted) {
             const blob = await res.blob();
             if (blob && blob.size > 0) {
@@ -1732,7 +1735,7 @@ export default function PdfView() {
       if (!objectUrl && applicantProfilePath && isMounted) {
         try {
           const cleanPath = String(applicantProfilePath).trim();
-          const dlRes = await fetch(`${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`, { headers });
+          const dlRes = await apiFetch(`${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`, { headers });
           if (dlRes.ok && isMounted) {
             const blob = await dlRes.blob();
             if (blob && blob.size > 0) {
@@ -1780,7 +1783,7 @@ export default function PdfView() {
     setIsCoPhotosLoading(true);
     let isMounted = true;
     let remaining = validKycIds.length;
-    const token = localStorage.getItem('authToken');
+    const token = getAccessToken();
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -1795,11 +1798,11 @@ export default function PdfView() {
         .replace(/\\/g, '/')
         .replace(/^\/+/, '');
 
-      fetch(`${API_BASE}/ApplicationKYCDocuments/${kycId}/profile-image`, { headers })
+      apiFetch(`${API_BASE}/ApplicationKYCDocuments/${kycId}/profile-image`, { headers })
         .then((res) => {
           if (res.ok || !storedPath) return res;
           // Fallback: the stored profile image path on this co-applicant's own KYC record
-          return fetch(`${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(storedPath)}`, { headers });
+          return apiFetch(`${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(storedPath)}`, { headers });
         })
         .then(async (res) => {
           if (res.ok && isMounted) {
@@ -1855,12 +1858,12 @@ export default function PdfView() {
 
     let isMounted = true;
     setIsProofPhotosDownloading(true);
-    const token = localStorage.getItem('authToken');
+    const token = getAccessToken();
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
     Promise.allSettled(
       coApplicantProofPhotoPicks.map(async ({ seq, proof }) => {
-        const res = await fetch(`${API_BASE}/customerdocumentproof/${encodeURIComponent(proof.id)}/download`, { headers });
+        const res = await apiFetch(`${API_BASE}/customerdocumentproof/${encodeURIComponent(proof.id)}/download`, { headers });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
         const imageType = proofImageType(blob.type, '') || proofImageType(proof.contentType, proof.fileName);

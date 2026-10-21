@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import ErrorBoundary from '../components/ErrorBoundary/ErrorBoundary';
 import MainLayout from '../layouts/MainLayout/MainLayout';
 import { ROUTES } from '../config/routeConfig';
+import { logout } from '../../../../Core/src/auth/session';
+import { LOGIN_PATH, navigation } from '../../../../Core/src/auth/authEvents';
 
-import RmLogin from '../pages/RmLogin/RmLogin';
 import Dashboard from '../pages/Dashboard/Dashboard';
 import NewApplications from '../pages/NewApplications/NewApplications';
 import ApplicationDetails from '../pages/ApplicationDetails/ApplicationDetails';
@@ -42,24 +43,27 @@ function LayoutWrapper({ children, title, subtitle }) {
   );
 }
 
+function LoginRedirect() {
+  useEffect(() => {
+    navigation.replace(LOGIN_PATH);
+  }, []);
+  return null;
+}
+
+function LogoutRoute() {
+  useEffect(() => {
+    logout();
+  }, []);
+  return null;
+}
+
 export default function AppRoutes() {
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
-  const location = useLocation();
-
-  const handleLogin = () => {
-    setIsAuthenticated(true);
-  };
-
-  if (!isAuthenticated && location.pathname !== ROUTES.LOGIN) {
-    return <RmLogin onLogin={handleLogin} />;
-  }
-
   return (
     <ApplicationDraftProvider>
       <ErrorBoundary>
         <Routes>
         <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
-        <Route path={ROUTES.LOGIN} element={<RmLogin onLogin={handleLogin} />} />
+        <Route path={ROUTES.LOGIN} element={<LoginRedirect />} />
 
         <Route
           path={ROUTES.DASHBOARD}
@@ -293,28 +297,7 @@ export default function AppRoutes() {
           }
         />
 
-        <Route
-          path={ROUTES.LOGOUT}
-          element={
-            <div style={{ padding: '40px', textAlign: 'center' }}>
-              <h2>Logged Out</h2>
-              <p>You have been safely logged out.</p>
-              <button
-                onClick={handleLogin}
-                style={{
-                  padding: '10px 20px',
-                  background: 'var(--color-primary)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer'
-                }}
-              >
-                Log Back In
-              </button>
-            </div>
-          }
-        />
+        <Route path={ROUTES.LOGOUT} element={<LogoutRoute />} />
 
         <Route path="*" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
         </Routes>

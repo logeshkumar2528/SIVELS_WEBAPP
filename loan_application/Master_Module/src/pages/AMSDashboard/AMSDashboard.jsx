@@ -37,12 +37,14 @@ import { getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
 import { getAllRelationshipManagers } from '../../api/rmApi';
 import { getAllAgents } from '../../api/agentApi';
 import { agentCustomerService } from '../../../../Core/src/services/agentCustomerService';
+import { logout } from '../../../../Core/src/auth/session';
 import axiosInstance from '../../api/axiosInstance';
 import { getProfileImageUrl } from '../../utils/profileImageHelper';
 import { MasterModal } from '../../components/masters/MasterModal/MasterModal';
 import { fetchLocationLookups } from '../PeopleDirectory/PeopleDirectoryPage';
 import '../PeopleDirectory/PeopleDirectory.css';
 import './AMSDashboard.css';
+import AuthImage from '../../../../Core/src/auth/AuthImage';
 
 const unwrap = (response) => {
   if (!response) return [];
@@ -111,7 +113,7 @@ function AmsAvatar({ role, id, name, className = 'ams-person-avatar', version = 
   if (imageUrl && !error) {
     return (
       <span className={className} style={{ overflow: 'hidden', padding: 0 }}>
-        <img
+        <AuthImage
           src={imageUrl}
           alt={name || role}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -230,9 +232,7 @@ export default function AMSDashboard() {
 
   const handleConfirmLogout = () => {
     setShowLogoutModal(false);
-    localStorage.removeItem('sivels_currentUser');
-    localStorage.removeItem('amsData');
-    window.location.href = '/login';
+    logout();
   };
 
   const [amsImageVersion] = useState(Date.now());

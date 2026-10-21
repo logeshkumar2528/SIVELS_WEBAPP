@@ -1,3 +1,6 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../../Core/src/auth/tokenStore';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, Pencil, Calendar } from 'lucide-react';
@@ -19,7 +22,7 @@ import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
 import './SubmissionHistory.css';
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
+const API_BASE = API_BASE_URL;
 
 function getInitials(name = '') {
   const parts = String(name).trim().split(/\s+/).filter(Boolean);
@@ -87,15 +90,15 @@ export default function SubmissionHistory() {
           throw new Error('No RM context found in session. Please sign in again.');
         }
 
-        const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+        const token = getAccessToken();
         const authHeaders = {};
         if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
         const [customersResponse, agentsResponse, rmsResponse, appProdResponse] = await Promise.all([
-          fetch(`${API_BASE}/AgentAddCustomer`, { headers: authHeaders }),
-          fetch(`${API_BASE}/AgentMaster`, { headers: authHeaders }),
-          fetch(`${API_BASE}/RMMaster`, { headers: authHeaders }).catch(() => null),
-          fetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).catch(() => null),
+          apiFetch(`${API_BASE}/AgentAddCustomer`, { headers: authHeaders }),
+          apiFetch(`${API_BASE}/AgentMaster`, { headers: authHeaders }),
+          apiFetch(`${API_BASE}/RMMaster`, { headers: authHeaders }).catch(() => null),
+          apiFetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).catch(() => null),
         ]);
         if (!customersResponse.ok) throw new Error(`Failed to load submissions (${customersResponse.status})`);
         if (!agentsResponse.ok) throw new Error(`Failed to load agents (${agentsResponse.status})`);

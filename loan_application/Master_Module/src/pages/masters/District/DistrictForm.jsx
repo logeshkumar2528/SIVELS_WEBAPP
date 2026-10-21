@@ -118,11 +118,11 @@ export function DistrictForm({ isOpen, onClose, onSuccess, initialData }) {
 
       if (isEdit) {
         payload.districtId = initialData.districtId;
-        payload.modifiedBy = getCurrentUserId() || 1;
+        payload.modifiedBy = getCurrentUserId();
         await updateDistrict(initialData.districtId, payload);
         toast.success('Updated successfully');
       } else {
-        payload.createdBy = getCurrentUserId() || 1;
+        payload.createdBy = getCurrentUserId();
         await createDistrict(payload);
         toast.success('Created successfully');
       }

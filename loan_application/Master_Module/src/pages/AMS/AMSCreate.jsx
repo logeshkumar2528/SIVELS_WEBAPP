@@ -613,8 +613,8 @@ export default function AMSCreate() {
         accountNumber: form.accountNumber.trim(),
         ifscCode: form.ifscCode.trim().toUpperCase(),
         isActive,
-        createdBy: getCurrentUserId() || 1,
-        modifiedBy: getCurrentUserId() || 1,
+        createdBy: getCurrentUserId(),
+        modifiedBy: getCurrentUserId(),
         districtIds: selectedDistrictIds,
       };
 
