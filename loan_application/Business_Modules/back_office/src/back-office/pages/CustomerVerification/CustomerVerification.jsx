@@ -5640,187 +5640,7 @@ export default function CustomerVerification({
     };
   }, [activeStep, calculationAppProdId]);
 
-  // Standalone Step 09 "Health Check" — particulars from GET /api/health-check-types
-  const [healthCheckTypes, setHealthCheckTypes] = useState([]);
-  const [healthCheckTypesLoading, setHealthCheckTypesLoading] = useState(false);
-  const [healthCheckTypesError, setHealthCheckTypesError] = useState(null);
-  const [healthChecksByStep, setHealthChecksByStep] = useState({
-    19: {},
-  });
-  const [findingsModal, setFindingsModal] = useState({
-    open: false,
-    step: null,
-    typeId: null,
-    label: '',
-    draft: '',
-  });
-
-  const fetchHealthCheckTypes = useCallback(async () => {
-    setHealthCheckTypesLoading(true);
-    setHealthCheckTypesError(null);
-    try {
-      const res = await backOfficeService.getHealthCheckTypes();
-      const list = Array.isArray(res) ? res : (res?.data || res?.value || []);
-      setHealthCheckTypes(list);
-    } catch (err) {
-      console.error('Failed to load health check types:', err);
-      setHealthCheckTypesError('Failed to load health check types. Please try again.');
-    } finally {
-      setHealthCheckTypesLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (activeStep === 19) {
-      fetchHealthCheckTypes();
-    }
-  }, [activeStep, fetchHealthCheckTypes]);
-
-  const activeHealthCheckTypes = useMemo(() => {
-    return (healthCheckTypes || []).filter((item) => item.isActive === true);
-  }, [healthCheckTypes]);
-
-  const updateHealthCheck = (typeId, field, value, step = activeStep) => {
-    setHealthChecksByStep((prev) => ({
-      ...prev,
-      [step]: {
-        ...(prev[step] || {}),
-        [typeId]: {
-          status: 'Pending',
-          dateOfCheck: '',
-          findings: '',
-          ...(prev[step]?.[typeId] || {}),
-          [field]: value,
-        },
-      },
-    }));
-  };
-
-  const openFindingsModal = (typeId, label, currentFindings = '', step = activeStep) => {
-    setFindingsModal({
-      open: true,
-      step,
-      typeId,
-      label: label || 'Health check',
-      draft: currentFindings || '',
-    });
-  };
-
-  const closeFindingsModal = () => {
-    setFindingsModal({ open: false, step: null, typeId: null, label: '', draft: '' });
-  };
-
-  const saveFindingsModal = () => {
-    if (findingsModal.typeId == null) return;
-    const targetStep = findingsModal.step ?? activeStep;
-    updateHealthCheck(findingsModal.typeId, 'findings', (findingsModal.draft || '').trim(), targetStep);
-    closeFindingsModal();
-  };
-
-  const healthCheckStatusClass = (status) => {
-    const normalized = String(status || 'Pending').toLowerCase();
-    if (normalized === 'yes') return 'is-yes';
-    if (normalized === 'no') return 'is-no';
-    return 'is-pending';
-  };
-
-  const renderHealthChecksChecklist = (step = activeStep) => {
-    const stepChecks = healthChecksByStep[step] || {};
-    return (
-      <section className="bo-cv-health-checks" aria-label="Health Check">
-        <div className="bo-cv-health-checks-card">
-          <div className="bo-cv-health-checks-table-wrap">
-            <table className="bo-cv-health-checks-table">
-              <thead>
-                <tr>
-                  <th scope="col">Particulars</th>
-                  <th scope="col">Yes / No</th>
-                  <th scope="col">Date of check</th>
-                  <th scope="col">Findings / Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {healthCheckTypesLoading && (
-                  <tr>
-                    <td colSpan={4} className="bo-cv-health-checks-empty">Loading health check types…</td>
-                  </tr>
-                )}
-                {!healthCheckTypesLoading && healthCheckTypesError && (
-                  <tr>
-                    <td colSpan={4} className="bo-cv-health-checks-empty bo-cv-health-checks-error">
-                      {healthCheckTypesError}
-                    </td>
-                  </tr>
-                )}
-                {!healthCheckTypesLoading && !healthCheckTypesError && activeHealthCheckTypes.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="bo-cv-health-checks-empty">
-                      No active health check types found in master.
-                    </td>
-                  </tr>
-                )}
-                {!healthCheckTypesLoading && !healthCheckTypesError && activeHealthCheckTypes.map((type) => {
-                  const typeId = type.healthCheckTypeId;
-                  const label = type.checkName || '—';
-                  const row = stepChecks[typeId] || {
-                    status: 'Pending',
-                    dateOfCheck: '',
-                    findings: '',
-                  };
-                  const hasFindings = Boolean(String(row.findings || '').trim());
-                  return (
-                    <tr key={typeId}>
-                      <td className="bo-cv-health-checks-particular">
-                        <span className="bo-cv-health-checks-particular-name">{label}</span>
-                      </td>
-                      <td>
-                        <div className={`bo-cv-health-status-wrap ${healthCheckStatusClass(row.status)}`}>
-                          <select
-                            className="bo-cv-health-checks-select"
-                            value={row.status}
-                            onChange={(e) => updateHealthCheck(typeId, 'status', e.target.value, step)}
-                            aria-label={`${label} Yes/No status`}
-                          >
-                            <option value="Pending">Pending</option>
-                            <option value="Yes">Yes</option>
-                            <option value="No">No</option>
-                          </select>
-                        </div>
-                      </td>
-                      <td>
-                        <input
-                          type="date"
-                          className="bo-cv-health-checks-input"
-                          value={row.dateOfCheck}
-                          onChange={(e) => updateHealthCheck(typeId, 'dateOfCheck', e.target.value, step)}
-                          aria-label={`${label} date of check`}
-                        />
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className={`bo-cv-health-findings-trigger ${hasFindings ? 'has-value' : ''}`}
-                          onClick={() => openFindingsModal(typeId, label, row.findings, step)}
-                          aria-label={`${label} findings or status`}
-                        >
-                          <span className="bo-cv-health-findings-trigger-text">
-                            {hasFindings ? row.findings : 'Click to add findings…'}
-                          </span>
-                          <span className="bo-cv-health-findings-trigger-action">
-                            {hasFindings ? 'Edit' : 'Add'}
-                          </span>
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-             </div>
-           </div>
-         </section>
-    );
-  };
+  // Standalone Step 05 (Internal Step 19) "Health Check" logic relocated after resolver declarations (after resolvedTargetCustomerId) to prevent TDZ
 
   // 13. Icons
   const ArrowLeftIcon = iconMap['ArrowLeft'];
@@ -5931,12 +5751,12 @@ export default function CustomerVerification({
   }, [verificationData]);
 
 
-  // Send to Credit Officer action handler (PD Assessment Save/Update)
-  const handleSendToCreditOfficer = async () => {
+  // Save PD action handler (PD Assessment Save/Update)
+  const handleSavePd = async () => {
     const sheet = recommendationSheets[0] || {};
     const recommendationVal = (sheet.recommendation || '').trim();
     if (!recommendationVal) {
-      setFinalRemarksError('Recommendation is required before sending to Credit Officer.');
+      setFinalRemarksError('Recommendation is required before saving PD.');
       setFinalRemarksBanner(null);
       return;
     }
@@ -6038,6 +5858,8 @@ export default function CustomerVerification({
       setIsSendingToCreditOfficer(false);
     }
   };
+
+  const handleSendToCreditOfficer = handleSavePd;
 
   // ----------------------------------------------------
   // Document Resolution & Preview Loader (Old vs New & Dynamic Master)
@@ -6463,6 +6285,504 @@ export default function CustomerVerification({
     verificationData?.raw?.customer?.AgentCustomerId ||
     0
   );
+
+  // ----------------------------------------------------
+  // Standalone Step 05 (Internal Step 19) "Health Check"
+  // ----------------------------------------------------
+  const [healthCheckTypes, setHealthCheckTypes] = useState([]);
+  const [healthCheckTypesLoading, setHealthCheckTypesLoading] = useState(false);
+  const [healthCheckTypesError, setHealthCheckTypesError] = useState(null);
+  const [healthChecksByStep, setHealthChecksByStep] = useState({
+    19: {},
+  });
+  const [savedHealthChecks, setSavedHealthChecks] = useState({});
+  const [isSavingHealthChecks, setIsSavingHealthChecks] = useState(false);
+  const [healthChecksFeedback, setHealthChecksFeedback] = useState(null);
+  const healthChecksAppProdIdRef = useRef(null);
+
+  const [findingsModal, setFindingsModal] = useState({
+    open: false,
+    step: null,
+    typeId: null,
+    label: '',
+    draft: '',
+  });
+
+  const loadHealthCheckData = useCallback(async (appProdId) => {
+    if (!appProdId || appProdId <= 0) return;
+    healthChecksAppProdIdRef.current = appProdId;
+    setHealthCheckTypesLoading(true);
+    setHealthCheckTypesError(null);
+
+    try {
+      const [typesRes, savedRes] = await Promise.all([
+        backOfficeService.getHealthCheckTypes(),
+        backOfficeService.getHealthChecksByApplication(appProdId).catch((err) => {
+          console.warn('Failed to load saved health checks for application:', err);
+          return [];
+        }),
+      ]);
+
+      if (healthChecksAppProdIdRef.current !== appProdId) return;
+
+      const typesList = Array.isArray(typesRes) ? typesRes : (typesRes?.data || typesRes?.value || []);
+      setHealthCheckTypes(typesList);
+
+      const rawSavedList = Array.isArray(savedRes) ? savedRes : (savedRes?.data || savedRes?.value || []);
+      const savedList = Array.isArray(rawSavedList) ? rawSavedList : [];
+
+      const baselineMap = {};
+      const editableMap = {};
+      const duplicates = [];
+
+      savedList.forEach((item) => {
+        if (!item || item.isActive === false) return;
+        const typeId = item.healthCheckTypeId ?? item.HealthCheckTypeId;
+        if (!typeId) return;
+
+        if (baselineMap[typeId]) {
+          duplicates.push(typeId);
+        }
+
+        const recId =
+          item.applicationHealthCheckDetailsId ??
+          item.ApplicationHealthCheckDetailsId ??
+          item.id ??
+          null;
+        const status = item.checkStatus ?? item.CheckStatus ?? item.status ?? 'Pending';
+        const dateOfCheck = item.dateOfCheck ? String(item.dateOfCheck).slice(0, 10) : '';
+        const findings = item.findings ?? item.Findings ?? '';
+        const applicantSequence = item.applicantSequence ?? item.ApplicantSequence ?? null;
+
+        const record = {
+          status,
+          dateOfCheck,
+          findings,
+          applicationHealthCheckDetailsId: recId ? Number(recId) : null,
+          applicantSequence: applicantSequence != null ? Number(applicantSequence) : null,
+        };
+
+        if (!baselineMap[typeId]) {
+          baselineMap[typeId] = record;
+          editableMap[typeId] = { ...record };
+        }
+      });
+
+      if (duplicates.length > 0) {
+        setHealthChecksFeedback({
+          type: 'warning',
+          message: `Ambiguity detected: Multiple saved records found for health check type ID(s): [${duplicates.join(', ')}]. Primary records retained.`,
+        });
+      }
+
+      setSavedHealthChecks(baselineMap);
+      setHealthChecksByStep((prev) => ({
+        ...prev,
+        19: editableMap,
+      }));
+    } catch (err) {
+      if (healthChecksAppProdIdRef.current !== appProdId) return;
+      console.error('Failed to load health check data:', err);
+      setHealthCheckTypesError('Failed to load health check data. Please try again.');
+    } finally {
+      if (healthChecksAppProdIdRef.current === appProdId) {
+        setHealthCheckTypesLoading(false);
+      }
+    }
+  }, []);
+
+  const targetHealthCheckAppProdId = Number(calculationAppProdId || resolvedAppProdId || 0);
+
+  useEffect(() => {
+    if (activeStep === 19 && targetHealthCheckAppProdId > 0) {
+      loadHealthCheckData(targetHealthCheckAppProdId);
+    }
+  }, [activeStep, targetHealthCheckAppProdId, loadHealthCheckData]);
+
+  const activeHealthCheckTypes = useMemo(() => {
+    return (healthCheckTypes || []).filter((item) => item.isActive === true);
+  }, [healthCheckTypes]);
+
+  const isHealthCheckRowDirty = useCallback((currentRow, savedRow) => {
+    const curStatus = (currentRow?.status || 'Pending').trim();
+    const curDate = (currentRow?.dateOfCheck || '').trim();
+    const curFindings = (currentRow?.findings || '').trim();
+
+    if (savedRow && (savedRow.applicationHealthCheckDetailsId != null || savedRow.status != null)) {
+      const savedStatus = (savedRow.status || 'Pending').trim();
+      const savedDate = (savedRow.dateOfCheck || '').trim();
+      const savedFindings = (savedRow.findings || '').trim();
+      return curStatus !== savedStatus || curDate !== savedDate || curFindings !== savedFindings;
+    }
+
+    return curStatus !== 'Pending' || curDate !== '' || curFindings !== '';
+  }, []);
+
+  const dirtyHealthCheckTypes = useMemo(() => {
+    const stepChecks = healthChecksByStep[19] || {};
+    return activeHealthCheckTypes.filter((type) => {
+      const typeId = type.healthCheckTypeId;
+      const currentRow = stepChecks[typeId] || { status: 'Pending', dateOfCheck: '', findings: '' };
+      const savedRow = savedHealthChecks[typeId];
+      return isHealthCheckRowDirty(currentRow, savedRow);
+    });
+  }, [activeHealthCheckTypes, healthChecksByStep, savedHealthChecks, isHealthCheckRowDirty]);
+
+  const updateHealthCheck = (typeId, field, value, step = activeStep) => {
+    setHealthChecksFeedback(null);
+    setHealthChecksByStep((prev) => ({
+      ...prev,
+      [step]: {
+        ...(prev[step] || {}),
+        [typeId]: {
+          status: 'Pending',
+          dateOfCheck: '',
+          findings: '',
+          ...(prev[step]?.[typeId] || {}),
+          [field]: value,
+        },
+      },
+    }));
+  };
+
+  const openFindingsModal = (typeId, label, currentFindings = '', step = activeStep) => {
+    setFindingsModal({
+      open: true,
+      step,
+      typeId,
+      label: label || 'Health check',
+      draft: currentFindings || '',
+    });
+  };
+
+  const closeFindingsModal = () => {
+    setFindingsModal({ open: false, step: null, typeId: null, label: '', draft: '' });
+  };
+
+  const saveFindingsModal = () => {
+    if (findingsModal.typeId == null) return;
+    const targetStep = findingsModal.step ?? activeStep;
+    updateHealthCheck(findingsModal.typeId, 'findings', (findingsModal.draft || '').trim(), targetStep);
+    closeFindingsModal();
+  };
+
+  const handleSaveHealthChecks = async () => {
+    const appProdId = Number(calculationAppProdId || resolvedAppProdId || 0);
+    const agentCustId = Number(calculationAgentCustId || resolvedTargetCustomerId || 0);
+    const backOfficeUserId = getAuthenticatedBackOfficeId();
+
+    if (!appProdId || appProdId <= 0) {
+      setHealthChecksFeedback({
+        type: 'error',
+        message: 'Unable to resolve Application Product Details ID. Cannot save health checks.',
+      });
+      return;
+    }
+
+    if (!agentCustId || agentCustId <= 0) {
+      setHealthChecksFeedback({
+        type: 'error',
+        message: 'Unable to resolve Agent Customer ID. Cannot save health checks.',
+      });
+      return;
+    }
+
+    if (!backOfficeUserId || Number(backOfficeUserId) <= 0) {
+      setHealthChecksFeedback({
+        type: 'error',
+        message: 'Unable to resolve authenticated Back Office operator ID. Please log in again.',
+      });
+      return;
+    }
+
+    const stepChecks = healthChecksByStep[19] || {};
+    const dirtyTypes = activeHealthCheckTypes.filter((type) => {
+      const typeId = type.healthCheckTypeId;
+      const currentRow = stepChecks[typeId] || { status: 'Pending', dateOfCheck: '', findings: '' };
+      const savedRow = savedHealthChecks[typeId];
+      return isHealthCheckRowDirty(currentRow, savedRow);
+    });
+
+    if (dirtyTypes.length === 0) {
+      return;
+    }
+
+    setIsSavingHealthChecks(true);
+    setHealthChecksFeedback(null);
+
+    let savedCount = 0;
+    const newlySavedBaseline = { ...savedHealthChecks };
+    const newlySavedStepChecks = { ...(healthChecksByStep[19] || {}) };
+    let lastError = null;
+
+    for (const type of dirtyTypes) {
+      const typeId = type.healthCheckTypeId;
+      const currentRow = stepChecks[typeId] || { status: 'Pending', dateOfCheck: '', findings: '' };
+      const savedRow = savedHealthChecks[typeId];
+      const existingRecordId =
+        currentRow.applicationHealthCheckDetailsId ||
+        savedRow?.applicationHealthCheckDetailsId ||
+        null;
+
+      const seq =
+        savedRow?.applicantSequence != null
+          ? Number(savedRow.applicantSequence)
+          : (selectedApplicantSequence != null && selectedApplicantSequence !== ''
+              ? Number(selectedApplicantSequence) || 1
+              : 1);
+
+      const formattedDate = currentRow.dateOfCheck ? `${currentRow.dateOfCheck}T00:00:00` : null;
+
+      const payload = {
+        applicationProductDetailsId: appProdId,
+        agentCustomerId: agentCustId,
+        applicantSequence: seq,
+        healthCheckTypeId: Number(typeId),
+        checkStatus: currentRow.status || 'Pending',
+        dateOfCheck: formattedDate,
+        findings: (currentRow.findings || '').trim(),
+        checkedByUserId: Number(backOfficeUserId),
+        checkedByRole: 'BackOffice',
+        isActive: true,
+        createdBy: Number(backOfficeUserId),
+        modifiedBy: Number(backOfficeUserId),
+      };
+
+      try {
+        let returnedRecord = null;
+        if (existingRecordId != null && Number(existingRecordId) > 0) {
+          const updatePayload = {
+            ...payload,
+            applicationHealthCheckDetailsId: Number(existingRecordId),
+          };
+          returnedRecord = await backOfficeService.updateHealthCheck(existingRecordId, updatePayload);
+        } else {
+          returnedRecord = await backOfficeService.createHealthCheck(payload);
+        }
+
+        const confirmedId =
+          returnedRecord?.applicationHealthCheckDetailsId ??
+          returnedRecord?.ApplicationHealthCheckDetailsId ??
+          returnedRecord?.id ??
+          existingRecordId;
+
+        const confirmedRow = {
+          ...currentRow,
+          applicationHealthCheckDetailsId: confirmedId ? Number(confirmedId) : null,
+          applicantSequence: seq,
+        };
+
+        newlySavedBaseline[typeId] = confirmedRow;
+        newlySavedStepChecks[typeId] = confirmedRow;
+        savedCount += 1;
+      } catch (err) {
+        console.error(`Failed to save health check for ${type.checkName}:`, err);
+        const msg =
+          err?.response?.data?.message ||
+          err?.response?.data?.title ||
+          err?.message ||
+          'Save failed';
+        lastError = `${type.checkName}: ${msg}`;
+        break;
+      }
+    }
+
+    setSavedHealthChecks(newlySavedBaseline);
+    setHealthChecksByStep((prev) => ({
+      ...prev,
+      19: newlySavedStepChecks,
+    }));
+
+    if (lastError) {
+      if (savedCount > 0) {
+        setHealthChecksFeedback({
+          type: 'error',
+          message: `Partially saved ${savedCount} health check(s), but encountered an error on ${lastError}. You can retry saving the remaining changes.`,
+        });
+      } else {
+        setHealthChecksFeedback({
+          type: 'error',
+          message: `Failed to save health checks (${lastError}). Please retry.`,
+        });
+      }
+    } else {
+      setHealthChecksFeedback({
+        type: 'success',
+        message: 'Health checks saved successfully.',
+      });
+    }
+
+    setIsSavingHealthChecks(false);
+  };
+
+  const healthCheckStatusClass = (status) => {
+    const normalized = String(status || 'Pending').toLowerCase();
+    if (normalized === 'yes') return 'is-yes';
+    if (normalized === 'no') return 'is-no';
+    if (normalized === 'completed') return 'is-yes';
+    return 'is-pending';
+  };
+
+  const renderHealthChecksChecklist = (step = activeStep) => {
+    const stepChecks = healthChecksByStep[step] || {};
+    const dirtyCount = dirtyHealthCheckTypes.length;
+
+    return (
+      <section className="bo-cv-health-checks" aria-label="Health Check">
+        {healthChecksFeedback && (
+          <div
+            className={`bo-cv-feedback-alert is-${healthChecksFeedback.type}`}
+            style={{ marginBottom: '12px' }}
+            role="alert"
+          >
+            {healthChecksFeedback.type === 'success' && '✓ '}
+            {healthChecksFeedback.type === 'error' && '✕ '}
+            {healthChecksFeedback.type === 'warning' && '⚠ '}
+            <span>{healthChecksFeedback.message}</span>
+          </div>
+        )}
+
+        <div className="bo-cv-health-checks-card">
+          <div className="bo-cv-health-checks-table-wrap">
+            <table className="bo-cv-health-checks-table">
+              <thead>
+                <tr>
+                  <th scope="col">Particulars</th>
+                  <th scope="col">Yes / No</th>
+                  <th scope="col">Date of check</th>
+                  <th scope="col">Findings / Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {healthCheckTypesLoading && (
+                  <tr>
+                    <td colSpan={4} className="bo-cv-health-checks-empty">Loading health check types and saved records…</td>
+                  </tr>
+                )}
+                {!healthCheckTypesLoading && healthCheckTypesError && (
+                  <tr>
+                    <td colSpan={4} className="bo-cv-health-checks-empty bo-cv-health-checks-error">
+                      {healthCheckTypesError}
+                    </td>
+                  </tr>
+                )}
+                {!healthCheckTypesLoading && !healthCheckTypesError && activeHealthCheckTypes.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="bo-cv-health-checks-empty">
+                      No active health check types found in master.
+                    </td>
+                  </tr>
+                )}
+                {!healthCheckTypesLoading && !healthCheckTypesError && activeHealthCheckTypes.map((type) => {
+                  const typeId = type.healthCheckTypeId;
+                  const label = type.checkName || '—';
+                  const row = stepChecks[typeId] || {
+                    status: 'Pending',
+                    dateOfCheck: '',
+                    findings: '',
+                    applicationHealthCheckDetailsId: null,
+                  };
+                  const savedRow = savedHealthChecks[typeId];
+                  const isDirty = isHealthCheckRowDirty(row, savedRow);
+                  const hasFindings = Boolean(String(row.findings || '').trim());
+                  return (
+                    <tr key={typeId} className={isDirty ? 'is-modified-row' : ''}>
+                      <td className="bo-cv-health-checks-particular">
+                        <span className="bo-cv-health-checks-particular-name">{label}</span>
+                        {isDirty && (
+                          <span
+                            style={{
+                              marginLeft: '8px',
+                              fontSize: '11px',
+                              color: '#d97706',
+                              fontWeight: 600,
+                            }}
+                            title="Unsaved changes in this row"
+                          >
+                            ● Unsaved
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <div className={`bo-cv-health-status-wrap ${healthCheckStatusClass(row.status)}`}>
+                          <select
+                            className="bo-cv-health-checks-select"
+                            value={row.status}
+                            onChange={(e) => updateHealthCheck(typeId, 'status', e.target.value, step)}
+                            aria-label={`${label} Yes/No status`}
+                            disabled={isSavingHealthChecks}
+                          >
+                            <option value="Pending">Pending</option>
+                            <option value="Yes">Yes</option>
+                            <option value="No">No</option>
+                            <option value="Completed">Completed</option>
+                          </select>
+                        </div>
+                      </td>
+                      <td>
+                        <input
+                          type="date"
+                          className="bo-cv-health-checks-input"
+                          value={row.dateOfCheck}
+                          onChange={(e) => updateHealthCheck(typeId, 'dateOfCheck', e.target.value, step)}
+                          aria-label={`${label} date of check`}
+                          disabled={isSavingHealthChecks}
+                        />
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className={`bo-cv-health-findings-trigger ${hasFindings ? 'has-value' : ''}`}
+                          onClick={() => openFindingsModal(typeId, label, row.findings, step)}
+                          aria-label={`${label} findings or status`}
+                          disabled={isSavingHealthChecks}
+                        >
+                          <span className="bo-cv-health-findings-trigger-text">
+                            {hasFindings ? row.findings : 'Click to add findings…'}
+                          </span>
+                          <span className="bo-cv-health-findings-trigger-action">
+                            {hasFindings ? 'Edit' : 'Add'}
+                          </span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div
+            className="bo-cv-health-checks-footer"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 16px',
+              borderTop: '1px solid #e2e8f0',
+              backgroundColor: '#f8fafc',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+              {dirtyCount > 0 && (
+                <span style={{ color: '#d97706', fontWeight: 600 }}>
+                  ● {dirtyCount} unsaved change{dirtyCount > 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              className="bo-btn bo-btn--primary"
+              onClick={handleSaveHealthChecks}
+              disabled={isSavingHealthChecks || dirtyCount === 0 || healthCheckTypesLoading}
+            >
+              {isSavingHealthChecks ? 'Saving Health Checks…' : 'Save Health Checks'}
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  };
 
   // ----------------------------------------------------
   // Normal Income — Microsoft Excel Desktop & Eligibility Record
@@ -13140,11 +13460,11 @@ export default function CustomerVerification({
                 <button
                   type="button"
                   className="bo-btn bo-btn--primary bo-cv-btn-send-credit-officer"
-                  onClick={handleSendToCreditOfficer}
+                  onClick={handleSavePd}
                   disabled={isSendingToCreditOfficer}
                 >
-                  {SendIcon && <SendIcon size={15} />}
-                  <span>{isSendingToCreditOfficer ? 'Sending...' : 'Send to Credit Officer'}</span>
+                  {SaveIcon ? <SaveIcon size={15} /> : (SendIcon && <SendIcon size={15} />)}
+                  <span>{isSendingToCreditOfficer ? 'Saving PD...' : 'Save PD'}</span>
                 </button>
               </div>
             </div>

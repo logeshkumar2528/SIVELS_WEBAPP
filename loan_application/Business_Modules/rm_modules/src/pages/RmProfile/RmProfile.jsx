@@ -1,3 +1,5 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
 import { useEffect, useMemo, useState } from 'react';
 import iconMap from '../../config/iconMap';
 import { formatDate } from '../../utils/dateHelper';
@@ -65,47 +67,63 @@ export default function RmProfile() {
     setImageFailed(false);
   }, [imageUrl]);
 
-  const fetchProfile = async () => {
+  const fetchProfile = async (isActive = () => true) => {
+    const isLive = typeof isActive === 'function' ? isActive : () => Boolean(isActive);
+
     setIsLoading(true);
     setLoadError('');
 
     try {
-      const response = await apiFetch(`${API_BASE}/RMMaster/my`);
+      const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+      const authHeaders = {};
+      if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch(`${API_BASE}/RMMaster`, { headers: authHeaders });
+      if (!isLive()) return;
+
       if (!response.ok) {
         throw new Error(`Failed to load RM profile (${response.status})`);
       }
 
       const data = await response.json();
-      let rows = [];
-      if (Array.isArray(data)) rows = data;
-      else if (Array.isArray(data?.value)) rows = data.value;
-      else if (data && typeof data === 'object') rows = [data.value ?? data];
+      if (!isLive()) return;
+
+      const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);
       const currentMobile = String(currentUser?.mobileNumber || currentUser?.phone || '').replace(/\D/g, '');
       const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || localStorage.getItem('rmId') || 0);
 
       const match =
         (currentRmId > 0 && rows.find((row) => Number(row.rmId || row.RMId) === currentRmId)) ||
         (currentMobile && rows.find((row) => String(row.mobileNumber || '').replace(/\D/g, '') === currentMobile)) ||
-        null;
+        rows[0];
 
-      if (match) {
-        const resolvedId = Number(match.rmId || match.RMId || currentRmId) || null;
-        setActiveRmId(resolvedId);
-        setProfileData(match);
-      } else {
-        setProfileData(currentUser);
+      if (isLive()) {
+        if (match) {
+          const resolvedId = Number(match.rmId || match.RMId || currentRmId) || null;
+          setActiveRmId(resolvedId);
+          setProfileData(match);
+        } else {
+          setProfileData(currentUser);
+        }
       }
     } catch (error) {
+      if (!isLive()) return;
       console.error('Failed to load RM profile:', error);
       setLoadError('Unable to load live RM profile. Showing available session values.');
       setProfileData(currentUser);
     } finally {
-      setIsLoading(false);
+      if (isLive()) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchProfile();
+    let active = true;
+    fetchProfile(() => active);
+    return () => {
+      active = false;
+    };
   }, [currentUser]);
 
   useEffect(() => {
@@ -346,7 +364,7 @@ export default function RmProfile() {
             </div>
             <div className="rm-sage-row rm-sage-row-alt-1">
               <div className="rm-sage-field-item">
-                <span className="rm-sage-label">Relationship Manager Code</span>
+                <span className="rm-sage-label">RM Code</span>
                 <span className="rm-sage-value">{rmCode}</span>
               </div>
               <div className="rm-sage-field-item">

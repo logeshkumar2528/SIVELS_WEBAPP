@@ -125,6 +125,42 @@ export const backOfficeService = {
   },
 
   /**
+   * Retrieve saved Health Check records for an application (GET /api/calculation/health-checks?applicationProductDetailsId={id}).
+   * @param {string|number} applicationProductDetailsId
+   */
+  getHealthChecksByApplication: async (applicationProductDetailsId) => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.CALCULATION_HEALTH_CHECKS, {
+      params: { applicationProductDetailsId },
+    });
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Create a new Health Check record (POST /api/calculation/health-checks).
+   * @param {object} payload
+   */
+  createHealthCheck: async (payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_HEALTH_CHECKS,
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Update an existing Health Check record (PUT /api/calculation/health-checks/{applicationHealthCheckDetailsId}).
+   * @param {string|number} applicationHealthCheckDetailsId
+   * @param {object} payload
+   */
+  updateHealthCheck: async (applicationHealthCheckDetailsId, payload) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_HEALTH_CHECK_BY_ID(applicationHealthCheckDetailsId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
    * Retrieve all RTR Loan Status Master records (GET /rtr-loan-status-master).
    */
   getRtrLoanStatusMaster: async () => {

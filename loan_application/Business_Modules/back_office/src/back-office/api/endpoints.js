@@ -23,6 +23,9 @@ export const BACK_OFFICE_ENDPOINTS = {
 
   PD_VERIFICATION_TYPES: '/PDVerificationTypeMaster',
   HEALTH_CHECK_TYPES: '/health-check-types',
+  CALCULATION_HEALTH_CHECKS: '/calculation/health-checks',
+  CALCULATION_HEALTH_CHECK_BY_ID: (applicationHealthCheckDetailsId) =>
+    `/calculation/health-checks/${encodeURIComponent(applicationHealthCheckDetailsId)}`,
   RTR_LOAN_STATUS_MASTER: '/rtr-loan-status-master',
   RTR_NORM_MASTER: '/rtr-norm-master',
   PROPERTY_MASTER: '/PropertyMaster',
