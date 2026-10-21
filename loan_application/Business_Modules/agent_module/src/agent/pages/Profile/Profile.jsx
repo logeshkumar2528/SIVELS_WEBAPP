@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Phone,
   Mail,
@@ -11,33 +11,17 @@ import {
   X,
   ChevronRight,
   Camera,
-  Loader2
+  Loader2,
+  BadgeIndianRupee
 } from 'lucide-react'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { useAuth } from '../../../../../../Core/src/context/AuthContext'
 import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
-import { getProfileImageUrl, updateProfileImage } from '../../utils/profileImageHelper'
+import { getProfileImageUrl, updateProfileImage, getInitials } from '../../utils/profileImageHelper'
+import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
+import { formatDate } from '../../../../../../Core/src/utils/dateHelper'
 import './Profile.css'
 import AuthImage from '../../../../../../Core/src/auth/AuthImage';
-
-function Profile() {
-  const [imageError, setImageError] = useState(false)
-  const [imageVersion, setImageVersion] = useState(Date.now())
-  const [previewUrl, setPreviewUrl] = useState(null)
-  const [isUploading, setIsUploading] = useState(false)
-  const [uploadError, setUploadError] = useState('')
-  const [uploadSuccess, setUploadSuccess] = useState('')
-  const fileInputRef = useRef(null)
-
-  const [showCommissionModal, setShowCommissionModal] = useState(false)
-  const [selectedEmiCustomer, setSelectedEmiCustomer] = useState(null)
-  const [customersCount, setCustomersCount] = useState('...')
-
-  const { currentUser } = useAuth()
-  const { agentData, loadingAgent, agentId } = useAgentIdentity()
-
-  const resolvedAgentId = agentId || agentData?.agentId || agentData?.AgentId || currentUser?.agentId || currentUser?.AgentId || (typeof window !== 'undefined' ? localStorage.getItem('agentId') : null)
-  const profileImageUrl = getProfileImageUrl('Agent', resolvedAgentId, imageVersion)
 
 function isAgentRole(role) {
   if (!role) return false;
@@ -45,8 +29,24 @@ function isAgentRole(role) {
   return s === 'agent' || s === 'field agent' || s === 'dsa' || s === 'direct selling agent';
 }
 
+function ProfileSkeleton() {
+  return (
+    <div className="agent-profile-dashboard agent-profile-skeleton" aria-label="Loading profile">
+      <div className="agent-profile-skeleton-hero" />
+      <div className="agent-profile-skeleton-grid" />
+    </div>
+  );
+}
+
 export default function Profile() {
   const [imageError, setImageError] = useState(false);
+  const [imageVersion, setImageVersion] = useState(Date.now());
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [uploadSuccess, setUploadSuccess] = useState('');
+  const fileInputRef = useRef(null);
+
   const [customersCount, setCustomersCount] = useState('...');
 
   const { currentUser } = useAuth();
@@ -58,12 +58,33 @@ export default function Profile() {
     agentData?.agentId ||
     agentData?.AgentId ||
     (isAgent ? (currentUser?.agentId || currentUser?.AgentId) : null) ||
+    (typeof window !== 'undefined' ? localStorage.getItem('agentId') : null) ||
     null;
 
   const profileImageUrl = useMemo(
-    () => (resolvedAgentId ? getProfileImageUrl('Agent', resolvedAgentId) : null),
-    [resolvedAgentId]
+    () => (resolvedAgentId ? getProfileImageUrl('Agent', resolvedAgentId, imageVersion) : null),
+    [resolvedAgentId, imageVersion]
   );
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !resolvedAgentId) return;
+    try {
+      setIsUploading(true);
+      setUploadError('');
+      const preview = URL.createObjectURL(file);
+      setPreviewUrl(preview);
+      await updateProfileImage('Agent', resolvedAgentId, file);
+      setImageVersion(Date.now());
+      setUploadSuccess('Profile image updated successfully');
+    } catch (err) {
+      console.error('Failed to update profile image', err);
+      setUploadError(err?.message || 'Failed to update profile image');
+      setPreviewUrl(null);
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   useEffect(() => {
     setImageError(false);
@@ -236,56 +257,48 @@ export default function Profile() {
   const showImage = Boolean(profileImageUrl && !imageError);
 
   return (
-    <div className="profile-page">
-      {/* 1. TOP CARD: PROFILE OVERVIEW (UNCHANGED) */}
-      <div className="profile-card profile-overview-card">
-        {/* Left Section: Avatar + Identity + Metric Tiles */}
-        <div className="profile-overview-left">
-          {/* Identity: Avatar + Name & Role */}
-          <div className="profile-identity-row">
-            <div className="profile-avatar-container" style={{ position: 'relative' }}>
-              <div className="profile-avatar-img" style={{ overflow: 'hidden' }}>
-                {previewUrl ? (
-                  <img
-                    src={previewUrl}
-                    alt={agentName}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                ) : !imageError && profileImageUrl ? (
-                  <AuthImage 
-                    src={profileImageUrl} 
-                    alt={agentName} 
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={() => setImageError(true)}
-                  />
-                ) : (
-                  <User size={38} strokeWidth={2} style={{ color: '#1A7A3C' }} />
-                )}
-              </div>
-
-              <button
-                type="button"
-                className="profile-avatar-edit-btn"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                title="Change profile photo"
-                aria-label="Change profile photo"
-              >
-                {isUploading ? <Loader2 size={12} className="profile-spin" /> : <Camera size={12} />}
-              </button>
-
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept="image/jpeg,image/jpg,image/png,image/webp"
-                style={{ display: 'none' }}
+    <div className="agent-profile-dashboard">
+      <div className="agent-profile-grid-layout">
+        {/* LEFT — Dark-green employee identity panel */}
+        <aside className="agent-identity-panel">
+          <div className="agent-identity-avatar-wrap" style={{ position: 'relative' }}>
+            {previewUrl ? (
+              <img
+                src={previewUrl}
+                alt={agentName}
+                className="agent-identity-avatar-img"
+              />
+            ) : !imageError && profileImageUrl ? (
+              <AuthImage 
+                src={profileImageUrl} 
+                alt={agentName} 
+                className="agent-identity-avatar-img"
+                onError={() => setImageError(true)}
               />
             ) : (
               <span className="agent-identity-initials">
                 {getInitials(agentName, 'AG')}
               </span>
             )}
+
+            <button
+              type="button"
+              className="profile-avatar-edit-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              title="Change profile photo"
+              aria-label="Change profile photo"
+            >
+              {isUploading ? <Loader2 size={12} className="profile-spin" /> : <Camera size={12} />}
+            </button>
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/jpeg,image/jpg,image/png,image/webp"
+              style={{ display: 'none' }}
+            />
           </div>
 
           <h2 className="agent-identity-name">{agentName}</h2>
