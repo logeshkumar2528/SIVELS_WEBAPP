@@ -13260,6 +13260,14 @@
   gap: 6px;
 }
 
+.bo-cv-workflow-panel .bo-cv-readiness-gaps {
+  margin: -6px 0 12px;
+  padding-left: 18px;
+  color: #92400e;
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
 .bo-cv-workflow-panel .bo-cv-btn-action {
   width: 100%;
   border: none;

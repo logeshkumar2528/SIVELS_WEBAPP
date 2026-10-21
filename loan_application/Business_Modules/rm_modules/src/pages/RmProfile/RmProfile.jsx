@@ -1,10 +1,10 @@
-import { apiFetch } from '../../../../../Core/src/api/apiFetch';
-import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import iconMap from '../../config/iconMap';
 import { formatDate } from '../../utils/dateHelper';
 import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './RmProfile.css';
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
 import AuthImage from '../../../../../Core/src/auth/AuthImage';
 
 const API_BASE = API_BASE_URL;
@@ -70,24 +70,23 @@ export default function RmProfile() {
     setLoadError('');
 
     try {
-      const token = localStorage.getItem('authToken') || localStorage.getItem('token');
-      const authHeaders = {};
-      if (token) authHeaders['Authorization'] = `Bearer ${token}`;
-
-      const response = await fetch(`${API_BASE}/RMMaster`, { headers: authHeaders });
+      const response = await apiFetch(`${API_BASE}/RMMaster/my`);
       if (!response.ok) {
         throw new Error(`Failed to load RM profile (${response.status})`);
       }
 
       const data = await response.json();
-      const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);
+      let rows = [];
+      if (Array.isArray(data)) rows = data;
+      else if (Array.isArray(data?.value)) rows = data.value;
+      else if (data && typeof data === 'object') rows = [data.value ?? data];
       const currentMobile = String(currentUser?.mobileNumber || currentUser?.phone || '').replace(/\D/g, '');
       const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || localStorage.getItem('rmId') || 0);
 
       const match =
-        rows.find((row) => Number(row.rmId || row.RMId) === currentRmId) ||
-        rows.find((row) => String(row.mobileNumber || '').replace(/\D/g, '') === currentMobile) ||
-        rows[0];
+        (currentRmId > 0 && rows.find((row) => Number(row.rmId || row.RMId) === currentRmId)) ||
+        (currentMobile && rows.find((row) => String(row.mobileNumber || '').replace(/\D/g, '') === currentMobile)) ||
+        null;
 
       if (match) {
         const resolvedId = Number(match.rmId || match.RMId || currentRmId) || null;
@@ -106,79 +105,7 @@ export default function RmProfile() {
   };
 
   useEffect(() => {
-    let active = true;
-
-    async function loadProfile() {
-      setIsLoading(true);
-      setLoadError('');
-
-      try {
-        const response = await apiFetch(`${API_BASE}/RMMaster`);
-        if (!response.ok) {
-          throw new Error(`Failed to load RM profile (${response.status})`);
-        }
-
-        const data = await response.json();
-        const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);
-        const currentMobile = String(currentUser?.mobileNumber || currentUser?.phone || '').replace(/\D/g, '');
-        const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || localStorage.getItem('rmId') || 0);
-
-        const match =
-          (currentRmId > 0 && rows.find((row) => Number(row.rmId || row.RMId) === currentRmId)) ||
-          (currentMobile && rows.find((row) => String(row.mobileNumber || '').replace(/\D/g, '') === currentMobile)) ||
-          null;
-
-        if (active && match) {
-          const resolvedId = Number(match.rmId || match.RMId || currentRmId) || null;
-          setActiveRmId(resolvedId);
-          const name = match.fullName || currentUser?.fullName || currentUser?.name || 'Relationship Manager';
-          const employeeId = match.rmCode || match.RmCode || match.RMCode || match.employeeId || '—';
-          const location = [match.branch, match.cityName, match.stateName].filter(Boolean).join(', ');
-
-          setProfile({
-            employeeId,
-            name,
-            role: 'Relationship Manager',
-            email: match.emailAddress || currentUser?.email || '',
-            phone: normalizePhone(match.mobileNumber || currentUser?.mobileNumber || ''),
-            location: location || currentUser?.address || '',
-            dob: match.dateOfBirth ? formatDateTime(match.dateOfBirth).split(',')[0] : '',
-            gender: match.genderName || '',
-            language: currentUser?.language || 'English',
-            address: [match.address, match.cityName, match.stateName, match.pincode].filter(Boolean).join(', '),
-            accessLevel: 'Full Access',
-            lastLogin: formatDateTime(match.modifiedAt || match.createdAt || ''),
-            accountCreated: formatDateTime(match.createdAt || match.dateJoined || ''),
-            stats: {
-              total: 0,
-              approved: 0,
-              approvedPct: '0%',
-              pending: 0,
-              pendingPct: '0%',
-              rejected: 0,
-              rejectedPct: '0%',
-            },
-            activities: [],
-          });
-        }
-      } catch (error) {
-        console.error('Failed to load RM profile:', error);
-        if (active) {
-          setLoadError('Unable to load live RM profile. Showing session values.');
-          setProfile(buildFallbackProfile(currentUser || {}));
-        }
-      } finally {
-        if (active) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    loadProfile();
-
-    return () => {
-      active = false;
-    };
+    fetchProfile();
   }, [currentUser]);
 
   useEffect(() => {
@@ -292,16 +219,11 @@ export default function RmProfile() {
         </div>
       )}
 
-      <div className="rm-banner">
-        <div className="rm-banner-left">
-          <div className="rm-avatar-wrapper">
-            {previewUrl ? (
-              <img
-                src={previewUrl}
-                alt={profile.name}
-                className="rm-avatar-img"
-              />
-            ) : imageUrl && !imageFailed ? (
+      <div className="rm-profile-grid-layout">
+        {/* LEFT — Dark-green employee identity panel */}
+        <aside className="rm-identity-panel">
+          <div className="rm-identity-avatar-wrap">
+            {showImage ? (
               <AuthImage
                 src={imageUrl}
                 alt={fullName}

@@ -32,6 +32,7 @@ import { buildApplicationDisplayId, resolveApplicantName } from '../applicationW
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import { getCurrentRMContext, normalizeApplicationStatus } from '../../utils/rmContext';
 import ApplicationTopSummary from '../../components/ApplicationTopSummary/ApplicationTopSummary';
+import ApplicationLockBanner from '../../components/ApplicationLockBanner/ApplicationLockBanner';
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 import './ApplicationDetails.css';
 
@@ -1226,6 +1227,7 @@ export default function ApplicationDetails() {
         <section className="ad-workspace-compact" aria-label="Loan application workspace">
           <div className="panel ad-main-panel compact-panel">
             <div className="compact-panel-content">
+              <ApplicationLockBanner appId={appId} />
               <fieldset disabled={isViewMode} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div className="compact-section-title">Application Information</div>
               <div className="compact-form-row sourcing-details-row">

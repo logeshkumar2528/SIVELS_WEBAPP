@@ -7,7 +7,7 @@ export const agentCustomerService = {
   },
 
   getAllCustomers: async () => {
-    const response = await axiosInstance.get('/AgentAddCustomer');
+    const response = await axiosInstance.get('/AgentAddCustomer/my');
     return response.data;
   },
 

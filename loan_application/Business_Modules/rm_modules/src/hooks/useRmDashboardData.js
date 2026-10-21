@@ -176,11 +176,11 @@ export function useRmDashboardData() {
         if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
         const [agentRes, customerRes, rmRes, rejectionsRes, appProdRes] = await Promise.all([
-          apiFetch(`${API_BASE}/AgentMaster`, { headers: authHeaders }),
-          apiFetch(`${API_BASE}/AgentAddCustomer`, { headers: authHeaders }),
-          apiFetch(`${API_BASE}/RMMaster`, { headers: authHeaders }).catch(() => null),
+          apiFetch(`${API_BASE}/AgentMaster/my`, { headers: authHeaders }),
+          apiFetch(`${API_BASE}/AgentAddCustomer/my`, { headers: authHeaders }),
+          apiFetch(`${API_BASE}/RMMaster/my`, { headers: authHeaders }).catch(() => null),
           apiFetch(`${API_BASE}/BackOfficeDocumentRejection/rm/${rmContext.rmId}/returned`, { headers: authHeaders }).catch(() => null),
-          apiFetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).catch(() => null),
+          apiFetch(`${API_BASE}/ApplicationProductDetails/my`, { headers: authHeaders }).catch(() => null),
         ]);
 
         if (!agentRes.ok) throw new Error(`Failed to load agents (${agentRes.status})`);

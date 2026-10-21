@@ -136,6 +136,42 @@ describe('axiosInstance auth interceptors', () => {
     expect(replaceSpy).not.toHaveBeenCalled();
   });
 
+  it('shows the server message for a locked application (409 APPLICATION_LOCKED)', async () => {
+    const message = 'Back Office has started verifying this application; it can no longer be edited by the RM.';
+    adapter.mockImplementation((config) => respond(config, 409, { message, code: 'APPLICATION_LOCKED' }));
+    const listener = vi.fn();
+    window.addEventListener(FORBIDDEN_EVENT, listener);
+
+    await expect(axiosInstance.put('/ApplicationAddressDetails/1', {})).rejects.toBeInstanceOf(AxiosError);
+
+    window.removeEventListener(FORBIDDEN_EVENT, listener);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][0].detail.message).toBe(message);
+  });
+
+  it('leaves other 409 conflicts to the calling screen', async () => {
+    adapter.mockImplementation((config) => respond(config, 409, { message: 'Already actioned.' }));
+    const listener = vi.fn();
+    window.addEventListener(FORBIDDEN_EVENT, listener);
+
+    await expect(axiosInstance.post('/ApplicationWorkflow/1/credit-approve', {})).rejects.toBeInstanceOf(AxiosError);
+
+    window.removeEventListener(FORBIDDEN_EVENT, listener);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('shows the rate-limit message on 429', async () => {
+    adapter.mockImplementation((config) => respond(config, 429, {}));
+    const listener = vi.fn();
+    window.addEventListener(FORBIDDEN_EVENT, listener);
+
+    await expect(axiosInstance.post('/MobileOtp/send-mobile-otp', {})).rejects.toBeInstanceOf(AxiosError);
+
+    window.removeEventListener(FORBIDDEN_EVENT, listener);
+    expect(listener.mock.calls[0][0].detail.message).toBe('Too many requests. Please wait a moment and try again.');
+    expect(replaceSpy).not.toHaveBeenCalled();
+  });
+
   it('sends FormData uploads unchanged with the Bearer token', async () => {
     adapter.mockImplementation((config) => respond(config, 200));
     const form = new FormData();

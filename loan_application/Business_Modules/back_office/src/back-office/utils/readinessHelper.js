@@ -1,220 +1,68 @@
 /**
  * readinessHelper.js
  * --------------------
- * Evaluates whether a Back Office loan application has completed the FULL required
- * Back Office underwriting and verification workflow before becoming eligible for
- * Submit to Credit Manager.
+ * Step 15 "Underwriting & Verification Readiness" is evaluated by the server
+ * (GET /ApplicationWorkflow/{agentCustomerId}/readiness), and send-to-credit-manager
+ * enforces the same checks. This file only turns that response into the flags the
+ * Back Office screens display, so the screens and the server cannot disagree.
  *
- * Back Office Workflow Sections & Verification Rules:
- * 1. Head Office Gate: Must have reached Head Office (status >= 2).
- *    Status 0 (New/Draft) and Status 1 (Pending RM) are NEVER Credit Manager ready.
- *    NOTE: Status >= 3 (Under Review) is NOT an automatic shortcut; the full verification workflow is strictly evaluated.
- *
- * 2. Section 02 - Document Verification:
- *    - Not a gate. KYC documents vary per customer (some are "Not Required"), so the
- *      verified count is shown for information only.
- *
- * 3. Section 06 - Legal Opinion:
- *    - Persisted in /api/BackOfficeApplicationDocuments.
- *    - Must have an active document with documentType === 'LEGAL_OPINION'.
- *
- * 4. Section 07 - Technical Value:
- *    - Persisted in /api/BackOfficeApplicationDocuments.
- *    - Must have an active document with documentType === 'TECHNICAL_VALUATION'.
- *
- * 5. Section 08 - CIBIL Check:
- *    - Persisted in /api/BackOfficeApplicationDocuments.
- *    - Must have an active document with documentType === 'CIBIL_REPORT' or 'MANUAL_CIBIL_PAN'.
- *
- * 6. Section 10 & 11 - Eligibility Assessment & Credit Recommendation:
- *    - Persisted in /api/calculation/assessments/by-application/:appProdId.
- *    - Must have a calculated assessment record with eligible/recommended sanction terms.
- *
- * 7. Unresolved Document Rejections:
- *    - Persisted in /api/BackOfficeDocumentRejection.
- *    - Must have NO active unresolved document rejections (status !== 'Verified' && status !== 'Resolved').
+ * Server check codes:
+ *   STATUS, LEGAL_OPINION, TECHNICAL_VALUATION, CIBIL_REPORT, ELIGIBILITY,
+ *   RECOMMENDATION, DOCUMENT_REJECTIONS, CREDIT_RETURN_ITEMS
  */
 
-export const REQUIRED_DOCUMENT_STEP_CODES = [
-  'PROFILE_IMAGE',
-  'AADHAAR',
-  'PAN',
-  'SALARY_SLIP',
-  'BANK_STATEMENT',
-  'ZIP_ARCHIVE',
-];
+const CREDIT_RETURN_ITEMS = 'CREDIT_RETURN_ITEMS';
 
-export const REQUIRED_APPLICATION_DOC_TYPES = [
-  'LEGAL_OPINION',
-  'TECHNICAL_VALUATION',
-  'CIBIL_REPORT',
-];
+export const EMPTY_READINESS = Object.freeze({
+  isReady: false,
+  isVerificationReady: false,
+  hasLegal: false,
+  hasTechnical: false,
+  hasCibil: false,
+  hasEligibility: false,
+  hasRecommendation: false,
+  unresolvedRejectionsCount: 0,
+  openCreditReturnCount: 0,
+  failedChecks: [],
+});
 
 /**
- * Checks if a loan application meets all FULL Back Office verification requirements.
- *
- * Supports both options object:
- *   isApplicationUnderwritingReady({ customer, stepVerifications, applicationDocuments, assessments, rejections })
- * and positional parameters:
- *   isApplicationUnderwritingReady(customer, stepVerifications, applicationDocuments, assessments, rejections)
- *
- * @returns {boolean}
+ * @param {{ isReady?: boolean, checks?: Array<{ code: string, label: string, passed: boolean, detail?: string, count?: number }> } | null} result
  */
-export function isApplicationUnderwritingReady(firstArg, ...rest) {
-  let customer = null;
-  let stepVerifications = [];
-  let applicationDocuments = [];
-  let assessments = [];
-  let rejections = [];
+export function summarizeReadiness(result) {
+  const checks = Array.isArray(result?.checks) ? result.checks : [];
+  if (!result || checks.length === 0) return { ...EMPTY_READINESS };
 
-  if (
-    firstArg &&
-    typeof firstArg === 'object' &&
-    !('status' in firstArg) &&
-    ('customer' in firstArg || 'stepVerifications' in firstArg)
-  ) {
-    customer = firstArg.customer;
-    stepVerifications = firstArg.stepVerifications || [];
-    applicationDocuments = firstArg.applicationDocuments || [];
-    assessments = firstArg.assessments || [];
-    rejections = firstArg.rejections || [];
-  } else {
-    customer = firstArg;
-    stepVerifications = rest[0] || [];
-    applicationDocuments = rest[1] || [];
-    assessments = rest[2] || [];
-    rejections = rest[3] || [];
-  }
+  const byCode = new Map(checks.map((c) => [String(c?.code || '').toUpperCase(), c]));
+  const passed = (code) => Boolean(byCode.get(code)?.passed);
+  const count = (code) => {
+    const check = byCode.get(code);
+    if (!check || check.passed) return 0;
+    return Number(check.count) > 0 ? Number(check.count) : 1;
+  };
 
-  return evaluateReadiness(
-    customer,
-    stepVerifications,
-    applicationDocuments,
-    assessments,
-    rejections
-  );
+  const failedChecks = checks.filter((c) => c && !c.passed);
+
+  return {
+    isReady: Boolean(result.isReady),
+    // Every check except open Credit Manager return items, which the Returned by Credit screen resolves in place.
+    isVerificationReady: failedChecks.every((c) => String(c.code || '').toUpperCase() === CREDIT_RETURN_ITEMS),
+    hasLegal: passed('LEGAL_OPINION'),
+    hasTechnical: passed('TECHNICAL_VALUATION'),
+    hasCibil: passed('CIBIL_REPORT'),
+    hasEligibility: passed('ELIGIBILITY'),
+    hasRecommendation: passed('RECOMMENDATION'),
+    unresolvedRejectionsCount: count('DOCUMENT_REJECTIONS'),
+    openCreditReturnCount: count(CREDIT_RETURN_ITEMS),
+    failedChecks,
+  };
 }
 
-function evaluateReadiness(
-  customer,
-  stepVerifications = [],
-  applicationDocuments = [],
-  assessments = [],
-  rejections = []
-) {
-  if (!customer) return false;
-
-  // 1. Head Office Pre-Credit Stage Gate: Allow ONLY status === 2 (Logged to HO) or status === 3 (Under Review)
-  // Status 0 (Draft), 1 (Pending RM), 4 (Approved), 5 (Rejected), 6 (Returned) are NEVER in the Submit to Credit queue.
-  const statusNum = Number(customer.status);
-  if (isNaN(statusNum) || (statusNum !== 2 && statusNum !== 3)) {
-    return false;
-  }
-
-  // 3. Back Office Application Documents (Legal Opinion, Technical Valuation, CIBIL Report)
-  const appDocsList = Array.isArray(applicationDocuments)
-    ? applicationDocuments
-    : (applicationDocuments?.value || applicationDocuments?.data || []);
-
-  const activeAppDocs = appDocsList.filter((d) => d && d.isActive !== false);
-
-  const hasLegalOpinion = activeAppDocs.some(
-    (d) => String(d.documentType || '').trim().toUpperCase() === 'LEGAL_OPINION'
-  );
-  if (!hasLegalOpinion) {
-    return false;
-  }
-
-  const hasTechnicalValuation = activeAppDocs.some(
-    (d) => String(d.documentType || '').trim().toUpperCase() === 'TECHNICAL_VALUATION'
-  );
-  if (!hasTechnicalValuation) {
-    return false;
-  }
-
-  const hasCibilReport = activeAppDocs.some(
-    (d) =>
-      String(d.documentType || '').trim().toUpperCase() === 'CIBIL_REPORT' ||
-      String(d.documentType || '').trim().toUpperCase() === 'MANUAL_CIBIL_PAN'
-  );
-  if (!hasCibilReport) {
-    return false;
-  }
-
-  // 4. Eligibility Assessment (Step 10)
-  const assessmentsList = Array.isArray(assessments)
-    ? assessments
-    : (assessments?.value || assessments?.data || []);
-
-  const activeAssessments = assessmentsList.filter((a) => a && a.isActive !== false);
-  if (activeAssessments.length === 0) {
-    return false;
-  }
-
-  // 4a. Eligibility Complete: Calculation has been executed with concrete populated result fields
-  const hasEligibilityComplete = activeAssessments.some((a) => {
-    const maxAmount = Number(a.maximumEligibleLoanAmount || a.finalLoanEligibility || 0);
-    const eligibleEmi = Number(a.eligibleEMI || a.maxEmi || 0);
-    const hasCalculatedAt = Boolean(a.calculatedAt || a.calculatedDate);
-    const statusText = String(a.status || '').trim().toLowerCase();
-    const hasCalculatedStatus =
-      statusText === 'eligible' ||
-      statusText === 'calculated' ||
-      statusText === 'ineligible' ||
-      statusText === 'completed';
-
-    // Must have a populated calculated monetary result (> 0) OR a valid calculation status with timestamp
-    return maxAmount > 0 || eligibleEmi > 0 || (hasCalculatedStatus && hasCalculatedAt);
-  });
-
-  if (!hasEligibilityComplete) {
-    return false;
-  }
-
-  // 4b. Recommendation Complete: Underwriter has saved Company Recommendation
-  const hasRecommendationComplete = activeAssessments.some((a) => {
-    const recAmount = Number(a.recommendedLoanAmount || 0);
-    if (recAmount > 0) return true;
-    if (a.assessmentData) {
-      let data = a.assessmentData;
-      if (typeof data === 'string') {
-        try {
-          data = JSON.parse(data);
-        } catch {}
-      }
-      const dataRec = Number(
-        data?.recommendedLoanAmount ||
-        data?.loanDetails?.recommendedLoanAmount ||
-        data?.recommendation?.recommendedLoanAmount ||
-        0
-      );
-      if (dataRec > 0) return true;
-    }
-    return false;
-  });
-
-  if (!hasRecommendationComplete) {
-    return false;
-  }
-
-  // 5. Unresolved Document Rejections Check
-  const rejectionsList = Array.isArray(rejections)
-    ? rejections
-    : (rejections?.value || rejections?.data || []);
-
-  const activeUnresolvedRejections = rejectionsList.filter(
-    (r) =>
-      r &&
-      r.isActive !== false &&
-      r.status !== 'Verified' &&
-      r.status !== 'Resolved'
-  );
-
-  if (activeUnresolvedRejections.length > 0) {
-    return false;
-  }
-
-  return true;
+/** One line per failed check, for warnings and error messages. */
+export function describeFailedChecks(failedChecks) {
+  return (Array.isArray(failedChecks) ? failedChecks : [])
+    .map((c) => c?.detail || c?.label)
+    .filter(Boolean);
 }
 
-export default isApplicationUnderwritingReady;
+export default summarizeReadiness;

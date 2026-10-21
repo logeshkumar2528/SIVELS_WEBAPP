@@ -24,9 +24,15 @@ import { getBackOfficeAuth } from '../../auth/authStorage';
 import Pagination from '../../components/Pagination/Pagination';
 import { getReturnItemStep } from '../../config/creditReturnFields';
 import { RETURN_ITEM_STATUS, RETURN_ITEM_STATUS_META, mapCreditReturnItem } from '../../mappers/creditReturnMapper';
+import { describeFailedChecks } from '../../utils/readinessHelper';
 import '../SubmitToCredit/SubmitToCredit.css';
 import '../../components/CreditReturnPanel/CreditReturnPanel.css';
 import './ReturnedByCredit.css';
+
+/** Server readiness apart from the open return items, which are resolved on this screen. */
+function isVerificationReady(application) {
+  return Boolean(application.isVerificationReady ?? application.isCreditReady);
+}
 
 /** Verification workspace URL opened at the section the item belongs to. */
 function buildSectionRoute(custId, item) {
@@ -181,7 +187,11 @@ function ResendModal({ application, onClose, onSent, onItemResolved }) {
   const custId = application.agentCustomerId || application.id;
   const hasItems = items.length > 0;
   const openCount = items.filter((item) => !item.isResolved).length;
-  const canSend = application.isCreditReady && openCount === 0;
+  const verificationReady = isVerificationReady(application);
+  const verificationGaps = describeFailedChecks(
+    (application.readinessFailedChecks || []).filter((c) => c?.code !== 'CREDIT_RETURN_ITEMS')
+  );
+  const canSend = verificationReady && openCount === 0;
 
   const handleItemResolved = (resolvedItem, note, updated) => {
     setItems((prev) =>
@@ -275,9 +285,16 @@ function ResendModal({ application, onClose, onSent, onItemResolved }) {
             </div>
           )}
 
-          {!application.isCreditReady && (
+          {!verificationReady && (
             <div className="rbc-error">
               Verification is incomplete. Complete all mandatory verification steps and resolve rejections before sending.
+              {verificationGaps.length > 0 && (
+                <ul className="rbc-readiness-gaps">
+                  {verificationGaps.map((gap) => (
+                    <li key={gap}>{gap}</li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
@@ -651,7 +668,7 @@ export default function ReturnedByCredit() {
                                 {c.openReturnItems.length > 0 ? 'Resolve Items' : 'Resubmit to Credit Manager'}
                               </span>
                             </button>
-                            {!c.isCreditReady && (
+                            {!isVerificationReady(c) && (
                               <span className="rbc-not-ready">Verification incomplete</span>
                             )}
                           </div>

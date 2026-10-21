@@ -30,8 +30,30 @@ export function handleSessionExpired() {
   redirectToLogin();
 }
 
-export function notifyForbidden() {
-  window.dispatchEvent(new CustomEvent(FORBIDDEN_EVENT, { detail: { message: FORBIDDEN_MESSAGE } }));
+export const APPLICATION_LOCKED_CODE = 'APPLICATION_LOCKED';
+export const LOCKED_MESSAGE = 'This application is locked at its current stage.';
+export const RATE_LIMITED_MESSAGE = 'Too many requests. Please wait a moment and try again.';
+
+function notify(serverMessage, fallback) {
+  const message = typeof serverMessage === 'string' && serverMessage.trim() ? serverMessage : fallback;
+  window.dispatchEvent(new CustomEvent(FORBIDDEN_EVENT, { detail: { message } }));
+}
+
+export function notifyForbidden(serverMessage) {
+  notify(serverMessage, FORBIDDEN_MESSAGE);
+}
+
+/**
+ * Shows the server's message for responses the user cannot fix by retrying immediately:
+ * 409 with code APPLICATION_LOCKED (wrong stage for this role) and 429 (rate limited).
+ * Other 409s are left to the calling screen.
+ */
+export function notifyBlockedResponse(status, body) {
+  if (status === 409 && body?.code === APPLICATION_LOCKED_CODE) {
+    notify(body?.message, LOCKED_MESSAGE);
+  } else if (status === 429) {
+    notify(body?.message, RATE_LIMITED_MESSAGE);
+  }
 }
 
 export function resetAuthEventsForTests() {

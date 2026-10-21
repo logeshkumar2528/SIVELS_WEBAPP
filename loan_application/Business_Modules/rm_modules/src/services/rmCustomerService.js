@@ -50,7 +50,7 @@ export const rmCustomerService = {
   },
 
   getAllCustomers: async () => {
-    const response = await axiosInstance.get('/AgentAddCustomer');
+    const response = await axiosInstance.get('/AgentAddCustomer/my');
     return normalizeCustomerResponse(response.data);
   },
 

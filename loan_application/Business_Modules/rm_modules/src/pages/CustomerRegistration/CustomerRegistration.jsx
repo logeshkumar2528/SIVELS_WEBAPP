@@ -26,6 +26,7 @@ import Modal from '../../components/Modal/Modal';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { formatDateTime, toIstDateInput } from '../../utils/dateHelper';
 import ApplicationTopSummary from '../../components/ApplicationTopSummary/ApplicationTopSummary';
+import ApplicationLockBanner from '../../components/ApplicationLockBanner/ApplicationLockBanner';
 import rmCustomerService from '../../services/rmCustomerService';
 import './CustomerRegistration.css';
 import { getCurrentRMContext } from '../../utils/rmContext';
@@ -1276,6 +1277,7 @@ export default function CustomerRegistration() {
 
       <div className="panel cr-form-card">
         <div className="cr-form-body">
+          <ApplicationLockBanner appId={appId} />
           <fieldset disabled={isViewMode} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <PersonCard
             heading="Applicant Information"

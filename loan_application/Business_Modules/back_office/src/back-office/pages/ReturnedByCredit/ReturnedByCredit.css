@@ -314,6 +314,11 @@
   font-size: 0.825rem;
 }
 
+.rbc-readiness-gaps {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+}
+
 .rbc-modal-footer {
   display: flex;
   justify-content: flex-end;

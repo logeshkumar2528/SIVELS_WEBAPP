@@ -9,7 +9,7 @@ export const CREDIT_MANAGER_ENDPOINTS = {
   CREDIT_MANAGER_MASTER: '/CreditManagerMaster',
   CREDIT_MANAGER_BY_ID: (id) => `/CreditManagerMaster/${encodeURIComponent(id)}`,
 
-  CUSTOMERS: '/AgentAddCustomer',
+  CUSTOMERS: '/AgentAddCustomer/my',
 
   CREDIT_APPROVE: (agentCustomerId) =>
     `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/credit-approve`,
@@ -29,4 +29,9 @@ export const CREDIT_MANAGER_ENDPOINTS = {
     `/ApplicationCreditReturnItem/by-customer/${encodeURIComponent(agentCustomerId)}`,
   CREDIT_RETURN_ITEM_ACCEPT: (itemId) =>
     `/ApplicationCreditReturnItem/${encodeURIComponent(itemId)}/accept`,
+
+  REVIEW_SECTIONS: (agentCustomerId) =>
+    `/ApplicationReviewSection/${encodeURIComponent(agentCustomerId)}`,
+  REVIEW_SECTION: (agentCustomerId, sectionId) =>
+    `/ApplicationReviewSection/${encodeURIComponent(agentCustomerId)}/${encodeURIComponent(sectionId)}`,
 };
