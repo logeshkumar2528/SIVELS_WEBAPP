@@ -37,6 +37,7 @@ import '../../../back_office/src/back-office/pages/SubmitToCredit/SubmitToCredit
 import '../styles/creditManager.css';
 import creditManagerService from '../api/creditManagerService';
 import { getCreditManagerAuth, getCreditManagerId } from '../auth/authStorage';
+import { usePermissions } from '../../../../Core/src/auth/permissions';
 import { ROUTES } from '../config/routeConfig';
 import { useCreditApplications } from '../context/CreditApplicationsContext';
 import {
@@ -170,6 +171,8 @@ function CreditDecisionPanel({
   onDismissSuccess,
   onAction,
 }) {
+  const { can } = usePermissions();
+  const canDecide = can('CREDIT.APPROVE');
   const CheckCircleIcon = iconMap['CheckCircle'];
   const XCircleIcon = iconMap['XCircle'];
   const RotateCcwIcon = iconMap['RotateCcw'];
@@ -233,7 +236,7 @@ function CreditDecisionPanel({
         <PendingFlagsCard
           flags={pendingFlags}
           onRemove={onRemoveFlag}
-          canReturn={isPending}
+          canReturn={isPending && canDecide}
           onReturn={() => onAction(DECISION_ACTIONS.RETURN)}
         />
       )}
@@ -264,8 +267,9 @@ function CreditDecisionPanel({
                 <strong>Return to Back Office</strong>. The application can be approved once every section is approved.
               </div>
             </div>
-            {approveBlockedReason && <p className="cm-approve-blocked">{approveBlockedReason}</p>}
-            <div className="cm-decision-actions">
+            {!canDecide && <p className="cm-approve-blocked">Your role can review this application but can't record a credit decision.</p>}
+            {canDecide && approveBlockedReason && <p className="cm-approve-blocked">{approveBlockedReason}</p>}
+            {canDecide && <div className="cm-decision-actions">
               <button type="button" className="stc-btn-doc cm-btn-return" onClick={() => onAction(DECISION_ACTIONS.RETURN)}>
                 {RotateCcwIcon && <RotateCcwIcon size={15} />}
                 <span>Return to Back Office</span>
@@ -284,7 +288,7 @@ function CreditDecisionPanel({
                 {CheckCircleIcon && <CheckCircleIcon size={15} />}
                 <span>Approve</span>
               </button>
-            </div>
+            </div>}
           </>
         ) : latestDecision ? (
           <div className="cm-decision-summary">

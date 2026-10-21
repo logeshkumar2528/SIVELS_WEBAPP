@@ -25,6 +25,7 @@ import Pagination from '../../components/Pagination/Pagination';
 import { getReturnItemStep } from '../../config/creditReturnFields';
 import { RETURN_ITEM_STATUS, RETURN_ITEM_STATUS_META, mapCreditReturnItem } from '../../mappers/creditReturnMapper';
 import { describeFailedChecks } from '../../utils/readinessHelper';
+import { hasPermission } from '../../../../../../Core/src/auth/permissions';
 import '../SubmitToCredit/SubmitToCredit.css';
 import '../../components/CreditReturnPanel/CreditReturnPanel.css';
 import './ReturnedByCredit.css';
@@ -191,7 +192,8 @@ function ResendModal({ application, onClose, onSent, onItemResolved }) {
   const verificationGaps = describeFailedChecks(
     (application.readinessFailedChecks || []).filter((c) => c?.code !== 'CREDIT_RETURN_ITEMS')
   );
-  const canSend = verificationReady && openCount === 0;
+  const canApprove = hasPermission('VERIFICATION.APPROVE');
+  const canSend = canApprove && verificationReady && openCount === 0;
 
   const handleItemResolved = (resolvedItem, note, updated) => {
     setItems((prev) =>
@@ -282,6 +284,12 @@ function ResendModal({ application, onClose, onSent, onItemResolved }) {
             <div className="rbc-modal-cm-remarks">
               <span className="rbc-label">Credit Manager asked to correct</span>
               <span className="rbc-remarks">{application.returnRemarks || '—'}</span>
+            </div>
+          )}
+
+          {!canApprove && (
+            <div className="rbc-error">
+              Your role can correct entries but can&apos;t send the application to the Credit Manager.
             </div>
           )}
 

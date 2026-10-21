@@ -1,0 +1,127 @@
+.access-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #eef2ff;
+  color: #3730a3;
+  margin-left: 6px;
+}
+
+.access-badge--locked {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.access-muted {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.access-editor {
+  display: grid;
+  gap: var(--spacing-lg, 1.25rem);
+}
+
+.access-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: var(--spacing-lg, 1.25rem);
+  overflow-x: auto;
+}
+
+.access-card h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 var(--spacing-md, 1rem);
+}
+
+.access-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--spacing-md, 1rem);
+}
+
+.access-grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.access-grid th,
+.access-grid td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.access-grid th.access-grid-level,
+.access-grid td.access-grid-level {
+  text-align: center;
+  width: 110px;
+}
+
+.access-grid-module-name {
+  font-weight: 600;
+}
+
+.access-grid input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.access-grid input[type='checkbox']:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.access-grid-none {
+  color: var(--color-text-muted);
+}
+
+.access-link-btn {
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0 4px;
+}
+
+.access-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-md, 1rem);
+  flex-wrap: wrap;
+}
+
+.access-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+@media (max-width: 640px) {
+  .access-grid th,
+  .access-grid td {
+    padding: 8px 6px;
+  }
+
+  .access-grid th.access-grid-level,
+  .access-grid td.access-grid-level {
+    width: 56px;
+  }
+}
+
+.access-select {
+  min-width: 220px;
+}
+
+.access-confirm-list {
+  margin: 0.5rem 0 1rem;
+  padding-left: 1.2rem;
+  font-size: 0.9rem;
+}

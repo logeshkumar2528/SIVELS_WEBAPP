@@ -18,6 +18,7 @@
  *   badgeKey {string|null} — Key to look up a live count in badgeCounts; null = no badge
  *   section  {string|null} — Section heading label; null = no heading (top-level items)
  *                            'BOTTOM' = pinned at the bottom of the sidebar
+ *   permission {string}   — Optional; item is hidden when the role lacks this permission
  */
 
 import { ROUTES } from './routeConfig';
@@ -30,6 +31,7 @@ import { ROUTES } from './routeConfig';
  * @property {string}      route
  * @property {string|null} badgeKey
  * @property {string|null} section
+ * @property {string}      [permission]
  */
 
 /** @type {NavItem[]} */
@@ -52,6 +54,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.DISTRICTS,
     badgeKey: 'districtOverview',
     section:  'OPERATIONS',
+    permission: 'DASHBOARD.VIEW',
   },
   {
     id:       'rms',
@@ -60,6 +63,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.RMS,
     badgeKey: 'rmMonitoring',
     section:  'OPERATIONS',
+    permission: 'STAFF.VIEW',
   },
   {
     id:       'agents',
@@ -68,6 +72,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.AGENTS,
     badgeKey: 'agentMonitoring',
     section:  'OPERATIONS',
+    permission: 'STAFF.VIEW',
   },
   {
     id:       'customers',
@@ -76,6 +81,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.CUSTOMERS,
     badgeKey: 'customerMonitoring',
     section:  'OPERATIONS',
+    permission: 'APPLICATIONS.VIEW',
   },
   {
     id:       'submit-to-credit',
@@ -84,6 +90,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.SUBMIT_TO_CREDIT,
     badgeKey: 'submitToCredit',
     section:  'OPERATIONS',
+    permission: 'VERIFICATION.VIEW',
   },
   {
     id:       'returned-by-credit',
@@ -92,6 +99,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.RETURNED_BY_CREDIT,
     badgeKey: 'returnedByCredit',
     section:  'OPERATIONS',
+    permission: 'VERIFICATION.VIEW',
   },
 
   /* ==========================================

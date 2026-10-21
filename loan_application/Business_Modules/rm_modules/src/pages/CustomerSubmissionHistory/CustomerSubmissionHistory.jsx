@@ -26,6 +26,7 @@ import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import { resolveVerificationIdByCodeOrName } from '../../../../../Core/src/utils/verificationHelper';
 import { matchesListingDateCriteria } from '../../utils/dateHelper';
 import { ROUTES } from '../../config/routeConfig';
+import { Can } from '../../../../../Core/src/auth/permissions';
 import './CustomerSubmissionHistory.css';
 
 const STATUS_OPTIONS = [
@@ -563,14 +564,16 @@ export default function CustomerSubmissionHistory() {
             Reset
           </button>
 
-          <button
-            type="button"
-            className="rm-csh-btn-create"
-            onClick={handleCreateCustomer}
-          >
-            <Plus size={16} strokeWidth={2.2} />
-            <span>Add New Customer</span>
-          </button>
+          <Can permission="APPLICATIONS.EDIT">
+            <button
+              type="button"
+              className="rm-csh-btn-create"
+              onClick={handleCreateCustomer}
+            >
+              <Plus size={16} strokeWidth={2.2} />
+              <span>Add New Customer</span>
+            </button>
+          </Can>
         </div>
 
         {/* Data Table Area */}
@@ -596,14 +599,16 @@ export default function CustomerSubmissionHistory() {
             <p className="rm-csh-empty-desc">
               Customers created directly by the Relationship Manager will appear here once submitted.
             </p>
-            <button
-              type="button"
-              className="rm-csh-btn-create"
-              onClick={handleCreateCustomer}
-            >
-              <UserPlus size={16} />
-              <span>Create First Customer</span>
-            </button>
+            <Can permission="APPLICATIONS.EDIT">
+              <button
+                type="button"
+                className="rm-csh-btn-create"
+                onClick={handleCreateCustomer}
+              >
+                <UserPlus size={16} />
+                <span>Create First Customer</span>
+              </button>
+            </Can>
           </div>
         ) : filteredSubmissions.length === 0 ? (
           <div className="rm-csh-empty-state">
