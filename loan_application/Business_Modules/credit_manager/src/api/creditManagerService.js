@@ -93,6 +93,28 @@ const creditManagerService = {
     return unwrapResponse(response);
   },
 
+  /**
+   * Section approvals and flags for the current review round.
+   * Resolves to { sections: [{ sectionId, isApproved, flags }], approvedCount, totalSections, sectionIds }.
+   */
+  getReviewSections: async (agentCustomerId) => {
+    const response = await axiosInstance.get(CREDIT_MANAGER_ENDPOINTS.REVIEW_SECTIONS(agentCustomerId));
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Saves one section. A section that is neither approved nor flagged is cleared.
+   * Payload: { isApproved, flags: [{ sectionCode, sectionName, fieldKey, fieldLabel, issue, stepId }],
+   * reviewedByUserId, reviewedByRole }
+   */
+  saveReviewSection: async (agentCustomerId, sectionId, payload) => {
+    const response = await axiosInstance.put(
+      CREDIT_MANAGER_ENDPOINTS.REVIEW_SECTION(agentCustomerId, sectionId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
   /** Resolves to null when no decision exists yet (backend returns 404). */
   getLatestCreditDecision: async (agentCustomerId) => {
     try {

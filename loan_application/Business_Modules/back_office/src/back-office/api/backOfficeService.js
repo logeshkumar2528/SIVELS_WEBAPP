@@ -1297,6 +1297,18 @@ export const backOfficeService = {
   },
 
   /**
+   * Step 15 readiness evaluated by the server (the same checks send-to-credit-manager enforces).
+   * Resolves to { isReady, status, applicationProductDetailsId, checks: [{ code, label, passed, detail, count }] }.
+   * @param {string|number} agentCustomerId
+   */
+  getApplicationReadiness: async (agentCustomerId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_WORKFLOW_READINESS(agentCustomerId)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
    * Get the latest Credit Manager decision for an application.
    * Resolves to null when no decision exists (backend returns 404).
    * @param {string|number} agentCustomerId

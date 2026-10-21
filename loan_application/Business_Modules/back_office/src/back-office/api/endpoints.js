@@ -226,6 +226,8 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/send-to-credit-manager`,
   APPLICATION_WORKFLOW_HISTORY: (agentCustomerId) =>
     `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/history`,
+  APPLICATION_WORKFLOW_READINESS: (agentCustomerId) =>
+    `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/readiness`,
 
   // Credit Manager decisions (Approved / Rejected / ReturnedToBackOffice)
   LATEST_CREDIT_DECISION: (agentCustomerId) =>

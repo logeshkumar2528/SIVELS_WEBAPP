@@ -8,6 +8,7 @@ import { buildApplicationDisplayId, resolveApplicantName } from '../../pages/app
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import { formatDateTime } from '../../utils/dateHelper';
 import ApplicationTopSummary from '../ApplicationTopSummary/ApplicationTopSummary';
+import ApplicationLockBanner from '../ApplicationLockBanner/ApplicationLockBanner';
 import './WizardSectionLayout.css';
 
 function getPrimaryBranch(appData) {
@@ -122,6 +123,7 @@ export default function WizardSectionLayout({
 
         <div className="panel aw-form-card">
           <div className="aw-form-body">
+            <ApplicationLockBanner appId={appId} />
             {children}
           </div>
 

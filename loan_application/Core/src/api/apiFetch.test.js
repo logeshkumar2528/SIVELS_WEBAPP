@@ -117,4 +117,29 @@ describe('apiFetch', () => {
     expect(listener.mock.calls[0][0].detail.message).toBe(message);
     expect(await response.json()).toEqual({ message });
   });
+
+  it('shows the lock message on 409 APPLICATION_LOCKED and leaves the body readable', async () => {
+    const body = { message: 'This application has been decided and can no longer be changed.', code: 'APPLICATION_LOCKED' };
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(body), { status: 409 }));
+    const listener = vi.fn();
+    window.addEventListener(FORBIDDEN_EVENT, listener);
+
+    const response = await apiFetch('/CustomerDocumentProof/upload', { method: 'POST' });
+
+    window.removeEventListener(FORBIDDEN_EVENT, listener);
+    expect(listener.mock.calls[0][0].detail.message).toBe(body.message);
+    expect(await response.json()).toEqual(body);
+  });
+
+  it('shows the rate-limit message on 429', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('', { status: 429 }));
+    const listener = vi.fn();
+    window.addEventListener(FORBIDDEN_EVENT, listener);
+
+    const response = await apiFetch('/MobileOtp/send-mobile-otp', { method: 'POST' });
+
+    window.removeEventListener(FORBIDDEN_EVENT, listener);
+    expect(response.status).toBe(429);
+    expect(listener.mock.calls[0][0].detail.message).toBe('Too many requests. Please wait a moment and try again.');
+  });
 });

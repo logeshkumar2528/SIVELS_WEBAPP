@@ -1,5 +1,5 @@
 import { isApiUrl, resolveApiUrl } from './apiConfig';
-import { handleSessionExpired, notifyForbidden } from '../auth/authEvents';
+import { handleSessionExpired, notifyBlockedResponse, notifyForbidden } from '../auth/authEvents';
 import { getTokenForRequest, isAuthEndpoint, recoverFromUnauthorized } from '../auth/refreshSession';
 import { getAccessToken } from '../auth/tokenStore';
 
@@ -45,6 +45,9 @@ export async function apiFetch(input, init = {}) {
   if (response.status === 403) {
     const body = await response.clone().json().catch(() => null);
     notifyForbidden(body?.message);
+  } else if (response.status === 409 || response.status === 429) {
+    const body = await response.clone().json().catch(() => null);
+    notifyBlockedResponse(response.status, body);
   }
 
   return response;

@@ -57,7 +57,7 @@ import { FolderOpen } from 'lucide-react';
 import PdfView from '../../../../../rm_modules/src/pages/PdfView/PdfView';
 import { ApplicationDraftProvider } from '../../../../../rm_modules/src/state/ApplicationDraftContext';
 import { resolveDocumentTypeId, getDocumentApplicability } from '../../../../../../Core/src/utils/documentTypeHelper';
-import { isApplicationUnderwritingReady } from '../../utils/readinessHelper';
+import { EMPTY_READINESS, describeFailedChecks, summarizeReadiness } from '../../utils/readinessHelper';
 import { buildNormalIncomeSummary } from '../../utils/normalIncomeSheetParser';
 import './CustomerVerification.css';
 
@@ -5505,15 +5505,10 @@ export default function CustomerVerification({
   const [workflowHistoryError, setWorkflowHistoryError] = useState(null);
   const [workflowActionFeedback, setWorkflowActionFeedback] = useState(null);
   const [step13Readiness, setStep13Readiness] = useState({
-    isReady: false,
+    ...EMPTY_READINESS,
     isEvaluating: false,
     evaluated: false,
     stepVerifsCount: 0,
-    hasLegal: false,
-    hasTechnical: false,
-    hasCibil: false,
-    hasEligibility: false,
-    unresolvedRejectionsCount: 0,
   });
 
   // PD assessment values for the current application.
@@ -6923,48 +6918,22 @@ export default function CustomerVerification({
     }
   }, [resolvedTargetCustomerId]);
 
+  // Step 15 readiness comes from the server, which enforces the same checks on send-to-credit-manager.
   const evaluateStep13Readiness = useCallback(async () => {
+    const custId = resolvedTargetCustomerId;
+    if (!custId || custId <= 0) return;
     const appProdId = resolvedAppProdId;
-    if (!appProdId || appProdId <= 0) return;
 
     setStep13Readiness((prev) => ({ ...prev, isEvaluating: true }));
     try {
-      const [stepVerifsRes, appDocsRes, assessmentsRes, rejectionsRes] = await Promise.allSettled([
-        backOfficeService.getStepVerificationsByApplication(appProdId),
-        backOfficeService.getApplicationDocuments(appProdId),
-        backOfficeService.getAssessmentsByApplication(appProdId),
-        backOfficeService.getDocumentRejectionsByApplication(appProdId),
+      const [readinessRes, stepVerifsRes] = await Promise.allSettled([
+        backOfficeService.getApplicationReadiness(custId),
+        appProdId > 0 ? backOfficeService.getStepVerificationsByApplication(appProdId) : Promise.resolve([]),
       ]);
+      if (readinessRes.status === 'rejected') throw readinessRes.reason;
 
+      // KYC document matrix is shown for information only; it is not a readiness check.
       const stepVerifs = stepVerifsRes.status === 'fulfilled' ? (Array.isArray(stepVerifsRes.value) ? stepVerifsRes.value : (stepVerifsRes.value?.value || stepVerifsRes.value?.data || [])) : [];
-      const appDocs = appDocsRes.status === 'fulfilled' ? (Array.isArray(appDocsRes.value) ? appDocsRes.value : (appDocsRes.value?.value || appDocsRes.value?.data || [])) : [];
-      const assessments = assessmentsRes.status === 'fulfilled' ? (Array.isArray(assessmentsRes.value) ? assessmentsRes.value : (assessmentsRes.value?.value || assessmentsRes.value?.data || [])) : [];
-      const rejections = rejectionsRes.status === 'fulfilled' ? (Array.isArray(rejectionsRes.value) ? rejectionsRes.value : (rejectionsRes.value?.value || rejectionsRes.value?.data || [])) : [];
-
-      const rawCustomer = verificationData?.raw?.customer || verificationData?.customer || {};
-      const rawCust = Array.isArray(rawCustomer) ? rawCustomer[0] : rawCustomer;
-      const currentStatus = Number(
-        rawCust?.status ??
-        rawCust?.applicationStatus ??
-        verificationData?.status ??
-        verificationData?.applicationStatus ??
-        2
-      );
-
-      const customerObj = {
-        ...verificationData,
-        status: currentStatus,
-      };
-
-      const isReady = isApplicationUnderwritingReady({
-        customer: customerObj,
-        stepVerifications: stepVerifs,
-        applicationDocuments: appDocs,
-        assessments,
-        rejections,
-      });
-
-      // Individual breakdown checks for UI display
       const activeVerifs = stepVerifs.filter((v) => v && v.isActive !== false && Boolean(v.isVerified));
       const primaryDocCodes = new Set(
         activeVerifs.filter((v) => Number(v.applicantSequence || 0) === 0).map((v) => String(v.stepCode || '').trim().toUpperCase())
@@ -6972,42 +6941,17 @@ export default function CustomerVerification({
       const REQUIRED_DOCS = ['PROFILE_IMAGE', 'AADHAAR', 'PAN', 'SALARY_SLIP', 'BANK_STATEMENT', 'ZIP_ARCHIVE'];
       const docsCount = REQUIRED_DOCS.filter((c) => primaryDocCodes.has(c)).length;
 
-      const activeAppDocs = appDocs.filter((d) => d && d.isActive !== false);
-      const hasLegal = activeAppDocs.some((d) => String(d.documentType || '').trim().toUpperCase() === 'LEGAL_OPINION');
-      const hasTechnical = activeAppDocs.some((d) => String(d.documentType || '').trim().toUpperCase() === 'TECHNICAL_VALUATION');
-      const hasCibil = activeAppDocs.some((d) => {
-        const dt = String(d.documentType || '').trim().toUpperCase();
-        return dt === 'CIBIL_REPORT' || dt === 'MANUAL_CIBIL_PAN';
-      });
-
-      const activeAssessments = assessments.filter((a) => a && a.isActive !== false);
-      const hasEligibility = activeAssessments.some((a) => {
-        const maxAmount = Number(a.maximumEligibleLoanAmount || a.finalLoanEligibility || 0);
-        const eligibleEmi = Number(a.eligibleEMI || a.maxEmi || 0);
-        const hasCalculatedAt = Boolean(a.calculatedAt || a.calculatedDate);
-        const statusText = String(a.status || '').trim().toLowerCase();
-        const hasCalculatedStatus = ['eligible', 'calculated', 'ineligible', 'completed'].includes(statusText);
-        return maxAmount > 0 || eligibleEmi > 0 || (hasCalculatedStatus && hasCalculatedAt);
-      });
-
-      const activeUnresolved = rejections.filter((r) => r && r.isActive !== false && r.status !== 'Verified' && r.status !== 'Resolved');
-
       setStep13Readiness({
-        isReady,
+        ...summarizeReadiness(readinessRes.value),
         isEvaluating: false,
         evaluated: true,
         stepVerifsCount: docsCount,
-        hasLegal,
-        hasTechnical,
-        hasCibil,
-        hasEligibility,
-        unresolvedRejectionsCount: activeUnresolved.length,
       });
     } catch (err) {
       console.warn('[CustomerVerification] Failed to evaluate readiness:', err);
       setStep13Readiness((prev) => ({ ...prev, isEvaluating: false, evaluated: true }));
     }
-  }, [resolvedAppProdId, verificationData]);
+  }, [resolvedTargetCustomerId, resolvedAppProdId]);
 
   // Trigger history and readiness fetch when Step 13 (activeStep === 18) opens
   useEffect(() => {
@@ -7123,9 +7067,10 @@ export default function CustomerVerification({
     }
 
     if (!step13Readiness.isReady) {
+      const gaps = describeFailedChecks(step13Readiness.failedChecks);
       setSendToCreditModal((prev) => ({
         ...prev,
-        error: 'Cannot forward to Credit Manager: Mandatory underwriting verification requirements are not yet complete.',
+        error: `Cannot forward to Credit Manager: Mandatory underwriting verification requirements are not yet complete.${gaps.length ? ` ${gaps.join(' ')}` : ''}`,
       }));
       return;
     }
@@ -7161,6 +7106,9 @@ export default function CustomerVerification({
       console.error('[CustomerVerification] Failed to send application to Credit Manager:', err);
       const msg = err?.response?.data?.message || err?.response?.data?.title || err?.message || 'Failed to send application to Credit Manager.';
       setSendToCreditModal((prev) => ({ ...prev, isSubmitting: false, error: msg }));
+      if (Array.isArray(err?.response?.data?.failedChecks)) {
+        evaluateStep13Readiness();
+      }
     }
   };
 
@@ -17984,6 +17932,21 @@ export default function CustomerVerification({
                     </div>
 
                     <div className="bo-cv-readiness-item">
+                      <div className="bo-cv-readiness-label">Credit Recommendation</div>
+                      <div className="bo-cv-readiness-data-row">
+                        <strong className="bo-cv-readiness-val">
+                          {step13Readiness.hasRecommendation ? 'Entered' : 'Pending'}
+                        </strong>
+                        <span
+                          className="bo-cv-readiness-status"
+                          style={{ color: step13Readiness.hasRecommendation ? '#16a34a' : '#ea580c' }}
+                        >
+                          {step13Readiness.hasRecommendation ? '✓ Complete' : 'Pending'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bo-cv-readiness-item">
                       <div className="bo-cv-readiness-label">Document Rejections</div>
                       <div className="bo-cv-readiness-data-row">
                         <strong className="bo-cv-readiness-val">
@@ -18069,6 +18032,13 @@ export default function CustomerVerification({
                         {AlertTriangleIcon ? <AlertTriangleIcon size={13} /> : <span>⚠</span>}
                         <span>Cannot submit: Complete required underwriting steps before forwarding.</span>
                       </div>
+                    )}
+                    {!step13Readiness.isReady && step13Readiness.failedChecks.length > 0 && (
+                      <ul className="bo-cv-readiness-gaps">
+                        {describeFailedChecks(step13Readiness.failedChecks).map((gap) => (
+                          <li key={gap}>{gap}</li>
+                        ))}
+                      </ul>
                     )}
                     {openCreditReturnCount > 0 && (
                       <div className="crp-strip" style={{ marginBottom: '12px' }}>

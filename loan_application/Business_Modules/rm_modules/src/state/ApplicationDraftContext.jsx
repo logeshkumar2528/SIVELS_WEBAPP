@@ -2941,6 +2941,53 @@ export function ApplicationDraftProvider({ children }) {
   );
 }
 
+const EDITABLE_STATE = Object.freeze({ canEdit: true, reason: '', enforced: false, status: null, loading: false });
+
+/**
+ * Whether the signed-in user may still edit the application at its current stage
+ * (GET /ApplicationWorkflow/{id}/edit-state). Unsaved drafts and failed lookups count as editable;
+ * the server still rejects locked saves with 409 APPLICATION_LOCKED.
+ */
+export function useApplicationEditState(applicationId) {
+  const [state, setState] = useState(EDITABLE_STATE);
+
+  useEffect(() => {
+    const id = Number(applicationId);
+    if (!Number.isInteger(id) || id <= 0) {
+      setState(EDITABLE_STATE);
+      return undefined;
+    }
+
+    let active = true;
+    setState({ ...EDITABLE_STATE, loading: true });
+    apiFetch(`${API_BASE_URL}/ApplicationWorkflow/${id}/edit-state`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!active) return;
+        setState(
+          data
+            ? {
+                canEdit: data.canEdit !== false,
+                reason: data.reason || '',
+                enforced: Boolean(data.enforced),
+                status: data.status ?? null,
+                loading: false,
+              }
+            : EDITABLE_STATE
+        );
+      })
+      .catch(() => {
+        if (active) setState(EDITABLE_STATE);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [applicationId]);
+
+  return state;
+}
+
 export function useApplicationDraftStore() {
   const context = useContext(ApplicationDraftContext);
   if (!context) {

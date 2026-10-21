@@ -8,7 +8,7 @@
  *   - Auto-fetches all customer loan applications on mount.
  *   - Normalizes raw API records through hierarchyMapper.
  *   - Resolves application ownership (Agent vs Direct RM).
- *   - Evaluates full Back Office underwriting workflow completion & Credit Manager submission readiness.
+ *   - Loads Credit Manager submission readiness from the server (one readiness call per application).
  *   - Provides safe loading, error, and refetch states.
  *   - Guarantees memory-safe execution via unmount guard.
  */
@@ -17,7 +17,7 @@ import { useState, useEffect, useCallback } from 'react';
 import backOfficeService from '../api/backOfficeService';
 import { mapAgent, mapCustomer, mapDistrict, mapRM } from '../mappers/hierarchyMapper';
 import { resolveApplicationOwnership } from '../utils/ownershipHelper';
-import { isApplicationUnderwritingReady } from '../utils/readinessHelper';
+import { summarizeReadiness } from '../utils/readinessHelper';
 
 const unwrapList = (response) => {
   if (Array.isArray(response)) return response;
@@ -64,128 +64,29 @@ const enrichCustomers = async (rawCustomers, rawRms, rawAgents, rawProductDetail
       };
     });
 
-  // Evaluate full Back Office verification workflow for each HO application in parallel
-  const verificationResults = await Promise.allSettled(
-    baseCustomers.map(async (customer) => {
-      if (!customer.applicationProductDetailsId) {
-        return {
-          isReady: false,
-          stepVerifications: [],
-          applicationDocuments: [],
-          assessments: [],
-          rejections: [],
-        };
-      }
-
-      try {
-        const [
-          stepVerifsRes,
-          appDocsRes,
-          assessmentsRes,
-          rejectionsRes,
-        ] = await Promise.allSettled([
-          backOfficeService.getStepVerificationsByApplication(
-            customer.applicationProductDetailsId
-          ),
-          backOfficeService.getApplicationDocuments(
-            customer.applicationProductDetailsId
-          ),
-          backOfficeService.getAssessmentsByApplication(
-            customer.applicationProductDetailsId
-          ),
-          backOfficeService.getDocumentRejectionsByApplication(
-            customer.applicationProductDetailsId
-          ),
-        ]);
-
-        const stepVerifs =
-          stepVerifsRes.status === 'fulfilled'
-            ? unwrapList(stepVerifsRes.value)
-            : [];
-        const appDocs =
-          appDocsRes.status === 'fulfilled'
-            ? unwrapList(appDocsRes.value)
-            : [];
-        const assessments =
-          assessmentsRes.status === 'fulfilled'
-            ? unwrapList(assessmentsRes.value)
-            : [];
-        const rejections =
-          rejectionsRes.status === 'fulfilled'
-            ? unwrapList(rejectionsRes.value)
-            : [];
-
-        const isReady = isApplicationUnderwritingReady({
-          customer,
-          stepVerifications: stepVerifs,
-          applicationDocuments: appDocs,
-          assessments,
-          rejections,
-        });
-
-        return {
-          isReady,
-          stepVerifications: stepVerifs,
-          applicationDocuments: appDocs,
-          assessments,
-          rejections,
-        };
-      } catch {
-        return {
-          isReady: false,
-          stepVerifications: [],
-          applicationDocuments: [],
-          assessments: [],
-          rejections: [],
-        };
-      }
-    })
+  // Step 15 readiness is evaluated by the server: one call per HO application, in parallel.
+  const readinessResults = await Promise.allSettled(
+    baseCustomers.map((customer) =>
+      customer.applicationProductDetailsId
+        ? backOfficeService.getApplicationReadiness(customer.agentCustomerId || customer.id)
+        : Promise.resolve(null)
+    )
   );
 
   return baseCustomers.map((customer, idx) => {
-    const verif =
-      verificationResults[idx]?.status === 'fulfilled'
-        ? verificationResults[idx].value
-        : {
-            isReady: false,
-            stepVerifications: [],
-            applicationDocuments: [],
-            assessments: [],
-            rejections: [],
-          };
+    const readiness = summarizeReadiness(
+      readinessResults[idx]?.status === 'fulfilled' ? readinessResults[idx].value : null
+    );
 
     return {
       ...customer,
-      isUnderwritingReady: Boolean(verif.isReady),
-      isCreditReady: Boolean(verif.isReady),
-      stepVerificationsCount: Array.isArray(verif.stepVerifications)
-        ? verif.stepVerifications.filter((s) => s?.isVerified).length
-        : 0,
-      hasLegalOpinion: Array.isArray(verif.applicationDocuments)
-        ? verif.applicationDocuments.some(
-            (d) =>
-              d &&
-              d.isActive !== false &&
-              String(d.documentType || '').toUpperCase() === 'LEGAL_OPINION'
-          )
-        : false,
-      hasTechnicalValuation: Array.isArray(verif.applicationDocuments)
-        ? verif.applicationDocuments.some(
-            (d) =>
-              d &&
-              d.isActive !== false &&
-              String(d.documentType || '').toUpperCase() === 'TECHNICAL_VALUATION'
-          )
-        : false,
-      hasCibilReport: Array.isArray(verif.applicationDocuments)
-        ? verif.applicationDocuments.some(
-            (d) =>
-              d &&
-              d.isActive !== false &&
-              (String(d.documentType || '').toUpperCase() === 'CIBIL_REPORT' ||
-                String(d.documentType || '').toUpperCase() === 'MANUAL_CIBIL_PAN')
-          )
-        : false,
+      isUnderwritingReady: readiness.isReady,
+      isCreditReady: readiness.isReady,
+      isVerificationReady: readiness.isVerificationReady,
+      readinessFailedChecks: readiness.failedChecks,
+      hasLegalOpinion: readiness.hasLegal,
+      hasTechnicalValuation: readiness.hasTechnical,
+      hasCibilReport: readiness.hasCibil,
     };
   });
 };
