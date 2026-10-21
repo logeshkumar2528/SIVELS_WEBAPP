@@ -2947,8 +2947,10 @@ const EDITABLE_STATE = Object.freeze({ canEdit: true, reason: '', enforced: fals
  * Whether the signed-in user may still edit the application at its current stage
  * (GET /ApplicationWorkflow/{id}/edit-state). Unsaved drafts and failed lookups count as editable;
  * the server still rejects locked saves with 409 APPLICATION_LOCKED.
+ * Pass area 'documents' for document uploads: the server keeps them open at status 2 while
+ * Back Office has documents returned to the RM, even though the rest of the application is locked.
  */
-export function useApplicationEditState(applicationId) {
+export function useApplicationEditState(applicationId, area) {
   const [state, setState] = useState(EDITABLE_STATE);
 
   useEffect(() => {
@@ -2960,7 +2962,8 @@ export function useApplicationEditState(applicationId) {
 
     let active = true;
     setState({ ...EDITABLE_STATE, loading: true });
-    apiFetch(`${API_BASE_URL}/ApplicationWorkflow/${id}/edit-state`)
+    const query = area ? `?area=${encodeURIComponent(area)}` : '';
+    apiFetch(`${API_BASE_URL}/ApplicationWorkflow/${id}/edit-state${query}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!active) return;
@@ -2983,7 +2986,7 @@ export function useApplicationEditState(applicationId) {
     return () => {
       active = false;
     };
-  }, [applicationId]);
+  }, [applicationId, area]);
 
   return state;
 }

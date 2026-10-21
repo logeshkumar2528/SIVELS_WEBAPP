@@ -4607,6 +4607,7 @@ export default function KycDocuments() {
         appData={appData}
         steps={APPLICATION_WIZARD_STEPS}
         activeStep={2}
+        lockArea="documents"
         title="Step 2: KYC Documents"
         subtitle="Capture Aadhaar, PAN and identity document details. Validate Aadhaar using OTP where required."
         backLabel="Back to Application Details"

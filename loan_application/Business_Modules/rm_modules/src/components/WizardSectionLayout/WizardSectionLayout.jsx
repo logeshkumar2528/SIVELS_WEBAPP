@@ -43,6 +43,7 @@ export default function WizardSectionLayout({
   showContinue = true,
   extraActions = null,
   headerAction = null,
+  lockArea,
 }) {
   const ArrowRightIcon = iconMap['ArrowRight'];
   const ArrowLeftIcon = iconMap['ArrowLeft'];
@@ -123,7 +124,7 @@ export default function WizardSectionLayout({
 
         <div className="panel aw-form-card">
           <div className="aw-form-body">
-            <ApplicationLockBanner appId={appId} />
+            <ApplicationLockBanner appId={appId} area={lockArea} />
             {children}
           </div>
 

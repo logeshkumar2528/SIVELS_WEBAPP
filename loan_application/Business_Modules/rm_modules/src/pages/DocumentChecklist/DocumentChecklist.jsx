@@ -319,6 +319,7 @@ export default function DocumentChecklist() {
       appData={appData}
       steps={APPLICATION_WIZARD_STEPS}
       activeStep={10}
+      lockArea="documents"
       title="Step 10: Document Checklist"
       subtitle="Verify that all required documents have been collected."
       backLabel="Back to Schedule of Charges"

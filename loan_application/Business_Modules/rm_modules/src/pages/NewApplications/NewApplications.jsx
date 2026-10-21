@@ -23,6 +23,7 @@ import {
   resolveApiArray,
 } from '../../utils/rmContext';
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
+import { clearLockForcedView } from '../../utils/lockForcedView';
 import rmCustomerService from '../../services/rmCustomerService';
 import './NewApplications.css';
 import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
@@ -992,7 +993,10 @@ export default function NewApplications({ initialFilter = 'All' }) {
                 title="View Details"
                 aria-label="View Details"
                 className="new-apps-action-btn"
-                onClick={() => navigate(`${ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId)}?mode=view`)}
+                onClick={() => {
+                  clearLockForcedView(applicationId);
+                  navigate(`${ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId)}?mode=view`);
+                }}
               >
                 <Eye size={16} />
               </Button>
