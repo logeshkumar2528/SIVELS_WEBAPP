@@ -98,11 +98,18 @@ export function normalizeApplicationStatus(status, statusName = '') {
   if (namedStatus.includes('pending') || namedStatus.includes('progress')) return 'Pending';
   if (namedStatus.includes('new') || namedStatus.includes('draft')) return 'New';
 
-  const numericStatus = Number(status);
-  if (numericStatus === 6) return 'Returned';
-  if (numericStatus === 2) return 'Logged to HO';
-  if (numericStatus === 1) return 'Pending';
-  if (numericStatus === 0) return 'New';
+  if (status !== null && status !== undefined && status !== '') {
+    const numericStatus = Number(status);
+    if (!Number.isNaN(numericStatus)) {
+      if (numericStatus === 6) return 'Returned';
+      if (numericStatus === 5) return 'Rejected';
+      if (numericStatus === 4) return 'Approved';
+      if (numericStatus === 3) return 'Under Review';
+      if (numericStatus === 2) return 'Logged to HO';
+      if (numericStatus === 1) return 'Pending';
+      if (numericStatus === 0) return 'New';
+    }
+  }
 
   const raw = String(status || '').trim();
   if (!raw || raw.toLowerCase() === 'draft') return 'New';

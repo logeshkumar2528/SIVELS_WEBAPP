@@ -42,5 +42,12 @@ export const STATUS_CONFIG = {
   'Rejected': {
     label: 'Rejected',
     variant: 'returned',
-  }
+  },
+  '0': { label: 'New', variant: 'new' },
+  '1': { label: 'RM Pending', variant: 'review' },
+  '2': { label: 'Logged to HO', variant: 'approved' },
+  '3': { label: 'CM Pending', variant: 'review' },
+  '4': { label: 'Approved', variant: 'approved' },
+  '5': { label: 'Rejected', variant: 'returned' },
+  '6': { label: 'BO Returned', variant: 'returned' },
 };

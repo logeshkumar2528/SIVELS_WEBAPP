@@ -25,6 +25,7 @@ import { getAllBackOffice, getBackOfficeById } from '../../api/backOfficeApi';
 import { getRelationshipManager } from '../../api/rmApi';
 import { getAgentById } from '../../api/agentApi';
 import { getAllCreditManagers, getCreditManagerById } from '../../api/creditManagerApi';
+import { getAllCreditHeads } from '../../api/creditHeadApi';
 import { getProfileImageUrl, getDocumentUrl, buildFileUrl } from '../../utils/profileImageHelper';
 import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
 import sivelsLogo from '../../../../Core/src/assets/branding/SivelsFinanceLogo.jpg';
@@ -179,10 +180,18 @@ const normalizeApplicationStatus = (value, statusName = '') => {
   if (named.includes('new') || named.includes('draft')) return 'New';
   if (named.includes('disburs')) return 'Disbursed';
 
-  const numeric = Number(value);
-  if (numeric === 2) return 'Approved';
-  if (numeric === 1) return 'Pending';
-  if (numeric === 0) return 'New';
+  if (value !== null && value !== undefined && value !== '') {
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric)) {
+      if (numeric === 6) return 'Returned';
+      if (numeric === 5) return 'Rejected';
+      if (numeric === 4) return 'Approved';
+      if (numeric === 3) return 'Under Review';
+      if (numeric === 2) return 'Logged to HO';
+      if (numeric === 1) return 'Pending';
+      if (numeric === 0) return 'New';
+    }
+  }
 
   const raw = String(value || '').trim();
   if (!raw || raw.toLowerCase() === 'draft') return 'New';
@@ -212,6 +221,7 @@ export function Dashboard() {
   const [amsList, setAmsList] = useState([]);
   const [backOfficeList, setBackOfficeList] = useState([]);
   const [creditManagers, setCreditManagers] = useState([]);
+  const [creditHeads, setCreditHeads] = useState([]);
   const [query, setQuery] = useState('');
   const [applicationQuery, setApplicationQuery] = useState('');
   const [applicationStatusFilter, setApplicationStatusFilter] = useState('All');
@@ -239,9 +249,10 @@ export function Dashboard() {
         apiFetch(`${API_BASE}/AMSMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('AMS request failed'))),
         getAllBackOffice(),
         getAllCreditManagers(),
+        getAllCreditHeads(),
       ]);
 
-      if ([agentResult, applicationResult, rmResult, amsResult, backOfficeResult, cmResult].some((result) => result.status === 'rejected')) {
+      if ([agentResult, applicationResult, rmResult, amsResult, backOfficeResult, cmResult, chResult].some((result) => result.status === 'rejected')) {
         setError('Some live records could not be loaded. Available data is shown below.');
       }
 
@@ -434,12 +445,34 @@ export function Dashboard() {
         };
       }).filter((item) => item.id || item.name);
 
+      const chRows = chResult.status === 'fulfilled' ? unwrap(chResult.value) : [];
+      const liveCreditHeads = chRows.map((item) => {
+        const id = read(item, ['creditHeadId', 'CreditHeadId', 'id', 'Id']);
+        const chName = read(item, ['fullName', 'FullName', 'name', 'Name'], 'Unnamed credit head');
+        return {
+          id,
+          creditHeadId: id,
+          creditHeadCode: read(item, ['creditHeadCode', 'CreditHeadCode', 'code', 'Code']),
+          name: chName,
+          fullName: chName,
+          email: read(item, ['emailAddress', 'EmailAddress', 'email', 'Email']),
+          phone: read(item, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
+          branch: read(item, ['branch', 'Branch', 'branchName', 'BranchName']),
+          status: status(read(item, ['status', 'Status', 'isActive', 'IsActive'])),
+          aadhaarDocumentPath: getAadhaarPath(item),
+          panCardPath: getPanPath(item),
+          profileImagePath: getProfilePath(item),
+          rawRecord: item,
+        };
+      }).filter((item) => item.id || item.name);
+
       setAgents(liveAgents);
       setApplications(liveApplications);
       setRms(liveRms);
       setAmsList(liveAms);
       setBackOfficeList(liveBackOffice);
       setCreditManagers(liveCreditManagers);
+      setCreditHeads(liveCreditHeads);
       setUpdatedAt(new Date());
     } catch {
       setError('Live dashboard data is unavailable. Check your connection and try again.');
@@ -449,6 +482,7 @@ export function Dashboard() {
       setAmsList([]);
       setBackOfficeList([]);
       setCreditManagers([]);
+      setCreditHeads([]);
     } finally {
       setLoading(false);
     }
@@ -481,7 +515,7 @@ export function Dashboard() {
     });
   }, [applications, applicationQuery, applicationStatusFilter]);
 
-  const pending = applications.filter((application) => /pending|review|new|submitted/i.test(application.status));
+  const pending = applications.filter((application) => /pending|review|new|submitted|logged to ho/i.test(application.status));
   const approved = applications.filter((application) => /approved/i.test(application.status));
   const disbursed = applications.filter((application) => /disburs/i.test(application.status));
   const coverage = rms.map((rm) => ({
@@ -1021,7 +1055,7 @@ export function Dashboard() {
             <span className="section-kicker">PEOPLE & ACCESS</span>
             <h2>Manage Your Lending Team</h2>
           </div>
-          <span className="admin-subheading-badge">6 Directories</span>
+          <span className="admin-subheading-badge">7 Directories</span>
         </div>
 
         <div className="people-role-card-grid">
@@ -1092,7 +1126,7 @@ export function Dashboard() {
               <ShieldCheck size={20} />
             </div>
             <div className="people-role-info">
-              <h3 className="people-role-title">AMS</h3>
+              <h3 className="people-role-title">ASM</h3>
               <span className="people-role-subtitle">Directory records</span>
             </div>
             <div className="people-role-metric">
@@ -1120,7 +1154,26 @@ export function Dashboard() {
             </div>
           </button>
 
-          {/* 6. CUSTOMERS */}
+          {/* 6. CREDIT HEADS */}
+          <button
+            type="button"
+            className="people-role-card people-role-card-credit-head"
+            onClick={() => navigate('/credit-heads')}
+          >
+            <div className="people-role-icon indigo">
+              <Landmark size={20} />
+            </div>
+            <div className="people-role-info">
+              <h3 className="people-role-title">Credit Heads</h3>
+              <span className="people-role-subtitle">Directory records</span>
+            </div>
+            <div className="people-role-metric">
+              <span className="people-role-count">{creditHeads.length}</span>
+              <ArrowUpRight size={16} className="people-role-arrow" />
+            </div>
+          </button>
+
+          {/* 7. CUSTOMERS */}
           <button
             type="button"
             className="people-role-card people-role-card-customer"
@@ -1479,13 +1532,13 @@ export function Dashboard() {
             className="person-dialog ams-details-dialog"
             role="dialog"
             aria-modal="true"
-            aria-label="Area Management Specialist details"
+            aria-label="Area Sourcing Manager (ASM) details"
             onMouseDown={(event) => event.stopPropagation()}
           >
             <button
               className="person-dialog-close"
               onClick={() => setSelectedAms(null)}
-              aria-label="Close AMS details"
+              aria-label="Close ASM details"
             >
               <X size={18} />
             </button>
@@ -1500,7 +1553,7 @@ export function Dashboard() {
                 version={selectedAms.imageVersion || imageVersion}
               />
               <div className="ams-modal-title-block">
-                <span className="eyebrow">AREA MANAGEMENT SPECIALIST</span>
+                <span className="eyebrow">AREA SOURCING MANAGER (ASM)</span>
                 <h2>{selectedAms.fullName}</h2>
                 <div className="ams-badge-row">
                   {selectedAms.amsCode && (
@@ -1526,7 +1579,7 @@ export function Dashboard() {
                       <dd>{selectedAms.fullName || '—'}</dd>
                     </div>
                     <div>
-                      <dt>AMS Code</dt>
+                      <dt>ASM Code</dt>
                       <dd>{selectedAms.amsCode || '—'}</dd>
                     </div>
                     <div>
@@ -1734,7 +1787,7 @@ export function Dashboard() {
                 Close
               </button>
               <button className="primary-button" onClick={() => openEditAms(selectedAms)}>
-                <Pencil size={16} /> Edit AMS
+                <Pencil size={16} /> Edit ASM
               </button>
             </div>
           </section>

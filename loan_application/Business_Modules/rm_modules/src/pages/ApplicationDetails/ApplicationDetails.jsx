@@ -30,7 +30,7 @@ import { formatDateTimeSeconds as formatDateTime } from '../../utils/dateHelper'
 import { buildValidationPopup, parseApiErrorBody } from '../../utils/formatUserFacingError';
 import { buildApplicationDisplayId, resolveApplicantName } from '../applicationWizard/flowUtils';
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
-import { getCurrentRMContext } from '../../utils/rmContext';
+import { getCurrentRMContext, normalizeApplicationStatus } from '../../utils/rmContext';
 import ApplicationTopSummary from '../../components/ApplicationTopSummary/ApplicationTopSummary';
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 import './ApplicationDetails.css';
@@ -74,18 +74,6 @@ function isFieldAgentChannel(option) {
     name.includes('field agent') || normalizedName.includes('fieldagent');
 }
 
-function normalizeApplicationStatus(status, statusName = '') {
-  const namedStatus = String(statusName || '').trim().toLowerCase();
-  if (namedStatus.includes('approved') || namedStatus.includes('logged to ho')) return 'Logged to HO';
-  if (namedStatus.includes('pending')) return 'Pending';
-  if (namedStatus.includes('returned')) return 'Returned';
-  if (namedStatus.includes('review')) return 'Under Review';
-
-  const numericStatus = Number(status);
-  if (numericStatus === 2) return 'Logged to HO';
-  if (numericStatus === 1) return 'Pending';
-  return 'New';
-}
 
 async function updateCustomerStatusToInProgress(baseUrl, customerId, record = {}) {
   if (!customerId) return;

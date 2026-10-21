@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../../../../Core/src/context/AuthContext';
 import axiosInstance from '../../../../../Core/src/api/axiosInstance';
+import { getStoredRoleCode } from '../../../../../Core/src/auth/session';
 
 /**
  * Safely unwrap agent object from potential API response variations (array, wrapped value/data, or single object).
@@ -42,6 +43,7 @@ async function fetchAgentIdFromToken() {
 
 export function useAgentIdentity() {
   const { currentUser } = useAuth();
+  const isAgent = Boolean(currentUser) && getStoredRoleCode() === 'AGENT';
 
   // Seed initial identity synchronously from authenticated currentUser
   const initialAgentId = currentUser?.agentId ?? currentUser?.AgentId ?? currentUser?.id ?? null;
@@ -108,5 +110,6 @@ export function useAgentIdentity() {
     };
   }, [currentUser]);
 
-  return { agentId, agentData, loadingAgent: loading };
+  // Wrong-role sessions are rejected by RequireAuth before this hook runs.
+  return { agentId, agentData, loadingAgent: loading, isAgent, isUnauthorized: false };
 }
