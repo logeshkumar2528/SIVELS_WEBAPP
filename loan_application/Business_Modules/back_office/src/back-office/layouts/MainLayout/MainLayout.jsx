@@ -39,6 +39,7 @@ import Header  from '../../components/Header/Header';
 import { NAV_ITEMS } from '../../config/navConfig';
 import { useCustomerQueue } from '../../hooks/useCustomerQueue';
 import { useCreditReturns } from '../../hooks/useCreditReturns';
+import { removeBackOfficeAuth } from '../../auth/authStorage';
 import './MainLayout.css';
 
 /* ==========================================
@@ -232,6 +233,7 @@ function MainLayout({
         isOpen={sidebarOpen}
         onNavigate={handleNavigate}
         onClose={handleSidebarClose}
+        onLogout={removeBackOfficeAuth}
       />
 
       {/* ========== BODY (Header + Content) ========== */}

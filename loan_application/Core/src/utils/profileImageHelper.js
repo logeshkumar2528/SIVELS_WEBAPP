@@ -54,6 +54,12 @@ const ROLE_ENDPOINT_MAP = {
   credit_manager: 'CreditManagerMaster',
   'credit manager': 'CreditManagerMaster',
   creditmanagermaster: 'CreditManagerMaster',
+
+  // Credit Head mappings
+  credithead: 'CreditHeadMaster',
+  credit_head: 'CreditHeadMaster',
+  'credit head': 'CreditHeadMaster',
+  creditheadmaster: 'CreditHeadMaster',
 };
 
 /**
@@ -379,6 +385,18 @@ export function getDocumentUrl(role, entityId, documentType = '', storedPath = '
   if (isCreditManager && cleanId) {
     if (isAadhaar) return `${API_BASE_URL}/CreditManagerMaster/${cleanId}/aadhar`;
     if (isPan) return `${API_BASE_URL}/CreditManagerMaster/${cleanId}/pan`;
+  }
+
+  // 6. Credit Head: /api/CreditHeadMaster/{creditHeadId}/aadhar and /api/CreditHeadMaster/{creditHeadId}/pan
+  const isCreditHead =
+    normalizedRole === 'credithead' ||
+    normalizedRole === 'credit_head' ||
+    normalizedRole === 'credit head' ||
+    normalizedRole === 'creditheadmaster';
+
+  if (isCreditHead && cleanId) {
+    if (isAadhaar) return `${API_BASE_URL}/CreditHeadMaster/${cleanId}/aadhar`;
+    if (isPan) return `${API_BASE_URL}/CreditHeadMaster/${cleanId}/pan`;
   }
 
   if (storedPath) {

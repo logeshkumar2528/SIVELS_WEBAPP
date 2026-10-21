@@ -53,6 +53,7 @@ import RelationshipManagerCreate from './pages/RelationshipManager/RelationshipM
 import AMSCreate from './pages/AMS/AMSCreate';
 import BackOfficeCreate from './pages/BackOffice/BackOfficeCreate';
 import CreditManagerCreate from './pages/CreditManager/CreditManagerCreate';
+import CreditHeadCreate from './pages/CreditHead/CreditHeadCreate';
 import CustomerEdit from './pages/Customer/CustomerEdit';
 import CreateUser from './pages/CreateUser/CreateUser';
 import AMSDashboard from './pages/AMSDashboard/AMSDashboard';

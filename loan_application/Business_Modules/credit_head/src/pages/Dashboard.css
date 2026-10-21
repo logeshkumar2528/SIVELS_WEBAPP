@@ -1,0 +1,253 @@
+/* Dashboard.css - Credit Head Scoped Executive Dashboard Stylesheet */
+
+.ch-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Executive Welcome Hero */
+.ch-hero-card {
+  background: linear-gradient(135deg, #092615 0%, #0d381e 50%, #144a2b 100%);
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  border-radius: 16px;
+  padding: 28px 32px;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 10px 25px -5px rgba(9, 38, 21, 0.35);
+  position: relative;
+  overflow: hidden;
+}
+
+.ch-hero-card::after {
+  content: '';
+  position: absolute;
+  top: -50px;
+  right: -50px;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, rgba(134, 239, 172, 0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.ch-hero-content {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  z-index: 1;
+}
+
+.ch-hero-icon-wrap {
+  width: 60px;
+  height: 60px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #86efac;
+  flex-shrink: 0;
+}
+
+.ch-hero-eyebrow {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #86efac;
+  margin-bottom: 4px;
+}
+
+.ch-hero-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 6px 0;
+}
+
+.ch-hero-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0;
+}
+
+.ch-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #86efac;
+  z-index: 1;
+}
+
+.ch-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+}
+
+/* Dashboard Grid */
+.ch-dashboard-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 1024px) {
+  .ch-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Card Common */
+.ch-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.ch-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.ch-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ch-card-title-group h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.ch-card-icon {
+  color: #0d381e;
+}
+
+/* Identity Details Grid */
+.ch-identity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .ch-identity-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ch-identity-item {
+  background: #f8fafc;
+  border: 1px solid #edf2f7;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ch-identity-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ch-identity-val {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+/* Side Card: Quick Action & Status */
+.ch-side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ch-quick-action-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ch-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  color: #14532d;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.ch-action-btn:hover {
+  background: #dcfce7;
+  border-color: #86efac;
+  transform: translateY(-1px);
+}
+
+.ch-action-btn-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ch-info-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ch-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.ch-info-label {
+  color: #64748b;
+}
+
+.ch-info-value {
+  font-weight: 600;
+  color: #0f172a;
+}

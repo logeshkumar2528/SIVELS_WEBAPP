@@ -5,6 +5,8 @@ export const CUSTOMER_DASHBOARD   = '/dashboard';
 export const MASTER_DASHBOARD     = '/master/dashboard';
 export const BACKOFFICE_DASHBOARD = '/backoffice/dashboard';
 export const CREDIT_MANAGER_DASHBOARD = '/credit';
+export const CREDIT_HEAD_DASHBOARD = '/credit-head/dashboard';
+export const WALLET_DASHBOARD     = '/aadhaar-wallet';
 
 /**
  * Normalizes any mobile number string to 10 digits for consistent comparison:

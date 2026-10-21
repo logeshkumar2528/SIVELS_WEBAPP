@@ -11,7 +11,7 @@ function Header() {
   const [imageError, setImageError] = useState(false)
   const location = useLocation()
   const { currentUser } = useAuth()
-  const { agentId, agentData, loadingAgent } = useAgentIdentity()
+  const { agentId, agentData, loadingAgent, isAgent } = useAgentIdentity()
 
   const getPageTitle = () => {
     switch (location.pathname) {
@@ -29,8 +29,10 @@ function Header() {
   }
 
   const [imageVersion, setImageVersion] = useState(Date.now())
-  const resolvedAgentId = agentId || agentData?.agentId || agentData?.AgentId || currentUser?.agentId || currentUser?.AgentId || (typeof window !== 'undefined' ? localStorage.getItem('agentId') : null)
-  const profileImageUrl = getProfileImageUrl('Agent', resolvedAgentId, imageVersion)
+  const resolvedAgentId = isAgent
+    ? (agentId || agentData?.agentId || agentData?.AgentId || currentUser?.agentId || currentUser?.AgentId || (typeof window !== 'undefined' ? localStorage.getItem('agentId') : null))
+    : null
+  const profileImageUrl = resolvedAgentId ? getProfileImageUrl('Agent', resolvedAgentId, imageVersion) : null
 
   useEffect(() => {
     setImageError(false)
@@ -47,9 +49,9 @@ function Header() {
     return () => window.removeEventListener('profile-image-updated', handleUpdate)
   }, [])
 
-  const agentName = agentData?.fullName || currentUser?.fullName || currentUser?.name || 'Agent'
+  const agentName = agentData?.fullName || (isAgent ? currentUser?.fullName || currentUser?.name : null) || 'Agent'
   const agentInitial = agentName ? agentName.charAt(0).toUpperCase() : 'A'
-  const agentCode = agentData?.agentCode || currentUser?.agentCode || 'N/A'
+  const agentCode = agentData?.agentCode || (isAgent ? currentUser?.agentCode : null) || 'N/A'
 
   return (
     <header className="header">

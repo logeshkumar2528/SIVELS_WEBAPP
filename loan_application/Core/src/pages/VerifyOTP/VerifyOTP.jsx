@@ -10,6 +10,126 @@ import { useAuth } from '../../context/AuthContext';
 import { useLoading } from '../../context/LoadingContext';
 import './VerifyOTP.css';
 
+function purgeConflictingRoleSessions(currentRole) {
+  const norm = String(currentRole || '').toLowerCase();
+  if (norm === 'agent') {
+    localStorage.removeItem('backOfficeAuth');
+    localStorage.removeItem('backOfficeData');
+    localStorage.removeItem('backOfficeId');
+    localStorage.removeItem('creditManagerAuth');
+    localStorage.removeItem('creditManagerData');
+    localStorage.removeItem('creditManagerId');
+    localStorage.removeItem('creditHeadAuth');
+    localStorage.removeItem('creditHeadData');
+    localStorage.removeItem('creditHeadId');
+    localStorage.removeItem('rmData');
+    localStorage.removeItem('rmId');
+    localStorage.removeItem('amsData');
+    localStorage.removeItem('amsId');
+    localStorage.removeItem('customerData');
+    localStorage.removeItem('customerId');
+  } else if (norm === 'backoffice' || norm === 'operations') {
+    localStorage.removeItem('agentAuth');
+    localStorage.removeItem('agentData');
+    localStorage.removeItem('agentId');
+    localStorage.removeItem('creditManagerAuth');
+    localStorage.removeItem('creditManagerData');
+    localStorage.removeItem('creditManagerId');
+    localStorage.removeItem('creditHeadAuth');
+    localStorage.removeItem('creditHeadData');
+    localStorage.removeItem('creditHeadId');
+    localStorage.removeItem('rmData');
+    localStorage.removeItem('rmId');
+    localStorage.removeItem('amsData');
+    localStorage.removeItem('amsId');
+    localStorage.removeItem('customerData');
+    localStorage.removeItem('customerId');
+  } else if (norm === 'rm' || norm === 'relationship') {
+    localStorage.removeItem('agentAuth');
+    localStorage.removeItem('agentData');
+    localStorage.removeItem('agentId');
+    localStorage.removeItem('backOfficeAuth');
+    localStorage.removeItem('backOfficeData');
+    localStorage.removeItem('backOfficeId');
+    localStorage.removeItem('creditManagerAuth');
+    localStorage.removeItem('creditManagerData');
+    localStorage.removeItem('creditManagerId');
+    localStorage.removeItem('creditHeadAuth');
+    localStorage.removeItem('creditHeadData');
+    localStorage.removeItem('creditHeadId');
+    localStorage.removeItem('amsData');
+    localStorage.removeItem('amsId');
+    localStorage.removeItem('customerData');
+    localStorage.removeItem('customerId');
+  } else if (norm === 'creditmanager' || norm === 'credit_manager') {
+    localStorage.removeItem('agentAuth');
+    localStorage.removeItem('agentData');
+    localStorage.removeItem('agentId');
+    localStorage.removeItem('backOfficeAuth');
+    localStorage.removeItem('backOfficeData');
+    localStorage.removeItem('backOfficeId');
+    localStorage.removeItem('creditHeadAuth');
+    localStorage.removeItem('creditHeadData');
+    localStorage.removeItem('creditHeadId');
+    localStorage.removeItem('rmData');
+    localStorage.removeItem('rmId');
+    localStorage.removeItem('amsData');
+    localStorage.removeItem('amsId');
+    localStorage.removeItem('customerData');
+    localStorage.removeItem('customerId');
+  } else if (norm === 'credithead' || norm === 'credit_head') {
+    localStorage.removeItem('agentAuth');
+    localStorage.removeItem('agentData');
+    localStorage.removeItem('agentId');
+    localStorage.removeItem('backOfficeAuth');
+    localStorage.removeItem('backOfficeData');
+    localStorage.removeItem('backOfficeId');
+    localStorage.removeItem('creditManagerAuth');
+    localStorage.removeItem('creditManagerData');
+    localStorage.removeItem('creditManagerId');
+    localStorage.removeItem('rmData');
+    localStorage.removeItem('rmId');
+    localStorage.removeItem('amsData');
+    localStorage.removeItem('amsId');
+    localStorage.removeItem('customerData');
+    localStorage.removeItem('customerId');
+  } else if (norm === 'customer') {
+    localStorage.removeItem('agentAuth');
+    localStorage.removeItem('agentData');
+    localStorage.removeItem('agentId');
+    localStorage.removeItem('backOfficeAuth');
+    localStorage.removeItem('backOfficeData');
+    localStorage.removeItem('backOfficeId');
+    localStorage.removeItem('creditManagerAuth');
+    localStorage.removeItem('creditManagerData');
+    localStorage.removeItem('creditManagerId');
+    localStorage.removeItem('creditHeadAuth');
+    localStorage.removeItem('creditHeadData');
+    localStorage.removeItem('creditHeadId');
+    localStorage.removeItem('rmData');
+    localStorage.removeItem('rmId');
+    localStorage.removeItem('amsData');
+    localStorage.removeItem('amsId');
+  } else if (norm === 'ams') {
+    localStorage.removeItem('agentAuth');
+    localStorage.removeItem('agentData');
+    localStorage.removeItem('agentId');
+    localStorage.removeItem('backOfficeAuth');
+    localStorage.removeItem('backOfficeData');
+    localStorage.removeItem('backOfficeId');
+    localStorage.removeItem('creditManagerAuth');
+    localStorage.removeItem('creditManagerData');
+    localStorage.removeItem('creditManagerId');
+    localStorage.removeItem('creditHeadAuth');
+    localStorage.removeItem('creditHeadData');
+    localStorage.removeItem('creditHeadId');
+    localStorage.removeItem('rmData');
+    localStorage.removeItem('rmId');
+    localStorage.removeItem('customerData');
+    localStorage.removeItem('customerId');
+  }
+}
+
 export default function VerifyOTP() {
   const OTP_LENGTH = CONSTANTS.OTP_LENGTH || 6;
 
