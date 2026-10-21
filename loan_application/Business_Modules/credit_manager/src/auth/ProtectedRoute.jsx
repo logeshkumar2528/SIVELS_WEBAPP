@@ -2,24 +2,15 @@
  * ProtectedRoute.jsx
  * --------------------
  * Auth Guard component for Credit Manager module routes.
- * Redirects unauthenticated users directly to the common /login route.
+ * Requires a session token and the CREDIT_MANAGER or CREDIT_HEAD role; other roles are sent
+ * to their own landing page and signed-out users to the common /login route.
  */
 
-import React, { useEffect } from 'react';
-import { isCreditManagerAuthenticated } from './authStorage';
+import React from 'react';
+import RequireAuth from '../../../../Core/src/auth/RequireAuth';
+
+const CREDIT_ROLES = ['CREDIT_MANAGER', 'CREDIT_HEAD'];
 
 export default function ProtectedRoute({ children }) {
-  const authenticated = isCreditManagerAuthenticated();
-
-  useEffect(() => {
-    if (!authenticated) {
-      window.location.href = '/login';
-    }
-  }, [authenticated]);
-
-  if (!authenticated) {
-    return null;
-  }
-
-  return children;
+  return <RequireAuth allowedRoles={CREDIT_ROLES}>{children}</RequireAuth>;
 }

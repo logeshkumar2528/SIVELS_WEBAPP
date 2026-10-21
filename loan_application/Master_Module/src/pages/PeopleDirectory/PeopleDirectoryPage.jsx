@@ -1,3 +1,6 @@
+import { apiFetch } from '../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../Core/src/auth/tokenStore';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -30,8 +33,10 @@ import { getProfileImageUrl, getDocumentUrl, buildFileUrl } from '../../utils/pr
 import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
 import './PeopleDirectory.css';
 import '../Dashboard/Dashboard.css';
+import AuthImage from '../../../../Core/src/auth/AuthImage';
+import { useAuthedObjectUrl } from '../../../../Core/src/auth/useAuthedObjectUrl';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+const API_BASE = API_BASE_URL;
 
 const unwrap = (response) => {
   if (Array.isArray(response)) return response;
@@ -173,7 +178,7 @@ const isCustomerEditable = (record) => {
 };
 
 const authHeaders = () => {
-  const token = localStorage.getItem('authToken');
+  const token = getAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
@@ -221,7 +226,7 @@ function DirectoryAvatar({ role, id, name, className = 'role-avatar', style, ver
           ...style,
         }}
       >
-        <img
+        <AuthImage
           src={imageUrl}
           alt={`${name || role} avatar`}
           style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
@@ -314,6 +319,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
   const [selectedAms, setSelectedAms] = useState(null);
   const [loadingAmsModal, setLoadingAmsModal] = useState(false);
   const [previewDoc, setPreviewDoc] = useState(null);
+  const previewSrc = useAuthedObjectUrl(previewDoc?.url);
   const [imageVersion, setImageVersion] = useState(() => Date.now());
 
   const blobUrlsRef = useRef([]);
@@ -983,7 +989,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
 
     try {
       const headers = authHeaders();
-      const response = await fetch(targetUrl, { headers });
+      const response = await apiFetch(targetUrl, { headers });
       if (response.ok) {
         const blob = await response.blob();
         const objectUrl = URL.createObjectURL(blob);
@@ -2231,7 +2237,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               <div className="ams-doc-preview-header-actions">
                 {previewDoc.url && (
                   <a
-                    href={previewDoc.url}
+                    href={previewSrc || undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="ams-doc-newtab-btn"
@@ -2260,14 +2266,14 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               ) : previewDoc.isPdf ? (
                 <div className="ams-doc-iframe-container">
                   <iframe
-                    src={previewDoc.url}
+                    src={previewSrc || undefined}
                     title={previewDoc.title || 'PDF Preview'}
                     className="ams-doc-iframe"
                   />
                   <div className="ams-doc-fallback-bar">
                     <span>Trouble viewing PDF?</span>
                     <a
-                      href={previewDoc.url}
+                      href={previewSrc || undefined}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="ams-doc-newtab-btn"
@@ -2279,7 +2285,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               ) : (
                 <div className="ams-doc-image-container">
                   <img
-                    src={previewDoc.url}
+                    src={previewSrc || undefined}
                     alt={previewDoc.title || 'Preview'}
                     className="ams-doc-image"
                     onError={(e) => {
@@ -2292,7 +2298,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                     <p>Unable to load image preview directly.</p>
                     {previewDoc.url && (
                       <a
-                        href={previewDoc.url}
+                        href={previewSrc || undefined}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="ams-doc-newtab-btn"

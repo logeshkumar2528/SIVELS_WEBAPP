@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { ROUTES } from '../../config/routeConfig';
 import { LayoutDashboard, CreditCard, History, User, LogOut, HeadphonesIcon } from 'lucide-react';
 import logoImg from '../../../../../Core/src/assets/branding/Logo.png';
+import { logout } from '../../../../../Core/src/auth/session';
 
 export default function CustomerSidebar() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -12,10 +13,7 @@ export default function CustomerSidebar() {
 
   const handleConfirmLogout = () => {
     setShowLogoutModal(false);
-    localStorage.removeItem('customerData');
-    localStorage.removeItem('customerId');
-    localStorage.removeItem('sivels_currentUser');
-    window.location.href = '/login';
+    logout();
   };
 
   const navItems = [

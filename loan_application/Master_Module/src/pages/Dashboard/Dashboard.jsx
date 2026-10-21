@@ -1,3 +1,6 @@
+import { apiFetch } from '../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../Core/src/auth/tokenStore';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -26,8 +29,10 @@ import { getProfileImageUrl, getDocumentUrl, buildFileUrl } from '../../utils/pr
 import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
 import sivelsLogo from '../../../../Core/src/assets/branding/SivelsFinanceLogo.jpg';
 import './Dashboard.css';
+import AuthImage from '../../../../Core/src/auth/AuthImage';
+import { useAuthedObjectUrl } from '../../../../Core/src/auth/useAuthedObjectUrl';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+const API_BASE = API_BASE_URL;
 const unwrap = (response) => {
   if (Array.isArray(response)) return response;
   if (Array.isArray(response?.data)) return response.data;
@@ -71,7 +76,7 @@ function MasterAvatar({ role, id, name, className = 'role-avatar', style, versio
   if (imageUrl && !error) {
     return (
       <span className={className} style={{ overflow: 'hidden', padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', ...style }}>
-        <img
+        <AuthImage
           src={imageUrl}
           alt={`${name || role} avatar`}
           style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
@@ -194,7 +199,7 @@ const formatWhen = (value) => {
 };
 
 const authHeaders = () => {
-  const token = localStorage.getItem('authToken');
+  const token = getAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
@@ -218,6 +223,7 @@ export function Dashboard() {
   const [selectedAms, setSelectedAms] = useState(null);
   const [loadingAmsModal, setLoadingAmsModal] = useState(false);
   const [previewDoc, setPreviewDoc] = useState(null);
+  const previewSrc = useAuthedObjectUrl(previewDoc?.url);
   const [imageVersion, setImageVersion] = useState(() => Date.now());
 
   const loadDashboard = useCallback(async () => {
@@ -227,10 +233,10 @@ export function Dashboard() {
     try {
       const headers = authHeaders();
       const [agentResult, applicationResult, rmResult, amsResult, backOfficeResult, cmResult] = await Promise.allSettled([
-        fetch(`${API_BASE}/AgentMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Agents request failed'))),
-        fetch(`${API_BASE}/AgentAddCustomer`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Applications request failed'))),
-        fetch(`${API_BASE}/RMMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('RM request failed'))),
-        fetch(`${API_BASE}/AMSMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('AMS request failed'))),
+        apiFetch(`${API_BASE}/AgentMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Agents request failed'))),
+        apiFetch(`${API_BASE}/AgentAddCustomer`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Applications request failed'))),
+        apiFetch(`${API_BASE}/RMMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('RM request failed'))),
+        apiFetch(`${API_BASE}/AMSMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('AMS request failed'))),
         getAllBackOffice(),
         getAllCreditManagers(),
       ]);
@@ -958,7 +964,7 @@ export function Dashboard() {
 
     try {
       const headers = authHeaders();
-      const response = await fetch(targetUrl, { headers });
+      const response = await apiFetch(targetUrl, { headers });
       if (response.ok) {
         const blob = await response.blob();
         const objectUrl = URL.createObjectURL(blob);
@@ -1757,7 +1763,7 @@ export function Dashboard() {
               <div className="ams-doc-preview-header-actions">
                 {previewDoc.url && (
                   <a
-                    href={previewDoc.url}
+                    href={previewSrc || undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="ams-doc-newtab-btn"
@@ -1786,14 +1792,14 @@ export function Dashboard() {
               ) : previewDoc.isPdf ? (
                 <div className="ams-doc-iframe-container">
                   <iframe
-                    src={previewDoc.url}
+                    src={previewSrc || undefined}
                     title={previewDoc.title || 'PDF Preview'}
                     className="ams-doc-iframe"
                   />
                   <div className="ams-doc-fallback-bar">
                     <span>Trouble viewing PDF?</span>
                     <a
-                      href={previewDoc.url}
+                      href={previewSrc || undefined}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="ams-doc-newtab-btn"
@@ -1805,7 +1811,7 @@ export function Dashboard() {
               ) : (
                 <div className="ams-doc-image-container">
                   <img
-                    src={previewDoc.url}
+                    src={previewSrc || undefined}
                     alt={previewDoc.title || 'Preview'}
                     className="ams-doc-image"
                     onError={(e) => {
@@ -1818,7 +1824,7 @@ export function Dashboard() {
                     <p>Unable to load image preview directly.</p>
                     {previewDoc.url && (
                       <a
-                        href={previewDoc.url}
+                        href={previewSrc || undefined}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="ams-doc-newtab-btn"

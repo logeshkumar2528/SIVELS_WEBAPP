@@ -1,3 +1,6 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../../Core/src/auth/tokenStore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { User, Users, FileText, Calendar, Phone, Mail, UserCheck } from 'lucide-react';
@@ -25,6 +28,7 @@ import { formatDateTime, toIstDateInput } from '../../utils/dateHelper';
 import ApplicationTopSummary from '../../components/ApplicationTopSummary/ApplicationTopSummary';
 import rmCustomerService from '../../services/rmCustomerService';
 import './CustomerRegistration.css';
+import { getCurrentRMContext } from '../../utils/rmContext';
 
 function digitsOnly(value) {
   return String(value || '').replace(/[^\d]/g, '');
@@ -636,8 +640,8 @@ export default function CustomerRegistration() {
         return;
       }
       try {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-        const res = await fetch(`${baseUrl}/AgentAddCustomer/${appId}`);
+        const baseUrl = API_BASE_URL;
+        const res = await apiFetch(`${baseUrl}/AgentAddCustomer/${appId}`);
         if (res.ok) {
           const data = await res.json();
           const record = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
@@ -679,8 +683,8 @@ export default function CustomerRegistration() {
   useEffect(() => {
     async function fetchMaster(endpoint, idField, nameField, setState, uniqueValues = false) {
       try {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-        const res = await fetch(`${baseUrl}/${endpoint}`);
+        const baseUrl = API_BASE_URL;
+        const res = await apiFetch(`${baseUrl}/${endpoint}`);
         if (res.ok) {
           const data = await res.json();
           if (uniqueValues) {
@@ -909,8 +913,8 @@ export default function CustomerRegistration() {
       return;
     }
 
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-    const token = localStorage.getItem('authToken');
+    const baseUrl = API_BASE_URL;
+    const token = getAccessToken();
     const authHeaders = {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -974,7 +978,7 @@ export default function CustomerRegistration() {
         let isUpdate = false;
         if (person.personalInformationId) {
           try {
-            const checkRes = await fetch(`${baseUrl}/ApplicationPersonalInformation/${person.personalInformationId}`, { headers: authHeaders });
+            const checkRes = await apiFetch(`${baseUrl}/ApplicationPersonalInformation/${person.personalInformationId}`, { headers: authHeaders });
             if (checkRes.ok) {
               const checkData = await checkRes.json();
               const row = Array.isArray(checkData) ? checkData[0] : (checkData?.value ? checkData.value[0] : checkData);
@@ -1023,7 +1027,7 @@ export default function CustomerRegistration() {
           ReligionId: religionId,
           DateOfBirth: person.dateOfBirth ? new Date(person.dateOfBirth).toISOString() : null,
           MothersMaidenName: person.mothersMaidenName || null,
-          CreatedBy: 1
+          CreatedBy: getCurrentRMContext().rmId
         };
         
         if (isUpdate) {
@@ -1032,7 +1036,7 @@ export default function CustomerRegistration() {
 
         console.log(`Saving PersonalInfo [${isUpdate ? 'PUT' : 'POST'}]:`, payload);
 
-        const response = await fetch(url, {
+        const response = await apiFetch(url, {
           method: isUpdate ? 'PUT' : 'POST',
           headers: authHeaders,
           body: JSON.stringify(payload),
@@ -1076,7 +1080,7 @@ export default function CustomerRegistration() {
 
         if (!savedId && !isUpdate && kycDocId) {
           try {
-            const listRes = await fetch(`${baseUrl}/ApplicationPersonalInformation`, { headers: authHeaders });
+            const listRes = await apiFetch(`${baseUrl}/ApplicationPersonalInformation`, { headers: authHeaders });
             if (listRes.ok) {
               const allList = await listRes.json();
               const arr = Array.isArray(allList) ? allList : (allList?.value ?? allList?.data ?? []);
@@ -1159,11 +1163,11 @@ export default function CustomerRegistration() {
 
   useEffect(() => {
     let isMounted = true;
-    const token = localStorage.getItem('authToken');
+    const token = getAccessToken();
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
+    const baseUrl = API_BASE_URL;
     const kycDocs = appData.sections?.kycDocuments || appData.kycDocuments || {};
 
     // 1. Load Applicant Aadhaar (Latest updated with original Agent-uploaded fallback)

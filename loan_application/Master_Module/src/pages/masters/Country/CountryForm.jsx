@@ -109,11 +109,11 @@ export function CountryForm({ isOpen, onClose, onSuccess, initialData }) {
 
       if (isEdit) {
         payload.countryId = initialData.countryId;
-        payload.modifiedBy = getCurrentUserId() || 1;
+        payload.modifiedBy = getCurrentUserId();
         await updateCountry(initialData.countryId, payload);
         toast.success('Updated successfully');
       } else {
-        payload.createdBy = getCurrentUserId() || 1;
+        payload.createdBy = getCurrentUserId();
         await createCountry(payload);
         toast.success('Created successfully');
       }

@@ -34,6 +34,7 @@ import { memo, useState, useEffect } from 'react';
 import iconMap from '../../config/iconMap';
 import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './Header.css';
+import AuthImage from '../../../../../../Core/src/auth/AuthImage';
 
 /* ==========================================
    AVATAR — Renders backend image with initials fallback
@@ -64,7 +65,7 @@ function UserAvatar({ name = '', imageRole = 'BackOffice', id = null, avatarUrl 
 
   if (imageUrl && !imageFailed) {
     return (
-      <img
+      <AuthImage
         src={imageUrl}
         alt={`${name || 'Back Office User'} avatar`}
         className="header-avatar-img"

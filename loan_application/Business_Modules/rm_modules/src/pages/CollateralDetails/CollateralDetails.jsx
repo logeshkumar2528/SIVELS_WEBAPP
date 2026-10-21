@@ -1,3 +1,6 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../../Core/src/auth/tokenStore';
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Home, UserCheck, MapPin, IndianRupee, AlertCircle, RefreshCw } from 'lucide-react';
@@ -11,6 +14,7 @@ import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSect
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { buildSectionUpdate, getSectionState } from '../applicationWizard/flowUtils';
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
+import { getCurrentRMContext } from '../../utils/rmContext';
 
 export function createCleanCollateralState() {
   return {
@@ -279,13 +283,13 @@ export default function CollateralDetails() {
     setIsLoadingMasters(true);
     setMastersError(null);
 
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+    const baseUrl = API_BASE_URL;
 
     try {
       const [propRes, usageRes, collateralRes] = await Promise.allSettled([
-        fetch(`${baseUrl}/PropertyMaster`),
-        fetch(`${baseUrl}/PropertyUsageMaster`),
-        fetch(`${baseUrl}/LoanProductCollateralMaster`),
+        apiFetch(`${baseUrl}/PropertyMaster`),
+        apiFetch(`${baseUrl}/PropertyUsageMaster`),
+        apiFetch(`${baseUrl}/LoanProductCollateralMaster`),
       ]);
 
       let hasMasterError = false;
@@ -363,7 +367,7 @@ export default function CollateralDetails() {
       if (!appId) return;
       setIsLoadingCollateralData(true);
 
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+      const baseUrl = API_BASE_URL;
 
       try {
         // 1. First trigger backend hydration from draft store
@@ -373,8 +377,8 @@ export default function CollateralDetails() {
         let fetchedCollaterals = [];
         try {
           const [colRes, prodRes] = await Promise.allSettled([
-            fetch(`${baseUrl}/ApplicationCollateralDetails`),
-            fetch(`${baseUrl}/ApplicationProductDetails`),
+            apiFetch(`${baseUrl}/ApplicationCollateralDetails`),
+            apiFetch(`${baseUrl}/ApplicationProductDetails`),
           ]);
 
           if (colRes.status === 'fulfilled' && colRes.value.ok) {
@@ -557,9 +561,9 @@ export default function CollateralDetails() {
       }
     }
 
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+    const baseUrl = API_BASE_URL;
     const prodId = appData.applicationProductDetailsId;
-    const token = localStorage.getItem('authToken');
+    const token = getAccessToken();
     const authHeaders = { 'Content-Type': 'application/json' };
     if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
@@ -571,7 +575,7 @@ export default function CollateralDetails() {
     if (p2Id && !hasP2Data) {
       try {
         const deleteUrl = `${baseUrl}/ApplicationCollateralDetails/${p2Id}`;
-        const deleteRes = await fetch(deleteUrl, {
+        const deleteRes = await apiFetch(deleteUrl, {
           method: 'DELETE',
           headers: authHeaders,
         });
@@ -633,14 +637,14 @@ export default function CollateralDetails() {
             PropertyUsageId: Number(prop.data.usage) || 0,
             LocationAddress: prop.data.locationAddress || '',
             EstimatedValue: parseAmountToNumber(prop.data.estimatedValue),
-            CreatedBy: 1,
+            CreatedBy: getCurrentRMContext().rmId,
           };
 
           if (isUpdate) {
             payload.ApplicationCollateralDetailsId = Number(prop.data.applicationCollateralDetailsId);
           }
 
-          const response = await fetch(url, {
+          const response = await apiFetch(url, {
             method: isUpdate ? 'PUT' : 'POST',
             headers: authHeaders,
             body: JSON.stringify(payload),

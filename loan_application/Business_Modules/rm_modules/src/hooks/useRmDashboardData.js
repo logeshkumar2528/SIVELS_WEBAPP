@@ -1,3 +1,6 @@
+import { apiFetch } from '../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../Core/src/auth/tokenStore';
 import { useEffect, useMemo, useState } from 'react';
 import { formatDate } from '../utils/dateHelper';
 import {
@@ -10,7 +13,7 @@ import {
 import { resolveApplicationOwnership } from '../utils/ownershipHelper';
 import { buildApplicationDisplayId } from '../pages/applicationWizard/flowUtils';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+const API_BASE = API_BASE_URL;
 
 const EMPTY_DASHBOARD = {
   badgeCounts: {
@@ -168,16 +171,16 @@ export function useRmDashboardData() {
           throw new Error('No RM context found in session.');
         }
 
-        const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+        const token = getAccessToken();
         const authHeaders = {};
         if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
         const [agentRes, customerRes, rmRes, rejectionsRes, appProdRes] = await Promise.all([
-          fetch(`${API_BASE}/AgentMaster`, { headers: authHeaders }),
-          fetch(`${API_BASE}/AgentAddCustomer`, { headers: authHeaders }),
-          fetch(`${API_BASE}/RMMaster`, { headers: authHeaders }).catch(() => null),
-          fetch(`${API_BASE}/BackOfficeDocumentRejection/rm/${rmContext.rmId}/returned`, { headers: authHeaders }).catch(() => null),
-          fetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).catch(() => null),
+          apiFetch(`${API_BASE}/AgentMaster`, { headers: authHeaders }),
+          apiFetch(`${API_BASE}/AgentAddCustomer`, { headers: authHeaders }),
+          apiFetch(`${API_BASE}/RMMaster`, { headers: authHeaders }).catch(() => null),
+          apiFetch(`${API_BASE}/BackOfficeDocumentRejection/rm/${rmContext.rmId}/returned`, { headers: authHeaders }).catch(() => null),
+          apiFetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).catch(() => null),
         ]);
 
         if (!agentRes.ok) throw new Error(`Failed to load agents (${agentRes.status})`);

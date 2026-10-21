@@ -1,3 +1,5 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { User, Hash } from 'lucide-react';
@@ -9,7 +11,7 @@ import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
 import { buildSectionUpdate, getSectionState } from '../applicationWizard/flowUtils';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+const API_BASE = API_BASE_URL;
 
 function getLoggedInRMFromStorage() {
   try {
@@ -76,7 +78,7 @@ export default function SourcingDetails() {
     async function fetchRM() {
       setIsLoading(true);
       try {
-        const res = await fetch(`${API_BASE}/RMMaster`);
+        const res = await apiFetch(`${API_BASE}/RMMaster`);
         if (res.ok) {
           const data = await res.json();
           const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);

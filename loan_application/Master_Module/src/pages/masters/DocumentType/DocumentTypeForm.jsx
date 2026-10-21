@@ -135,7 +135,7 @@ export function DocumentTypeForm({ isOpen, onClose, onSuccess, initialData }) {
           documentTypeCode: trimmedCode,
           employmentTypeId: Number(formData.employmentTypeId),
           isActive: Boolean(formData.isActive),
-          modifiedBy: Number(getCurrentUserId()) || 1
+          modifiedBy: getCurrentUserId()
         };
         
         await updateDocumentType(initialData.documentTypeId, payload);
@@ -146,7 +146,7 @@ export function DocumentTypeForm({ isOpen, onClose, onSuccess, initialData }) {
           documentTypeName: trimmedName,
           employmentTypeId: Number(formData.employmentTypeId),
           isActive: Boolean(formData.isActive),
-          createdBy: Number(getCurrentUserId()) || 1
+          createdBy: getCurrentUserId()
         };
         
         await createDocumentType(payload);

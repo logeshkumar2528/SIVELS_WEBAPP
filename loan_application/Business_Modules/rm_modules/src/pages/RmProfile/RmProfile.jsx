@@ -1,3 +1,5 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import iconMap from '../../config/iconMap';
 import Breadcrumb from '../../components/Breadcrumb/Breadcrumb';
@@ -5,8 +7,9 @@ import Button from '../../components/Button/Button';
 import { formatDateTime } from '../../utils/dateHelper';
 import { getProfileImageUrl, getInitials, updateProfileImage } from '../../utils/profileImageHelper';
 import './RmProfile.css';
+import AuthImage from '../../../../../Core/src/auth/AuthImage';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+const API_BASE = API_BASE_URL;
 
 function normalizePhone(phone = '') {
   const digits = String(phone).replace(/\D/g, '');
@@ -152,7 +155,7 @@ export default function RmProfile() {
       setLoadError('');
 
       try {
-        const response = await fetch(`${API_BASE}/RMMaster`);
+        const response = await apiFetch(`${API_BASE}/RMMaster`);
         if (!response.ok) {
           throw new Error(`Failed to load RM profile (${response.status})`);
         }
@@ -163,9 +166,9 @@ export default function RmProfile() {
         const currentRmId = Number(currentUser?.rmId || currentUser?.RMId || localStorage.getItem('rmId') || 0);
 
         const match =
-          rows.find((row) => Number(row.rmId || row.RMId) === currentRmId) ||
-          rows.find((row) => String(row.mobileNumber || '').replace(/\D/g, '') === currentMobile) ||
-          rows[0];
+          (currentRmId > 0 && rows.find((row) => Number(row.rmId || row.RMId) === currentRmId)) ||
+          (currentMobile && rows.find((row) => String(row.mobileNumber || '').replace(/\D/g, '') === currentMobile)) ||
+          null;
 
         if (active && match) {
           const resolvedId = Number(match.rmId || match.RMId || currentRmId) || null;
@@ -248,7 +251,7 @@ export default function RmProfile() {
                 className="rm-avatar-img"
               />
             ) : imageUrl && !imageFailed ? (
-              <img
+              <AuthImage
                 src={imageUrl}
                 alt={profile.name}
                 className="rm-avatar-img"

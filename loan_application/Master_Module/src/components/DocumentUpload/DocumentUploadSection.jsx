@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import axiosInstance from '../../api/axiosInstance';
 import './DocumentUploadSection.css';
+import AuthImage from '../../../../Core/src/auth/AuthImage';
+import { useAuthedObjectUrl } from '../../../../Core/src/auth/useAuthedObjectUrl';
 
 export function formatFileSize(bytes) {
   if (!bytes) return '0 B';
@@ -189,7 +191,7 @@ export function DocumentUploadCard({
                 <span className="doc-pdf-badge-text">PDF</span>
               </div>
             ) : isProfile && (previewUrl || existingUrl) ? (
-              <img
+              <AuthImage
                 src={previewUrl || existingUrl}
                 alt="Existing Profile"
                 className="doc-img-thumb doc-profile-thumb"
@@ -281,6 +283,7 @@ export function DocumentUploadCard({
 
 export function DocumentPreviewModal({ isOpen, onClose, doc }) {
   const [imgError, setImgError] = useState(false);
+  const docUrl = useAuthedObjectUrl(doc?.url);
 
   useEffect(() => {
     setImgError(false);
@@ -303,7 +306,7 @@ export function DocumentPreviewModal({ isOpen, onClose, doc }) {
           <div className="doc-modal-header-actions">
             {doc.url && (
               <a
-                href={doc.url}
+                href={docUrl || undefined}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="doc-external-link"
@@ -333,14 +336,14 @@ export function DocumentPreviewModal({ isOpen, onClose, doc }) {
           ) : doc.isPdf ? (
             <div className="doc-modal-pdf-container">
               <iframe
-                src={doc.url}
+                src={docUrl || undefined}
                 title={doc.name || doc.title || 'PDF Preview'}
                 className="doc-modal-iframe"
               />
               <div className="doc-modal-fallback-link">
                 <span>Trouble viewing PDF?</span>
                 <a
-                  href={doc.url}
+                  href={docUrl || undefined}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="doc-external-link"
@@ -356,7 +359,7 @@ export function DocumentPreviewModal({ isOpen, onClose, doc }) {
               <p>Unable to display image preview directly.</p>
               {doc.url && (
                 <a
-                  href={doc.url}
+                  href={docUrl || undefined}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="doc-external-link"
@@ -369,7 +372,7 @@ export function DocumentPreviewModal({ isOpen, onClose, doc }) {
           ) : (
             <div className="doc-modal-img-container">
               <img
-                src={doc.url}
+                src={docUrl || undefined}
                 alt={doc.name || doc.title || 'Preview'}
                 className="doc-modal-img"
                 onError={() => setImgError(true)}

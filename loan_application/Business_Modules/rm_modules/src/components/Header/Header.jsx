@@ -2,6 +2,7 @@ import { memo, useState, useEffect } from 'react';
 import iconMap from '../../config/iconMap';
 import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './Header.css';
+import AuthImage from '../../../../../Core/src/auth/AuthImage';
 
 function UserAvatar({ name = '', role = 'RM', id = null, avatarUrl = null }) {
   const [imageFailed, setImageFailed] = useState(false);
@@ -27,7 +28,7 @@ function UserAvatar({ name = '', role = 'RM', id = null, avatarUrl = null }) {
 
   if (imageUrl && !imageFailed) {
     return (
-      <img
+      <AuthImage
         src={imageUrl}
         alt={`${name || 'RM'} avatar`}
         className="header-avatar-img"

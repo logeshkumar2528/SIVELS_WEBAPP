@@ -25,6 +25,10 @@
  * - Single-fetch shared data and VerificationStepModal are preserved in code for easy inspection.
  */
 
+import { apiFetch } from '../../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../../../Core/src/auth/tokenStore';
+import { needsAuthedFetch } from '../../../../../../Core/src/auth/useAuthedObjectUrl';
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import iconMap from '../../config/iconMap';
@@ -55,7 +59,7 @@ import { isApplicationUnderwritingReady } from '../../utils/readinessHelper';
 import { buildNormalIncomeSummary } from '../../utils/normalIncomeSheetParser';
 import './CustomerVerification.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+const API_BASE = API_BASE_URL;
 
 const ArrowLeftIcon = iconMap['ArrowLeft'];
 const ArrowRightIcon = iconMap['ArrowRight'];
@@ -1397,12 +1401,12 @@ export default function CustomerVerification({
     let isMounted = true;
     async function fetchMasterData() {
       try {
-        const token = localStorage.getItem('authToken');
+        const token = getAccessToken();
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
         const [resDoc, resMap] = await Promise.all([
-          fetch(`${API_BASE}/DocumentTypeMaster`, { headers }),
-          fetch(`${API_BASE}/EmploymentTypeDocumentMapping`, { headers }),
+          apiFetch(`${API_BASE}/DocumentTypeMaster`, { headers }),
+          apiFetch(`${API_BASE}/EmploymentTypeDocumentMapping`, { headers }),
         ]);
 
         if (resDoc.ok && isMounted) {
@@ -1451,10 +1455,10 @@ export default function CustomerVerification({
     }
     setIsCustomerDocsLoading(true);
     try {
-      const token = localStorage.getItem('authToken');
+      const token = getAccessToken();
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch(`${API_BASE}/AgentCustomerDocument/bycustomer/${targetCustomerId}`, { headers });
+      const res = await apiFetch(`${API_BASE}/AgentCustomerDocument/bycustomer/${targetCustomerId}`, { headers });
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data) ? data : (data?.value || data?.data || data?.items || []);
@@ -1489,12 +1493,12 @@ export default function CustomerVerification({
     let isMounted = true;
     setIsSupplementaryKycLoading(true);
     async function fetchSupplementaryData() {
-      const token = localStorage.getItem('authToken');
+      const token = getAccessToken();
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       try {
-        const kycRes = await fetch(`${API_BASE}/ApplicationKYCDocuments`, { headers });
+        const kycRes = await apiFetch(`${API_BASE}/ApplicationKYCDocuments`, { headers });
         if (kycRes.ok && isMounted) {
           const allKyc = await kycRes.json();
           const kycArr = Array.isArray(allKyc) ? allKyc : (allKyc?.value || allKyc?.data || []);
@@ -1538,7 +1542,7 @@ export default function CustomerVerification({
       }
 
       try {
-        const persRes = await fetch(`${API_BASE}/ApplicationPersonalInformation`, { headers });
+        const persRes = await apiFetch(`${API_BASE}/ApplicationPersonalInformation`, { headers });
         if (persRes.ok && isMounted) {
           const allPers = await persRes.json();
           const persArr = Array.isArray(allPers) ? allPers : (allPers?.value || allPers?.data || []);
@@ -1786,11 +1790,11 @@ export default function CustomerVerification({
       return previewCacheRef.current.get(cacheKey);
     }
     try {
-      const token = localStorage.getItem('authToken');
+      const token = getAccessToken();
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${API_BASE}/ApplicationKYCDocuments/${kycId}/${route}`, { headers });
+      const res = await apiFetch(`${API_BASE}/ApplicationKYCDocuments/${kycId}/${route}`, { headers });
       if (!res.ok) {
         return { loading: false, url: null, error: null };
       }
@@ -1940,11 +1944,11 @@ export default function CustomerVerification({
         cleanPath = `UploadedFiles/${cleanPath}`;
       }
 
-      const token = localStorage.getItem('authToken');
+      const token = getAccessToken();
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`, { headers });
+      const res = await apiFetch(`${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(cleanPath)}`, { headers });
       if (res.status === 404) {
         return {
           loading: false,
@@ -10125,11 +10129,11 @@ export default function CustomerVerification({
 
     if (doc.downloadUrl) {
       try {
-        const token = localStorage.getItem('authToken');
+        const token = getAccessToken();
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const res = await fetch(doc.downloadUrl, { headers });
+        const res = await apiFetch(doc.downloadUrl, { headers });
         if (res.ok) {
           const blob = await res.blob();
           const blobUrl = URL.createObjectURL(blob);
@@ -10140,7 +10144,7 @@ export default function CustomerVerification({
       } catch (err) {
         console.warn('Direct fetch download failed, fallback to direct window open:', err);
       }
-      window.open(doc.downloadUrl, '_blank');
+      if (!needsAuthedFetch(doc.downloadUrl)) window.open(doc.downloadUrl, '_blank');
     }
   };
 

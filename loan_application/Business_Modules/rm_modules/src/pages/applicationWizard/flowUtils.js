@@ -1,3 +1,5 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
 export const KNOWN_DB_ID_FIELDS = [
   'personalInformationId',
   'PersonalInformationId',
@@ -508,7 +510,7 @@ export async function fetchApplicantDocumentTuple(finalBaseUrl, prodDetailsId, s
 
   const lookupPromise = (async () => {
     try {
-      const tupleRes = await fetch(
+      const tupleRes = await apiFetch(
         `${finalBaseUrl}/ApplicationKYCDocuments/applicant-document?applicationProductDetailsId=${encodeURIComponent(prodDetailsId)}&applicantSequence=${encodeURIComponent(seq)}&documentTypeId=${encodeURIComponent(docTypeId)}`,
         { headers }
       );
@@ -567,7 +569,7 @@ export async function resolveLatestApplicantAadhaar({
   baseUrl = '',
   headers = {},
 }) {
-  const finalBaseUrl = baseUrl || import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+  const finalBaseUrl = baseUrl || API_BASE_URL;
 
   // 1. Resolve Applicant KYC record (applicantSequence 0)
   const kycDocs = appData.sections?.kycDocuments || appData.kycDocuments || {};
@@ -640,7 +642,7 @@ export async function resolveLatestCoApplicantAadhaar({
   baseUrl = '',
   headers = {},
 }) {
-  const finalBaseUrl = baseUrl || import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+  const finalBaseUrl = baseUrl || API_BASE_URL;
   const seq = coIndex + 1; // Co-App 1 = sequence 1, Co-App 2 = sequence 2
 
   // 1. Resolve Co-Applicant KYC Data from all possible contexts
@@ -710,7 +712,7 @@ export async function fetchDocumentBlobWithMeta(url, headers = {}, fallbackFileN
   if (!rawBlobCache.has(cacheKey)) {
     const fetchPromise = (async () => {
       try {
-        const res = await fetch(url, { headers });
+        const res = await apiFetch(url, { headers });
         if (res.status === 404 || !res.ok) {
           return null;
         }
@@ -765,7 +767,7 @@ export async function resolveFinancialDocument({
   baseUrl = '',
   headers = {},
 }) {
-  const finalBaseUrl = (baseUrl || import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
+  const finalBaseUrl = (baseUrl || API_BASE_URL).replace(/\/$/, '');
   const seq = Number(sequence) || 0;
 
   const prodDetailsId =
@@ -784,7 +786,7 @@ export async function resolveFinancialDocument({
   // Priority 1: Check Application-level tuple if product details ID and documentTypeId are available
   if (prodDetailsId && resolvedTypeId) {
     try {
-      const tupleRes = await fetch(
+      const tupleRes = await apiFetch(
         `${finalBaseUrl}/ApplicationKYCDocuments/applicant-document?applicationProductDetailsId=${encodeURIComponent(prodDetailsId)}&applicantSequence=${encodeURIComponent(seq)}&documentTypeId=${encodeURIComponent(resolvedTypeId)}`,
         { headers }
       );
@@ -835,7 +837,7 @@ export async function resolveFinancialDocument({
     try {
       let custDocs = agentCustDocsCache.get(String(customerId));
       if (!custDocs) {
-        const agentDocRes = await fetch(`${finalBaseUrl}/AgentCustomerDocument/bycustomer/${encodeURIComponent(customerId)}`, { headers });
+        const agentDocRes = await apiFetch(`${finalBaseUrl}/AgentCustomerDocument/bycustomer/${encodeURIComponent(customerId)}`, { headers });
         if (agentDocRes.ok) {
           const data = await agentDocRes.json();
           custDocs = Array.isArray(data) ? data : (data?.value ?? data?.data ?? []);

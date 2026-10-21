@@ -7,7 +7,7 @@ import {
   LogOut,
   Headphones,
 } from 'lucide-react'
-import { useAuth } from '../../../../../../Core/src/context/AuthContext'
+import { logout } from '../../../../../../Core/src/auth/session'
 import logo from '../../../../../../Core/src/assets/branding/Logo.png'
 import './Sidebar.css'
 
@@ -25,7 +25,6 @@ function Sidebar({ isOpen = false, onClose, badgeCounts = {} }) {
   const [showLogoutModal, setShowLogoutModal] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
-  const { logout } = useAuth()
 
   const isActive = (route) => {
     if (route === '/Agent/dashboard') {
@@ -41,15 +40,7 @@ function Sidebar({ isOpen = false, onClose, badgeCounts = {} }) {
 
   const handleConfirmLogout = () => {
     setShowLogoutModal(false)
-    try {
-      if (logout) logout()
-    } catch (err) {
-      console.error('Logout error:', err)
-    }
-    localStorage.removeItem('sivels_currentUser')
-    localStorage.removeItem('sivels_permissions')
-    localStorage.removeItem('sivels_roles')
-    window.location.href = '/login'
+    logout()
   }
 
   const handleNavigate = (item) => {

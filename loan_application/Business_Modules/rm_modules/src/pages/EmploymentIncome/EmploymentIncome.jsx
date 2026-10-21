@@ -1,3 +1,6 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../../Core/src/auth/tokenStore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Building2, Briefcase, UserCog, GraduationCap, Factory, Clock, IndianRupee } from 'lucide-react';
@@ -21,6 +24,7 @@ import {
 } from '../applicationWizard/flowUtils';
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 import { resolveDocumentTypeId } from '../../../../../Core/src/utils/documentTypeHelper';
+import { getCurrentRMContext } from '../../utils/rmContext';
 
 function buildEmploymentState(appData) {
   const saved = getSectionState(appData, 'employmentIncome', {});
@@ -335,8 +339,8 @@ export default function EmploymentIncome() {
   useEffect(() => {
     async function fetchMaster(endpoint, idField, nameField, setStateFunc) {
       try {
-        const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
-        const res = await fetch(`${baseUrl}/${endpoint}`);
+        const baseUrl = API_BASE_URL;
+        const res = await apiFetch(`${baseUrl}/${endpoint}`);
         if (res.ok) {
           const raw = await res.json();
           const data = Array.isArray(raw) ? raw : (raw?.value ?? raw?.items ?? raw?.data ?? []);
@@ -395,11 +399,11 @@ export default function EmploymentIncome() {
 
   useEffect(() => {
     let isMounted = true;
-    const token = localStorage.getItem('authToken');
+    const token = getAccessToken();
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
+    const baseUrl = API_BASE_URL;
 
     // 1. Load Applicant Salary Slip
     resolveLatestApplicantSalarySlip({
@@ -512,7 +516,7 @@ export default function EmploymentIncome() {
       return;
     }
 
-    const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
+    const baseUrl = API_BASE_URL;
     const allPersons = [
       { ...form.applicant, isPrimary: true },
       ...form.coApplicants.map((co, i) => ({ ...co, index: i, isPrimary: false }))
@@ -560,14 +564,14 @@ export default function EmploymentIncome() {
           TotalExperience: Number(person.totalExperienceYears) || 0,
           GrossMonthlyIncome: parseAmountToNumber(person.grossMonthlyIncome),
           OtherMonthlyIncome: parseAmountToNumber(person.otherIncomeMonthly),
-          CreatedBy: 1
+          CreatedBy: getCurrentRMContext().rmId
         };
 
         if (isUpdate) {
           payload.ApplicationEmploymentIncomeDetailsId = Number(currentEmpId);
         }
 
-        const response = await fetch(url, {
+        const response = await apiFetch(url, {
           method: isUpdate ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),

@@ -19,6 +19,7 @@
 
 import { useState, useEffect } from 'react';
 import { getProfileImageUrl, getInitials } from '../../../utils/profileImageHelper';
+import AuthImage from '../../../auth/AuthImage';
 
 export default function ProfileAvatar({
   name = '',
@@ -43,7 +44,7 @@ export default function ProfileAvatar({
 
   if (resolvedUrl && !imageFailed) {
     return (
-      <img
+      <AuthImage
         src={resolvedUrl}
         alt={alt || `${name || 'User'} avatar`}
         className={imgClassName}

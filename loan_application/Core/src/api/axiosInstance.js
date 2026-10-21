@@ -1,9 +1,8 @@
 import axios from "axios";
-
-const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL ||
-  'https://fusiontecsoftware.com/sivels/api'
-).replace(/\/+$/, '');
+import { API_BASE_URL, isApiUrl } from "./apiConfig";
+import { handleSessionExpired, notifyForbidden } from "../auth/authEvents";
+import { getTokenForRequest, isAuthEndpoint, recoverFromUnauthorized } from "../auth/refreshSession";
+import { getAccessToken } from "../auth/tokenStore";
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -13,13 +12,36 @@ const axiosInstance = axios.create({
   timeout: 30000,
 });
 
+function requestUrl(config) {
+  const url = String(config?.url || "");
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${config?.baseURL || ""}${url}`;
+}
+
+function setAuthorization(config, token) {
+  if (!config.headers) return;
+  if (token) {
+    if (typeof config.headers.set === "function") {
+      config.headers.set("Authorization", `Bearer ${token}`);
+    } else {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  } else if (typeof config.headers.delete === "function") {
+    config.headers.delete("Authorization");
+  } else {
+    delete config.headers.Authorization;
+  }
+}
+
 // Request Interceptor
 axiosInstance.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("authToken");
+  async (config) => {
+    const url = requestUrl(config);
 
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    if (isApiUrl(url)) {
+      const token = isAuthEndpoint(url) ? getAccessToken() : await getTokenForRequest();
+      config._sentToken = token;
+      setAuthorization(config, token);
     }
 
     if (config.data instanceof FormData) {
@@ -36,18 +58,35 @@ axiosInstance.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+async function retryAfterUnauthorized(error) {
+  const config = error.config;
+  const retryToken = await recoverFromUnauthorized(config._sentToken);
+  if (!retryToken) {
+    return Promise.reject(error);
+  }
+  config._authRetried = true;
+  return axiosInstance(config);
+}
+
 // Response Interceptor
 axiosInstance.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const config = error.config;
+
     if (error.response) {
       switch (error.response.status) {
-        case 401:
-          console.error("Unauthorized");
-          break;
+        case 401: {
+          if (!config || !isApiUrl(requestUrl(config))) break;
+          if (isAuthEndpoint(requestUrl(config)) || config._authRetried) {
+            handleSessionExpired();
+            break;
+          }
+          return retryAfterUnauthorized(error);
+        }
 
         case 403:
-          console.error("Forbidden");
+          notifyForbidden();
           break;
 
         case 404:

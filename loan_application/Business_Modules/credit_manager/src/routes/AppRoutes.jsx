@@ -11,7 +11,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import ErrorBoundary from '../../../back_office/src/back-office/components/ErrorBoundary/ErrorBoundary';
 import MainLayout from '../layouts/MainLayout';
 import ProtectedRoute from '../auth/ProtectedRoute';
-import { removeCreditManagerAuth } from '../auth/authStorage';
+import { logout } from '../../../../Core/src/auth/session';
 import { ROUTES } from '../config/routeConfig';
 
 import Dashboard from '../pages/Dashboard';
@@ -33,12 +33,11 @@ function LayoutWrapper({ children, title, subtitle }) {
 
 /**
  * LogoutHandler
- * Safely clears Credit Manager session keys and redirects to /login.
+ * Revokes the session, clears all login keys and redirects to /login.
  */
 function LogoutHandler() {
   React.useEffect(() => {
-    removeCreditManagerAuth();
-    window.location.href = '/login';
+    logout();
   }, []);
 
   return null;

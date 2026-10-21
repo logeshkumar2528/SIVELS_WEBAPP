@@ -1,3 +1,6 @@
+import { apiFetch } from '../../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../../../Core/src/auth/tokenStore';
 import { useState, useEffect, useMemo } from 'react'
 import {
   X,
@@ -81,11 +84,11 @@ function ViewCustomerModal({ customer, onClose }) {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+        const API_BASE = API_BASE_URL;
         const targetCustId = customer.agentCustomerId || customer.id;
         const appProdId = customer.applicationProductDetailsId || customer.ApplicationProductDetailsId || null;
 
-        const token = localStorage.getItem('authToken');
+        const token = getAccessToken();
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -93,7 +96,7 @@ function ViewCustomerModal({ customer, onClose }) {
           agentCustomerService.getDocumentsByCustomerId(targetCustId).catch(() => []),
           masterService.getEmploymentTypes().catch(() => []),
           masterService.getDocumentTypes().catch(() => []),
-          fetch(`${API_BASE}/BackOfficeDocumentRejection`, { headers }).then(r => r.ok ? r.json() : []).catch(() => [])
+          apiFetch(`${API_BASE}/BackOfficeDocumentRejection`, { headers }).then(r => r.ok ? r.json() : []).catch(() => [])
         ])
 
         const extractArray = (res) => {
@@ -296,8 +299,8 @@ function ViewCustomerModal({ customer, onClose }) {
   const handleViewDocument = async (doc) => {
     setViewError('')
     try {
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
-      const token = localStorage.getItem('authToken');
+      const API_BASE = API_BASE_URL;
+      const token = getAccessToken();
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -347,7 +350,7 @@ function ViewCustomerModal({ customer, onClose }) {
           serverPath = `UploadedFiles/${serverPath}`;
         }
 
-        const res = await fetch(`${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(serverPath)}`, { headers });
+        const res = await apiFetch(`${API_BASE}/ApplicationKYCDocuments/download?path=${encodeURIComponent(serverPath)}`, { headers });
         if (res.status === 404) {
           setViewError('Document file not found on server.');
           return;

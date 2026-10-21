@@ -5,6 +5,7 @@ import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { useAuth } from '../../../../../../Core/src/context/AuthContext'
 import { getProfileImageUrl } from '../../utils/profileImageHelper'
 import './Header.css'
+import AuthImage from '../../../../../../Core/src/auth/AuthImage';
 
 function Header() {
   const [imageError, setImageError] = useState(false)
@@ -67,7 +68,7 @@ function Header() {
         <div className="header-profile">
           <div className="header-avatar" style={{ overflow: 'hidden' }}>
             {loadingAgent ? '' : (!imageError && profileImageUrl) ? (
-              <img 
+              <AuthImage 
                 src={profileImageUrl} 
                 alt={agentName}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}

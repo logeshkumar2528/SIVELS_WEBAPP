@@ -11,10 +11,8 @@
  *   - AMS        : GET /api/AMSMaster/{amsId}/profile-image
  */
 
-const API_BASE_URL = (
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) ||
-  'https://fusiontecsoftware.com/sivels/api'
-).replace(/\/+$/, '');
+import { apiFetch } from '../api/apiFetch';
+import { API_BASE_URL } from '../api/apiConfig';
 
 /**
  * Normalized role to Master API route mapping
@@ -185,15 +183,8 @@ export async function updateProfileImage(role, id, file) {
   const formData = new FormData();
   formData.append('file', file);
 
-  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null;
-  const headers = {};
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     method: 'PUT',
-    headers,
     body: formData,
   });
 
@@ -279,7 +270,7 @@ export function buildFileUrl(value) {
  * Builds the RM document download/view endpoint URL using the stored database path.
  *
  * @param {string} storedPath - e.g. "RMAadhar/ab22415c-6323-4ee5-8680-666c472cf2ca.png"
- * @returns {string|null} - URL e.g. "https://fusiontecsoftware.com/sivels/api/RMMaster/download?path=RMAadhar%2Fab22415c-6323-4ee5-8680-666c472cf2ca.png"
+ * @returns {string|null} - URL e.g. "${VITE_API_BASE_URL}/RMMaster/download?path=RMAadhar%2Fab22415c-6323-4ee5-8680-666c472cf2ca.png"
  */
 export function getRmDocumentDownloadUrl(storedPath) {
   if (!storedPath) return null;

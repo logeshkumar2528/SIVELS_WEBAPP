@@ -32,7 +32,7 @@
 import { memo, useState } from 'react';
 import iconMap from '../../config/iconMap';
 import logoImg from '../../../../../../Core/src/assets/branding/Logo.png';
-import { removeBackOfficeAuth } from '../../auth/authStorage';
+import { logout } from '../../../../../../Core/src/auth/session';
 import './Sidebar.css';
 
 /* ==========================================
@@ -175,8 +175,7 @@ function Sidebar({ menu = [], activeRoute = '', badgeCounts = {}, isOpen = false
       onLogout();
       return;
     }
-    removeBackOfficeAuth();
-    window.location.href = '/login';
+    logout();
   };
 
   return (

@@ -3,6 +3,7 @@ import iconMap from '../../../back_office/src/back-office/config/iconMap';
 import '../../../back_office/src/back-office/pages/Profile/Profile.css';
 import { getProfileImageUrl, getInitials } from '../../../../Core/src/utils/profileImageHelper';
 import { useCreditManagerProfile } from '../hooks/useCreditManagerProfile';
+import AuthImage from '../../../../Core/src/auth/AuthImage';
 
 function ProfileField({ icon: Icon, label, value }) {
   return (
@@ -75,7 +76,7 @@ export default function MyProfile() {
         <div className="bo-profile-hero-content">
           <div className="bo-profile-avatar-wrap">
             {showImage ? (
-              <img
+              <AuthImage
                 src={imageUrl}
                 alt={profile.fullName || 'Credit Manager'}
                 className="bo-profile-avatar-image"

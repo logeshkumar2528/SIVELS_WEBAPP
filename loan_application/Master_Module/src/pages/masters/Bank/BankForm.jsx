@@ -112,11 +112,11 @@ export function BankForm({ isOpen, onClose, onSuccess, initialData }) {
         // State master instruction said "Do NOT send stateId... for a normal create request."
         // For PUT, they said: Send correct backend payload. I'll add modifiedBy.
         payload.bankId = initialData.bankId;
-        payload.modifiedBy = getCurrentUserId() || 1;
+        payload.modifiedBy = getCurrentUserId();
         await updateBank(initialData.bankId, payload);
         toast.success('Updated successfully');
       } else {
-        payload.createdBy = getCurrentUserId() || 1;
+        payload.createdBy = getCurrentUserId();
         await createBank(payload);
         toast.success('Created successfully');
       }

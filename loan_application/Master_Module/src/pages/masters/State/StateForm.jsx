@@ -106,11 +106,11 @@ export function StateForm({ isOpen, onClose, onSuccess, initialData }) {
 
       if (isEdit) {
         payload.stateId = initialData.stateId;
-        payload.modifiedBy = getCurrentUserId() || 1;
+        payload.modifiedBy = getCurrentUserId();
         await updateState(initialData.stateId, payload);
         toast.success('Updated successfully');
       } else {
-        payload.createdBy = getCurrentUserId() || 1;
+        payload.createdBy = getCurrentUserId();
         await createState(payload);
         toast.success('Created successfully');
       }

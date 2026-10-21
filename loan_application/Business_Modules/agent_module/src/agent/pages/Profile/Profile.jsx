@@ -22,6 +22,7 @@ import { useAuth } from '../../../../../../Core/src/context/AuthContext'
 import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
 import { getProfileImageUrl, updateProfileImage } from '../../utils/profileImageHelper'
 import './Profile.css'
+import AuthImage from '../../../../../../Core/src/auth/AuthImage';
 
 function Profile() {
   const [imageError, setImageError] = useState(false)
@@ -312,7 +313,7 @@ function Profile() {
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 ) : !imageError && profileImageUrl ? (
-                  <img 
+                  <AuthImage 
                     src={profileImageUrl} 
                     alt={agentName} 
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}

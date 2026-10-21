@@ -1,3 +1,5 @@
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { FileText, IndianRupee, IdCard, Briefcase, Landmark, Home, CheckCircle2, RefreshCw } from 'lucide-react';
@@ -207,7 +209,7 @@ export default function DocumentChecklist() {
 
     async function checkApiAndAutoTick() {
       setIsVerifying(true);
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+      const baseUrl = API_BASE_URL;
 
       try {
         const [
@@ -218,12 +220,12 @@ export default function DocumentChecklist() {
           bankRes,
           collateralRes,
         ] = await Promise.allSettled([
-          fetch(`${baseUrl}/ApplicationProductDetails`),
-          fetch(`${baseUrl}/ApplicationPersonalInformation`),
-          fetch(`${baseUrl}/ApplicationKYCDocuments`),
-          fetch(`${baseUrl}/ApplicationEmploymentIncomeDetails`),
-          fetch(`${baseUrl}/ApplicationBankExistingLoanDetails`),
-          fetch(`${baseUrl}/ApplicationCollateralDetails`),
+          apiFetch(`${baseUrl}/ApplicationProductDetails`),
+          apiFetch(`${baseUrl}/ApplicationPersonalInformation`),
+          apiFetch(`${baseUrl}/ApplicationKYCDocuments`),
+          apiFetch(`${baseUrl}/ApplicationEmploymentIncomeDetails`),
+          apiFetch(`${baseUrl}/ApplicationBankExistingLoanDetails`),
+          apiFetch(`${baseUrl}/ApplicationCollateralDetails`),
         ]);
 
         const parseData = async (res) => {

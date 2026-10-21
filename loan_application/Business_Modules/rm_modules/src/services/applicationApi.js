@@ -1,4 +1,6 @@
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/$/, '');
+import { apiFetch } from '../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../Core/src/api/apiConfig';
+const API_BASE = API_BASE_URL;
 
 function unwrap(data) {
   if (Array.isArray(data)) return data[0] || null;
@@ -13,7 +15,7 @@ function getApplicationId(record) {
 }
 
 export async function loadApplicationHeader(applicationId) {
-  const response = await fetch(`${API_BASE}/AgentAddCustomer/${encodeURIComponent(applicationId)}`);
+  const response = await apiFetch(`${API_BASE}/AgentAddCustomer/${encodeURIComponent(applicationId)}`);
   if (!response.ok) throw new Error(`Failed to load application (${response.status})`);
 
   const customer = unwrap(await response.json());
@@ -22,7 +24,7 @@ export async function loadApplicationHeader(applicationId) {
   let agent = null;
   const agentId = customer.agentId || customer.AgentId;
   if (agentId) {
-    const agentResponse = await fetch(`${API_BASE}/AgentMaster/${encodeURIComponent(agentId)}`);
+    const agentResponse = await apiFetch(`${API_BASE}/AgentMaster/${encodeURIComponent(agentId)}`);
     if (agentResponse.ok) agent = unwrap(await agentResponse.json());
   }
 
@@ -42,7 +44,7 @@ export async function loadApplicationHeader(applicationId) {
 }
 
 export async function findFirstApplication() {
-  const response = await fetch(`${API_BASE}/AgentAddCustomer`);
+  const response = await apiFetch(`${API_BASE}/AgentAddCustomer`);
   if (!response.ok) throw new Error(`Failed to load applications (${response.status})`);
   const data = await response.json();
   const records = Array.isArray(data) ? data : (data?.value || data?.items || data?.data || []);

@@ -3,6 +3,7 @@ import iconMap from '../../config/iconMap';
 import { useBackOfficeProfile } from '../../hooks/useBackOfficeProfile';
 import { getProfileImageUrl, getInitials, updateProfileImage } from '../../utils/profileImageHelper';
 import './Profile.css';
+import AuthImage from '../../../../../../Core/src/auth/AuthImage';
 
 function ProfileField({ icon: Icon, label, value }) {
   return (
@@ -139,7 +140,7 @@ export default function Profile() {
         <div className="bo-profile-hero-content">
           <div className="bo-profile-avatar-wrap">
             {showImage ? (
-              <img
+              <AuthImage
                 src={previewUrl || imageUrl}
                 alt={profile.fullName || 'Back Office User'}
                 className="bo-profile-avatar-image"

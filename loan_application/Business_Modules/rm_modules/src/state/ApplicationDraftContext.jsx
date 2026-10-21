@@ -1,3 +1,5 @@
+import { apiFetch } from '../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../Core/src/api/apiConfig';
 import { mapKycPerson, primaryKycForSequence } from '../pages/KycDocuments/kycDocumentState';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { allNewApplications } from '../pages/NewApplications/newApplicationsData';
@@ -778,7 +780,7 @@ const kycRowId = (k) => k?.applicationKYCDocumentId ?? k?.ApplicationKYCDocument
 
 async function fetchRecordList(url) {
   try {
-    const res = await fetch(url);
+    const res = await apiFetch(url);
     return res.ok ? toRecordList(await res.json()) : null;
   } catch {
     return null;
@@ -2560,14 +2562,14 @@ export function ApplicationDraftProvider({ children }) {
 
     const hydrationPromise = (async () => {
       setHydratingMap((prev) => ({ ...prev, [appIdStr]: true }));
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api';
+      const baseUrl = API_BASE_URL;
 
       try {
         let backendResult = null;
 
         // 1. Try full details endpoint
         try {
-          const fullRes = await fetch(`${baseUrl}/ApplicationFullDetails/${appIdStr}`);
+          const fullRes = await apiFetch(`${baseUrl}/ApplicationFullDetails/${appIdStr}`);
           if (fullRes.ok) {
             const fullData = await fullRes.json();
             if (fullData) {
@@ -2580,7 +2582,7 @@ export function ApplicationDraftProvider({ children }) {
 
         // 2. Fallback to AgentAddCustomer endpoint if full details is 404 or empty
         if (!backendResult) {
-          const custRes = await fetch(`${baseUrl}/AgentAddCustomer/${appIdStr}`);
+          const custRes = await apiFetch(`${baseUrl}/AgentAddCustomer/${appIdStr}`);
           if (custRes.ok) {
             const custData = await custRes.json();
             const custRecord = Array.isArray(custData) ? custData[0] : (custData?.value ? custData.value[0] : custData);
@@ -2623,13 +2625,13 @@ export function ApplicationDraftProvider({ children }) {
               bankRes,
               colRes
             ] = await Promise.allSettled([
-              !hasProd ? fetch(`${baseUrl}/ApplicationProductDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
-              !hasKycs ? fetch(`${baseUrl}/ApplicationKYCDocuments`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
-              !hasPersonal ? fetch(`${baseUrl}/ApplicationPersonalInformation`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
-              !hasAddress ? fetch(`${baseUrl}/ApplicationAddressDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
-              !hasEmp ? fetch(`${baseUrl}/ApplicationEmploymentIncomeDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
-              !hasBank ? fetch(`${baseUrl}/ApplicationBankExistingLoanDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
-              !hasCol ? fetch(`${baseUrl}/ApplicationCollateralDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasProd ? apiFetch(`${baseUrl}/ApplicationProductDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasKycs ? apiFetch(`${baseUrl}/ApplicationKYCDocuments`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasPersonal ? apiFetch(`${baseUrl}/ApplicationPersonalInformation`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasAddress ? apiFetch(`${baseUrl}/ApplicationAddressDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasEmp ? apiFetch(`${baseUrl}/ApplicationEmploymentIncomeDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasBank ? apiFetch(`${baseUrl}/ApplicationBankExistingLoanDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasCol ? apiFetch(`${baseUrl}/ApplicationCollateralDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
             ]);
 
             // Match Product if missing

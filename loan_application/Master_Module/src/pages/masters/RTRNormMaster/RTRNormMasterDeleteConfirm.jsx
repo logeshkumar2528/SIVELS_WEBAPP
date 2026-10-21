@@ -27,7 +27,7 @@ export function RTRNormMasterDeleteConfirm({ isOpen, onClose, onSuccess, record 
 
     setIsSubmitting(true);
     try {
-      const userId = getCurrentUserId() || 1;
+      const userId = getCurrentUserId();
       await deleteRTRNormMaster(recordId, userId);
       toast.success('RTR Norm deleted successfully');
       onSuccess();
