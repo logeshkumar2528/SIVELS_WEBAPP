@@ -9,7 +9,7 @@ export const CREDIT_MANAGER_ENDPOINTS = {
   CREDIT_MANAGER_MASTER: '/CreditManagerMaster',
   CREDIT_MANAGER_BY_ID: (id) => `/CreditManagerMaster/${encodeURIComponent(id)}`,
 
-  CUSTOMERS: '/AgentAddCustomer',
+  CUSTOMERS: '/AgentAddCustomer/my',
 
   CREDIT_APPROVE: (agentCustomerId) =>
     `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/credit-approve`,

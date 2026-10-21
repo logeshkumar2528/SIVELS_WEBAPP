@@ -1497,29 +1497,31 @@ export default function CustomerVerification({
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
+      const targetAppProdId = Number(
+        verificationData?.applicationProductDetailsId ||
+        verificationData?.application?.product?.applicationProductDetailsId ||
+        verificationData?.application?.product?.ApplicationProductDetailsId ||
+        verificationData?.application?.applicationProductDetailsId ||
+        verificationData?.application?.ApplicationProductDetailsId ||
+        verificationData?.raw?.productDetails?.product?.applicationProductDetailsId ||
+        verificationData?.raw?.productDetails?.product?.ApplicationProductDetailsId ||
+        verificationData?.raw?.productDetailsList?.product?.applicationProductDetailsId ||
+        verificationData?.raw?.productDetailsList?.product?.ApplicationProductDetailsId ||
+        verificationData?.raw?.productDetails?.[0]?.product?.applicationProductDetailsId ||
+        verificationData?.raw?.productDetails?.[0]?.product?.ApplicationProductDetailsId ||
+        verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
+        verificationData?.raw?.productDetails?.applicationProductDetailsId ||
+        verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
+        verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId ||
+        0
+      );
+      const byApplication = targetAppProdId > 0 ? `/by-application/${targetAppProdId}` : '';
+
       try {
-        const kycRes = await apiFetch(`${API_BASE}/ApplicationKYCDocuments`, { headers });
+        const kycRes = await apiFetch(`${API_BASE}/ApplicationKYCDocuments${byApplication}`, { headers });
         if (kycRes.ok && isMounted) {
           const allKyc = await kycRes.json();
           const kycArr = Array.isArray(allKyc) ? allKyc : (allKyc?.value || allKyc?.data || []);
-          const targetAppProdId = Number(
-            verificationData?.applicationProductDetailsId ||
-            verificationData?.application?.product?.applicationProductDetailsId ||
-            verificationData?.application?.product?.ApplicationProductDetailsId ||
-            verificationData?.application?.applicationProductDetailsId ||
-            verificationData?.application?.ApplicationProductDetailsId ||
-            verificationData?.raw?.productDetails?.product?.applicationProductDetailsId ||
-            verificationData?.raw?.productDetails?.product?.ApplicationProductDetailsId ||
-            verificationData?.raw?.productDetailsList?.product?.applicationProductDetailsId ||
-            verificationData?.raw?.productDetailsList?.product?.ApplicationProductDetailsId ||
-            verificationData?.raw?.productDetails?.[0]?.product?.applicationProductDetailsId ||
-            verificationData?.raw?.productDetails?.[0]?.product?.ApplicationProductDetailsId ||
-            verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
-            verificationData?.raw?.productDetails?.applicationProductDetailsId ||
-            verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
-            verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId ||
-            0
-          );
           const filteredKyc = kycArr
             .filter((k) => {
               const kProdId = Number(k.applicationProductDetailsId ?? k.ApplicationProductDetailsId);
@@ -1542,12 +1544,14 @@ export default function CustomerVerification({
       }
 
       try {
-        const persRes = await apiFetch(`${API_BASE}/ApplicationPersonalInformation`, { headers });
+        const persRes = await apiFetch(`${API_BASE}/ApplicationPersonalInformation${byApplication}`, { headers });
         if (persRes.ok && isMounted) {
           const allPers = await persRes.json();
           const persArr = Array.isArray(allPers) ? allPers : (allPers?.value || allPers?.data || []);
-          const filteredPers = persArr
-            .filter((p) => String(p.agentCustomerId ?? p.AgentCustomerId) === String(targetCustomerId))
+          // by-application rows already belong to this application.
+          const filteredPers = (byApplication
+            ? persArr
+            : persArr.filter((p) => String(p.agentCustomerId ?? p.AgentCustomerId) === String(targetCustomerId)))
             .sort((a, b) => (a.personalInformationId || 0) - (b.personalInformationId || 0));
           if (filteredPers.length > 0) {
             setPersonalInfoList(filteredPers);

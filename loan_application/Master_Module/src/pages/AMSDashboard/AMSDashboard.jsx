@@ -275,15 +275,15 @@ export default function AMSDashboard() {
           : Promise.resolve([]),
         // 2. All Relationship Managers
         getAllRelationshipManagers().catch(() =>
-          axiosInstance.get('/RMMaster').then((r) => r.data).catch(() => [])
+          axiosInstance.get('/RMMaster/my').then((r) => r.data).catch(() => [])
         ),
         // 3. All Agents
         getAllAgents().catch(() =>
-          axiosInstance.get('/AgentMaster').then((r) => r.data).catch(() => [])
+          axiosInstance.get('/AgentMaster/my').then((r) => r.data).catch(() => [])
         ),
         // 4. All Customers / Loan Applications
         agentCustomerService.getAllCustomers().catch(() =>
-          axiosInstance.get('/AgentAddCustomer').then((r) => r.data).catch(() => [])
+          axiosInstance.get('/AgentAddCustomer/my').then((r) => r.data).catch(() => [])
         ),
         // 5. AMS Detailed Profile (if ID exists)
         currentAmsId

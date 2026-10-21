@@ -104,4 +104,17 @@ describe('apiFetch', () => {
     expect(getAccessToken()).toBe('access-1');
     expect(replaceSpy).not.toHaveBeenCalled();
   });
+
+  it('shows the server 403 message and leaves the body readable', async () => {
+    const message = "You don't have permission to access this record.";
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ message }), { status: 403 }));
+    const listener = vi.fn();
+    window.addEventListener(FORBIDDEN_EVENT, listener);
+
+    const response = await apiFetch('/AgentAddCustomer/5');
+
+    window.removeEventListener(FORBIDDEN_EVENT, listener);
+    expect(listener.mock.calls[0][0].detail.message).toBe(message);
+    expect(await response.json()).toEqual({ message });
+  });
 });

@@ -155,7 +155,7 @@ export default function RmProfile() {
       setLoadError('');
 
       try {
-        const response = await apiFetch(`${API_BASE}/RMMaster`);
+        const response = await apiFetch(`${API_BASE}/RMMaster/my`);
         if (!response.ok) {
           throw new Error(`Failed to load RM profile (${response.status})`);
         }

@@ -30,8 +30,9 @@ export function handleSessionExpired() {
   redirectToLogin();
 }
 
-export function notifyForbidden() {
-  window.dispatchEvent(new CustomEvent(FORBIDDEN_EVENT, { detail: { message: FORBIDDEN_MESSAGE } }));
+export function notifyForbidden(serverMessage) {
+  const message = typeof serverMessage === 'string' && serverMessage.trim() ? serverMessage : FORBIDDEN_MESSAGE;
+  window.dispatchEvent(new CustomEvent(FORBIDDEN_EVENT, { detail: { message } }));
 }
 
 export function resetAuthEventsForTests() {

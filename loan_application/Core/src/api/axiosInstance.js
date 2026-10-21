@@ -86,7 +86,7 @@ axiosInstance.interceptors.response.use(
         }
 
         case 403:
-          notifyForbidden();
+          notifyForbidden(error.response.data?.message);
           break;
 
         case 404:

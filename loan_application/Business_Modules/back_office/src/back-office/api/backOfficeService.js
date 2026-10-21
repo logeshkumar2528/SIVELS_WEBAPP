@@ -71,7 +71,7 @@ export const backOfficeService = {
   ========================================== */
 
   /**
-   * Retrieve all Relationship Managers globally (no user restriction).
+   * Retrieve the Relationship Managers the caller may see (all of them for Back Office).
    */
   getAllRMs: async () => {
     const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.RMS);
@@ -92,7 +92,7 @@ export const backOfficeService = {
   ========================================== */
 
   /**
-   * Retrieve all Field Agents globally.
+   * Retrieve the Field Agents the caller may see (all of them for Back Office).
    */
   getAllAgents: async () => {
     const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.AGENTS);
@@ -143,7 +143,7 @@ export const backOfficeService = {
   ========================================== */
 
   /**
-   * Retrieve all customer loan applications.
+   * Retrieve the customer loan applications in the caller's queue.
    */
   getAllCustomers: async () => {
     const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.CUSTOMERS);

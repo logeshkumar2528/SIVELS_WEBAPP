@@ -378,7 +378,7 @@ export default function CollateralDetails() {
         try {
           const [colRes, prodRes] = await Promise.allSettled([
             apiFetch(`${baseUrl}/ApplicationCollateralDetails`),
-            apiFetch(`${baseUrl}/ApplicationProductDetails`),
+            apiFetch(`${baseUrl}/ApplicationProductDetails/my`),
           ]);
 
           if (colRes.status === 'fulfilled' && colRes.value.ok) {

@@ -344,7 +344,7 @@ export default function PdfView() {
           fullDetailsRes,
         ] = await Promise.allSettled([
           apiFetch(`${API_BASE}/AgentAddCustomer/${applicationId}`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
-          apiFetch(`${API_BASE}/RMMaster`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          apiFetch(`${API_BASE}/RMMaster/my`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
           fetchMaster('SourcingChannelMaster', 'sourcingChannelId', 'sourcingChannelName'),
           fetchMaster('LoanProductMaster', 'loanProductId', 'productName'),
           fetchMaster('LoanPurposeMaster', 'loanPurposeId', 'purposeName'),
@@ -370,7 +370,7 @@ export default function PdfView() {
           apiFetch(`${API_BASE}/ApplicationPersonalInformation`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
           apiFetch(`${API_BASE}/ApplicationBankExistingLoanDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
           apiFetch(`${API_BASE}/ApplicationCollateralDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
-          apiFetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
+          apiFetch(`${API_BASE}/ApplicationProductDetails/my`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
           apiFetch(`${API_BASE}/ApplicationKYCDocuments`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
           apiFetch(`${API_BASE}/ApplicationFullDetails/${applicationId}`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
         ]);

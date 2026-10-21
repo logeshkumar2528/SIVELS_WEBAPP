@@ -137,7 +137,7 @@ export default function AddAgent({ onSuccessRedirect, agentId: agentIdProp } = {
   }, [currentBranch, currentRmName, currentUser, isEditMode]);
 
   useEffect(() => {
-    apiFetch(`${API_BASE}/RMMaster`)
+    apiFetch(`${API_BASE}/RMMaster/my`)
       .then((response) => response.ok ? response.json() : [])
       .then((result) => {
         const rows = Array.isArray(result) ? result : result?.data || [];

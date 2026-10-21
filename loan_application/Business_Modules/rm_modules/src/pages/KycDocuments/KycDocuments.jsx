@@ -1420,7 +1420,10 @@ export default function KycDocuments() {
       }
 
       try {
-        const kycRes = await apiFetch(`${API_BASE}/ApplicationKYCDocuments`, { headers });
+        const kycUrl = productDetailsId
+          ? `${API_BASE}/ApplicationKYCDocuments/by-application/${encodeURIComponent(productDetailsId)}`
+          : `${API_BASE}/ApplicationKYCDocuments`;
+        const kycRes = await apiFetch(kycUrl, { headers });
         if (kycRes.ok && isMounted) {
           const allKyc = await kycRes.json();
           if (!isMounted) return;

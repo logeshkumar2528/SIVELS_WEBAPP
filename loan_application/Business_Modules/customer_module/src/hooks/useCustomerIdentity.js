@@ -62,13 +62,22 @@ export function useCustomerIdentity() {
         return;
       }
 
-      const customerId = storedCustomer.agentCustomerId ?? storedCustomer.AgentCustomerId ?? storedCustomer.customerId ?? storedCustomer.id ?? localStorage.getItem('customerId');
-      const mobile = storedCustomer.mobileNumber ?? storedCustomer.MobileNumber;
+      let customerId = storedCustomer.agentCustomerId ?? storedCustomer.AgentCustomerId ?? storedCustomer.customerId ?? storedCustomer.id ?? localStorage.getItem('customerId');
 
       try {
         let freshData = null;
 
-        // 1. If we have customer ID, fetch fresh record from GET /AgentAddCustomer/{id}
+        // The token knows which customer record belongs to this login.
+        if (!customerId) {
+          try {
+            const me = await axiosInstance.get('/auth/me');
+            customerId = me.data?.agentCustomerId ?? null;
+            if (customerId) localStorage.setItem('customerId', String(customerId));
+          } catch (meErr) {
+            console.warn('[useCustomerIdentity] /auth/me lookup failed:', meErr?.message);
+          }
+        }
+
         if (customerId) {
           try {
             const res = await axiosInstance.get(`/AgentAddCustomer/${customerId}`);
@@ -76,19 +85,6 @@ export function useCustomerIdentity() {
           } catch (fetchErr) {
             console.warn('[useCustomerIdentity] Direct ID lookup failed:', fetchErr?.message);
           }
-        }
-
-        // 2. Fallback: match by mobile number from GET /AgentAddCustomer
-        if (!freshData && mobile) {
-          const res = await axiosInstance.get('/AgentAddCustomer');
-          const rawList = res.data?.value ?? res.data ?? [];
-          const list = Array.isArray(rawList) ? rawList : (rawList ? [rawList] : []);
-          const cleanMobile = String(mobile).replace(/\D/g, '').slice(-10);
-
-          freshData = list.find((item) => {
-            const itemNum = String(item?.mobileNumber ?? item?.MobileNumber ?? '').replace(/\D/g, '').slice(-10);
-            return itemNum === cleanMobile;
-          });
         }
 
         if (isMounted) {

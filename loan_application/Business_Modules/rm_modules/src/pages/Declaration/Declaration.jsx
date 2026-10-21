@@ -74,7 +74,7 @@ async function fetchLiveRMNameFromApi() {
   const fallbackName = currentRmObj.fullName || currentRmObj.name || '';
 
   try {
-    const res = await apiFetch(`${API_BASE}/RMMaster`);
+    const res = await apiFetch(`${API_BASE}/RMMaster/my`);
     if (res.ok) {
       const data = await res.json();
       const rows = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);

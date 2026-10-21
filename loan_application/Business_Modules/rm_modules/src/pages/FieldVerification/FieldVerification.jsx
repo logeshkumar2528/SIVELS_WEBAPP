@@ -8,7 +8,7 @@ import { ROUTES } from '../../config/routeConfig';
 import { FIELD_VERIFICATION_STEPS } from '../../config/fieldVerificationWizard';
 import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
-import { findFirstApplication, loadApplicationHeader } from '../../services/applicationApi';
+import { loadApplicationHeader, requireApplicationId } from '../../services/applicationApi';
 import Modal from '../../components/Modal/Modal';
 import {
   buildSectionUpdate,
@@ -227,7 +227,7 @@ export default function FieldVerification() {
     let active = true;
     async function loadHeader() {
       try {
-        const id = requestedApplicationId || await findFirstApplication();
+        const id = requireApplicationId(requestedApplicationId);
         const header = await loadApplicationHeader(id);
         if (!active) return;
         setResolvedApplicationId(String(id));

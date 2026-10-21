@@ -823,9 +823,10 @@ async function mergeApplicationPeopleRows(backendResult, baseUrl, agentCustomerI
     backendResult.customer?.ApplicationProductDetailsId;
   if (!hasRecordId(productDetailsId) && !hasRecordId(agentCustomerId)) return;
 
+  const byApplication = hasRecordId(productDetailsId) ? `/by-application/${encodeURIComponent(productDetailsId)}` : '';
   const [allKycs, allPersonal] = await Promise.all([
-    fetchRecordList(`${baseUrl}/ApplicationKYCDocuments`),
-    fetchRecordList(`${baseUrl}/ApplicationPersonalInformation`),
+    fetchRecordList(`${baseUrl}/ApplicationKYCDocuments${byApplication}`),
+    fetchRecordList(`${baseUrl}/ApplicationPersonalInformation${byApplication}`),
   ]);
 
   let kycs = toRecordList(
@@ -2616,6 +2617,12 @@ export function ApplicationDraftProvider({ children }) {
           const hasCol = extractArr(backendResult.collateral ?? backendResult.Collateral ?? backendResult.collateralDetails ?? backendResult.CollateralDetails ?? backendResult.applicationCollateralDetails ?? backendResult.ApplicationCollateralDetails).length > 0;
 
           if (!hasProd || !hasKycs || !hasPersonal || !hasAddress || !hasEmp || !hasBank || !hasCol) {
+            const knownProdId =
+              backendResult.productDetails?.applicationProductDetailsId ??
+              backendResult.productDetails?.ApplicationProductDetailsId ??
+              backendResult.customer?.applicationProductDetailsId ??
+              backendResult.customer?.ApplicationProductDetailsId;
+            const byApplication = knownProdId ? `/by-application/${encodeURIComponent(knownProdId)}` : '';
             const [
               prodRes,
               kycRes,
@@ -2625,9 +2632,9 @@ export function ApplicationDraftProvider({ children }) {
               bankRes,
               colRes
             ] = await Promise.allSettled([
-              !hasProd ? apiFetch(`${baseUrl}/ApplicationProductDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
-              !hasKycs ? apiFetch(`${baseUrl}/ApplicationKYCDocuments`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
-              !hasPersonal ? apiFetch(`${baseUrl}/ApplicationPersonalInformation`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasProd ? apiFetch(`${baseUrl}/ApplicationProductDetails/my`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasKycs ? apiFetch(`${baseUrl}/ApplicationKYCDocuments${byApplication}`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasPersonal ? apiFetch(`${baseUrl}/ApplicationPersonalInformation${byApplication}`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
               !hasAddress ? apiFetch(`${baseUrl}/ApplicationAddressDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
               !hasEmp ? apiFetch(`${baseUrl}/ApplicationEmploymentIncomeDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
               !hasBank ? apiFetch(`${baseUrl}/ApplicationBankExistingLoanDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),

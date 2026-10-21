@@ -43,7 +43,8 @@ export async function apiFetch(input, init = {}) {
   }
 
   if (response.status === 403) {
-    notifyForbidden();
+    const body = await response.clone().json().catch(() => null);
+    notifyForbidden(body?.message);
   }
 
   return response;

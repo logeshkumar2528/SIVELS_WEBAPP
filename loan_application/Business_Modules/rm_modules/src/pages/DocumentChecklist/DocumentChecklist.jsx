@@ -211,59 +211,60 @@ export default function DocumentChecklist() {
       setIsVerifying(true);
       const baseUrl = API_BASE_URL;
 
+      const fetchList = async (url) => {
+        try {
+          const res = await apiFetch(url);
+          if (!res.ok) return [];
+          const data = await res.json();
+          if (Array.isArray(data)) return data;
+          if (Array.isArray(data?.value)) return data.value;
+          if (Array.isArray(data?.data)) return data.data;
+          return data ? [data] : [];
+        } catch {
+          return [];
+        }
+      };
+      const idOf = (row, camel, pascal) => String(row?.[camel] ?? row?.[pascal] ?? '');
+
       try {
-        const [
-          productRes,
-          personalRes,
-          kycRes,
-          employmentRes,
-          bankRes,
-          collateralRes,
-        ] = await Promise.allSettled([
-          apiFetch(`${baseUrl}/ApplicationProductDetails`),
-          apiFetch(`${baseUrl}/ApplicationPersonalInformation`),
-          apiFetch(`${baseUrl}/ApplicationKYCDocuments`),
-          apiFetch(`${baseUrl}/ApplicationEmploymentIncomeDetails`),
-          apiFetch(`${baseUrl}/ApplicationBankExistingLoanDetails`),
-          apiFetch(`${baseUrl}/ApplicationCollateralDetails`),
-        ]);
+        // Only this application's records count towards the checklist.
+        const products = await fetchList(`${baseUrl}/ApplicationProductDetails/bycustomer/${encodeURIComponent(appId)}`);
+        const prodId =
+          getApplication(appId)?.applicationProductDetailsId ??
+          products[0]?.applicationProductDetailsId ??
+          products[0]?.ApplicationProductDetailsId;
 
-        const parseData = async (res) => {
-          if (res.status === 'fulfilled' && res.value?.ok) {
-            try {
-              const data = await res.value.json();
-              return Array.isArray(data) ? data.length > 0 : Boolean(data);
-            } catch {
-              return false;
-            }
-          }
-          return false;
-        };
+        let apiData = { hasProduct: products.length > 0 };
+        if (prodId) {
+          const [personal, kyc, bankLoans, collateral, addresses, employment] = await Promise.all([
+            fetchList(`${baseUrl}/ApplicationPersonalInformation/by-application/${prodId}`),
+            fetchList(`${baseUrl}/ApplicationKYCDocuments/by-application/${prodId}`),
+            fetchList(`${baseUrl}/ApplicationBankExistingLoanDetails`),
+            fetchList(`${baseUrl}/ApplicationCollateralDetails/by-application-product-details/${prodId}`),
+            fetchList(`${baseUrl}/ApplicationAddressDetails`),
+            fetchList(`${baseUrl}/ApplicationEmploymentIncomeDetails`),
+          ]);
 
-        const [
-          hasProduct,
-          hasPersonal,
-          hasKyc,
-          hasEmployment,
-          hasBank,
-          hasCollateral,
-        ] = await Promise.all([
-          parseData(productRes),
-          parseData(personalRes),
-          parseData(kycRes),
-          parseData(employmentRes),
-          parseData(bankRes),
-          parseData(collateralRes),
-        ]);
+          const personalIds = new Set(personal.map((p) => idOf(p, 'personalInformationId', 'PersonalInformationId')));
+          const addressIds = new Set(
+            addresses
+              .filter((a) => personalIds.has(idOf(a, 'personalInformationId', 'PersonalInformationId')))
+              .map((a) => idOf(a, 'applicationAddressDetailsId', 'ApplicationAddressDetailsId'))
+          );
 
-        const apiData = {
-          hasProduct,
-          hasPersonal,
-          hasKyc,
-          hasEmployment,
-          hasBank,
-          hasCollateral,
-        };
+          apiData = {
+            hasProduct: true,
+            hasPersonal: personal.length > 0,
+            hasKyc: kyc.length > 0,
+            hasEmployment: employment.some((e) =>
+              addressIds.has(idOf(e, 'applicationAddressDetailsId', 'ApplicationAddressDetailsId'))
+            ),
+            hasBank: bankLoans.some(
+              (b) => idOf(b, 'applicationProductDetailsId', 'ApplicationProductDetailsId') === String(prodId)
+            ),
+            hasCollateral: collateral.length > 0,
+          };
+        }
 
         if (isMounted) {
           const currentAppData = getApplication(appId);
