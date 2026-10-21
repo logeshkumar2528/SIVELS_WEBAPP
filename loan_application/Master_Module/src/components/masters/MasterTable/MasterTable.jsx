@@ -1,4 +1,5 @@
 import { Edit, Trash2, ChevronsUpDown } from 'lucide-react';
+import { useMasterEditAccess } from '../MasterEditAccess';
 import './MasterTable.css';
 
 export function MasterTable({ 
@@ -6,11 +7,15 @@ export function MasterTable({
   data, 
   isLoading, 
   isError, 
-  onEdit, 
-  onDelete,
+  onEdit: onEditProp, 
+  onDelete: onDeleteProp,
   canDelete,
   isDeleteDisabled
 }) {
+  const canEdit = useMasterEditAccess();
+  const onEdit = canEdit ? onEditProp : undefined;
+  const onDelete = canEdit ? onDeleteProp : undefined;
+
   if (isError) {
     return (
       <div className="master-table-state">

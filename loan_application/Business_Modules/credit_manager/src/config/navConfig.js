@@ -23,6 +23,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.RECEIVED,
     badgeKey: 'receivedApplications',
     section:  'APPLICATIONS',
+    permission: 'CREDIT.VIEW',
   },
   {
     id:       'pending',
@@ -31,6 +32,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.PENDING,
     badgeKey: 'pendingReview',
     section:  'APPLICATIONS',
+    permission: 'CREDIT.VIEW',
   },
   {
     id:       'approved',
@@ -39,6 +41,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.APPROVED,
     badgeKey: 'approved',
     section:  'APPLICATIONS',
+    permission: 'CREDIT.VIEW',
   },
   {
     id:       'rejected',
@@ -47,6 +50,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.REJECTED,
     badgeKey: 'rejected',
     section:  'APPLICATIONS',
+    permission: 'CREDIT.VIEW',
   },
   {
     id:       'reports',
@@ -55,6 +59,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.REPORTS,
     badgeKey: null,
     section:  'REPORTS',
+    permission: 'DASHBOARD.VIEW',
   },
 
   {

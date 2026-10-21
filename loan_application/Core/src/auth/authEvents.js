@@ -1,3 +1,4 @@
+import { PERMISSION_DENIED_CODE, describePermission } from './permissions';
 import { clearSession } from './tokenStore';
 
 export const LOGIN_PATH = '/login';
@@ -41,6 +42,15 @@ function notify(serverMessage, fallback) {
 
 export function notifyForbidden(serverMessage) {
   notify(serverMessage, FORBIDDEN_MESSAGE);
+}
+
+/** 403 body: PERMISSION_DENIED names the missing permission; other 403s keep the generic notice. */
+export function notifyForbiddenResponse(body) {
+  if (body?.code === PERMISSION_DENIED_CODE && body?.permission) {
+    notify(body.message, `Your role can't ${describePermission(body.permission)}.`);
+    return;
+  }
+  notify(body?.message, FORBIDDEN_MESSAGE);
 }
 
 /**

@@ -29,6 +29,7 @@ import { apiFetch } from '../../../../../../Core/src/api/apiFetch';
 import { API_BASE_URL } from '../../../../../../Core/src/api/apiConfig';
 import { getAccessToken } from '../../../../../../Core/src/auth/tokenStore';
 import { needsAuthedFetch } from '../../../../../../Core/src/auth/useAuthedObjectUrl';
+import { hasPermission } from '../../../../../../Core/src/auth/permissions';
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import iconMap from '../../config/iconMap';
@@ -9512,6 +9513,7 @@ export default function CustomerVerification({
   const creditReturnPanelRef = useRef(null);
   const scrollToReturnPanelRef = useRef(false);
   const canSendToCreditManager = step13Readiness.isReady && openCreditReturnCount === 0;
+  const canApproveVerification = hasPermission('VERIFICATION.APPROVE');
 
   const openCreditReturnSection = useCallback(
     (stepId) => {
@@ -18287,6 +18289,10 @@ export default function CustomerVerification({
               {/* Dual Action Cards (Credit Manager view renders its own decision panel instead) */}
               {isCreditManagerView ? (
                 <div style={{ marginBottom: '20px' }}>{finalActionsSlot}</div>
+              ) : !canApproveVerification ? (
+                <p className="bo-cv-action-card-desc" style={{ marginBottom: '20px' }}>
+                  Your role can review this application but can&apos;t return it to the RM or send it to the Credit Manager.
+                </p>
               ) : (
               <div className="bo-cv-actions-grid">
                 {/* Card 1: Return to RM */}

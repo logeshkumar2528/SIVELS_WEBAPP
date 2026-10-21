@@ -1,0 +1,11 @@
+.masters-access {
+  display: contents;
+}
+
+/* Some master pages build their own table and toolbar instead of using MasterTable. */
+.masters-access--readonly .masters-page-actions-area .masters-btn-primary,
+.masters-access--readonly .masters-page-toolbar-actions .masters-btn-primary,
+.masters-access--readonly .master-table-actions-th,
+.masters-access--readonly .master-table-actions-td {
+  display: none;
+}

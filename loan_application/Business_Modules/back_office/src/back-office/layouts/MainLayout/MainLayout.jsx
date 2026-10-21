@@ -40,6 +40,7 @@ import { NAV_ITEMS } from '../../config/navConfig';
 import { useCustomerQueue } from '../../hooks/useCustomerQueue';
 import { useCreditReturns } from '../../hooks/useCreditReturns';
 import { removeBackOfficeAuth } from '../../auth/authStorage';
+import { usePermissions } from '../../../../../../Core/src/auth/permissions';
 import './MainLayout.css';
 
 /* ==========================================
@@ -72,6 +73,7 @@ function MainLayout({
      Layout state — ONLY sidebarOpen lives here
   ------------------------------------------ */
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { roleName, filterNav } = usePermissions();
 
   /* ------------------------------------------
      Router hooks — layout infrastructure
@@ -218,7 +220,7 @@ function MainLayout({
     ...(user?.name ? user : {}),
     id: user?.id || user?.backOfficeId || fallbackUser.id,
     name: user?.name || fallbackUser.name,
-    role: user?.role || fallbackUser.role,
+    role: user?.role || roleName || fallbackUser.role,
     avatarUrl: user?.avatarUrl || fallbackUser.avatarUrl,
   };
 
@@ -227,7 +229,7 @@ function MainLayout({
 
       {/* ========== SIDEBAR ========== */}
       <Sidebar
-        menu={NAV_ITEMS}
+        menu={filterNav(NAV_ITEMS)}
         activeRoute={pathname}
         badgeCounts={liveBadgeCounts}
         isOpen={sidebarOpen}
