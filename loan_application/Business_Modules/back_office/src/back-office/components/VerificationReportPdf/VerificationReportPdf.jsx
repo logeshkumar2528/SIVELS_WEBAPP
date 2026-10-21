@@ -149,8 +149,12 @@ export default function VerificationReportPdf({
         appProdId > 0 ? backOfficeService.getApplicationDocuments(appProdId) : Promise.resolve([]),
         appProdId > 0 ? backOfficeService.getDocumentRejectionsByApplication(appProdId) : Promise.resolve([]),
         appProdId > 0 ? backOfficeService.getAssessmentsByApplication(appProdId) : Promise.resolve([]),
-        apiFetch(`${API_BASE}/ApplicationKYCDocuments`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : [])),
-        apiFetch(`${API_BASE}/ApplicationPersonalInformation`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : [])),
+        appProdId > 0
+          ? apiFetch(`${API_BASE}/ApplicationKYCDocuments/by-application/${appProdId}`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : []))
+          : Promise.resolve([]),
+        appProdId > 0
+          ? apiFetch(`${API_BASE}/ApplicationPersonalInformation/by-application/${appProdId}`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : []))
+          : Promise.resolve([]),
       ]);
 
       // Map step verifications (Primary Applicant: applicantSequence === 0)
@@ -186,20 +190,15 @@ export default function VerificationReportPdf({
         setAssessmentRecords(list.filter((a) => a && a.isActive !== false));
       }
 
-      // KYC list filtered
+      // KYC and personal rows of this application (by-application)
       if (kycListRes.status === 'fulfilled' && kycListRes.value) {
         const raw = kycListRes.value;
-        const list = Array.isArray(raw) ? raw : (raw?.value || raw?.data || []);
-        const filtered = list.filter((k) => String(k.agentCustomerId ?? k.AgentCustomerId) === String(targetCustomerId));
-        setKycRecords(filtered);
+        setKycRecords(Array.isArray(raw) ? raw : (raw?.value || raw?.data || []));
       }
 
-      // Personal list filtered
       if (persListRes.status === 'fulfilled' && persListRes.value) {
         const raw = persListRes.value;
-        const list = Array.isArray(raw) ? raw : (raw?.value || raw?.data || []);
-        const filtered = list.filter((p) => String(p.agentCustomerId ?? p.AgentCustomerId) === String(targetCustomerId));
-        setPersonalRecords(filtered);
+        setPersonalRecords(Array.isArray(raw) ? raw : (raw?.value || raw?.data || []));
       }
     } catch (err) {
       console.error('Failed to load Back Office verification report data:', err);
@@ -231,13 +230,15 @@ export default function VerificationReportPdf({
     const count = parseInt(verificationData?.applicationDetails?.coApplicantCount || 0, 10);
     if (!count || count <= 0) return [];
 
-    const coPers = personalRecords.slice(1);
-    const coKyc = kycRecords.slice(1);
+    const coKyc = kycRecords
+      .filter((k) => k && k.isActive !== false && Number(k.applicantSequence ?? 0) > 0)
+      .sort((a, b) => Number(a.applicantSequence ?? 0) - Number(b.applicantSequence ?? 0));
+    const personalByKyc = new Map(personalRecords.map((p) => [String(p.applicationKYCDocumentId), p]));
 
     const result = [];
     for (let i = 0; i < count; i++) {
-      const p = coPers[i] || {};
       const k = coKyc[i] || {};
+      const p = personalByKyc.get(String(k.applicationKYCDocumentId)) || {};
       const name = [p.firstName, p.middleName, p.lastName].filter(Boolean).join(' ') || p.fullName || `Co-Applicant ${i + 1}`;
       result.push({
         index: i + 1,

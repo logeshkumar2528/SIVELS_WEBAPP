@@ -1420,7 +1420,10 @@ export default function KycDocuments() {
       }
 
       try {
-        const kycRes = await apiFetch(`${API_BASE}/ApplicationKYCDocuments`, { headers });
+        const kycUrl = productDetailsId
+          ? `${API_BASE}/ApplicationKYCDocuments/by-application/${encodeURIComponent(productDetailsId)}`
+          : `${API_BASE}/ApplicationKYCDocuments`;
+        const kycRes = await apiFetch(kycUrl, { headers });
         if (kycRes.ok && isMounted) {
           const allKyc = await kycRes.json();
           if (!isMounted) return;
@@ -4604,6 +4607,7 @@ export default function KycDocuments() {
         appData={appData}
         steps={APPLICATION_WIZARD_STEPS}
         activeStep={2}
+        lockArea="documents"
         title="Step 2: KYC Documents"
         subtitle="Capture Aadhaar, PAN and identity document details. Validate Aadhaar using OTP where required."
         backLabel="Back to Application Details"

@@ -23,6 +23,7 @@ import {
   resolveApiArray,
 } from '../../utils/rmContext';
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
+import { clearLockForcedView } from '../../utils/lockForcedView';
 import rmCustomerService from '../../services/rmCustomerService';
 import './NewApplications.css';
 import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
@@ -252,11 +253,11 @@ export default function NewApplications({ initialFilter = 'All' }) {
       if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
       const [agentRes, customerRes, rmRes, rejectionsRes, appProdRes] = await Promise.all([
-        apiFetch(`${API_BASE}/AgentMaster`, { headers: authHeaders }),
-        apiFetch(`${API_BASE}/AgentAddCustomer`, { headers: authHeaders }),
-        apiFetch(`${API_BASE}/RMMaster`, { headers: authHeaders }).catch(() => null),
+        apiFetch(`${API_BASE}/AgentMaster/my`, { headers: authHeaders }),
+        apiFetch(`${API_BASE}/AgentAddCustomer/my`, { headers: authHeaders }),
+        apiFetch(`${API_BASE}/RMMaster/my`, { headers: authHeaders }).catch(() => null),
         apiFetch(`${API_BASE}/BackOfficeDocumentRejection/rm/${rmContext.rmId}/returned`, { headers: authHeaders }).catch(() => null),
-        apiFetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).catch(() => null),
+        apiFetch(`${API_BASE}/ApplicationProductDetails/my`, { headers: authHeaders }).catch(() => null),
       ]);
 
       if (!agentRes.ok) {
@@ -992,7 +993,10 @@ export default function NewApplications({ initialFilter = 'All' }) {
                 title="View Details"
                 aria-label="View Details"
                 className="new-apps-action-btn"
-                onClick={() => navigate(`${ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId)}?mode=view`)}
+                onClick={() => {
+                  clearLockForcedView(applicationId);
+                  navigate(`${ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId)}?mode=view`);
+                }}
               >
                 <Eye size={16} />
               </Button>

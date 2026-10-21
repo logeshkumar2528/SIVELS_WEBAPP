@@ -11,8 +11,9 @@
  *     "Final Action" shows the Credit Manager decision panel instead.
  *   - Every section has an Edit / Approve / Reject bar. Sections are read-only until "Edit" is clicked.
  *   - Reject (section or document) flags the item for the Back Office instead of sending it to the RM.
- *     Flags and section approvals are kept per application in sessionStorage; flags are sent with
- *     "Return to Back Office", and the application can only be approved once every section is approved.
+ *     Flags and section approvals are saved on the server per application (useReviewSections); flags
+ *     are sent with "Return to Back Office", and the application can only be approved once every
+ *     section is approved.
  *
  * Route: /credit/applications/:customerId
  */
@@ -31,10 +32,7 @@ import {
   getAttentionSections,
   mapCreditReturnItem,
 } from '../../../back_office/src/back-office/mappers/creditReturnMapper';
-import {
-  buildCreditReturnItemFromStep,
-  getReturnItemStep,
-} from '../../../back_office/src/back-office/config/creditReturnFields';
+import { getReturnItemStep } from '../../../back_office/src/back-office/config/creditReturnFields';
 import '../../../back_office/src/back-office/pages/SubmitToCredit/SubmitToCredit.css';
 import '../styles/creditManager.css';
 import creditManagerService from '../api/creditManagerService';
@@ -51,6 +49,7 @@ import {
 import CreditDecisionModal, { DECISION_ACTIONS, getErrorMessage } from '../components/CreditDecisionModal';
 import ReturnIssuesList from '../components/ReturnIssuesList';
 import SectionReviewBar from '../components/SectionReviewBar';
+import { useReviewSections } from '../hooks/useReviewSections';
 import { getApplicationNo, parseDate } from '../utils/formatters';
 
 const FINAL_ACTION_STEP = '15';
@@ -87,104 +86,6 @@ function useCreditManagerActingIdentity() {
     setActingIdentity(identity);
     return () => setActingIdentity(null);
   }, [identity]);
-}
-
-function readSessionList(key) {
-  try {
-    const parsed = JSON.parse(sessionStorage.getItem(key) || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-/** Array state mirrored to sessionStorage so it survives reloads while the review is in progress. */
-function useSessionList(key) {
-  const [list, setList] = useState(() => readSessionList(key));
-
-  useEffect(() => {
-    setList(readSessionList(key));
-  }, [key]);
-
-  const update = useCallback(
-    (next) => {
-      setList((prev) => {
-        const value = typeof next === 'function' ? next(prev) : next;
-        if (value.length) sessionStorage.setItem(key, JSON.stringify(value));
-        else sessionStorage.removeItem(key);
-        return value;
-      });
-    },
-    [key]
-  );
-
-  return [list, update];
-}
-
-const isSameFlag = (a, b) =>
-  a.sectionCode === b.sectionCode &&
-  a.fieldKey === b.fieldKey &&
-  a.fieldLabel.toLowerCase() === b.fieldLabel.toLowerCase();
-
-/**
- * Per-section review state: approved section ids, plus flags (step-level rejects) that are sent
- * together with "Return to Back Office". A section with a flag counts as rejected.
- */
-function useSectionReview(customerId) {
-  const [flags, setFlags] = useSessionList(`cm-pending-flags:${customerId}`);
-  const [approvedIds, setApprovedIds] = useSessionList(`cm-approved-sections:${customerId}`);
-
-  const addFlag = useCallback(
-    (step) => {
-      const sectionId = resolveReviewSectionId(step.stepNum);
-      const item = { ...buildCreditReturnItemFromStep(step), stepId: sectionId };
-      if (!item.issue) return;
-      setFlags((prev) => [...prev.filter((flag) => !isSameFlag(flag, item)), item]);
-      setApprovedIds((prev) => prev.filter((id) => id !== sectionId));
-    },
-    [setFlags, setApprovedIds]
-  );
-
-  const getStatus = useCallback(
-    (sectionId) => {
-      if (flags.some((flag) => flag.stepId === sectionId)) return 'FLAGGED';
-      if (approvedIds.includes(sectionId)) return 'APPROVED';
-      return null;
-    },
-    [flags, approvedIds]
-  );
-
-  const approve = useCallback(
-    (sectionId) => setApprovedIds((prev) => (prev.includes(sectionId) ? prev : [...prev, sectionId])),
-    [setApprovedIds]
-  );
-  const unapprove = useCallback(
-    (sectionId) => setApprovedIds((prev) => prev.filter((id) => id !== sectionId)),
-    [setApprovedIds]
-  );
-  const clearSectionFlags = useCallback(
-    (sectionId) => setFlags((prev) => prev.filter((flag) => flag.stepId !== sectionId)),
-    [setFlags]
-  );
-  const reset = useCallback(() => {
-    setFlags([]);
-    setApprovedIds([]);
-  }, [setFlags, setApprovedIds]);
-
-  const approvedCount = CREDIT_REVIEW_SECTIONS.filter((s) => getStatus(s.id) === 'APPROVED').length;
-
-  return {
-    flags,
-    setFlags,
-    addFlag,
-    getStatus,
-    approve,
-    unapprove,
-    clearSectionFlags,
-    reset,
-    approvedCount,
-    totalSections: CREDIT_REVIEW_SECTIONS.length,
-  };
 }
 
 function PendingFlagsCard({ flags, onRemove, onReturn, canReturn }) {
@@ -447,7 +348,7 @@ export default function ApplicationReview() {
   const [returnItems, setReturnItems] = useState([]);
   const [decisionLoading, setDecisionLoading] = useState(true);
   const [decisionError, setDecisionError] = useState('');
-  const review = useSectionReview(customerId);
+  const review = useReviewSections(customerId);
   const { flags: pendingFlags, setFlags: setPendingFlags, addFlag } = review;
 
   const ShieldCheckIcon = iconMap['ShieldCheck'];
@@ -603,7 +504,7 @@ export default function ApplicationReview() {
   const handleDecisionSubmit = async (action, payload) => {
     await action.call(customerId, payload);
     setActiveAction(null);
-    review.reset();
+    review.reload();
     setSuccessMessage(action.successMessage);
     refetchQueue();
     loadDecisions();
@@ -611,6 +512,11 @@ export default function ApplicationReview() {
 
   return (
     <div className="cm-workspace">
+      {review.error && (
+        <div className="cm-form-alert" role="alert">
+          <span>{review.error}</span>
+        </div>
+      )}
 
       <CustomerVerification
         viewerRole="CreditManager"

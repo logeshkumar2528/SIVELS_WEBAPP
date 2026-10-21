@@ -10,7 +10,7 @@ import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
 import Modal from '../../components/Modal/Modal';
 import { buildSectionUpdate, getSectionState } from '../applicationWizard/flowUtils';
-import { findFirstApplication, loadApplicationHeader } from '../../services/applicationApi';
+import { loadApplicationHeader, requireApplicationId } from '../../services/applicationApi';
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 
 const PROPERTY_TYPES = ['Residential', 'Commercial', 'Industrial'];
@@ -169,7 +169,7 @@ export default function FieldVerificationStep2() {
     let active = true;
     async function loadHeader() {
       try {
-        const id = requestedApplicationId || await findFirstApplication();
+        const id = requireApplicationId(requestedApplicationId);
         const header = await loadApplicationHeader(id);
         if (!active) return;
         setResolvedApplicationId(String(id));

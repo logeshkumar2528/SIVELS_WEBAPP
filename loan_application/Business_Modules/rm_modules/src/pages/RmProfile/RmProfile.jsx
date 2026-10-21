@@ -5,6 +5,8 @@ import iconMap from '../../config/iconMap';
 import { formatDate } from '../../utils/dateHelper';
 import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './RmProfile.css';
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
 import AuthImage from '../../../../../Core/src/auth/AuthImage';
 
 const API_BASE = API_BASE_URL;

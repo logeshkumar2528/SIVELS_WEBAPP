@@ -95,10 +95,10 @@ export default function SubmissionHistory() {
         if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
         const [customersResponse, agentsResponse, rmsResponse, appProdResponse] = await Promise.all([
-          apiFetch(`${API_BASE}/AgentAddCustomer`, { headers: authHeaders }),
-          apiFetch(`${API_BASE}/AgentMaster`, { headers: authHeaders }),
-          apiFetch(`${API_BASE}/RMMaster`, { headers: authHeaders }).catch(() => null),
-          apiFetch(`${API_BASE}/ApplicationProductDetails`, { headers: authHeaders }).catch(() => null),
+          apiFetch(`${API_BASE}/AgentAddCustomer/my`, { headers: authHeaders }),
+          apiFetch(`${API_BASE}/AgentMaster/my`, { headers: authHeaders }),
+          apiFetch(`${API_BASE}/RMMaster/my`, { headers: authHeaders }).catch(() => null),
+          apiFetch(`${API_BASE}/ApplicationProductDetails/my`, { headers: authHeaders }).catch(() => null),
         ]);
         if (!customersResponse.ok) throw new Error(`Failed to load submissions (${customersResponse.status})`);
         if (!agentsResponse.ok) throw new Error(`Failed to load agents (${agentsResponse.status})`);

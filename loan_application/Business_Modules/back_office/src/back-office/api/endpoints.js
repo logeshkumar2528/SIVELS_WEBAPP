@@ -11,14 +11,14 @@
  */
 
 export const BACK_OFFICE_ENDPOINTS = {
-  // Master Data
+  // Master Data (the /my lists return what the caller's role may see)
   DISTRICTS: '/District',
   DISTRICT_BY_ID: (id) => `/District/${encodeURIComponent(id)}`,
 
-  RMS: '/RMMaster',
+  RMS: '/RMMaster/my',
   RM_BY_ID: (id) => `/RMMaster/${encodeURIComponent(id)}`,
 
-  AGENTS: '/AgentMaster',
+  AGENTS: '/AgentMaster/my',
   AGENT_BY_ID: (id) => `/AgentMaster/${encodeURIComponent(id)}`,
 
   PD_VERIFICATION_TYPES: '/PDVerificationTypeMaster',
@@ -50,13 +50,13 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/ApplicationBankExistingLoanDetails/${encodeURIComponent(id)}`,
 
   // Customer / Lead Ingestion
-  CUSTOMERS: '/AgentAddCustomer',
+  CUSTOMERS: '/AgentAddCustomer/my',
   CUSTOMER_BY_ID: (id) => `/AgentAddCustomer/${encodeURIComponent(id)}`,
 
   // Full RM 12-Step Underwriting Application
   APPLICATION_FULL_DETAILS: (agentCustomerId) =>
     `/ApplicationFullDetails/${encodeURIComponent(agentCustomerId)}`,
-  PRODUCT_DETAILS: '/ApplicationProductDetails',
+  PRODUCT_DETAILS: '/ApplicationProductDetails/my',
   PRODUCT_DETAILS_BY_CUSTOMER: (agentCustomerId) =>
     `/ApplicationProductDetails/bycustomer/${encodeURIComponent(agentCustomerId)}`,
 
@@ -229,6 +229,8 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/send-to-credit-manager`,
   APPLICATION_WORKFLOW_HISTORY: (agentCustomerId) =>
     `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/history`,
+  APPLICATION_WORKFLOW_READINESS: (agentCustomerId) =>
+    `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/readiness`,
 
   // Credit Manager decisions (Approved / Rejected / ReturnedToBackOffice)
   LATEST_CREDIT_DECISION: (agentCustomerId) =>

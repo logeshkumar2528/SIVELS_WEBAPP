@@ -1,6 +1,6 @@
 import axios from "axios";
 import { API_BASE_URL, isApiUrl } from "./apiConfig";
-import { handleSessionExpired, notifyForbidden } from "../auth/authEvents";
+import { handleSessionExpired, notifyBlockedResponse, notifyForbidden } from "../auth/authEvents";
 import { getTokenForRequest, isAuthEndpoint, recoverFromUnauthorized } from "../auth/refreshSession";
 import { getAccessToken } from "../auth/tokenStore";
 
@@ -86,7 +86,12 @@ axiosInstance.interceptors.response.use(
         }
 
         case 403:
-          notifyForbidden();
+          notifyForbidden(error.response.data?.message);
+          break;
+
+        case 409:
+        case 429:
+          notifyBlockedResponse(error.response.status, error.response.data);
           break;
 
         case 404:

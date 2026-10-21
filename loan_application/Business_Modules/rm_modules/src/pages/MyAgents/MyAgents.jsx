@@ -203,9 +203,9 @@ export default function MyAgents() {
       try {
         const authHeaders = getAuthHeaders();
         const [rmResponse, agentsResponse, customerResponse] = await Promise.all([
-          apiFetch(`${API_BASE}/RMMaster`, { headers: authHeaders }),
-          apiFetch(`${API_BASE}/AgentMaster`, { headers: authHeaders }),
-          apiFetch(`${API_BASE}/AgentAddCustomer`, { headers: authHeaders }),
+          apiFetch(`${API_BASE}/RMMaster/my`, { headers: authHeaders }),
+          apiFetch(`${API_BASE}/AgentMaster/my`, { headers: authHeaders }),
+          apiFetch(`${API_BASE}/AgentAddCustomer/my`, { headers: authHeaders }),
         ]);
 
         if (!rmResponse.ok) throw new Error(`Failed to load RM data (${rmResponse.status})`);

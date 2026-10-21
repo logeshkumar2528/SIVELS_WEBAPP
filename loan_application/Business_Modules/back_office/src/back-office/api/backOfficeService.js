@@ -71,7 +71,7 @@ export const backOfficeService = {
   ========================================== */
 
   /**
-   * Retrieve all Relationship Managers globally (no user restriction).
+   * Retrieve the Relationship Managers the caller may see (all of them for Back Office).
    */
   getAllRMs: async () => {
     const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.RMS);
@@ -92,7 +92,7 @@ export const backOfficeService = {
   ========================================== */
 
   /**
-   * Retrieve all Field Agents globally.
+   * Retrieve the Field Agents the caller may see (all of them for Back Office).
    */
   getAllAgents: async () => {
     const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.AGENTS);
@@ -179,7 +179,7 @@ export const backOfficeService = {
   ========================================== */
 
   /**
-   * Retrieve all customer loan applications.
+   * Retrieve the customer loan applications in the caller's queue.
    */
   getAllCustomers: async () => {
     const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.CUSTOMERS);
@@ -1328,6 +1328,18 @@ export const backOfficeService = {
   getApplicationWorkflowHistory: async (agentCustomerId) => {
     const response = await axiosInstance.get(
       BACK_OFFICE_ENDPOINTS.APPLICATION_WORKFLOW_HISTORY(agentCustomerId)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Step 15 readiness evaluated by the server (the same checks send-to-credit-manager enforces).
+   * Resolves to { isReady, status, applicationProductDetailsId, checks: [{ code, label, passed, detail, count }] }.
+   * @param {string|number} agentCustomerId
+   */
+  getApplicationReadiness: async (agentCustomerId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_WORKFLOW_READINESS(agentCustomerId)
     );
     return unwrapResponse(response);
   },

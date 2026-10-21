@@ -43,13 +43,10 @@ export async function loadApplicationHeader(applicationId) {
   };
 }
 
-export async function findFirstApplication() {
-  const response = await apiFetch(`${API_BASE}/AgentAddCustomer`);
-  if (!response.ok) throw new Error(`Failed to load applications (${response.status})`);
-  const data = await response.json();
-  const records = Array.isArray(data) ? data : (data?.value || data?.items || data?.data || []);
-  const record = records[0];
-  const id = getApplicationId(record);
-  if (!id) throw new Error('No applications are available for field verification');
-  return String(id);
+// Field verification always works on one chosen application; it never guesses one from a list.
+export function requireApplicationId(applicationId) {
+  if (!applicationId) {
+    throw new Error('Open Field Verification from an application in New Applications.');
+  }
+  return String(applicationId);
 }

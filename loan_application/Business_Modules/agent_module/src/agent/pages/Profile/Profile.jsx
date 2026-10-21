@@ -22,6 +22,7 @@ import { agentCustomerService } from '../../../../../../Core/src/services/agentC
 import { formatDate } from '../../../../../../Core/src/utils/dateHelper'
 import './Profile.css'
 import AuthImage from '../../../../../../Core/src/auth/AuthImage';
+import './Profile.css';
 
 function isAgentRole(role) {
   if (!role) return false;

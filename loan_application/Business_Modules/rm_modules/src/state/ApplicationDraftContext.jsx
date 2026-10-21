@@ -823,9 +823,10 @@ async function mergeApplicationPeopleRows(backendResult, baseUrl, agentCustomerI
     backendResult.customer?.ApplicationProductDetailsId;
   if (!hasRecordId(productDetailsId) && !hasRecordId(agentCustomerId)) return;
 
+  const byApplication = hasRecordId(productDetailsId) ? `/by-application/${encodeURIComponent(productDetailsId)}` : '';
   const [allKycs, allPersonal] = await Promise.all([
-    fetchRecordList(`${baseUrl}/ApplicationKYCDocuments`),
-    fetchRecordList(`${baseUrl}/ApplicationPersonalInformation`),
+    fetchRecordList(`${baseUrl}/ApplicationKYCDocuments${byApplication}`),
+    fetchRecordList(`${baseUrl}/ApplicationPersonalInformation${byApplication}`),
   ]);
 
   let kycs = toRecordList(
@@ -2616,6 +2617,12 @@ export function ApplicationDraftProvider({ children }) {
           const hasCol = extractArr(backendResult.collateral ?? backendResult.Collateral ?? backendResult.collateralDetails ?? backendResult.CollateralDetails ?? backendResult.applicationCollateralDetails ?? backendResult.ApplicationCollateralDetails).length > 0;
 
           if (!hasProd || !hasKycs || !hasPersonal || !hasAddress || !hasEmp || !hasBank || !hasCol) {
+            const knownProdId =
+              backendResult.productDetails?.applicationProductDetailsId ??
+              backendResult.productDetails?.ApplicationProductDetailsId ??
+              backendResult.customer?.applicationProductDetailsId ??
+              backendResult.customer?.ApplicationProductDetailsId;
+            const byApplication = knownProdId ? `/by-application/${encodeURIComponent(knownProdId)}` : '';
             const [
               prodRes,
               kycRes,
@@ -2625,9 +2632,9 @@ export function ApplicationDraftProvider({ children }) {
               bankRes,
               colRes
             ] = await Promise.allSettled([
-              !hasProd ? apiFetch(`${baseUrl}/ApplicationProductDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
-              !hasKycs ? apiFetch(`${baseUrl}/ApplicationKYCDocuments`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
-              !hasPersonal ? apiFetch(`${baseUrl}/ApplicationPersonalInformation`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasProd ? apiFetch(`${baseUrl}/ApplicationProductDetails/my`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasKycs ? apiFetch(`${baseUrl}/ApplicationKYCDocuments${byApplication}`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
+              !hasPersonal ? apiFetch(`${baseUrl}/ApplicationPersonalInformation${byApplication}`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
               !hasAddress ? apiFetch(`${baseUrl}/ApplicationAddressDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
               !hasEmp ? apiFetch(`${baseUrl}/ApplicationEmploymentIncomeDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
               !hasBank ? apiFetch(`${baseUrl}/ApplicationBankExistingLoanDetails`).then((r) => r.ok ? r.json() : null) : Promise.resolve(null),
@@ -2932,6 +2939,56 @@ export function ApplicationDraftProvider({ children }) {
       {children}
     </ApplicationDraftContext.Provider>
   );
+}
+
+const EDITABLE_STATE = Object.freeze({ canEdit: true, reason: '', enforced: false, status: null, loading: false });
+
+/**
+ * Whether the signed-in user may still edit the application at its current stage
+ * (GET /ApplicationWorkflow/{id}/edit-state). Unsaved drafts and failed lookups count as editable;
+ * the server still rejects locked saves with 409 APPLICATION_LOCKED.
+ * Pass area 'documents' for document uploads: the server keeps them open at status 2 while
+ * Back Office has documents returned to the RM, even though the rest of the application is locked.
+ */
+export function useApplicationEditState(applicationId, area) {
+  const [state, setState] = useState(EDITABLE_STATE);
+
+  useEffect(() => {
+    const id = Number(applicationId);
+    if (!Number.isInteger(id) || id <= 0) {
+      setState(EDITABLE_STATE);
+      return undefined;
+    }
+
+    let active = true;
+    setState({ ...EDITABLE_STATE, loading: true });
+    const query = area ? `?area=${encodeURIComponent(area)}` : '';
+    apiFetch(`${API_BASE_URL}/ApplicationWorkflow/${id}/edit-state${query}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!active) return;
+        setState(
+          data
+            ? {
+                canEdit: data.canEdit !== false,
+                reason: data.reason || '',
+                enforced: Boolean(data.enforced),
+                status: data.status ?? null,
+                loading: false,
+              }
+            : EDITABLE_STATE
+        );
+      })
+      .catch(() => {
+        if (active) setState(EDITABLE_STATE);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [applicationId, area]);
+
+  return state;
 }
 
 export function useApplicationDraftStore() {
