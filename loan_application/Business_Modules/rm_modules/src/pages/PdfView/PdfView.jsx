@@ -185,6 +185,157 @@ function isObsoleteMock(val) {
   );
 }
 
+const getValCaseInsensitive = (obj, field) => {
+  if (!obj || !field) return undefined;
+  if (obj[field] !== undefined) return obj[field];
+  const target = field.toLowerCase();
+  const foundKey = Object.keys(obj).find((k) => k.toLowerCase() === target);
+  return foundKey ? obj[foundKey] : undefined;
+};
+
+const fetchMaster = async (endpoint, idField, nameField) => {
+  try {
+    const token = getAccessToken();
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await apiFetch(`${API_BASE}/${endpoint}`, { headers });
+    if (res.ok) {
+      const data = await res.json();
+      const rows = extractArray(data);
+      const map = {};
+      rows.forEach((r) => {
+        const id = getValCaseInsensitive(r, idField);
+        const name = getValCaseInsensitive(r, nameField);
+        if (id !== undefined && id !== null && name !== undefined && name !== null) {
+          const trimmedName = String(name).trim();
+          map[id] = trimmedName;
+          map[String(id)] = trimmedName;
+          const numId = Number(id);
+          if (!isNaN(numId)) {
+            map[numId] = trimmedName;
+          }
+        }
+      });
+      return map;
+    }
+  } catch (err) {
+    console.warn(`Failed to fetch master from ${endpoint}:`, err);
+    return {};
+  }
+  return {};
+};
+
+const isReadableString = (v) => {
+  if (v === null || v === undefined) return false;
+  const s = String(v).trim();
+  if (s === '' || s === '-' || s === '—') return false;
+  return isNaN(Number(s));
+};
+
+const resolveFromMaster = (val, masterMap, payloadName, isMastersLoading) => {
+  if (isReadableString(payloadName)) {
+    return String(payloadName).trim();
+  }
+  if (val === null || val === undefined || String(val).trim() === '') {
+    return '-';
+  }
+  if (isReadableString(val)) {
+    return String(val).trim();
+  }
+  if (masterMap) {
+    if (masterMap[val] !== undefined && masterMap[val] !== null && String(masterMap[val]).trim() !== '') {
+      return String(masterMap[val]).trim();
+    }
+    const strVal = String(val).trim();
+    if (masterMap[strVal] !== undefined && masterMap[strVal] !== null && String(masterMap[strVal]).trim() !== '') {
+      return String(masterMap[strVal]).trim();
+    }
+  }
+  if (isMastersLoading) {
+    return '-';
+  }
+  return '-';
+};
+
+let globalMastersPromise = null;
+
+const getMasterMapsPromise = () => {
+  if (!globalMastersPromise) {
+    globalMastersPromise = (async () => {
+      const [
+        sourcingMap,
+        prodMap,
+        purposeMap,
+        variationMap,
+        titleMap,
+        casteMap,
+        genderMap,
+        maritalMap,
+        relMap,
+        religionMap,
+        docTypeMap,
+        verifMap,
+        bankMap,
+        propertyMap,
+        propertyUsageMap,
+        empTypeMap,
+        eduMap,
+        industryTypeMap,
+        cityMap,
+        stateMap,
+      ] = await Promise.allSettled([
+        fetchMaster('SourcingChannelMaster', 'sourcingChannelId', 'sourcingChannelName'),
+        fetchMaster('LoanProductMaster', 'loanProductId', 'productName'),
+        fetchMaster('LoanPurposeMaster', 'loanPurposeId', 'purposeName'),
+        fetchMaster('LoanProductVariationMaster', 'loanProductVariationId', 'variationName'),
+        fetchMaster('TitleMaster', 'titleId', 'titleName'),
+        fetchMaster('masters/CasteMaster', 'casteId', 'casteName'),
+        fetchMaster('gender', 'genderId', 'genderName'),
+        fetchMaster('marital-status', 'maritalStatusId', 'maritalStatusName'),
+        fetchMaster('RelationshipMaster', 'relationshipId', 'relationshipName'),
+        fetchMaster('masters/ReligionMaster', 'religionId', 'religionName'),
+        fetchMaster('DocumentTypeMaster', 'documentTypeId', 'documentTypeName'),
+        fetchMaster('VerificationMaster', 'verificationId', 'verificationName'),
+        fetchMaster('masters/bank/active', 'bankId', 'bankName'),
+        fetchMaster('PropertyMaster', 'propertyId', 'propertyName'),
+        fetchMaster('PropertyUsageMaster', 'propertyUsageId', 'propertyUsageName'),
+        fetchMaster('EmploymentType', 'employmentTypeId', 'employmentTypeName'),
+        fetchMaster('EducationMaster', 'educationId', 'educationName'),
+        fetchMaster('masters/IndustryTypeMaster', 'industryTypeId', 'industryTypeName'),
+        fetchMaster('City', 'cityId', 'cityName'),
+        fetchMaster('State', 'stateId', 'stateName'),
+      ]);
+
+      return {
+        sourcingChannels: sourcingMap.status === 'fulfilled' ? sourcingMap.value : {},
+        loanProducts: prodMap.status === 'fulfilled' ? prodMap.value : {},
+        loanPurposes: purposeMap.status === 'fulfilled' ? purposeMap.value : {},
+        loanVariations: variationMap.status === 'fulfilled' ? variationMap.value : {},
+        titles: titleMap.status === 'fulfilled' ? titleMap.value : {},
+        genders: genderMap.status === 'fulfilled' ? genderMap.value : {},
+        castes: casteMap.status === 'fulfilled' ? casteMap.value : {},
+        religions: religionMap.status === 'fulfilled' ? religionMap.value : {},
+        maritalStatuses: maritalMap.status === 'fulfilled' ? maritalMap.value : {},
+        relationships: relMap.status === 'fulfilled' ? relMap.value : {},
+        documentTypes: docTypeMap.status === 'fulfilled' ? docTypeMap.value : {},
+        verifications: verifMap.status === 'fulfilled' ? verifMap.value : {},
+        banks: bankMap.status === 'fulfilled' ? bankMap.value : {},
+        properties: propertyMap.status === 'fulfilled' ? propertyMap.value : {},
+        propertyUsages: propertyUsageMap.status === 'fulfilled' ? propertyUsageMap.value : {},
+        employmentTypes: empTypeMap.status === 'fulfilled' ? empTypeMap.value : {},
+        educations: eduMap.status === 'fulfilled' ? eduMap.value : {},
+        industryTypes: industryTypeMap.status === 'fulfilled' ? industryTypeMap.value : {},
+        cities: cityMap.status === 'fulfilled' ? cityMap.value : {},
+        states: stateMap.status === 'fulfilled' ? stateMap.value : {},
+      };
+    })().catch((err) => {
+      globalMastersPromise = null;
+      throw err;
+    });
+  }
+  return globalMastersPromise;
+};
+
 export default function PdfView() {
   const params = useParams();
   const { showLoader, hideLoader, withLoading } = useLoading();
@@ -226,6 +377,7 @@ export default function PdfView() {
   // Co-Applicant Address Proof images keyed by applicantSequence (1, 2, ...)
   const [coApplicantProofPhotos, setCoApplicantProofPhotos] = useState({});
   const [isProofPhotosDownloading, setIsProofPhotosDownloading] = useState(false);
+  const [isMastersLoading, setIsMastersLoading] = useState(true);
   const [isMetadataLoading, setIsMetadataLoading] = useState(true);
   const [isDocsDownloading, setIsDocsDownloading] = useState(true);
   const [isCoPhotosLoading, setIsCoPhotosLoading] = useState(false);
@@ -268,6 +420,30 @@ export default function PdfView() {
     };
   }, []);
 
+  // Immediately start loading master maps on mount in parallel
+  useEffect(() => {
+    let active = true;
+    setIsMastersLoading(true);
+
+    getMasterMapsPromise()
+      .then((maps) => {
+        if (active) {
+          setMasterMaps(maps);
+          setIsMastersLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed loading masters in PdfView:', err);
+        if (active) {
+          setIsMastersLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   useEffect(() => {
     let active = true;
 
@@ -288,52 +464,9 @@ export default function PdfView() {
         const authHeaders = {};
         if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
-        const fetchMaster = async (endpoint, idField, nameField) => {
-          try {
-            const res = await apiFetch(`${API_BASE}/${endpoint}`, { headers: authHeaders });
-            if (res.ok) {
-              const data = await res.json();
-              const rows = extractArray(data);
-              const map = {};
-              rows.forEach((r) => {
-                const id = r[idField] ?? r[idField.charAt(0).toUpperCase() + idField.slice(1)] ?? r[idField.toLowerCase()];
-                const name = r[nameField] ?? r[nameField.charAt(0).toUpperCase() + nameField.slice(1)] ?? r[nameField.toLowerCase()];
-                if (id !== undefined && id !== null) {
-                  map[id] = name;
-                  map[String(id)] = name;
-                }
-              });
-              return map;
-            }
-          } catch {
-            return {};
-          }
-          return {};
-        };
-
         const [
           custRes,
           rmRes,
-          sourcingMap,
-          prodMap,
-          purposeMap,
-          variationMap,
-          titleMap,
-          casteMap,
-          genderMap,
-          maritalMap,
-          relMap,
-          religionMap,
-          docTypeMap,
-          verifMap,
-          bankMap,
-          propertyMap,
-          propertyUsageMap,
-          empTypeMap,
-          eduMap,
-          industryTypeMap,
-          cityMap,
-          stateMap,
           empDetailsRes,
           addrDetailsRes,
           persInfoRes,
@@ -345,26 +478,6 @@ export default function PdfView() {
         ] = await Promise.allSettled([
           apiFetch(`${API_BASE}/AgentAddCustomer/${applicationId}`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
           apiFetch(`${API_BASE}/RMMaster/my`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
-          fetchMaster('SourcingChannelMaster', 'sourcingChannelId', 'sourcingChannelName'),
-          fetchMaster('LoanProductMaster', 'loanProductId', 'productName'),
-          fetchMaster('LoanPurposeMaster', 'loanPurposeId', 'purposeName'),
-          fetchMaster('LoanProductVariationMaster', 'loanProductVariationId', 'variationName'),
-          fetchMaster('TitleMaster', 'titleID', 'titleName'),
-          fetchMaster('masters/CasteMaster', 'casteId', 'casteName'),
-          fetchMaster('gender', 'genderId', 'genderName'),
-          fetchMaster('marital-status', 'maritalStatusId', 'maritalStatusName'),
-          fetchMaster('RelationshipMaster', 'relationshipId', 'relationshipName'),
-          fetchMaster('masters/ReligionMaster', 'religionId', 'religionName'),
-          fetchMaster('DocumentTypeMaster', 'documentTypeId', 'documentTypeName'),
-          fetchMaster('VerificationMaster', 'verificationId', 'verificationName'),
-          fetchMaster('masters/bank/active', 'bankId', 'bankName'),
-          fetchMaster('PropertyMaster', 'propertyId', 'propertyName'),
-          fetchMaster('PropertyUsageMaster', 'propertyUsageId', 'propertyUsageName'),
-          fetchMaster('EmploymentType', 'employmentTypeId', 'employmentTypeName'),
-          fetchMaster('EducationMaster', 'educationId', 'educationName'),
-          fetchMaster('masters/IndustryTypeMaster', 'industryTypeId', 'industryTypeName'),
-          fetchMaster('City', 'cityId', 'cityName'),
-          fetchMaster('State', 'stateId', 'stateName'),
           apiFetch(`${API_BASE}/ApplicationEmploymentIncomeDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
           apiFetch(`${API_BASE}/ApplicationAddressDetails`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
           apiFetch(`${API_BASE}/ApplicationPersonalInformation`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)),
@@ -775,7 +888,9 @@ export default function PdfView() {
             return {
               personalInformationId: p.personalInformationId ?? p.PersonalInformationId ?? null,
               relationshipWithApplicant: p.relationshipId ?? p.RelationshipId ?? '',
-              title: p.titleId ?? p.TitleId ?? '',
+              relationshipName: p.relationshipName ?? p.RelationshipName ?? '',
+              title: p.titleId ?? p.TitleId ?? p.titleID ?? p.TitleID ?? '',
+              titleName: p.titleName ?? p.TitleName ?? '',
               firstName: p.firstName ?? p.FirstName ?? '',
               middleName: p.middleName ?? p.MiddleName ?? '',
               lastName: p.lastName ?? p.LastName ?? '',
@@ -783,9 +898,14 @@ export default function PdfView() {
               mothersMaidenName: p.mothersMaidenName ?? p.MothersMaidenName ?? '',
               dateOfBirth: p.dateOfBirth ? String(p.dateOfBirth).slice(0, 10) : '',
               religion: p.religionId ?? p.ReligionId ?? '',
+              religionName: p.religionName ?? p.ReligionName ?? '',
               category: p.casteId ?? p.CasteId ?? '',
+              categoryName: p.casteName ?? p.CasteName ?? p.categoryName ?? p.CategoryName ?? '',
+              casteName: p.casteName ?? p.CasteName ?? p.categoryName ?? p.CategoryName ?? '',
               gender: p.genderId ?? p.GenderId ?? '',
+              genderName: p.genderName ?? p.GenderName ?? '',
               maritalStatus: p.maritalStatusId ?? p.MaritalStatusId ?? '',
+              maritalStatusName: p.maritalStatusName ?? p.MaritalStatusName ?? '',
               mobileNo: p.mobileNumber ?? p.MobileNumber ?? p.mobileNo ?? '',
               emailId: p.emailId ?? p.EmailId ?? '',
             };
@@ -797,7 +917,9 @@ export default function PdfView() {
             const addressLine2 = a.addressLine2 ?? a.AddressLine2 ?? '';
             const landmark = a.landmark ?? a.Landmark ?? '';
             const city = a.cityId ?? a.CityId ?? a.city ?? a.City ?? '';
+            const cityName = a.cityName ?? a.CityName ?? '';
             const state = a.stateId ?? a.StateId ?? a.state ?? a.State ?? '';
+            const stateName = a.stateName ?? a.StateName ?? '';
             const pincode = a.pincode ?? a.Pincode ?? a.postalCode ?? a.PostalCode ?? a.pinCode ?? a.PinCode ?? '';
             const rawMailing = a.mailingAsCurrent ?? a.MailingAsCurrent ?? a.mailingSameAsCurrent ?? a.MailingSameAsCurrent;
             const mailingSameAsCurrent = rawMailing !== undefined && rawMailing !== null && rawMailing !== ''
@@ -809,8 +931,10 @@ export default function PdfView() {
               landmark,
               city,
               cityId: city,
+              cityName,
               state,
               stateId: state,
+              stateName,
               pincode,
               mailingSameAsCurrent,
               current: {
@@ -819,8 +943,10 @@ export default function PdfView() {
                 landmark,
                 city,
                 cityId: city,
+                cityName,
                 state,
                 stateId: state,
+                stateName,
                 pincode,
               },
             };
@@ -838,9 +964,12 @@ export default function PdfView() {
               employmentNature: e.employmentTypeId ?? e.EmploymentTypeId ?? '',
               employmentType: e.employmentTypeId ?? e.EmploymentTypeId ?? '',
               employmentTypeId: e.employmentTypeId ?? e.EmploymentTypeId ?? '',
+              employmentTypeName: e.employmentTypeName || e.EmploymentTypeName || '',
               qualification: e.educationId ?? e.EducationId ?? '',
               educationId: e.educationId ?? e.EducationId ?? '',
+              educationName: e.educationName || e.EducationName || e.qualificationName || e.QualificationName || '',
               industryType: e.industryType || e.IndustryType || '',
+              industryTypeName: e.industryTypeName || e.IndustryTypeName || '',
               totalExperienceYears: e.totalExperience ?? e.TotalExperience ?? '',
               totalExperience: e.totalExperience ?? e.TotalExperience ?? '',
               grossMonthlyIncome: e.grossMonthlyIncome ?? e.GrossMonthlyIncome ?? '',
@@ -853,7 +982,8 @@ export default function PdfView() {
 
           const transformBank = (b) => {
             if (!b) return null;
-            const bankName = b.bankId ?? b.BankId ?? b.bankName ?? b.BankName ?? '';
+            const bankId = b.bankId ?? b.BankId ?? '';
+            const bankName = b.bankName ?? b.BankName ?? '';
             const branch = b.bankBranchId ?? b.BankBranchId ?? b.branch ?? b.Branch ?? '';
             const accountNumber = b.accountNumber ?? b.AccountNumber ?? '';
             const accountHolderName = b.accountHolderName ?? b.AccountHolderName ?? '';
@@ -864,8 +994,8 @@ export default function PdfView() {
             const isPrimaryBank = b.isPrimaryBank ?? b.IsPrimaryBank ?? false;
             return {
               applicationBankExistingLoanDetailsId: b.applicationBankExistingLoanDetailsId ?? b.ApplicationBankExistingLoanDetailsId ?? null,
-              bankName,
-              bankId: bankName,
+              bankId: bankId || bankName,
+              bankName: bankName,
               branch,
               bankBranchId: branch,
               accountNumber,
@@ -1003,7 +1133,8 @@ export default function PdfView() {
               matchedProduct?.ApplicationProductDetailsId ??
               appData.applicationProductDetailsId ??
               null;
-            const categoryMap = docTypeMap.status === 'fulfilled' ? docTypeMap.value || {} : {};
+            const mastersForProofs = await getMasterMapsPromise();
+            const categoryMap = mastersForProofs?.documentTypes || masterMaps?.documentTypes || {};
             proofsRequested = true;
             loadCustomerProofs({
               customerId: resolvedCustomerId,
@@ -1070,28 +1201,8 @@ export default function PdfView() {
             setLiveRM(resolvedOwnership);
           }
 
-          setMasterMaps({
-            sourcingChannels: sourcingMap.status === 'fulfilled' ? sourcingMap.value : {},
-            loanProducts: prodMap.status === 'fulfilled' ? prodMap.value : {},
-            loanPurposes: purposeMap.status === 'fulfilled' ? purposeMap.value : {},
-            loanVariations: variationMap.status === 'fulfilled' ? variationMap.value : {},
-            titles: titleMap.status === 'fulfilled' ? titleMap.value : {},
-            genders: genderMap.status === 'fulfilled' ? genderMap.value : {},
-            castes: casteMap.status === 'fulfilled' ? casteMap.value : {},
-            religions: religionMap.status === 'fulfilled' ? religionMap.value : {},
-            maritalStatuses: maritalMap.status === 'fulfilled' ? maritalMap.value : {},
-            relationships: relMap.status === 'fulfilled' ? relMap.value : {},
-            documentTypes: docTypeMap.status === 'fulfilled' ? docTypeMap.value : {},
-            verifications: verifMap.status === 'fulfilled' ? verifMap.value : {},
-            banks: bankMap.status === 'fulfilled' ? bankMap.value : {},
-            properties: propertyMap.status === 'fulfilled' ? propertyMap.value : {},
-            propertyUsages: propertyUsageMap.status === 'fulfilled' ? propertyUsageMap.value : {},
-            employmentTypes: empTypeMap.status === 'fulfilled' ? empTypeMap.value : {},
-            educations: eduMap.status === 'fulfilled' ? eduMap.value : {},
-            industryTypes: industryTypeMap.status === 'fulfilled' ? industryTypeMap.value : {},
-            cities: cityMap.status === 'fulfilled' ? cityMap.value : {},
-            states: stateMap.status === 'fulfilled' ? stateMap.value : {},
-          });
+          const resolvedMasters = await getMasterMapsPromise();
+          setMasterMaps(resolvedMasters);
           setIsMetadataLoading(false);
         }
 
@@ -1241,6 +1352,7 @@ export default function PdfView() {
   const [errorPopup, setErrorPopup] = useState(null);
 
   const isPdfMediaReady =
+    !isMastersLoading &&
     !isMetadataLoading &&
     !isDocsDownloading &&
     !isCoPhotosLoading &&
@@ -1427,111 +1539,52 @@ export default function PdfView() {
   };
 
   // Master resolvers
-  const resolveSourcingChannel = (val) => masterMaps.sourcingChannels[val] || val || '';
-  const resolveLoanProduct = (val) => masterMaps.loanProducts[val] || appData.loanProductDisplay || val || '';
-  const resolveLoanVariation = (val) => {
-    if (val === null || val === undefined || val === '') return '';
-    return masterMaps.loanVariations?.[val] || masterMaps.loanVariations?.[String(val)] || '';
+  const resolveSourcingChannel = (val, name) => resolveFromMaster(val, masterMaps.sourcingChannels, name, isMastersLoading);
+  const resolveLoanProduct = (val, name) => {
+    const res = resolveFromMaster(val, masterMaps.loanProducts, name || appData.loanProductDisplay, isMastersLoading);
+    return res === '-' ? (appData.loanProductDisplay || '-') : res;
   };
-  const resolveLoanPurpose = (val) => masterMaps.loanPurposes[val] || appData.loanType || val || '';
-  const resolveTitle = (val) => masterMaps.titles[val] || val || '';
-  const resolveGender = (val) => masterMaps.genders[val] || val || '';
-  const resolveCategory = (val) => masterMaps.castes[val] || val || '';
-  const resolveReligion = (val) => masterMaps.religions[val] || val || '';
-  const resolveMaritalStatus = (val) => masterMaps.maritalStatuses[val] || val || '';
-  const resolveRelationship = (val) => {
-    if (val === null || val === undefined || val === '') return '';
-    if (masterMaps.relationships && (masterMaps.relationships[val] !== undefined || masterMaps.relationships[String(val)] !== undefined)) {
-      return masterMaps.relationships[val] || masterMaps.relationships[String(val)] || '';
-    }
-    return String(val);
+  const resolveLoanVariation = (val, name) => {
+    if (val === null || val === undefined || String(val).trim() === '') return '';
+    const res = resolveFromMaster(val, masterMaps.loanVariations, name, isMastersLoading);
+    return res === '-' ? '' : res;
   };
-  const resolveVerification = (val) => {
-    if (val === null || val === undefined || val === '') return 'Verified';
-    if (masterMaps.verifications && (masterMaps.verifications[val] !== undefined || masterMaps.verifications[String(val)] !== undefined)) {
-      return masterMaps.verifications[val] || masterMaps.verifications[String(val)] || 'Verified';
-    }
-    return String(val);
+  const resolveLoanPurpose = (val, name) => {
+    const res = resolveFromMaster(val, masterMaps.loanPurposes, name || appData.loanType || liveCustomer?.loanPurposeName, isMastersLoading);
+    return res === '-' ? (appData.loanType || liveCustomer?.loanPurposeName || '-') : res;
   };
-  const resolveDocType = (val) => {
-    if (val === undefined || val === null || val === '') return '';
-    if (masterMaps.documentTypes && (masterMaps.documentTypes[val] || masterMaps.documentTypes[String(val)])) {
-      return masterMaps.documentTypes[val] || masterMaps.documentTypes[String(val)];
-    }
-    const num = Number(val);
-    if (num === 1) return 'Aadhaar';
-    if (num === 2) return 'PAN Card';
-    if (num === 3) return 'Bank Statement';
-    if (num === 4) return 'Salary Slip';
-    if (num === 6) return 'Photo';
-    return String(val);
+  const resolveTitle = (val, name) => resolveFromMaster(val, masterMaps.titles, name, isMastersLoading);
+  const resolveGender = (val, name) => resolveFromMaster(val, masterMaps.genders, name, isMastersLoading);
+  const resolveCategory = (val, name) => resolveFromMaster(val, masterMaps.castes, name, isMastersLoading);
+  const resolveReligion = (val, name) => resolveFromMaster(val, masterMaps.religions, name, isMastersLoading);
+  const resolveMaritalStatus = (val, name) => resolveFromMaster(val, masterMaps.maritalStatuses, name, isMastersLoading);
+  const resolveRelationship = (val, name) => resolveFromMaster(val, masterMaps.relationships, name, isMastersLoading);
+  const resolveVerification = (val, name) => {
+    if (val === null || val === undefined || String(val).trim() === '') return 'Verified';
+    const res = resolveFromMaster(val, masterMaps.verifications, name, isMastersLoading);
+    return res === '-' ? 'Verified' : res;
   };
-  const resolveBank = (val) => {
-    if (val === null || val === undefined || val === '') return '';
-    if (masterMaps.banks && masterMaps.banks[val] !== undefined) {
-      return masterMaps.banks[val];
-    }
-    if (masterMaps.banks && masterMaps.banks[String(val)] !== undefined) {
-      return masterMaps.banks[String(val)];
-    }
-    return val;
+  const resolveDocType = (val, name) => {
+    if (val === null || val === undefined || String(val).trim() === '') return '';
+    const res = resolveFromMaster(val, masterMaps.documentTypes, name, isMastersLoading);
+    return res === '-' ? '' : res;
   };
-  const resolveProperty = (val) => {
-    if (val === null || val === undefined || val === '') return '';
-    if (masterMaps.properties && masterMaps.properties[val] !== undefined) {
-      return masterMaps.properties[val];
-    }
-    if (masterMaps.properties && masterMaps.properties[String(val)] !== undefined) {
-      return masterMaps.properties[String(val)];
-    }
-    return val;
+  const resolveBank = (val, name) => resolveFromMaster(val, masterMaps.banks, name, isMastersLoading);
+  const resolveProperty = (val, name) => resolveFromMaster(val, masterMaps.properties, name, isMastersLoading);
+  const resolvePropertyUsage = (val, name) => resolveFromMaster(val, masterMaps.propertyUsages, name, isMastersLoading);
+  const resolveEmploymentType = (val, name) => resolveFromMaster(val, masterMaps.employmentTypes, name, isMastersLoading);
+  const resolveEducation = (val, name) => resolveFromMaster(val, masterMaps.educations, name, isMastersLoading);
+  const resolveIndustryType = (val, name) => {
+    const res = resolveFromMaster(val, masterMaps.industryTypes, name, isMastersLoading);
+    return res || '-';
   };
-
-  const resolvePropertyUsage = (val) => {
-    if (val === null || val === undefined || val === '') return '';
-    if (masterMaps.propertyUsages && masterMaps.propertyUsages[val] !== undefined) {
-      return masterMaps.propertyUsages[val];
-    }
-    if (masterMaps.propertyUsages && masterMaps.propertyUsages[String(val)] !== undefined) {
-      return masterMaps.propertyUsages[String(val)];
-    }
-    return val;
+  const resolveCity = (val, name) => {
+    const res = resolveFromMaster(val, masterMaps.cities, name, isMastersLoading);
+    return res === '-' ? '' : res;
   };
-
-  const resolveEmploymentType = (val) => {
-    if (val === null || val === undefined || val === '') return '';
-    if (masterMaps.employmentTypes && (masterMaps.employmentTypes[val] !== undefined || masterMaps.employmentTypes[String(val)] !== undefined)) {
-      return masterMaps.employmentTypes[val] || masterMaps.employmentTypes[String(val)];
-    }
-    return String(val);
-  };
-  const resolveEducation = (val) => {
-    if (val === null || val === undefined || val === '') return '';
-    if (masterMaps.educations && (masterMaps.educations[val] !== undefined || masterMaps.educations[String(val)] !== undefined)) {
-      return masterMaps.educations[val] || masterMaps.educations[String(val)];
-    }
-    return String(val);
-  };
-  const resolveIndustryType = (val) => {
-    if (val === null || val === undefined || val === '') return '-';
-    if (masterMaps.industryTypes && (masterMaps.industryTypes[val] !== undefined || masterMaps.industryTypes[String(val)] !== undefined)) {
-      return masterMaps.industryTypes[val] || masterMaps.industryTypes[String(val)];
-    }
-    return String(val);
-  };
-  const resolveCity = (val) => {
-    if (val === null || val === undefined || val === '') return '';
-    if (masterMaps.cities && (masterMaps.cities[val] !== undefined || masterMaps.cities[String(val)] !== undefined)) {
-      return masterMaps.cities[val] || masterMaps.cities[String(val)];
-    }
-    return String(val);
-  };
-  const resolveState = (val) => {
-    if (val === null || val === undefined || val === '') return '';
-    if (masterMaps.states && (masterMaps.states[val] !== undefined || masterMaps.states[String(val)] !== undefined)) {
-      return masterMaps.states[val] || masterMaps.states[String(val)];
-    }
-    return String(val);
+  const resolveState = (val, name) => {
+    const res = resolveFromMaster(val, masterMaps.states, name, isMastersLoading);
+    return res === '-' ? '' : res;
   };
 
   const formatCurrencyOrDash = (val) => {
@@ -2970,14 +3023,14 @@ export default function PdfView() {
               <div className="pdf-office-row">
                 <span className="pdf-office-label">Loan Product:</span>
                 <div className="pdf-office-value">
-                  {resolveLoanProduct(appData.loanProduct)}
+                  {resolveLoanProduct(appData.loanProduct, appData.loanProductDisplay)}
                   {resolveLoanVariation(appData.loanVariation) ? ` - ${resolveLoanVariation(appData.loanVariation)}` : ''}
                 </div>
               </div>
               <div className="pdf-office-row">
                 <span className="pdf-office-label">Purpose of Loan:</span>
                 <div className="pdf-office-value">
-                  {resolveLoanPurpose(appData.purposeOfLoan || appData.loanType || liveCustomer?.loanPurposeName)}
+                  {resolveLoanPurpose(appData.purposeOfLoan || appData.loanType || liveCustomer?.loanPurposeName, liveCustomer?.loanPurposeName || appData.loanType)}
                 </div>
               </div>
               <div className="pdf-office-row">
@@ -3069,8 +3122,8 @@ export default function PdfView() {
             <tbody>
               <tr>
                 <td>Title</td>
-                <td>{resolveTitle(applicant.title) || '-'}</td>
-                {hasCoApplicants && coApplicants.map((co, i) => <td key={i}>{resolveTitle(co.title) || '-'}</td>)}
+                <td>{resolveTitle(applicant.title, applicant.titleName) || '-'}</td>
+                {hasCoApplicants && coApplicants.map((co, i) => <td key={i}>{resolveTitle(co.title, co.titleName) || '-'}</td>)}
               </tr>
               <tr>
                 <td>First Name</td>
@@ -3104,24 +3157,24 @@ export default function PdfView() {
               </tr>
               <tr>
                 <td>Gender</td>
-                <td>{resolveGender(applicant.gender) || '-'}</td>
-                {hasCoApplicants && coApplicants.map((co, i) => <td key={i}>{resolveGender(co.gender) || '-'}</td>)}
+                <td>{resolveGender(applicant.gender, applicant.genderName) || '-'}</td>
+                {hasCoApplicants && coApplicants.map((co, i) => <td key={i}>{resolveGender(co.gender, co.genderName) || '-'}</td>)}
               </tr>
               <tr>
                 <td>Marital Status</td>
-                <td>{resolveMaritalStatus(applicant.maritalStatus) || '-'}</td>
+                <td>{resolveMaritalStatus(applicant.maritalStatus, applicant.maritalStatusName) || '-'}</td>
                 {hasCoApplicants &&
-                  coApplicants.map((co, i) => <td key={i}>{resolveMaritalStatus(co.maritalStatus) || '-'}</td>)}
+                  coApplicants.map((co, i) => <td key={i}>{resolveMaritalStatus(co.maritalStatus, co.maritalStatusName) || '-'}</td>)}
               </tr>
               <tr>
                 <td>Category</td>
-                <td>{resolveCategory(applicant.category) || '-'}</td>
-                {hasCoApplicants && coApplicants.map((co, i) => <td key={i}>{resolveCategory(co.category) || '-'}</td>)}
+                <td>{resolveCategory(applicant.category, applicant.categoryName || applicant.casteName) || '-'}</td>
+                {hasCoApplicants && coApplicants.map((co, i) => <td key={i}>{resolveCategory(co.category, co.categoryName || co.casteName) || '-'}</td>)}
               </tr>
               <tr>
                 <td>Religion</td>
-                <td>{resolveReligion(applicant.religion) || '-'}</td>
-                {hasCoApplicants && coApplicants.map((co, i) => <td key={i}>{resolveReligion(co.religion) || '-'}</td>)}
+                <td>{resolveReligion(applicant.religion, applicant.religionName) || '-'}</td>
+                {hasCoApplicants && coApplicants.map((co, i) => <td key={i}>{resolveReligion(co.religion, co.religionName) || '-'}</td>)}
               </tr>
               <tr>
                 <td>Mobile No</td>
@@ -3138,7 +3191,7 @@ export default function PdfView() {
                 <td>SELF</td>
                 {hasCoApplicants &&
                   coApplicants.map((co, i) => (
-                    <td key={i}>{resolveRelationship(co.relationshipWithApplicant) || '-'}</td>
+                    <td key={i}>{resolveRelationship(co.relationshipWithApplicant, co.relationshipName) || '-'}</td>
                   ))}
               </tr>
             </tbody>
@@ -3172,10 +3225,10 @@ export default function PdfView() {
               </tr>
               <tr>
                 <td>Identity Doc Type</td>
-                <td>{resolveDocType(kycData.applicant?.identityDocumentType) || '-'}</td>
+                <td>{resolveDocType(kycData.applicant?.identityDocumentType, kycData.applicant?.identityDocumentTypeName) || '-'}</td>
                 {hasCoApplicants &&
                   coApplicantKycRows.map((row, i) => (
-                    <td key={i}>{resolveDocType(row.identityDocumentType) || '-'}</td>
+                    <td key={i}>{resolveDocType(row.identityDocumentType, row.identityDocumentTypeName) || '-'}</td>
                   ))}
               </tr>
               <tr>
@@ -3186,10 +3239,10 @@ export default function PdfView() {
               </tr>
               <tr>
                 <td>Verification Status</td>
-                <td>{resolveVerification(kycData.applicant?.verificationStatus) || '-'}</td>
+                <td>{resolveVerification(kycData.applicant?.verificationStatus, kycData.applicant?.verificationStatusName) || 'Verified'}</td>
                 {hasCoApplicants &&
                   coApplicantKycRows.map((row, i) => (
-                    <td key={i}>{resolveVerification(row.verificationStatus) || 'Pending'}</td>
+                    <td key={i}>{resolveVerification(row.verificationStatus, row.verificationStatusName) || 'Pending'}</td>
                   ))}
               </tr>
             </tbody>
@@ -3323,8 +3376,8 @@ export default function PdfView() {
                 <td>City & State</td>
                 <td>
                   {[
-                    resolveCity(addressData.applicant?.current?.city || addressData.applicant?.city),
-                    resolveState(addressData.applicant?.current?.state || addressData.applicant?.state),
+                    resolveCity(addressData.applicant?.current?.city || addressData.applicant?.city, addressData.applicant?.current?.cityName || addressData.applicant?.cityName),
+                    resolveState(addressData.applicant?.current?.state || addressData.applicant?.state, addressData.applicant?.current?.stateName || addressData.applicant?.stateName),
                   ]
                     .filter(Boolean)
                     .join(', ') || '-'}
@@ -3333,8 +3386,8 @@ export default function PdfView() {
                   coApplicants.map((_, i) => (
                     <td key={i}>
                       {[
-                        resolveCity(addressData.coApplicants?.[i]?.current?.city || addressData.coApplicants?.[i]?.city),
-                        resolveState(addressData.coApplicants?.[i]?.current?.state || addressData.coApplicants?.[i]?.state),
+                        resolveCity(addressData.coApplicants?.[i]?.current?.city || addressData.coApplicants?.[i]?.city, addressData.coApplicants?.[i]?.current?.cityName || addressData.coApplicants?.[i]?.cityName),
+                        resolveState(addressData.coApplicants?.[i]?.current?.state || addressData.coApplicants?.[i]?.state, addressData.coApplicants?.[i]?.current?.stateName || addressData.coApplicants?.[i]?.stateName),
                       ]
                         .filter(Boolean)
                         .join(', ') || '-'}
@@ -3385,12 +3438,12 @@ export default function PdfView() {
               <tr>
                 <td>Occupation Category</td>
                 <td>
-                  {resolveEmploymentType(empData.applicant?.employmentNature || empData.applicant?.employmentType || empData.applicant?.employmentTypeId) || empData.applicant?.employmentNature || empData.applicant?.employmentType || '-'}
+                  {resolveEmploymentType(empData.applicant?.employmentNature || empData.applicant?.employmentType || empData.applicant?.employmentTypeId, empData.applicant?.employmentTypeName)}
                 </td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>
-                      {resolveEmploymentType(empData.coApplicants?.[i]?.employmentNature || empData.coApplicants?.[i]?.employmentType || empData.coApplicants?.[i]?.employmentTypeId) || empData.coApplicants?.[i]?.employmentNature || empData.coApplicants?.[i]?.employmentType || '-'}
+                      {resolveEmploymentType(empData.coApplicants?.[i]?.employmentNature || empData.coApplicants?.[i]?.employmentType || empData.coApplicants?.[i]?.employmentTypeId, empData.coApplicants?.[i]?.employmentTypeName)}
                     </td>
                   ))}
               </tr>
@@ -3413,20 +3466,20 @@ export default function PdfView() {
               <tr>
                 <td>Qualification</td>
                 <td>
-                  {resolveEducation(empData.applicant?.qualification || empData.applicant?.educationId) || empData.applicant?.qualification || '-'}
+                  {resolveEducation(empData.applicant?.qualification || empData.applicant?.educationId, empData.applicant?.educationName)}
                 </td>
                 {hasCoApplicants &&
                   coApplicants.map((_, i) => (
                     <td key={i}>
-                      {resolveEducation(empData.coApplicants?.[i]?.qualification || empData.coApplicants?.[i]?.educationId) || empData.coApplicants?.[i]?.qualification || '-'}
+                      {resolveEducation(empData.coApplicants?.[i]?.qualification || empData.coApplicants?.[i]?.educationId, empData.coApplicants?.[i]?.educationName)}
                     </td>
                   ))}
               </tr>
               <tr>
                 <td>Industry Type</td>
-                <td>{resolveIndustryType(empData.applicant?.industryType)}</td>
+                <td>{resolveIndustryType(empData.applicant?.industryType, empData.applicant?.industryTypeName)}</td>
                 {hasCoApplicants &&
-                  coApplicants.map((_, i) => <td key={i}>{resolveIndustryType(empData.coApplicants?.[i]?.industryType)}</td>)}
+                  coApplicants.map((_, i) => <td key={i}>{resolveIndustryType(empData.coApplicants?.[i]?.industryType, empData.coApplicants?.[i]?.industryTypeName)}</td>)}
               </tr>
               <tr>
                 <td>Total Experience</td>
@@ -3497,12 +3550,10 @@ export default function PdfView() {
               <tr>
                 <td>Applicant</td>
                 <td>
-                  {resolveBank(bankData.applicant?.primaryBank?.bankName || bankData.applicant?.primaryBank?.bankId || bankData.primaryBank?.bankName || bankData.primaryBank?.bankId) ||
-                    bankData.applicant?.primaryBank?.bankName ||
-                    bankData.applicant?.primaryBank?.bankId ||
-                    bankData.primaryBank?.bankName ||
-                    bankData.primaryBank?.bankId ||
-                    '-'}
+                  {resolveBank(
+                    bankData.applicant?.primaryBank?.bankId || bankData.applicant?.primaryBank?.bankName || bankData.primaryBank?.bankId || bankData.primaryBank?.bankName,
+                    bankData.applicant?.primaryBank?.bankName || bankData.primaryBank?.bankName
+                  )}
                 </td>
                 <td>{bankData.applicant?.primaryBank?.accountHolderName || bankData.primaryBank?.accountHolderName || customerDisplayName || '-'}</td>
                 <td>
@@ -3525,10 +3576,10 @@ export default function PdfView() {
                   <tr key={i}>
                     <td>Co-Applicant {i + 1}</td>
                     <td>
-                      {resolveBank(bankData.coApplicants?.[i]?.primaryBank?.bankName || bankData.coApplicants?.[i]?.primaryBank?.bankId) ||
-                        bankData.coApplicants?.[i]?.primaryBank?.bankName ||
-                        bankData.coApplicants?.[i]?.primaryBank?.bankId ||
-                        '-'}
+                      {resolveBank(
+                        bankData.coApplicants?.[i]?.primaryBank?.bankId || bankData.coApplicants?.[i]?.primaryBank?.bankName,
+                        bankData.coApplicants?.[i]?.primaryBank?.bankName
+                      )}
                     </td>
                     <td>
                       {bankData.coApplicants?.[i]?.primaryBank?.accountHolderName ||
@@ -3568,7 +3619,7 @@ export default function PdfView() {
                   <td className="pdf-row-header">Property Type</td>
                   {collateralList.map((prop, i) => (
                     <td key={i}>
-                      {resolveProperty(prop.typeOfProperty) || prop.propertyName || prop.typeOfProperty || '-'}
+                      {resolveProperty(prop.typeOfProperty, prop.propertyName)}
                     </td>
                   ))}
                 </tr>
@@ -3588,7 +3639,7 @@ export default function PdfView() {
                   <td className="pdf-row-header">Property Usage</td>
                   {collateralList.map((prop, i) => (
                     <td key={i}>
-                      {resolvePropertyUsage(prop.usage) || prop.propertyUsageName || prop.usage || '-'}
+                      {resolvePropertyUsage(prop.usage, prop.propertyUsageName)}
                     </td>
                   ))}
                 </tr>
@@ -3609,10 +3660,7 @@ export default function PdfView() {
                 <tr>
                   <td className="pdf-row-header">Property Type</td>
                   <td>
-                    {resolveProperty(collateralList[0]?.typeOfProperty) ||
-                      collateralList[0]?.propertyName ||
-                      collateralList[0]?.typeOfProperty ||
-                      '-'}
+                    {resolveProperty(collateralList[0]?.typeOfProperty, collateralList[0]?.propertyName)}
                   </td>
                 </tr>
                 <tr>
@@ -3626,10 +3674,7 @@ export default function PdfView() {
                 <tr>
                   <td className="pdf-row-header">Property Usage</td>
                   <td>
-                    {resolvePropertyUsage(collateralList[0]?.usage) ||
-                      collateralList[0]?.propertyUsageName ||
-                      collateralList[0]?.usage ||
-                      '-'}
+                    {resolvePropertyUsage(collateralList[0]?.usage, collateralList[0]?.propertyUsageName)}
                   </td>
                 </tr>
               </tbody>
@@ -3679,7 +3724,7 @@ export default function PdfView() {
                   <tr key={i}>
                     <td>Reference {i + 1}</td>
                     <td>{ref.fullName || '-'}</td>
-                    <td>{resolveRelationship(ref.relationship) || ref.relationship || '-'}</td>
+                    <td>{resolveRelationship(ref.relationship, ref.relationshipName || ref.relationshipWithApplicant)}</td>
                     <td>{ref.mobileNo || '-'}</td>
                     <td>{ref.address || '-'}</td>
                   </tr>
