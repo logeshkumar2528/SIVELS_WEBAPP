@@ -856,6 +856,36 @@ export const backOfficeService = {
     return unwrapResponse(response);
   },
 
+  // LIP Program - Monthly Cash Flow & FOIR Assessment
+  getLipProgramCurrent: async (applicationProductDetailsId, applicantSequence) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.LIP_PROGRAM_CURRENT(applicationProductDetailsId, applicantSequence)
+    );
+    return unwrapResponse(response);
+  },
+
+  getLipProgramRecord: async (id) => {
+    const response = await axiosInstance.get(BACK_OFFICE_ENDPOINTS.LIP_PROGRAM_RECORD(id));
+    return unwrapResponse(response);
+  },
+
+  getLipProgramHistory: async (applicationProductDetailsId, applicantSequence) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.LIP_PROGRAM_HISTORY(applicationProductDetailsId, applicantSequence)
+    );
+    return unwrapResponse(response);
+  },
+
+  previewLipProgram: async (payload) => {
+    const response = await axiosInstance.post(BACK_OFFICE_ENDPOINTS.LIP_PROGRAM_PREVIEW, payload);
+    return unwrapResponse(response);
+  },
+
+  calculateLipProgram: async (payload) => {
+    const response = await axiosInstance.post(BACK_OFFICE_ENDPOINTS.LIP_PROGRAM_CALCULATE, payload);
+    return unwrapResponse(response);
+  },
+
   /* ==========================================
      8c. RTR (REPAYMENT TRACK RECORD) CALCULATION APIs
   ========================================== */
