@@ -83,7 +83,7 @@ export default function Profile() {
           <div className="bo-identity-avatar-wrap">
             {showImage ? (
               <AuthImage
-                src={previewUrl || imageUrl}
+                src={imageUrl}
                 alt={profile.fullName || 'Back Office User'}
                 className="bo-profile-avatar-image"
                 onError={() => setImageFailed(true)}

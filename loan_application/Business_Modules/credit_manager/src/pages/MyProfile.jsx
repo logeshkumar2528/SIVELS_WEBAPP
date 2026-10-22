@@ -4,6 +4,7 @@ import { getProfileImageUrl, getInitials } from '../../../../Core/src/utils/prof
 import { formatDate } from '../../../../Core/src/utils/dateHelper';
 import { useCreditManagerProfile } from '../hooks/useCreditManagerProfile';
 import AuthImage from '../../../../Core/src/auth/AuthImage';
+import './MyProfile.css';
 
 function ProfileField({ icon: Icon, label, value }) {
   return (
