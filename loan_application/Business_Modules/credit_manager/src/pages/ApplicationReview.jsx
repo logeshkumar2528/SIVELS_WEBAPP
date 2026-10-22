@@ -26,6 +26,10 @@ import CustomerVerification, {
   resolveReviewSectionId,
 } from '../../../back_office/src/back-office/pages/CustomerVerification/CustomerVerification';
 import VerificationReportPdf from '../../../back_office/src/back-office/components/VerificationReportPdf/VerificationReportPdf';
+import { useVerificationWorkspace } from '../../../back_office/src/back-office/hooks/useVerificationWorkspace';
+import ApprovedDocumentsViewer, {
+  DOC_TYPES,
+} from '../../../../Core/src/features/approval-documents/components/ApprovedDocumentsViewer';
 import { setActingIdentity } from '../../../back_office/src/back-office/auth/authStorage';
 import {
   RETURN_ITEM_STATUS,
@@ -52,7 +56,7 @@ import SectionReviewBar from '../components/SectionReviewBar';
 import { useReviewSections } from '../hooks/useReviewSections';
 import { getApplicationNo, parseDate } from '../utils/formatters';
 
-const FINAL_ACTION_STEP = '15';
+const FINAL_ACTION_STEP = '13';
 
 function formatRupees(amount) {
   const num = Number(amount);
@@ -169,11 +173,35 @@ function CreditDecisionPanel({
   successMessage,
   onDismissSuccess,
   onAction,
+  onViewDocument,
+  onDownloadDocument,
 }) {
   const CheckCircleIcon = iconMap['CheckCircle'];
   const XCircleIcon = iconMap['XCircle'];
   const RotateCcwIcon = iconMap['RotateCcw'];
   const AlertCircleIcon = iconMap['AlertCircle'];
+  const EyeIcon = iconMap['Eye'];
+  const DownloadIcon = iconMap['Download'];
+  const FileTextIcon = iconMap['FileText'];
+  const FileCheckIcon = iconMap['FileCheck'];
+  const ArrowRightIcon = iconMap['ArrowRight'];
+
+  const isDecisionComplete = useMemo(() => {
+    if (!latestDecision || latestDecision.decision !== CREDIT_DECISION.APPROVED) return false;
+    const amount = Number(latestDecision.sanctionedLoanAmount);
+    const roi = latestDecision.sanctionedROI;
+    const tenure = Number(latestDecision.sanctionedTenureMonths);
+    return (
+      Number.isFinite(amount) &&
+      amount > 0 &&
+      roi !== null &&
+      roi !== undefined &&
+      roi !== '' &&
+      Number.isFinite(Number(roi)) &&
+      Number.isFinite(tenure) &&
+      tenure > 0
+    );
+  }, [latestDecision]);
   const XIcon = iconMap['X'];
   const acceptedCount = latestReturnItems.filter((item) => item.itemStatus === RETURN_ITEM_STATUS.ACCEPTED).length;
   const awaitingReviewCount = awaitingReviewSections.reduce((sum, s) => sum + s.count, 0);
@@ -266,14 +294,6 @@ function CreditDecisionPanel({
             </div>
             {approveBlockedReason && <p className="cm-approve-blocked">{approveBlockedReason}</p>}
             <div className="cm-decision-actions">
-              <button type="button" className="stc-btn-doc cm-btn-return" onClick={() => onAction(DECISION_ACTIONS.RETURN)}>
-                {RotateCcwIcon && <RotateCcwIcon size={15} />}
-                <span>Return to Back Office</span>
-              </button>
-              <button type="button" className="stc-btn-doc cm-btn-reject" onClick={() => onAction(DECISION_ACTIONS.REJECT)}>
-                {XCircleIcon && <XCircleIcon size={15} />}
-                <span>Reject</span>
-              </button>
               <button
                 type="button"
                 className="stc-btn-doc cm-btn-approve"
@@ -283,6 +303,23 @@ function CreditDecisionPanel({
               >
                 {CheckCircleIcon && <CheckCircleIcon size={15} />}
                 <span>Approve</span>
+              </button>
+              <button type="button" className="stc-btn-doc cm-btn-reject" onClick={() => onAction(DECISION_ACTIONS.REJECT)}>
+                {XCircleIcon && <XCircleIcon size={15} />}
+                <span>Reject</span>
+              </button>
+              <button type="button" className="stc-btn-doc cm-btn-return" onClick={() => onAction(DECISION_ACTIONS.RETURN)}>
+                {RotateCcwIcon && <RotateCcwIcon size={15} />}
+                <span>Return to Back Office</span>
+              </button>
+              <button
+                type="button"
+                className="stc-btn-doc cm-btn-forward"
+                disabled
+                title="Forward workflow will be available in a future release"
+              >
+                {ArrowRightIcon && <ArrowRightIcon size={15} />}
+                <span>Forward</span>
               </button>
             </div>
           </>
@@ -329,6 +366,138 @@ function CreditDecisionPanel({
           </p>
         )}
       </div>
+
+      {latestDecision?.decision === CREDIT_DECISION.APPROVED && (
+        <div className="stc-submit-card cm-approved-docs-card">
+          <div className="cm-issues-card-head" style={{ marginBottom: 16 }}>
+            <div>
+              <h3 className="stc-docs-section-title" style={{ margin: 0 }}>Approved Documents</h3>
+              <span className="stc-customer-sub">
+                Official loan documentation generated on demand from Credit Manager approved terms.
+              </span>
+            </div>
+          </div>
+
+          {!isDecisionComplete && (
+            <div className="cm-form-alert" role="alert" style={{ marginBottom: 16 }}>
+              The approved decision is missing required financial terms (sanctioned loan amount, interest rate, or tenure). Document viewing and generation are disabled.
+            </div>
+          )}
+
+          <div
+            className="cm-approved-docs-grid"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: '16px',
+            }}
+          >
+            {/* 1. Sanction Letter Card */}
+            <div
+              className="cm-approved-doc-card"
+              style={{
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '16px',
+                background: '#ffffff',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  {FileTextIcon && <FileTextIcon size={18} color="#0F7A4C" />}
+                  <strong style={{ fontSize: '15px', color: '#0f172a' }}>Sanction Letter</strong>
+                </div>
+                <p
+                  className="stc-customer-sub"
+                  style={{ margin: '0 0 16px 0', fontSize: '13px', lineHeight: '1.4' }}
+                >
+                  Official Sivels Finance sanction letter containing sanctioned loan amount, interest rate, tenure, EMI, and credit conditions.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="stc-btn-doc"
+                  onClick={() => onViewDocument && onViewDocument(DOC_TYPES.SANCTION_LETTER)}
+                  disabled={!isDecisionComplete}
+                  title={!isDecisionComplete ? 'Decision terms incomplete' : 'View Sanction Letter'}
+                  style={{ flex: 1, justifyContent: 'center' }}
+                >
+                  {EyeIcon && <EyeIcon size={14} />}
+                  <span>View</span>
+                </button>
+                <button
+                  type="button"
+                  className="stc-btn-doc cm-btn-approve"
+                  onClick={() => onDownloadDocument && onDownloadDocument(DOC_TYPES.SANCTION_LETTER)}
+                  disabled={!isDecisionComplete}
+                  title={!isDecisionComplete ? 'Decision terms incomplete' : 'Download Sanction Letter PDF'}
+                  style={{ flex: 1, justifyContent: 'center' }}
+                >
+                  {DownloadIcon && <DownloadIcon size={14} />}
+                  <span>Download</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 2. Key Facts Statement (KFS) Card */}
+            <div
+              className="cm-approved-doc-card"
+              style={{
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '16px',
+                background: '#ffffff',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  {FileCheckIcon && <FileCheckIcon size={18} color="#0F7A4C" />}
+                  <strong style={{ fontSize: '15px', color: '#0f172a' }}>Key Facts Statement (KFS)</strong>
+                </div>
+                <p
+                  className="stc-customer-sub"
+                  style={{ margin: '0 0 16px 0', fontSize: '13px', lineHeight: '1.4' }}
+                >
+                  Standardized regulatory disclosure detailing APR, repayment schedule, fee breakdown, and grievance redressal mechanisms.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="stc-btn-doc"
+                  onClick={() => onViewDocument && onViewDocument(DOC_TYPES.KFS)}
+                  disabled={!isDecisionComplete}
+                  title={!isDecisionComplete ? 'Decision terms incomplete' : 'View Key Facts Statement'}
+                  style={{ flex: 1, justifyContent: 'center' }}
+                >
+                  {EyeIcon && <EyeIcon size={14} />}
+                  <span>View</span>
+                </button>
+                <button
+                  type="button"
+                  className="stc-btn-doc cm-btn-approve"
+                  onClick={() => onDownloadDocument && onDownloadDocument(DOC_TYPES.KFS)}
+                  disabled={!isDecisionComplete}
+                  title={!isDecisionComplete ? 'Decision terms incomplete' : 'Download Key Facts Statement PDF'}
+                  style={{ flex: 1, justifyContent: 'center' }}
+                >
+                  {DownloadIcon && <DownloadIcon size={14} />}
+                  <span>Download</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -350,6 +519,42 @@ export default function ApplicationReview() {
   const [decisionError, setDecisionError] = useState('');
   const review = useReviewSections(customerId);
   const { flags: pendingFlags, setFlags: setPendingFlags, addFlag } = review;
+
+  const { verificationData } = useVerificationWorkspace(customerId);
+  const coApplicants = useMemo(() => {
+    const rawPersonal =
+      verificationData?.raw?.personalInformation ||
+      verificationData?.raw?.PersonalInformation ||
+      [];
+    const personalList = Array.isArray(rawPersonal) ? rawPersonal : (rawPersonal ? [rawPersonal] : []);
+    return personalList.slice(1);
+  }, [verificationData]);
+
+  const [docViewerState, setDocViewerState] = useState({
+    isOpen: false,
+    docType: DOC_TYPES.SANCTION_LETTER,
+    autoDownload: false,
+  });
+
+  const handleViewDocument = useCallback((docType) => {
+    setDocViewerState({
+      isOpen: true,
+      docType: docType || DOC_TYPES.SANCTION_LETTER,
+      autoDownload: false,
+    });
+  }, []);
+
+  const handleDownloadDocument = useCallback((docType) => {
+    setDocViewerState({
+      isOpen: true,
+      docType: docType || DOC_TYPES.SANCTION_LETTER,
+      autoDownload: true,
+    });
+  }, []);
+
+  const handleCloseDocViewer = useCallback(() => {
+    setDocViewerState((prev) => ({ ...prev, isOpen: false, autoDownload: false }));
+  }, []);
 
   const ShieldCheckIcon = iconMap['ShieldCheck'];
   const FileCheckIcon = iconMap['FileCheck'];
@@ -385,6 +590,11 @@ export default function ApplicationReview() {
     () => applications.find((app) => String(app.agentCustomerId) === String(customerId)),
     [applications, customerId]
   );
+
+  const applicationProductDetailsId =
+    verificationData?.applicationProductDetailsId ||
+    queueApp?.applicationProductDetailsId ||
+    null;
 
   const status = Number(queueApp?.status);
   const isPending = status === CM_STATUS.PENDING;
@@ -541,6 +751,8 @@ export default function ApplicationReview() {
             successMessage={successMessage}
             onDismissSuccess={() => setSuccessMessage('')}
             onAction={setActiveAction}
+            onViewDocument={handleViewDocument}
+            onDownloadDocument={handleDownloadDocument}
           />
         }
       />
@@ -564,6 +776,20 @@ export default function ApplicationReview() {
             </div>
           </div>
         </div>
+      )}
+
+      {docViewerState.isOpen && (
+        <ApprovedDocumentsViewer
+          isOpen={docViewerState.isOpen}
+          onClose={handleCloseDocViewer}
+          initialDocument={docViewerState.docType}
+          autoDownload={docViewerState.autoDownload}
+          customerId={customerId}
+          verificationData={verificationData}
+          coApplicants={coApplicants}
+          applicationProductDetailsId={applicationProductDetailsId}
+          creditDecision={latestDecision}
+        />
       )}
 
       {activeAction && (

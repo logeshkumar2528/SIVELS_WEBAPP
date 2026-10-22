@@ -1,3 +1,116 @@
+/* Base container & toolbar for credit documents (standalone) */
+.cam-report {
+  --cam-primary: var(--color-primary, #0f7a4c);
+  --cam-primary-dark: var(--color-primary-hover, #15692f);
+  --cam-primary-light: var(--color-primary-light, #eaf5ee);
+  --cam-primary-muted: var(--color-primary-muted, #a8d5b5);
+  --cam-border: #d5e3da;
+  --cam-border-light: var(--color-border-light, #f0f5f1);
+  --cam-text: var(--color-text-primary, #1a2320);
+  --cam-text-secondary: var(--color-text-secondary, #3d5245);
+  --cam-text-muted: var(--color-text-muted, #7a9485);
+  --cam-font: var(--font-family-base, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4, 16px);
+  font-family: var(--cam-font);
+}
+
+.cam-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-3, 12px);
+  padding: var(--spacing-3, 12px) var(--spacing-4, 16px);
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e4ede7);
+  border-left: 4px solid var(--cam-primary);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: var(--shadow-sm, 0 1px 4px rgba(22, 34, 25, 0.07));
+}
+
+.cam-toolbar-status {
+  font-size: var(--font-size-md, 14px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--cam-text);
+}
+
+.cam-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2, 8px);
+}
+
+.cam-toolbar-error {
+  font-size: var(--font-size-sm, 12px);
+  color: var(--color-danger, #dc2626);
+}
+
+.cam-btn {
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: var(--font-size-base, 13px);
+  font-weight: var(--font-weight-semibold, 600);
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--cam-border);
+  background: var(--color-surface, #ffffff);
+  color: var(--cam-text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast, 150ms ease), border-color var(--transition-fast, 150ms ease);
+}
+
+.cam-btn:hover:not(:disabled) {
+  background: var(--cam-primary-light);
+  border-color: var(--cam-primary-muted);
+}
+
+.cam-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cam-btn-primary {
+  background: var(--cam-primary);
+  border-color: var(--cam-primary);
+  color: var(--color-text-inverse, #ffffff);
+}
+
+.cam-btn-primary:hover:not(:disabled) {
+  background: var(--cam-primary-dark);
+  border-color: var(--cam-primary-dark);
+}
+
+.cam-print-root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-5, 20px);
+  padding: var(--spacing-6, 24px) 0;
+  background: var(--color-bg, #f4f7f5);
+  border: 1px solid var(--color-border, #e4ede7);
+  border-radius: var(--radius-lg, 12px);
+  overflow-x: auto;
+}
+
+.cam-page {
+  position: relative;
+  box-sizing: border-box;
+  width: 794px;
+  min-height: 1123px;
+  padding: 60px 42px 52px;
+  background: #ffffff;
+  color: var(--cam-text);
+  font-family: var(--cam-font);
+  font-size: 10.5px;
+  line-height: 1.45;
+  border-top: 6px solid var(--cam-primary);
+  border-radius: var(--radius-xs, 4px);
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(22, 34, 25, 0.08));
+  display: flex;
+  flex-direction: column;
+}
+
 /* Key Facts Statement — View Form palette on the shared CAM page canvas */
 
 .kfs-report {
