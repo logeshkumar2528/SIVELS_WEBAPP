@@ -750,7 +750,7 @@ export default function SanctionLetter({
               </TermRow>
               <TermRow label="Processing Fees">
                 {data.processingFee > 0
-                  ? `${formatRupees(data.processingFee)}${data.processingFeePercent ? ` (${data.processingFeePercent} of the sanctioned amount)` : ''} plus applicable taxes, to be paid to ${COMPANY} (non-refundable).`
+                  ? `${data.processingFeePercent ? `(${data.processingFeePercent} of the sanctioned amount) ` : ''}plus applicable taxes, to be paid to ${COMPANY} (non-refundable).`
                   : EMPTY}
               </TermRow>
               <TermRow label="Prepayment and Foreclosure Charges">

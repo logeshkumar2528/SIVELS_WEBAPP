@@ -6299,6 +6299,7 @@ export default function CustomerVerification({
   const [isSavingHealthChecks, setIsSavingHealthChecks] = useState(false);
   const [healthChecksFeedback, setHealthChecksFeedback] = useState(null);
   const healthChecksAppProdIdRef = useRef(null);
+  const lastLoadedHealthCheckAppProdIdRef = useRef(null);
 
   const [findingsModal, setFindingsModal] = useState({
     open: false,
@@ -6393,9 +6394,21 @@ export default function CustomerVerification({
 
   const targetHealthCheckAppProdId = Number(calculationAppProdId || resolvedAppProdId || 0);
 
+  // Customer isolation: reset health check state whenever the target application or customer changes
   useEffect(() => {
-    if (activeStep === 19 && targetHealthCheckAppProdId > 0) {
-      loadHealthCheckData(targetHealthCheckAppProdId);
+    setHealthChecksByStep({ 19: {} });
+    setSavedHealthChecks({});
+    setHealthChecksFeedback(null);
+    lastLoadedHealthCheckAppProdIdRef.current = null;
+  }, [targetHealthCheckAppProdId, resolvedTargetCustomerId]);
+
+  // Load health check data when opening Step 05 (19) or Step 12 (17)
+  useEffect(() => {
+    if ((activeStep === 19 || activeStep === 17) && targetHealthCheckAppProdId > 0) {
+      if (lastLoadedHealthCheckAppProdIdRef.current !== targetHealthCheckAppProdId) {
+        lastLoadedHealthCheckAppProdIdRef.current = targetHealthCheckAppProdId;
+        loadHealthCheckData(targetHealthCheckAppProdId);
+      }
     }
   }, [activeStep, targetHealthCheckAppProdId, loadHealthCheckData]);
 
@@ -6415,7 +6428,8 @@ export default function CustomerVerification({
       return curStatus !== savedStatus || curDate !== savedDate || curFindings !== savedFindings;
     }
 
-    return curStatus !== 'Pending' || curDate !== '' || curFindings !== '';
+    // Unpersisted active health check types must be included on save
+    return true;
   }, []);
 
   const dirtyHealthCheckTypes = useMemo(() => {
@@ -18000,7 +18014,7 @@ export default function CustomerVerification({
                 coApplicants={coApplicants}
                 applicationProductDetailsId={calculationAppProdId}
                 agentCustomerId={resolvedTargetCustomerId}
-                healthChecks={healthChecksByStep[19]}
+                healthChecks={savedHealthChecks}
                 unsavedPdSheet={recommendationSheets[0]}
               />
             </div>
