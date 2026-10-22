@@ -18,6 +18,7 @@ describe('summarizeReadiness', () => {
   it('treats a missing response as not ready', () => {
     expect(summarizeReadiness(null)).toEqual(EMPTY_READINESS);
     expect(summarizeReadiness({ isReady: true, checks: [] }).isReady).toBe(false);
+    expect(EMPTY_READINESS).not.toHaveProperty('hasRecommendation');
   });
 
   it('maps a ready application', () => {
@@ -29,11 +30,11 @@ describe('summarizeReadiness', () => {
       hasTechnical: true,
       hasCibil: true,
       hasEligibility: true,
-      hasRecommendation: true,
       unresolvedRejectionsCount: 0,
       openCreditReturnCount: 0,
       failedChecks: [],
     });
+    expect(result).not.toHaveProperty('hasRecommendation');
   });
 
   it('reports failed checks and open counts', () => {

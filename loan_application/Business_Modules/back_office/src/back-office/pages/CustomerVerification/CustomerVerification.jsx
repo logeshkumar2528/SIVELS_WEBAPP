@@ -6714,19 +6714,6 @@ export default function CustomerVerification({
                     <tr key={typeId} className={isDirty ? 'is-modified-row' : ''}>
                       <td className="bo-cv-health-checks-particular">
                         <span className="bo-cv-health-checks-particular-name">{label}</span>
-                        {isDirty && (
-                          <span
-                            style={{
-                              marginLeft: '8px',
-                              fontSize: '11px',
-                              color: '#d97706',
-                              fontWeight: 600,
-                            }}
-                            title="Unsaved changes in this row"
-                          >
-                            ● Unsaved
-                          </span>
-                        )}
                       </td>
                       <td>
                         <div className={`bo-cv-health-status-wrap ${healthCheckStatusClass(row.status)}`}>
@@ -6782,19 +6769,12 @@ export default function CustomerVerification({
             style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
+              justifyContent: 'flex-end',
               padding: '12px 16px',
               borderTop: '1px solid #e2e8f0',
               backgroundColor: '#f8fafc',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
-              {dirtyCount > 0 && (
-                <span style={{ color: '#d97706', fontWeight: 600 }}>
-                  ● {dirtyCount} unsaved change{dirtyCount > 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
             <button
               type="button"
               className="bo-btn bo-btn--primary"
@@ -18607,21 +18587,6 @@ export default function CustomerVerification({
                           style={{ color: step13Readiness.hasEligibility ? '#16a34a' : '#ea580c' }}
                         >
                           {step13Readiness.hasEligibility ? '✓ Complete' : 'Pending'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="bo-cv-readiness-item">
-                      <div className="bo-cv-readiness-label">Credit Recommendation</div>
-                      <div className="bo-cv-readiness-data-row">
-                        <strong className="bo-cv-readiness-val">
-                          {step13Readiness.hasRecommendation ? 'Entered' : 'Pending'}
-                        </strong>
-                        <span
-                          className="bo-cv-readiness-status"
-                          style={{ color: step13Readiness.hasRecommendation ? '#16a34a' : '#ea580c' }}
-                        >
-                          {step13Readiness.hasRecommendation ? '✓ Complete' : 'Pending'}
                         </span>
                       </div>
                     </div>
