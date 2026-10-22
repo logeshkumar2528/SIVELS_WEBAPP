@@ -18,6 +18,7 @@ import { getCurrentUserId } from '../../utils/authHelper';
 import { DocumentPreviewModal, DocumentUploadCard, fetchDocumentBlobUrl, isPdfUrl } from '../../components/DocumentUpload/DocumentUploadSection';
 import { getProfileImageUrl } from '../../utils/profileImageHelper';
 import { getFileUrl, isPdfFile, getAadhaarPath, getPanPath, getProfilePath, getDocumentUrl } from '../Dashboard/Dashboard';
+import { StaffRoleSelect, toRoleId } from '../../components/StaffRoleSelect/StaffRoleSelect';
 import '../RelationshipManager/RelationshipManagerCreate.css';
 
 const createInitialForm = () => ({
@@ -65,6 +66,7 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [isActive, setIsActive] = useState(true);
+  const [staffRoleId, setStaffRoleId] = useState('');
   const [genders, setGenders] = useState([]);
   const [states, setStates] = useState([]);
   const [cities, setCities] = useState([]);
@@ -418,6 +420,7 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
         branch: form.branch.trim(),
         dateJoined: form.dateJoined,
         isActive,
+        roleId: toRoleId(staffRoleId),
         accountNumber: form.accountNumber.trim(),
         ifscCode: form.ifscCode.trim().toUpperCase(),
         createdBy: getCurrentUserId(),
@@ -715,6 +718,13 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
               <small>Allow this back office officer to be used in the system.</small>
             </span>
           </label>
+          <StaffRoleSelect
+            legacyType="BackOffice"
+            legacyId={editBackOfficeId}
+            value={staffRoleId}
+            onChange={setStaffRoleId}
+            disabled={saving || loadingRecord}
+          />
 
           {error && <p className="form-error-msg">{error}</p>}
 

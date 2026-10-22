@@ -56,6 +56,7 @@ export function StaffRoleDialog({ staff, roles, onClose, onChanged, icon }) {
                 </option>
               ))}
             </select>
+            {target?.departmentName && <span className="access-muted">Department: {target.departmentName}</span>}
           </div>
           <div className="form-actions">
             <button type="button" className="masters-btn-secondary" onClick={onClose}>
@@ -73,6 +74,11 @@ export function StaffRoleDialog({ staff, roles, onClose, onChanged, icon }) {
             <li>
               From <strong>{staff.roleName}</strong> to <strong>{target.roleName}</strong>
             </li>
+            {staff.departmentName !== target.departmentName && (
+              <li>
+                Department {staff.departmentName || '—'} to {target.departmentName || '—'}
+              </li>
+            )}
             <li>{target.permissionCount} permissions</li>
             <li>The new permissions apply straight away; they will be asked to sign in again so their menus match.</li>
           </ul>

@@ -36,6 +36,7 @@ import { getFileUrl, isPdfFile, getAadhaarPath, getPanPath, getProfilePath, getD
 import '../RelationshipManager/RelationshipManagerCreate.css';
 import './AgentCreate.css';
 import { getCurrentUserId } from '../../utils/authHelper';
+import { StaffRoleSelect, toRoleId } from '../../components/StaffRoleSelect/StaffRoleSelect';
 
 const API_BASE = API_BASE_URL;
 
@@ -70,6 +71,7 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
   const isAdmin = true; // Master Module context
   const [rmOptions, setRmOptions] = useState([]);
   const [selectedRmId, setSelectedRmId] = useState('');
+  const [staffRoleId, setStaffRoleId] = useState('');
 
   // Form State
   const [formData, setFormData] = useState({
@@ -477,6 +479,7 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
     role: formData.role.trim(),
     branch: formData.branch.trim() || currentBranch || '',
     isActive: existingAgent?.isActive ?? true,
+    roleId: toRoleId(staffRoleId),
     bankAccountNumber: formData.bankAccountNumber.trim(),
     ifscCode: formData.ifscCode.trim().toUpperCase(),
     createdBy: existingAgent?.createdBy ?? (currentRmId || getCurrentUserId()),
@@ -879,6 +882,17 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
                   readOnly
                 />
               </div>
+
+              <StaffRoleSelect
+                legacyType="Agent"
+                legacyId={editAgentId}
+                value={staffRoleId}
+                onChange={setStaffRoleId}
+                disabled={isSaving || loadingAgent}
+                groupClassName="agent-field-group"
+                labelClassName="agent-field-label"
+                selectClassName="agent-input"
+              />
             </div>
           </section>
 

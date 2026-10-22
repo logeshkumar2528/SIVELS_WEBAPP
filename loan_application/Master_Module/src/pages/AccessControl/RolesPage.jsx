@@ -29,6 +29,7 @@ const COLUMNS = [
     label: 'Based on',
     render: (row) => (row.isSystemRole ? <span className="access-muted">—</span> : row.baseRoleName),
   },
+  { key: 'departmentName', label: 'Department', render: (row) => row.departmentName || '—' },
   { key: 'staffCount', label: 'Staff' },
   { key: 'permissionCount', label: 'Permissions' },
   { key: 'isActive', label: 'Status', render: (row) => <MasterStatusBadge status={row.isActive} /> },
@@ -65,7 +66,7 @@ export function RolesPage() {
     const term = search.trim().toLowerCase();
     if (!term) return roles;
     return roles.filter(
-      (r) => r.roleName?.toLowerCase().includes(term) || r.baseRoleName?.toLowerCase().includes(term)
+      (r) => [r.roleName, r.baseRoleName, r.departmentName].some((v) => v?.toLowerCase().includes(term))
     );
   }, [roles, search]);
 

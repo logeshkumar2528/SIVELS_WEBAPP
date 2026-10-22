@@ -41,6 +41,7 @@ const COLUMNS = [
       </span>
     ),
   },
+  { key: 'departmentName', label: 'Department', render: (row) => row.departmentName || '—' },
   { key: 'isActive', label: 'Status', render: (row) => <MasterStatusBadge status={row.isActive} /> },
 ];
 
@@ -78,7 +79,7 @@ export function StaffRolesPage() {
     const term = search.trim().toLowerCase();
     if (!term) return staff;
     return staff.filter((s) =>
-      [s.fullName, s.staffCode, s.mobileNumber, s.roleName].some((v) => v?.toLowerCase().includes(term))
+      [s.fullName, s.staffCode, s.mobileNumber, s.roleName, s.departmentName].some((v) => v?.toLowerCase().includes(term))
     );
   }, [staff, search]);
 
