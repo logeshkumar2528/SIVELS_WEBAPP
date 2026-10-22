@@ -1,3 +1,5 @@
+import { getAccessToken } from '../../../../Core/src/auth/tokenStore';
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://fusiontecsoftware.com/sivels/api').replace(/\/+$/, '');
 const ACCESS_ENDPOINT = (mobileNumber) => `${API_BASE_URL}/wallet/access/${encodeURIComponent(mobileNumber)}`;
 const SUMMARY_ENDPOINT = `${API_BASE_URL}/wallet/summary`;
@@ -12,7 +14,17 @@ const readJson = async (response) => {
 };
 
 const request = async (url, options = {}, fallbackMessage) => {
-  try { return await readJson(await fetch(url, { ...options, credentials: 'include', headers: { Accept: 'application/json', ...(options.headers || {}) } })); }
+  try {
+    const token = getAccessToken();
+    const headers = { Accept: 'application/json', ...(options.headers || {}) };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    return await readJson(await fetch(url, {
+      ...options,
+      credentials: 'include',
+      headers,
+    }));
+  }
   catch (error) { if (error.status) throw error; throw new Error(error?.message || fallbackMessage); }
 };
 

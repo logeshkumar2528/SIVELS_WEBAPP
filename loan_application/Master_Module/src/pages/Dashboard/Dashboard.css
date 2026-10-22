@@ -1532,6 +1532,35 @@ td small {
   min-height: 0;
 }
 
+.dashboard-services-section {
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid #e4ebe6;
+}
+
+.dashboard-services-section h2 {
+  margin: 4px 0 14px;
+  color: #18251e;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+/* This dashboard now contains content below the directory grid, so let the
+   card grow instead of distributing a fixed-height grid into the new section. */
+.admin-unified-card.dashboard-with-services {
+  flex: none;
+  min-height: calc(100dvh - 100px);
+}
+
+.dashboard-with-services > .people-role-card-grid {
+  flex: none;
+  grid-auto-rows: 72px;
+}
+
+.dashboard-with-services .dashboard-services-section {
+  flex: none;
+}
+
 .people-role-card {
   display: flex;
   flex-direction: row;

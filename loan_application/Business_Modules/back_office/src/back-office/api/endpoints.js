@@ -114,6 +114,15 @@ export const BACK_OFFICE_ENDPOINTS = {
   ELIGIBILITY_NORMAL_INCOME_SAVE_STATUS: (applicationProductDetailsId, agentCustomerId, backOfficeId) =>
     `/EligibilityNormalIncome/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(agentCustomerId)}/save-status${backOfficeId != null ? `?backOfficeId=${encodeURIComponent(backOfficeId)}` : ''}`,
 
+  // LIP Program - Monthly Cash Flow & FOIR Assessment
+  LIP_PROGRAM_CURRENT: (applicationProductDetailsId, applicantSequence) =>
+    `/lip-program/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
+  LIP_PROGRAM_RECORD: (id) => `/lip-program/record/${encodeURIComponent(id)}`,
+  LIP_PROGRAM_HISTORY: (applicationProductDetailsId, applicantSequence) =>
+    `/lip-program/history/${encodeURIComponent(applicationProductDetailsId)}/${encodeURIComponent(applicantSequence)}`,
+  LIP_PROGRAM_PREVIEW: '/lip-program/preview',
+  LIP_PROGRAM_CALCULATE: '/lip-program/calculate',
+
   // Banking analysis and eligibility APIs
   BANKING_DETAILS: (applicationProductDetailsId) =>
     `/application/${encodeURIComponent(applicationProductDetailsId)}/banking`,

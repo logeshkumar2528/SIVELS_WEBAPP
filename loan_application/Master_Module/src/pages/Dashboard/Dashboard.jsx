@@ -1024,7 +1024,7 @@ export function Dashboard() {
 
   return (
     <div className="dashboard-page">
-      <section className="admin-unified-card">
+      <section className="admin-unified-card dashboard-with-services">
         <div className="admin-unified-header">
           <div className="admin-unified-title-block">
             <img
@@ -1191,6 +1191,31 @@ export function Dashboard() {
               <ArrowUpRight size={16} className="people-role-arrow" />
             </div>
           </button>
+        </div>
+
+        <div className="dashboard-services-section">
+          <div className="admin-subheading-left">
+            <span className="section-kicker">VERIFICATION SERVICES</span>
+            <h2>Verification Services</h2>
+          </div>
+          <div className="people-role-card-grid">
+            <button
+              type="button"
+              className="people-role-card people-role-card-verification"
+              onClick={() => { window.location.href = '/aadhaar-wallet'; }}
+            >
+              <div className="people-role-icon teal">
+                <ShieldCheck size={20} />
+              </div>
+              <div className="people-role-info">
+                <h3 className="people-role-title">Aadhaar API Wallet</h3>
+                <span className="people-role-subtitle">Manage Aadhaar verification wallet</span>
+              </div>
+              <div className="people-role-metric">
+                <ArrowUpRight size={16} className="people-role-arrow" />
+              </div>
+            </button>
+          </div>
         </div>
       </section>
 
