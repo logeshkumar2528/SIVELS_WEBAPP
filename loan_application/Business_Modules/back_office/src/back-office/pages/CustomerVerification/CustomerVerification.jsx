@@ -93,6 +93,7 @@ const CalculatorIcon = iconMap['Calculator'] || iconMap['BadgeIndianRupee'];
 const ZapIcon = iconMap['Zap'];
 const Trash2Icon = iconMap['Trash2'] || iconMap['X'];
 const ExternalLinkIcon = iconMap['ExternalLink'];
+const MessageSquareIcon = iconMap['MessageSquare'] || iconMap['FileText'];
 
 function formatCurrency(amount) {
   if (amount === null || amount === undefined || isNaN(amount) || amount === 0) return '₹0';
@@ -2108,6 +2109,16 @@ export default function CustomerVerification({
     error: null,
     successMsg: '',
   });
+
+  // ── Step 03 Document Verifications State (Legal & Technical Reports) ─────
+  const [allApplicationDocs, setAllApplicationDocs] = useState([]);
+  const [newUploadFile, setNewUploadFile] = useState(null);
+  const [newUploadRemarks, setNewUploadRemarks] = useState('');
+  const [isSavingNewDoc, setIsSavingNewDoc] = useState(false);
+  const [newUploadError, setNewUploadError] = useState(null);
+  const [newUploadSuccess, setNewUploadSuccess] = useState('');
+  const [viewingRemarksDoc, setViewingRemarksDoc] = useState(null);
+  const newDocFileInputRef = useRef(null);
 
   // 7. Manual CIBIL PAN Upload State for Step 11
   const [manualCibilPan, setManualCibilPan] = useState({
@@ -7794,6 +7805,7 @@ export default function CustomerVerification({
       const res = await backOfficeService.getApplicationDocuments(appProdId);
       const list = Array.isArray(res) ? res : (res?.value || res?.data || []);
       const activeDocs = list.filter((d) => d && d.isActive !== false);
+      setAllApplicationDocs(activeDocs);
 
       const legalDoc = activeDocs.find((d) => d.documentType === 'LEGAL_OPINION');
       if (legalDoc) {
@@ -9912,6 +9924,287 @@ export default function CustomerVerification({
       e.target.value = '';
     }
   };
+
+  // ── Step 03: Document Verifications Handlers (Legal & Technical) ───────────
+  const handleStep03FileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 150 * 1024 * 1024) {
+      setNewUploadError(`File size (${formatFileSize(file.size)}) exceeds the maximum 150 MB limit.`);
+      setNewUploadFile(null);
+      e.target.value = '';
+      return;
+    }
+
+    const allowedExts = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.webp'];
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!allowedExts.includes(ext)) {
+      setNewUploadError(`Invalid file format (${ext}). Supported formats: PDF, DOC, DOCX, JPG, PNG, WEBP.`);
+      setNewUploadFile(null);
+      e.target.value = '';
+      return;
+    }
+
+    setNewUploadError(null);
+    setNewUploadSuccess('');
+    setNewUploadFile(file);
+  };
+
+  const handleSaveStep03Document = async (currentStep) => {
+    if (!newUploadFile) {
+      setNewUploadError('Please select a file to upload.');
+      return;
+    }
+
+    const trimmedRemarks = (newUploadRemarks || '').trim();
+    if (!trimmedRemarks) {
+      setNewUploadError('Remarks are required for new document upload.');
+      return;
+    }
+
+    if (newUploadFile.size > 150 * 1024 * 1024) {
+      setNewUploadError(`File size (${formatFileSize(newUploadFile.size)}) exceeds the maximum 150 MB limit.`);
+      return;
+    }
+
+    const allowedExts = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.webp'];
+    const ext = '.' + newUploadFile.name.split('.').pop()?.toLowerCase();
+    if (!allowedExts.includes(ext)) {
+      setNewUploadError(`Invalid file format (${ext}). Supported formats: PDF, DOC, DOCX, JPG, PNG, WEBP.`);
+      return;
+    }
+
+    const appProdId = Number(
+      resolvedAppProdId ||
+      calculationAppProdId ||
+      verificationData?.applicationProductDetailsId ||
+      verificationData?.application?.applicationProductDetailsId ||
+      verificationData?.application?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
+      verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId ||
+      0
+    );
+
+    if (!appProdId) {
+      setNewUploadError('Application Product Details ID is missing. Cannot upload document.');
+      return;
+    }
+
+    const boAuth = getBackOfficeAuth();
+    const backOfficeId = Number(
+      boAuth?.id ||
+      boAuth?.backOfficeId ||
+      localStorage.getItem('backOfficeId')
+    );
+
+    if (!backOfficeId) {
+      setNewUploadError('Unable to determine Back Office user. Please login again.');
+      return;
+    }
+
+    const rmId = Number(
+      verificationData?.rmId ||
+      verificationData?.customer?.rmId ||
+      verificationData?.customer?.RmId ||
+      verificationData?.customer?.RMId ||
+      verificationData?.raw?.rmId ||
+      verificationData?.raw?.RmId ||
+      verificationData?.raw?.RMId ||
+      verificationData?.raw?.customer?.rmId ||
+      verificationData?.raw?.customer?.RmId ||
+      verificationData?.raw?.customer?.RMId ||
+      verificationData?.application?.rmId ||
+      0
+    );
+
+    if (!rmId) {
+      setNewUploadError('Unable to identify assigned Relationship Manager. Cannot attach document.');
+      return;
+    }
+
+    const isLegal = currentStep === 11;
+    const docType = isLegal ? 'LEGAL_OPINION' : 'TECHNICAL_VALUATION';
+    const docTitle = isLegal ? 'Legal Opinion Report' : 'Technical Valuation Report';
+
+    // Check if an active document of this type already exists for this application
+    const existingDoc = allApplicationDocs.find(
+      (d) => d && d.isActive !== false && d.documentType === docType
+    ) || (isLegal
+      ? (legalOpinion.backOfficeApplicationDocumentId ? legalOpinion : null)
+      : (technicalValue.backOfficeApplicationDocumentId ? technicalValue : null));
+
+    if (existingDoc && existingDoc.backOfficeApplicationDocumentId) {
+      const existingWarningMsg = isLegal
+        ? 'A Legal Report already exists. Use the Replace icon to change the document.'
+        : 'A Technical Report already exists. Use the Replace icon to change the document.';
+      setNewUploadError(existingWarningMsg);
+      setNewUploadSuccess('');
+      return;
+    }
+
+    setIsSavingNewDoc(true);
+    setNewUploadError(null);
+    setNewUploadSuccess('');
+
+    try {
+      const formData = new FormData();
+      formData.append('File', newUploadFile);
+      formData.append('DocumentType', docType);
+      formData.append('DocumentTitle', docTitle);
+      formData.append('ApplicationProductDetailsId', String(appProdId));
+      formData.append('BackOfficeId', String(backOfficeId));
+      formData.append('RmId', String(rmId));
+      formData.append('Remarks', trimmedRemarks);
+      formData.append('UploadedBy', String(backOfficeId));
+
+      const result = await backOfficeService.uploadApplicationDocument(formData);
+      const uploadedDocId = result?.backOfficeApplicationDocumentId;
+      if (uploadedDocId) {
+        // Atomically update metadata to guarantee remarks persistence
+        await backOfficeService.updateApplicationDocumentMetadata(
+          uploadedDocId,
+          {
+            remarks: trimmedRemarks,
+            documentStatus: 'Saved',
+            modifiedBy: backOfficeId,
+          }
+        );
+      }
+
+      await fetchBackOfficeDocuments();
+
+      setNewUploadFile(null);
+      setNewUploadRemarks('');
+      if (newDocFileInputRef.current) {
+        newDocFileInputRef.current.value = '';
+      }
+      setNewUploadSuccess('Document and remarks saved successfully.');
+    } catch (err) {
+      console.error(`Error saving ${docTitle}:`, err);
+      setNewUploadError(err?.response?.data?.message || err?.message || `Failed to save ${docTitle}. Please try again.`);
+    } finally {
+      setIsSavingNewDoc(false);
+    }
+  };
+
+  const handleTableReplaceDocument = async (e, targetDoc) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 150 * 1024 * 1024) {
+      setNewUploadError(`File size (${formatFileSize(file.size)}) exceeds the maximum 150 MB limit.`);
+      e.target.value = '';
+      return;
+    }
+
+    const allowedExts = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.webp'];
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!allowedExts.includes(ext)) {
+      setNewUploadError(`Invalid file format (${ext}). Supported formats: PDF, DOC, DOCX, JPG, PNG, WEBP.`);
+      e.target.value = '';
+      return;
+    }
+
+    const appProdId = Number(
+      resolvedAppProdId ||
+      calculationAppProdId ||
+      verificationData?.applicationProductDetailsId ||
+      verificationData?.application?.applicationProductDetailsId ||
+      verificationData?.application?.ApplicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.[0]?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetails?.applicationProductDetailsId ||
+      verificationData?.raw?.productDetailsList?.[0]?.applicationProductDetailsId ||
+      verificationData?.raw?.applicationProductDetails?.applicationProductDetailsId ||
+      0
+    );
+
+    if (!appProdId) {
+      setNewUploadError('Application Product Details ID is missing. Cannot replace document.');
+      e.target.value = '';
+      return;
+    }
+
+    const boAuth = getBackOfficeAuth();
+    const backOfficeId = Number(
+      boAuth?.id ||
+      boAuth?.backOfficeId ||
+      localStorage.getItem('backOfficeId')
+    );
+
+    if (!backOfficeId) {
+      setNewUploadError('Unable to determine Back Office user. Please login again.');
+      e.target.value = '';
+      return;
+    }
+
+    const rmId = Number(
+      verificationData?.rmId ||
+      verificationData?.customer?.rmId ||
+      verificationData?.customer?.RmId ||
+      verificationData?.customer?.RMId ||
+      verificationData?.raw?.rmId ||
+      verificationData?.raw?.RmId ||
+      verificationData?.raw?.RMId ||
+      verificationData?.raw?.customer?.rmId ||
+      verificationData?.raw?.customer?.RmId ||
+      verificationData?.raw?.customer?.RMId ||
+      verificationData?.application?.rmId ||
+      0
+    );
+
+    if (!rmId) {
+      setNewUploadError('Unable to identify assigned Relationship Manager. Cannot replace document.');
+      e.target.value = '';
+      return;
+    }
+
+    setIsSavingNewDoc(true);
+    setNewUploadError(null);
+    setNewUploadSuccess('');
+
+    try {
+      const formData = new FormData();
+      formData.append('File', file);
+      formData.append('DocumentType', targetDoc.documentType);
+      formData.append('DocumentTitle', targetDoc.documentTitle || (targetDoc.documentType === 'LEGAL_OPINION' ? 'Legal Opinion Report' : 'Technical Valuation Report'));
+      formData.append('ApplicationProductDetailsId', String(appProdId));
+      formData.append('BackOfficeId', String(backOfficeId));
+      formData.append('RmId', String(rmId));
+      formData.append('ModifiedBy', String(backOfficeId));
+      // Preserve existing remarks when replacing an uploaded document unless explicitly edited
+      formData.append('Remarks', targetDoc.remarks || `Replaced ${targetDoc.documentTitle || 'document'}`);
+
+      await backOfficeService.replaceApplicationDocument(
+        targetDoc.backOfficeApplicationDocumentId,
+        formData
+      );
+
+      await fetchBackOfficeDocuments();
+      setNewUploadSuccess('Document replaced successfully.');
+    } catch (err) {
+      console.error('Error replacing document:', err);
+      setNewUploadError(err?.response?.data?.message || err?.message || 'Failed to replace document. Please try again.');
+    } finally {
+      setIsSavingNewDoc(false);
+      e.target.value = '';
+    }
+  };
+
+  useEffect(() => {
+    if (activeStep === 11 || activeStep === 12) {
+      setNewUploadFile(null);
+      setNewUploadRemarks('');
+      setNewUploadError(null);
+      setNewUploadSuccess('');
+      setViewingRemarksDoc(null);
+      if (newDocFileInputRef.current) {
+        newDocFileInputRef.current.value = '';
+      }
+    }
+  }, [activeStep]);
 
   const handleViewBackOfficeDocument = async (docState, setter) => {
     if (!docState?.backOfficeApplicationDocumentId) {
@@ -12299,297 +12592,350 @@ export default function CustomerVerification({
                   </div>
                 )}
 
-                {/* ── STEP 06: LEGAL REPORT ── */}
-                {activeStep === 11 && (
-                  <div className="bo-cv-upload-container">
-                    {!legalOpinion.backOfficeApplicationDocumentId && !legalOpinion.file ? (
-                      <div className="bo-cv-dropzone-box">
-                        <input
-                          type="file"
-                          id="bo-cv-legal-upload"
-                          className="bo-cv-file-input"
-                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
-                          onChange={(e) => handleUploadOrReplaceDocument(e, 'LEGAL_OPINION', legalOpinion, setLegalOpinion)}
-                          disabled={legalOpinion.loading}
-                        />
-                        <label htmlFor="bo-cv-legal-upload" className="bo-cv-dropzone-label">
-                          <div className="bo-cv-dropzone-icon">
-                            {FileTextIcon && <FileTextIcon size={24} />}
-                          </div>
-                          <strong className="bo-cv-dropzone-title">Upload Legal Opinion Document</strong>
-                          <span className="bo-cv-dropzone-sub">
-                            Drag and drop or browse file from your device &bull; Maximum file size 150 MB
-                          </span>
-                          <span className="bo-cv-dropzone-types">Supported formats: PDF, DOC, DOCX, JPG, PNG, WEBP</span>
-                        </label>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="bo-cv-file-card bo-cv-file-card--compact">
-                          <div className="bo-cv-file-card-info">
-                            <div className="bo-cv-file-card-icon">
-                              {FileCheckIcon && <FileCheckIcon size={24} />}
+                {/* ── STEP 03: LEGAL REPORT (INTERNAL STEP 11) & TECHNICAL REPORT (INTERNAL STEP 12) ── */}
+                {(activeStep === 11 || activeStep === 12) && (() => {
+                  const isLegal = activeStep === 11;
+                  const docType = isLegal ? 'LEGAL_OPINION' : 'TECHNICAL_VALUATION';
+                  const docTypeLabel = isLegal ? 'Legal Opinion Report' : 'Technical Valuation Report';
+                  const docPillLabel = isLegal ? 'Legal Opinion' : 'Technical Valuation';
+                  const currentSetter = isLegal ? setLegalOpinion : setTechnicalValue;
+
+                  // Combined saved documents: LEGAL_OPINION and TECHNICAL_VALUATION
+                  const allowedTypes = ['LEGAL_OPINION', 'TECHNICAL_VALUATION'];
+                  let combinedDocs = allApplicationDocs.filter(
+                    (d) => d && d.isActive !== false && allowedTypes.includes(d.documentType)
+                  );
+
+                  // Fallback to legalOpinion and technicalValue if missing from allApplicationDocs
+                  if (!combinedDocs.some((d) => d.documentType === 'LEGAL_OPINION') && legalOpinion?.backOfficeApplicationDocumentId) {
+                    combinedDocs.push({
+                      backOfficeApplicationDocumentId: legalOpinion.backOfficeApplicationDocumentId,
+                      documentType: 'LEGAL_OPINION',
+                      documentTitle: legalOpinion.documentTitle || 'Legal Opinion Report',
+                      originalFileName: legalOpinion.fileName,
+                      fileSize: legalOpinion.fileSize,
+                      uploadedAt: legalOpinion.uploadedAt,
+                      modifiedAt: legalOpinion.modifiedAt,
+                      documentStatus: legalOpinion.documentStatus,
+                      remarks: legalOpinion.remarks,
+                    });
+                  }
+                  if (!combinedDocs.some((d) => d.documentType === 'TECHNICAL_VALUATION') && technicalValue?.backOfficeApplicationDocumentId) {
+                    combinedDocs.push({
+                      backOfficeApplicationDocumentId: technicalValue.backOfficeApplicationDocumentId,
+                      documentType: 'TECHNICAL_VALUATION',
+                      documentTitle: technicalValue.documentTitle || 'Technical Valuation Report',
+                      originalFileName: technicalValue.fileName,
+                      fileSize: technicalValue.fileSize,
+                      uploadedAt: technicalValue.uploadedAt,
+                      modifiedAt: technicalValue.modifiedAt,
+                      documentStatus: technicalValue.documentStatus,
+                      remarks: technicalValue.remarks,
+                    });
+                  }
+
+                  // Consistent sorting: Legal Opinion first, then Technical Valuation
+                  combinedDocs.sort((a, b) => {
+                    if (a.documentType === 'LEGAL_OPINION' && b.documentType !== 'LEGAL_OPINION') return -1;
+                    if (a.documentType !== 'LEGAL_OPINION' && b.documentType === 'LEGAL_OPINION') return 1;
+                    return 0;
+                  });
+
+                  const legalCount = combinedDocs.filter((d) => d.documentType === 'LEGAL_OPINION').length;
+                  const techCount = combinedDocs.filter((d) => d.documentType === 'TECHNICAL_VALUATION').length;
+                  const hasDuplicateRecords = legalCount > 1 || techCount > 1;
+
+                  return (
+                    <div className="bo-cv-doc-mgr-wrapper">
+                      {/* Feedback Notifications */}
+                      {newUploadError && (
+                        <div className="bo-cv-feedback-alert is-error">
+                          {newUploadError}
+                        </div>
+                      )}
+                      {newUploadSuccess && (
+                        <div className="bo-cv-feedback-alert is-success">
+                          {newUploadSuccess}
+                        </div>
+                      )}
+
+                      {/* A. Upload New Document Card */}
+                      <div className="bo-cv-doc-card">
+                        <div className="bo-cv-doc-card-header">
+                          <h4 className="bo-cv-doc-card-title">Upload New Document</h4>
+                        </div>
+                        <div className="bo-cv-doc-card-body">
+                          <div className="bo-cv-doc-form-row">
+                            {/* Column 1: Document Type */}
+                            <div className="bo-cv-doc-col">
+                              <label htmlFor="bo-cv-doc-type-input" className="bo-cv-doc-label">
+                                Document Type <span className="bo-cv-req">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                id="bo-cv-doc-type-input"
+                                className="bo-cv-doc-input bo-cv-doc-input--readonly"
+                                value={docTypeLabel}
+                                readOnly
+                              />
                             </div>
-                            <div className="bo-cv-file-card-details">
-                              <h4 className="bo-cv-file-name" title={legalOpinion.fileName || legalOpinion.documentTitle || 'Legal Opinion Document'}>
-                                {legalOpinion.fileName || legalOpinion.documentTitle || 'Legal Opinion Document'}
-                              </h4>
-                              <div className="bo-cv-file-meta-badges">
-                                {legalOpinion.fileSize && (
-                                  <span className="bo-cv-file-size">Size: {legalOpinion.fileSize}</span>
-                                )}
-                                {legalOpinion.uploadedAt && (
-                                  <span className="bo-cv-file-size">Uploaded: {new Date(legalOpinion.uploadedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                                )}
-                                <span className="bo-cv-file-status-badge">{legalOpinion.documentStatus || 'Uploaded'}</span>
+
+                            {/* Column 2: Upload File */}
+                            <div className="bo-cv-doc-col">
+                              <label htmlFor="bo-cv-doc-file-input" className="bo-cv-doc-label">
+                                Upload File <span className="bo-cv-req">*</span>
+                              </label>
+                              <div className="bo-cv-file-picker-wrapper">
+                                <input
+                                  ref={newDocFileInputRef}
+                                  type="file"
+                                  id="bo-cv-doc-file-input"
+                                  className="bo-cv-file-input-native"
+                                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                                  onChange={handleStep03FileSelect}
+                                  disabled={isSavingNewDoc}
+                                />
+                                <label
+                                  htmlFor="bo-cv-doc-file-input"
+                                  className={`bo-cv-file-picker-label ${newUploadFile ? 'has-file' : ''}`}
+                                >
+                                  <span className="bo-cv-file-picker-btn">Choose File</span>
+                                  <span
+                                    className="bo-cv-file-picker-name"
+                                    title={newUploadFile?.name || 'No file chosen'}
+                                  >
+                                    {newUploadFile ? newUploadFile.name : 'No file chosen'}
+                                  </span>
+                                </label>
                               </div>
                             </div>
-                          </div>
-                          <div className="bo-cv-file-card-actions bo-cv-file-card-actions--compact">
-                            <label
-                              htmlFor="bo-cv-legal-replace"
-                              className={`bo-btn bo-btn--outline bo-btn--sm bo-btn--icon bo-btn--replace${legalOpinion.loading ? ' is-disabled' : ''}`}
-                              title="Replace Legal Opinion Document"
-                              aria-label="Replace Legal Opinion Document"
-                            >
-                              <input
-                                type="file"
-                                id="bo-cv-legal-replace"
-                                className="bo-cv-file-input"
-                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
-                                onChange={(e) => handleUploadOrReplaceDocument(e, 'LEGAL_OPINION', legalOpinion, setLegalOpinion)}
-                                disabled={legalOpinion.loading}
-                              />
-                              {RefreshCwIcon && <RefreshCwIcon size={14} />}
-                            </label>
-                            <button
-                              type="button"
-                              className="bo-btn bo-btn--outline bo-btn--sm bo-btn--icon"
-                              onClick={() => handleViewBackOfficeDocument(legalOpinion, setLegalOpinion)}
-                              disabled={legalOpinion.loading}
-                              title="View Legal Opinion Document"
-                              aria-label="View Legal Opinion Document"
-                            >
-                              {EyeIcon && <EyeIcon size={14} />}
-                            </button>
-                            <button
-                              type="button"
-                              className="bo-btn bo-btn--outline bo-btn--sm bo-btn--icon"
-                              onClick={() => handleDownloadBackOfficeDocument(legalOpinion, setLegalOpinion)}
-                              disabled={legalOpinion.loading}
-                              title="Download Legal Opinion Document"
-                              aria-label="Download Legal Opinion Document"
-                            >
-                              {DownloadIcon && <DownloadIcon size={14} />}
-                            </button>
-                            <button
-                              type="button"
-                              className="bo-btn bo-btn--outline-danger bo-btn--sm bo-btn--icon"
-                              onClick={() => handleDeleteBackOfficeDocument('LEGAL_OPINION', legalOpinion, setLegalOpinion)}
-                              disabled={legalOpinion.loading}
-                              title="Delete Legal Opinion Document"
-                              aria-label="Delete Legal Opinion Document"
-                            >
-                              {Trash2Icon && <Trash2Icon size={14} />}
-                            </button>
-                          </div>
-                        </div>
 
-                        {legalOpinion.backOfficeApplicationDocumentId && (
-                          <div className="bo-cv-step-remarks-box bo-cv-step-remarks-box--compact">
-                            <label htmlFor="bo-cv-legal-remarks-input" className="bo-cv-step-remarks-label">
-                              Legal Opinion Remarks
-                            </label>
-                            <textarea
-                              id="bo-cv-legal-remarks-input"
-                              className="bo-cv-step-remarks-textarea"
-                              rows={2}
-                              placeholder="Enter Legal Opinion remarks..."
-                              value={legalOpinion.remarks || ''}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setLegalOpinion((prev) => ({ ...prev, remarks: val, error: null, successMsg: '' }));
-                              }}
-                              disabled={legalOpinion.savingRemarks}
-                            />
-                            <div className="bo-cv-step-remarks-footer">
-                              {legalOpinion.successMsg && (
-                                <span className="bo-cv-step-remarks-success">
-                                  ✓ {legalOpinion.successMsg}
-                                </span>
-                              )}
+                            {/* Column 3: Remarks */}
+                            <div className="bo-cv-doc-col">
+                              <label htmlFor="bo-cv-doc-remarks-input" className="bo-cv-doc-label">
+                                Remarks <span className="bo-cv-req">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                id="bo-cv-doc-remarks-input"
+                                className="bo-cv-doc-input"
+                                placeholder="Enter remarks..."
+                                value={newUploadRemarks}
+                                onChange={(e) => {
+                                  setNewUploadRemarks(e.target.value);
+                                  setNewUploadError(null);
+                                }}
+                                disabled={isSavingNewDoc}
+                              />
+                            </div>
+
+                            {/* Column 4: Save Button */}
+                            <div className="bo-cv-doc-col bo-cv-doc-col--action">
+                              <label className="bo-cv-doc-label bo-cv-doc-label--empty">&nbsp;</label>
                               <button
                                 type="button"
-                                className="bo-btn bo-btn--primary bo-btn--sm bo-cv-btn-save-remarks"
-                                onClick={() => handleOpenSaveRemarksConfirm('LEGAL_OPINION', 'Legal Opinion', legalOpinion, setLegalOpinion)}
-                                disabled={legalOpinion.savingRemarks || !(legalOpinion.remarks || '').trim()}
+                                className="bo-btn bo-btn--primary bo-cv-doc-save-btn"
+                                onClick={() => handleSaveStep03Document(activeStep)}
+                                disabled={isSavingNewDoc || !newUploadFile || !newUploadRemarks.trim()}
+                                title="Save Document"
                               >
-                                {legalOpinion.savingRemarks ? 'Saving...' : 'Save'}
+                                {SaveIcon && <SaveIcon size={16} />}
+                                <span>{isSavingNewDoc ? 'Saving...' : 'Save'}</span>
                               </button>
                             </div>
                           </div>
-                        )}
-                      </>
-                    )}
-
-                    {legalOpinion.loading && (
-                      <div className="bo-cv-feedback-alert is-info">
-                        Processing Legal Opinion document...
-                      </div>
-                    )}
-                    {legalOpinion.error && (
-                      <div className="bo-cv-feedback-alert is-error">
-                        {legalOpinion.error}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* ── STEP 07: TECHNICAL REPORT ── */}
-                {activeStep === 12 && (
-                  <div className="bo-cv-upload-container">
-                    {!technicalValue.backOfficeApplicationDocumentId && !technicalValue.file ? (
-                      <div className="bo-cv-dropzone-box">
-                        <input
-                          type="file"
-                          id="bo-cv-tech-upload"
-                          className="bo-cv-file-input"
-                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
-                          onChange={(e) => handleUploadOrReplaceDocument(e, 'TECHNICAL_VALUATION', technicalValue, setTechnicalValue)}
-                          disabled={technicalValue.loading}
-                        />
-                        <label htmlFor="bo-cv-tech-upload" className="bo-cv-dropzone-label">
-                          <div className="bo-cv-dropzone-icon">
-                            {BuildingIcon && <BuildingIcon size={24} />}
-                          </div>
-                          <strong className="bo-cv-dropzone-title">Upload Technical Valuation Report</strong>
-                          <span className="bo-cv-dropzone-sub">
-                            Drag and drop or browse file from your device &bull; Maximum file size 150 MB
-                          </span>
-                          <span className="bo-cv-dropzone-types">Supported formats: PDF, DOC, DOCX, JPG, PNG, WEBP</span>
-                        </label>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="bo-cv-file-card bo-cv-file-card--compact">
-                          <div className="bo-cv-file-card-info">
-                            <div className="bo-cv-file-card-icon">
-                              {FileCheckIcon && <FileCheckIcon size={24} />}
-                            </div>
-                            <div className="bo-cv-file-card-details">
-                              <h4 className="bo-cv-file-name" title={technicalValue.fileName || technicalValue.documentTitle || 'Technical Valuation Document'}>
-                                {technicalValue.fileName || technicalValue.documentTitle || 'Technical Valuation Document'}
-                              </h4>
-                              <div className="bo-cv-file-meta-badges">
-                                {technicalValue.fileSize && (
-                                  <span className="bo-cv-file-size">Size: {technicalValue.fileSize}</span>
-                                )}
-                                {technicalValue.uploadedAt && (
-                                  <span className="bo-cv-file-size">Uploaded: {new Date(technicalValue.uploadedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                                )}
-                                <span className="bo-cv-file-status-badge">{technicalValue.documentStatus || 'Uploaded'}</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="bo-cv-file-card-actions bo-cv-file-card-actions--compact">
-                            <label
-                              htmlFor="bo-cv-tech-replace"
-                              className={`bo-btn bo-btn--outline bo-btn--sm bo-btn--icon bo-btn--replace${technicalValue.loading ? ' is-disabled' : ''}`}
-                              title="Replace Technical Valuation Document"
-                              aria-label="Replace Technical Valuation Document"
-                            >
-                              <input
-                                type="file"
-                                id="bo-cv-tech-replace"
-                                className="bo-cv-file-input"
-                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
-                                onChange={(e) => handleUploadOrReplaceDocument(e, 'TECHNICAL_VALUATION', technicalValue, setTechnicalValue)}
-                                disabled={technicalValue.loading}
-                              />
-                              {RefreshCwIcon && <RefreshCwIcon size={14} />}
-                            </label>
-                            <button
-                              type="button"
-                              className="bo-btn bo-btn--outline bo-btn--sm bo-btn--icon"
-                              onClick={() => handleViewBackOfficeDocument(technicalValue, setTechnicalValue)}
-                              disabled={technicalValue.loading}
-                              title="View Technical Valuation Document"
-                              aria-label="View Technical Valuation Document"
-                            >
-                              {EyeIcon && <EyeIcon size={14} />}
-                            </button>
-                            <button
-                              type="button"
-                              className="bo-btn bo-btn--outline bo-btn--sm bo-btn--icon"
-                              onClick={() => handleDownloadBackOfficeDocument(technicalValue, setTechnicalValue)}
-                              disabled={technicalValue.loading}
-                              title="Download Technical Valuation Document"
-                              aria-label="Download Technical Valuation Document"
-                            >
-                              {DownloadIcon && <DownloadIcon size={14} />}
-                            </button>
-                            <button
-                              type="button"
-                              className="bo-btn bo-btn--outline-danger bo-btn--sm bo-btn--icon"
-                              onClick={() => handleDeleteBackOfficeDocument('TECHNICAL_VALUATION', technicalValue, setTechnicalValue)}
-                              disabled={technicalValue.loading}
-                              title="Delete Technical Valuation Document"
-                              aria-label="Delete Technical Valuation Document"
-                            >
-                              {Trash2Icon && <Trash2Icon size={14} />}
-                            </button>
-                          </div>
                         </div>
+                      </div>
 
-                        {technicalValue.backOfficeApplicationDocumentId && (
-                          <div className="bo-cv-step-remarks-box bo-cv-step-remarks-box--compact">
-                            <label htmlFor="bo-cv-tech-remarks-input" className="bo-cv-step-remarks-label">
-                              Technical Valuation Remarks
-                            </label>
-                            <textarea
-                              id="bo-cv-tech-remarks-input"
-                              className="bo-cv-step-remarks-textarea"
-                              rows={2}
-                              placeholder="Enter Technical Valuation remarks..."
-                              value={technicalValue.remarks || ''}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setTechnicalValue((prev) => ({ ...prev, remarks: val, error: null, successMsg: '' }));
-                              }}
-                              disabled={technicalValue.savingRemarks}
-                            />
-                            <div className="bo-cv-step-remarks-footer">
-                              {technicalValue.successMsg && (
-                                <span className="bo-cv-step-remarks-success">
-                                  ✓ {technicalValue.successMsg}
-                                </span>
+                      {/* B. Saved Documents Table Card */}
+                      <div className="bo-cv-doc-card bo-cv-doc-table-card">
+                        <div className="bo-cv-doc-card-header">
+                          <h4 className="bo-cv-doc-card-title">Saved Documents</h4>
+                        </div>
+                        <div className="bo-cv-doc-table-wrapper">
+                          {hasDuplicateRecords && (
+                            <div className="bo-cv-feedback-alert is-warning" style={{ margin: '12px 16px 0 16px' }}>
+                              Notice: Multiple active document records detected for this application in storage. All records are displayed below for review.
+                            </div>
+                          )}
+                          <table className="bo-cv-doc-table">
+                            <thead>
+                              <tr>
+                                <th style={{ width: '50px', textAlign: 'center' }}>#</th>
+                                <th style={{ textAlign: 'left' }}>Document Name</th>
+                                <th style={{ width: '170px', textAlign: 'center' }}>Document Type</th>
+                                <th style={{ width: '200px', textAlign: 'center' }}>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {combinedDocs.length === 0 ? (
+                                <tr>
+                                  <td colSpan={4} className="bo-cv-doc-table-empty">
+                                    No documents uploaded yet.
+                                  </td>
+                                </tr>
+                              ) : (
+                                combinedDocs.map((doc, idx) => {
+                                  const displayFileName = doc.originalFileName || doc.fileName || doc.documentTitle || 'Document';
+                                  const isDocLegal = doc.documentType === 'LEGAL_OPINION';
+                                  const rowDocTypeBadge = isDocLegal ? 'Legal Opinion' : 'Technical Valuation';
+                                  const rowSetter = isDocLegal ? setLegalOpinion : setTechnicalValue;
+                                  const docState = {
+                                    ...doc,
+                                    fileName: displayFileName,
+                                    documentType: doc.documentType,
+                                  };
+
+                                  return (
+                                    <tr key={doc.backOfficeApplicationDocumentId || idx}>
+                                      <td className="bo-cv-doc-td-idx">
+                                        {idx + 1}
+                                      </td>
+                                      <td className="bo-cv-doc-td-name">
+                                        <div className="bo-cv-doc-name-cell">
+                                          <span className="bo-cv-doc-icon">
+                                            {FileTextIcon && <FileTextIcon size={16} />}
+                                          </span>
+                                          <span className="bo-cv-doc-filename" title={displayFileName}>
+                                            {displayFileName}
+                                          </span>
+                                        </div>
+                                      </td>
+                                      <td className="bo-cv-doc-td-type">
+                                        <span className="bo-cv-doc-type-pill">
+                                          {rowDocTypeBadge}
+                                        </span>
+                                      </td>
+                                      <td className="bo-cv-doc-td-actions">
+                                        <div className="bo-cv-doc-actions-cell">
+                                          {/* 1. View */}
+                                          <button
+                                            type="button"
+                                            className="bo-btn bo-btn--outline bo-btn--sm bo-btn--icon bo-cv-action-btn"
+                                            onClick={() => handleViewBackOfficeDocument(docState, rowSetter)}
+                                            title="View Document"
+                                            aria-label="View Document"
+                                          >
+                                            {EyeIcon && <EyeIcon size={14} />}
+                                          </button>
+
+                                          {/* 2. Remarks (Read-Only Modal) */}
+                                          <button
+                                            type="button"
+                                            className="bo-btn bo-btn--outline bo-btn--sm bo-btn--icon bo-cv-action-btn"
+                                            onClick={() => setViewingRemarksDoc({
+                                              documentTitle: displayFileName,
+                                              remarks: doc.remarks || 'No remarks recorded for this document.',
+                                            })}
+                                            title="View Remarks"
+                                            aria-label="View Remarks"
+                                          >
+                                            {MessageSquareIcon && <MessageSquareIcon size={14} />}
+                                          </button>
+
+                                          {/* 3. Download */}
+                                          <button
+                                            type="button"
+                                            className="bo-btn bo-btn--outline bo-btn--sm bo-btn--icon bo-cv-action-btn"
+                                            onClick={() => handleDownloadBackOfficeDocument(docState, rowSetter)}
+                                            title="Download Document"
+                                            aria-label="Download Document"
+                                          >
+                                            {DownloadIcon && <DownloadIcon size={14} />}
+                                          </button>
+
+                                          {/* 4. Replace */}
+                                          <label
+                                            htmlFor={`bo-cv-table-replace-${doc.backOfficeApplicationDocumentId || idx}`}
+                                            className="bo-btn bo-btn--outline bo-btn--sm bo-btn--icon bo-btn--replace bo-cv-action-btn"
+                                            title="Replace Document"
+                                            aria-label="Replace Document"
+                                          >
+                                            <input
+                                              type="file"
+                                              id={`bo-cv-table-replace-${doc.backOfficeApplicationDocumentId || idx}`}
+                                              className="bo-cv-file-input"
+                                              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                                              onChange={(e) => handleTableReplaceDocument(e, doc)}
+                                              style={{ display: 'none' }}
+                                              disabled={isSavingNewDoc}
+                                            />
+                                            {RefreshCwIcon && <RefreshCwIcon size={14} />}
+                                          </label>
+
+                                          {/* 5. Delete */}
+                                          <button
+                                            type="button"
+                                            className="bo-btn bo-btn--outline-danger bo-btn--sm bo-btn--icon bo-cv-action-btn"
+                                            onClick={() => handleDeleteBackOfficeDocument(doc.documentType, docState, rowSetter)}
+                                            title="Delete Document"
+                                            aria-label="Delete Document"
+                                          >
+                                            {Trash2Icon && <Trash2Icon size={14} />}
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })
                               )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* Read-Only Remarks Viewer Modal */}
+                      {viewingRemarksDoc && (
+                        <div
+                          className="bo-cv-remarks-modal-overlay"
+                          onClick={() => setViewingRemarksDoc(null)}
+                        >
+                          <div
+                            className="bo-cv-remarks-modal-box"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="bo-cv-remarks-modal-header">
+                              <div className="bo-cv-remarks-modal-title-wrap">
+                                <span className="bo-cv-remarks-modal-icon">
+                                  {MessageSquareIcon && <MessageSquareIcon size={18} />}
+                                </span>
+                                <div>
+                                  <h4 className="bo-cv-remarks-modal-title">Document Remarks</h4>
+                                  <span className="bo-cv-remarks-modal-docname" title={viewingRemarksDoc.documentTitle}>
+                                    {viewingRemarksDoc.documentTitle}
+                                  </span>
+                                </div>
+                              </div>
                               <button
                                 type="button"
-                                className="bo-btn bo-btn--primary bo-btn--sm bo-cv-btn-save-remarks"
-                                onClick={() => handleOpenSaveRemarksConfirm('TECHNICAL_VALUATION', 'Technical Valuation', technicalValue, setTechnicalValue)}
-                                disabled={technicalValue.savingRemarks || !(technicalValue.remarks || '').trim()}
+                                className="bo-btn bo-btn--icon bo-cv-remarks-modal-close"
+                                onClick={() => setViewingRemarksDoc(null)}
+                                aria-label="Close remarks modal"
                               >
-                                {technicalValue.savingRemarks ? 'Saving...' : 'Save'}
+                                {XIcon && <XIcon size={18} />}
+                              </button>
+                            </div>
+                            <div className="bo-cv-remarks-modal-body">
+                              <label className="bo-cv-remarks-modal-label">Saved Remarks:</label>
+                              <div className="bo-cv-remarks-modal-content">
+                                {viewingRemarksDoc.remarks}
+                              </div>
+                            </div>
+                            <div className="bo-cv-remarks-modal-footer">
+                              <button
+                                type="button"
+                                className="bo-btn bo-btn--outline bo-btn--sm"
+                                onClick={() => setViewingRemarksDoc(null)}
+                              >
+                                Close
                               </button>
                             </div>
                           </div>
-                        )}
-                      </>
-                    )}
-
-                    {technicalValue.loading && (
-                      <div className="bo-cv-feedback-alert is-info">
-                        Processing Technical Valuation document...
-                      </div>
-                    )}
-                    {technicalValue.error && (
-                      <div className="bo-cv-feedback-alert is-error">
-                        {technicalValue.error}
-                      </div>
-                    )}
-                  </div>
-                )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}
