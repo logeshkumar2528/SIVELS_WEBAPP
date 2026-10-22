@@ -18,6 +18,7 @@ import { getCurrentUserId } from '../../utils/authHelper';
 import { DocumentUploadCard, DocumentPreviewModal, fetchDocumentBlobUrl, isPdfUrl } from '../../components/DocumentUpload/DocumentUploadSection';
 import { getProfileImageUrl, getRmDocumentDownloadUrl, buildFileUrl, getDocumentUrl } from '../../utils/profileImageHelper';
 import { isPdfFile, getAadhaarPath, getPanPath, getProfilePath } from '../Dashboard/Dashboard';
+import { StaffRoleSelect, toRoleId } from '../../components/StaffRoleSelect/StaffRoleSelect';
 import './RelationshipManagerCreate.css';
 
 const fields = [
@@ -43,6 +44,7 @@ export default function RelationshipManagerCreate() {
   const isEditMode = Boolean(rmId);
   const [form, setForm] = useState(emptyForm);
   const [isActive, setIsActive] = useState(true);
+  const [staffRoleId, setStaffRoleId] = useState('');
   const [saving, setSaving] = useState(false);
   const [loadingRecord, setLoadingRecord] = useState(isEditMode);
   const [error, setError] = useState('');
@@ -350,6 +352,7 @@ export default function RelationshipManagerCreate() {
         stateId: Number(form.stateId),
         cityId: Number(form.cityId),
         isActive,
+        roleId: toRoleId(staffRoleId),
         createdBy: existingRecord?.createdBy || getCurrentUserId(),
         modifiedBy: getCurrentUserId(),
       };
@@ -633,6 +636,13 @@ export default function RelationshipManagerCreate() {
             <small>Allow this manager to be assigned to new applications.</small>
           </span>
         </label>
+        <StaffRoleSelect
+          legacyType="RM"
+          legacyId={rmId}
+          value={staffRoleId}
+          onChange={setStaffRoleId}
+          disabled={saving || loadingRecord}
+        />
         {error && <p className="form-error-msg">{error}</p>}
         <div className="form-actions">
           <button type="button" className="masters-btn-secondary" onClick={() => navigate('/dashboard')} disabled={saving}>

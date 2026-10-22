@@ -1,5 +1,10 @@
 import axiosInstance from './axiosInstance';
 
+export const getDepartments = async () => {
+  const response = await axiosInstance.get('/AccessControl/departments');
+  return response.data;
+};
+
 export const getPermissionCatalog = async () => {
   const response = await axiosInstance.get('/AccessControl/permissions');
   return response.data;
@@ -35,11 +40,14 @@ export const deactivateRole = async (roleId) => {
   return response.data;
 };
 
-export const getStaffRoles = async ({ search, roleId } = {}) => {
+// legacyType + legacyId find the login behind one master record (e.g. RM 12).
+export const getStaffRoles = async ({ search, roleId, legacyType, legacyId } = {}) => {
   const response = await axiosInstance.get('/AccessControl/staff', {
     params: {
       ...(search ? { search } : {}),
       ...(roleId ? { roleId } : {}),
+      ...(legacyType ? { legacyType } : {}),
+      ...(legacyId ? { legacyId } : {}),
     },
   });
   return response.data;

@@ -19,6 +19,7 @@ import { getCurrentUserId } from '../../utils/authHelper';
 import { DocumentUploadCard, DocumentPreviewModal, fetchDocumentBlobUrl, isPdfUrl } from '../../components/DocumentUpload/DocumentUploadSection';
 import { getProfileImageUrl } from '../../utils/profileImageHelper';
 import { getFileUrl, isPdfFile, getAadhaarPath, getPanPath, getDocumentUrl } from '../Dashboard/Dashboard';
+import { StaffRoleSelect, toRoleId } from '../../components/StaffRoleSelect/StaffRoleSelect';
 import '../RelationshipManager/RelationshipManagerCreate.css';
 import './AMSCreate.css';
 
@@ -85,6 +86,7 @@ export default function AMSCreate() {
   const [form, setForm] = useState(createInitialForm);
   const [selectedDistrictIds, setSelectedDistrictIds] = useState([]);
   const [isActive, setIsActive] = useState(true);
+  const [staffRoleId, setStaffRoleId] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [submittingStep, setSubmittingStep] = useState('');
@@ -613,6 +615,7 @@ export default function AMSCreate() {
         accountNumber: form.accountNumber.trim(),
         ifscCode: form.ifscCode.trim().toUpperCase(),
         isActive,
+        roleId: toRoleId(staffRoleId),
         createdBy: getCurrentUserId(),
         modifiedBy: getCurrentUserId(),
         districtIds: selectedDistrictIds,
@@ -1008,6 +1011,13 @@ export default function AMSCreate() {
             <small>Allow this ASM to be assigned to applications in the selected districts.</small>
           </span>
         </label>
+        <StaffRoleSelect
+          legacyType="AMS"
+          legacyId={editAmsId}
+          value={staffRoleId}
+          onChange={setStaffRoleId}
+          disabled={saving || loadingRecord}
+        />
 
         <div className="form-actions">
           <button

@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { usePermissions } from '../../../../Core/src/auth/permissions';
 import {
   createRole,
+  getDepartments,
   getPermissionCatalog,
   getRole,
   getRoles,
@@ -35,6 +36,9 @@ export function RoleEditorPage() {
   const [roleName, setRoleName] = useState('');
   const [description, setDescription] = useState('');
   const [baseRoleId, setBaseRoleId] = useState('');
+  const [departments, setDepartments] = useState([]);
+  const [departmentId, setDepartmentId] = useState('');
+  const [departmentPicked, setDepartmentPicked] = useState(false);
   const [available, setAvailable] = useState([]);
   const [selected, setSelected] = useState([]);
   const [saved, setSaved] = useState([]);
@@ -47,19 +51,22 @@ export function RoleEditorPage() {
     (async () => {
       setIsLoading(true);
       try {
-        const [catalogData, rolesData, roleData] = await Promise.all([
+        const [catalogData, rolesData, roleData, departmentData] = await Promise.all([
           getPermissionCatalog(),
           getRoles(),
           isNew ? Promise.resolve(null) : getRole(roleId),
+          getDepartments(),
         ]);
         if (cancelled) return;
         setCatalog(catalogData);
         setSystemRoles(rolesData.filter((r) => r.isSystemRole && r.isActive));
+        setDepartments(departmentData);
         if (roleData) {
           setRole(roleData.role);
           setRoleName(roleData.role.roleName);
           setDescription(roleData.role.description || '');
           setBaseRoleId(String(roleData.role.baseRoleId ?? ''));
+          setDepartmentId(String(roleData.role.departmentId ?? ''));
           setAvailable(roleData.availablePermissions);
           setSelected(roleData.permissions);
           setSaved(roleData.permissions);
@@ -77,6 +84,11 @@ export function RoleEditorPage() {
 
   const chooseBaseRole = async (value) => {
     setBaseRoleId(value);
+    // A new role sits in its base role's department until the admin picks another one.
+    if (isNew && !departmentPicked) {
+      const base = systemRoles.find((r) => String(r.roleId) === value);
+      setDepartmentId(base ? String(base.departmentId) : '');
+    }
     if (!value) {
       setAvailable([]);
       setSelected([]);
@@ -99,6 +111,10 @@ export function RoleEditorPage() {
   const grid = useMemo(() => buildGrid(catalog, selected, available), [catalog, selected, available]);
   const locked = useMemo(() => alwaysGrantedCodes(catalog), [catalog]);
   const changes = diffPermissions(saved, selected);
+  const departmentOptions = useMemo(() => {
+    if (!role?.departmentId || departments.some((d) => d.departmentId === role.departmentId)) return departments;
+    return [...departments, { departmentId: role.departmentId, departmentName: `${role.departmentName} (inactive)` }];
+  }, [departments, role]);
 
   const save = async () => {
     const name = roleName.trim();
@@ -110,12 +126,17 @@ export function RoleEditorPage() {
       setError('Choose the system role this role is based on.');
       return;
     }
+    if (!departmentId) {
+      setError('Choose the department this role belongs to.');
+      return;
+    }
     setError(null);
     setIsSaving(true);
     const payload = {
       roleName: name,
       description: description.trim() || null,
       baseRoleId: baseRoleId ? Number(baseRoleId) : null,
+      departmentId: Number(departmentId),
       permissions: selected,
     };
     try {
@@ -214,6 +235,33 @@ export function RoleEditorPage() {
               {baseLocked && !isSystem && (
                 <span className="access-muted">Fixed while staff members have this role.</span>
               )}
+            </div>
+            <div className="form-group">
+              <label htmlFor="roleDepartment" className="form-label">
+                Department <span className="text-danger">*</span>
+              </label>
+              {isSystem ? (
+                <input id="roleDepartment" className="form-input" value={role?.departmentName || ''} disabled />
+              ) : (
+                <select
+                  id="roleDepartment"
+                  className="form-input access-select"
+                  value={departmentId}
+                  onChange={(e) => {
+                    setDepartmentId(e.target.value);
+                    setDepartmentPicked(true);
+                  }}
+                  disabled={readOnly || isSaving}
+                >
+                  <option value="">Choose a department</option>
+                  {departmentOptions.map((d) => (
+                    <option key={d.departmentId} value={d.departmentId}>
+                      {d.departmentName}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {isSystem && <span className="access-muted">System roles stay in their own department.</span>}
             </div>
             <div className="form-group">
               <label htmlFor="roleDescription" className="form-label">
