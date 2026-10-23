@@ -96,6 +96,50 @@ const Trash2Icon = iconMap['Trash2'] || iconMap['X'];
 const ExternalLinkIcon = iconMap['ExternalLink'];
 const MessageSquareIcon = iconMap['MessageSquare'] || iconMap['FileText'];
 
+// Step 03 Unified Verification Sections configuration
+const UNIFIED_VERIFICATION_SECTIONS = [
+  { id: 8, label: 'Property FI', requiresSecured: true },
+  { id: 9, label: 'Office FI', requiresSecured: true },
+  { id: 10, label: 'Residence FI', requiresSecured: true },
+  { id: 11, label: 'Legal Report', requiresSecured: false },
+  { id: 12, label: 'Technical Report', requiresSecured: false },
+];
+
+// Module-level cache for Loan Master data to avoid redundant network requests across customers
+let cachedLoanProducts = null;
+let cachedLoanTypes = null;
+let loanMastersFetchPromise = null;
+
+async function fetchLoanMastersCached(headers) {
+  if (cachedLoanProducts && cachedLoanTypes) {
+    return { products: cachedLoanProducts, types: cachedLoanTypes };
+  }
+  if (!loanMastersFetchPromise) {
+    loanMastersFetchPromise = Promise.all([
+      apiFetch(`${API_BASE}/LoanProductMaster`, { headers }).then(async (r) => {
+        if (!r.ok) throw new Error(`LoanProductMaster failed: ${r.status}`);
+        const data = await r.json();
+        return Array.isArray(data) ? data : (data?.value || data?.data || []);
+      }),
+      apiFetch(`${API_BASE}/LoanTypeMaster`, { headers }).then(async (r) => {
+        if (!r.ok) throw new Error(`LoanTypeMaster failed: ${r.status}`);
+        const data = await r.json();
+        return Array.isArray(data) ? data : (data?.value || data?.data || []);
+      }),
+    ])
+      .then(([products, types]) => {
+        cachedLoanProducts = products;
+        cachedLoanTypes = types;
+        return { products, types };
+      })
+      .catch((err) => {
+        loanMastersFetchPromise = null; // Reset to allow retry on error
+        throw err;
+      });
+  }
+  return loanMastersFetchPromise;
+}
+
 function formatCurrency(amount) {
   if (amount === null || amount === undefined || isNaN(amount) || amount === 0) return '₹0';
   return `₹${Number(amount).toLocaleString('en-IN')}`;
@@ -1306,24 +1350,194 @@ export default function CustomerVerification({
   // 1. Fetch Real Application from Backend via Phase 1/3 Hook
   const { verificationData, loading, error, refetch } = useVerificationWorkspace(customerId);
 
+  // ── Step 03 Loan Type Dynamic Classification ──
+  const [loanClassification, setLoanClassification] = useState({
+    status: 'IDLE', // 'IDLE' | 'LOADING' | 'RESOLVED' | 'FAILED'
+    loanProductId: null,
+    loanTypeId: null,
+    typeCode: null,
+    error: null,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    const rawProd = verificationData?.applicationDetails?.raw || verificationData?.application || {};
+    const rawCust = verificationData?.customer || verificationData?.raw?.customer || {};
+    const custItem = Array.isArray(rawCust) ? rawCust[0] : rawCust;
+
+    const currentLoanProductId =
+      rawProd.loanProductId ??
+      rawProd.LoanProductId ??
+      custItem?.loanProductId ??
+      custItem?.LoanProductId ??
+      null;
+
+    if (!verificationData && loading) {
+      return;
+    }
+
+    if (!currentLoanProductId && !verificationData) {
+      return;
+    }
+
+    async function resolveLoanClassification() {
+      if (isMounted) {
+        setLoanClassification((prev) => ({
+          ...prev,
+          status: 'LOADING',
+          loanProductId: currentLoanProductId,
+          error: null,
+        }));
+      }
+
+      try {
+        const token = getAccessToken();
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        // 1. Check direct backend projection if already present on product details
+        const directCode =
+          rawProd.loanTypeCode ??
+          rawProd.LoanTypeCode ??
+          rawProd.typeCode ??
+          rawProd.TypeCode ??
+          null;
+
+        if (directCode && typeof directCode === 'string') {
+          const cleanDirect = directCode.toUpperCase().trim();
+          if (cleanDirect === 'SEC' || cleanDirect === 'SECHOUS' || cleanDirect === 'UNSEC') {
+            if (isMounted) {
+              setLoanClassification({
+                status: 'RESOLVED',
+                loanProductId: currentLoanProductId,
+                loanTypeId: rawProd.loanTypeId ?? rawProd.LoanTypeId ?? null,
+                typeCode: cleanDirect,
+                error: null,
+              });
+            }
+            return;
+          }
+        }
+
+        // 2. Fetch or retrieve cached master data
+        const { products, types } = await fetchLoanMastersCached(headers);
+
+        // 3. Resolve product -> loanTypeId
+        const matchedProduct = currentLoanProductId != null
+          ? products.find((p) => String(p.loanProductId ?? p.LoanProductId) === String(currentLoanProductId))
+          : null;
+
+        const resolvedTypeId =
+          matchedProduct?.loanTypeId ??
+          matchedProduct?.LoanTypeId ??
+          rawProd.loanTypeId ??
+          rawProd.LoanTypeId ??
+          null;
+
+        // 4. Resolve loanTypeId -> typeCode
+        let resolvedCode = matchedProduct?.typeCode ?? matchedProduct?.TypeCode ?? null;
+        if (!resolvedCode && resolvedTypeId != null) {
+          const matchedType = types.find(
+            (t) => String(t.loanTypeId ?? t.LoanTypeId) === String(resolvedTypeId)
+          );
+          if (matchedType) {
+            resolvedCode = matchedType.typeCode ?? matchedType.TypeCode ?? null;
+          }
+        }
+
+        const finalCode = resolvedCode ? String(resolvedCode).toUpperCase().trim() : null;
+
+        if (finalCode === 'SEC' || finalCode === 'SECHOUS' || finalCode === 'UNSEC') {
+          if (isMounted) {
+            setLoanClassification({
+              status: 'RESOLVED',
+              loanProductId: currentLoanProductId,
+              loanTypeId: resolvedTypeId,
+              typeCode: finalCode,
+              error: null,
+            });
+          }
+        } else {
+          if (isMounted) {
+            setLoanClassification({
+              status: 'FAILED',
+              loanProductId: currentLoanProductId,
+              loanTypeId: resolvedTypeId,
+              typeCode: finalCode,
+              error: finalCode
+                ? `Unknown loan type code: ${finalCode}`
+                : `Could not resolve loan type for product #${currentLoanProductId || 'N/A'}`,
+            });
+          }
+        }
+      } catch (err) {
+        if (isMounted) {
+          console.warn('[CustomerVerification] Failed to resolve loan classification:', err);
+          setLoanClassification({
+            status: 'FAILED',
+            loanProductId: currentLoanProductId,
+            loanTypeId: null,
+            typeCode: null,
+            error: err?.message || 'Loan master fetch failed',
+          });
+        }
+      }
+    }
+
+    resolveLoanClassification();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [verificationData, loading]);
+
+  const isUnsecured = loanClassification.status === 'RESOLVED' && loanClassification.typeCode === 'UNSEC';
+  const isLoanClassificationLoading = loanClassification.status === 'LOADING' || loanClassification.status === 'IDLE';
+
+  const allowedUnifiedSteps = useMemo(() => {
+    if (isUnsecured || isLoanClassificationLoading) {
+      return UNIFIED_VERIFICATION_SECTIONS.filter((s) => !s.requiresSecured);
+    }
+    return UNIFIED_VERIFICATION_SECTIONS;
+  }, [isUnsecured, isLoanClassificationLoading]);
+
   // 2. Active 16-Step Workflow State (Initialized from URL ?step= query parameter)
   const [activeStep, setActiveStep] = useState(() => resolveInternalStepFromQuery(searchParams.get('step')));
   const [viewFormRefreshKey, setViewFormRefreshKey] = useState(0);
 
+  const effectiveActiveStep =
+    isUnsecured && (activeStep === 8 || activeStep === 9 || activeStep === 10)
+      ? 11
+      : activeStep;
+
+  // Auto-correct activeStep if UNSEC application lands on hidden internal step (8, 9, 10)
+  useEffect(() => {
+    if (isUnsecured && (activeStep === 8 || activeStep === 9 || activeStep === 10)) {
+      setActiveStep(11);
+    }
+  }, [isUnsecured, activeStep]);
+
   // Sync activeStep when searchParams changes (e.g. browser Back/Forward or direct URL change)
   useEffect(() => {
     const stepParam = searchParams.get('step');
-    const targetInternal = resolveInternalStepFromQuery(stepParam);
+    let targetInternal = resolveInternalStepFromQuery(stepParam);
+    if (isUnsecured && (targetInternal === 8 || targetInternal === 9 || targetInternal === 10)) {
+      targetInternal = 11;
+    }
     const targetVisible = resolveVisibleStepFromInternal(targetInternal);
 
     setActiveStep((currentInternal) => {
+      let nextInternal = currentInternal;
       const currentVisible = resolveVisibleStepFromInternal(currentInternal);
       if (currentVisible !== targetVisible) {
-        return targetInternal;
+        nextInternal = targetInternal;
       }
-      return currentInternal;
+      if (isUnsecured && (nextInternal === 8 || nextInternal === 9 || nextInternal === 10)) {
+        return 11;
+      }
+      return nextInternal;
     });
-  }, [searchParams]);
+  }, [searchParams, isUnsecured]);
 
   // Credit Manager must review the CAM before any other section unlocks (remembered per application)
   const camReviewedKey = `cm-cam-reviewed:${customerId}`;
@@ -1348,8 +1562,12 @@ export default function CustomerVerification({
   // Navigate to internal step and push to browser history (?step={visibleStep})
   const navigateToStep = useCallback((internalStepNum) => {
     if (camGateLocked && internalStepNum !== CAM_STEP_ID) return;
-    const visibleStep = resolveVisibleStepFromInternal(internalStepNum);
-    setActiveStep(internalStepNum);
+    let targetNum = internalStepNum;
+    if (isUnsecured && (targetNum === 8 || targetNum === 9 || targetNum === 10)) {
+      targetNum = 11;
+    }
+    const visibleStep = resolveVisibleStepFromInternal(targetNum);
+    setActiveStep(targetNum);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       if (next.get('step') === String(visibleStep)) {
@@ -1358,7 +1576,7 @@ export default function CustomerVerification({
       next.set('step', String(visibleStep));
       return next;
     }, { replace: false });
-  }, [setSearchParams, camGateLocked]);
+  }, [setSearchParams, camGateLocked, isUnsecured]);
 
   useEffect(() => {
     if (!camGateLocked || activeStep === CAM_STEP_ID) return;
@@ -12335,7 +12553,7 @@ export default function CustomerVerification({
                 const cmSectionStatus =
                   isCreditManagerView && sectionReview ? sectionReview.getStatus(step.id) : null;
                 const returnAttentionCount = isUnifiedVerif
-                  ? [8, 9, 10, 11, 12].reduce((sum, id) => sum + (creditReturnAttentionByStep[id] || 0), 0)
+                  ? (isUnsecured ? [11, 12] : [8, 9, 10, 11, 12]).reduce((sum, id) => sum + (creditReturnAttentionByStep[id] || 0), 0)
                   : (creditReturnAttentionByStep[step.id] || 0);
                 const isLocked = camGateLocked && step.id !== CAM_STEP_ID;
 
@@ -12349,7 +12567,7 @@ export default function CustomerVerification({
                       onClick={() => {
                         if (isLocked) return;
                         if (isUnifiedVerif) {
-                          navigateToStep(8);
+                          navigateToStep(isUnsecured ? 11 : 8);
                         } else if (isDocStep) {
                           if (activeStep < 2 || activeStep > 7) {
                             navigateToStep(2);
@@ -12979,6 +13197,30 @@ export default function CustomerVerification({
 
               {/* 2. Section Selector Dropdown */}
               <div className="bo-cv-unified-selector-row">
+                {loanClassification.status === 'FAILED' && (
+                  <div
+                    className="bo-cv-unified-alert bo-cv-unified-alert-warning"
+                    role="alert"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      width: '100%',
+                      marginBottom: 10,
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      background: '#fffbe6',
+                      border: '1px solid #ffe58f',
+                      color: '#ad6800',
+                      fontSize: 13,
+                    }}
+                  >
+                    {AlertTriangleIcon && <AlertTriangleIcon size={16} />}
+                    <span>
+                      Unable to verify loan classification from master data ({loanClassification.error || 'Unknown'}). Displaying all verification sections for review.
+                    </span>
+                  </div>
+                )}
                 <label htmlFor="bo-cv-unified-step-select" className="bo-cv-unified-selector-label">
                   Select Section:
                 </label>
@@ -12986,24 +13228,24 @@ export default function CustomerVerification({
                   <select
                     id="bo-cv-unified-step-select"
                     className="bo-cv-unified-select"
-                    value={activeStep}
+                    value={effectiveActiveStep}
                     onChange={(e) => navigateToStep(Number(e.target.value))}
                     aria-label="Select verification section"
                   >
-                    <option value={8}>Property FI</option>
-                    <option value={9}>Office FI</option>
-                    <option value={10}>Residence FI</option>
-                    <option value={11}>Legal Report</option>
-                    <option value={12}>Technical Report</option>
+                    {allowedUnifiedSteps.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
               {/* 3. Section-Scoped Credit Manager Return Panel */}
               <CreditReturnSectionPanel
-                key={activeStep}
+                key={effectiveActiveStep}
                 sectionTitle={activeReturnStepTitle}
-                items={creditReturnItemsByStep[activeStep] || []}
+                items={creditReturnItemsByStep[effectiveActiveStep] || []}
                 viewerRole={viewerRole}
                 canAct={canActOnCreditReturns}
                 lockedReason={creditReturnLockedReason}
@@ -13014,7 +13256,7 @@ export default function CustomerVerification({
               {/* 4. Selected Section Content */}
               <div className="bo-cv-unified-section-content">
                 {/* ── STEP 03: PROPERTY FI ── */}
-                {activeStep === 8 && (
+                {effectiveActiveStep === 8 && !isUnsecured && (
                   <div className="bo-cv-placeholder-panel">
                     <div className="bo-cv-placeholder-icon">
                       {BuildingIcon && <BuildingIcon size={40} />}
@@ -13026,7 +13268,7 @@ export default function CustomerVerification({
                 )}
 
                 {/* ── STEP 04: OFFICE FI ── */}
-                {activeStep === 9 && (
+                {effectiveActiveStep === 9 && !isUnsecured && (
                   <div className="bo-cv-placeholder-panel">
                     <div className="bo-cv-placeholder-icon">
                       {BuildingIcon && <BuildingIcon size={40} />}
@@ -13038,7 +13280,7 @@ export default function CustomerVerification({
                 )}
 
                 {/* ── STEP 05: RESIDENCE FI ── */}
-                {activeStep === 10 && (
+                {effectiveActiveStep === 10 && !isUnsecured && (
                   <div className="bo-cv-placeholder-panel">
                     <div className="bo-cv-placeholder-icon">
                       {BuildingIcon && <BuildingIcon size={40} />}
@@ -13050,8 +13292,8 @@ export default function CustomerVerification({
                 )}
 
                 {/* ── STEP 03: LEGAL REPORT (INTERNAL STEP 11) & TECHNICAL REPORT (INTERNAL STEP 12) ── */}
-                {(activeStep === 11 || activeStep === 12) && (() => {
-                  const isLegal = activeStep === 11;
+                {(effectiveActiveStep === 11 || effectiveActiveStep === 12) && (() => {
+                  const isLegal = effectiveActiveStep === 11;
                   const docType = isLegal ? 'LEGAL_OPINION' : 'TECHNICAL_VALUATION';
                   const docTypeLabel = isLegal ? 'Legal Opinion Report' : 'Technical Valuation Report';
                   const docPillLabel = isLegal ? 'Legal Opinion' : 'Technical Valuation';
@@ -13192,7 +13434,7 @@ export default function CustomerVerification({
                               <button
                                 type="button"
                                 className="bo-btn bo-btn--primary bo-cv-doc-save-btn"
-                                onClick={() => handleSaveStep03Document(activeStep)}
+                                onClick={() => handleSaveStep03Document(effectiveActiveStep)}
                                 disabled={isSavingNewDoc || !newUploadFile || !newUploadRemarks.trim()}
                                 title="Save Document"
                               >
