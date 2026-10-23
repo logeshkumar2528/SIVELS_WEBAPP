@@ -60,8 +60,28 @@ function renderPage() {
 
 describe('ReturnedByCredit', () => {
   beforeEach(() => {
+    localStorage.clear();
     service.resolveCreditReturnItem.mockReset();
     service.sendApplicationToCreditManager.mockReset();
+  });
+
+  it('keeps resubmitting disabled for roles without VERIFICATION.APPROVE', () => {
+    localStorage.setItem(
+      'sivels_currentUser',
+      JSON.stringify({ roleCode: 'BACK_OFFICE', permissions: ['VERIFICATION.VIEW', 'VERIFICATION.EDIT'] })
+    );
+    application.returnItems = [];
+    application.openReturnItems = [];
+    try {
+      renderPage();
+      fireEvent.click(screen.getByRole('button', { name: /Mark corrections and send application/ }));
+      const dialog = screen.getByRole('dialog');
+      expect(within(dialog).getByText(/can't send the application to the Credit Manager/)).toBeInTheDocument();
+      expect(within(dialog).getByRole('button', { name: 'Resubmit to Credit Manager' })).toBeDisabled();
+    } finally {
+      application.returnItems = [legalItem];
+      application.openReturnItems = [legalItem];
+    }
   });
 
   it('marks the returned Legal Report in red and opens that section when clicked', () => {

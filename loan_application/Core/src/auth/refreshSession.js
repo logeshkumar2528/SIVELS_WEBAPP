@@ -1,5 +1,6 @@
 import { resolveApiUrl } from '../api/apiConfig';
 import { handleSessionExpired } from './authEvents';
+import { storeRoleDetails } from './permissions';
 import {
   getAccessToken,
   getRefreshToken,
@@ -52,6 +53,7 @@ async function requestNewTokens(refreshToken) {
   if (!saveTokens(data)) {
     throw new SessionExpiredError();
   }
+  storeRoleDetails(data);
   return data.token;
 }
 

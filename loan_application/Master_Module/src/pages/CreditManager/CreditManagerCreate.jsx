@@ -16,6 +16,7 @@ import { getBankBranches } from '../../api/masters/bankBranchApi';
 import { getCurrentUserId } from '../../utils/authHelper';
 import { DocumentPreviewModal, DocumentUploadCard, fetchDocumentBlobUrl, isPdfUrl } from '../../components/DocumentUpload/DocumentUploadSection';
 import { getProfileImageUrl, getDocumentUrl } from '../../utils/profileImageHelper';
+import { StaffRoleSelect, toRoleId } from '../../components/StaffRoleSelect/StaffRoleSelect';
 import '../RelationshipManager/RelationshipManagerCreate.css';
 
 const createInitialForm = () => ({
@@ -63,6 +64,7 @@ export default function CreditManagerCreate({ onSuccessRedirect = '/credit-manag
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [isActive, setIsActive] = useState(true);
+  const [staffRoleId, setStaffRoleId] = useState('');
   const [genders, setGenders] = useState([]);
   const [states, setStates] = useState([]);
   const [cities, setCities] = useState([]);
@@ -432,6 +434,7 @@ export default function CreditManagerCreate({ onSuccessRedirect = '/credit-manag
           ifscCode: form.ifscCode.trim().toUpperCase(),
           userId: null,
           isActive,
+          roleId: toRoleId(staffRoleId),
           modifiedBy: currentAdminId,
         };
 
@@ -454,6 +457,7 @@ export default function CreditManagerCreate({ onSuccessRedirect = '/credit-manag
           ifscCode: form.ifscCode.trim().toUpperCase(),
           userId: null,
           isActive,
+          roleId: toRoleId(staffRoleId),
           createdBy: currentAdminId,
         };
 
@@ -954,6 +958,13 @@ export default function CreditManagerCreate({ onSuccessRedirect = '/credit-manag
               <small>Allow this credit manager to log in, evaluate, and sanction loans.</small>
             </span>
           </label>
+          <StaffRoleSelect
+            legacyType="CreditManager"
+            legacyId={editCmId}
+            value={staffRoleId}
+            onChange={setStaffRoleId}
+            disabled={saving || loadingRecord}
+          />
 
           {/* Form Actions */}
           <div className="form-actions">

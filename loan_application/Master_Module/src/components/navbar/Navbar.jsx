@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { MasterModal } from '../masters/MasterModal/MasterModal';
 import { logout } from '../../../../Core/src/auth/session';
+import { usePermissions } from '../../../../Core/src/auth/permissions';
 import './Navbar.css';
 
 const MASTERS_MENU = [
@@ -156,6 +157,7 @@ export function Navbar() {
     }
   })();
   const isAmsUser = currentUser?.role === 'AMS';
+  const { can } = usePermissions();
   const handleLogout = () => {
     logout();
   };
@@ -195,7 +197,11 @@ export function Navbar() {
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
 
-  const matchingCategories = MASTER_CATEGORIES.map((category) => ({
+  const canViewMasters = can('MASTERS.VIEW');
+  // Company configuration is part of the MASTERS permission module.
+  const canViewCompany = canViewMasters;
+
+  const matchingCategories = (canViewMasters ? MASTER_CATEGORIES : []).map((category) => ({
     ...category,
     items: category.items.filter((item) =>
       item.label.toLowerCase().includes(normalizedSearch)
@@ -203,6 +209,7 @@ export function Navbar() {
   })).filter((category) => category.items.length > 0);
 
   const isCompanyMatching =
+    canViewCompany &&
     COMPANY_CONFIG_ITEM &&
     (!normalizedSearch || COMPANY_CONFIG_ITEM.label.toLowerCase().includes(normalizedSearch));
 
@@ -273,14 +280,36 @@ export function Navbar() {
               Dashboard
             </NavLink>
 
-            <NavLink
-              to="/application-360"
-              className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-              onClick={closeMenus}
-            >
-              Application 360
-            </NavLink>
+            {can('APPLICATIONS.VIEW') && (
+              <NavLink
+                to="/application-360"
+                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+                onClick={closeMenus}
+              >
+                Application 360
+              </NavLink>
+            )}
 
+            {!isAmsUser && can('ROLES.VIEW') && (
+              <>
+                <NavLink
+                  to="/roles"
+                  className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+                  onClick={closeMenus}
+                >
+                  Roles
+                </NavLink>
+                <NavLink
+                  to="/staff-roles"
+                  className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+                  onClick={closeMenus}
+                >
+                  Staff Roles
+                </NavLink>
+              </>
+            )}
+
+            {(canViewMasters || canViewCompany) && (
             <div className="nav-dropdown-container" ref={dropdownRef}>
               <button 
                 className={`nav-link dropdown-toggle master-dropdown-trigger ${isMastersActive || isMastersOpen ? 'active' : ''}`}
@@ -366,6 +395,7 @@ export function Navbar() {
                 </div>
               )}
             </div>
+            )}
           </div>
         )}
         <button className="navbar-logout" onClick={() => setShowLogoutModal(true)}><LogOut size={17} /> <span>Logout</span></button>

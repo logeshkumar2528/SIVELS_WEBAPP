@@ -6,7 +6,11 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.js'],
-    include: ['Business_Modules/**/src/**/*.test.{js,jsx}', 'Core/src/**/*.test.{js,jsx}'],
+    include: [
+      'Business_Modules/**/src/**/*.test.{js,jsx}',
+      'Core/src/**/*.test.{js,jsx}',
+      'Master_Module/src/**/*.test.{js,jsx}',
+    ],
     // Written for `node --test`, not Vitest.
     exclude: ['**/node_modules/**', 'Business_Modules/rm_modules/src/pages/KycDocuments/kycDocumentState.test.js'],
     css: false,

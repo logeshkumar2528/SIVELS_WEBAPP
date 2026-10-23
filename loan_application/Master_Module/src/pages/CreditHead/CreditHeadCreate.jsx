@@ -16,6 +16,7 @@ import { getBankBranches } from '../../api/masters/bankBranchApi';
 import { getCurrentUserId } from '../../utils/authHelper';
 import { DocumentPreviewModal, DocumentUploadCard, fetchDocumentBlobUrl, isPdfUrl } from '../../components/DocumentUpload/DocumentUploadSection';
 import { getProfileImageUrl, getDocumentUrl } from '../../utils/profileImageHelper';
+import { StaffRoleSelect, toRoleId } from '../../components/StaffRoleSelect/StaffRoleSelect';
 import '../RelationshipManager/RelationshipManagerCreate.css';
 
 const createInitialForm = () => ({
@@ -63,6 +64,7 @@ export default function CreditHeadCreate({ onSuccessRedirect = '/credit-heads' }
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [isActive, setIsActive] = useState(true);
+  const [staffRoleId, setStaffRoleId] = useState('');
   const [genders, setGenders] = useState([]);
   const [states, setStates] = useState([]);
   const [cities, setCities] = useState([]);
@@ -469,6 +471,7 @@ export default function CreditHeadCreate({ onSuccessRedirect = '/credit-heads' }
           ifscCode: form.ifscCode.trim().toUpperCase(),
           userId: null,
           isActive,
+          roleId: toRoleId(staffRoleId),
           modifiedBy: currentAdminId,
         };
 
@@ -491,6 +494,7 @@ export default function CreditHeadCreate({ onSuccessRedirect = '/credit-heads' }
           ifscCode: form.ifscCode.trim().toUpperCase(),
           userId: null,
           isActive,
+          roleId: toRoleId(staffRoleId),
           createdBy: currentAdminId,
         };
 
@@ -966,6 +970,13 @@ export default function CreditHeadCreate({ onSuccessRedirect = '/credit-heads' }
               <small>Allow this credit head to evaluate and sanction loans.</small>
             </span>
           </label>
+          <StaffRoleSelect
+            legacyType="CreditHead"
+            legacyId={editChId}
+            value={staffRoleId}
+            onChange={setStaffRoleId}
+            disabled={saving || loadingRecord}
+          />
 
           {/* Form Actions */}
           <div className="form-actions">

@@ -20,6 +20,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.ADD_CUSTOMER,
     badgeKey: null,
     section:  'APPLICATIONS',
+    permission: 'APPLICATIONS.EDIT',
   },
   {
     id:       'new-applications',
@@ -28,6 +29,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.NEW_APPLICATIONS,
     badgeKey: 'newApplications',
     section:  'APPLICATIONS',
+    permission: 'APPLICATIONS.VIEW',
   },
   {
     id:       'pending-applications',
@@ -36,6 +38,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.PENDING_APPLICATIONS,
     badgeKey: 'verification',
     section:  'APPLICATIONS',
+    permission: 'APPLICATIONS.VIEW',
   },
   {
     id:       'approved-applications',
@@ -44,6 +47,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.APPROVED_APPLICATIONS,
     badgeKey: 'approved',
     section:  'APPLICATIONS',
+    permission: 'APPLICATIONS.VIEW',
   },
   {
     id:       'returned-applications',
@@ -52,6 +56,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.RETURNED_APPLICATIONS,
     badgeKey: 'returned',
     section:  'APPLICATIONS',
+    permission: 'APPLICATIONS.VIEW',
   },
   {
     id:       'customer-submission-history',
@@ -60,6 +65,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.CUSTOMER_SUBMISSION_HISTORY,
     badgeKey: 'customerSubmissionHistory',
     section:  'APPLICATIONS',
+    permission: 'APPLICATIONS.VIEW',
   },
 
   {
@@ -69,6 +75,7 @@ export const NAV_ITEMS = [
     route:    ROUTES.MY_AGENTS,
     badgeKey: 'myAgents',
     section:  'MANAGEMENT',
+    permission: 'STAFF.VIEW',
   },
   {
     id:       'profile',

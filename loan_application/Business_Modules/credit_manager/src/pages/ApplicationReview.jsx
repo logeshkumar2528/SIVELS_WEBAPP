@@ -41,6 +41,7 @@ import '../../../back_office/src/back-office/pages/SubmitToCredit/SubmitToCredit
 import '../styles/creditManager.css';
 import creditManagerService from '../api/creditManagerService';
 import { getCreditManagerAuth, getCreditManagerId } from '../auth/authStorage';
+import { usePermissions } from '../../../../Core/src/auth/permissions';
 import { ROUTES } from '../config/routeConfig';
 import { useCreditApplications } from '../context/CreditApplicationsContext';
 import {
@@ -176,6 +177,8 @@ function CreditDecisionPanel({
   onViewDocument,
   onDownloadDocument,
 }) {
+  const { can } = usePermissions();
+  const canDecide = can('CREDIT.APPROVE');
   const CheckCircleIcon = iconMap['CheckCircle'];
   const XCircleIcon = iconMap['XCircle'];
   const RotateCcwIcon = iconMap['RotateCcw'];
@@ -261,7 +264,7 @@ function CreditDecisionPanel({
         <PendingFlagsCard
           flags={pendingFlags}
           onRemove={onRemoveFlag}
-          canReturn={isPending}
+          canReturn={isPending && canDecide}
           onReturn={() => onAction(DECISION_ACTIONS.RETURN)}
         />
       )}

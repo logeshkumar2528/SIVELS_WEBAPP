@@ -239,9 +239,19 @@ export function buildLoginUser(result, mobileNumber) {
     mobileNumber,
     role: config.legacyRole,
     roleCode,
+    ...roleDetails(result),
     staffId: result.staffId ?? null,
     userId: result.userId ?? account.userId ?? null,
     landingPath: resolveLandingPath(roleCode, result.landingPath),
+  };
+}
+
+// roleCode stays the base (system) role used for routing; roleId/roleName name the actual role.
+function roleDetails(result) {
+  return {
+    ...(result?.roleId != null ? { roleId: result.roleId } : {}),
+    ...(result?.roleName ? { roleName: result.roleName } : {}),
+    ...(Array.isArray(result?.permissions) ? { permissions: result.permissions } : {}),
   };
 }
 
@@ -342,6 +352,7 @@ export function persistRoleSession(result, userData) {
         userId: uId,
         role: 'CreditManager',
         roleCode,
+        ...roleDetails(userData),
         staffId: userData.staffId,
         landingPath: userData.landingPath,
         mobileNumber,
@@ -370,6 +381,7 @@ export async function restoreSession(allowedRoles = []) {
     ...existing,
     role: ROLE_CONFIG[roleCode].legacyRole,
     roleCode,
+    ...roleDetails(me),
     mobileNumber: existing.mobileNumber || me.mobileNumber,
   };
   if (me.staffId != null) merged.staffId = me.staffId;
@@ -385,6 +397,7 @@ export async function restoreSession(allowedRoles = []) {
 
   setItem(`sivels_session_${roleCode}`, merged);
   setItem(CURRENT_USER_KEY, merged);
+  window.dispatchEvent(new CustomEvent(PERMISSIONS_CHANGED_EVENT));
   return roleCode;
 }
 

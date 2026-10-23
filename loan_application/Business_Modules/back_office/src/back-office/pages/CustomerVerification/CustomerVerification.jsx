@@ -29,6 +29,7 @@ import { apiFetch } from '../../../../../../Core/src/api/apiFetch';
 import { API_BASE_URL } from '../../../../../../Core/src/api/apiConfig';
 import { getAccessToken } from '../../../../../../Core/src/auth/tokenStore';
 import { needsAuthedFetch } from '../../../../../../Core/src/auth/useAuthedObjectUrl';
+import { hasPermission } from '../../../../../../Core/src/auth/permissions';
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import iconMap from '../../config/iconMap';
@@ -2223,6 +2224,7 @@ export default function CustomerVerification({
   const [bankingResultOnly, setBankingResultOnly] = useState(false);
   const [rtrWorkspaceOpen, setRtrWorkspaceOpen] = useState(false);
   const [incomeWorkspaceOpen, setIncomeWorkspaceOpen] = useState(false);
+  const [lipWorkspaceOpen, setLipWorkspaceOpen] = useState(false);
   const [rtrCalculatedTrigger, setRtrCalculatedTrigger] = useState(0);
   const [calcSheetTab, setCalcSheetTab] = useState('inputs'); // inputs | settings | results
   const [proposedLoanOpen, setProposedLoanOpen] = useState(false);
@@ -9514,6 +9516,7 @@ export default function CustomerVerification({
   const creditReturnPanelRef = useRef(null);
   const scrollToReturnPanelRef = useRef(false);
   const canSendToCreditManager = step13Readiness.isReady && openCreditReturnCount === 0;
+  const canApproveVerification = hasPermission('VERIFICATION.APPROVE');
 
   const openCreditReturnSection = useCallback(
     (stepId) => {
@@ -11738,6 +11741,26 @@ export default function CustomerVerification({
     (step) => ![9, 10, 11, 12].includes(step.id) && (SHOW_CAM_STEP || step.id !== CAM_STEP_ID)
   );
 
+  const visibleAssessmentMethods = (assessmentMethods.length > 0
+    ? assessmentMethods.filter((m) => {
+        const methodCode = (m.methodCode || '').toUpperCase();
+        const methodName = (m.methodName || m.name || '').toUpperCase();
+        const isLipMethod = methodCode.includes('LIP') || methodName.includes('LIP PROGRAM');
+        return methodCode !== 'ABB' && methodCode !== 'BANKING' && !isLipMethod && Number(m.assessmentMethodId) !== 2;
+      })
+    : [
+        { methodCode: 'INCOME', methodName: 'Income' },
+        { methodCode: 'NORMAL_INCOME', methodName: 'Normal Income' },
+        { methodCode: 'RTR', methodName: 'RTR' },
+      ]);
+  const lipMethod = { assessmentMethodId: 'lip-program', methodCode: 'LIP_PROGRAM', methodName: 'LIP Program' };
+  const lipMethodIndex = Math.min(2, visibleAssessmentMethods.length);
+  const assessmentMethodsWithLip = [
+    ...visibleAssessmentMethods.slice(0, lipMethodIndex),
+    lipMethod,
+    ...visibleAssessmentMethods.slice(lipMethodIndex),
+  ];
+
   return (
     <div
       className={`bo-cv-page-wrap${normalIncomeResultOpen ? ' is-normal-income-result-page' : ''}${
@@ -13850,7 +13873,25 @@ export default function CustomerVerification({
               STEP 11: ELIGIBILITY ASSESSMENT — COMMAND CENTER
           ══════════════════════════════════════════════════════════════════ */}
           {activeStep === 16 && (
-            selectedMethodCode === 'RTR' && rtrWorkspaceOpen ? (
+            lipWorkspaceOpen ? (
+              <LipProgramWorkspace
+                applicationProductDetailsId={resolvedAppProdId || calculationAppProdId}
+                agentCustomerId={resolvedTargetCustomerId || calculationAgentCustId}
+                applicantSequence={selectedApplicantSequence}
+                onBack={() => {
+                  setLipWorkspaceOpen(false);
+                  setSelectedMethodCode('INCOME');
+                  setIncomeWorkspaceOpen(false);
+                  setBankingWorkspaceOpen(false);
+                  setRtrWorkspaceOpen(false);
+                }}
+                onOpenProposedLoan={() => {
+                  setLipWorkspaceOpen(false);
+                  setSelectedMethodCode('RTR');
+                  setRtrWorkspaceOpen(true);
+                }}
+              />
+            ) : selectedMethodCode === 'RTR' && rtrWorkspaceOpen ? (
               <div className="bo-cv-elig-deck bo-cv-elig-deck--rtr-workspace">
                 <div className="bo-cv-rtr-workspace">
                   {/* ── CARD 1: HEADER + APPLICANT SELECTOR ── */}
@@ -15215,25 +15256,21 @@ export default function CustomerVerification({
                       </div>
                     ) : (
                       <div className="bo-cv-elig-method-rail" role="tablist" aria-label="Assessment methods">
-                        {(assessmentMethods.length > 0
-                          ? assessmentMethods.filter((m) => (m.methodCode || '').toUpperCase() !== 'ABB' && (m.methodCode || '').toUpperCase() !== 'BANKING' && Number(m.assessmentMethodId) !== 2)
-                          : [
-                              { methodCode: 'INCOME', methodName: 'Income' },
-                              { methodCode: 'NORMAL_INCOME', methodName: 'Normal Income' },
-                              { methodCode: 'RTR', methodName: 'RTR' },
-                            ]
-                        ).map((method) => {
+                        {assessmentMethodsWithLip.map((method) => {
                           const code = (method.methodCode || '').toUpperCase();
                           const isSelected = code === selectedMethodCode.toUpperCase();
                           const isIncome = code === 'INCOME';
                           const isRtr = code === 'RTR';
                           const isNormalIncome = code === 'NORMAL_INCOME';
+                          const isLipProgram = code === 'LIP_PROGRAM';
                           const shortName = isIncome
                             ? 'Eligibility - Salaried'
                             : isNormalIncome
                             ? 'Eligibility - Normal Income'
                             : isRtr
                             ? 'Eligibility - RTR Sheet'
+                            : isLipProgram
+                            ? 'LIP Program'
                             : method.methodName ||
                             (isIncome
                               ? 'Income'
@@ -15257,6 +15294,14 @@ export default function CustomerVerification({
                                   setRtrWorkspaceOpen(false);
                                   setIncomeWorkspaceOpen(false);
                                   launchNormalIncomeExcelDesktop();
+                                  return;
+                                }
+                                if (nextCode === 'LIP_PROGRAM') {
+                                  setSelectedMethodCode('LIP_PROGRAM');
+                                  setLipWorkspaceOpen(true);
+                                  setBankingWorkspaceOpen(false);
+                                  setRtrWorkspaceOpen(false);
+                                  setIncomeWorkspaceOpen(false);
                                   return;
                                 }
                                 setSelectedMethodCode(nextCode);
@@ -15288,6 +15333,8 @@ export default function CustomerVerification({
                                   ? CreditCardIcon && <CreditCardIcon size={15} />
                                   : isNormalIncome
                                   ? TrendingUpIcon && <TrendingUpIcon size={15} />
+                                  : isLipProgram
+                                  ? BuildingIcon && <BuildingIcon size={15} />
                                   : BuildingIcon && <BuildingIcon size={15} />}
                               </span>
                               <span className="bo-cv-elig-method-chip-text">
@@ -18557,6 +18604,10 @@ export default function CustomerVerification({
               {/* Dual Action Cards (Credit Manager view renders its own decision panel instead) */}
               {isCreditManagerView ? (
                 <div style={{ marginBottom: '20px' }}>{finalActionsSlot}</div>
+              ) : !canApproveVerification ? (
+                <p className="bo-cv-action-card-desc" style={{ marginBottom: '20px' }}>
+                  Your role can review this application but can&apos;t return it to the RM or send it to the Credit Manager.
+                </p>
               ) : (
               <div className="bo-cv-actions-grid">
                 {/* Card 1: Return to RM */}

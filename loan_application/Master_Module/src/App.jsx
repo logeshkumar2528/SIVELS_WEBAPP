@@ -59,6 +59,10 @@ import CreateUser from './pages/CreateUser/CreateUser';
 import AMSDashboard from './pages/AMSDashboard/AMSDashboard';
 import { Application360 } from './pages/Application360/Application360';
 import { PeopleDirectoryPage } from './pages/PeopleDirectory/PeopleDirectoryPage';
+import { RolesPage } from './pages/AccessControl/RolesPage';
+import { RoleEditorPage } from './pages/AccessControl/RoleEditorPage';
+import { StaffRolesPage } from './pages/AccessControl/StaffRolesPage';
+import { MasterEditAccess } from './components/masters/MasterEditAccess';
 import {
   GeneralDeviationMaster,
   CIRDeviationMaster,
@@ -124,9 +128,15 @@ function App() {
               <Route path="edit-customer/:customerId" element={<CustomerEdit />} />
               <Route path="edit-ams/:amsId" element={<AMSCreate />} />
               <Route path="edit-back-office/:backOfficeId" element={<BackOfficeCreate />} />
-              <Route path="company" element={<CompanyConfiguration />} />
+              <Route path="company" element={<MasterEditAccess />}>
+                <Route index element={<CompanyConfiguration />} />
+              </Route>
+              <Route path="roles" element={<RolesPage />} />
+              <Route path="roles/new" element={<RoleEditorPage />} />
+              <Route path="roles/:roleId" element={<RoleEditorPage />} />
+              <Route path="staff-roles" element={<StaffRolesPage />} />
             
-              <Route path="masters">
+              <Route path="masters" element={<MasterEditAccess />}>
                 <Route index element={<Navigate to="interest-type" replace />} />
                 <Route path="interest-type" element={<InterestTypePage />} />
                 <Route path="title" element={<Title />} />

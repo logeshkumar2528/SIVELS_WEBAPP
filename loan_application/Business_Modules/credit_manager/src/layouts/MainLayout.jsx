@@ -13,6 +13,7 @@ import { NAV_ITEMS } from '../config/navConfig';
 import { ROUTES } from '../config/routeConfig';
 import { getCreditManagerAuth } from '../auth/authStorage';
 import { useCreditApplications } from '../context/CreditApplicationsContext';
+import { usePermissions } from '../../../../Core/src/auth/permissions';
 
 function formatHeaderDate(date) {
   return date.toLocaleDateString('en-IN', {
@@ -27,6 +28,7 @@ function MainLayout({ title = '', subtitle = '', children }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { counts } = useCreditApplications();
+  const { roleName, filterNav } = usePermissions();
 
   useEffect(() => {
     document.body.classList.toggle('body--no-scroll', sidebarOpen);
@@ -52,19 +54,20 @@ function MainLayout({ title = '', subtitle = '', children }) {
 
   const user = useMemo(() => {
     const auth = getCreditManagerAuth();
+    const title = roleName || 'Credit Manager';
     return {
       id: auth?.creditManagerId ?? null,
       name: auth?.name || 'Credit Manager',
-      role: auth?.creditManagerCode ? `Credit Manager • ${auth.creditManagerCode}` : 'Credit Manager',
+      role: auth?.creditManagerCode ? `${title} • ${auth.creditManagerCode}` : title,
       imageRole: 'CreditManager',
       avatarUrl: null,
     };
-  }, []);
+  }, [roleName]);
 
   return (
     <div className={['layout', sidebarOpen ? 'layout--sidebar-open' : ''].join(' ').trim()}>
       <Sidebar
-        menu={NAV_ITEMS}
+        menu={filterNav(NAV_ITEMS)}
         activeRoute={pathname}
         badgeCounts={badgeCounts}
         isOpen={sidebarOpen}

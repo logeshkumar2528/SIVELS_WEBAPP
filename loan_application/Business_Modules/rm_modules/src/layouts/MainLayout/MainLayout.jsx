@@ -5,6 +5,7 @@ import Sidebar from '../../components/Sidebar/Sidebar';
 import Header from '../../components/Header/Header';
 import { NAV_ITEMS } from '../../config/navConfig';
 import { useRmDashboardData } from '../../hooks/useRmDashboardData';
+import { usePermissions } from '../../../../../Core/src/auth/permissions';
 import '../../styles/variables.css';
 import '../../styles/listingPages.css';
 import './MainLayout.css';
@@ -89,6 +90,8 @@ function MainLayout({
   }, []);
   const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
   const { badgeCounts } = useRmDashboardData();
+  const { roleName, filterNav } = usePermissions();
+  const menu = filterNav(NAV_ITEMS);
 
   useEffect(() => {
     document.body.classList.toggle('body--no-scroll', sidebarOpen);
@@ -125,14 +128,14 @@ function MainLayout({
     ...(user?.name && user.name !== 'Rajesh Kumar' ? user : {}),
     id: user?.id || user?.rmId || currentUser?.id || currentUser?.rmId || fallbackUser?.id,
     name: (user?.name && user.name !== 'Rajesh Kumar' ? user.name : null) || currentUser?.name || fallbackUser?.name,
-    role: (user?.role && user.role !== 'Relationship Manager' ? user.role : null) || currentUser?.role || fallbackUser?.role,
+    role: (user?.role && user.role !== 'Relationship Manager' ? user.role : null) || roleName || currentUser?.role || fallbackUser?.role,
     avatarUrl: user?.avatarUrl || currentUser?.avatarUrl || fallbackUser?.avatarUrl,
   };
 
   return (
     <div className={['layout', sidebarOpen ? 'layout--sidebar-open' : ''].join(' ').trim()}>
       <Sidebar
-        menu={NAV_ITEMS}
+        menu={menu}
         activeRoute={pathname}
         badgeCounts={badgeCounts}
         isOpen={sidebarOpen}
