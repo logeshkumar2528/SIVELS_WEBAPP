@@ -147,6 +147,19 @@ button { font: inherit; }
 .wl-btn-outline { border-color: var(--wl-border-strong); background: var(--wl-surface); color: var(--wl-text-2); box-shadow: var(--wl-shadow-sm); }
 .wl-btn-outline:hover:not(:disabled) { border-color: var(--wl-primary); color: var(--wl-primary); }
 
+.wl-back-btn {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  align-self: flex-start;
+}
+
+.wl-back-btn:hover:not(:disabled) {
+  background: var(--wl-primary-soft);
+}
+
 .wl-btn-light { height: 44px; padding: 0 20px; background: #fff; color: var(--wl-primary-deep); box-shadow: 0 6px 16px -6px rgba(0, 0, 0, 0.35); }
 .wl-btn-light:hover:not(:disabled) { transform: translateY(-1px); background: #f2fbf6; }
 
