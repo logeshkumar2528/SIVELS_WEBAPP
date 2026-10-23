@@ -236,6 +236,28 @@ const INITIAL_STEP_VERIFICATIONS = {
 };
 
 /**
+ * Display names for the five authoritative eligibility assessment methods.
+ */
+const FINAL_METHOD_DISPLAY_NAMES = {
+  INCOME: 'Eligibility - Salaried',
+  NORMAL_INCOME: 'Eligibility - Normal Income',
+  LIP_PROGRAM: 'LIP Program',
+  RTR: 'Eligibility - RTR Sheet',
+  BANKING: 'Eligibility - Banking Program',
+};
+
+/**
+ * Ordered list of the five assessment methods for the Phase 2B 2+2+1 Status grid.
+ */
+const STATUS_ASSESSMENT_METHODS = [
+  { code: 'INCOME', name: 'Eligibility - Salaried' },
+  { code: 'NORMAL_INCOME', name: 'Eligibility - Normal Income' },
+  { code: 'LIP_PROGRAM', name: 'LIP Program' },
+  { code: 'RTR', name: 'Eligibility - RTR Sheet' },
+  { code: 'BANKING', name: 'Eligibility - Banking Program' },
+];
+
+/**
  * 16-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
  */
 const VERIFICATION_WORKFLOW_STEPS = [
@@ -2212,9 +2234,12 @@ export default function CustomerVerification({
     );
   }, [activePdVerificationTypes, selectedPdTypeId]);
 
-  // 9. Eligibility Assessment State for Step 14 (Phase 2A)
+  // 9. Eligibility Assessment State for Step 14 (Phase 2A & 2B)
   const [assessmentMethods, setAssessmentMethods] = useState([]);
   const [selectedMethodCode, setSelectedMethodCode] = useState('INCOME');
+  const [finalSelectedMethodCode, setFinalSelectedMethodCode] = useState(null);
+  const [lipCurrentRecord, setLipCurrentRecord] = useState(null);
+  const [bankingEligibilityRecord, setBankingEligibilityRecord] = useState(null);
   const [selectedApplicantSequence, setSelectedApplicantSequence] = useState(0);
   const [methodsLoading, setMethodsLoading] = useState(false);
   const [methodsError, setMethodsError] = useState(null);
@@ -2526,6 +2551,51 @@ export default function CustomerVerification({
       0
     );
   }, [verificationData]);
+
+  // Reset temporary final method selection when customer or application product changes
+  useEffect(() => {
+    setFinalSelectedMethodCode(null);
+  }, [customerId, calculationAppProdId]);
+
+  // Phase 2B: Hydrate LIP Program current record for Step 16 completion status
+  useEffect(() => {
+    if (activeStep !== 16 || !calculationAppProdId || calculationAppProdId <= 0) {
+      setLipCurrentRecord(null);
+      return;
+    }
+    let isMounted = true;
+    backOfficeService.getLipProgramCurrent(calculationAppProdId, selectedApplicantSequence)
+      .then((res) => {
+        if (isMounted) setLipCurrentRecord(res || null);
+      })
+      .catch(() => {
+        if (isMounted) setLipCurrentRecord(null);
+      });
+    return () => { isMounted = false; };
+  }, [activeStep, calculationAppProdId, selectedApplicantSequence]);
+
+  // Phase 2B: Hydrate Banking eligibility analysis for Step 16 completion status
+  useEffect(() => {
+    if (activeStep !== 16 || !calculationAppProdId || calculationAppProdId <= 0) {
+      setBankingEligibilityRecord(null);
+      return;
+    }
+    let isMounted = true;
+    backOfficeService.getBankingEligibilityAnalysis(calculationAppProdId)
+      .then((res) => {
+        if (isMounted) setBankingEligibilityRecord(res || null);
+      })
+      .catch(() => {
+        return backOfficeService.getBankingAnalysis(calculationAppProdId)
+          .then((res) => {
+            if (isMounted) setBankingEligibilityRecord(res?.eligibility || res || null);
+          })
+          .catch(() => {
+            if (isMounted) setBankingEligibilityRecord(null);
+          });
+      });
+    return () => { isMounted = false; };
+  }, [activeStep, calculationAppProdId]);
 
   // The RTR result must use the active proposed-loan record, not the older assessment EMI factor.
   useEffect(() => {
@@ -4184,11 +4254,13 @@ export default function CustomerVerification({
     };
   }, [rtrDraftLoans, currentRtrAssessment]);
 
-  // Trigger RTR hydration when the Common Sheet is needed by RTR or Income.
+  // Trigger RTR hydration when the Common Sheet is needed by RTR or Income, and for Step 16 completion status
   useEffect(() => {
-    if (activeStep === 16 && (selectedMethodCode === 'RTR' || selectedMethodCode === 'INCOME') && calculationAppProdId > 0) {
-      fetchRTRLoans(calculationAppProdId, selectedApplicantSequence);
+    if (activeStep === 16 && calculationAppProdId > 0) {
       fetchRTRAssessments(calculationAppProdId, selectedApplicantSequence);
+      if (selectedMethodCode === 'RTR' || selectedMethodCode === 'INCOME') {
+        fetchRTRLoans(calculationAppProdId, selectedApplicantSequence);
+      }
     }
   }, [activeStep, selectedMethodCode, calculationAppProdId, selectedApplicantSequence, fetchRTRLoans, fetchRTRAssessments]);
 
@@ -11628,6 +11700,85 @@ export default function CustomerVerification({
     setBureauState('loading');
   };
 
+  // Phase 2B: Authoritative assessment completion determination for all 5 methods
+  const assessmentCompletionMap = useMemo(() => {
+    // 1. Salaried (INCOME)
+    const salariedMatch = (assessmentsList || []).find((a) => {
+      const isSalariedMethod = Number(a.assessmentMethodId) === 1;
+      const isApplicantMatch = Number(a.applicantSequence ?? 0) === Number(selectedApplicantSequence ?? 0);
+      return isSalariedMethod && isApplicantMatch;
+    });
+    const salariedRecord = (lastCalculationResponse && (Number(lastCalculationResponse.assessmentMethodId) === 1 || selectedMethodCode === 'INCOME'))
+      ? lastCalculationResponse
+      : salariedMatch;
+    const isSalariedCompleted = Boolean(
+      salariedRecord &&
+      (salariedRecord.loanEligibilityAssessmentId != null || salariedRecord.status === 'Calculated' || salariedRecord.calculatedAt != null) &&
+      salariedRecord.maximumEligibleLoanAmount !== null &&
+      salariedRecord.maximumEligibleLoanAmount !== undefined
+    );
+
+    // 2. Normal Income (NORMAL_INCOME)
+    const niSummary = savedNormalIncomeRecord?.summary || savedNormalIncomeRecord || null;
+    const isNormalIncomeCompleted = Boolean(
+      savedNormalIncomeRecord &&
+      niSummary &&
+      (
+        (niSummary.loanEligibilityLacs !== null && niSummary.loanEligibilityLacs !== undefined && Number(niSummary.loanEligibilityLacs) > 0) ||
+        (niSummary.eligibleMonthlyIncome !== null && niSummary.eligibleMonthlyIncome !== undefined && Number(niSummary.eligibleMonthlyIncome) > 0) ||
+        (niSummary.totalIncomeAnnual !== null && niSummary.totalIncomeAnnual !== undefined && Number(niSummary.totalIncomeAnnual) > 0)
+      )
+    );
+
+    // 3. LIP Program (LIP_PROGRAM)
+    const isLipCompleted = Boolean(
+      lipCurrentRecord &&
+      lipCurrentRecord.lipProgramAssessmentId != null &&
+      (
+        (lipCurrentRecord.eligibleLoanAmount !== null && lipCurrentRecord.eligibleLoanAmount !== undefined) ||
+        (lipCurrentRecord.eligibleEMI !== null && lipCurrentRecord.eligibleEMI !== undefined) ||
+        (lipCurrentRecord.totalMonthlyIncome !== null && lipCurrentRecord.totalMonthlyIncome !== undefined) ||
+        lipCurrentRecord.calculatedAt != null
+      )
+    );
+
+    // 4. RTR Sheet (RTR)
+    const isRtrCompleted = Boolean(
+      currentRtrAssessment &&
+      currentRtrAssessment.applicationRTRAssessmentId != null &&
+      (
+        currentRtrAssessment.finalLoanEligibility !== null &&
+        currentRtrAssessment.finalLoanEligibility !== undefined
+      )
+    );
+
+    // 5. Banking Program (BANKING)
+    const bankingResult = bankingEligibilityRecord?.eligibility || bankingEligibilityRecord || null;
+    const isBankingCompleted = Boolean(
+      bankingResult &&
+      (
+        (bankingResult.loanEligibilityInLacs !== null && bankingResult.loanEligibilityInLacs !== undefined) ||
+        (bankingResult.pooledEligibility?.loanEligibilityInLacs !== null && bankingResult.pooledEligibility?.loanEligibilityInLacs !== undefined) ||
+        (Array.isArray(bankingResult.banks) && bankingResult.banks.some((b) => b.isSelectedForEligibility))
+      )
+    );
+
+    return {
+      INCOME: isSalariedCompleted,
+      NORMAL_INCOME: isNormalIncomeCompleted,
+      LIP_PROGRAM: isLipCompleted,
+      RTR: isRtrCompleted,
+      BANKING: isBankingCompleted,
+    };
+  }, [assessmentsList, lastCalculationResponse, selectedApplicantSequence, selectedMethodCode, savedNormalIncomeRecord, lipCurrentRecord, currentRtrAssessment, bankingEligibilityRecord]);
+
+  // Phase 2B: Invalidate final selection if selected method is no longer completed
+  useEffect(() => {
+    if (finalSelectedMethodCode && assessmentCompletionMap && assessmentCompletionMap[finalSelectedMethodCode] === false) {
+      setFinalSelectedMethodCode(null);
+    }
+  }, [finalSelectedMethodCode, assessmentCompletionMap]);
+
   const handleBack = () => {
     if (onBack) onBack();
     else navigate(ROUTES.CUSTOMERS);
@@ -11761,6 +11912,11 @@ export default function CustomerVerification({
     lipMethod,
     ...visibleAssessmentMethods.slice(lipMethodIndex),
   ];
+
+  const isApprovedApplication = Number(verificationData?.overallStatus) === 4;
+  const isFinalMethodSelectionDisabled =
+    isApprovedApplication ||
+    (isCreditManagerView ? (!sectionReview?.canEdit || isCmSectionLocked) : false);
 
   return (
     <div
@@ -13885,6 +14041,11 @@ export default function CustomerVerification({
                   setIncomeWorkspaceOpen(false);
                   setBankingWorkspaceOpen(false);
                   setRtrWorkspaceOpen(false);
+                  if (calculationAppProdId > 0) {
+                    backOfficeService.getLipProgramCurrent(calculationAppProdId, selectedApplicantSequence)
+                      .then((res) => setLipCurrentRecord(res || null))
+                      .catch(() => setLipCurrentRecord(null));
+                  }
                 }}
                 onOpenProposedLoan={() => {
                   setLipWorkspaceOpen(false);
@@ -14474,6 +14635,11 @@ export default function CustomerVerification({
                   onBack={() => {
                     setBankingWorkspaceOpen(false);
                     setBankingResultOnly(false);
+                    if (calculationAppProdId > 0) {
+                      backOfficeService.getBankingEligibilityAnalysis(calculationAppProdId)
+                        .then((res) => setBankingEligibilityRecord(res || null))
+                        .catch(() => {});
+                    }
                   }}
                 />
               </div>
@@ -15499,33 +15665,104 @@ export default function CustomerVerification({
                     })()}
                   </div>
 
-                  <div className="bo-cv-elig-control-block">
-                    <div className="bo-cv-elig-control-label-row">
-                      <span className="bo-cv-elig-control-label">Applicant</span>
-                      <span className="bo-cv-elig-soft-pill">{allApplicants.length} profiles</span>
+                  <div className="bo-cv-elig-controls-right-col">
+                    <div className="bo-cv-elig-control-block">
+                      <div className="bo-cv-elig-control-label-row">
+                        <span className="bo-cv-elig-control-label">Applicant</span>
+                        <span className="bo-cv-elig-soft-pill">{allApplicants.length} profiles</span>
+                      </div>
+                      <div className="bo-cv-elig-person-rail" role="tablist" aria-label="Applicants">
+                        {allApplicants.map((app) => {
+                          const isSelected = app.sequence === selectedApplicantSequence;
+                          return (
+                            <button
+                              key={`applicant-tab-${app.sequence}`}
+                              type="button"
+                              role="tab"
+                              aria-selected={isSelected}
+                              className={`bo-cv-elig-person-chip ${isSelected ? 'is-active' : ''} ${app.isMain ? 'is-main' : ''}`}
+                              onClick={() => setSelectedApplicantSequence(app.sequence)}
+                            >
+                              <span className="bo-cv-elig-person-avatar">
+                                {UserIcon && <UserIcon size={14} />}
+                              </span>
+                              <span className="bo-cv-elig-person-meta">
+                                <strong>{app.name}</strong>
+                                <small>{app.isMain ? 'Main Applicant' : app.label}</small>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div className="bo-cv-elig-person-rail" role="tablist" aria-label="Applicants">
-                      {allApplicants.map((app) => {
-                        const isSelected = app.sequence === selectedApplicantSequence;
-                        return (
-                          <button
-                            key={`applicant-tab-${app.sequence}`}
-                            type="button"
-                            role="tab"
-                            aria-selected={isSelected}
-                            className={`bo-cv-elig-person-chip ${isSelected ? 'is-active' : ''} ${app.isMain ? 'is-main' : ''}`}
-                            onClick={() => setSelectedApplicantSequence(app.sequence)}
-                          >
-                            <span className="bo-cv-elig-person-avatar">
-                              {UserIcon && <UserIcon size={14} />}
+
+                    {/* Phase 2B: Right-Side Assessment Status Panel */}
+                    <div className="bo-cv-elig-control-block bo-cv-elig-status-panel">
+                      <div className="bo-cv-elig-control-label-row">
+                        <span className="bo-cv-elig-control-label">Assessment Status</span>
+                      </div>
+                      <div className="bo-cv-assessment-status-grid" role="group" aria-label="Assessment Status and Final Selection">
+                        {STATUS_ASSESSMENT_METHODS.map((item) => {
+                          const isCompleted = Boolean(assessmentCompletionMap[item.code]);
+                          const isSelected = finalSelectedMethodCode === item.code;
+                          const isDisabled = !isCompleted || isFinalMethodSelectionDisabled;
+                          return (
+                            <div
+                              key={item.code}
+                              className={`bo-cv-status-card ${isCompleted ? 'is-completed' : 'is-incomplete'} ${isSelected ? 'is-final-selected' : ''}`}
+                            >
+                              <div className="bo-cv-status-card-header">
+                                <span className="bo-cv-status-card-title">{item.name}</span>
+                                <span className={`bo-cv-status-badge ${isCompleted ? 'is-completed' : 'is-incomplete'}`}>
+                                  {isCompleted ? 'Completed' : 'Not Completed'}
+                                </span>
+                              </div>
+                              <div className="bo-cv-status-card-body">
+                                <label className={`bo-cv-status-checkbox-label ${isDisabled ? 'is-disabled' : ''}`}>
+                                  <input
+                                    type="checkbox"
+                                    id={`final-status-checkbox-${item.code}`}
+                                    name="finalAssessmentStatusCheckbox"
+                                    value={item.code}
+                                    checked={isSelected}
+                                    disabled={isDisabled}
+                                    onChange={() => {
+                                      if (!isDisabled) {
+                                        setFinalSelectedMethodCode((prev) => (prev === item.code ? null : item.code));
+                                      }
+                                    }}
+                                    className="bo-cv-status-checkbox"
+                                    aria-label={`${item.name} - ${isSelected ? 'Selected for Loan' : 'Select as Final'}`}
+                                  />
+                                  <span className="bo-cv-status-checkbox-text">
+                                    {isSelected ? 'Selected for Loan' : 'Select as Final'}
+                                  </span>
+                                </label>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="bo-cv-elig-final-summary" aria-live="polite">
+                        <div className="bo-cv-elig-final-summary-main">
+                          <span className="bo-cv-elig-final-summary-label">
+                            Final Assessment Method:{' '}
+                            <strong>
+                              {finalSelectedMethodCode
+                                ? FINAL_METHOD_DISPLAY_NAMES[finalSelectedMethodCode] || finalSelectedMethodCode
+                                : 'Not Selected'}
+                            </strong>
+                          </span>
+                          {finalSelectedMethodCode && (
+                            <span className="bo-cv-elig-final-badge">
+                              Selected for Loan
                             </span>
-                            <span className="bo-cv-elig-person-meta">
-                              <strong>{app.name}</strong>
-                              <small>{app.isMain ? 'Main Applicant' : app.label}</small>
-                            </span>
-                          </button>
-                        );
-                      })}
+                          )}
+                        </div>
+                        <p className="bo-cv-elig-final-summary-note">
+                          Temporary selection — not yet saved to the application.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </section>
