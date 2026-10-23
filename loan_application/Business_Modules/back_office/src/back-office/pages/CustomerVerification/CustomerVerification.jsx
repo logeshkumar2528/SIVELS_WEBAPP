@@ -2238,6 +2238,12 @@ export default function CustomerVerification({
   const [assessmentMethods, setAssessmentMethods] = useState([]);
   const [selectedMethodCode, setSelectedMethodCode] = useState('INCOME');
   const [finalSelectedMethodCode, setFinalSelectedMethodCode] = useState(null);
+  const [savedFinalAssessmentRecord, setSavedFinalAssessmentRecord] = useState(null);
+  const [finalAssessmentLoading, setFinalAssessmentLoading] = useState(false);
+  const [finalAssessmentSaving, setFinalAssessmentSaving] = useState(false);
+  const [finalAssessmentSaveStatus, setFinalAssessmentSaveStatus] = useState(null);
+  const [finalAssessmentErrorMessage, setFinalAssessmentErrorMessage] = useState(null);
+  const activeFinalAssessmentContextRef = useRef('');
   const [lipCurrentRecord, setLipCurrentRecord] = useState(null);
   const [bankingEligibilityRecord, setBankingEligibilityRecord] = useState(null);
   const [selectedApplicantSequence, setSelectedApplicantSequence] = useState(0);
@@ -2552,10 +2558,70 @@ export default function CustomerVerification({
     );
   }, [verificationData]);
 
-  // Reset temporary final method selection when customer or application product changes
+  // Feature A: Hydrate saved final assessment selection from backend
   useEffect(() => {
-    setFinalSelectedMethodCode(null);
-  }, [customerId, calculationAppProdId]);
+    if (!calculationAppProdId || calculationAppProdId <= 0) {
+      setFinalSelectedMethodCode(null);
+      setSavedFinalAssessmentRecord(null);
+      setFinalAssessmentLoading(false);
+      setFinalAssessmentSaveStatus(null);
+      setFinalAssessmentErrorMessage(null);
+      return;
+    }
+
+    const currentContext = String(calculationAppProdId);
+    activeFinalAssessmentContextRef.current = currentContext;
+    let isMounted = true;
+
+    setFinalAssessmentLoading(true);
+    setFinalAssessmentSaveStatus(null);
+    setFinalAssessmentErrorMessage(null);
+
+    backOfficeService.getFinalAssessment(calculationAppProdId)
+      .then((res) => {
+        if (!isMounted || activeFinalAssessmentContextRef.current !== currentContext) return;
+        const data = res?.value !== undefined ? res.value : res;
+        const isCompleted = Boolean(data?.isCompleted ?? data?.IsCompleted);
+        const code = String(data?.methodCode || data?.MethodCode || '').trim().toUpperCase();
+
+        if (isCompleted && code && STATUS_ASSESSMENT_METHODS.some((m) => m.code === code)) {
+          setFinalSelectedMethodCode(code);
+          setSavedFinalAssessmentRecord(data);
+          setFinalAssessmentSaveStatus('saved');
+        } else {
+          setFinalSelectedMethodCode(null);
+          setSavedFinalAssessmentRecord(null);
+          setFinalAssessmentSaveStatus(null);
+        }
+      })
+      .catch((err) => {
+        if (!isMounted || activeFinalAssessmentContextRef.current !== currentContext) return;
+        const status = err?.response?.status;
+        if (status === 404) {
+          // 404 indicates no saved final selection exists on the backend
+          setFinalSelectedMethodCode(null);
+          setSavedFinalAssessmentRecord(null);
+          setFinalAssessmentSaveStatus(null);
+        } else {
+          console.warn('[Final Assessment] Failed to fetch saved selection:', err);
+          const msg =
+            err?.response?.data?.message ||
+            err?.response?.data?.Message ||
+            err?.message ||
+            'Unable to load saved final assessment selection.';
+          setFinalAssessmentErrorMessage(msg);
+        }
+      })
+      .finally(() => {
+        if (isMounted && activeFinalAssessmentContextRef.current === currentContext) {
+          setFinalAssessmentLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [calculationAppProdId]);
 
   // Phase 2B: Hydrate LIP Program current record for Step 16 completion status
   useEffect(() => {
@@ -2574,29 +2640,39 @@ export default function CustomerVerification({
     return () => { isMounted = false; };
   }, [activeStep, calculationAppProdId, selectedApplicantSequence]);
 
-  // Phase 2B: Hydrate Banking eligibility analysis for Step 16 completion status
+  // Phase 2B: Hydrate Banking eligibility analysis and bank records for Step 16 completion and final selection
   useEffect(() => {
     if (activeStep !== 16 || !calculationAppProdId || calculationAppProdId <= 0) {
       setBankingEligibilityRecord(null);
       return;
     }
     let isMounted = true;
-    backOfficeService.getBankingEligibilityAnalysis(calculationAppProdId)
-      .then((res) => {
-        if (isMounted) setBankingEligibilityRecord(res || null);
-      })
-      .catch(() => {
-        return backOfficeService.getBankingAnalysis(calculationAppProdId)
-          .then((res) => {
-            if (isMounted) setBankingEligibilityRecord(res?.eligibility || res || null);
-          })
-          .catch(() => {
-            if (isMounted) setBankingEligibilityRecord(null);
-          });
+    Promise.allSettled([
+      backOfficeService.getBankingEligibilityAnalysis(calculationAppProdId),
+      backOfficeService.getBankingAnalysis(calculationAppProdId),
+      backOfficeService.getBankingDetails(calculationAppProdId),
+    ]).then(([eligRes, analysisRes, detailsRes]) => {
+      if (!isMounted) return;
+      const elig = eligRes.status === 'fulfilled' ? eligRes.value : null;
+      const analysis = analysisRes.status === 'fulfilled' ? analysisRes.value : null;
+      const details = detailsRes.status === 'fulfilled' ? detailsRes.value : null;
+
+      const baseResult = elig || analysis?.eligibility || analysis || null;
+      if (!baseResult && !details) {
+        setBankingEligibilityRecord(null);
+        return;
+      }
+
+      const rawBanks = Array.isArray(details) ? details : (Array.isArray(analysis?.banks) ? analysis.banks : (Array.isArray(elig?.banks) ? elig.banks : []));
+      setBankingEligibilityRecord({
+        ...(baseResult || {}),
+        banks: rawBanks,
       });
+    }).catch(() => {
+      if (isMounted) setBankingEligibilityRecord(null);
+    });
     return () => { isMounted = false; };
   }, [activeStep, calculationAppProdId]);
-
   // The RTR result must use the active proposed-loan record, not the older assessment EMI factor.
   useEffect(() => {
     if (activeStep !== 16 || !calculationAppProdId || calculationAppProdId <= 0) return;
@@ -6932,8 +7008,25 @@ export default function CustomerVerification({
     try {
       const saved = await backOfficeService.getEligibilityNormalIncome(resolvedAppProdId, resolvedTargetCustomerId);
       if (customerContextRef.current !== currentContext) return null;
-      setSavedNormalIncomeRecord(saved || null);
-      return saved;
+      let mergedSaved = saved || null;
+      if (mergedSaved && !mergedSaved.eligibilitySheetSnapshotId) {
+        try {
+          const actualBackOfficeId = getAuthenticatedBackOfficeId();
+          const statusRes = await backOfficeService.getEligibilityNormalIncomeSaveStatus(
+            resolvedAppProdId,
+            resolvedTargetCustomerId,
+            actualBackOfficeId
+          );
+          if (statusRes?.eligibilitySheetSnapshotId) {
+            mergedSaved = {
+              ...mergedSaved,
+              eligibilitySheetSnapshotId: statusRes.eligibilitySheetSnapshotId,
+            };
+          }
+        } catch (_) {}
+      }
+      setSavedNormalIncomeRecord(mergedSaved);
+      return mergedSaved;
     } catch (err) {
       if (customerContextRef.current !== currentContext) return null;
       console.warn('[Normal Income] Failed to load saved record:', err?.message || err);
@@ -11772,12 +11865,205 @@ export default function CustomerVerification({
     };
   }, [assessmentsList, lastCalculationResponse, selectedApplicantSequence, selectedMethodCode, savedNormalIncomeRecord, lipCurrentRecord, currentRtrAssessment, bankingEligibilityRecord]);
 
-  // Phase 2B: Invalidate final selection if selected method is no longer completed
-  useEffect(() => {
-    if (finalSelectedMethodCode && assessmentCompletionMap && assessmentCompletionMap[finalSelectedMethodCode] === false) {
-      setFinalSelectedMethodCode(null);
+  const isApprovedApplication = Number(verificationData?.overallStatus) === 4;
+  const isFinalMethodSelectionDisabled =
+    isApprovedApplication ||
+    isCreditManagerView ||
+    finalAssessmentSaving ||
+    finalAssessmentLoading;
+
+  // Resolve valid positive integer assessment ID and applicantSequence for each method
+  const resolveAssessmentIdAndSequence = useCallback((methodCode) => {
+    switch (methodCode) {
+      case 'INCOME': {
+        const salariedMatch = (assessmentsList || []).find((a) => {
+          const isSalariedMethod = Number(a.assessmentMethodId) === 1;
+          const isApplicantMatch = Number(a.applicantSequence ?? 0) === Number(selectedApplicantSequence ?? 0);
+          return isSalariedMethod && isApplicantMatch;
+        });
+        const salariedRecord = (lastCalculationResponse && (Number(lastCalculationResponse.assessmentMethodId) === 1 || selectedMethodCode === 'INCOME'))
+          ? lastCalculationResponse
+          : salariedMatch;
+        const assessmentId = Number(salariedRecord?.loanEligibilityAssessmentId || currentAssessment?.loanEligibilityAssessmentId || 0);
+        const applicantSequence = Number(salariedRecord?.applicantSequence ?? currentAssessment?.applicantSequence ?? selectedApplicantSequence ?? 0);
+        if (assessmentId > 0) {
+          return { valid: true, assessmentId, applicantSequence };
+        }
+        return { valid: false, error: 'Salaried Income assessment ID (loanEligibilityAssessmentId) is missing or invalid.' };
+      }
+
+      case 'NORMAL_INCOME': {
+        const snapshotId = Number(
+          savedNormalIncomeRecord?.eligibilitySheetSnapshotId ??
+          savedNormalIncomeRecord?.summary?.eligibilitySheetSnapshotId ??
+          excelDesktopState?.snapshotId ??
+          0
+        );
+        const finalId = snapshotId > 0 ? snapshotId : Number(savedNormalIncomeRecord?.id || 0);
+        if (finalId > 0) {
+          return { valid: true, assessmentId: finalId, applicantSequence: 0 };
+        }
+        return { valid: false, error: 'Normal Income snapshot ID (eligibilitySheetSnapshotId) is missing or invalid.' };
+      }
+
+      case 'LIP_PROGRAM': {
+        const assessmentId = Number(lipCurrentRecord?.lipProgramAssessmentId || 0);
+        const applicantSequence = Number(lipCurrentRecord?.applicantSequence ?? selectedApplicantSequence ?? 0);
+        if (assessmentId > 0) {
+          return { valid: true, assessmentId, applicantSequence };
+        }
+        return { valid: false, error: 'LIP Program assessment ID (lipProgramAssessmentId) is missing or invalid.' };
+      }
+
+      case 'RTR': {
+        const assessmentId = Number(currentRtrAssessment?.applicationRTRAssessmentId || 0);
+        const applicantSequence = Number(currentRtrAssessment?.applicantSequence ?? selectedApplicantSequence ?? 0);
+        if (assessmentId > 0) {
+          return { valid: true, assessmentId, applicantSequence };
+        }
+        return { valid: false, error: 'RTR assessment ID (applicationRTRAssessmentId) is missing or invalid.' };
+      }
+
+      case 'BANKING': {
+        const bankingResult = bankingEligibilityRecord?.eligibility || bankingEligibilityRecord || {};
+        const bankList = Array.isArray(bankingResult.banks) ? bankingResult.banks : [];
+        const selectedBanks = bankList.filter((b) => Boolean(b.isSelectedForEligibility));
+
+        if (selectedBanks.length === 1) {
+          const bankId = Number(selectedBanks[0].applicationBankingDetailsId || 0);
+          if (bankId > 0) {
+            return { valid: true, assessmentId: bankId, applicantSequence: 0 };
+          }
+          return { valid: false, error: 'Selected bank record has an invalid or missing applicationBankingDetailsId.' };
+        }
+
+        if (selectedBanks.length > 1) {
+          return {
+            valid: false,
+            isAmbiguous: true,
+            error: `Multiple banks (${selectedBanks.length}) are selected for eligibility. A single assessment ID cannot be unambiguously determined.`,
+          };
+        }
+
+        return {
+          valid: false,
+          isAmbiguous: true,
+          error: 'No bank record is marked as selected for eligibility (isSelectedForEligibility).',
+        };
+      }
+
+      default:
+        return { valid: false, error: `Unknown assessment method code: ${methodCode}` };
     }
-  }, [finalSelectedMethodCode, assessmentCompletionMap]);
+  }, [
+    assessmentsList,
+    selectedApplicantSequence,
+    lastCalculationResponse,
+    selectedMethodCode,
+    currentAssessment,
+    savedNormalIncomeRecord,
+    excelDesktopState,
+    lipCurrentRecord,
+    currentRtrAssessment,
+    bankingEligibilityRecord,
+  ]);
+
+  // Handle final assessment selection change (Phase D & E)
+  const handleFinalAssessmentSelect = useCallback(async (targetMethodCode) => {
+    if (isFinalMethodSelectionDisabled || finalAssessmentSaving) return;
+
+    // Deselection rule: Clicking already-selected method does not clear it
+    if (finalSelectedMethodCode === targetMethodCode) {
+      return;
+    }
+
+    if (!assessmentCompletionMap[targetMethodCode]) {
+      setFinalAssessmentErrorMessage(
+        `Cannot select ${FINAL_METHOD_DISPLAY_NAMES[targetMethodCode] || targetMethodCode}: Calculation is not completed.`
+      );
+      return;
+    }
+
+    const resolution = resolveAssessmentIdAndSequence(targetMethodCode);
+    if (!resolution.valid) {
+      setFinalAssessmentErrorMessage(resolution.error || `Unable to resolve assessment ID for ${targetMethodCode}.`);
+      return;
+    }
+
+    const appProdId = calculationAppProdId;
+    if (!appProdId || appProdId <= 0) {
+      setFinalAssessmentErrorMessage('Missing valid Application Product Details ID.');
+      return;
+    }
+
+    const currentContext = String(appProdId);
+    activeFinalAssessmentContextRef.current = currentContext;
+
+    const payload = {
+      methodCode: targetMethodCode,
+      assessmentId: resolution.assessmentId,
+      applicantSequence: resolution.applicantSequence,
+    };
+
+    setFinalAssessmentSaving(true);
+    setFinalAssessmentErrorMessage(null);
+
+    try {
+      const res = await backOfficeService.saveFinalAssessment(appProdId, payload);
+      if (activeFinalAssessmentContextRef.current !== currentContext) return;
+
+      const data = res?.value !== undefined ? res.value : res;
+      setFinalSelectedMethodCode(targetMethodCode);
+      setSavedFinalAssessmentRecord(data || payload);
+      setFinalAssessmentSaveStatus('saved');
+    } catch (err) {
+      if (activeFinalAssessmentContextRef.current !== currentContext) return;
+      console.error('[Final Assessment] Save failed:', err);
+      const errMsg =
+        err?.response?.data?.message ||
+        err?.response?.data?.Message ||
+        err?.message ||
+        'Failed to save final assessment selection to the application.';
+      setFinalAssessmentErrorMessage(errMsg);
+      setFinalAssessmentSaveStatus('error');
+    } finally {
+      if (activeFinalAssessmentContextRef.current === currentContext) {
+        setFinalAssessmentSaving(false);
+      }
+    }
+  }, [
+    isFinalMethodSelectionDisabled,
+    finalAssessmentSaving,
+    finalSelectedMethodCode,
+    assessmentCompletionMap,
+    resolveAssessmentIdAndSequence,
+    calculationAppProdId,
+  ]);
+
+  // Phase 2B/Feature A: Invalidate final selection if selected method is no longer completed
+  // (guarded against premature wipe during step navigation or initial record hydration)
+  useEffect(() => {
+    if (finalAssessmentLoading) return;
+    if (!finalSelectedMethodCode) return;
+
+    if (finalSelectedMethodCode === 'LIP_PROGRAM' && lipCurrentRecord === null) return;
+    if (finalSelectedMethodCode === 'BANKING' && bankingEligibilityRecord === null) return;
+    if (finalSelectedMethodCode === 'NORMAL_INCOME' && savedNormalIncomeRecord === null) return;
+    if (finalSelectedMethodCode === 'RTR' && currentRtrAssessment === null) return;
+
+    if (assessmentCompletionMap && assessmentCompletionMap[finalSelectedMethodCode] === false) {
+      setFinalSelectedMethodCode(null);
+      setFinalAssessmentSaveStatus(null);
+    }
+  }, [
+    finalSelectedMethodCode,
+    assessmentCompletionMap,
+    finalAssessmentLoading,
+    lipCurrentRecord,
+    bankingEligibilityRecord,
+    savedNormalIncomeRecord,
+    currentRtrAssessment,
+  ]);
 
   const handleBack = () => {
     if (onBack) onBack();
@@ -11912,11 +12198,6 @@ export default function CustomerVerification({
     lipMethod,
     ...visibleAssessmentMethods.slice(lipMethodIndex),
   ];
-
-  const isApprovedApplication = Number(verificationData?.overallStatus) === 4;
-  const isFinalMethodSelectionDisabled =
-    isApprovedApplication ||
-    (isCreditManagerView ? (!sectionReview?.canEdit || isCmSectionLocked) : false);
 
   return (
     <div
@@ -14636,9 +14917,19 @@ export default function CustomerVerification({
                     setBankingWorkspaceOpen(false);
                     setBankingResultOnly(false);
                     if (calculationAppProdId > 0) {
-                      backOfficeService.getBankingEligibilityAnalysis(calculationAppProdId)
-                        .then((res) => setBankingEligibilityRecord(res || null))
-                        .catch(() => {});
+                      Promise.allSettled([
+                        backOfficeService.getBankingEligibilityAnalysis(calculationAppProdId),
+                        backOfficeService.getBankingDetails(calculationAppProdId),
+                      ]).then(([eligRes, detailsRes]) => {
+                        const elig = eligRes.status === 'fulfilled' ? eligRes.value : null;
+                        const details = detailsRes.status === 'fulfilled' ? detailsRes.value : null;
+                        if (elig || details) {
+                          setBankingEligibilityRecord({
+                            ...(elig || {}),
+                            banks: Array.isArray(details) ? details : (elig?.banks || []),
+                          });
+                        }
+                      }).catch(() => {});
                     }
                   }}
                 />
@@ -15728,7 +16019,7 @@ export default function CustomerVerification({
                                     disabled={isDisabled}
                                     onChange={() => {
                                       if (!isDisabled) {
-                                        setFinalSelectedMethodCode((prev) => (prev === item.code ? null : item.code));
+                                        handleFinalAssessmentSelect(item.code);
                                       }
                                     }}
                                     className="bo-cv-status-checkbox"
@@ -15759,9 +16050,33 @@ export default function CustomerVerification({
                             </span>
                           )}
                         </div>
-                        <p className="bo-cv-elig-final-summary-note">
-                          Temporary selection — not yet saved to the application.
-                        </p>
+                        {finalAssessmentLoading ? (
+                          <p className="bo-cv-elig-final-summary-note">
+                            Loading saved final assessment selection...
+                          </p>
+                        ) : finalAssessmentSaving ? (
+                          <p className="bo-cv-elig-final-summary-note">
+                            Saving selection to application...
+                          </p>
+                        ) : finalAssessmentErrorMessage ? (
+                          <p className="bo-cv-elig-final-summary-note" style={{ color: '#dc2626' }}>
+                            ⚠️ {finalAssessmentErrorMessage}
+                          </p>
+                        ) : isCreditManagerView ? (
+                          <p className="bo-cv-elig-final-summary-note">
+                            {finalSelectedMethodCode
+                              ? 'Designated by Back Office for loan sanction (Read-only).'
+                              : 'No final assessment method selected by Back Office.'}
+                          </p>
+                        ) : finalAssessmentSaveStatus === 'saved' && finalSelectedMethodCode ? (
+                          <p className="bo-cv-elig-final-summary-note" style={{ color: '#16a34a' }}>
+                            ✓ Saved to application. To change, select another completed method.
+                          </p>
+                        ) : (
+                          <p className="bo-cv-elig-final-summary-note">
+                            Select one completed assessment method to designate for loan sanction.
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
