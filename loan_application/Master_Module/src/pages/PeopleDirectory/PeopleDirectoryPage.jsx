@@ -3089,6 +3089,14 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
           </div>
         </div>
       )}
+
+      {/* Sublist Records Modal (View Customers / View Agents) */}
+      {sublistModal && (
+        <SublistRecordsModal
+          modalData={sublistModal}
+          onClose={() => setSublistModal(null)}
+        />
+      )}
     </div>
   );
 }
