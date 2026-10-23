@@ -15263,6 +15263,9 @@ export default function CustomerVerification({
                           const isRtr = code === 'RTR';
                           const isNormalIncome = code === 'NORMAL_INCOME';
                           const isLipProgram = code === 'LIP_PROGRAM';
+                          const normalIncomeSessionActive =
+                            isNormalIncome &&
+                            ['preparing', 'waiting_for_save', 'saved', 'saved_with_errors', 'locked'].includes(excelDesktopState.status);
                           const shortName = isIncome
                             ? 'Eligibility - Salaried'
                             : isNormalIncome
@@ -15285,6 +15288,10 @@ export default function CustomerVerification({
                               type="button"
                               role="tab"
                               aria-selected={isSelected}
+                              disabled={normalIncomeSessionActive}
+                              title={normalIncomeSessionActive
+                                ? 'The Normal Income workbook already has an active Excel session.'
+                                : undefined}
                               className={`bo-cv-elig-method-chip ${isSelected ? 'is-active' : ''}`}
                               onClick={() => {
                                 const nextCode = code || 'INCOME';
@@ -15293,6 +15300,7 @@ export default function CustomerVerification({
                                   setBankingWorkspaceOpen(false);
                                   setRtrWorkspaceOpen(false);
                                   setIncomeWorkspaceOpen(false);
+                                  if (normalIncomeSessionActive) return;
                                   launchNormalIncomeExcelDesktop();
                                   return;
                                 }
@@ -15418,6 +15426,22 @@ export default function CustomerVerification({
                         error: 'Error',
                         idle: savedNormalIncomeRecord ? 'Saved' : 'Idle',
                       }[excelDesktopState.status] || (savedNormalIncomeRecord ? 'Saved' : 'Idle');
+                      const excelSessionActive = [
+                        'preparing',
+                        'waiting_for_save',
+                        'saved',
+                        'saved_with_errors',
+                        'locked',
+                      ].includes(excelDesktopState.status);
+                      const openExcelDisabled = excelSessionActive || normalIncomeDownloading;
+                      const userGuidance = {
+                        preparing: 'Opening Excel. Please wait…',
+                        waiting_for_save: 'Edit the workbook in Excel and press Ctrl+S. Keep this page open while saving.',
+                        saved: 'Saved successfully. Close Excel before opening this workbook again.',
+                        saved_with_errors: 'The workbook was saved with errors. Review the message above before reopening it.',
+                        locked: 'This workbook is already open in another Excel session. Close that session or wait for the lock to expire.',
+                        expired: 'The editing session expired. Open Excel again to start a new session.',
+                      }[excelDesktopState.status];
 
                       return (
                         <div className={`bo-cv-ni-sync is-${excelDesktopState.status}`} role="status" aria-live="polite">
@@ -15438,9 +15462,10 @@ export default function CustomerVerification({
                                 type="button"
                                 className="bo-cv-ni-sync-save"
                                 onClick={launchNormalIncomeExcelDesktop}
-                                title="Open customer workbook in Microsoft Excel Desktop"
+                                disabled={openExcelDisabled}
+                                title={openExcelDisabled ? (userGuidance || 'The workbook already has an active Excel session') : 'Open customer workbook in Microsoft Excel Desktop'}
                               >
-                                Open in Excel
+                                {excelDesktopState.status === 'preparing' ? 'Opening Excel…' : excelSessionActive ? 'Excel Session Active' : 'Open in Excel'}
                               </button>
                               {savedNormalIncomeRecord && (
                                 <button
@@ -15464,7 +15489,9 @@ export default function CustomerVerification({
                               )}
                             </span>
                           </div>
-                          {excelDesktopState.message && <p className="bo-cv-ni-sync-msg">{excelDesktopState.message}</p>}
+                          {(excelDesktopState.message || userGuidance) && (
+                            <p className="bo-cv-ni-sync-msg">{userGuidance || excelDesktopState.message}</p>
+                          )}
                           {excelDesktopState.error && (
                             <p className="bo-cv-ni-sync-msg" style={{ color: '#d32f2f' }}>
                               {excelDesktopState.error}
