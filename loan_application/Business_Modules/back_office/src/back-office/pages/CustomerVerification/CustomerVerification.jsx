@@ -42,6 +42,7 @@ import RtrCommonSheet from '../../components/RtrCommonSheet/RtrCommonSheet';
 import DeviationAssessment from '../../components/DeviationAssessment/DeviationAssessment';
 import CamReport from '../../components/CamReport/CamReport';
 import RecommendationSheet from '../../components/RecommendationSheet/RecommendationSheet';
+import LipProgramWorkspace from '../../components/LipProgramWorkspace/LipProgramWorkspace';
 import CustomerDocumentsPanel from '../../components/CustomerDocuments/CustomerDocumentsPanel';
 import CustomerProofVerificationSection from '../../components/CustomerDocuments/CustomerProofVerificationSection';
 import { CreditReturnAttentionStrip, CreditReturnSectionPanel } from '../../components/CreditReturnPanel/CreditReturnPanel';
