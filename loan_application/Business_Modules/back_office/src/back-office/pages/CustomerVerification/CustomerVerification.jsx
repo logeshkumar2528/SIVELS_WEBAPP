@@ -30,6 +30,7 @@ import { API_BASE_URL } from '../../../../../../Core/src/api/apiConfig';
 import { getAccessToken } from '../../../../../../Core/src/auth/tokenStore';
 import { needsAuthedFetch } from '../../../../../../Core/src/auth/useAuthedObjectUrl';
 import { hasPermission } from '../../../../../../Core/src/auth/permissions';
+import { getStoredRoleCode } from '../../../../../../Core/src/auth/session';
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import iconMap from '../../config/iconMap';
@@ -11865,10 +11866,25 @@ export default function CustomerVerification({
     };
   }, [assessmentsList, lastCalculationResponse, selectedApplicantSequence, selectedMethodCode, savedNormalIncomeRecord, lipCurrentRecord, currentRtrAssessment, bankingEligibilityRecord]);
 
-  const isApprovedApplication = Number(verificationData?.overallStatus) === 4;
+  const currentRoleCode = (getStoredRoleCode() || '').toUpperCase();
+  const isCreditHead = currentRoleCode === 'CREDIT_HEAD';
+  const isCreditManager =
+    isCreditManagerView &&
+    currentRoleCode === 'CREDIT_MANAGER';
+  const isApplicationClosed =
+    Number(verificationData?.overallStatus) === 4 ||
+    Number(verificationData?.overallStatus) === 5 ||
+    Number(verificationData?.overallStatus) === 6;
+  const isWorkflowEditable = sectionReview ? Boolean(sectionReview.canEdit) : true;
+
+  const canCreditManagerSelect =
+    isCreditManager &&
+    !isApplicationClosed &&
+    isWorkflowEditable &&
+    !isCmSectionLocked;
+
   const isFinalMethodSelectionDisabled =
-    isApprovedApplication ||
-    isCreditManagerView ||
+    !canCreditManagerSelect ||
     finalAssessmentSaving ||
     finalAssessmentLoading;
 
@@ -11970,7 +11986,7 @@ export default function CustomerVerification({
 
   // Handle final assessment selection change (Phase D & E)
   const handleFinalAssessmentSelect = useCallback(async (targetMethodCode) => {
-    if (isFinalMethodSelectionDisabled || finalAssessmentSaving) return;
+    if (!canCreditManagerSelect || isFinalMethodSelectionDisabled || finalAssessmentSaving) return;
 
     // Deselection rule: Clicking already-selected method does not clear it
     if (finalSelectedMethodCode === targetMethodCode) {
@@ -12032,6 +12048,7 @@ export default function CustomerVerification({
       }
     }
   }, [
+    canCreditManagerSelect,
     isFinalMethodSelectionDisabled,
     finalAssessmentSaving,
     finalSelectedMethodCode,
@@ -12046,6 +12063,7 @@ export default function CustomerVerification({
     if (finalAssessmentLoading) return;
     if (!finalSelectedMethodCode) return;
 
+    if (finalSelectedMethodCode === 'INCOME' && (!assessmentsList || assessmentsList.length === 0) && !lastCalculationResponse) return;
     if (finalSelectedMethodCode === 'LIP_PROGRAM' && lipCurrentRecord === null) return;
     if (finalSelectedMethodCode === 'BANKING' && bankingEligibilityRecord === null) return;
     if (finalSelectedMethodCode === 'NORMAL_INCOME' && savedNormalIncomeRecord === null) return;
@@ -12059,6 +12077,8 @@ export default function CustomerVerification({
     finalSelectedMethodCode,
     assessmentCompletionMap,
     finalAssessmentLoading,
+    assessmentsList,
+    lastCalculationResponse,
     lipCurrentRecord,
     bankingEligibilityRecord,
     savedNormalIncomeRecord,
@@ -16024,6 +16044,21 @@ export default function CustomerVerification({
                                     }}
                                     className="bo-cv-status-checkbox"
                                     aria-label={`${item.name} - ${isSelected ? 'Selected for Loan' : 'Select as Final'}`}
+                                    title={
+                                      !isCompleted
+                                        ? `${item.name} is not completed. Only completed methods can be selected.`
+                                        : !isCreditManagerView
+                                          ? 'Final assessment method selection is performed by Credit Manager.'
+                                          : isCreditHead
+                                            ? 'Read-only view for Credit Head.'
+                                            : isCmSectionLocked
+                                              ? 'Click "Edit" on this section to change selection.'
+                                              : !isWorkflowEditable || isApplicationClosed
+                                                ? 'Application is read-only.'
+                                                : isSelected
+                                                  ? `${item.name} is selected for loan sanction.`
+                                                  : `Select ${item.name} as final assessment method.`
+                                    }
                                   />
                                   <span className="bo-cv-status-checkbox-text">
                                     {isSelected ? 'Selected for Loan' : 'Select as Final'}
@@ -16062,15 +16097,37 @@ export default function CustomerVerification({
                           <p className="bo-cv-elig-final-summary-note" style={{ color: '#dc2626' }}>
                             ⚠️ {finalAssessmentErrorMessage}
                           </p>
-                        ) : isCreditManagerView ? (
+                        ) : !isCreditManagerView ? (
                           <p className="bo-cv-elig-final-summary-note">
                             {finalSelectedMethodCode
-                              ? 'Designated by Back Office for loan sanction (Read-only).'
-                              : 'No final assessment method selected by Back Office.'}
+                              ? 'Designated by Credit Manager for loan sanction.'
+                              : 'Not Selected — Awaiting Credit Manager selection.'}
+                          </p>
+                        ) : isCreditHead ? (
+                          <p className="bo-cv-elig-final-summary-note">
+                            {finalSelectedMethodCode
+                              ? 'Designated by Credit Manager for loan sanction (Read-only view for Credit Head).'
+                              : 'Read-only view for Credit Head — Awaiting Credit Manager selection.'}
+                          </p>
+                        ) : !isWorkflowEditable || isApplicationClosed ? (
+                          <p className="bo-cv-elig-final-summary-note">
+                            {finalSelectedMethodCode
+                              ? 'Designated for loan sanction (Read-only — application is no longer pending).'
+                              : 'No final assessment method selected (Read-only — application is no longer pending).'}
+                          </p>
+                        ) : isCmSectionLocked ? (
+                          <p className="bo-cv-elig-final-summary-note">
+                            {finalSelectedMethodCode
+                              ? 'Click "Edit" on this section to change the final assessment method.'
+                              : 'Click "Edit" on this section to select a final assessment method.'}
                           </p>
                         ) : finalAssessmentSaveStatus === 'saved' && finalSelectedMethodCode ? (
                           <p className="bo-cv-elig-final-summary-note" style={{ color: '#16a34a' }}>
                             ✓ Saved to application. To change, select another completed method.
+                          </p>
+                        ) : finalSelectedMethodCode ? (
+                          <p className="bo-cv-elig-final-summary-note">
+                            Designated for loan sanction. To change, select another completed method.
                           </p>
                         ) : (
                           <p className="bo-cv-elig-final-summary-note">
