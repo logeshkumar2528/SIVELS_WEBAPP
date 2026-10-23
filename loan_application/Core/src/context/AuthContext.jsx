@@ -1,48 +1,14 @@
 import React, { createContext, useContext, useState } from "react";
 import { clearSession } from "../auth/tokenStore";
-
+import { getStoredUser } from "../auth/session";
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  // Initialize state from localStorage with recency-aware session resolution
+  // Initialize state using tab-aware and route-aware session resolution
   const [currentUser, setCurrentUser] = useState(() => {
     try {
-      const saved = localStorage.getItem('sivels_currentUser');
-      const parsedSaved = saved ? JSON.parse(saved) : null;
-
-      const agentAuthRaw = localStorage.getItem('agentAuth');
-      const parsedAgentAuth = agentAuthRaw ? JSON.parse(agentAuthRaw) : null;
-
-      const boAuthRaw = localStorage.getItem('backOfficeAuth');
-      const parsedBoAuth = boAuthRaw ? JSON.parse(boAuthRaw) : null;
-
-      const getTs = (obj) => {
-        if (!obj || typeof obj !== 'object') return 0;
-        const ts = obj.loginTimestamp || obj.timestamp || obj.createdAt;
-        if (!ts) return 0;
-        const ms = new Date(ts).getTime();
-        return isNaN(ms) ? 0 : ms;
-      };
-
-      const agentTs = getTs(parsedAgentAuth);
-      const boTs = getTs(parsedBoAuth);
-      const savedTs = getTs(parsedSaved);
-
-      // On /Agent routes, verify if Agent session is the authoritative one
-      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/Agent')) {
-        if (parsedAgentAuth && parsedAgentAuth.isAuthenticated && agentTs >= boTs && agentTs >= savedTs) {
-          return parsedAgentAuth;
-        }
-      }
-
-      if (parsedSaved) {
-        return parsedSaved;
-      }
-      if (parsedAgentAuth && parsedAgentAuth.isAuthenticated) {
-        return parsedAgentAuth;
-      }
-      return null;
+      return getStoredUser();
     } catch {
       return null;
     }
@@ -69,6 +35,14 @@ export const AuthProvider = ({ children }) => {
   const login = (userData, backendResponse) => {
     setCurrentUser(userData);
     localStorage.setItem('sivels_currentUser', JSON.stringify(userData));
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('sivels_tabUser', JSON.stringify(userData));
+        if (userData?.roleCode) {
+          sessionStorage.setItem('sivels_tabRole', userData.roleCode);
+        }
+      }
+    } catch {}
 
     let generatedPermissions = [];
     let userRoles = [];

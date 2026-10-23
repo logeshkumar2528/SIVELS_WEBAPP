@@ -7,7 +7,7 @@
  * loan terms. Values the system does not capture yet are shown as NIL.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import backOfficeService from '../../api/backOfficeService';
+import approvalDocumentService from '../../services/approvalDocumentService';
 import {
   BRAND_NAME,
   LogoImage,
@@ -21,8 +21,8 @@ import {
   toNumber,
   fmtINR,
   usePrintAndPdf,
-} from '../CamReport/camShared';
-import { amountInWords, calcApr, calcEmi, calcKfsTotals, EMI_DUE_DAY, GST_RATE } from './kfsCalc';
+} from '../../utils/documentExportHelper';
+import { amountInWords, calcApr, calcEmi, calcKfsTotals, EMI_DUE_DAY, GST_RATE } from '../../utils/kfsCalc';
 import './KfsReport.css';
 
 const LENDER_NAME = 'Sivels Holdings (P) Ltd';
@@ -154,7 +154,7 @@ function ScheduleTable({ rows, totalRows = rows, showTotals = false }) {
   );
 }
 
-export default function KfsReport({ verificationData, applicationProductDetailsId, agentCustomerId }) {
+export default function KfsReport({ verificationData, applicationProductDetailsId, agentCustomerId, creditDecision: creditDecisionProp = null }) {
   const reportRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState({});
@@ -167,9 +167,9 @@ export default function KfsReport({ verificationData, applicationProductDetailsI
     async function load() {
       setLoading(true);
       const results = await Promise.allSettled([
-        custId ? backOfficeService.getLatestCreditDecision(custId) : Promise.resolve(null),
-        appProdId > 0 ? backOfficeService.getLoanObligationsSummary(appProdId, 0) : Promise.resolve(null),
-        appProdId > 0 ? backOfficeService.getAssessmentsByApplication(appProdId) : Promise.resolve([]),
+        custId ? approvalDocumentService.getLatestCreditDecision(custId) : Promise.resolve(null),
+        appProdId > 0 ? approvalDocumentService.getLoanObligationsSummary(appProdId, 0) : Promise.resolve(null),
+        appProdId > 0 ? approvalDocumentService.getAssessmentsByApplication(appProdId) : Promise.resolve([]),
         getMaster('/company/companyloansetting'),
         getMaster('/company/companymaster'),
         getMaster('/company/companycontactpersonmaster'),
@@ -205,9 +205,22 @@ export default function KfsReport({ verificationData, applicationProductDetailsI
   const productWrapper = firstRecord(raw.productDetails || raw.productDetailsList || raw.ProductDetails) || {};
   const productRecord = productWrapper.product || productWrapper;
 
-  const decision = data.creditDecision;
-  const isApproved = String(pick(decision, ['decision', 'Decision']) || '').toLowerCase() === 'approved';
-  const sanctioned = (keys) => (isApproved ? toNumber(pick(decision, keys)) : null);
+  const decision = creditDecisionProp || data.creditDecision;
+  const decisionStatus = String(pick(decision, ['decision', 'Decision']) || '').trim();
+  const isApproved = decisionStatus.toLowerCase() === 'approved';
+
+  const approvedAmount = isApproved ? toNumber(pick(decision, ['sanctionedLoanAmount', 'SanctionedLoanAmount'])) : null;
+  const approvedRoi = isApproved ? toNumber(pick(decision, ['sanctionedROI', 'SanctionedROI', 'sanctionedRoi'])) : null;
+  const approvedTenure = isApproved ? toNumber(pick(decision, ['sanctionedTenureMonths', 'SanctionedTenureMonths'])) : null;
+
+  const isCompleteApproved =
+    isApproved &&
+    approvedAmount != null &&
+    approvedAmount > 0 &&
+    approvedTenure != null &&
+    approvedTenure > 0 &&
+    approvedRoi != null &&
+    approvedRoi >= 0;
 
   const assessment = useMemo(() => {
     const list = (data.assessments || []).filter(
@@ -217,23 +230,11 @@ export default function KfsReport({ verificationData, applicationProductDetailsI
     return (current.length ? current : list)[0] || null;
   }, [data.assessments]);
 
-  const principal =
-    sanctioned(['sanctionedLoanAmount', 'SanctionedLoanAmount']) ??
-    toNumber(pick(data.obligationSummary, ['proposedLoanAmount'])) ??
-    toNumber(productRecord.loanAmount) ??
-    toNumber(app.loanAmount);
-  const rate =
-    sanctioned(['sanctionedROI', 'SanctionedROI', 'sanctionedRoi']) ??
-    toNumber(pick(data.obligationSummary, ['proposedROI'])) ??
-    toNumber(pick(assessment, ['proposedROI'])) ??
-    toNumber(app.interestRate);
-  const tenure =
-    sanctioned(['sanctionedTenureMonths', 'SanctionedTenureMonths']) ??
-    toNumber(pick(data.obligationSummary, ['proposedTenureMonths'])) ??
-    toNumber(pick(assessment, ['proposedTenureMonths'])) ??
-    toNumber(app.loanTenure);
-  const sanctionDate = isApproved
-    ? pick(decision, ['decisionDate', 'DecisionDate', 'createdDate', 'CreatedDate', 'createdAt'])
+  const principal = isCompleteApproved ? approvedAmount : null;
+  const rate = isCompleteApproved ? approvedRoi : null;
+  const tenure = isCompleteApproved ? approvedTenure : null;
+  const sanctionDate = isCompleteApproved
+    ? pick(decision, ['decidedAt', 'DecidedAt', 'decisionDate', 'DecisionDate', 'createdDate', 'CreatedDate', 'createdAt', 'CreatedAt'])
     : null;
 
   const loanSetting = data.loanSetting || {};
@@ -331,16 +332,20 @@ export default function KfsReport({ verificationData, applicationProductDetailsI
         <span className="cam-toolbar-status">{loading ? 'Loading KFS data…' : DOC_LABEL}</span>
         <div className="cam-toolbar-actions">
           {exportError && <span className="cam-toolbar-error">{exportError}</span>}
-          <button type="button" className="cam-btn" onClick={handlePrint} disabled={loading}>Print</button>
-          <button type="button" className="cam-btn cam-btn-primary" onClick={handleDownload} disabled={loading || isExporting}>
+          <button type="button" className="cam-btn" onClick={handlePrint} disabled={loading || !isCompleteApproved}>Print</button>
+          <button type="button" className="cam-btn cam-btn-primary" onClick={handleDownload} disabled={loading || isExporting || !isCompleteApproved}>
             {isExporting ? 'Generating PDF…' : 'Download PDF'}
           </button>
         </div>
       </div>
 
-      {!isApproved && !loading && (
+      {!isCompleteApproved && !loading && (
         <div className="kfs-notice">
-          The loan is not yet sanctioned, so this KFS uses the proposed amount, rate and tenure.
+          {!decision
+            ? 'Approval Pending: This Key Facts Statement is a post-approval disclosure and can only be generated after the application is approved by the Credit Manager.'
+            : !isApproved
+            ? `Not Approved: This application has a Credit Manager decision of "${decisionStatus}". A Key Facts Statement can only be generated for approved loans.`
+            : 'Incomplete Sanction Data: The Credit Manager approval decision is missing required financial terms (sanctioned amount, interest rate, or tenure).'}
         </div>
       )}
 

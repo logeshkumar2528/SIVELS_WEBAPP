@@ -1,8 +1,15 @@
 import axiosInstance from '../api/axiosInstance';
 import { resolveApiUrl } from '../api/apiConfig';
 import { LOGIN_PATH, navigation } from './authEvents';
-import { PERMISSIONS_CHANGED_EVENT } from './permissions';
-import { clearSession, getAccessToken, getRefreshToken } from './tokenStore';
+import {
+  clearSession,
+  getAccessToken,
+  getRefreshToken,
+  getTabRole,
+  setTabRole,
+  TAB_ROLE_KEY,
+  TAB_USER_KEY,
+} from './tokenStore';
 import {
   AGENT_DASHBOARD,
   AMS_DASHBOARD,
@@ -68,23 +75,142 @@ export function resolveLandingPath(roleCode, landingPath) {
   return ROLE_CONFIG[roleCode]?.landingPath || LOGIN_PATH;
 }
 
-export function getStoredUser() {
+export function getStoredUser(allowedRoles = []) {
+  const normAllowed = Array.isArray(allowedRoles)
+    ? allowedRoles.map((r) => String(r).trim().toUpperCase()).filter(Boolean)
+    : [];
+
+  // Priority 1: Current tab sessionStorage
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      const tabRaw = sessionStorage.getItem(TAB_USER_KEY);
+      if (tabRaw) {
+        const parsedTab = JSON.parse(tabRaw);
+        if (parsedTab && typeof parsedTab === 'object') {
+          const roleCode = normalizeRoleCode(parsedTab.roleCode, parsedTab.role);
+          if (normAllowed.length === 0 || (roleCode && normAllowed.includes(roleCode))) {
+            return parsedTab;
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // Priority 2: Role-scoped localStorage for allowed roles
+  if (normAllowed.length > 0) {
+    for (const r of normAllowed) {
+      try {
+        const roleRaw = localStorage.getItem(`sivels_session_${r}`);
+        if (roleRaw) {
+          const parsed = JSON.parse(roleRaw);
+          if (parsed && typeof parsed === 'object') {
+            // Hydrate current tab sessionStorage
+            if (typeof sessionStorage !== 'undefined') {
+              sessionStorage.setItem(TAB_USER_KEY, JSON.stringify(parsed));
+              sessionStorage.setItem(TAB_ROLE_KEY, r);
+            }
+            return parsed;
+          }
+        }
+      } catch {}
+    }
+
+    // Role-specific legacy caches fallback
+    for (const r of normAllowed) {
+      try {
+        if (r === 'AGENT') {
+          const raw = localStorage.getItem('agentData');
+          if (raw) {
+            const agent = JSON.parse(raw);
+            if (agent && typeof agent === 'object') {
+              return { ...agent, role: 'Agent', roleCode: 'AGENT', landingPath: AGENT_DASHBOARD };
+            }
+          }
+        } else if (r === 'RM') {
+          const raw = localStorage.getItem('rmData');
+          if (raw) {
+            const rm = JSON.parse(raw);
+            if (rm && typeof rm === 'object') {
+              return { ...rm, role: 'RM', roleCode: 'RM', landingPath: RM_DASHBOARD };
+            }
+          }
+        } else if (r === 'BACK_OFFICE') {
+          const raw = localStorage.getItem('backOfficeData') || localStorage.getItem('backOfficeAuth');
+          if (raw) {
+            const bo = JSON.parse(raw);
+            if (bo && typeof bo === 'object') {
+              return { ...bo, role: 'BackOffice', roleCode: 'BACK_OFFICE', landingPath: BACKOFFICE_DASHBOARD };
+            }
+          }
+        } else if (r === 'MASTER_ADMIN' || r === 'AMS') {
+          const raw = localStorage.getItem('masterData') || (r === 'AMS' ? localStorage.getItem('amsData') : null);
+          if (raw) {
+            const m = JSON.parse(raw);
+            if (m && typeof m === 'object') {
+              return {
+                ...m,
+                role: r === 'AMS' ? 'AMS' : 'Master',
+                roleCode: r,
+                landingPath: r === 'AMS' ? AMS_DASHBOARD : MASTER_DASHBOARD,
+              };
+            }
+          }
+        } else if (r === 'CUSTOMER') {
+          const raw = localStorage.getItem('customerData');
+          if (raw) {
+            const c = JSON.parse(raw);
+            if (c && typeof c === 'object') {
+              return { ...c, role: 'Customer', roleCode: 'CUSTOMER', landingPath: CUSTOMER_DASHBOARD };
+            }
+          }
+        } else if (r === 'CREDIT_MANAGER' || r === 'CREDIT_HEAD') {
+          const raw = localStorage.getItem('creditManagerData') || localStorage.getItem('creditManagerAuth');
+          if (raw) {
+            const cm = JSON.parse(raw);
+            if (cm && typeof cm === 'object') {
+              return { ...cm, role: 'CreditManager', roleCode: r, landingPath: CREDIT_MANAGER_DASHBOARD };
+            }
+          }
+        }
+      } catch {}
+    }
+  }
+
+  // Priority 3: Fallback to global sivels_currentUser ONLY if it matches allowedRoles (or no allowedRoles filter)
   try {
     const raw = localStorage.getItem(CURRENT_USER_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
-    return parsed && typeof parsed === 'object' ? parsed : null;
+    if (parsed && typeof parsed === 'object') {
+      const roleCode = normalizeRoleCode(parsed.roleCode, parsed.role);
+      if (normAllowed.length === 0 || (roleCode && normAllowed.includes(roleCode))) {
+        return parsed;
+      }
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
-export function getStoredRoleCode() {
-  const user = getStoredUser();
+export function getStoredRoleCode(allowedRoles = []) {
+  // 1. Check tab role
+  const tabRole = getTabRole();
+  const normTabRole = tabRole ? String(tabRole).trim().toUpperCase() : null;
+  const normAllowed = Array.isArray(allowedRoles)
+    ? allowedRoles.map((r) => String(r).trim().toUpperCase()).filter(Boolean)
+    : [];
+
+  if (normTabRole && (normAllowed.length === 0 || normAllowed.includes(normTabRole))) {
+    return normTabRole;
+  }
+
+  // 2. Derive from getStoredUser(allowedRoles)
+  const user = getStoredUser(allowedRoles);
   return user ? normalizeRoleCode(user.roleCode, user.role) : null;
 }
 
-export function getStoredLandingPath() {
-  const user = getStoredUser();
+export function getStoredLandingPath(allowedRoles = []) {
+  const user = getStoredUser(allowedRoles);
   const roleCode = user ? normalizeRoleCode(user.roleCode, user.role) : null;
   return roleCode ? resolveLandingPath(roleCode, user.landingPath) : LOGIN_PATH;
 }
@@ -138,6 +264,18 @@ export function persistRoleSession(result, userData) {
   const config = ROLE_CONFIG[roleCode];
   const account = result[config.accountKey] || result.staff || {};
 
+  // Tab-scoped persistence
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(TAB_USER_KEY, JSON.stringify(userData));
+      sessionStorage.setItem(TAB_ROLE_KEY, roleCode);
+    }
+  } catch {}
+
+  // Role-scoped persistent storage
+  setItem(`sivels_session_${roleCode}`, userData);
+
+  // Global backward-compatibility mirror
   setItem(CURRENT_USER_KEY, userData);
 
   switch (roleCode) {
@@ -232,13 +370,13 @@ export function persistRoleSession(result, userData) {
  * GET /auth/me and refresh the stored identity. Resolves to the normalised roleCode,
  * or null when the backend did not return a recognised role.
  */
-export async function restoreSession() {
+export async function restoreSession(allowedRoles = []) {
   const response = await axiosInstance.get('/auth/me');
   const me = response?.data || {};
   const roleCode = normalizeRoleCode(me.roleCode, me.role);
   if (!roleCode) return null;
 
-  const existing = getStoredUser() || {};
+  const existing = getStoredUser(allowedRoles) || {};
   const merged = {
     ...existing,
     role: ROLE_CONFIG[roleCode].legacyRole,
@@ -250,6 +388,14 @@ export async function restoreSession() {
   if (me.landingPath) merged.landingPath = resolveLandingPath(roleCode, me.landingPath);
   if (!existing.fullName && me.fullName) merged.fullName = me.fullName;
 
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(TAB_USER_KEY, JSON.stringify(merged));
+      sessionStorage.setItem(TAB_ROLE_KEY, roleCode);
+    }
+  } catch {}
+
+  setItem(`sivels_session_${roleCode}`, merged);
   setItem(CURRENT_USER_KEY, merged);
   window.dispatchEvent(new CustomEvent(PERMISSIONS_CHANGED_EVENT));
   return roleCode;

@@ -9,8 +9,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Download, Printer } from 'lucide-react';
-import backOfficeService from '../../api/backOfficeService';
-import SivelsLogo from '../../../../../../Core/src/assets/branding/SivelsFinanceLogo.jpg';
+import approvalDocumentService from '../../services/approvalDocumentService';
+import { calcEmi } from '../../utils/kfsCalc';
+import SivelsLogo from '../../../../assets/branding/SivelsFinanceLogo.jpg';
 import './SanctionLetter.css';
 
 const COMPANY = 'Sivels Holdings (P) Ltd';
@@ -46,6 +47,12 @@ function sequenceOf(row, fallback) {
   const raw = row?.applicantSequence ?? row?.ApplicantSequence;
   const seq = Number(raw);
   return raw !== undefined && raw !== null && Number.isFinite(seq) ? seq : fallback;
+}
+
+function toNumber(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const num = Number(String(value).replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(num) ? num : null;
 }
 
 function formatRupees(amount) {
@@ -135,7 +142,7 @@ function withTitle(title, name) {
   return name.toLowerCase().startsWith(title.toLowerCase()) ? name : `${prefix} ${name}`;
 }
 
-function buildLetterData(verificationData, coApplicants) {
+function buildLetterData(verificationData, coApplicants, approvedTerms = null) {
   const app = verificationData?.applicationDetails || {};
   const personal = verificationData?.personalInformation || {};
   const address = verificationData?.addressDetails || {};
@@ -145,7 +152,12 @@ function buildLetterData(verificationData, coApplicants) {
 
   const borrowerName = clean(verificationData?.customerName) || clean(personal.fullName);
   const title = pick(personal.raw, 'titleName', 'TitleName', 'title', 'Title');
-  const loanAmount = Number(app.loanAmount) || Number(charges.sanctionLoanAmount) || 0;
+
+  const isCompleteApproved = approvedTerms?.isCompleteApproved ?? false;
+  const loanAmount = isCompleteApproved ? (approvedTerms.approvedLoanAmount || 0) : 0;
+  const roi = isCompleteApproved && approvedTerms.approvedROI != null ? String(approvedTerms.approvedROI) : '';
+  const tenure = isCompleteApproved && approvedTerms.approvedTenure != null ? String(approvedTerms.approvedTenure) : '';
+  const emi = isCompleteApproved ? (approvedTerms.emi || 0) : 0;
 
   const rawAddresses = toList(raw.addressDetails || raw.AddressDetails);
   const rawPersonal = toList(raw.personalInformation || raw.PersonalInformation);
@@ -181,10 +193,12 @@ function buildLetterData(verificationData, coApplicants) {
     ? correspondence
     : formatAddress(address.permanentAddress) || correspondence;
 
+  const letterDate = approvedTerms?.sanctionDate || formatLetterDate(new Date());
+
   return {
     refNo: clean(verificationData?.appId) || clean(verificationData?.customerCode) || clean(verificationData?.customerId),
     branch: clean(app.sourcingBranch) || clean(verificationData?.districtName),
-    letterDate: formatLetterDate(new Date()),
+    letterDate,
     applicationDate: formatLongDate(verificationData?.appliedDate || app.appliedDate),
     borrowerName,
     borrowerDisplayName: withTitle(title, borrowerName),
@@ -197,9 +211,9 @@ function buildLetterData(verificationData, coApplicants) {
     loanAmount,
     loanAmountWords: amountInWords(loanAmount),
     purpose: clean(app.purposeOfLoan),
-    tenure: clean(app.loanTenure),
-    emi: Number(charges.monthlyEmiAmount) || 0,
-    roi: clean(app.interestRate),
+    tenure,
+    emi,
+    roi,
     processingFee,
     processingFeePercent,
     insuranceFee: Number(charges.insuranceFee) || 0,
@@ -375,6 +389,8 @@ export default function SanctionLetter({
   applicationProductDetailsId,
   unsavedPdSheet = null,
   pdDoneBy = '',
+  agentCustomerId = null,
+  creditDecision: creditDecisionProp = null,
 }) {
   const pageRefs = useRef([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -382,6 +398,46 @@ export default function SanctionLetter({
   const [downloadError, setDownloadError] = useState('');
   const [savedPdSheet, setSavedPdSheet] = useState(null);
   const [pdSheetLoading, setPdSheetLoading] = useState(false);
+
+  const resolvedCustomerId =
+    agentCustomerId ||
+    verificationData?.customerId ||
+    verificationData?.agentCustomerId ||
+    verificationData?.raw?.agentCustomerId ||
+    verificationData?.raw?.AgentCustomerId ||
+    null;
+
+  const [creditDecision, setCreditDecision] = useState(creditDecisionProp);
+  const [decisionLoading, setDecisionLoading] = useState(false);
+
+  useEffect(() => {
+    if (creditDecisionProp) {
+      setCreditDecision(creditDecisionProp);
+      return;
+    }
+    const custId = Number(resolvedCustomerId);
+    if (!custId || custId <= 0) {
+      setCreditDecision(null);
+      return;
+    }
+    let isMounted = true;
+    setDecisionLoading(true);
+    approvalDocumentService
+      .getLatestCreditDecision(custId)
+      .then((dec) => {
+        if (isMounted) setCreditDecision(dec);
+      })
+      .catch((err) => {
+        console.warn('[SanctionLetter] Failed to load latest credit decision:', err?.message || err);
+        if (isMounted) setCreditDecision(null);
+      })
+      .finally(() => {
+        if (isMounted) setDecisionLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [creditDecisionProp, resolvedCustomerId]);
 
   useEffect(() => {
     const appProdId = Number(applicationProductDetailsId);
@@ -391,7 +447,7 @@ export default function SanctionLetter({
     }
     let isMounted = true;
     setPdSheetLoading(true);
-    backOfficeService
+    approvalDocumentService
       .getPdAssessmentByApplication(appProdId)
       .then((record) => {
         if (isMounted) setSavedPdSheet(normalizePdRecord(record));
@@ -408,16 +464,73 @@ export default function SanctionLetter({
     };
   }, [applicationProductDetailsId]);
 
+  const decisionStatus = String(
+    creditDecision?.decision ?? creditDecision?.Decision ?? ''
+  ).trim();
+  const isApproved = decisionStatus.toLowerCase() === 'approved';
+
+  const approvedLoanAmount = isApproved
+    ? toNumber(creditDecision?.sanctionedLoanAmount ?? creditDecision?.SanctionedLoanAmount)
+    : null;
+  const approvedROI = isApproved
+    ? toNumber(creditDecision?.sanctionedROI ?? creditDecision?.SanctionedROI ?? creditDecision?.sanctionedRoi)
+    : null;
+  const approvedTenure = isApproved
+    ? toNumber(creditDecision?.sanctionedTenureMonths ?? creditDecision?.SanctionedTenureMonths)
+    : null;
+
+  const isCompleteApproved =
+    isApproved &&
+    approvedLoanAmount != null &&
+    approvedLoanAmount > 0 &&
+    approvedTenure != null &&
+    approvedTenure > 0 &&
+    approvedROI != null &&
+    approvedROI >= 0;
+
+  const calculatedEmi = isCompleteApproved
+    ? calcEmi(approvedLoanAmount, approvedROI, approvedTenure)
+    : null;
+  const approvedEmi = calculatedEmi != null ? Math.round(calculatedEmi) : 0;
+
+  const rawConditions = creditDecision?.conditions ?? creditDecision?.Conditions ?? '';
+  const decisionConditions = typeof rawConditions === 'string'
+    ? rawConditions.split('\n').map((s) => s.trim()).filter(Boolean)
+    : toList(rawConditions).map(clean).filter(Boolean);
+
+  const rawDecidedAt =
+    creditDecision?.decidedAt ??
+    creditDecision?.DecidedAt ??
+    creditDecision?.decisionDate ??
+    creditDecision?.DecisionDate ??
+    creditDecision?.createdDate ??
+    creditDecision?.CreatedDate ??
+    creditDecision?.createdAt ??
+    creditDecision?.CreatedAt ??
+    null;
+  const sanctionDate = rawDecidedAt ? formatLetterDate(rawDecidedAt) : null;
+
+  const approvedTerms = useMemo(() => ({
+    isApproved,
+    isCompleteApproved,
+    approvedLoanAmount,
+    approvedROI,
+    approvedTenure,
+    emi: approvedEmi,
+    sanctionDate,
+  }), [isApproved, isCompleteApproved, approvedLoanAmount, approvedROI, approvedTenure, approvedEmi, sanctionDate]);
+
   const pdSheet = hasPdContent(savedPdSheet) ? savedPdSheet : unsavedPdSheet;
   const pdPoints = useMemo(() => buildPdPoints(pdSheet, pdDoneBy), [pdSheet, pdDoneBy]);
-  const specificConditions = useMemo(
-    () => toList(pdSheet?.otherSanctionConditions).map(clean).filter(Boolean),
-    [pdSheet]
-  );
+  const specificConditions = useMemo(() => {
+    const fromPd = toList(pdSheet?.otherSanctionConditions).map(clean).filter(Boolean);
+    const combined = [...decisionConditions, ...fromPd];
+    return Array.from(new Set(combined));
+  }, [pdSheet, decisionConditions]);
 
   const data = useMemo(
-    () => buildLetterData(verificationData, coApplicants),
-    [verificationData, coApplicants]
+    () => buildLetterData(verificationData, coApplicants, approvedTerms),
+    [verificationData, coApplicants, approvedTerms]
   );
 
   const v = (value) => value || EMPTY;
@@ -545,16 +658,31 @@ export default function SanctionLetter({
           type="button"
           className="sl-download-btn sl-print-btn"
           onClick={handlePrint}
-          disabled={isGenerating}
+          disabled={isGenerating || isPrinting || !isCompleteApproved}
         >
           <Printer size={14} />
           <span>{isPrinting ? 'Preparing...' : 'Print'}</span>
         </button>
-        <button type="button" className="sl-download-btn" onClick={handleDownload} disabled={isGenerating}>
+        <button
+          type="button"
+          className="sl-download-btn"
+          onClick={handleDownload}
+          disabled={isGenerating || isPrinting || !isCompleteApproved}
+        >
           <Download size={14} />
           <span>{isGenerating && !isPrinting ? 'Generating PDF...' : 'Download PDF'}</span>
         </button>
       </div>
+
+      {!isCompleteApproved && !decisionLoading && (
+        <div style={{ maxWidth: 820, margin: '0 auto 16px', padding: '10px 14px', background: '#fef3c7', color: '#92400e', borderRadius: 6, fontWeight: 600, fontSize: 12 }}>
+          {!creditDecision
+            ? 'Approval Pending: This Sanction Letter is a post-approval document and can only be generated after the Credit Manager approves the application.'
+            : !isApproved
+            ? `Not Approved: This application has a Credit Manager decision of "${decisionStatus}". A Sanction Letter can only be generated for approved applications.`
+            : 'Incomplete Sanction Data: The Credit Manager approval decision is missing required financial terms (sanctioned amount, interest rate, or tenure).'}
+        </div>
+      )}
 
       <div className="sl-document">
         {/* ── PAGE 1: Addressee & Facility Details ── */}
@@ -750,7 +878,7 @@ export default function SanctionLetter({
               </TermRow>
               <TermRow label="Processing Fees">
                 {data.processingFee > 0
-                  ? `${formatRupees(data.processingFee)}${data.processingFeePercent ? ` (${data.processingFeePercent} of the sanctioned amount)` : ''} plus applicable taxes, to be paid to ${COMPANY} (non-refundable).`
+                  ? `${data.processingFeePercent ? `(${data.processingFeePercent} of the sanctioned amount) ` : ''}plus applicable taxes, to be paid to ${COMPANY} (non-refundable).`
                   : EMPTY}
               </TermRow>
               <TermRow label="Prepayment and Foreclosure Charges">

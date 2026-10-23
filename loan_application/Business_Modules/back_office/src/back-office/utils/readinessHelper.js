@@ -8,7 +8,7 @@
  *
  * Server check codes:
  *   STATUS, LEGAL_OPINION, TECHNICAL_VALUATION, CIBIL_REPORT, ELIGIBILITY,
- *   RECOMMENDATION, DOCUMENT_REJECTIONS, CREDIT_RETURN_ITEMS
+ *   DOCUMENT_REJECTIONS, CREDIT_RETURN_ITEMS (RECOMMENDATION is obsolete)
  */
 
 const CREDIT_RETURN_ITEMS = 'CREDIT_RETURN_ITEMS';
@@ -20,7 +20,6 @@ export const EMPTY_READINESS = Object.freeze({
   hasTechnical: false,
   hasCibil: false,
   hasEligibility: false,
-  hasRecommendation: false,
   unresolvedRejectionsCount: 0,
   openCreditReturnCount: 0,
   failedChecks: [],
@@ -30,8 +29,11 @@ export const EMPTY_READINESS = Object.freeze({
  * @param {{ isReady?: boolean, checks?: Array<{ code: string, label: string, passed: boolean, detail?: string, count?: number }> } | null} result
  */
 export function summarizeReadiness(result) {
-  const checks = Array.isArray(result?.checks) ? result.checks : [];
-  if (!result || checks.length === 0) return { ...EMPTY_READINESS };
+  const rawChecks = Array.isArray(result?.checks) ? result.checks : [];
+  if (!result || rawChecks.length === 0) return { ...EMPTY_READINESS };
+
+  // Credit Recommendation requirement has been removed; exclude any obsolete recommendation check
+  const checks = rawChecks.filter((c) => String(c?.code || '').toUpperCase() !== 'RECOMMENDATION');
 
   const byCode = new Map(checks.map((c) => [String(c?.code || '').toUpperCase(), c]));
   const passed = (code) => Boolean(byCode.get(code)?.passed);
@@ -51,7 +53,6 @@ export function summarizeReadiness(result) {
     hasTechnical: passed('TECHNICAL_VALUATION'),
     hasCibil: passed('CIBIL_REPORT'),
     hasEligibility: passed('ELIGIBILITY'),
-    hasRecommendation: passed('RECOMMENDATION'),
     unresolvedRejectionsCount: count('DOCUMENT_REJECTIONS'),
     openCreditReturnCount: count(CREDIT_RETURN_ITEMS),
     failedChecks,

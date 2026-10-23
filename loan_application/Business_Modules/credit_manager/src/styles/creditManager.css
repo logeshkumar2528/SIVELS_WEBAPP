@@ -84,6 +84,15 @@
   background: #b91c1c;
 }
 
+.cm-btn-forward {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.cm-btn-forward:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
 .cm-btn-return {
   background: #ffffff;
   color: #1d4ed8;

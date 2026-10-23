@@ -331,12 +331,18 @@ export default function RecommendationSheet({
     if (r && (r.pdAssessmentId || r.PdAssessmentId || r.id)) {
       return {
         pdVisitDate: r.dateOfPdVisit ?? r.DateOfPdVisit,
+        pdAddress: r.pdAddress ?? r.PdAddress,
         endUseCategory: r.endUseCategorization ?? r.EndUseCategorization,
         personalDiscussionSiteVisit: r.personalDiscussionSiteVisit ?? r.PersonalDiscussionSiteVisit,
         endUse: r.endUse ?? r.EndUse,
         disbursementTransaction: r.disbursementTransaction ?? r.DisbursementTransaction,
         applicantProfile: r.applicantProfile ?? r.ApplicantProfile,
         coApplicantProfile: r.coApplicantProfile ?? r.CoApplicantProfile,
+        bureauReport: r.bureauReport ?? r.BureauReport,
+        proposedCollateral: r.proposedCollateral ?? r.ProposedCollateral,
+        legalAndTechnical: r.legalTechnicalReview ?? r.LegalTechnicalReview ?? r.legalAndTechnical,
+        strengths: r.strengths ?? r.Strengths,
+        concerns: r.concerns ?? r.Concerns,
         recommendation: r.recommendation ?? r.Recommendation,
         pdDoneById: r.modifiedBy ?? r.createdBy ?? r.CreatedBy,
       };
@@ -344,6 +350,23 @@ export default function RecommendationSheet({
     return unsavedPdSheet || {};
   }, [data.pdAssessment, unsavedPdSheet]);
   const pdDoneBy = nameById(data.backOfficeUsers, 'backOfficeId', 'fullName', pd.pdDoneById);
+
+  const pdConditions = useMemo(() => {
+    const r = data.pdAssessment;
+    const rawSaved = r?.sanctionConditions ?? r?.SanctionConditions;
+    const savedList = toList(rawSaved)
+      .filter((c) => c && c.isActive !== false && c.IsActive !== false)
+      .map((c) => (typeof c === 'string' ? c : c?.conditionText ?? c?.ConditionText ?? ''))
+      .map((c) => (c == null ? '' : String(c).trim()))
+      .filter((c) => !isBlank(c));
+
+    if (savedList.length > 0) return savedList;
+
+    return toList(unsavedPdSheet?.otherSanctionConditions)
+      .map((c) => (typeof c === 'string' ? c : c?.conditionText ?? c?.ConditionText ?? ''))
+      .map((c) => (c == null ? '' : String(c).trim()))
+      .filter((c) => !isBlank(c));
+  }, [data.pdAssessment, unsavedPdSheet]);
 
   /* ── Eligibility ─────────────────────────────────────────────────── */
 
@@ -482,49 +505,33 @@ export default function RecommendationSheet({
   ].filter((v) => !isBlank(v));
 
   const healthCheckRows = useMemo(() => {
-    const verifs = (data.stepVerifications || []).filter((v) => v && v.isActive !== false);
-    const verifsFor = (codes, primaryOnly) =>
-      verifs.filter(
-        (v) =>
-          codes.includes(String(v.stepCode || '').trim().toUpperCase()) &&
-          (!primaryOnly || Number(v.applicantSequence || 0) === 0)
-      );
-    const fromVerifications = (name) => {
-      const key = String(name || '').trim().toUpperCase();
-      let rows = [];
-      if (key === 'FI' || key.includes('FIELD INVESTIGATION')) rows = verifsFor(['PROPERTY_FI', 'OFFICE_FI', 'RESIDENCE_FI'], false);
-      else if (key.startsWith('PAN')) rows = verifsFor(['PAN'], true);
-      else if (key.includes('AADHA')) rows = verifsFor(['AADHAAR'], true);
-      if (rows.length === 0) return null;
-      const dates = rows
-        .map((v) => v.verifiedAt || v.modifiedAt || v.modifiedDate || v.createdAt || v.createdDate)
-        .filter(Boolean)
-        .sort((a, b) => new Date(b) - new Date(a));
-      const findings = rows
-        .map((v) => {
-          const label = rows.length > 1 ? `${humanize(String(v.stepCode).replace(/_/g, ' '))}: ` : '';
-          return isBlank(v.remarks) ? null : `${label}${v.remarks}`;
-        })
-        .filter(Boolean)
-        .join('; ');
-      return {
-        status: rows.every((v) => Boolean(v.isVerified)) ? 'Yes' : 'Pending',
-        dateOfCheck: dates[0],
-        findings,
-      };
+    const rowFor = (name, entry = null) => {
+      if (!entry) {
+        return [name, '', '', ''];
+      }
+      const rawStatus = entry.status ?? entry.checkStatus ?? entry.CheckStatus;
+      const rawDate = entry.dateOfCheck ?? entry.DateOfCheck;
+      const rawFindings = entry.findings ?? entry.Findings;
+      const recordId =
+        entry.applicationHealthCheckDetailsId ??
+        entry.ApplicationHealthCheckDetailsId ??
+        entry.id;
+
+      if (!rawStatus && !recordId) {
+        return [name, '', '', ''];
+      }
+
+      const status = isBlank(rawStatus) ? '' : String(rawStatus).trim();
+      const date = isBlank(rawDate) ? '' : fmtDate(rawDate);
+      const findings = isBlank(rawFindings) ? '' : String(rawFindings).trim();
+
+      return [name, status, date, findings];
     };
-    const rowFor = (name, sessionEntry = {}) => {
-      const hasSession =
-        !isBlank(sessionEntry.dateOfCheck) ||
-        !isBlank(sessionEntry.findings) ||
-        (!isBlank(sessionEntry.status) && sessionEntry.status !== 'Pending');
-      const entry = hasSession ? sessionEntry : (fromVerifications(name) || sessionEntry);
-      return [name, entry.status, isBlank(entry.dateOfCheck) ? '' : fmtDate(entry.dateOfCheck), entry.findings];
-    };
+
     const types = data.healthCheckTypes || [];
-    if (types.length === 0) return HEALTH_CHECK_FALLBACK.map((name) => rowFor(name));
-    return types.map((t) => rowFor(t.checkName, healthChecks?.[t.healthCheckTypeId] || {}));
-  }, [data.healthCheckTypes, data.stepVerifications, healthChecks]);
+    if (types.length === 0) return HEALTH_CHECK_FALLBACK.map((name) => rowFor(name, null));
+    return types.map((t) => rowFor(t.checkName, healthChecks?.[t.healthCheckTypeId] || null));
+  }, [data.healthCheckTypes, healthChecks]);
 
   const propertyNameMap = new Map(
     (data.propertyMaster || []).map((p) => [Number(p.propertyId ?? p.id), p.propertyName || p.name || p.propertyCode])
@@ -581,12 +588,10 @@ export default function RecommendationSheet({
 
   const recommendationText = `On the basis of overall Credit Appraisal & detailed analysis, case recommendation under ${product || 'the proposed product'} for amount of ${nil(fmtLacs(loanAmount))}, total exposure of ${nil(fmtCrores(totalExposure))}.`;
   const coApplicantNames = coApplicants.map((co) => co.name).filter((v) => !isBlank(v)).join(', ');
-  const pdComment = [
+  const pdCommentSummary =
     pdDoneBy || pd.pdVisitDate
       ? `PD visit done by ${nil(pdDoneBy)}${pd.pdVisitDate ? `, met the customer ${applicantName} on ${fmtDate(pd.pdVisitDate)}` : ''}.`
-      : null,
-    pd.personalDiscussionSiteVisit,
-  ];
+      : null;
 
   /* ── Render ──────────────────────────────────────────────────────── */
 
@@ -705,7 +710,57 @@ export default function RecommendationSheet({
                 </td>
               </tr>
               <tr>
-                <th>PD comment</th><td colSpan={3}><Lines values={pdComment} /></td>
+                <th>PD comment</th>
+                <td colSpan={3}>
+                  <div className="rs-pd-comment-block" style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                    {pdCommentSummary && <div style={{ marginBottom: '2px', lineHeight: '1.4' }}>{pdCommentSummary}</div>}
+                    <div>
+                      <strong>1. Address Where PD Was Conducted</strong>
+                      <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.pdAddress)}</div>
+                    </div>
+                    <div>
+                      <strong>2. Personal Discussion / Site Visit</strong>
+                      <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.personalDiscussionSiteVisit)}</div>
+                    </div>
+                    <div>
+                      <strong>3. Applicant Profile</strong>
+                      <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.applicantProfile)}</div>
+                    </div>
+                    <div>
+                      <strong>4. Co-Applicant Profile</strong>
+                      <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.coApplicantProfile)}</div>
+                    </div>
+                    <div>
+                      <strong>5. About Bureau Report of Applicant &amp; Co-Applicant</strong>
+                      <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.bureauReport)}</div>
+                    </div>
+                    <div>
+                      <strong>6. About Proposed Collateral (Including Legal and Technical)</strong>
+                      <div style={{ paddingLeft: '12px', display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '2px' }}>
+                        <div>
+                          <strong>a. Proposed Collateral Details</strong>
+                          <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.proposedCollateral)}</div>
+                        </div>
+                        <div>
+                          <strong>b. Legal &amp; Technical Review</strong>
+                          <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.legalAndTechnical)}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <strong>7. Strengths</strong>
+                      <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.strengths)}</div>
+                    </div>
+                    <div>
+                      <strong>8. Concerns (If Any)</strong>
+                      <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.concerns)}</div>
+                    </div>
+                    <div>
+                      <strong>9. Recommendation</strong>
+                      <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.recommendation)}</div>
+                    </div>
+                  </div>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -812,6 +867,20 @@ export default function RecommendationSheet({
 
         {/* Page 5: Deviation and recommendation */}
         <SheetPage>
+          {pdConditions.length > 0 && (
+            <div className="rs-pd-conditions" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <SubHeading>PD Conditions:</SubHeading>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {pdConditions.map((cond, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+                    <span style={{ fontWeight: 700, minWidth: '18px' }}>{idx + 1}.</span>
+                    <span style={{ whiteSpace: 'pre-wrap', flex: 1 }}>{cond}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <SubHeading>Deviation:</SubHeading>
           <GridTable headers={['Nature of Deviation', 'Deviation Description', 'Level', 'Mitigate']} rows={deviationRows} />
 

@@ -2,13 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import PermissionNotice from './PermissionNotice';
 import { LOGIN_PATH, handleSessionExpired, navigation, redirectToLogin } from './authEvents';
 import { getStoredLandingPath, getStoredRoleCode, restoreSession } from './session';
-import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, hasSession } from './tokenStore';
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, clearSession, hasSession } from './tokenStore';
 
 let restorePromise = null;
 
-function restoreOnce() {
+function restoreOnce(allowedRoles) {
   if (!restorePromise) {
-    restorePromise = restoreSession().catch((error) => {
+    restorePromise = restoreSession(allowedRoles).catch((error) => {
       restorePromise = null;
       throw error;
     });
@@ -26,17 +26,17 @@ function redirectToOwnLanding() {
   navigation.replace(target);
 }
 
-function initialStatus(isRoleAllowed) {
+function initialStatus(isRoleAllowed, allowedRoles) {
   if (!hasSession()) return 'no-session';
-  const roleCode = getStoredRoleCode();
+  const roleCode = getStoredRoleCode(allowedRoles);
   if (!roleCode) return 'checking';
   return isRoleAllowed(roleCode) ? 'allowed' : 'wrong-role';
 }
 
 /**
  * Module-level route guard. Requires a session token and a roleCode accepted by the module,
- * verifies the session once per page load with GET /auth/me, and sends users with another
- * role to their own landing page.
+ * verifies the session once per page load with GET /auth/me, and protects against cross-module
+ * tab hijacking.
  *
  * @param {string[]} [allowedRoles]  roleCodes allowed into the module
  * @param {(roleCode: string, pathname: string) => boolean} [isAllowed]  custom check (overrides allowedRoles)
@@ -50,16 +50,16 @@ export default function RequireAuth({ allowedRoles = [], isAllowed, pathname, ch
     checkRef.current = isRoleAllowed;
   });
 
-  const [status, setStatus] = useState(() => initialStatus(isRoleAllowed));
+  const [status, setStatus] = useState(() => initialStatus(isRoleAllowed, allowedRoles));
   const mountStatusRef = useRef(status);
 
   useEffect(() => {
     if (status !== 'allowed' || pathname === undefined) return;
-    const roleCode = getStoredRoleCode();
+    const roleCode = getStoredRoleCode(allowedRoles);
     if (roleCode && !checkRef.current(roleCode)) {
       redirectToOwnLanding();
     }
-  }, [pathname, status]);
+  }, [pathname, status, allowedRoles]);
 
   useEffect(() => {
     const mountStatus = mountStatusRef.current;
@@ -73,7 +73,7 @@ export default function RequireAuth({ allowedRoles = [], isAllowed, pathname, ch
     }
 
     let cancelled = false;
-    restoreOnce()
+    restoreOnce(allowedRoles)
       .then((roleCode) => {
         if (cancelled) return;
         if (!roleCode) {
@@ -105,8 +105,17 @@ export default function RequireAuth({ allowedRoles = [], isAllowed, pathname, ch
       }
     };
     const onStorage = (event) => {
-      if ((event.key === null || event.key === ACCESS_TOKEN_KEY || event.key === REFRESH_TOKEN_KEY) && !hasSession()) {
-        redirectToLogin();
+      // Global logout notification: either tokens removed or sivels_logout_event dispatched
+      if (
+        event.key === null ||
+        event.key === ACCESS_TOKEN_KEY ||
+        event.key === REFRESH_TOKEN_KEY ||
+        event.key === 'sivels_logout_event'
+      ) {
+        if (!hasSession()) {
+          clearSession();
+          redirectToLogin();
+        }
       }
     };
     window.addEventListener('pageshow', onPageShow);
