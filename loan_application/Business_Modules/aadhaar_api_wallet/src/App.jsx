@@ -31,6 +31,7 @@ const CheckIcon = (p) => <Icon {...p}><circle cx="12" cy="12" r="10" /><path d="
 const LockIcon = (p) => <Icon {...p}><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></Icon>;
 const CloseIcon = (p) => <Icon {...p}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>;
 const ShieldIcon = (p) => <Icon {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></Icon>;
+const ArrowLeftIcon = (p) => <Icon {...p}><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></Icon>;
 
 function BalanceAmount({ value }) {
   const parts = money.formatToParts(Number(value) || 0);
@@ -59,6 +60,10 @@ function App() {
   }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { const timer = setInterval(load, 300000); return () => clearInterval(timer); }, [load]);
+
+  const handleBackToDashboard = () => {
+    window.location.assign('/master/dashboard');
+  };
 
   const openSync = () => { setSyncValue(summary?.baselineBalance ?? ''); setSyncConfirm(false); setSuccess(''); setSyncOpen(true); };
   const saveBaseline = async () => { const amount = Number(syncValue); if (!Number.isFinite(amount) || amount < 0 || !/^\d+(\.\d{1,2})?$/.test(String(syncValue))) return; setSaving(true); setError(''); try { await walletService.setBaseline(amount); setSyncOpen(false); setSuccess('Starting balance updated successfully.'); await load(true); } catch (e) { setError(e.message || 'Unable to update wallet baseline'); } finally { setSaving(false); } };
@@ -120,6 +125,15 @@ function App() {
 
       <header className="wl-header">
         <div className="wl-header-text">
+          <button
+            type="button"
+            className="wl-btn wl-btn-outline wl-back-btn"
+            onClick={handleBackToDashboard}
+            aria-label="Back to Dashboard"
+          >
+            <ArrowLeftIcon size={16} />
+            <span>Back to Dashboard</span>
+          </button>
           <nav className="wl-breadcrumb" aria-label="Breadcrumb">
             <span>IDSPay</span><span className="wl-breadcrumb-sep">/</span><span>Verification Services</span>
           </nav>

@@ -101,6 +101,8 @@ export const BACK_OFFICE_ENDPOINTS = {
   CALCULATION_ABB_BALANCES: '/calculation/abb-balances',
   CALCULATION_ABB_BALANCES_BY_ACCOUNT: (abbAccountDetailsId) =>
     `/calculation/abb-balances/${encodeURIComponent(abbAccountDetailsId)}`,
+  CALCULATION_FINAL_ASSESSMENT: (applicationProductDetailsId) =>
+    `/calculation/final-assessment/${encodeURIComponent(applicationProductDetailsId)}`,
   CALCULATION_ASSESSMENTS_BY_APPLICATION: (applicationProductDetailsId) =>
     `/calculation/assessments/by-application/${encodeURIComponent(applicationProductDetailsId)}`,
   CALCULATION_ASSESSMENT_RECOMMENDATION: (loanEligibilityAssessmentId) =>

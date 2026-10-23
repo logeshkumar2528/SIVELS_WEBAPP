@@ -9375,6 +9375,187 @@
   color: #6b8578;
 }
 
+/* Phase 2B: Right-Side Controls Column & Assessment Status Panel */
+.bo-cv-elig-controls-right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bo-cv-elig-status-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 2-column grid: Row 1 (2), Row 2 (2), Row 3 (1) */
+.bo-cv-assessment-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.bo-cv-status-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  transition: all 0.15s ease;
+  min-height: 72px;
+  box-sizing: border-box;
+}
+
+.bo-cv-status-card.is-completed {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.bo-cv-status-card.is-final-selected {
+  border-color: #059669;
+  background: #f0fdf4;
+  box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.2);
+}
+
+.bo-cv-status-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.bo-cv-status-card-title {
+  font-size: 12px;
+  font-weight: 650;
+  color: #1e293b;
+  line-height: 1.25;
+}
+
+.bo-cv-status-card.is-final-selected .bo-cv-status-card-title {
+  color: #065f46;
+}
+
+.bo-cv-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.bo-cv-status-badge.is-completed {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.bo-cv-status-badge.is-incomplete {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.bo-cv-status-card-body {
+  display: flex;
+  align-items: center;
+}
+
+.bo-cv-status-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  user-select: none;
+  line-height: 1;
+}
+
+.bo-cv-status-checkbox-label.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  color: #94a3b8;
+}
+
+.bo-cv-status-checkbox {
+  width: 14px;
+  height: 14px;
+  accent-color: #059669;
+  cursor: pointer;
+  margin: 0;
+}
+
+.bo-cv-status-checkbox:disabled {
+  cursor: not-allowed;
+}
+
+.bo-cv-status-card.is-final-selected .bo-cv-status-checkbox-text {
+  color: #15803d;
+  font-weight: 700;
+}
+
+.bo-cv-elig-final-summary {
+  margin-top: 4px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bo-cv-elig-final-summary-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bo-cv-elig-final-summary-label {
+  font-size: 13px;
+  color: #334155;
+}
+
+.bo-cv-elig-final-summary-label strong {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.bo-cv-elig-final-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.bo-cv-elig-final-summary-note {
+  margin: 0;
+  font-size: 11px;
+  color: #64748b;
+  font-style: italic;
+}
+
+@media (max-width: 640px) {
+  .bo-cv-assessment-status-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .bo-cv-elig-ribbon {
   display: flex;
   flex-direction: column;

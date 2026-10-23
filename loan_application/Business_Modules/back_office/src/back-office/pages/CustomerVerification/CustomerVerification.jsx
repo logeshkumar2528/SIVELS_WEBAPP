@@ -30,6 +30,7 @@ import { API_BASE_URL } from '../../../../../../Core/src/api/apiConfig';
 import { getAccessToken } from '../../../../../../Core/src/auth/tokenStore';
 import { needsAuthedFetch } from '../../../../../../Core/src/auth/useAuthedObjectUrl';
 import { hasPermission } from '../../../../../../Core/src/auth/permissions';
+import { getStoredRoleCode } from '../../../../../../Core/src/auth/session';
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import iconMap from '../../config/iconMap';
@@ -42,6 +43,7 @@ import RtrCommonSheet from '../../components/RtrCommonSheet/RtrCommonSheet';
 import DeviationAssessment from '../../components/DeviationAssessment/DeviationAssessment';
 import CamReport from '../../components/CamReport/CamReport';
 import RecommendationSheet from '../../components/RecommendationSheet/RecommendationSheet';
+import LipProgramWorkspace from '../../components/LipProgramWorkspace/LipProgramWorkspace';
 import CustomerDocumentsPanel from '../../components/CustomerDocuments/CustomerDocumentsPanel';
 import CustomerProofVerificationSection from '../../components/CustomerDocuments/CustomerProofVerificationSection';
 import { CreditReturnAttentionStrip, CreditReturnSectionPanel } from '../../components/CreditReturnPanel/CreditReturnPanel';
@@ -93,6 +95,50 @@ const ZapIcon = iconMap['Zap'];
 const Trash2Icon = iconMap['Trash2'] || iconMap['X'];
 const ExternalLinkIcon = iconMap['ExternalLink'];
 const MessageSquareIcon = iconMap['MessageSquare'] || iconMap['FileText'];
+
+// Step 03 Unified Verification Sections configuration
+const UNIFIED_VERIFICATION_SECTIONS = [
+  { id: 8, label: 'Property FI', requiresSecured: true },
+  { id: 9, label: 'Office FI', requiresSecured: true },
+  { id: 10, label: 'Residence FI', requiresSecured: true },
+  { id: 11, label: 'Legal Report', requiresSecured: false },
+  { id: 12, label: 'Technical Report', requiresSecured: false },
+];
+
+// Module-level cache for Loan Master data to avoid redundant network requests across customers
+let cachedLoanProducts = null;
+let cachedLoanTypes = null;
+let loanMastersFetchPromise = null;
+
+async function fetchLoanMastersCached(headers) {
+  if (cachedLoanProducts && cachedLoanTypes) {
+    return { products: cachedLoanProducts, types: cachedLoanTypes };
+  }
+  if (!loanMastersFetchPromise) {
+    loanMastersFetchPromise = Promise.all([
+      apiFetch(`${API_BASE}/LoanProductMaster`, { headers }).then(async (r) => {
+        if (!r.ok) throw new Error(`LoanProductMaster failed: ${r.status}`);
+        const data = await r.json();
+        return Array.isArray(data) ? data : (data?.value || data?.data || []);
+      }),
+      apiFetch(`${API_BASE}/LoanTypeMaster`, { headers }).then(async (r) => {
+        if (!r.ok) throw new Error(`LoanTypeMaster failed: ${r.status}`);
+        const data = await r.json();
+        return Array.isArray(data) ? data : (data?.value || data?.data || []);
+      }),
+    ])
+      .then(([products, types]) => {
+        cachedLoanProducts = products;
+        cachedLoanTypes = types;
+        return { products, types };
+      })
+      .catch((err) => {
+        loanMastersFetchPromise = null; // Reset to allow retry on error
+        throw err;
+      });
+  }
+  return loanMastersFetchPromise;
+}
 
 function formatCurrency(amount) {
   if (amount === null || amount === undefined || isNaN(amount) || amount === 0) return '₹0';
@@ -233,6 +279,28 @@ const createEmptyStepVerifications = () => ({
 const INITIAL_STEP_VERIFICATIONS = {
   0: createEmptyStepVerifications(),
 };
+
+/**
+ * Display names for the five authoritative eligibility assessment methods.
+ */
+const FINAL_METHOD_DISPLAY_NAMES = {
+  INCOME: 'Eligibility - Salaried',
+  NORMAL_INCOME: 'Eligibility - Normal Income',
+  LIP_PROGRAM: 'LIP Program',
+  RTR: 'Eligibility - RTR Sheet',
+  BANKING: 'Eligibility - Banking Program',
+};
+
+/**
+ * Ordered list of the five assessment methods for the Phase 2B 2+2+1 Status grid.
+ */
+const STATUS_ASSESSMENT_METHODS = [
+  { code: 'INCOME', name: 'Eligibility - Salaried' },
+  { code: 'NORMAL_INCOME', name: 'Eligibility - Normal Income' },
+  { code: 'LIP_PROGRAM', name: 'LIP Program' },
+  { code: 'RTR', name: 'Eligibility - RTR Sheet' },
+  { code: 'BANKING', name: 'Eligibility - Banking Program' },
+];
 
 /**
  * 16-Step Underwriting Verification Workflow Step Definitions with Sidebar Groups
@@ -1282,24 +1350,194 @@ export default function CustomerVerification({
   // 1. Fetch Real Application from Backend via Phase 1/3 Hook
   const { verificationData, loading, error, refetch } = useVerificationWorkspace(customerId);
 
+  // ── Step 03 Loan Type Dynamic Classification ──
+  const [loanClassification, setLoanClassification] = useState({
+    status: 'IDLE', // 'IDLE' | 'LOADING' | 'RESOLVED' | 'FAILED'
+    loanProductId: null,
+    loanTypeId: null,
+    typeCode: null,
+    error: null,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    const rawProd = verificationData?.applicationDetails?.raw || verificationData?.application || {};
+    const rawCust = verificationData?.customer || verificationData?.raw?.customer || {};
+    const custItem = Array.isArray(rawCust) ? rawCust[0] : rawCust;
+
+    const currentLoanProductId =
+      rawProd.loanProductId ??
+      rawProd.LoanProductId ??
+      custItem?.loanProductId ??
+      custItem?.LoanProductId ??
+      null;
+
+    if (!verificationData && loading) {
+      return;
+    }
+
+    if (!currentLoanProductId && !verificationData) {
+      return;
+    }
+
+    async function resolveLoanClassification() {
+      if (isMounted) {
+        setLoanClassification((prev) => ({
+          ...prev,
+          status: 'LOADING',
+          loanProductId: currentLoanProductId,
+          error: null,
+        }));
+      }
+
+      try {
+        const token = getAccessToken();
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        // 1. Check direct backend projection if already present on product details
+        const directCode =
+          rawProd.loanTypeCode ??
+          rawProd.LoanTypeCode ??
+          rawProd.typeCode ??
+          rawProd.TypeCode ??
+          null;
+
+        if (directCode && typeof directCode === 'string') {
+          const cleanDirect = directCode.toUpperCase().trim();
+          if (cleanDirect === 'SEC' || cleanDirect === 'SECHOUS' || cleanDirect === 'UNSEC') {
+            if (isMounted) {
+              setLoanClassification({
+                status: 'RESOLVED',
+                loanProductId: currentLoanProductId,
+                loanTypeId: rawProd.loanTypeId ?? rawProd.LoanTypeId ?? null,
+                typeCode: cleanDirect,
+                error: null,
+              });
+            }
+            return;
+          }
+        }
+
+        // 2. Fetch or retrieve cached master data
+        const { products, types } = await fetchLoanMastersCached(headers);
+
+        // 3. Resolve product -> loanTypeId
+        const matchedProduct = currentLoanProductId != null
+          ? products.find((p) => String(p.loanProductId ?? p.LoanProductId) === String(currentLoanProductId))
+          : null;
+
+        const resolvedTypeId =
+          matchedProduct?.loanTypeId ??
+          matchedProduct?.LoanTypeId ??
+          rawProd.loanTypeId ??
+          rawProd.LoanTypeId ??
+          null;
+
+        // 4. Resolve loanTypeId -> typeCode
+        let resolvedCode = matchedProduct?.typeCode ?? matchedProduct?.TypeCode ?? null;
+        if (!resolvedCode && resolvedTypeId != null) {
+          const matchedType = types.find(
+            (t) => String(t.loanTypeId ?? t.LoanTypeId) === String(resolvedTypeId)
+          );
+          if (matchedType) {
+            resolvedCode = matchedType.typeCode ?? matchedType.TypeCode ?? null;
+          }
+        }
+
+        const finalCode = resolvedCode ? String(resolvedCode).toUpperCase().trim() : null;
+
+        if (finalCode === 'SEC' || finalCode === 'SECHOUS' || finalCode === 'UNSEC') {
+          if (isMounted) {
+            setLoanClassification({
+              status: 'RESOLVED',
+              loanProductId: currentLoanProductId,
+              loanTypeId: resolvedTypeId,
+              typeCode: finalCode,
+              error: null,
+            });
+          }
+        } else {
+          if (isMounted) {
+            setLoanClassification({
+              status: 'FAILED',
+              loanProductId: currentLoanProductId,
+              loanTypeId: resolvedTypeId,
+              typeCode: finalCode,
+              error: finalCode
+                ? `Unknown loan type code: ${finalCode}`
+                : `Could not resolve loan type for product #${currentLoanProductId || 'N/A'}`,
+            });
+          }
+        }
+      } catch (err) {
+        if (isMounted) {
+          console.warn('[CustomerVerification] Failed to resolve loan classification:', err);
+          setLoanClassification({
+            status: 'FAILED',
+            loanProductId: currentLoanProductId,
+            loanTypeId: null,
+            typeCode: null,
+            error: err?.message || 'Loan master fetch failed',
+          });
+        }
+      }
+    }
+
+    resolveLoanClassification();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [verificationData, loading]);
+
+  const isUnsecured = loanClassification.status === 'RESOLVED' && loanClassification.typeCode === 'UNSEC';
+  const isLoanClassificationLoading = loanClassification.status === 'LOADING' || loanClassification.status === 'IDLE';
+
+  const allowedUnifiedSteps = useMemo(() => {
+    if (isUnsecured || isLoanClassificationLoading) {
+      return UNIFIED_VERIFICATION_SECTIONS.filter((s) => !s.requiresSecured);
+    }
+    return UNIFIED_VERIFICATION_SECTIONS;
+  }, [isUnsecured, isLoanClassificationLoading]);
+
   // 2. Active 16-Step Workflow State (Initialized from URL ?step= query parameter)
   const [activeStep, setActiveStep] = useState(() => resolveInternalStepFromQuery(searchParams.get('step')));
   const [viewFormRefreshKey, setViewFormRefreshKey] = useState(0);
 
+  const effectiveActiveStep =
+    isUnsecured && (activeStep === 8 || activeStep === 9 || activeStep === 10)
+      ? 11
+      : activeStep;
+
+  // Auto-correct activeStep if UNSEC application lands on hidden internal step (8, 9, 10)
+  useEffect(() => {
+    if (isUnsecured && (activeStep === 8 || activeStep === 9 || activeStep === 10)) {
+      setActiveStep(11);
+    }
+  }, [isUnsecured, activeStep]);
+
   // Sync activeStep when searchParams changes (e.g. browser Back/Forward or direct URL change)
   useEffect(() => {
     const stepParam = searchParams.get('step');
-    const targetInternal = resolveInternalStepFromQuery(stepParam);
+    let targetInternal = resolveInternalStepFromQuery(stepParam);
+    if (isUnsecured && (targetInternal === 8 || targetInternal === 9 || targetInternal === 10)) {
+      targetInternal = 11;
+    }
     const targetVisible = resolveVisibleStepFromInternal(targetInternal);
 
     setActiveStep((currentInternal) => {
+      let nextInternal = currentInternal;
       const currentVisible = resolveVisibleStepFromInternal(currentInternal);
       if (currentVisible !== targetVisible) {
-        return targetInternal;
+        nextInternal = targetInternal;
       }
-      return currentInternal;
+      if (isUnsecured && (nextInternal === 8 || nextInternal === 9 || nextInternal === 10)) {
+        return 11;
+      }
+      return nextInternal;
     });
-  }, [searchParams]);
+  }, [searchParams, isUnsecured]);
 
   // Credit Manager must review the CAM before any other section unlocks (remembered per application)
   const camReviewedKey = `cm-cam-reviewed:${customerId}`;
@@ -1324,8 +1562,12 @@ export default function CustomerVerification({
   // Navigate to internal step and push to browser history (?step={visibleStep})
   const navigateToStep = useCallback((internalStepNum) => {
     if (camGateLocked && internalStepNum !== CAM_STEP_ID) return;
-    const visibleStep = resolveVisibleStepFromInternal(internalStepNum);
-    setActiveStep(internalStepNum);
+    let targetNum = internalStepNum;
+    if (isUnsecured && (targetNum === 8 || targetNum === 9 || targetNum === 10)) {
+      targetNum = 11;
+    }
+    const visibleStep = resolveVisibleStepFromInternal(targetNum);
+    setActiveStep(targetNum);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       if (next.get('step') === String(visibleStep)) {
@@ -1334,7 +1576,7 @@ export default function CustomerVerification({
       next.set('step', String(visibleStep));
       return next;
     }, { replace: false });
-  }, [setSearchParams, camGateLocked]);
+  }, [setSearchParams, camGateLocked, isUnsecured]);
 
   useEffect(() => {
     if (!camGateLocked || activeStep === CAM_STEP_ID) return;
@@ -2211,9 +2453,18 @@ export default function CustomerVerification({
     );
   }, [activePdVerificationTypes, selectedPdTypeId]);
 
-  // 9. Eligibility Assessment State for Step 14 (Phase 2A)
+  // 9. Eligibility Assessment State for Step 14 (Phase 2A & 2B)
   const [assessmentMethods, setAssessmentMethods] = useState([]);
   const [selectedMethodCode, setSelectedMethodCode] = useState('INCOME');
+  const [finalSelectedMethodCode, setFinalSelectedMethodCode] = useState(null);
+  const [savedFinalAssessmentRecord, setSavedFinalAssessmentRecord] = useState(null);
+  const [finalAssessmentLoading, setFinalAssessmentLoading] = useState(false);
+  const [finalAssessmentSaving, setFinalAssessmentSaving] = useState(false);
+  const [finalAssessmentSaveStatus, setFinalAssessmentSaveStatus] = useState(null);
+  const [finalAssessmentErrorMessage, setFinalAssessmentErrorMessage] = useState(null);
+  const activeFinalAssessmentContextRef = useRef('');
+  const [lipCurrentRecord, setLipCurrentRecord] = useState(null);
+  const [bankingEligibilityRecord, setBankingEligibilityRecord] = useState(null);
   const [selectedApplicantSequence, setSelectedApplicantSequence] = useState(0);
   const [methodsLoading, setMethodsLoading] = useState(false);
   const [methodsError, setMethodsError] = useState(null);
@@ -2526,6 +2777,121 @@ export default function CustomerVerification({
     );
   }, [verificationData]);
 
+  // Feature A: Hydrate saved final assessment selection from backend
+  useEffect(() => {
+    if (!calculationAppProdId || calculationAppProdId <= 0) {
+      setFinalSelectedMethodCode(null);
+      setSavedFinalAssessmentRecord(null);
+      setFinalAssessmentLoading(false);
+      setFinalAssessmentSaveStatus(null);
+      setFinalAssessmentErrorMessage(null);
+      return;
+    }
+
+    const currentContext = String(calculationAppProdId);
+    activeFinalAssessmentContextRef.current = currentContext;
+    let isMounted = true;
+
+    setFinalAssessmentLoading(true);
+    setFinalAssessmentSaveStatus(null);
+    setFinalAssessmentErrorMessage(null);
+
+    backOfficeService.getFinalAssessment(calculationAppProdId)
+      .then((res) => {
+        if (!isMounted || activeFinalAssessmentContextRef.current !== currentContext) return;
+        const data = res?.value !== undefined ? res.value : res;
+        const isCompleted = Boolean(data?.isCompleted ?? data?.IsCompleted);
+        const code = String(data?.methodCode || data?.MethodCode || '').trim().toUpperCase();
+
+        if (isCompleted && code && STATUS_ASSESSMENT_METHODS.some((m) => m.code === code)) {
+          setFinalSelectedMethodCode(code);
+          setSavedFinalAssessmentRecord(data);
+          setFinalAssessmentSaveStatus('saved');
+        } else {
+          setFinalSelectedMethodCode(null);
+          setSavedFinalAssessmentRecord(null);
+          setFinalAssessmentSaveStatus(null);
+        }
+      })
+      .catch((err) => {
+        if (!isMounted || activeFinalAssessmentContextRef.current !== currentContext) return;
+        const status = err?.response?.status;
+        if (status === 404) {
+          // 404 indicates no saved final selection exists on the backend
+          setFinalSelectedMethodCode(null);
+          setSavedFinalAssessmentRecord(null);
+          setFinalAssessmentSaveStatus(null);
+        } else {
+          console.warn('[Final Assessment] Failed to fetch saved selection:', err);
+          const msg =
+            err?.response?.data?.message ||
+            err?.response?.data?.Message ||
+            err?.message ||
+            'Unable to load saved final assessment selection.';
+          setFinalAssessmentErrorMessage(msg);
+        }
+      })
+      .finally(() => {
+        if (isMounted && activeFinalAssessmentContextRef.current === currentContext) {
+          setFinalAssessmentLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [calculationAppProdId]);
+
+  // Phase 2B: Hydrate LIP Program current record for Step 16 completion status
+  useEffect(() => {
+    if (activeStep !== 16 || !calculationAppProdId || calculationAppProdId <= 0) {
+      setLipCurrentRecord(null);
+      return;
+    }
+    let isMounted = true;
+    backOfficeService.getLipProgramCurrent(calculationAppProdId, selectedApplicantSequence)
+      .then((res) => {
+        if (isMounted) setLipCurrentRecord(res || null);
+      })
+      .catch(() => {
+        if (isMounted) setLipCurrentRecord(null);
+      });
+    return () => { isMounted = false; };
+  }, [activeStep, calculationAppProdId, selectedApplicantSequence]);
+
+  // Phase 2B: Hydrate Banking eligibility analysis and bank records for Step 16 completion and final selection
+  useEffect(() => {
+    if (activeStep !== 16 || !calculationAppProdId || calculationAppProdId <= 0) {
+      setBankingEligibilityRecord(null);
+      return;
+    }
+    let isMounted = true;
+    Promise.allSettled([
+      backOfficeService.getBankingEligibilityAnalysis(calculationAppProdId),
+      backOfficeService.getBankingAnalysis(calculationAppProdId),
+      backOfficeService.getBankingDetails(calculationAppProdId),
+    ]).then(([eligRes, analysisRes, detailsRes]) => {
+      if (!isMounted) return;
+      const elig = eligRes.status === 'fulfilled' ? eligRes.value : null;
+      const analysis = analysisRes.status === 'fulfilled' ? analysisRes.value : null;
+      const details = detailsRes.status === 'fulfilled' ? detailsRes.value : null;
+
+      const baseResult = elig || analysis?.eligibility || analysis || null;
+      if (!baseResult && !details) {
+        setBankingEligibilityRecord(null);
+        return;
+      }
+
+      const rawBanks = Array.isArray(details) ? details : (Array.isArray(analysis?.banks) ? analysis.banks : (Array.isArray(elig?.banks) ? elig.banks : []));
+      setBankingEligibilityRecord({
+        ...(baseResult || {}),
+        banks: rawBanks,
+      });
+    }).catch(() => {
+      if (isMounted) setBankingEligibilityRecord(null);
+    });
+    return () => { isMounted = false; };
+  }, [activeStep, calculationAppProdId]);
   // The RTR result must use the active proposed-loan record, not the older assessment EMI factor.
   useEffect(() => {
     if (activeStep !== 16 || !calculationAppProdId || calculationAppProdId <= 0) return;
@@ -4183,11 +4549,13 @@ export default function CustomerVerification({
     };
   }, [rtrDraftLoans, currentRtrAssessment]);
 
-  // Trigger RTR hydration when the Common Sheet is needed by RTR or Income.
+  // Trigger RTR hydration when the Common Sheet is needed by RTR or Income, and for Step 16 completion status
   useEffect(() => {
-    if (activeStep === 16 && (selectedMethodCode === 'RTR' || selectedMethodCode === 'INCOME') && calculationAppProdId > 0) {
-      fetchRTRLoans(calculationAppProdId, selectedApplicantSequence);
+    if (activeStep === 16 && calculationAppProdId > 0) {
       fetchRTRAssessments(calculationAppProdId, selectedApplicantSequence);
+      if (selectedMethodCode === 'RTR' || selectedMethodCode === 'INCOME') {
+        fetchRTRLoans(calculationAppProdId, selectedApplicantSequence);
+      }
     }
   }, [activeStep, selectedMethodCode, calculationAppProdId, selectedApplicantSequence, fetchRTRLoans, fetchRTRAssessments]);
 
@@ -6859,8 +7227,25 @@ export default function CustomerVerification({
     try {
       const saved = await backOfficeService.getEligibilityNormalIncome(resolvedAppProdId, resolvedTargetCustomerId);
       if (customerContextRef.current !== currentContext) return null;
-      setSavedNormalIncomeRecord(saved || null);
-      return saved;
+      let mergedSaved = saved || null;
+      if (mergedSaved && !mergedSaved.eligibilitySheetSnapshotId) {
+        try {
+          const actualBackOfficeId = getAuthenticatedBackOfficeId();
+          const statusRes = await backOfficeService.getEligibilityNormalIncomeSaveStatus(
+            resolvedAppProdId,
+            resolvedTargetCustomerId,
+            actualBackOfficeId
+          );
+          if (statusRes?.eligibilitySheetSnapshotId) {
+            mergedSaved = {
+              ...mergedSaved,
+              eligibilitySheetSnapshotId: statusRes.eligibilitySheetSnapshotId,
+            };
+          }
+        } catch (_) {}
+      }
+      setSavedNormalIncomeRecord(mergedSaved);
+      return mergedSaved;
     } catch (err) {
       if (customerContextRef.current !== currentContext) return null;
       console.warn('[Normal Income] Failed to load saved record:', err?.message || err);
@@ -11627,6 +12012,297 @@ export default function CustomerVerification({
     setBureauState('loading');
   };
 
+  // Phase 2B: Authoritative assessment completion determination for all 5 methods
+  const assessmentCompletionMap = useMemo(() => {
+    // 1. Salaried (INCOME)
+    const salariedMatch = (assessmentsList || []).find((a) => {
+      const isSalariedMethod = Number(a.assessmentMethodId) === 1;
+      const isApplicantMatch = Number(a.applicantSequence ?? 0) === Number(selectedApplicantSequence ?? 0);
+      return isSalariedMethod && isApplicantMatch;
+    });
+    const salariedRecord = (lastCalculationResponse && (Number(lastCalculationResponse.assessmentMethodId) === 1 || selectedMethodCode === 'INCOME'))
+      ? lastCalculationResponse
+      : salariedMatch;
+    const isSalariedCompleted = Boolean(
+      salariedRecord &&
+      (salariedRecord.loanEligibilityAssessmentId != null || salariedRecord.status === 'Calculated' || salariedRecord.calculatedAt != null) &&
+      salariedRecord.maximumEligibleLoanAmount !== null &&
+      salariedRecord.maximumEligibleLoanAmount !== undefined
+    );
+
+    // 2. Normal Income (NORMAL_INCOME)
+    const niSummary = savedNormalIncomeRecord?.summary || savedNormalIncomeRecord || null;
+    const isNormalIncomeCompleted = Boolean(
+      savedNormalIncomeRecord &&
+      niSummary &&
+      (
+        (niSummary.loanEligibilityLacs !== null && niSummary.loanEligibilityLacs !== undefined && Number(niSummary.loanEligibilityLacs) > 0) ||
+        (niSummary.eligibleMonthlyIncome !== null && niSummary.eligibleMonthlyIncome !== undefined && Number(niSummary.eligibleMonthlyIncome) > 0) ||
+        (niSummary.totalIncomeAnnual !== null && niSummary.totalIncomeAnnual !== undefined && Number(niSummary.totalIncomeAnnual) > 0)
+      )
+    );
+
+    // 3. LIP Program (LIP_PROGRAM)
+    const isLipCompleted = Boolean(
+      lipCurrentRecord &&
+      lipCurrentRecord.lipProgramAssessmentId != null &&
+      (
+        (lipCurrentRecord.eligibleLoanAmount !== null && lipCurrentRecord.eligibleLoanAmount !== undefined) ||
+        (lipCurrentRecord.eligibleEMI !== null && lipCurrentRecord.eligibleEMI !== undefined) ||
+        (lipCurrentRecord.totalMonthlyIncome !== null && lipCurrentRecord.totalMonthlyIncome !== undefined) ||
+        lipCurrentRecord.calculatedAt != null
+      )
+    );
+
+    // 4. RTR Sheet (RTR)
+    const isRtrCompleted = Boolean(
+      currentRtrAssessment &&
+      currentRtrAssessment.applicationRTRAssessmentId != null &&
+      (
+        currentRtrAssessment.finalLoanEligibility !== null &&
+        currentRtrAssessment.finalLoanEligibility !== undefined
+      )
+    );
+
+    // 5. Banking Program (BANKING)
+    const bankingResult = bankingEligibilityRecord?.eligibility || bankingEligibilityRecord || null;
+    const isBankingCompleted = Boolean(
+      bankingResult &&
+      (
+        (bankingResult.loanEligibilityInLacs !== null && bankingResult.loanEligibilityInLacs !== undefined) ||
+        (bankingResult.pooledEligibility?.loanEligibilityInLacs !== null && bankingResult.pooledEligibility?.loanEligibilityInLacs !== undefined) ||
+        (Array.isArray(bankingResult.banks) && bankingResult.banks.some((b) => b.isSelectedForEligibility))
+      )
+    );
+
+    return {
+      INCOME: isSalariedCompleted,
+      NORMAL_INCOME: isNormalIncomeCompleted,
+      LIP_PROGRAM: isLipCompleted,
+      RTR: isRtrCompleted,
+      BANKING: isBankingCompleted,
+    };
+  }, [assessmentsList, lastCalculationResponse, selectedApplicantSequence, selectedMethodCode, savedNormalIncomeRecord, lipCurrentRecord, currentRtrAssessment, bankingEligibilityRecord]);
+
+  const currentRoleCode = (getStoredRoleCode() || '').toUpperCase();
+  const isCreditHead = currentRoleCode === 'CREDIT_HEAD';
+  const isCreditManager =
+    isCreditManagerView &&
+    currentRoleCode === 'CREDIT_MANAGER';
+  const isApplicationClosed =
+    Number(verificationData?.overallStatus) === 4 ||
+    Number(verificationData?.overallStatus) === 5 ||
+    Number(verificationData?.overallStatus) === 6;
+  const isWorkflowEditable = sectionReview ? Boolean(sectionReview.canEdit) : true;
+
+  const canCreditManagerSelect =
+    isCreditManager &&
+    !isApplicationClosed &&
+    isWorkflowEditable &&
+    !isCmSectionLocked;
+
+  const isFinalMethodSelectionDisabled =
+    !canCreditManagerSelect ||
+    finalAssessmentSaving ||
+    finalAssessmentLoading;
+
+  // Resolve valid positive integer assessment ID and applicantSequence for each method
+  const resolveAssessmentIdAndSequence = useCallback((methodCode) => {
+    switch (methodCode) {
+      case 'INCOME': {
+        const salariedMatch = (assessmentsList || []).find((a) => {
+          const isSalariedMethod = Number(a.assessmentMethodId) === 1;
+          const isApplicantMatch = Number(a.applicantSequence ?? 0) === Number(selectedApplicantSequence ?? 0);
+          return isSalariedMethod && isApplicantMatch;
+        });
+        const salariedRecord = (lastCalculationResponse && (Number(lastCalculationResponse.assessmentMethodId) === 1 || selectedMethodCode === 'INCOME'))
+          ? lastCalculationResponse
+          : salariedMatch;
+        const assessmentId = Number(salariedRecord?.loanEligibilityAssessmentId || currentAssessment?.loanEligibilityAssessmentId || 0);
+        const applicantSequence = Number(salariedRecord?.applicantSequence ?? currentAssessment?.applicantSequence ?? selectedApplicantSequence ?? 0);
+        if (assessmentId > 0) {
+          return { valid: true, assessmentId, applicantSequence };
+        }
+        return { valid: false, error: 'Salaried Income assessment ID (loanEligibilityAssessmentId) is missing or invalid.' };
+      }
+
+      case 'NORMAL_INCOME': {
+        const snapshotId = Number(
+          savedNormalIncomeRecord?.eligibilitySheetSnapshotId ??
+          savedNormalIncomeRecord?.summary?.eligibilitySheetSnapshotId ??
+          excelDesktopState?.snapshotId ??
+          0
+        );
+        const finalId = snapshotId > 0 ? snapshotId : Number(savedNormalIncomeRecord?.id || 0);
+        if (finalId > 0) {
+          return { valid: true, assessmentId: finalId, applicantSequence: 0 };
+        }
+        return { valid: false, error: 'Normal Income snapshot ID (eligibilitySheetSnapshotId) is missing or invalid.' };
+      }
+
+      case 'LIP_PROGRAM': {
+        const assessmentId = Number(lipCurrentRecord?.lipProgramAssessmentId || 0);
+        const applicantSequence = Number(lipCurrentRecord?.applicantSequence ?? selectedApplicantSequence ?? 0);
+        if (assessmentId > 0) {
+          return { valid: true, assessmentId, applicantSequence };
+        }
+        return { valid: false, error: 'LIP Program assessment ID (lipProgramAssessmentId) is missing or invalid.' };
+      }
+
+      case 'RTR': {
+        const assessmentId = Number(currentRtrAssessment?.applicationRTRAssessmentId || 0);
+        const applicantSequence = Number(currentRtrAssessment?.applicantSequence ?? selectedApplicantSequence ?? 0);
+        if (assessmentId > 0) {
+          return { valid: true, assessmentId, applicantSequence };
+        }
+        return { valid: false, error: 'RTR assessment ID (applicationRTRAssessmentId) is missing or invalid.' };
+      }
+
+      case 'BANKING': {
+        const bankingResult = bankingEligibilityRecord?.eligibility || bankingEligibilityRecord || {};
+        const bankList = Array.isArray(bankingResult.banks) ? bankingResult.banks : [];
+        const selectedBanks = bankList.filter((b) => Boolean(b.isSelectedForEligibility));
+
+        if (selectedBanks.length === 1) {
+          const bankId = Number(selectedBanks[0].applicationBankingDetailsId || 0);
+          if (bankId > 0) {
+            return { valid: true, assessmentId: bankId, applicantSequence: 0 };
+          }
+          return { valid: false, error: 'Selected bank record has an invalid or missing applicationBankingDetailsId.' };
+        }
+
+        if (selectedBanks.length > 1) {
+          return {
+            valid: false,
+            isAmbiguous: true,
+            error: `Multiple banks (${selectedBanks.length}) are selected for eligibility. A single assessment ID cannot be unambiguously determined.`,
+          };
+        }
+
+        return {
+          valid: false,
+          isAmbiguous: true,
+          error: 'No bank record is marked as selected for eligibility (isSelectedForEligibility).',
+        };
+      }
+
+      default:
+        return { valid: false, error: `Unknown assessment method code: ${methodCode}` };
+    }
+  }, [
+    assessmentsList,
+    selectedApplicantSequence,
+    lastCalculationResponse,
+    selectedMethodCode,
+    currentAssessment,
+    savedNormalIncomeRecord,
+    excelDesktopState,
+    lipCurrentRecord,
+    currentRtrAssessment,
+    bankingEligibilityRecord,
+  ]);
+
+  // Handle final assessment selection change (Phase D & E)
+  const handleFinalAssessmentSelect = useCallback(async (targetMethodCode) => {
+    if (!canCreditManagerSelect || isFinalMethodSelectionDisabled || finalAssessmentSaving) return;
+
+    // Deselection rule: Clicking already-selected method does not clear it
+    if (finalSelectedMethodCode === targetMethodCode) {
+      return;
+    }
+
+    if (!assessmentCompletionMap[targetMethodCode]) {
+      setFinalAssessmentErrorMessage(
+        `Cannot select ${FINAL_METHOD_DISPLAY_NAMES[targetMethodCode] || targetMethodCode}: Calculation is not completed.`
+      );
+      return;
+    }
+
+    const resolution = resolveAssessmentIdAndSequence(targetMethodCode);
+    if (!resolution.valid) {
+      setFinalAssessmentErrorMessage(resolution.error || `Unable to resolve assessment ID for ${targetMethodCode}.`);
+      return;
+    }
+
+    const appProdId = calculationAppProdId;
+    if (!appProdId || appProdId <= 0) {
+      setFinalAssessmentErrorMessage('Missing valid Application Product Details ID.');
+      return;
+    }
+
+    const currentContext = String(appProdId);
+    activeFinalAssessmentContextRef.current = currentContext;
+
+    const payload = {
+      methodCode: targetMethodCode,
+      assessmentId: resolution.assessmentId,
+      applicantSequence: resolution.applicantSequence,
+    };
+
+    setFinalAssessmentSaving(true);
+    setFinalAssessmentErrorMessage(null);
+
+    try {
+      const res = await backOfficeService.saveFinalAssessment(appProdId, payload);
+      if (activeFinalAssessmentContextRef.current !== currentContext) return;
+
+      const data = res?.value !== undefined ? res.value : res;
+      setFinalSelectedMethodCode(targetMethodCode);
+      setSavedFinalAssessmentRecord(data || payload);
+      setFinalAssessmentSaveStatus('saved');
+    } catch (err) {
+      if (activeFinalAssessmentContextRef.current !== currentContext) return;
+      console.error('[Final Assessment] Save failed:', err);
+      const errMsg =
+        err?.response?.data?.message ||
+        err?.response?.data?.Message ||
+        err?.message ||
+        'Failed to save final assessment selection to the application.';
+      setFinalAssessmentErrorMessage(errMsg);
+      setFinalAssessmentSaveStatus('error');
+    } finally {
+      if (activeFinalAssessmentContextRef.current === currentContext) {
+        setFinalAssessmentSaving(false);
+      }
+    }
+  }, [
+    canCreditManagerSelect,
+    isFinalMethodSelectionDisabled,
+    finalAssessmentSaving,
+    finalSelectedMethodCode,
+    assessmentCompletionMap,
+    resolveAssessmentIdAndSequence,
+    calculationAppProdId,
+  ]);
+
+  // Phase 2B/Feature A: Invalidate final selection if selected method is no longer completed
+  // (guarded against premature wipe during step navigation or initial record hydration)
+  useEffect(() => {
+    if (finalAssessmentLoading) return;
+    if (!finalSelectedMethodCode) return;
+
+    if (finalSelectedMethodCode === 'INCOME' && (!assessmentsList || assessmentsList.length === 0) && !lastCalculationResponse) return;
+    if (finalSelectedMethodCode === 'LIP_PROGRAM' && lipCurrentRecord === null) return;
+    if (finalSelectedMethodCode === 'BANKING' && bankingEligibilityRecord === null) return;
+    if (finalSelectedMethodCode === 'NORMAL_INCOME' && savedNormalIncomeRecord === null) return;
+    if (finalSelectedMethodCode === 'RTR' && currentRtrAssessment === null) return;
+
+    if (assessmentCompletionMap && assessmentCompletionMap[finalSelectedMethodCode] === false) {
+      setFinalSelectedMethodCode(null);
+      setFinalAssessmentSaveStatus(null);
+    }
+  }, [
+    finalSelectedMethodCode,
+    assessmentCompletionMap,
+    finalAssessmentLoading,
+    assessmentsList,
+    lastCalculationResponse,
+    lipCurrentRecord,
+    bankingEligibilityRecord,
+    savedNormalIncomeRecord,
+    currentRtrAssessment,
+  ]);
+
   const handleBack = () => {
     if (onBack) onBack();
     else navigate(ROUTES.CUSTOMERS);
@@ -11877,7 +12553,7 @@ export default function CustomerVerification({
                 const cmSectionStatus =
                   isCreditManagerView && sectionReview ? sectionReview.getStatus(step.id) : null;
                 const returnAttentionCount = isUnifiedVerif
-                  ? [8, 9, 10, 11, 12].reduce((sum, id) => sum + (creditReturnAttentionByStep[id] || 0), 0)
+                  ? (isUnsecured ? [11, 12] : [8, 9, 10, 11, 12]).reduce((sum, id) => sum + (creditReturnAttentionByStep[id] || 0), 0)
                   : (creditReturnAttentionByStep[step.id] || 0);
                 const isLocked = camGateLocked && step.id !== CAM_STEP_ID;
 
@@ -11891,7 +12567,7 @@ export default function CustomerVerification({
                       onClick={() => {
                         if (isLocked) return;
                         if (isUnifiedVerif) {
-                          navigateToStep(8);
+                          navigateToStep(isUnsecured ? 11 : 8);
                         } else if (isDocStep) {
                           if (activeStep < 2 || activeStep > 7) {
                             navigateToStep(2);
@@ -12521,6 +13197,30 @@ export default function CustomerVerification({
 
               {/* 2. Section Selector Dropdown */}
               <div className="bo-cv-unified-selector-row">
+                {loanClassification.status === 'FAILED' && (
+                  <div
+                    className="bo-cv-unified-alert bo-cv-unified-alert-warning"
+                    role="alert"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      width: '100%',
+                      marginBottom: 10,
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      background: '#fffbe6',
+                      border: '1px solid #ffe58f',
+                      color: '#ad6800',
+                      fontSize: 13,
+                    }}
+                  >
+                    {AlertTriangleIcon && <AlertTriangleIcon size={16} />}
+                    <span>
+                      Unable to verify loan classification from master data ({loanClassification.error || 'Unknown'}). Displaying all verification sections for review.
+                    </span>
+                  </div>
+                )}
                 <label htmlFor="bo-cv-unified-step-select" className="bo-cv-unified-selector-label">
                   Select Section:
                 </label>
@@ -12528,24 +13228,24 @@ export default function CustomerVerification({
                   <select
                     id="bo-cv-unified-step-select"
                     className="bo-cv-unified-select"
-                    value={activeStep}
+                    value={effectiveActiveStep}
                     onChange={(e) => navigateToStep(Number(e.target.value))}
                     aria-label="Select verification section"
                   >
-                    <option value={8}>Property FI</option>
-                    <option value={9}>Office FI</option>
-                    <option value={10}>Residence FI</option>
-                    <option value={11}>Legal Report</option>
-                    <option value={12}>Technical Report</option>
+                    {allowedUnifiedSteps.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
               {/* 3. Section-Scoped Credit Manager Return Panel */}
               <CreditReturnSectionPanel
-                key={activeStep}
+                key={effectiveActiveStep}
                 sectionTitle={activeReturnStepTitle}
-                items={creditReturnItemsByStep[activeStep] || []}
+                items={creditReturnItemsByStep[effectiveActiveStep] || []}
                 viewerRole={viewerRole}
                 canAct={canActOnCreditReturns}
                 lockedReason={creditReturnLockedReason}
@@ -12556,7 +13256,7 @@ export default function CustomerVerification({
               {/* 4. Selected Section Content */}
               <div className="bo-cv-unified-section-content">
                 {/* ── STEP 03: PROPERTY FI ── */}
-                {activeStep === 8 && (
+                {effectiveActiveStep === 8 && !isUnsecured && (
                   <div className="bo-cv-placeholder-panel">
                     <div className="bo-cv-placeholder-icon">
                       {BuildingIcon && <BuildingIcon size={40} />}
@@ -12568,7 +13268,7 @@ export default function CustomerVerification({
                 )}
 
                 {/* ── STEP 04: OFFICE FI ── */}
-                {activeStep === 9 && (
+                {effectiveActiveStep === 9 && !isUnsecured && (
                   <div className="bo-cv-placeholder-panel">
                     <div className="bo-cv-placeholder-icon">
                       {BuildingIcon && <BuildingIcon size={40} />}
@@ -12580,7 +13280,7 @@ export default function CustomerVerification({
                 )}
 
                 {/* ── STEP 05: RESIDENCE FI ── */}
-                {activeStep === 10 && (
+                {effectiveActiveStep === 10 && !isUnsecured && (
                   <div className="bo-cv-placeholder-panel">
                     <div className="bo-cv-placeholder-icon">
                       {BuildingIcon && <BuildingIcon size={40} />}
@@ -12592,8 +13292,8 @@ export default function CustomerVerification({
                 )}
 
                 {/* ── STEP 03: LEGAL REPORT (INTERNAL STEP 11) & TECHNICAL REPORT (INTERNAL STEP 12) ── */}
-                {(activeStep === 11 || activeStep === 12) && (() => {
-                  const isLegal = activeStep === 11;
+                {(effectiveActiveStep === 11 || effectiveActiveStep === 12) && (() => {
+                  const isLegal = effectiveActiveStep === 11;
                   const docType = isLegal ? 'LEGAL_OPINION' : 'TECHNICAL_VALUATION';
                   const docTypeLabel = isLegal ? 'Legal Opinion Report' : 'Technical Valuation Report';
                   const docPillLabel = isLegal ? 'Legal Opinion' : 'Technical Valuation';
@@ -12734,7 +13434,7 @@ export default function CustomerVerification({
                               <button
                                 type="button"
                                 className="bo-btn bo-btn--primary bo-cv-doc-save-btn"
-                                onClick={() => handleSaveStep03Document(activeStep)}
+                                onClick={() => handleSaveStep03Document(effectiveActiveStep)}
                                 disabled={isSavingNewDoc || !newUploadFile || !newUploadRemarks.trim()}
                                 title="Save Document"
                               >
@@ -13884,6 +14584,11 @@ export default function CustomerVerification({
                   setIncomeWorkspaceOpen(false);
                   setBankingWorkspaceOpen(false);
                   setRtrWorkspaceOpen(false);
+                  if (calculationAppProdId > 0) {
+                    backOfficeService.getLipProgramCurrent(calculationAppProdId, selectedApplicantSequence)
+                      .then((res) => setLipCurrentRecord(res || null))
+                      .catch(() => setLipCurrentRecord(null));
+                  }
                 }}
                 onOpenProposedLoan={() => {
                   setLipWorkspaceOpen(false);
@@ -14473,6 +15178,21 @@ export default function CustomerVerification({
                   onBack={() => {
                     setBankingWorkspaceOpen(false);
                     setBankingResultOnly(false);
+                    if (calculationAppProdId > 0) {
+                      Promise.allSettled([
+                        backOfficeService.getBankingEligibilityAnalysis(calculationAppProdId),
+                        backOfficeService.getBankingDetails(calculationAppProdId),
+                      ]).then(([eligRes, detailsRes]) => {
+                        const elig = eligRes.status === 'fulfilled' ? eligRes.value : null;
+                        const details = detailsRes.status === 'fulfilled' ? detailsRes.value : null;
+                        if (elig || details) {
+                          setBankingEligibilityRecord({
+                            ...(elig || {}),
+                            banks: Array.isArray(details) ? details : (elig?.banks || []),
+                          });
+                        }
+                      }).catch(() => {});
+                    }
                   }}
                 />
               </div>
@@ -15525,33 +16245,165 @@ export default function CustomerVerification({
                     })()}
                   </div>
 
-                  <div className="bo-cv-elig-control-block">
-                    <div className="bo-cv-elig-control-label-row">
-                      <span className="bo-cv-elig-control-label">Applicant</span>
-                      <span className="bo-cv-elig-soft-pill">{allApplicants.length} profiles</span>
+                  <div className="bo-cv-elig-controls-right-col">
+                    <div className="bo-cv-elig-control-block">
+                      <div className="bo-cv-elig-control-label-row">
+                        <span className="bo-cv-elig-control-label">Applicant</span>
+                        <span className="bo-cv-elig-soft-pill">{allApplicants.length} profiles</span>
+                      </div>
+                      <div className="bo-cv-elig-person-rail" role="tablist" aria-label="Applicants">
+                        {allApplicants.map((app) => {
+                          const isSelected = app.sequence === selectedApplicantSequence;
+                          return (
+                            <button
+                              key={`applicant-tab-${app.sequence}`}
+                              type="button"
+                              role="tab"
+                              aria-selected={isSelected}
+                              className={`bo-cv-elig-person-chip ${isSelected ? 'is-active' : ''} ${app.isMain ? 'is-main' : ''}`}
+                              onClick={() => setSelectedApplicantSequence(app.sequence)}
+                            >
+                              <span className="bo-cv-elig-person-avatar">
+                                {UserIcon && <UserIcon size={14} />}
+                              </span>
+                              <span className="bo-cv-elig-person-meta">
+                                <strong>{app.name}</strong>
+                                <small>{app.isMain ? 'Main Applicant' : app.label}</small>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div className="bo-cv-elig-person-rail" role="tablist" aria-label="Applicants">
-                      {allApplicants.map((app) => {
-                        const isSelected = app.sequence === selectedApplicantSequence;
-                        return (
-                          <button
-                            key={`applicant-tab-${app.sequence}`}
-                            type="button"
-                            role="tab"
-                            aria-selected={isSelected}
-                            className={`bo-cv-elig-person-chip ${isSelected ? 'is-active' : ''} ${app.isMain ? 'is-main' : ''}`}
-                            onClick={() => setSelectedApplicantSequence(app.sequence)}
-                          >
-                            <span className="bo-cv-elig-person-avatar">
-                              {UserIcon && <UserIcon size={14} />}
+
+                    {/* Phase 2B: Right-Side Assessment Status Panel */}
+                    <div className="bo-cv-elig-control-block bo-cv-elig-status-panel">
+                      <div className="bo-cv-elig-control-label-row">
+                        <span className="bo-cv-elig-control-label">Assessment Status</span>
+                      </div>
+                      <div className="bo-cv-assessment-status-grid" role="group" aria-label="Assessment Status and Final Selection">
+                        {STATUS_ASSESSMENT_METHODS.map((item) => {
+                          const isCompleted = Boolean(assessmentCompletionMap[item.code]);
+                          const isSelected = finalSelectedMethodCode === item.code;
+                          const isDisabled = !isCompleted || isFinalMethodSelectionDisabled;
+                          return (
+                            <div
+                              key={item.code}
+                              className={`bo-cv-status-card ${isCompleted ? 'is-completed' : 'is-incomplete'} ${isSelected ? 'is-final-selected' : ''}`}
+                            >
+                              <div className="bo-cv-status-card-header">
+                                <span className="bo-cv-status-card-title">{item.name}</span>
+                                <span className={`bo-cv-status-badge ${isCompleted ? 'is-completed' : 'is-incomplete'}`}>
+                                  {isCompleted ? 'Completed' : 'Not Completed'}
+                                </span>
+                              </div>
+                              <div className="bo-cv-status-card-body">
+                                <label className={`bo-cv-status-checkbox-label ${isDisabled ? 'is-disabled' : ''}`}>
+                                  <input
+                                    type="checkbox"
+                                    id={`final-status-checkbox-${item.code}`}
+                                    name="finalAssessmentStatusCheckbox"
+                                    value={item.code}
+                                    checked={isSelected}
+                                    disabled={isDisabled}
+                                    onChange={() => {
+                                      if (!isDisabled) {
+                                        handleFinalAssessmentSelect(item.code);
+                                      }
+                                    }}
+                                    className="bo-cv-status-checkbox"
+                                    aria-label={`${item.name} - ${isSelected ? 'Selected for Loan' : 'Select as Final'}`}
+                                    title={
+                                      !isCompleted
+                                        ? `${item.name} is not completed. Only completed methods can be selected.`
+                                        : !isCreditManagerView
+                                          ? 'Final assessment method selection is performed by Credit Manager.'
+                                          : isCreditHead
+                                            ? 'Read-only view for Credit Head.'
+                                            : isCmSectionLocked
+                                              ? 'Click "Edit" on this section to change selection.'
+                                              : !isWorkflowEditable || isApplicationClosed
+                                                ? 'Application is read-only.'
+                                                : isSelected
+                                                  ? `${item.name} is selected for loan sanction.`
+                                                  : `Select ${item.name} as final assessment method.`
+                                    }
+                                  />
+                                  <span className="bo-cv-status-checkbox-text">
+                                    {isSelected ? 'Selected for Loan' : 'Select as Final'}
+                                  </span>
+                                </label>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="bo-cv-elig-final-summary" aria-live="polite">
+                        <div className="bo-cv-elig-final-summary-main">
+                          <span className="bo-cv-elig-final-summary-label">
+                            Final Assessment Method:{' '}
+                            <strong>
+                              {finalSelectedMethodCode
+                                ? FINAL_METHOD_DISPLAY_NAMES[finalSelectedMethodCode] || finalSelectedMethodCode
+                                : 'Not Selected'}
+                            </strong>
+                          </span>
+                          {finalSelectedMethodCode && (
+                            <span className="bo-cv-elig-final-badge">
+                              Selected for Loan
                             </span>
-                            <span className="bo-cv-elig-person-meta">
-                              <strong>{app.name}</strong>
-                              <small>{app.isMain ? 'Main Applicant' : app.label}</small>
-                            </span>
-                          </button>
-                        );
-                      })}
+                          )}
+                        </div>
+                        {finalAssessmentLoading ? (
+                          <p className="bo-cv-elig-final-summary-note">
+                            Loading saved final assessment selection...
+                          </p>
+                        ) : finalAssessmentSaving ? (
+                          <p className="bo-cv-elig-final-summary-note">
+                            Saving selection to application...
+                          </p>
+                        ) : finalAssessmentErrorMessage ? (
+                          <p className="bo-cv-elig-final-summary-note" style={{ color: '#dc2626' }}>
+                            ⚠️ {finalAssessmentErrorMessage}
+                          </p>
+                        ) : !isCreditManagerView ? (
+                          <p className="bo-cv-elig-final-summary-note">
+                            {finalSelectedMethodCode
+                              ? 'Designated by Credit Manager for loan sanction.'
+                              : 'Not Selected — Awaiting Credit Manager selection.'}
+                          </p>
+                        ) : isCreditHead ? (
+                          <p className="bo-cv-elig-final-summary-note">
+                            {finalSelectedMethodCode
+                              ? 'Designated by Credit Manager for loan sanction (Read-only view for Credit Head).'
+                              : 'Read-only view for Credit Head — Awaiting Credit Manager selection.'}
+                          </p>
+                        ) : !isWorkflowEditable || isApplicationClosed ? (
+                          <p className="bo-cv-elig-final-summary-note">
+                            {finalSelectedMethodCode
+                              ? 'Designated for loan sanction (Read-only — application is no longer pending).'
+                              : 'No final assessment method selected (Read-only — application is no longer pending).'}
+                          </p>
+                        ) : isCmSectionLocked ? (
+                          <p className="bo-cv-elig-final-summary-note">
+                            {finalSelectedMethodCode
+                              ? 'Click "Edit" on this section to change the final assessment method.'
+                              : 'Click "Edit" on this section to select a final assessment method.'}
+                          </p>
+                        ) : finalAssessmentSaveStatus === 'saved' && finalSelectedMethodCode ? (
+                          <p className="bo-cv-elig-final-summary-note" style={{ color: '#16a34a' }}>
+                            ✓ Saved to application. To change, select another completed method.
+                          </p>
+                        ) : finalSelectedMethodCode ? (
+                          <p className="bo-cv-elig-final-summary-note">
+                            Designated for loan sanction. To change, select another completed method.
+                          </p>
+                        ) : (
+                          <p className="bo-cv-elig-final-summary-note">
+                            Select one completed assessment method to designate for loan sanction.
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </section>

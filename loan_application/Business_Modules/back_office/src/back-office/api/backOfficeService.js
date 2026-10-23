@@ -788,7 +788,31 @@ export const backOfficeService = {
   },
 
   /**
+   * Retrieve the saved final assessment selection for an application.
+   * @param {string|number} applicationProductDetailsId
+   */
+  getFinalAssessment: async (applicationProductDetailsId) => {
+    const response = await axiosInstance.get(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_FINAL_ASSESSMENT(applicationProductDetailsId)
+    );
+    return unwrapResponse(response);
+  },
+
+  /**
+   * Save or replace the final assessment selection for an application.
+   * @param {string|number} applicationProductDetailsId
+   * @param {{ methodCode: string, assessmentId: number, applicantSequence: number }} payload
+   */
+  saveFinalAssessment: async (applicationProductDetailsId, payload) => {
+    const response = await axiosInstance.put(
+      BACK_OFFICE_ENDPOINTS.CALCULATION_FINAL_ASSESSMENT(applicationProductDetailsId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+  /**
    * Retrieve all saved calculation assessment results for an application.
+
    * @param {string|number} applicationProductDetailsId
    */
   getAssessmentsByApplication: async (applicationProductDetailsId) => {
