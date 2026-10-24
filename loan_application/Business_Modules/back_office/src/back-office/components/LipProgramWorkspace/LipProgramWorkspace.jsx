@@ -264,7 +264,7 @@ export default function LipProgramWorkspace({
 
   return <div className="lip-workspace">
     <div className="lip-toolbar">
-      <div><button type="button" className="lip-back-button" onClick={onBack}>← Back to Assessment</button><h2>LIP Program</h2><p>{context.applicantSequence === 0 ? 'Primary Applicant' : `Co-Applicant ${context.applicantSequence}`}</p></div>
+      <div><button type="button" className="lip-back-button" onClick={onBack} aria-label="Back to Eligibility Assessment"><span aria-hidden="true">←</span><span>Back to Eligibility Assessment</span></button><h2>LIP Program</h2><p>{context.applicantSequence === 0 ? 'Primary Applicant' : `Co-Applicant ${context.applicantSequence}`}</p></div>
       <div className="lip-toolbar-actions"><span className={`lip-status ${mode}`}>{status}</span>{mode === 'view' || mode === 'old' ? <button type="button" onClick={() => startEdit(record)}>Edit</button> : <button type="button" className="primary" disabled={saving || previewLoading} onClick={save}>{saving ? 'Saving…' : 'Save'}</button>} {editable && record && <button type="button" onClick={() => { setDraft(responseInputs(record)); setFoirPercent(String(record.foirPercentApplied ?? 60)); setDirty(false); setMode(record.isCurrent ? 'view' : 'old'); }}>Cancel</button>}<button type="button" onClick={loadHistory}>History</button></div>
     </div>
     {record && mode !== 'new' && <div className="lip-meta">Saved on {formatDate(record.calculatedAt)} by {record.calculatedByRole || '–'}</div>}
