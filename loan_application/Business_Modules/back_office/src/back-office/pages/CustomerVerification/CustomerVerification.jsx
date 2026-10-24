@@ -729,7 +729,7 @@ function getStatusInfo(status) {
   return { label: 'Pending', className: 'bo-cv-pill-pending' };
 }
 
-function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBack, initialResultOnly = false, actionsSlot = null, showSaveButton = false }) {
+function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBack, initialResultOnly = false, actionsSlot = null, showSaveButton = false, readOnly = false }) {
   const emptyMonth = () => ({
     applicationBankingMonthlyDetailsId: null,
     monthYear: '', monthlyCredits: '', monthlyCreditsNonBusiness: '', monthlyDebits: '',
@@ -834,6 +834,7 @@ function BankingEligibilityWorkspace({ applicationProductDetailsId, userId, onBa
   }, [applicationProductDetailsId]);
 
   const save = async () => {
+    if (readOnly) return;
     if (!applicationProductDetailsId) return;
     const selected = banks.filter((bank) => bank.isSelectedForEligibility).length;
     if (selected > 3) { setMessage({ type: 'error', text: 'Select a maximum of 3 banks for eligibility.' }); return; }
@@ -2462,6 +2463,24 @@ export default function CustomerVerification({
   const [finalAssessmentSaving, setFinalAssessmentSaving] = useState(false);
   const [finalAssessmentSaveStatus, setFinalAssessmentSaveStatus] = useState(null);
   const [finalAssessmentErrorMessage, setFinalAssessmentErrorMessage] = useState(null);
+  const [isForwardedToCreditManager, setIsForwardedToCreditManager] = useState(false);
+
+  // ── Centralized Application Status & Role Permissions ──────────────────────
+  const currentRoleCode = (getStoredRoleCode() || '').toUpperCase();
+  const rawAppStatus = Number(verificationData?.overallStatus);
+  const appStatus = isForwardedToCreditManager ? 3 : rawAppStatus;
+  const isBackOffice =
+    !isCreditManagerView &&
+    currentRoleCode === 'BACK_OFFICE';
+  const isCreditHead = currentRoleCode === 'CREDIT_HEAD';
+  const isCreditManager =
+    isCreditManagerView &&
+    currentRoleCode === 'CREDIT_MANAGER';
+  const isApplicationClosed =
+    appStatus === 4 ||
+    appStatus === 5 ||
+    appStatus === 6;
+  const isBackOfficeEditable = isBackOffice && appStatus === 2;
   const activeFinalAssessmentContextRef = useRef('');
   const [lipCurrentRecord, setLipCurrentRecord] = useState(null);
   const [bankingEligibilityRecord, setBankingEligibilityRecord] = useState(null);
@@ -2488,6 +2507,7 @@ export default function CustomerVerification({
 
 
   const saveProposedLoan = async () => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     const roi = Number(proposedLoan.manualROI);
     const tenure = Number(proposedLoan.manualTenureMonths);
     const amount = Number(proposedLoan.recommendedLoanAmount);
@@ -2776,6 +2796,11 @@ export default function CustomerVerification({
       0
     );
   }, [verificationData]);
+
+  // Reset forwarded state on application / calculation context change
+  useEffect(() => {
+    setIsForwardedToCreditManager(false);
+  }, [calculationAppProdId, customerId]);
 
   // Feature A: Hydrate saved final assessment selection from backend
   useEffect(() => {
@@ -3261,6 +3286,12 @@ export default function CustomerVerification({
 
   // Pre-calculation synchronization helper (handles POST for new rows & PUT for modified persisted rows)
   const synchronizeSalaryRows = async () => {
+    if (isBackOffice && !isBackOfficeEditable) {
+      return {
+        success: false,
+        message: 'Application is currently in read-only mode for Back Office.',
+      };
+    }
     if (salaryRows.length < 3) {
       return {
         success: false,
@@ -3474,6 +3505,7 @@ export default function CustomerVerification({
 
   // Handle removing an other income row
   const handleRemoveOtherIncomeRow = async (indexToRemove) => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     const row = otherIncomeRows[indexToRemove];
     if (row?.applicationOtherIncomeDetailsId) {
       const currentUserId = resolveAuthenticatedUserId();
@@ -3530,6 +3562,12 @@ export default function CustomerVerification({
 
   // Pre-calculation synchronization helper for other income rows (POST for new, PUT for modified)
   const synchronizeOtherIncomeRows = async () => {
+    if (isBackOffice && !isBackOfficeEditable) {
+      return {
+        success: false,
+        message: 'Application is currently in read-only mode for Back Office.',
+      };
+    }
     if (otherIncomeRows.length === 0) {
       return { success: true, count: 0 };
     }
@@ -3971,6 +4009,7 @@ export default function CustomerVerification({
 
   // Handle Create ABB Account
   const handleCreateAbbAccount = async () => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     setAccountBanner(null);
 
     if (!newAccountDraft.bankId) {
@@ -4123,6 +4162,7 @@ export default function CustomerVerification({
 
   // Handle Save ABB Balances for an account
   const handleSaveAbbBalances = async (accId) => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     setBalanceBannerMap((prev) => ({ ...prev, [accId]: null }));
 
     const currentUserId = resolveAuthenticatedUserId();
@@ -4617,6 +4657,7 @@ export default function CustomerVerification({
 
   // Handle Add RTR Loan row
   const handleAddRtrLoanRow = () => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     const todayStr = new Date().toISOString().split('T')[0];
     setRtrDraftLoans((prev) => [
       ...prev,
@@ -4647,6 +4688,7 @@ export default function CustomerVerification({
 
   // Handle Remove RTR Draft Loan row (frontend state only, strictly for unsaved draft rows)
   const handleRemoveRtrDraftRow = (indexToRemove) => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     setRtrDraftLoans((prev) => {
       const targetRow = prev[indexToRemove];
       // Guard: do not delete saved rows via frontend remove
@@ -4659,6 +4701,9 @@ export default function CustomerVerification({
 
   // Handle Save / Synchronize RTR Loans (strictly no delete)
   const handleSaveRtrLoans = async () => {
+    if (isBackOffice && !isBackOfficeEditable) {
+      return { success: false, message: 'Application is currently in read-only mode for Back Office.' };
+    }
     setRtrLoansBanner(null);
     const currentUserId = resolveAuthenticatedUserId();
     if (!currentUserId) {
@@ -5092,6 +5137,13 @@ export default function CustomerVerification({
 
   // Calculate Eligibility handler
   const handleCalculateEligibility = async () => {
+    if (isBackOffice && !isBackOfficeEditable) {
+      setCalcBanner({
+        type: 'error',
+        message: 'Application is currently in read-only mode for Back Office.',
+      });
+      return;
+    }
     setCalcBanner(null);
 
     // 1. Resolve Auth
@@ -5478,6 +5530,13 @@ export default function CustomerVerification({
 
   // Handle Save Recommendation (PATCH /api/calculation/assessments/{id}/recommendation)
   const handleSaveRecommendation = async () => {
+    if (isBackOffice && !isBackOfficeEditable) {
+      setRecommendationBanner({
+        type: 'error',
+        message: 'Application is currently in read-only mode for Back Office.',
+      });
+      return;
+    }
     setRecommendationBanner(null);
 
     const assessmentId = currentAssessment?.loanEligibilityAssessmentId;
@@ -5689,6 +5748,13 @@ export default function CustomerVerification({
   }, []);
 
   const handleSaveActiveLoan = async () => {
+    if (isBackOffice && !isBackOfficeEditable) {
+      setLoanBanner({
+        type: 'error',
+        message: 'Application is currently in read-only mode for Back Office.',
+      });
+      return;
+    }
     setLoanBanner(null);
 
     if (!selectedEmploymentIncomeDetailsId) {
@@ -5910,12 +5976,14 @@ export default function CustomerVerification({
   const [recommendationSheets, setRecommendationSheets] = useState(() => [createRecommendationSheet()]);
 
   const updateRecommendationSheet = (sheetId, field, value) => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     setRecommendationSheets((sheets) => sheets.map((sheet) => (
       sheet.id === sheetId ? { ...sheet, [field]: value } : sheet
     )));
   };
 
   const updateSanctionCondition = (sheetId, conditionIndex, value) => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     setRecommendationSheets((sheets) => sheets.map((sheet) => {
       if (sheet.id !== sheetId) return sheet;
       const conditions = [...sheet.otherSanctionConditions];
@@ -5925,6 +5993,7 @@ export default function CustomerVerification({
   };
 
   const addSanctionCondition = (sheetId) => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     setRecommendationSheets((sheets) => sheets.map((sheet) => (
       sheet.id === sheetId
         ? { ...sheet, otherSanctionConditions: [...sheet.otherSanctionConditions, ''] }
@@ -5933,6 +6002,7 @@ export default function CustomerVerification({
   };
 
   const removeSanctionCondition = (sheetId, conditionIndex) => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     setRecommendationSheets((sheets) => sheets.map((sheet) => {
       if (sheet.id !== sheetId || sheet.otherSanctionConditions.length === 1) return sheet;
       return {
@@ -6130,6 +6200,13 @@ export default function CustomerVerification({
 
   // Save PD action handler (PD Assessment Save/Update)
   const handleSavePd = async () => {
+    if (isBackOffice && !isBackOfficeEditable) {
+      setFinalRemarksBanner({
+        type: 'error',
+        message: 'Application is currently in read-only mode for Back Office.',
+      });
+      return;
+    }
     const sheet = recommendationSheets[0] || {};
     const recommendationVal = (sheet.recommendation || '').trim();
     if (!recommendationVal) {
@@ -6820,6 +6897,7 @@ export default function CustomerVerification({
   }, [activeHealthCheckTypes, healthChecksByStep, savedHealthChecks, isHealthCheckRowDirty]);
 
   const updateHealthCheck = (typeId, field, value, step = activeStep) => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     setHealthChecksFeedback(null);
     setHealthChecksByStep((prev) => ({
       ...prev,
@@ -6851,6 +6929,7 @@ export default function CustomerVerification({
   };
 
   const saveFindingsModal = () => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     if (findingsModal.typeId == null) return;
     const targetStep = findingsModal.step ?? activeStep;
     updateHealthCheck(findingsModal.typeId, 'findings', (findingsModal.draft || '').trim(), targetStep);
@@ -6858,6 +6937,13 @@ export default function CustomerVerification({
   };
 
   const handleSaveHealthChecks = async () => {
+    if (isBackOffice && !isBackOfficeEditable) {
+      setHealthChecksFeedback({
+        type: 'error',
+        message: 'Application is currently in read-only mode for Back Office.',
+      });
+      return;
+    }
     const appProdId = Number(calculationAppProdId || resolvedAppProdId || 0);
     const agentCustId = Number(calculationAgentCustId || resolvedTargetCustomerId || 0);
     const backOfficeUserId = getAuthenticatedBackOfficeId();
@@ -7088,7 +7174,7 @@ export default function CustomerVerification({
                             value={row.status}
                             onChange={(e) => updateHealthCheck(typeId, 'status', e.target.value, step)}
                             aria-label={`${label} Yes/No status`}
-                            disabled={isSavingHealthChecks}
+                            disabled={isSavingHealthChecks || !isSectionEditable}
                           >
                             <option value="Pending">Pending</option>
                             <option value="Yes">Yes</option>
@@ -7104,7 +7190,7 @@ export default function CustomerVerification({
                           value={row.dateOfCheck}
                           onChange={(e) => updateHealthCheck(typeId, 'dateOfCheck', e.target.value, step)}
                           aria-label={`${label} date of check`}
-                          disabled={isSavingHealthChecks}
+                          disabled={isSavingHealthChecks || !isSectionEditable}
                         />
                       </td>
                       <td>
@@ -7119,7 +7205,7 @@ export default function CustomerVerification({
                             {hasFindings ? row.findings : 'Click to add findings…'}
                           </span>
                           <span className="bo-cv-health-findings-trigger-action">
-                            {hasFindings ? 'Edit' : 'Add'}
+                            {!isSectionEditable ? 'View' : (hasFindings ? 'Edit' : 'Add')}
                           </span>
                         </button>
                       </td>
@@ -7141,14 +7227,16 @@ export default function CustomerVerification({
               backgroundColor: '#f8fafc',
             }}
           >
-            <button
-              type="button"
-              className="bo-btn bo-btn--primary"
-              onClick={handleSaveHealthChecks}
-              disabled={isSavingHealthChecks || dirtyCount === 0 || healthCheckTypesLoading}
-            >
-              {isSavingHealthChecks ? 'Saving Health Checks…' : 'Save Health Checks'}
-            </button>
+            {isSectionEditable && (
+              <button
+                type="button"
+                className="bo-btn bo-btn--primary"
+                onClick={handleSaveHealthChecks}
+                disabled={isSavingHealthChecks || dirtyCount === 0 || healthCheckTypesLoading}
+              >
+                {isSavingHealthChecks ? 'Saving Health Checks…' : 'Save Health Checks'}
+              </button>
+            )}
           </div>
         </div>
       </section>
@@ -7485,6 +7573,7 @@ export default function CustomerVerification({
   }, [pollDesktopSaveStatus, stopDesktopPolling]);
 
   const launchNormalIncomeExcelDesktop = useCallback(async () => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     if (!resolvedAppProdId || !resolvedTargetCustomerId) return;
     const currentContext = `${resolvedAppProdId}_${resolvedTargetCustomerId}`;
 
@@ -7670,6 +7759,7 @@ export default function CustomerVerification({
   }, [activeStep, fetchWorkflowHistory, evaluateStep13Readiness]);
 
   const handleOpenReturnToRmModal = () => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     setReturnToRmModal({
       open: true,
       remarks: '',
@@ -7686,6 +7776,7 @@ export default function CustomerVerification({
   };
 
   const handleConfirmReturnToRm = async () => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     if (coApplicants.length > 0) {
       const rawSeq = returnToRmModal.applicantSequence;
       if (rawSeq === null || rawSeq === undefined || rawSeq === '' || isNaN(Number(rawSeq))) {
@@ -7741,6 +7832,7 @@ export default function CustomerVerification({
   };
 
   const handleOpenSendToCreditModal = () => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     setSendToCreditModal({
       open: true,
       remarks: '',
@@ -7756,6 +7848,7 @@ export default function CustomerVerification({
   };
 
   const handleConfirmSendToCredit = async () => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     const trimmed = (sendToCreditModal.remarks || '').trim();
     if (!trimmed) {
       setSendToCreditModal((prev) => ({ ...prev, error: 'Underwriter recommendation remarks are mandatory.' }));
@@ -7800,6 +7893,7 @@ export default function CustomerVerification({
         remarks: trimmed,
       };
       await backOfficeService.sendApplicationToCreditManager(custId, payload);
+      setIsForwardedToCreditManager(true);
 
       setSendToCreditModal({ open: false, remarks: '', error: null, isSubmitting: false });
       setWorkflowActionFeedback({
@@ -7809,7 +7903,13 @@ export default function CustomerVerification({
           : `Application #${custId} has been successfully submitted to Credit Manager. Status transitioned from Logged to HO (2) to Sent to Credit Manager (3: Under Review).`,
       });
 
-      await Promise.all([fetchWorkflowHistory(), reloadCreditReturnItems()]);
+      await Promise.all([
+        fetchWorkflowHistory(),
+        reloadCreditReturnItems(),
+        typeof refetch === 'function'
+          ? refetch().catch((e) => console.warn('[CustomerVerification] Post-forwarding refetch failed:', e))
+          : Promise.resolve(),
+      ]);
     } catch (err) {
       console.error('[CustomerVerification] Failed to send application to Credit Manager:', err);
       const msg = err?.response?.data?.message || err?.response?.data?.title || err?.message || 'Failed to send application to Credit Manager.';
@@ -7963,6 +8063,9 @@ export default function CustomerVerification({
     remarks = '',
     stepNum = null,
   }) => {
+    if (isBackOffice && !isBackOfficeEditable) {
+      return { success: false, error: 'Application is currently in read-only mode for Back Office.' };
+    }
     const seq =
       applicantSequence !== undefined && applicantSequence !== null && !isNaN(Number(applicantSequence))
         ? Number(applicantSequence)
@@ -9543,6 +9646,7 @@ export default function CustomerVerification({
       }));
       return;
     }
+    if (isBackOffice && !isBackOfficeEditable) return;
     if (!remarks) {
       setStepFeedback((prev) => ({
         ...prev,
@@ -9753,6 +9857,7 @@ export default function CustomerVerification({
     rejectedDocumentType = null,
     manualDocumentIndex = null
   ) => {
+    if (!isCreditManagerView && isBackOffice && !isBackOfficeEditable) return;
     const existingRemarks = (stepRemarks[stepNum] || '').trim();
     setRejectConfirmModal({
       open: true,
@@ -9927,6 +10032,7 @@ export default function CustomerVerification({
       await creditReturn.onAccept(item, remarks);
       return;
     }
+    if (isBackOffice && !isBackOfficeEditable) return;
     const backOfficeId = getAuthenticatedBackOfficeId();
     if (!backOfficeId) {
       throw new Error('Unable to identify the logged-in Back Office user. Please login again.');
@@ -9958,6 +10064,7 @@ export default function CustomerVerification({
 
   // Confirm and Execute Return Document to RM (with mandatory remarks validation)
   const handleConfirmReject = async (returnNow = false) => {
+    if (!isCreditManagerView && isBackOffice && !isBackOfficeEditable) return;
     const {
       stepNum,
       stepLabel,
@@ -10012,6 +10119,7 @@ export default function CustomerVerification({
   // Back Office Verify Resubmitted Rejection Handler
   const handleVerifyRejection = async (rejectionId, stepLabel, stepNum, applicantSequence = null) => {
     if (!rejectionId) return;
+    if (isBackOffice && !isBackOfficeEditable) return;
     const boAuth = getBackOfficeAuth();
     const backOfficeId = Number(
       boAuth?.id ||
@@ -10108,6 +10216,10 @@ export default function CustomerVerification({
 
   // ── Back Office Document Handlers (Steps 09, 10, 11) ───────────────────────
   const handleUploadOrReplaceDocument = async (e, stepType, currentState, setter) => {
+    if (isBackOffice && !isBackOfficeEditable) {
+      e.target.value = '';
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -10291,6 +10403,10 @@ export default function CustomerVerification({
 
   // ── Step 03: Document Verifications Handlers (Legal & Technical) ───────────
   const handleStep03FileSelect = (e) => {
+    if (isBackOffice && !isBackOfficeEditable) {
+      e.target.value = '';
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -10316,6 +10432,7 @@ export default function CustomerVerification({
   };
 
   const handleSaveStep03Document = async (currentStep) => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     if (!newUploadFile) {
       setNewUploadError('Please select a file to upload.');
       return;
@@ -10455,6 +10572,10 @@ export default function CustomerVerification({
   };
 
   const handleTableReplaceDocument = async (e, targetDoc) => {
+    if (isBackOffice && !isBackOfficeEditable) {
+      e.target.value = '';
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -10657,6 +10778,7 @@ export default function CustomerVerification({
   };
 
   const handleDeleteBackOfficeDocument = (stepType, docState, setter) => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     const docId = docState?.backOfficeApplicationDocumentId;
     if (!docId) return;
 
@@ -10694,6 +10816,7 @@ export default function CustomerVerification({
   };
 
   const handleConfirmDeleteDocument = async () => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     const { docId, stepType, stepLabel, docState, setter, isDeleting } = deleteDocModal;
     if (!docId || !setter || isDeleting) return;
 
@@ -10764,6 +10887,7 @@ export default function CustomerVerification({
   };
 
   const handleOpenSaveRemarksConfirm = (stepType, stepLabel, docState, setter) => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     if (!docState?.backOfficeApplicationDocumentId) {
       setter((prev) => ({
         ...prev,
@@ -10804,6 +10928,7 @@ export default function CustomerVerification({
   };
 
   const handleConfirmSaveRemarks = async () => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     const { docId, remarks, stepLabel, setter } = saveRemarksModal;
     setSaveRemarksModal({
       open: false,
@@ -11851,6 +11976,7 @@ export default function CustomerVerification({
   }, [selectedCoApplicantIndex, handleOpenRejectConfirm]);
 
   const handleToggleRowVerification = useCallback(async (row) => {
+    if (isBackOffice && !isBackOfficeEditable) return;
     if (!row || !row.hasFile || row.isNotRequired || row.status === 'Not Required') return;
     if (row.status === 'Returned to RM' || row.status === 'Returned') return;
 
@@ -12084,25 +12210,25 @@ export default function CustomerVerification({
     };
   }, [assessmentsList, lastCalculationResponse, selectedApplicantSequence, selectedMethodCode, savedNormalIncomeRecord, lipCurrentRecord, currentRtrAssessment, bankingEligibilityRecord]);
 
-  const currentRoleCode = (getStoredRoleCode() || '').toUpperCase();
-  const isCreditHead = currentRoleCode === 'CREDIT_HEAD';
-  const isCreditManager =
-    isCreditManagerView &&
-    currentRoleCode === 'CREDIT_MANAGER';
-  const isApplicationClosed =
-    Number(verificationData?.overallStatus) === 4 ||
-    Number(verificationData?.overallStatus) === 5 ||
-    Number(verificationData?.overallStatus) === 6;
   const isWorkflowEditable = sectionReview ? Boolean(sectionReview.canEdit) : true;
 
-  const canCreditManagerSelect =
-    isCreditManager &&
+  const isSectionEditable =
     !isApplicationClosed &&
-    isWorkflowEditable &&
-    !isCmSectionLocked;
+    (
+      isBackOfficeEditable ||
+      (
+        isCreditManager &&
+        appStatus === 3 &&
+        isWorkflowEditable &&
+        !isCmSectionLocked
+      )
+    );
+
+  const canSelectFinalAssessment = isSectionEditable;
+  const canEditDeviations = isSectionEditable;
 
   const isFinalMethodSelectionDisabled =
-    !canCreditManagerSelect ||
+    !canSelectFinalAssessment ||
     finalAssessmentSaving ||
     finalAssessmentLoading;
 
@@ -12204,7 +12330,7 @@ export default function CustomerVerification({
 
   // Handle final assessment selection change (Phase D & E)
   const handleFinalAssessmentSelect = useCallback(async (targetMethodCode) => {
-    if (!canCreditManagerSelect || isFinalMethodSelectionDisabled || finalAssessmentSaving) return;
+    if (!canSelectFinalAssessment || isFinalMethodSelectionDisabled || finalAssessmentSaving) return;
 
     // Deselection rule: Clicking already-selected method does not clear it
     if (finalSelectedMethodCode === targetMethodCode) {
@@ -12266,7 +12392,7 @@ export default function CustomerVerification({
       }
     }
   }, [
-    canCreditManagerSelect,
+    canSelectFinalAssessment,
     isFinalMethodSelectionDisabled,
     finalAssessmentSaving,
     finalSelectedMethodCode,
@@ -12506,6 +12632,41 @@ export default function CustomerVerification({
           </div>
         </div>
       </header>
+
+      {/* ── Read-Only Feedback Banner for Back Office ──────────────────── */}
+      {isBackOffice && !isBackOfficeEditable && (
+        <div
+          role="status"
+          style={{
+            margin: '0 24px 12px 24px',
+            padding: '10px 16px',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            fontSize: '0.86rem',
+            fontWeight: 500,
+            backgroundColor: appStatus === 5 ? '#fef2f2' : appStatus === 4 ? '#f0fdf4' : '#eff6ff',
+            border: `1px solid ${appStatus === 5 ? '#fecaca' : appStatus === 4 ? '#bbf7d0' : '#bfdbfe'}`,
+            color: appStatus === 5 ? '#dc2626' : appStatus === 4 ? '#15803d' : '#1d4ed8',
+          }}
+        >
+          <span style={{ fontSize: '1.1rem' }}>
+            {appStatus === 5 ? '✕' : appStatus === 4 ? '✓' : 'ℹ️'}
+          </span>
+          <span>
+            {appStatus === 3
+              ? 'Application submitted to Credit Manager. Verification details are available in view-only mode.'
+              : appStatus === 4
+              ? 'Application has been approved. Verification details are available in view-only mode.'
+              : appStatus === 5
+              ? 'Application has been rejected. Verification details are available in view-only mode.'
+              : appStatus === 6
+              ? 'Application has been returned to Relationship Manager. Verification details are available in view-only mode.'
+              : 'Application is not in Back Office verification queue. Verification details are available in view-only mode.'}
+          </span>
+        </div>
+      )}
 
       {/* ── 2. Dedicated 2-Column Workspace Body ──────────────────────── */}
       <div className="bo-cv-workspace-body">
@@ -12772,6 +12933,7 @@ export default function CustomerVerification({
                           const IconComp = row.icon;
                           const isThisRowSaving = savingVerificationKey === `${row.applicantSequence || 0}_${row.stepCode}`;
                           const isCheckboxDisabled =
+                            !isSectionEditable ||
                             !row.hasFile ||
                             row.isNotRequired ||
                             row.status === 'Not Required' ||
@@ -12907,7 +13069,7 @@ export default function CustomerVerification({
                                             : 'Document not available')
                                         : 'Return document to RM'
                                     }
-                                    disabled={!row.hasFile || row.isNotRequired}
+                                    disabled={!isSectionEditable || !row.hasFile || row.isNotRequired}
                                     onClick={() => handleRowReturn(row)}
                                   >
                                     {RotateCcwIcon ? <RotateCcwIcon size={14} /> : <span>↩</span>}
@@ -12998,6 +13160,7 @@ export default function CustomerVerification({
                             const IconComp = row.icon;
                             const isThisRowSaving = savingVerificationKey === `${row.applicantSequence}_${row.stepCode}`;
                             const isCheckboxDisabled =
+                              !isSectionEditable ||
                               !row.hasFile ||
                               row.isNotRequired ||
                               row.status === 'Not Required' ||
@@ -13133,7 +13296,7 @@ export default function CustomerVerification({
                                               : 'Document not available')
                                           : 'Return document to RM'
                                       }
-                                      disabled={!row.hasFile || row.isNotRequired}
+                                      disabled={!isSectionEditable || !row.hasFile || row.isNotRequired}
                                       onClick={() => handleRowReturn(row)}
                                     >
                                       {RotateCcwIcon ? <RotateCcwIcon size={14} /> : <span>↩</span>}
@@ -13172,6 +13335,7 @@ export default function CustomerVerification({
                       fetchApplicationRejections();
                       fetchAllCustomerDocs();
                     }}
+                    readOnly={!isSectionEditable}
                   />
                 </div>
               </div>
@@ -13424,7 +13588,7 @@ export default function CustomerVerification({
                                   setNewUploadRemarks(e.target.value);
                                   setNewUploadError(null);
                                 }}
-                                disabled={isSavingNewDoc}
+                                disabled={isSavingNewDoc || !isSectionEditable}
                               />
                             </div>
 
@@ -13435,7 +13599,7 @@ export default function CustomerVerification({
                                 type="button"
                                 className="bo-btn bo-btn--primary bo-cv-doc-save-btn"
                                 onClick={() => handleSaveStep03Document(effectiveActiveStep)}
-                                disabled={isSavingNewDoc || !newUploadFile || !newUploadRemarks.trim()}
+                                disabled={isSavingNewDoc || !isSectionEditable || !newUploadFile || !newUploadRemarks.trim()}
                                 title="Save Document"
                               >
                                 {SaveIcon && <SaveIcon size={16} />}
@@ -13544,34 +13708,38 @@ export default function CustomerVerification({
                                           </button>
 
                                           {/* 4. Replace */}
-                                          <label
-                                            htmlFor={`bo-cv-table-replace-${doc.backOfficeApplicationDocumentId || idx}`}
-                                            className="bo-btn bo-btn--outline bo-btn--sm bo-btn--icon bo-btn--replace bo-cv-action-btn"
-                                            title="Replace Document"
-                                            aria-label="Replace Document"
-                                          >
-                                            <input
-                                              type="file"
-                                              id={`bo-cv-table-replace-${doc.backOfficeApplicationDocumentId || idx}`}
-                                              className="bo-cv-file-input"
-                                              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
-                                              onChange={(e) => handleTableReplaceDocument(e, doc)}
-                                              style={{ display: 'none' }}
-                                              disabled={isSavingNewDoc}
-                                            />
-                                            {RefreshCwIcon && <RefreshCwIcon size={14} />}
-                                          </label>
+                                          {isSectionEditable && (
+                                            <label
+                                              htmlFor={`bo-cv-table-replace-${doc.backOfficeApplicationDocumentId || idx}`}
+                                              className="bo-btn bo-btn--outline bo-btn--sm bo-btn--icon bo-btn--replace bo-cv-action-btn"
+                                              title="Replace Document"
+                                              aria-label="Replace Document"
+                                            >
+                                              <input
+                                                type="file"
+                                                id={`bo-cv-table-replace-${doc.backOfficeApplicationDocumentId || idx}`}
+                                                className="bo-cv-file-input"
+                                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                                                onChange={(e) => handleTableReplaceDocument(e, doc)}
+                                                style={{ display: 'none' }}
+                                                disabled={isSavingNewDoc || !isSectionEditable}
+                                              />
+                                              {RefreshCwIcon && <RefreshCwIcon size={14} />}
+                                            </label>
+                                          )}
 
                                           {/* 5. Delete */}
-                                          <button
-                                            type="button"
-                                            className="bo-btn bo-btn--outline-danger bo-btn--sm bo-btn--icon bo-cv-action-btn"
-                                            onClick={() => handleDeleteBackOfficeDocument(doc.documentType, docState, rowSetter)}
-                                            title="Delete Document"
-                                            aria-label="Delete Document"
-                                          >
-                                            {Trash2Icon && <Trash2Icon size={14} />}
-                                          </button>
+                                          {isSectionEditable && (
+                                            <button
+                                              type="button"
+                                              className="bo-btn bo-btn--outline-danger bo-btn--sm bo-btn--icon bo-cv-action-btn"
+                                              onClick={() => handleDeleteBackOfficeDocument(doc.documentType, docState, rowSetter)}
+                                              title="Delete Document"
+                                              aria-label="Delete Document"
+                                            >
+                                              {Trash2Icon && <Trash2Icon size={14} />}
+                                            </button>
+                                          )}
                                         </div>
                                       </td>
                                     </tr>
@@ -13673,7 +13841,7 @@ export default function CustomerVerification({
                       className="bo-cv-file-input"
                       accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
                       onChange={(e) => handleUploadOrReplaceDocument(e, 'MANUAL_CIBIL_PAN', manualCibilPan, setManualCibilPan)}
-                      disabled={manualCibilPan.loading}
+                      disabled={manualCibilPan.loading || !isSectionEditable}
                     />
                     <label htmlFor="bo-cv-cibil-pan-file" className="bo-cv-manual-pan-btn">
                       {FileTextIcon && <FileTextIcon size={14} />}
@@ -13720,15 +13888,17 @@ export default function CustomerVerification({
                           {DownloadIcon && <DownloadIcon size={13} />}
                           <span>Download</span>
                         </button>
-                        <button
-                          type="button"
-                          className="bo-btn bo-btn--outline-danger bo-btn--sm"
-                          onClick={() => handleDeleteBackOfficeDocument('MANUAL_CIBIL_PAN', manualCibilPan, setManualCibilPan)}
-                          disabled={manualCibilPan.loading}
-                        >
-                          {Trash2Icon && <Trash2Icon size={13} />}
-                          <span>Delete</span>
-                        </button>
+                        {isSectionEditable && (
+                          <button
+                            type="button"
+                            className="bo-btn bo-btn--outline-danger bo-btn--sm"
+                            onClick={() => handleDeleteBackOfficeDocument('MANUAL_CIBIL_PAN', manualCibilPan, setManualCibilPan)}
+                            disabled={manualCibilPan.loading}
+                          >
+                            {Trash2Icon && <Trash2Icon size={13} />}
+                            <span>Delete</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -13747,7 +13917,7 @@ export default function CustomerVerification({
                             const val = e.target.value;
                             setManualCibilPan((prev) => ({ ...prev, remarks: val, error: null, successMsg: '' }));
                           }}
-                          disabled={manualCibilPan.savingRemarks}
+                          disabled={manualCibilPan.savingRemarks || !isSectionEditable}
                         />
                         <div className="bo-cv-step-remarks-footer">
                           {manualCibilPan.successMsg && (
@@ -13755,14 +13925,16 @@ export default function CustomerVerification({
                               ✓ {manualCibilPan.successMsg}
                             </span>
                           )}
-                          <button
-                            type="button"
-                            className="bo-btn bo-btn--primary bo-btn--sm bo-cv-btn-save-remarks"
-                            onClick={() => handleOpenSaveRemarksConfirm('MANUAL_CIBIL_PAN', 'Manual CIBIL PAN', manualCibilPan, setManualCibilPan)}
-                            disabled={manualCibilPan.savingRemarks || !(manualCibilPan.remarks || '').trim()}
-                          >
-                            {manualCibilPan.savingRemarks ? 'Saving...' : 'Save'}
-                          </button>
+                          {isSectionEditable && (
+                            <button
+                              type="button"
+                              className="bo-btn bo-btn--primary bo-btn--sm bo-cv-btn-save-remarks"
+                              onClick={() => handleOpenSaveRemarksConfirm('MANUAL_CIBIL_PAN', 'Manual CIBIL PAN', manualCibilPan, setManualCibilPan)}
+                              disabled={manualCibilPan.savingRemarks || !(manualCibilPan.remarks || '').trim()}
+                            >
+                              {manualCibilPan.savingRemarks ? 'Saving...' : 'Save'}
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}
@@ -14228,7 +14400,7 @@ export default function CustomerVerification({
                     className="bo-cv-pd-dropdown"
                     value={selectedPdTypeId || ''}
                     onChange={(e) => setSelectedPdTypeId(Number(e.target.value) || e.target.value)}
-                    disabled={pdVerificationTypesLoading || activePdVerificationTypes.length === 0}
+                    disabled={pdVerificationTypesLoading || activePdVerificationTypes.length === 0 || !isSectionEditable}
                   >
                     {pdVerificationTypesLoading ? (
                       <option value="">Loading verification modes...</option>
@@ -14461,14 +14633,16 @@ export default function CustomerVerification({
                         <span className="bo-cv-pd-field-label">
                           <span className="bo-cv-pd-field-num">14</span> Case Specific Sanction Condition
                         </span>
-                        <button
-                          type="button"
-                          className="bo-cv-rec-condition-add"
-                          onClick={() => addSanctionCondition(sheet.id)}
-                          aria-label="Add sanction condition point"
-                        >
-                          {PlusIcon && <PlusIcon size={14} />} <span>Add Condition</span>
-                        </button>
+                        {isSectionEditable && (
+                          <button
+                            type="button"
+                            className="bo-cv-rec-condition-add"
+                            onClick={() => addSanctionCondition(sheet.id)}
+                            aria-label="Add sanction condition point"
+                          >
+                            {PlusIcon && <PlusIcon size={14} />} <span>Add Condition</span>
+                          </button>
+                        )}
                       </div>
                       <div className="bo-cv-rec-condition-list">
                         {sheet.otherSanctionConditions.map((condition, conditionIndex) => (
@@ -14481,16 +14655,18 @@ export default function CustomerVerification({
                               onChange={(e) => updateSanctionCondition(sheet.id, conditionIndex, e.target.value)}
                               aria-label={`Sanction condition ${conditionIndex + 1}`}
                             />
-                            <button
-                              type="button"
-                              className="bo-cv-rec-condition-remove"
-                              onClick={() => removeSanctionCondition(sheet.id, conditionIndex)}
-                              disabled={sheet.otherSanctionConditions.length === 1}
-                              aria-label={`Remove sanction condition ${conditionIndex + 1}`}
-                              title={sheet.otherSanctionConditions.length === 1 ? 'At least one condition point is required' : 'Remove this condition'}
-                            >
-                              {MinusIcon && <MinusIcon size={15} />}
-                            </button>
+                            {isSectionEditable && (
+                              <button
+                                type="button"
+                                className="bo-cv-rec-condition-remove"
+                                onClick={() => removeSanctionCondition(sheet.id, conditionIndex)}
+                                disabled={sheet.otherSanctionConditions.length === 1}
+                                aria-label={`Remove sanction condition ${conditionIndex + 1}`}
+                                title={sheet.otherSanctionConditions.length === 1 ? 'At least one condition point is required' : 'Remove this condition'}
+                              >
+                                {MinusIcon && <MinusIcon size={15} />}
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -14516,15 +14692,17 @@ export default function CustomerVerification({
                   </div>
                 )}
 
-                <button
-                  type="button"
-                  className="bo-btn bo-btn--primary bo-cv-btn-send-credit-officer"
-                  onClick={handleSavePd}
-                  disabled={isSendingToCreditOfficer}
-                >
-                  {SaveIcon ? <SaveIcon size={15} /> : (SendIcon && <SendIcon size={15} />)}
-                  <span>{isSendingToCreditOfficer ? 'Saving PD...' : 'Save PD'}</span>
-                </button>
+                {isSectionEditable && (
+                  <button
+                    type="button"
+                    className="bo-btn bo-btn--primary bo-cv-btn-send-credit-officer"
+                    onClick={handleSavePd}
+                    disabled={isSendingToCreditOfficer}
+                  >
+                    {SaveIcon ? <SaveIcon size={15} /> : (SendIcon && <SendIcon size={15} />)}
+                    <span>{isSendingToCreditOfficer ? 'Saving PD...' : 'Save PD'}</span>
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -14539,6 +14717,7 @@ export default function CustomerVerification({
               applicantSequence={0}
               currentUserId={getAuthenticatedBackOfficeId()}
               actionsSlot={renderCreditReviewActions()}
+              readOnly={!isSectionEditable}
             />
           )}
 
@@ -14551,6 +14730,7 @@ export default function CustomerVerification({
               applicantSequence={0}
               currentUserId={getAuthenticatedBackOfficeId()}
               actionsSlot={renderCreditReviewActions()}
+              readOnly={!isSectionEditable}
             />
           )}
 
@@ -14564,7 +14744,8 @@ export default function CustomerVerification({
                 applicationProductDetailsId={resolvedAppProdId || calculationAppProdId}
                 userId={getAuthenticatedBackOfficeId()}
                 actionsSlot={renderCreditReviewActions()}
-                showSaveButton
+                showSaveButton={isSectionEditable}
+                readOnly={!isSectionEditable}
               />
             </div>
           )}
@@ -14578,6 +14759,7 @@ export default function CustomerVerification({
                 applicationProductDetailsId={resolvedAppProdId || calculationAppProdId}
                 agentCustomerId={resolvedTargetCustomerId || calculationAgentCustId}
                 applicantSequence={selectedApplicantSequence}
+                readOnly={!isSectionEditable}
                 onBack={() => {
                   setLipWorkspaceOpen(false);
                   setSelectedMethodCode('INCOME');
@@ -14671,15 +14853,17 @@ export default function CustomerVerification({
                       <div className="bo-cv-rtr-section-title-wrap">
                         <h3 className="bo-cv-rtr-section-title">Loan Facilities</h3>
                       </div>
-                      <button
-                        type="button"
-                        className="bo-cv-rtr-add-btn"
-                        onClick={handleAddRtrLoanRow}
-                        disabled={rtrLoansSaving}
-                      >
-                        {PlusIcon ? <PlusIcon size={14} /> : '+'}
-                        <span>Add Facility</span>
-                      </button>
+                      {isSectionEditable && (
+                        <button
+                          type="button"
+                          className="bo-cv-rtr-add-btn"
+                          onClick={handleAddRtrLoanRow}
+                          disabled={rtrLoansSaving}
+                        >
+                          {PlusIcon ? <PlusIcon size={14} /> : '+'}
+                          <span>Add Facility</span>
+                        </button>
+                      )}
                     </div>
 
                     {/* Live Summary Bar */}
@@ -14747,15 +14931,17 @@ export default function CustomerVerification({
                         </div>
                         <h4>No loan facilities yet</h4>
                         <p>Add an active loan facility to begin RTR assessment.</p>
-                        <button
-                          type="button"
-                          className="bo-cv-elig-primary-btn bo-cv-rtr-empty-cta"
-                          onClick={handleAddRtrLoanRow}
-                          disabled={rtrLoansSaving}
-                        >
-                          {PlusIcon ? <PlusIcon size={15} /> : '+'}
-                          <span>Add first facility</span>
-                        </button>
+                        {isSectionEditable && (
+                          <button
+                            type="button"
+                            className="bo-cv-elig-primary-btn bo-cv-rtr-empty-cta"
+                            onClick={handleAddRtrLoanRow}
+                            disabled={rtrLoansSaving}
+                          >
+                            {PlusIcon ? <PlusIcon size={15} /> : '+'}
+                            <span>Add first facility</span>
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <div className="bo-cv-rtr-matrix-wrapper">
@@ -14793,7 +14979,7 @@ export default function CustomerVerification({
                                       <div className="bo-cv-rtr-facility-badges">
                                         {isSelected && <span className="bo-cv-rtr-badge is-selected">Selected</span>}
                                         {isDraft && <span className="bo-cv-rtr-badge is-draft">Draft</span>}
-                                        {isDraft && (
+                                        {isDraft && isSectionEditable && (
                                           <button
                                             type="button"
                                             className="bo-cv-rtr-remove-btn"
@@ -15045,7 +15231,7 @@ export default function CustomerVerification({
                         type="button"
                         className="bo-btn bo-btn--primary bo-cv-calculate-btn"
                         onClick={handleCalculateEligibility}
-                        disabled={calculating || !calculationAppProdId || rtrSummaryMetrics.validCount === 0}
+                        disabled={calculating || !calculationAppProdId || rtrSummaryMetrics.validCount === 0 || !isSectionEditable}
                       >
                         {calculating ? (
                           <>
@@ -15175,6 +15361,8 @@ export default function CustomerVerification({
                   applicationProductDetailsId={resolvedAppProdId || calculationAppProdId}
                   userId={getAuthenticatedBackOfficeId()}
                   initialResultOnly={bankingResultOnly}
+                  showSaveButton={isSectionEditable}
+                  readOnly={!isSectionEditable}
                   onBack={() => {
                     setBankingWorkspaceOpen(false);
                     setBankingResultOnly(false);
@@ -15770,7 +15958,8 @@ export default function CustomerVerification({
                         disabled={
                           calculating ||
                           !calculationAppProdId ||
-                          !selectedEmploymentIncomeDetailsId
+                          !selectedEmploymentIncomeDetailsId ||
+                          !isSectionEditable
                         }
                       >
                         {calculating ? (
@@ -16182,7 +16371,7 @@ export default function CustomerVerification({
                                 type="button"
                                 className="bo-cv-ni-sync-save"
                                 onClick={launchNormalIncomeExcelDesktop}
-                                disabled={openExcelDisabled}
+                                disabled={openExcelDisabled || !isSectionEditable}
                                 title={openExcelDisabled ? (userGuidance || 'The workbook already has an active Excel session') : 'Open customer workbook in Microsoft Excel Desktop'}
                               >
                                 {excelDesktopState.status === 'preparing' ? 'Opening Excel…' : excelSessionActive ? 'Excel Session Active' : 'Open in Excel'}
@@ -16316,17 +16505,21 @@ export default function CustomerVerification({
                                     title={
                                       !isCompleted
                                         ? `${item.name} is not completed. Only completed methods can be selected.`
-                                        : !isCreditManagerView
-                                          ? 'Final assessment method selection is performed by Credit Manager.'
-                                          : isCreditHead
-                                            ? 'Read-only view for Credit Head.'
-                                            : isCmSectionLocked
-                                              ? 'Click "Edit" on this section to change selection.'
-                                              : !isWorkflowEditable || isApplicationClosed
-                                                ? 'Application is read-only.'
-                                                : isSelected
-                                                  ? `${item.name} is selected for loan sanction.`
-                                                  : `Select ${item.name} as final assessment method.`
+                                        : isCreditHead
+                                          ? 'Read-only view for Credit Head.'
+                                          : isBackOffice && appStatus === 3
+                                            ? 'Application has been forwarded to Credit Manager (Read-only).'
+                                            : isBackOffice && appStatus !== 2
+                                              ? 'Application is read-only for Back Office.'
+                                              : isCreditManager && appStatus === 2
+                                                ? 'Application is currently with Back Office (Read-only).'
+                                                : isCreditManager && isCmSectionLocked
+                                                  ? 'Click "Edit" on this section to change selection.'
+                                                  : !isWorkflowEditable || isApplicationClosed
+                                                    ? 'Application is read-only.'
+                                                    : isSelected
+                                                      ? `${item.name} is selected for loan sanction.`
+                                                      : `Select ${item.name} as final assessment method.`
                                     }
                                   />
                                   <span className="bo-cv-status-checkbox-text">
@@ -16366,17 +16559,29 @@ export default function CustomerVerification({
                           <p className="bo-cv-elig-final-summary-note" style={{ color: '#dc2626' }}>
                             ⚠️ {finalAssessmentErrorMessage}
                           </p>
-                        ) : !isCreditManagerView ? (
-                          <p className="bo-cv-elig-final-summary-note">
-                            {finalSelectedMethodCode
-                              ? 'Designated by Credit Manager for loan sanction.'
-                              : 'Not Selected — Awaiting Credit Manager selection.'}
-                          </p>
                         ) : isCreditHead ? (
                           <p className="bo-cv-elig-final-summary-note">
                             {finalSelectedMethodCode
-                              ? 'Designated by Credit Manager for loan sanction (Read-only view for Credit Head).'
-                              : 'Read-only view for Credit Head — Awaiting Credit Manager selection.'}
+                              ? 'Designated for loan sanction (Read-only view for Credit Head).'
+                              : 'Read-only view for Credit Head — Awaiting selection.'}
+                          </p>
+                        ) : isBackOffice && appStatus === 3 ? (
+                          <p className="bo-cv-elig-final-summary-note">
+                            {finalSelectedMethodCode
+                              ? 'Designated for loan sanction (Read-only — application forwarded to Credit Manager).'
+                              : 'Not Selected — Read-only after forwarding to Credit Manager.'}
+                          </p>
+                        ) : isBackOffice && (isApplicationClosed || appStatus !== 2) ? (
+                          <p className="bo-cv-elig-final-summary-note">
+                            {finalSelectedMethodCode
+                              ? 'Designated for loan sanction (Read-only — application is closed).'
+                              : 'No final assessment method selected (Read-only — application is closed).'}
+                          </p>
+                        ) : isCreditManager && appStatus === 2 ? (
+                          <p className="bo-cv-elig-final-summary-note">
+                            {finalSelectedMethodCode
+                              ? 'Designated for loan sanction (Read-only — application currently with Back Office).'
+                              : 'Not Selected — Read-only while application is with Back Office.'}
                           </p>
                         ) : !isWorkflowEditable || isApplicationClosed ? (
                           <p className="bo-cv-elig-final-summary-note">
@@ -16384,7 +16589,7 @@ export default function CustomerVerification({
                               ? 'Designated for loan sanction (Read-only — application is no longer pending).'
                               : 'No final assessment method selected (Read-only — application is no longer pending).'}
                           </p>
-                        ) : isCmSectionLocked ? (
+                        ) : isCreditManager && isCmSectionLocked ? (
                           <p className="bo-cv-elig-final-summary-note">
                             {finalSelectedMethodCode
                               ? 'Click "Edit" on this section to change the final assessment method.'
@@ -16396,7 +16601,9 @@ export default function CustomerVerification({
                           </p>
                         ) : finalSelectedMethodCode ? (
                           <p className="bo-cv-elig-final-summary-note">
-                            Designated for loan sanction. To change, select another completed method.
+                            {isCreditManager
+                              ? 'Designated for loan sanction. You can retain this selection or replace it with another completed method.'
+                              : 'Designated for loan sanction. To change, select another completed method.'}
                           </p>
                         ) : (
                           <p className="bo-cv-elig-final-summary-note">
@@ -17150,15 +17357,17 @@ export default function CustomerVerification({
                           <small>Max MOB</small>
                           <strong>{rtrSummaryMetrics.maxMob > 0 ? `${rtrSummaryMetrics.maxMob} mo` : '—'}</strong>
                         </div>
-                        <button
-                          type="button"
-                          className="bo-cv-rtr-add-btn"
-                          onClick={handleAddRtrLoanRow}
-                          disabled={rtrLoansSaving}
-                        >
-                          {PlusIcon ? <PlusIcon size={14} /> : '+'}
-                          <span>Add facility</span>
-                        </button>
+                        {isSectionEditable && (
+                          <button
+                            type="button"
+                            className="bo-cv-rtr-add-btn"
+                            onClick={handleAddRtrLoanRow}
+                            disabled={rtrLoansSaving}
+                          >
+                            {PlusIcon ? <PlusIcon size={14} /> : '+'}
+                            <span>Add facility</span>
+                          </button>
+                        )}
                       </div>
 
                       {proposedLoanBanner && (
@@ -17190,7 +17399,7 @@ export default function CustomerVerification({
                             </div>
                             <div className="bo-cv-proposed-loan-actions">
                               <button type="button" className="bo-btn bo-btn--outline" onClick={() => setProposedLoanOpen(false)} disabled={proposedLoanSaving}>Cancel</button>
-                              <button type="button" className="bo-btn bo-btn--primary" onClick={saveProposedLoan} disabled={proposedLoanSaving}>{proposedLoanSaving ? 'Saving...' : 'Save'}</button>
+                              {isSectionEditable && (<button type="button" className="bo-btn bo-btn--primary" onClick={saveProposedLoan} disabled={proposedLoanSaving}>{proposedLoanSaving ? 'Saving...' : 'Save'}</button>)}
                             </div>
                           </div>
                         </div>
@@ -17203,15 +17412,17 @@ export default function CustomerVerification({
                           </div>
                           <h4>No loan facilities yet</h4>
                           <p>Add an active loan facility to begin RTR assessment.</p>
-                          <button
-                            type="button"
-                            className="bo-cv-elig-primary-btn bo-cv-rtr-empty-cta"
-                            onClick={handleAddRtrLoanRow}
-                            disabled={rtrLoansSaving}
-                          >
-                            {PlusIcon ? <PlusIcon size={15} /> : '+'}
-                            <span>Add first facility</span>
-                          </button>
+                          {isSectionEditable && (
+                            <button
+                              type="button"
+                              className="bo-cv-elig-primary-btn bo-cv-rtr-empty-cta"
+                              onClick={handleAddRtrLoanRow}
+                              disabled={rtrLoansSaving}
+                            >
+                              {PlusIcon ? <PlusIcon size={15} /> : '+'}
+                              <span>Add first facility</span>
+                            </button>
+                          )}
                         </div>
                       ) : (
                         <div className="bo-cv-rtr-card-list">
@@ -17251,7 +17462,7 @@ export default function CustomerVerification({
                                   <div className="bo-cv-rtr-facility-badges">
                                     {isSelected && <span className="bo-cv-rtr-badge is-selected">Selected</span>}
                                     {isDraft && <span className="bo-cv-rtr-badge is-draft">Draft</span>}
-                                    {isDraft && (
+                                    {isDraft && isSectionEditable && (
                                       <button
                                         type="button"
                                         className="bo-cv-rtr-remove-btn"
@@ -18635,7 +18846,8 @@ export default function CustomerVerification({
                         calculating ||
                         !calculationAppProdId ||
                         (selectedMethodCode !== 'RTR' && !selectedEmploymentIncomeDetailsId) ||
-                        (selectedMethodCode === 'RTR' && rtrSummaryMetrics.validCount === 0)
+                        (selectedMethodCode === 'RTR' && rtrSummaryMetrics.validCount === 0) ||
+                        !isSectionEditable
                       }
                     >
                       {calculating ? (
@@ -19166,7 +19378,8 @@ export default function CustomerVerification({
                                   calculating ||
                                   !calculationAppProdId ||
                                   (selectedMethodCode !== 'RTR' && !selectedEmploymentIncomeDetailsId) ||
-                                  (selectedMethodCode === 'RTR' && rtrSummaryMetrics.validCount === 0)
+                                  (selectedMethodCode === 'RTR' && rtrSummaryMetrics.validCount === 0) ||
+                                  !isSectionEditable
                                 }
                               >
                                 {calculating ? (
@@ -19234,6 +19447,8 @@ export default function CustomerVerification({
                 backOfficeId={resolveCalculationAuthInfo().backOfficeId}
                 createdBy={resolveCalculationAuthInfo().userId}
                 showRefresh={!isCreditManagerView}
+                canEdit={canEditDeviations}
+                isCmLocked={isCreditManager && isCmSectionLocked}
               />
             </div>
           )}
@@ -19851,6 +20066,7 @@ export default function CustomerVerification({
                   placeholder="Describe the check outcome, remarks, or status notes…"
                   rows={5}
                   autoFocus
+                  readOnly={!isSectionEditable}
                 />
               </div>
             </div>
@@ -19863,13 +20079,15 @@ export default function CustomerVerification({
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                className="bo-cv-btn-save-remarks"
-                onClick={saveFindingsModal}
-              >
-                Save
-              </button>
+              {isSectionEditable && (
+                <button
+                  type="button"
+                  className="bo-cv-btn-save-remarks"
+                  onClick={saveFindingsModal}
+                >
+                  Save
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -20807,6 +21025,7 @@ export default function CustomerVerification({
           fetchApplicationRejections();
           fetchAllCustomerDocs();
         }}
+        readOnly={!isSectionEditable}
       />
     </div>
   );

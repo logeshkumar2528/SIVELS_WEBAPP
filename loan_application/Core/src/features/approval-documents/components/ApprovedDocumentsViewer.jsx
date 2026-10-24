@@ -17,6 +17,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { FileText, FileCheck, X, AlertTriangle } from 'lucide-react';
 import SanctionLetter from './SanctionLetter/SanctionLetter';
 import KfsReport from './KfsReport/KfsReport';
+import approvalDocumentService from '../services/approvalDocumentService';
 
 export const DOC_TYPES = {
   SANCTION_LETTER: 'SANCTION_LETTER',
@@ -36,6 +37,10 @@ export default function ApprovedDocumentsViewer({
 }) {
   const [activeDoc, setActiveDoc] = useState(initialDocument || DOC_TYPES.SANCTION_LETTER);
   const [autoDownloadTriggered, setAutoDownloadTriggered] = useState(false);
+  const [loanIdentifier, setLoanIdentifier] = useState(null);
+  const [identifierLoading, setIdentifierLoading] = useState(false);
+  const [identifierError, setIdentifierError] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
   const documentContainerRef = useRef(null);
 
   // Sync active document when initialDocument changes
@@ -77,9 +82,67 @@ export default function ApprovedDocumentsViewer({
     sanctionedTenure > 0
   );
 
+  const hasOfficialIdentifiers = Boolean(
+    loanIdentifier?.loanAccountNumber && loanIdentifier?.sanctionLetterId
+  );
+  const canExportOfficialDocument = Boolean(isDecisionComplete && hasOfficialIdentifiers);
+
+  // Fetch persisted official identifiers on-demand for approved applications
+  useEffect(() => {
+    if (!isOpen || !customerId || !isApproved) {
+      setLoanIdentifier(null);
+      setIdentifierError('');
+      return;
+    }
+
+    let isMounted = true;
+    const loadIdentifier = async () => {
+      setIdentifierLoading(true);
+      setIdentifierError('');
+      try {
+        const data = await approvalDocumentService.getLoanIdentifierByCustomer(customerId);
+        if (isMounted) {
+          setLoanIdentifier(data);
+        }
+      } catch (err) {
+        if (isMounted) {
+          console.error('[ApprovedDocumentsViewer] Failed to load loan identifier:', err);
+          setIdentifierError('Unable to check official loan identifier status.');
+        }
+      } finally {
+        if (isMounted) {
+          setIdentifierLoading(false);
+        }
+      }
+    };
+
+    loadIdentifier();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, customerId, isApproved]);
+
+  const handleGenerateIdentifier = async () => {
+    if (!customerId || isGenerating || !isApproved) return;
+    setIsGenerating(true);
+    setIdentifierError('');
+    try {
+      const data = await approvalDocumentService.generateLoanIdentifier(customerId);
+      setLoanIdentifier(data);
+    } catch (err) {
+      console.error('[ApprovedDocumentsViewer] Recovery generation failed:', err);
+      setIdentifierError(
+        err?.response?.data?.message || err?.message || 'Failed to generate official loan identifier. Please try again.'
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   // Handle on-demand auto-download when requested by user action
   useEffect(() => {
-    if (!isOpen || !autoDownload || autoDownloadTriggered || !isDecisionComplete) return;
+    if (!isOpen || !autoDownload || autoDownloadTriggered || !canExportOfficialDocument) return;
 
     const timer = setTimeout(() => {
       if (!documentContainerRef.current) return;
@@ -100,7 +163,7 @@ export default function ApprovedDocumentsViewer({
     }, 450);
 
     return () => clearTimeout(timer);
-  }, [isOpen, autoDownload, autoDownloadTriggered, activeDoc, isDecisionComplete]);
+  }, [isOpen, autoDownload, autoDownloadTriggered, activeDoc, canExportOfficialDocument]);
 
   if (!isOpen) return null;
 
@@ -290,6 +353,52 @@ export default function ApprovedDocumentsViewer({
           </div>
         )}
 
+        {/* Missing Official Identifiers Warning Banner */}
+        {isDecisionComplete && !hasOfficialIdentifiers && !identifierLoading && (
+          <div
+            style={{
+              margin: '12px 20px 0',
+              padding: '10px 14px',
+              background: '#fef3c7',
+              border: '1px solid #fde68a',
+              borderRadius: '8px',
+              color: '#92400e',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              fontSize: '13px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <AlertTriangle size={18} style={{ flexShrink: 0, color: '#d97706' }} />
+              <div>
+                <strong>Official Loan Identifiers Missing:</strong> Official Loan Account Number and Sanction Letter ID have not been generated for this approved application. Official PDF download and printing are disabled until identifiers are generated.
+                {identifierError && <div style={{ marginTop: '4px', color: '#b91c1c' }}>{identifierError}</div>}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleGenerateIdentifier}
+              disabled={isGenerating}
+              style={{
+                flexShrink: 0,
+                padding: '6px 14px',
+                backgroundColor: '#0F7A4C',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '6px',
+                fontWeight: 600,
+                fontSize: '12px',
+                cursor: isGenerating ? 'not-allowed' : 'pointer',
+                opacity: isGenerating ? 0.7 : 1,
+              }}
+            >
+              {isGenerating ? 'Generating...' : 'Generate Identifiers'}
+            </button>
+          </div>
+        )}
+
         {/* Modal Body / Document Renderer */}
         <div
           ref={documentContainerRef}
@@ -308,6 +417,9 @@ export default function ApprovedDocumentsViewer({
               applicationProductDetailsId={applicationProductDetailsId}
               agentCustomerId={customerId}
               creditDecision={creditDecision}
+              loanIdentifier={loanIdentifier}
+              onGenerateIdentifier={handleGenerateIdentifier}
+              isGeneratingIdentifier={isGenerating}
             />
           ) : (
             <KfsReport
@@ -315,6 +427,9 @@ export default function ApprovedDocumentsViewer({
               applicationProductDetailsId={applicationProductDetailsId}
               agentCustomerId={customerId}
               creditDecision={creditDecision}
+              loanIdentifier={loanIdentifier}
+              onGenerateIdentifier={handleGenerateIdentifier}
+              isGeneratingIdentifier={isGenerating}
             />
           )}
         </div>

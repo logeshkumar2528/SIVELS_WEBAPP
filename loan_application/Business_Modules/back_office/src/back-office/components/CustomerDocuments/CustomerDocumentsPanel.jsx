@@ -79,6 +79,7 @@ export default function CustomerDocumentsPanel({
   backOfficeId,
   applicants = [],
   onChanged,
+  readOnly = false,
 }) {
   const [isLoading, setIsLoading] = useState(false);
   const [loadErrors, setLoadErrors] = useState([]);
@@ -287,6 +288,7 @@ export default function CustomerDocumentsPanel({
   };
 
   const handleReject = async (group) => {
+    if (readOnly) return;
     const remarks = (rejectTarget?.remarks || '').trim();
     if (!remarks) {
       setRejectTarget((prev) => ({ ...prev, error: 'Rejection remarks are required.' }));
@@ -323,6 +325,7 @@ export default function CustomerDocumentsPanel({
   };
 
   const handleVerify = async (group, rejection) => {
+    if (readOnly) return;
     if (!hasValue(backOfficeId)) {
       setMessage(group.key, 'error', 'Back Office ID is not available. Please sign in again.');
       return;
@@ -429,7 +432,7 @@ export default function CustomerDocumentsPanel({
             >
               <Download size={13} /> Download
             </button>
-            {isResubmitted && (
+            {!readOnly && isResubmitted && (
               <button
                 type="button"
                 className="bo-cdp-btn is-success"
@@ -439,7 +442,7 @@ export default function CustomerDocumentsPanel({
                 <ShieldCheck size={13} /> {isBusy && busy.action === 'verify' ? 'Verifying...' : 'Verify'}
               </button>
             )}
-            {canReject && (
+            {!readOnly && canReject && (
               <button
                 type="button"
                 className="bo-cdp-btn is-danger"

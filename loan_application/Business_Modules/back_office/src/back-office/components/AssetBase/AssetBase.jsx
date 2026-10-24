@@ -46,6 +46,7 @@ export default function AssetBase({
   applicantSequence = 0,
   currentUserId: propUserId,
   actionsSlot = null,
+  readOnly = false,
 }) {
   // Master Data State
   const [propertyMasters, setPropertyMasters] = useState([]);
@@ -217,9 +218,18 @@ export default function AssetBase({
     return () => clearTimeout(timer);
   }, [successMessage, actionError]);
 
+  // Cancel any active adding/editing when switching to read-only
+  useEffect(() => {
+    if (readOnly) {
+      setIsAdding(false);
+      setEditingAssetId(null);
+      setDeleteConfirmRow(null);
+    }
+  }, [readOnly]);
+
   // Handle Add Asset Click
   const handleStartAdd = () => {
-    if (isAdding) return;
+    if (readOnly || isAdding) return;
     setEditingAssetId(null);
     setNewAssetForm(initialNewAssetForm);
     setIsAdding(true);
@@ -235,6 +245,7 @@ export default function AssetBase({
 
   // Handle Save New Asset (POST)
   const handleSaveNewAsset = async () => {
+    if (readOnly) return;
     setActionError(null);
     setSuccessMessage(null);
 
@@ -299,6 +310,7 @@ export default function AssetBase({
 
   // Handle Start Edit (Hydrate Row or GET One)
   const handleStartEdit = async (row) => {
+    if (readOnly) return;
     setIsAdding(false);
     setActionError(null);
     setSuccessMessage(null);
@@ -341,6 +353,7 @@ export default function AssetBase({
 
   // Handle Save Edit (PUT)
   const handleSaveEdit = async (assetId) => {
+    if (readOnly) return;
     setActionError(null);
     setSuccessMessage(null);
 
@@ -404,13 +417,14 @@ export default function AssetBase({
 
   // Handle Delete Confirmation (DELETE)
   const handleDeleteClick = (row) => {
+    if (readOnly) return;
     setDeleteConfirmRow(row);
     setActionError(null);
     setSuccessMessage(null);
   };
 
   const handleConfirmDelete = async () => {
-    if (!deleteConfirmRow) return;
+    if (readOnly || !deleteConfirmRow) return;
     const assetId = deleteConfirmRow.applicationAssetDetailsId ?? deleteConfirmRow.id;
     if (!assetId) return;
 
@@ -439,15 +453,17 @@ export default function AssetBase({
         </div>
         <div className="bo-ab-header-actions">
           {actionsSlot}
-          <button
-            type="button"
-            className="bo-ab-btn bo-ab-btn-primary"
-            onClick={handleStartAdd}
-            disabled={isAdding || isSaving || isAssetsLoading}
-          >
-            {PlusIcon && <PlusIcon size={16} />}
-            <span>Add Asset</span>
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              className="bo-ab-btn bo-ab-btn-primary"
+              onClick={handleStartAdd}
+              disabled={isAdding || isSaving || isAssetsLoading}
+            >
+              {PlusIcon && <PlusIcon size={16} />}
+              <span>Add Asset</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -550,15 +566,17 @@ export default function AssetBase({
                 <td colSpan={9} className="bo-ab-empty-cell">
                   <div className="bo-ab-no-data">
                     <p>No asset records added yet for this application.</p>
-                    <button
-                      type="button"
-                      className="bo-ab-btn bo-ab-btn-outline"
-                      onClick={handleStartAdd}
-                      disabled={isSaving}
-                    >
-                      {PlusIcon && <PlusIcon size={14} />}
-                      <span>Add First Asset</span>
-                    </button>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        className="bo-ab-btn bo-ab-btn-outline"
+                        onClick={handleStartAdd}
+                        disabled={isSaving}
+                      >
+                        {PlusIcon && <PlusIcon size={14} />}
+                        <span>Add First Asset</span>
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -708,26 +726,30 @@ export default function AssetBase({
                     {row.mortgagedToWhom || '-'}
                   </td>
                   <td className="bo-ab-actions-cell">
-                    <div className="bo-ab-actions-group">
-                      <button
-                        type="button"
-                        className="bo-ab-btn-icon bo-ab-btn-icon--edit"
-                        title="Edit Asset"
-                        onClick={() => handleStartEdit(row)}
-                        disabled={isSaving || isAdding || editingAssetId != null}
-                      >
-                        {PencilIcon && <PencilIcon size={14} />}
-                      </button>
-                      <button
-                        type="button"
-                        className="bo-ab-btn-icon bo-ab-btn-icon--delete"
-                        title="Delete Asset"
-                        onClick={() => handleDeleteClick(row)}
-                        disabled={isSaving || isAdding || editingAssetId != null}
-                      >
-                        {Trash2Icon && <Trash2Icon size={14} />}
-                      </button>
-                    </div>
+                    {!readOnly ? (
+                      <div className="bo-ab-actions-group">
+                        <button
+                          type="button"
+                          className="bo-ab-btn-icon bo-ab-btn-icon--edit"
+                          title="Edit Asset"
+                          onClick={() => handleStartEdit(row)}
+                          disabled={isSaving || isAdding || editingAssetId != null}
+                        >
+                          {PencilIcon && <PencilIcon size={14} />}
+                        </button>
+                        <button
+                          type="button"
+                          className="bo-ab-btn-icon bo-ab-btn-icon--delete"
+                          title="Delete Asset"
+                          onClick={() => handleDeleteClick(row)}
+                          disabled={isSaving || isAdding || editingAssetId != null}
+                        >
+                          {Trash2Icon && <Trash2Icon size={14} />}
+                        </button>
+                      </div>
+                    ) : (
+                      <span style={{ color: '#94a3b8' }}>—</span>
+                    )}
                   </td>
                 </tr>
               );

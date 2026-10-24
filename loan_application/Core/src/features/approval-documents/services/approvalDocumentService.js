@@ -91,6 +91,70 @@ export const approvalDocumentService = {
     const response = await axiosInstance.get(path);
     return unwrapResponse(response);
   },
+
+  /**
+   * Generates official loan identifiers upon Credit Manager approval.
+   * Handles 409 Conflict by safely extracting existing identifiers or retrieving them via GET.
+   *
+   * @param {string|number} agentCustomerId
+   * @returns {Promise<Object>}
+   */
+  generateLoanIdentifier: async (agentCustomerId) => {
+    if (!agentCustomerId) {
+      throw new Error('Agent Customer ID is required to generate loan identifiers');
+    }
+    try {
+      const response = await axiosInstance.post('/loan-identifiers', {
+        agentCustomerId: Number(agentCustomerId),
+      });
+      return unwrapResponse(response);
+    } catch (err) {
+      if (err?.response?.status === 409) {
+        const conflictData = unwrapResponse(err.response);
+        if (conflictData?.loanAccountNumber && conflictData?.sanctionLetterId) {
+          return conflictData;
+        }
+        return approvalDocumentService.getLoanIdentifierByCustomer(agentCustomerId);
+      }
+      throw err;
+    }
+  },
+
+  /**
+   * Retrieves active loan identifiers for an approved customer (requires underwriting role).
+   * Resolves to null on 404 Not Found.
+   *
+   * @param {string|number} agentCustomerId
+   * @returns {Promise<Object|null>}
+   */
+  getLoanIdentifierByCustomer: async (agentCustomerId) => {
+    if (!agentCustomerId) return null;
+    try {
+      const response = await axiosInstance.get(
+        `/loan-identifiers/by-customer/${encodeURIComponent(agentCustomerId)}`
+      );
+      return unwrapResponse(response);
+    } catch (err) {
+      if (err?.response?.status === 404) return null;
+      throw err;
+    }
+  },
+
+  /**
+   * Retrieves the authenticated customer's own active loan identifiers (customer role).
+   * Resolves to null on 404 Not Found.
+   *
+   * @returns {Promise<Object|null>}
+   */
+  getMyLoanIdentifier: async () => {
+    try {
+      const response = await axiosInstance.get('/loan-identifiers/my');
+      return unwrapResponse(response);
+    } catch (err) {
+      if (err?.response?.status === 404) return null;
+      throw err;
+    }
+  },
 };
 
 export default approvalDocumentService;
