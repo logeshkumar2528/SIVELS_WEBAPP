@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Building2, Download, FileText, Landmark } from 'lucide-react';
 import { useCustomerIdentity } from '../../hooks/useCustomerIdentity';
-import approvalDocumentService from '../../../../Core/src/features/approval-documents/services/approvalDocumentService';
+import approvalDocumentService from '../../../../../Core/src/features/approval-documents/services/approvalDocumentService';
 import './MyLoan.css';
 
 const repaymentDetails = [

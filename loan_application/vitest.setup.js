@@ -4,4 +4,6 @@ import { cleanup } from '@testing-library/react';
 
 afterEach(() => {
   cleanup();
+  // Tokens and the tab role are also kept per tab in sessionStorage; tests only reset localStorage.
+  sessionStorage.clear();
 });

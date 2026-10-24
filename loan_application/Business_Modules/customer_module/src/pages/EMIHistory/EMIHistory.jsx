@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Building2, CalendarDays, ChevronDown, Download } from 'lucide-react';
 import { useCustomerIdentity } from '../../hooks/useCustomerIdentity';
 import Pagination from '../../components/Pagination/Pagination';
-import approvalDocumentService from '../../../../Core/src/features/approval-documents/services/approvalDocumentService';
+import approvalDocumentService from '../../../../../Core/src/features/approval-documents/services/approvalDocumentService';
 import './EMIHistory.css';
 
 const payments = [
