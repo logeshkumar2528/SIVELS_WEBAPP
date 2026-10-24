@@ -12125,6 +12125,18 @@ export default function CustomerVerification({
       )
     );
 
+  const canEditDeviations =
+    !isApplicationClosed &&
+    (
+      (isBackOffice && appStatus === 2) ||
+      (
+        isCreditManager &&
+        appStatus === 3 &&
+        isWorkflowEditable &&
+        !isCmSectionLocked
+      )
+    );
+
   const isFinalMethodSelectionDisabled =
     !canSelectFinalAssessment ||
     finalAssessmentSaving ||
@@ -19276,6 +19288,8 @@ export default function CustomerVerification({
                 backOfficeId={resolveCalculationAuthInfo().backOfficeId}
                 createdBy={resolveCalculationAuthInfo().userId}
                 showRefresh={!isCreditManagerView}
+                canEdit={canEditDeviations}
+                isCmLocked={isCreditManager && isCmSectionLocked}
               />
             </div>
           )}

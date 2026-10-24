@@ -224,6 +224,10 @@ export default function RecommendationSheet({
         backOfficeService.getMortgageStatusMaster(),
         backOfficeService.getDeviationMasters(),
         backOfficeService.getApplicationDeviationDecisions(appProdId),
+        backOfficeService.getCIRDeviationMasters(),
+        backOfficeService.getApplicationCIRDeviationDecisions(appProdId),
+        backOfficeService.getNegativeFIDeviationMasters(),
+        backOfficeService.getApplicationNegativeFIDecisions(appProdId),
         custId ? backOfficeService.getLatestCreditDecision(custId) : Promise.resolve(null),
         backOfficeService.getCreditManagers(),
       ]);
@@ -232,7 +236,10 @@ export default function RecommendationSheet({
       const [
         district, pdAssessment, assessments, normalIncome, obligations, obligationSummary, rtrStatuses,
         banking, stepVerifications, healthCheckTypes, assets, propertyMaster, mortgageMaster,
-        deviationMasters, deviationDecisions, creditDecision, creditManagers,
+        deviationMasters, deviationDecisions,
+        cirDeviationMasters, cirDeviationDecisions,
+        negativeFiMasters, negativeFiDecisions,
+        creditDecision, creditManagers,
       ] = results.map(settledValue);
 
       setData({
@@ -258,6 +265,10 @@ export default function RecommendationSheet({
         mortgageMaster: toList(mortgageMaster),
         deviationMasters: toList(deviationMasters),
         deviationDecisions: toList(deviationDecisions),
+        cirDeviationMasters: toList(cirDeviationMasters),
+        cirDeviationDecisions: toList(cirDeviationDecisions),
+        negativeFiMasters: toList(negativeFiMasters),
+        negativeFiDecisions: toList(negativeFiDecisions),
         creditDecision: firstRecord(creditDecision),
         creditManagers: toList(creditManagers),
       });
@@ -552,21 +563,60 @@ export default function RecommendationSheet({
   const assetTotal = activeAssets.reduce((sum, a) => sum + (toNumber(a.marketValue) || 0), 0);
 
   const deviationRows = useMemo(() => {
-    const masters = new Map((data.deviationMasters || []).map((m) => [String(m.deviationId ?? m.DeviationId ?? m.id), m]));
-    return (data.deviationDecisions || [])
+    const genMasters = new Map((data.deviationMasters || []).map((m) => [String(m.deviationId ?? m.DeviationId ?? m.id ?? m.Id), m]));
+    const cirMasters = new Map((data.cirDeviationMasters || []).map((m) => [String(m.cirDeviationId ?? m.CIRDeviationId ?? m.id ?? m.Id), m]));
+    const negMasters = new Map((data.negativeFiMasters || []).map((m) => [String(m.negativeFIDeviationId ?? m.NegativeFIDeviationId ?? m.id ?? m.Id), m]));
+
+    const generalRows = (data.deviationDecisions || [])
       .filter((d) => String(d.decision ?? d.Decision ?? '').toLowerCase() === 'yes')
       .map((d) => {
-        const m = masters.get(String(d.deviationId ?? d.DeviationId)) || {};
+        const m = genMasters.get(String(d.deviationId ?? d.DeviationId ?? d.id)) || {};
         const remarks = pick(d, ['remarks', 'Remarks']);
         const mitigate = remarks && remarks !== 'Decision updated' ? remarks : pick(m, ['deviationNorms', 'DeviationNorms']);
         return [
-          pick(m, ['programSection', 'ProgramSection', 'program', 'section']),
-          pick(m, ['deviationDescription', 'DeviationDescription', 'description']),
+          pick(m, ['programSection', 'ProgramSection', 'program', 'section']) || 'General Deviation',
+          pick(m, ['deviationDescription', 'DeviationDescription', 'description', 'Description']),
           pick(m, ['approvingAuthority', 'ApprovingAuthority']),
           mitigate,
         ];
       });
-  }, [data.deviationMasters, data.deviationDecisions]);
+
+    const cirRows = (data.cirDeviationDecisions || [])
+      .filter((d) => String(d.decision ?? d.Decision ?? '').toLowerCase() === 'yes')
+      .map((d) => {
+        const m = cirMasters.get(String(d.cirDeviationId ?? d.CIRDeviationId ?? d.deviationId ?? d.DeviationId ?? d.id)) || {};
+        const remarks = pick(d, ['remarks', 'Remarks']);
+        const mitigate = remarks && remarks !== 'Decision updated' ? remarks : pick(m, ['cirDeviationNorms', 'CIRDeviationNorms', 'deviationNorms', 'DeviationNorms']);
+        return [
+          'CIR Deviation',
+          pick(m, ['cirDeviationDescription', 'CIRDeviationDescription', 'deviationDescription', 'DeviationDescription', 'description', 'Description']),
+          pick(m, ['approvingAuthority', 'ApprovingAuthority']),
+          mitigate,
+        ];
+      });
+
+    const negFiRows = (data.negativeFiDecisions || [])
+      .filter((d) => String(d.decision ?? d.Decision ?? '').toLowerCase() === 'yes')
+      .map((d) => {
+        const m = negMasters.get(String(d.negativeFIDeviationId ?? d.NegativeFIDeviationId ?? d.deviationId ?? d.DeviationId ?? d.id)) || {};
+        const remarks = pick(d, ['remarks', 'Remarks']);
+        return [
+          pick(m, ['category', 'Category', 'negativeFICategory', 'NegativeFICategory']) || 'Negative FI',
+          pick(m, ['reasonDescription', 'ReasonDescription', 'negativeFIDescription', 'NegativeFIDescription', 'description', 'Description']),
+          pick(m, ['approvingAuthority', 'ApprovingAuthority']),
+          remarks || '—',
+        ];
+      });
+
+    return [...generalRows, ...cirRows, ...negFiRows];
+  }, [
+    data.deviationMasters,
+    data.deviationDecisions,
+    data.cirDeviationMasters,
+    data.cirDeviationDecisions,
+    data.negativeFiMasters,
+    data.negativeFiDecisions,
+  ]);
 
   /* ── Sign-off ────────────────────────────────────────────────────── */
 
