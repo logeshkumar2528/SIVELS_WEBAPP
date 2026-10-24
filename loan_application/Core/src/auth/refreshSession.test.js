@@ -76,6 +76,7 @@ describe('refreshSession', () => {
 
   it('refreshes once before a request when the access token is missing', async () => {
     localStorage.removeItem('authToken');
+    sessionStorage.removeItem('authToken');
     fetchMock.mockResolvedValueOnce(refreshSuccess(2));
 
     const [a, b] = await Promise.all([getTokenForRequest(), getTokenForRequest()]);
@@ -87,6 +88,7 @@ describe('refreshSession', () => {
 
   it('refreshes proactively when the access token expires within 60 seconds', async () => {
     localStorage.setItem('authTokenExpiresAt', future(20_000));
+    sessionStorage.setItem('authTokenExpiresAt', future(20_000));
     fetchMock.mockResolvedValueOnce(refreshSuccess(2));
 
     expect(await getTokenForRequest()).toBe('access-2');

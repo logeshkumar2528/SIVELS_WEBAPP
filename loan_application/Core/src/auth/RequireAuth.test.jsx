@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import RequireAuth from './RequireAuth';
+import axiosInstance from '../api/axiosInstance';
 import { navigation, resetAuthEventsForTests } from './authEvents';
 import { resetRefreshStateForTests } from './refreshSession';
 import { saveTokens } from './tokenStore';
@@ -49,6 +50,8 @@ describe('RequireAuth', () => {
 
   it('sends a user with another role to their own landing page', async () => {
     signInAs({ role: 'Agent', roleCode: 'AGENT', landingPath: '/Agent/dashboard' });
+    // The guard now confirms the role with GET /auth/me before redirecting.
+    vi.spyOn(axiosInstance, 'get').mockResolvedValue({ data: { roleCode: 'AGENT', role: 'Agent', staffId: 9 } });
 
     render(
       <RequireAuth allowedRoles={['RM']}>

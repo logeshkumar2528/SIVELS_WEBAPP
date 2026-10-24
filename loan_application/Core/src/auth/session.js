@@ -1,6 +1,7 @@
 import axiosInstance from '../api/axiosInstance';
 import { resolveApiUrl } from '../api/apiConfig';
 import { LOGIN_PATH, navigation } from './authEvents';
+import { PERMISSIONS_CHANGED_EVENT } from './permissions';
 import {
   clearSession,
   getAccessToken,
