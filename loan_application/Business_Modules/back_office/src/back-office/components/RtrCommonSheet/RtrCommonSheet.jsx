@@ -111,6 +111,7 @@ export default function RtrCommonSheet({
   applicantSequence = 0,
   currentUserId: propUserId,
   actionsSlot = null,
+  readOnly = false,
 }) {
   // Top Summary Section Groups (Local UI State only, empty strings initially)
   const [summary, setSummary] = useState({
@@ -443,6 +444,7 @@ export default function RtrCommonSheet({
 
   // Update Summary field
   const handleSummaryChange = (field, value) => {
+    if (readOnly) return;
     setSummary((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -467,11 +469,13 @@ export default function RtrCommonSheet({
 
   // Add a new blank row
   const handleAddRow = () => {
+    if (readOnly) return;
     setRows((prev) => [...prev, createBlankRow()]);
   };
 
   // Remove row handler (local only for unsaved; confirmation + DELETE for saved)
   const handleRemoveRow = (row) => {
+    if (readOnly) return;
     if (!row.applicationLoanObligationDetailsId) {
       setRows((prev) => {
         if (prev.length <= 1) {
@@ -486,7 +490,7 @@ export default function RtrCommonSheet({
 
   // Confirmed delete execution for saved row
   const handleConfirmDelete = async () => {
-    if (!deleteConfirmRow || !deleteConfirmRow.applicationLoanObligationDetailsId) return;
+    if (readOnly || !deleteConfirmRow || !deleteConfirmRow.applicationLoanObligationDetailsId) return;
     setIsDeleting(true);
     setObligationsError(null);
     setSaveSuccessMessage(null);
@@ -517,6 +521,7 @@ export default function RtrCommonSheet({
 
   // Update a regular table cell
   const handleRowChange = (rowId, field, value) => {
+    if (readOnly) return;
     setRows((prev) =>
       prev.map((r) => {
         if (r.id !== rowId) return r;
@@ -532,6 +537,7 @@ export default function RtrCommonSheet({
   };
 
   const handleMonthlyChange = (rowId, index, value) => {
+    if (readOnly) return;
     setRows((prev) => prev.map((row) => {
       if (row.id !== rowId) return row;
       const monthlyValues = [...(row.monthlyValues || Array(12).fill(''))];
@@ -541,6 +547,7 @@ export default function RtrCommonSheet({
   };
 
   const handleLatestMonthChange = async (value) => {
+    if (readOnly) return;
     setRows((prev) => prev.map((row) => ({ ...row, monthlyLatestMonth: value })));
     if (!value || obligationsSaving) return;
 
@@ -663,6 +670,7 @@ export default function RtrCommonSheet({
 
   // Section-level Save Obligations Handler
   const handleSaveObligations = async () => {
+    if (readOnly) return;
     if (!applicationProductDetailsId || Number(applicationProductDetailsId) <= 0) {
       setObligationsError('Application Product ID not found. Unable to save obligations.');
       return;
@@ -896,7 +904,7 @@ export default function RtrCommonSheet({
                     className="bo-rtr-input bo-rtr-input--compact"
                     value={summary.proposedLoanAmount}
                     onChange={(e) => handleSummaryChange('proposedLoanAmount', e.target.value)}
-                    disabled={obligationsSaving}
+                    disabled={readOnly || obligationsSaving}
                   />
                 </label>
                 <label className="bo-rtr-compact-field">
@@ -907,7 +915,7 @@ export default function RtrCommonSheet({
                     className="bo-rtr-input bo-rtr-input--compact"
                     value={summary.proposedLoanTenor}
                     onChange={(e) => handleSummaryChange('proposedLoanTenor', e.target.value)}
-                    disabled={obligationsSaving}
+                    disabled={readOnly || obligationsSaving}
                   />
                 </label>
                 <label className="bo-rtr-compact-field">
@@ -919,7 +927,7 @@ export default function RtrCommonSheet({
                     className="bo-rtr-input bo-rtr-input--compact"
                     value={summary.proposedLoanRoi}
                     onChange={(e) => handleSummaryChange('proposedLoanRoi', e.target.value)}
-                    disabled={obligationsSaving}
+                    disabled={readOnly || obligationsSaving}
                   />
                 </label>
                 <label className="bo-rtr-compact-field">
@@ -973,28 +981,30 @@ export default function RtrCommonSheet({
             <div className="bo-rtr-facilities-title-wrap">
               <h3 className="bo-rtr-section-title">Obligation Details</h3>
             </div>
-            <div className="bo-rtr-facilities-toolbar-actions">
-              <button
-                type="button"
-                className="bo-rtr-add-row-btn"
-                onClick={handleAddRow}
-                disabled={obligationsSaving}
-                aria-label="Add Facility"
-              >
-                {PlusIcon ? <PlusIcon size={14} /> : <span>+</span>}
-                <span>Add Facility</span>
-              </button>
-              <button
-                type="button"
-                className="bo-rtr-save-btn"
-                onClick={handleSaveObligations}
-                disabled={obligationsSaving || obligationsLoading}
-                aria-label="Save Obligations"
-              >
-                {SaveIcon ? <SaveIcon size={14} /> : null}
-                <span>{obligationsSaving ? 'Saving...' : 'Save Obligations'}</span>
-              </button>
-            </div>
+            {!readOnly && (
+              <div className="bo-rtr-facilities-toolbar-actions">
+                <button
+                  type="button"
+                  className="bo-rtr-add-row-btn"
+                  onClick={handleAddRow}
+                  disabled={readOnly || obligationsSaving}
+                  aria-label="Add Facility"
+                >
+                  {PlusIcon ? <PlusIcon size={14} /> : <span>+</span>}
+                  <span>Add Facility</span>
+                </button>
+                <button
+                  type="button"
+                  className="bo-rtr-save-btn"
+                  onClick={handleSaveObligations}
+                  disabled={obligationsSaving || obligationsLoading}
+                  aria-label="Save Obligations"
+                >
+                  {SaveIcon ? <SaveIcon size={14} /> : null}
+                  <span>{obligationsSaving ? 'Saving...' : 'Save Obligations'}</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Horizontal Responsive Table */}
@@ -1032,7 +1042,7 @@ export default function RtrCommonSheet({
                             type="date"
                             value={rows[0]?.monthlyLatestMonth || ''}
                             onChange={(e) => handleLatestMonthChange(e.target.value)}
-                            disabled={obligationsSaving}
+                            disabled={readOnly || obligationsSaving}
                             aria-label="Select latest month"
                           />
                           <strong>{formatMonthlyHeader(month, index)}</strong>
@@ -1066,7 +1076,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-input"
                         value={row.borrowerName}
                         onChange={(e) => handleRowChange(row.id, 'borrowerName', e.target.value)}
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       />
                     </td>
 
@@ -1078,7 +1088,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-input"
                         value={row.bankName}
                         onChange={(e) => handleRowChange(row.id, 'bankName', e.target.value)}
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       />
                     </td>
 
@@ -1090,7 +1100,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-input"
                         value={row.emiAccount}
                         onChange={(e) => handleRowChange(row.id, 'emiAccount', e.target.value)}
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       />
                     </td>
 
@@ -1102,7 +1112,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-input"
                         value={row.product}
                         onChange={(e) => handleRowChange(row.id, 'product', e.target.value)}
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       />
                     </td>
 
@@ -1150,7 +1160,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-input bo-rtr-input-num"
                         value={row.loanAmount}
                         onChange={(e) => handleRowChange(row.id, 'loanAmount', e.target.value)}
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       />
                     </td>
 
@@ -1162,7 +1172,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-input bo-rtr-input-num"
                         value={row.emi}
                         onChange={(e) => handleRowChange(row.id, 'emi', e.target.value)}
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       />
                     </td>
 
@@ -1174,7 +1184,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-input bo-rtr-input-num"
                         value={row.pos}
                         onChange={(e) => handleRowChange(row.id, 'pos', e.target.value)}
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       />
                     </td>
 
@@ -1185,7 +1195,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-input bo-rtr-input-date"
                         value={row.startDate}
                         onChange={(e) => handleRowChange(row.id, 'startDate', e.target.value)}
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       />
                     </td>
 
@@ -1196,7 +1206,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-input bo-rtr-input-date"
                         value={row.endDate}
                         onChange={(e) => handleRowChange(row.id, 'endDate', e.target.value)}
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       />
                     </td>
 
@@ -1209,7 +1219,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-input bo-rtr-input-num"
                         value={row.emiDueDay ?? ''}
                         onChange={(e) => handleRowChange(row.id, 'emiDueDay', e.target.value)}
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       />
                     </td>
 
@@ -1221,7 +1231,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-input bo-rtr-input-num"
                         value={row.tenor}
                         onChange={(e) => handleRowChange(row.id, 'tenor', e.target.value)}
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       />
                     </td>
 
@@ -1233,7 +1243,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-input bo-rtr-input-num"
                         value={row.paidTenor}
                         onChange={(e) => handleRowChange(row.id, 'paidTenor', e.target.value)}
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       />
                     </td>
 
@@ -1245,7 +1255,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-input bo-rtr-input-num"
                         value={calculatedOutstandingTenor(row)}
                         readOnly
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       />
                     </td>
 
@@ -1255,7 +1265,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-select"
                         value={row.reflectedInCibil}
                         onChange={(e) => handleRowChange(row.id, 'reflectedInCibil', e.target.value)}
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       >
                         <option value="">Select</option>
                         <option value="Yes">Yes</option>
@@ -1269,7 +1279,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-select"
                         value={row.forValue}
                         onChange={(e) => handleRowChange(row.id, 'forValue', e.target.value)}
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       >
                         <option value="">Select</option>
                         <option value="Yes">Yes</option>
@@ -1285,7 +1295,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-input bo-rtr-input-num"
                         value={row.bounceCount}
                         onChange={(e) => handleRowChange(row.id, 'bounceCount', e.target.value)}
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       />
                     </td>
 
@@ -1297,7 +1307,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-input"
                         value={row.dpd}
                         onChange={(e) => handleRowChange(row.id, 'dpd', e.target.value)}
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       />
                     </td>
 
@@ -1309,7 +1319,7 @@ export default function RtrCommonSheet({
                         className="bo-rtr-textarea bo-rtr-table-textarea"
                         value={row.rtrComment}
                         onChange={(e) => handleRowChange(row.id, 'rtrComment', e.target.value)}
-                        disabled={obligationsSaving}
+                        disabled={readOnly || obligationsSaving}
                       />
                     </td>
 
@@ -1323,7 +1333,7 @@ export default function RtrCommonSheet({
                           className="bo-rtr-input bo-rtr-input-num"
                           value={row.monthlyValues?.[monthIndex] ?? ''}
                           onChange={(e) => handleMonthlyChange(row.id, monthIndex, e.target.value)}
-                          disabled={obligationsSaving}
+                          disabled={readOnly || obligationsSaving}
                           aria-label={`${formatMonthlyHeader(month, monthIndex)} value`}
                         />
                       </td>
@@ -1331,17 +1341,21 @@ export default function RtrCommonSheet({
 
                     {/* 20. Actions */}
                     <td className="bo-rtr-td bo-rtr-td--actions">
-                      <button
-                        type="button"
-                        className="bo-rtr-row-delete-btn"
-                        onClick={() => handleRemoveRow(row)}
-                        title={row.applicationLoanObligationDetailsId ? 'Delete saved obligation' : 'Remove draft row'}
-                        aria-label={`Delete facility ${idx + 1}`}
-                        disabled={obligationsSaving}
-                      >
-                        {Trash2Icon ? <Trash2Icon size={14} /> : <span>×</span>}
-                        <span>Delete</span>
-                      </button>
+                      {!readOnly ? (
+                        <button
+                          type="button"
+                          className="bo-rtr-row-delete-btn"
+                          onClick={() => handleRemoveRow(row)}
+                          title={row.applicationLoanObligationDetailsId ? 'Delete saved obligation' : 'Remove draft row'}
+                          aria-label={`Delete facility ${idx + 1}`}
+                          disabled={readOnly || obligationsSaving}
+                        >
+                          {Trash2Icon ? <Trash2Icon size={14} /> : <span>×</span>}
+                          <span>Delete</span>
+                        </button>
+                      ) : (
+                        <span style={{ color: '#94a3b8' }}>—</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -1351,27 +1365,29 @@ export default function RtrCommonSheet({
 
           {/* Section Footer / Bottom Action Bar */}
           <div className="bo-rtr-facilities-footer">
-            <div className="bo-rtr-footer-actions">
-              <button
-                type="button"
-                className="bo-rtr-add-row-btn bo-rtr-add-row-btn--bottom"
-                onClick={handleAddRow}
-                disabled={obligationsSaving}
-              >
-                {PlusIcon ? <PlusIcon size={14} /> : <span>+</span>}
-                <span>Add Facility</span>
-              </button>
-              <button
-                type="button"
-                className="bo-rtr-save-btn"
-                onClick={handleSaveObligations}
-                disabled={obligationsSaving || obligationsLoading}
-                aria-label="Save Obligations"
-              >
-                {SaveIcon ? <SaveIcon size={14} /> : null}
-                <span>{obligationsSaving ? 'Saving...' : 'Save Obligations'}</span>
-              </button>
-            </div>
+            {!readOnly && (
+              <div className="bo-rtr-footer-actions">
+                <button
+                  type="button"
+                  className="bo-rtr-add-row-btn bo-rtr-add-row-btn--bottom"
+                  onClick={handleAddRow}
+                  disabled={readOnly || obligationsSaving}
+                >
+                  {PlusIcon ? <PlusIcon size={14} /> : <span>+</span>}
+                  <span>Add Facility</span>
+                </button>
+                <button
+                  type="button"
+                  className="bo-rtr-save-btn"
+                  onClick={handleSaveObligations}
+                  disabled={obligationsSaving || obligationsLoading}
+                  aria-label="Save Obligations"
+                >
+                  {SaveIcon ? <SaveIcon size={14} /> : null}
+                  <span>{obligationsSaving ? 'Saving...' : 'Save Obligations'}</span>
+                </button>
+              </div>
+            )}
             <span className="bo-rtr-rows-counter">
               Total facilities: <strong>{rows.length}</strong>
             </span>

@@ -65,6 +65,7 @@ export default function CustomerProofVerificationSection({
   backOfficeId,
   applicants = [],
   onChanged,
+  readOnly = false,
 }) {
   const [proofs, setProofs] = useState([]);
   const [rejections, setRejections] = useState([]);
@@ -181,6 +182,7 @@ export default function CustomerProofVerificationSection({
   const loaderFor = (proof) => () => downloadCustomerDocumentProof(proof.customerDocumentProofId);
 
   const handleVerify = (key, proof, isVerified) => {
+    if (readOnly) return;
     if (!hasValue(backOfficeId)) {
       setMessage(key, 'error', 'Unable to identify the logged-in Back Office user. Please log in again.');
       return;
@@ -194,6 +196,7 @@ export default function CustomerProofVerificationSection({
   };
 
   const handleVerifyResubmission = (key, rejection) => {
+    if (readOnly) return;
     if (!hasValue(backOfficeId)) {
       setMessage(key, 'error', 'Unable to identify the logged-in Back Office user. Please log in again.');
       return;
@@ -207,6 +210,7 @@ export default function CustomerProofVerificationSection({
   };
 
   const handleReject = async (key, proof, title) => {
+    if (readOnly) return;
     const remarks = (rejectTarget?.remarks || '').trim();
     if (!remarks) {
       setRejectTarget((prev) => ({ ...prev, error: 'Rejection remarks are required.' }));
@@ -315,7 +319,7 @@ export default function CustomerProofVerificationSection({
                             const isImg = isImageFile(proof.fileName);
                             const fileSizeStr = formatFileSize(proof.fileSize);
                             const isVerifying = isBusy(key, 'verify') || isBusy(key, 'unverify') || isBusy(key, 'verify-resubmission');
-                            const isCheckboxDisabled = Boolean(busy) || isVerifying || status === STATUS.RETURNED;
+                            const isCheckboxDisabled = readOnly || Boolean(busy) || isVerifying || status === STATUS.RETURNED;
 
                             return (
                               <tr key={key} className="bo-cv-doc-tr">
@@ -422,7 +426,7 @@ export default function CustomerProofVerificationSection({
                                     >
                                       <Download size={14} />
                                     </button>
-                                    {status !== STATUS.RETURNED && (
+                                    {!readOnly && status !== STATUS.RETURNED && (
                                       <button
                                         type="button"
                                         className="bo-cv-doc-action-btn bo-cv-doc-action-btn--return"
