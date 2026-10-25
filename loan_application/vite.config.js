@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -77,7 +78,7 @@ const multiModulePlugin = () => ({
 });
 
 export default defineConfig({
-  plugins: [react(), multiModulePlugin()],
+  plugins: [react(), tailwindcss(), multiModulePlugin()],
   server: {
     port: 5173,
   },
