@@ -395,9 +395,6 @@ function CreditDecisionPanel({
           <div className="cm-issues-card-head" style={{ marginBottom: 16 }}>
             <div>
               <h3 className="stc-docs-section-title" style={{ margin: 0 }}>Approved Documents</h3>
-              <span className="stc-customer-sub">
-                Official loan documentation generated on demand from Credit Manager approved terms.
-              </span>
             </div>
           </div>
 
@@ -433,12 +430,6 @@ function CreditDecisionPanel({
                   {FileTextIcon && <FileTextIcon size={18} color="#0F7A4C" />}
                   <strong style={{ fontSize: '15px', color: '#0f172a' }}>Sanction Letter</strong>
                 </div>
-                <p
-                  className="stc-customer-sub"
-                  style={{ margin: '0 0 16px 0', fontSize: '13px', lineHeight: '1.4' }}
-                >
-                  Official Sivels Finance sanction letter containing sanctioned loan amount, interest rate, tenure, EMI, and credit conditions.
-                </p>
               </div>
 
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -485,12 +476,6 @@ function CreditDecisionPanel({
                   {FileCheckIcon && <FileCheckIcon size={18} color="#0F7A4C" />}
                   <strong style={{ fontSize: '15px', color: '#0f172a' }}>Key Facts Statement (KFS)</strong>
                 </div>
-                <p
-                  className="stc-customer-sub"
-                  style={{ margin: '0 0 16px 0', fontSize: '13px', lineHeight: '1.4' }}
-                >
-                  Standardized regulatory disclosure detailing APR, repayment schedule, fee breakdown, and grievance redressal mechanisms.
-                </p>
               </div>
 
               <div style={{ display: 'flex', gap: '8px' }}>

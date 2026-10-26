@@ -87,13 +87,6 @@ const fmtPct = (v) => {
   return n == null ? '' : `${Number(n.toFixed(2))}%`;
 };
 
-const monthsToClear = (principal, annualRate, emi) => {
-  const r = annualRate / 12 / 100;
-  const ratio = (principal * r) / emi;
-  if (!(r > 0) || ratio >= 1) return null;
-  return Math.ceil(-Math.log(1 - ratio) / Math.log(1 + r));
-};
-
 function KfsPage({ children }) {
   return (
     <section className="cam-page kfs-page">
@@ -266,7 +259,6 @@ export default function KfsReport({
 
   const spread = baseRate != null && rate != null ? rate - baseRate : null;
   const shockedEmi = calcEmi(principal, (rate || 0) + RATE_SHOCK, tenure);
-  const shockedTenure = totals.emi ? monthsToClear(principal, (rate || 0) + RATE_SHOCK, totals.emi) : null;
 
   /* ── Parties ─────────────────────────────────────────────────────── */
 
@@ -504,8 +496,8 @@ export default function KfsReport({
                 <td>{nil(fmtPct(rate))}</td>
                 <td>{RESET_PERIODICITY_MONTHS}</td>
                 <td>{RESET_PERIODICITY_MONTHS}</td>
-                <td>{nil(emiText)}</td>
-                <td>{nil(shockedTenure ?? (shockedEmi ? tenure : null))}</td>
+                <td>{nil(fmtRupee(shockedEmi))}</td>
+                <td>{nil(tenure)}</td>
               </tr>
             </tbody>
           </table>
