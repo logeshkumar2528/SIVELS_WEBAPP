@@ -159,7 +159,15 @@ export const getRejectedDocumentLabel = (rejection) => {
 const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejections = [], matchedProduct = null) => {
   const applicationId = item.applicationId || item.applicationNumber || item.agentCustomerId || item.customerId || `${index + 1}`;
   const ownership = resolveApplicationOwnership(item, agentsById, rmsById);
+  const rawStatusNum = Number(item.status ?? item.Status);
   let normalizedStatus = normalizeApplicationStatus(item.status, item.statusName || item.StatusName);
+  if (Number.isFinite(rawStatusNum)) {
+    if (rawStatusNum === 2) normalizedStatus = 'Logged to HO';
+    else if (rawStatusNum === 3) normalizedStatus = 'Under Review';
+    else if (rawStatusNum === 4) normalizedStatus = 'Approved';
+    else if (rawStatusNum === 5) normalizedStatus = 'Rejected';
+    else if (rawStatusNum === 6) normalizedStatus = 'Returned';
+  }
 
   if (rejections && rejections.length > 0) {
     const hasActiveReturn = rejections.some((r) => r.status === 'ReturnedToRM');
@@ -172,6 +180,104 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
   const rawCustomerCode = item.customerCode || item.CustomerCode || '';
   const customerCode = rawCustomerCode ? String(rawCustomerCode).trim() : 'N/A';
 
+  let sourcerName = '—';
+  let sourcerRole = '—';
+  let sourcerCode = '—';
+
+  if (ownership.isAgentCreated) {
+    sourcerRole = 'Agent';
+    const agentRecord = (ownership.agentId && agentsById[String(ownership.agentId)]) || {};
+    sourcerName =
+      agentRecord.fullName ||
+      agentRecord.FullName ||
+      agentRecord.agentName ||
+      agentRecord.AgentName ||
+      agentRecord.name ||
+      agentRecord.Name ||
+      ownership.agentName ||
+      'Agent';
+    const rawCode =
+      agentRecord.agentCode ||
+      agentRecord.AgentCode ||
+      agentRecord.code ||
+      agentRecord.Code ||
+      item.agentCode ||
+      item.AgentCode ||
+      '';
+    sourcerCode = rawCode ? String(rawCode).trim() : '—';
+  } else if (ownership.isDirectRm) {
+    sourcerRole = 'RM';
+    const rmRecord = (ownership.rmId && rmsById[String(ownership.rmId)]) || {};
+    sourcerName =
+      rmRecord.fullName ||
+      rmRecord.FullName ||
+      rmRecord.rmName ||
+      rmRecord.RMName ||
+      rmRecord.name ||
+      rmRecord.Name ||
+      ownership.rmName ||
+      'RM';
+    const rawCode =
+      rmRecord.rmCode ||
+      rmRecord.RMCode ||
+      rmRecord.code ||
+      rmRecord.Code ||
+      item.rmCode ||
+      item.RMCode ||
+      '';
+    sourcerCode = rawCode ? String(rawCode).trim() : '—';
+  } else {
+    const hasAgent = Boolean(ownership.agentId || item.agentId || item.AgentId);
+    const hasRm = Boolean(ownership.rmId || item.rmId || item.RmId || item.RMId);
+    if (hasAgent) {
+      sourcerRole = 'Agent';
+      const aId = ownership.agentId || item.agentId || item.AgentId;
+      const agentRecord = (aId && agentsById[String(aId)]) || {};
+      sourcerName =
+        agentRecord.fullName ||
+        agentRecord.FullName ||
+        agentRecord.agentName ||
+        agentRecord.AgentName ||
+        agentRecord.name ||
+        agentRecord.Name ||
+        ownership.agentName ||
+        'Agent';
+      const rawCode =
+        agentRecord.agentCode ||
+        agentRecord.AgentCode ||
+        agentRecord.code ||
+        agentRecord.Code ||
+        item.agentCode ||
+        item.AgentCode ||
+        '';
+      sourcerCode = rawCode ? String(rawCode).trim() : '—';
+    } else if (hasRm) {
+      sourcerRole = 'RM';
+      const rId = ownership.rmId || item.rmId || item.RmId || item.RMId;
+      const rmRecord = (rId && rmsById[String(rId)]) || {};
+      sourcerName =
+        rmRecord.fullName ||
+        rmRecord.FullName ||
+        rmRecord.rmName ||
+        rmRecord.RMName ||
+        rmRecord.name ||
+        rmRecord.Name ||
+        ownership.rmName ||
+        'RM';
+      const rawCode =
+        rmRecord.rmCode ||
+        rmRecord.RMCode ||
+        rmRecord.code ||
+        rmRecord.Code ||
+        item.rmCode ||
+        item.RMCode ||
+        '';
+      sourcerCode = rawCode ? String(rawCode).trim() : '—';
+    } else {
+      sourcerName = ownership.agentName || '—';
+    }
+  }
+
   return {
     id: String(applicationId),
     appId: officialAppId,
@@ -182,6 +288,9 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
     loanType: item.loanProductName || item.loanPurposeName || item.loanType || '',
     amount: formatCurrency(item.expectedLoanAmount ?? item.amount),
     agentName: ownership.agentName,
+    sourcerName,
+    sourcerRole,
+    sourcerCode,
     createdDate: formatDate(item.createdAt || item.createdDate),
     createdAt: item.createdAt || item.createdDate || item.CreatedAt || item.CreatedDate || null,
     rawCreatedAt: item.createdAt || item.createdDate || item.CreatedAt || item.CreatedDate || item.submittedAt || item.SubmittedAt || null,
@@ -201,11 +310,13 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
 };
 
 export default function NewApplications({ initialFilter = 'All' }) {
+  const isLoggedToHoRoute = initialFilter === 'Logged to HO';
+  const defaultFilter = isLoggedToHoRoute ? 'All' : initialFilter;
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-  const [statusFilter, setStatusFilter] = useState(initialFilter);
+  const [statusFilter, setStatusFilter] = useState(defaultFilter);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(7);
   const [applications, setApplications] = useState([]);
@@ -229,7 +340,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
   const FilterIcon = iconMap['Filter'];
 
   useEffect(() => {
-    setStatusFilter(initialFilter);
+    setStatusFilter(defaultFilter);
     setCurrentPage(1);
     setSearchTerm('');
     setFromDate('');
@@ -821,7 +932,14 @@ export default function NewApplications({ initialFilter = 'All' }) {
           app.id.toLowerCase().includes(searchLower) ||
           app.mobile.includes(searchTrimmed);
 
-        const matchesStatus = statusFilter === 'All' || app.status === statusFilter;
+        const appStatusCode = Number(app.rawStatusCode ?? app.rawStatus);
+        const isHoSubmitted = Number.isFinite(appStatusCode) && (appStatusCode === 2 || appStatusCode === 3 || appStatusCode === 4 || appStatusCode === 5 || appStatusCode === 6);
+        if (isLoggedToHoRoute && !isHoSubmitted) return false;
+
+        const matchesStatus =
+          statusFilter === 'All'
+            ? (isLoggedToHoRoute ? isHoSubmitted : true)
+            : app.status === statusFilter;
         return matchesSearch && matchesStatus;
       })
       .sort((a, b) => {
@@ -881,7 +999,26 @@ export default function NewApplications({ initialFilter = 'All' }) {
     { key: 'mobile', label: 'MOBILE' },
     { key: 'loanType', label: 'LOAN PURPOSE' },
     { key: 'amount', label: 'AMOUNT' },
-    { key: 'agentName', label: 'FIELD AGENT' },
+    {
+      key: 'sourcedBy',
+      label: 'SOURCED BY',
+      render: (row) => {
+        const role = row.sourcerRole && row.sourcerRole !== '—' ? String(row.sourcerRole).toUpperCase() : '';
+        const code = row.sourcerCode && row.sourcerCode !== '—' ? row.sourcerCode : '';
+        const metaText = role && code ? `${role} · ${code}` : (role || code || '—');
+
+        return (
+          <div className="new-apps-sourced-cell">
+            <span className="new-apps-sourcer-name" title={row.sourcerName}>
+              {row.sourcerName || '—'}
+            </span>
+            <span className="new-apps-sourcer-meta" title={metaText}>
+              {metaText}
+            </span>
+          </div>
+        );
+      },
+    },
     { key: 'createdDate', label: 'DATE' },
     {
       key: 'status',
@@ -890,7 +1027,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
         <div className="new-apps-status-cell">
           <StatusBadge
             status={row.status}
-            label={row.status === 'Logged to HO' ? 'Logged to HO' : undefined}
+            label={row.status}
           />
         </div>
       ),
@@ -969,7 +1106,9 @@ export default function NewApplications({ initialFilter = 'All' }) {
           );
         }
 
-        if (row.status === 'Logged to HO' || row.rawStatus === 2 || row.rawStatus === '2') {
+        const rowStatusCode = Number(row.rawStatusCode ?? row.rawStatus);
+        const isCompletedHoStatus = isLoggedToHoRoute && (rowStatusCode === 3 || rowStatusCode === 4 || rowStatusCode === 5 || rowStatusCode === 6);
+        if (row.status === 'Logged to HO' || row.rawStatus === 2 || row.rawStatus === '2' || isCompletedHoStatus) {
           const canEdit = getCanEdit(row);
           return (
             <div className="new-apps-actions-cell" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -1126,19 +1265,30 @@ export default function NewApplications({ initialFilter = 'All' }) {
                   setStatusFilter(val);
                   setCurrentPage(1);
                 }}
-                options={[
-                  { value: 'All', label: 'All Statuses' },
-                  { value: 'New', label: 'New' },
-                  { value: 'Pending', label: 'RM Pending' },
-                  { value: 'Under Review', label: 'CM Pending' },
-                  { value: 'Logged to HO', label: 'Logged to HO' },
-                  { value: 'Returned', label: 'BO Returned' },
-                ]}
+                options={
+                  isLoggedToHoRoute
+                    ? [
+                        { value: 'All', label: 'All HO Submissions' },
+                        { value: 'Logged to HO', label: 'Logged to HO' },
+                        { value: 'Under Review', label: 'Under Review' },
+                        { value: 'Approved', label: 'Approved' },
+                        { value: 'Rejected', label: 'Rejected' },
+                        { value: 'Returned', label: 'Returned' },
+                      ]
+                    : [
+                        { value: 'All', label: 'All Statuses' },
+                        { value: 'New', label: 'New' },
+                        { value: 'Pending', label: 'RM Pending' },
+                        { value: 'Under Review', label: 'CM Pending' },
+                        { value: 'Logged to HO', label: 'Logged to HO' },
+                        { value: 'Returned', label: 'BO Returned' },
+                      ]
+                }
                 placeholder={null}
               />
             </div>
 
-            {(searchTerm || fromDate || toDate || statusFilter !== 'All') && (
+            {(searchTerm || fromDate || toDate || statusFilter !== defaultFilter) && (
               <button
                 type="button"
                 className="btn-reset-filter"
@@ -1146,7 +1296,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
                   setSearchTerm('');
                   setFromDate('');
                   setToDate('');
-                  setStatusFilter('All');
+                  setStatusFilter(defaultFilter);
                   setCurrentPage(1);
                 }}
               >
