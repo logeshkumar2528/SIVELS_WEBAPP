@@ -3,7 +3,7 @@ import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
 import { getAccessToken } from '../../../../../Core/src/auth/tokenStore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { MapPin, Map, Building2, Hash, HelpCircle } from 'lucide-react';
+import { MapPin, Map, Hash, HelpCircle } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import Button from '../../components/Button/Button';
 import Select from '../../components/Select/Select';
@@ -27,24 +27,6 @@ import {
   loadApplicantAadhaarUrl,
   loadCoApplicantAadhaarUrl,
 } from '../applicationWizard/flowUtils';
-import { getCurrentRMContext } from '../../utils/rmContext';
-
-function resolveMasterId(value, options = []) {
-  if (value === null || value === undefined || value === '') return null;
-  const num = Number(value);
-  if (Number.isFinite(num) && num > 0) return num;
-
-  const str = String(value).trim().toLowerCase();
-  const matched = options.find((opt) =>
-    String(opt.label ?? opt.name ?? opt.raw?.stateName ?? opt.raw?.cityName ?? '')
-      .trim()
-      .toLowerCase() === str
-  );
-  const matchedId = Number(matched?.value ?? matched?.id ?? matched?.raw?.stateId ?? matched?.raw?.cityId);
-  return Number.isFinite(matchedId) && matchedId > 0 ? matchedId : null;
-}
-
-
 
 function buildAddressState(appData) {
   const saved = getSectionState(appData, 'addressDetails', {});
@@ -100,9 +82,6 @@ function AddressCard({
   address, 
   onChange, 
   errors = {},
-  cityOptions = [],
-  stateOptions = [],
-  isLoadingMasters = false
 }) {
   return (
     <div className="aw-mini-card">
@@ -156,18 +135,11 @@ function AddressCard({
           <div className="aw-field">
             <label className="form-label">City</label>
             <div className="aw-input-wrapper">
-              <Select
-                error={!!errors.city}
-                value={address.cityId ?? address.city}
-                onChange={(val) => {
-                  const selected = cityOptions.find((option) => String(option.value) === String(val));
-                  onChange('cityId', val);
-                  onChange('city', selected?.label || '');
-                }}
-                placeholder={isLoadingMasters ? "Loading..." : "Select city"}
-                options={cityOptions}
-                disabled={isLoadingMasters}
-                icon={<Building2 size={14} />}
+              <MapPin className="aw-input-icon" size={14} />
+              <input
+                className={`form-input aw-input aw-input--with-icon ${errors.city ? 'aw-input--invalid' : ''}`}
+                value={address.city || ''}
+                onChange={(e) => onChange('city', e.target.value)}
               />
             </div>
             {errors.city && <span className="aw-field-error">{errors.city}</span>}
@@ -176,18 +148,11 @@ function AddressCard({
           <div className="aw-field">
             <label className="form-label">State</label>
             <div className="aw-input-wrapper">
-              <Select
-                error={!!errors.state}
-                value={address.stateId ?? address.state}
-                onChange={(val) => {
-                  const selected = stateOptions.find((option) => String(option.value) === String(val));
-                  onChange('stateId', val);
-                  onChange('state', selected?.label || '');
-                }}
-                placeholder={isLoadingMasters ? "Loading..." : "Select state"}
-                options={stateOptions}
-                disabled={isLoadingMasters}
-                icon={<Map size={14} />}
+              <Map className="aw-input-icon" size={14} />
+              <input
+                className={`form-input aw-input aw-input--with-icon ${errors.state ? 'aw-input--invalid' : ''}`}
+                value={address.state || ''}
+                onChange={(e) => onChange('state', e.target.value)}
               />
             </div>
             {errors.state && <span className="aw-field-error">{errors.state}</span>}
@@ -238,44 +203,17 @@ export default function AddressDetails() {
   const { applications, getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
   const hydratedAt = applications?.[appId]?._hydratedAt || 0;
   const [form, setForm] = useState(() => buildAddressState(getApplication(appId)));
+  const formRef = useRef(form);
+  formRef.current = form;
   const [errors, setErrors] = useState({});
   const [errorPopup, setErrorPopup] = useState(null);
 
-  const [isLoadingMasters, setIsLoadingMasters] = useState(false);
-  const [stateOptions, setStateOptions] = useState([]);
-  const [cityOptions, setCityOptions] = useState([]);
 
   useEffect(() => {
     if (appId && loadApplicationFromBackend) {
       loadApplicationFromBackend(appId);
     }
   }, [appId, loadApplicationFromBackend]);
-
-  useEffect(() => {
-    async function fetchMaster(endpoint, idField, nameField, setStateFunc) {
-      try {
-        const baseUrl = API_BASE_URL;
-        const res = await apiFetch(`${baseUrl}/${endpoint}`);
-        if (res.ok) {
-          const data = await res.json();
-          setStateFunc(data.map(item => ({ value: item[idField], label: item[nameField], raw: item })));
-        }
-      } catch (e) {
-        console.error(`Failed to fetch ${endpoint}:`, e);
-      }
-    }
-
-    async function loadMasters() {
-      setIsLoadingMasters(true);
-      await Promise.allSettled([
-        fetchMaster('State', 'stateId', 'stateName', setStateOptions),
-        fetchMaster('City', 'cityId', 'cityName', setCityOptions),
-      ]);
-      setIsLoadingMasters(false);
-    }
-    
-    loadMasters();
-  }, []);
 
   useEffect(() => {
     ensureApplication(appId);
@@ -325,26 +263,76 @@ export default function AddressDetails() {
         const address = Array.isArray(data) ? data[0] : data;
         if (!active || !address) return;
         aadhaarPrefillLoadedRef.current = String(kycDocumentId);
-        setForm((prev) => {
-          const applicant = {
-            ...prev.applicant,
-            addressLine1: address.addressLine1 ?? address.AddressLine1 ?? prev.applicant.addressLine1,
-            addressLine2: address.addressLine2 ?? address.AddressLine2 ?? prev.applicant.addressLine2,
-            landmark: address.landmark ?? address.Landmark ?? prev.applicant.landmark,
-            pincode: address.pincode ?? address.Pincode ?? prev.applicant.pincode,
-            state: address.state ?? address.State ?? address.stateName ?? address.StateName ?? prev.applicant.state,
-            city: address.cityOrDistrict ?? address.CityOrDistrict ?? address.city ?? address.cityName ?? address.CityName ?? prev.applicant.city,
-            stateId: address.stateId ?? address.StateId ?? null,
-            cityId: address.cityId ?? address.CityId ?? null,
-          };
-          const next = { ...prev, applicant };
-          saveApplication(appId, buildSectionUpdate(appData, 'addressDetails', next));
-          return next;
-        });
+        const next = {
+          ...formRef.current,
+          applicant: {
+            ...formRef.current.applicant,
+            addressLine1: formRef.current.applicant.addressLine1 || address.addressLine1 || address.AddressLine1 || '',
+            addressLine2: formRef.current.applicant.addressLine2 || address.addressLine2 || address.AddressLine2 || '',
+            landmark: formRef.current.applicant.landmark || address.landmark || address.Landmark || '',
+            pincode: formRef.current.applicant.pincode || address.pincode || address.Pincode || '',
+            state: formRef.current.applicant.state || address.state || address.State || address.stateName || address.StateName || '',
+            city: formRef.current.applicant.city || address.cityOrDistrict || address.CityOrDistrict || address.city || address.City || address.cityName || address.CityName || '',
+          },
+        };
+        setForm(next);
+        saveApplication(appId, buildSectionUpdate(appData, 'addressDetails', next));
       } catch (error) {
         console.error('Unable to load Aadhaar address prefill:', error);
       }
     })();
+    return () => { active = false; };
+  }, [appData, appId, saveApplication, coApplicantKycIdsKey]);
+
+  // Load Aadhaar address data for each co-applicant using that person's KYC
+  // document ID.  The primary-applicant prefill above must not be reused for
+  // co-applicant address cards.
+  useEffect(() => {
+    const kycApplicants = appData?.sections?.kycDocuments?.coApplicants || appData?.kycDocuments?.coApplicants || [];
+    if (!Array.isArray(kycApplicants) || kycApplicants.length === 0) return undefined;
+
+    let active = true;
+    (async () => {
+      const prefills = await Promise.all(kycApplicants.map(async (kyc, index) => {
+        const kycDocumentId = kyc?.kycDocumentId || kyc?.applicationKYCDocumentId || kyc?.ApplicationKYCDocumentId;
+        if (!kycDocumentId || aadhaarPrefillLoadedRef.current === `co:${index}:${kycDocumentId}`) return null;
+        try {
+          const response = await rmCustomerService.getAadhaarAddressPrefill(kycDocumentId);
+          const data = response?.data?.data || response?.data?.value || response?.data || response?.value || response;
+          const address = Array.isArray(data) ? data[0] : data;
+          return address ? { index, kycDocumentId, address } : null;
+        } catch (error) {
+          console.error(`Unable to load Aadhaar address prefill for co-applicant ${index + 1}:`, error);
+          return null;
+        }
+      }));
+
+      if (!active) return;
+      const validPrefills = prefills.filter(Boolean);
+      if (validPrefills.length === 0) return;
+
+      const next = {
+        ...formRef.current,
+        coApplicants: formRef.current.coApplicants.map((coApplicant, index) => {
+          const match = validPrefills.find((item) => item.index === index);
+          if (!match) return coApplicant;
+          const address = match.address;
+          aadhaarPrefillLoadedRef.current = `co:${index}:${match.kycDocumentId}`;
+          return {
+            ...coApplicant,
+            addressLine1: coApplicant.addressLine1 || address.addressLine1 || address.AddressLine1 || '',
+            addressLine2: coApplicant.addressLine2 || address.addressLine2 || address.AddressLine2 || '',
+            landmark: coApplicant.landmark || address.landmark || address.Landmark || '',
+            pincode: coApplicant.pincode || address.pincode || address.Pincode || '',
+            state: coApplicant.state || address.state || address.State || address.stateName || address.StateName || '',
+            city: coApplicant.city || address.cityOrDistrict || address.CityOrDistrict || address.city || address.City || address.cityName || address.CityName || '',
+          };
+        }),
+      };
+      setForm(next);
+      saveApplication(appId, buildSectionUpdate(appData, 'addressDetails', next));
+    })();
+
     return () => { active = false; };
   }, [appData, appId, saveApplication, coApplicantKycIdsKey]);
 
@@ -571,26 +559,6 @@ export default function AddressDetails() {
         }
         usedPersonalInformationIds.add(validPersonalInfoId);
 
-        const resolvedStateId = resolveMasterId(person.stateId, stateOptions) || resolveMasterId(person.state, stateOptions);
-        if (!resolvedStateId) {
-          setErrorPopup({
-            title: 'Invalid State',
-            message: `Please select a valid State for ${person.isPrimary ? 'Applicant' : `Co-Applicant ${person.index + 1}`}.`,
-            variant: 'validation',
-          });
-          return;
-        }
-
-        const resolvedCityId = resolveMasterId(person.cityId, cityOptions) || resolveMasterId(person.city, cityOptions);
-        if (!resolvedCityId) {
-          setErrorPopup({
-            title: 'Invalid City',
-            message: `Please select a valid City for ${person.isPrimary ? 'Applicant' : `Co-Applicant ${person.index + 1}`}.`,
-            variant: 'validation',
-          });
-          return;
-        }
-
         let validAddressId =
           person.addressDetailsId !== null &&
           person.addressDetailsId !== undefined &&
@@ -617,20 +585,15 @@ export default function AddressDetails() {
           : `${baseUrl}/ApplicationAddressDetails`;
 
         const payload = {
-          PersonalInformationId: validPersonalInfoId,
-          AddressLine1: person.addressLine1 || '',
-          AddressLine2: person.addressLine2 || null,
-          Landmark: person.landmark || null,
-          CityId: resolvedCityId,
-          StateId: resolvedStateId,
-          Pincode: person.pincode || person.postalCode || person.Pincode || '',
-          MailingAsCurrent: person.mailingSameAsCurrent === 'Yes',
-          CreatedBy: getCurrentRMContext().rmId,
+          personalInformationId: validPersonalInfoId,
+          addressLine1: person.addressLine1 || '',
+          addressLine2: person.addressLine2 || null,
+          landmark: person.landmark || null,
+          city: person.city || '',
+          state: person.state || '',
+          pincode: person.pincode || person.postalCode || person.Pincode || '',
+          mailingAsCurrent: person.mailingSameAsCurrent === 'Yes',
         };
-
-        if (isUpdate) {
-          payload.ApplicationAddressDetailsId = validAddressId;
-        }
 
         console.log(`Saving Address [${isUpdate ? 'PUT' : 'POST'}]:`, payload);
 
@@ -778,9 +741,6 @@ export default function AddressDetails() {
             .filter(([key]) => key.startsWith('applicant.'))
             .map(([key, value]) => [key.split('.').slice(1).join('.'), value]),
         )}
-        cityOptions={cityOptions}
-        stateOptions={stateOptions}
-        isLoadingMasters={isLoadingMasters}
       />
 
       {activeCount > 0 && form.coApplicants.map((address, index) => (
@@ -794,9 +754,6 @@ export default function AddressDetails() {
               .filter(([key]) => key.startsWith(`coApplicants.${index}.`))
               .map(([key, value]) => [key.split('.').slice(2).join('.'), value]),
           )}
-          cityOptions={cityOptions}
-          stateOptions={stateOptions}
-          isLoadingMasters={isLoadingMasters}
         />
       ))}
       </fieldset>

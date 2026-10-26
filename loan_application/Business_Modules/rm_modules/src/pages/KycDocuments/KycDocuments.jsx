@@ -87,6 +87,59 @@ function formatFileSize(bytes) {
   return `${gb.toFixed(1)} GB`;
 }
 
+const PROFILE_IMAGE_MIMES = new Set(['image/jpeg', 'image/jpg', 'image/png']);
+
+/**
+ * The profile-image API accepts only JPG/JPEG/PNG. Agent documents can arrive
+ * without an extension or as WebP, so normalize the browser File before it is
+ * sent to ApplicationKYCDocuments/{id}/profile-image.
+ */
+async function normalizeProfileImageFile(file) {
+  if (!file) throw new Error('No profile image file selected.');
+
+  const originalName = String(file.name || 'profile-image').trim();
+  const originalExt = originalName.split('.').pop()?.toLowerCase() || '';
+  const inputMime = String(file.type || '').toLowerCase();
+  const inferredMime = inputMime || (
+    originalExt === 'png' ? 'image/png' :
+      (originalExt === 'jpg' || originalExt === 'jpeg' || originalExt === 'jfif' ? 'image/jpeg' : '')
+  );
+
+  // Convert WebP to PNG because the backend deliberately does not accept WebP.
+  if (inferredMime === 'image/webp' || originalExt === 'webp') {
+    if (typeof createImageBitmap !== 'function') {
+      throw new Error('This browser cannot convert WebP profile images. Please select a JPG, JPEG, or PNG image.');
+    }
+    const bitmap = await createImageBitmap(file);
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext('2d');
+      context.drawImage(bitmap, 0, 0);
+      const pngBlob = await new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not convert the profile image to PNG.'))), 'image/png');
+      });
+      const baseName = originalName.replace(/\.[^.]+$/, '') || 'profile-image';
+      return new File([pngBlob], `${baseName}.png`, { type: 'image/png' });
+    } finally {
+      bitmap.close?.();
+    }
+  }
+
+  if (!PROFILE_IMAGE_MIMES.has(inferredMime)) {
+    throw new Error('Invalid profile image type. Please select a JPG, JPEG, or PNG image.');
+  }
+
+  const normalizedMime = inferredMime === 'image/jpg' ? 'image/jpeg' : inferredMime;
+  const normalizedExt = normalizedMime === 'image/png' ? 'png' : 'jpg';
+  const hasAllowedExtension = /\.(jpg|jpeg|png)$/i.test(originalName);
+  if (hasAllowedExtension && file.type === normalizedMime) return file;
+
+  const baseName = originalName.replace(/\.[^.]+$/, '') || 'profile-image';
+  return new File([file], `${baseName}.${normalizedExt}`, { type: normalizedMime });
+}
+
 function getFileIcon(fileName = '') {
   const ext = String(fileName).split('.').pop()?.toLowerCase();
   if (ext === 'zip' || ext === 'rar' || ext === '7z' || ext === 'tar' || ext === 'gz') {
@@ -3651,15 +3704,28 @@ export default function KycDocuments() {
         return { ...current, identityDocumentRawFiles: raw, documentPath: newDocPath, numberOfDocuments: preservedNumDocs };
       }, personIndex);
 
-      setDraftSection('kycDocuments', (prev) => {
-        const next = { ...prev };
-        if (personType === 'applicant') {
-          next.applicant = { ...next.applicant, documentPath: newDocPath, numberOfDocuments: preservedNumDocs };
-        } else if (Array.isArray(next.coApplicants)) {
-          next.coApplicants = next.coApplicants.map((co, i) => i === personIndex ? { ...co, documentPath: newDocPath, numberOfDocuments: preservedNumDocs } : co);
-        }
-        return next;
-      });
+      // Keep the persisted application draft in sync with the local form.
+      // `setDraftSection` is not part of the application draft store; using it
+      // here caused a ReferenceError after a successful manual-document upload.
+      const currentApplication = getApplication(appId) || appData;
+      const currentKycSection = getSectionState(currentApplication, 'kycDocuments', {});
+      const nextKycSection = {
+        ...currentKycSection,
+        ...(personType === 'applicant'
+          ? {
+              applicant: {
+                ...(currentKycSection.applicant || {}),
+                documentPath: newDocPath,
+                numberOfDocuments: preservedNumDocs,
+              },
+            }
+          : {
+              coApplicants: (currentKycSection.coApplicants || []).map((co, i) =>
+                i === personIndex ? { ...co, documentPath: newDocPath, numberOfDocuments: preservedNumDocs } : co
+              ),
+            }),
+      };
+      saveApplication(appId, buildSectionUpdate(currentApplication, 'kycDocuments', nextKycSection));
     }
   };
 
@@ -4110,6 +4176,19 @@ export default function KycDocuments() {
             }
 
             if (!(effectiveFile instanceof File)) continue;
+
+            if (key === 'profile') {
+              try {
+                effectiveFile = await normalizeProfileImageFile(effectiveFile);
+              } catch (imageError) {
+                setErrorPopup({
+                  title: 'Profile Image Upload Failed',
+                  message: imageError.message || 'Please select a JPG, JPEG, or PNG profile image.',
+                  variant: 'validation',
+                });
+                return;
+              }
+            }
 
             anyIdentityFileUploaded = true;
             const isReplacement = hasCanonicalPath;

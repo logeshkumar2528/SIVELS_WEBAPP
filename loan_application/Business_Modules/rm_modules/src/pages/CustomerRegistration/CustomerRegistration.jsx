@@ -737,29 +737,84 @@ export default function CustomerRegistration() {
         const person = Array.isArray(data) ? data[0] : data;
         if (!active || !person) return;
         aadhaarPrefillLoadedRef.current = String(kycDocumentId);
-        setForm((prev) => {
-          const applicant = {
-            ...prev.applicant,
-            relationshipWithApplicant: person.relationshipId ?? person.RelationshipId ?? prev.applicant.relationshipWithApplicant,
-            title: person.titleId ?? person.TitleId ?? prev.applicant.title,
-            firstName: person.firstName ?? person.FirstName ?? prev.applicant.firstName,
-            middleName: person.middleName ?? person.MiddleName ?? prev.applicant.middleName,
-            lastName: person.lastName ?? person.LastName ?? prev.applicant.lastName,
-            fatherOrSpouseName: person.fatherSpouseName ?? person.FatherSpouseName ?? prev.applicant.fatherOrSpouseName,
-            dateOfBirth: person.dateOfBirth ?? person.DateOfBirth ?? prev.applicant.dateOfBirth,
-            gender: person.genderId ?? person.GenderId ?? prev.applicant.gender,
-            mobileNo: person.mobileNumber ?? person.MobileNumber ?? person.mobile ?? person.Mobile ?? person.aadhaarLinkedMobileNumber ?? person.AadhaarLinkedMobileNumber ?? prev.applicant.mobileNo,
-          };
-          const next = { ...prev, applicant };
-          saveApplication(appId, buildRegistrationPayload(next, getApplication(appId), applicantHeaderName));
-          return next;
-        });
+        const next = {
+          ...form,
+          applicant: {
+            ...form.applicant,
+            relationshipWithApplicant: person.relationshipId ?? person.RelationshipId ?? form.applicant.relationshipWithApplicant,
+            title: person.titleId ?? person.TitleId ?? form.applicant.title,
+            firstName: person.firstName ?? person.FirstName ?? form.applicant.firstName,
+            middleName: person.middleName ?? person.MiddleName ?? form.applicant.middleName,
+            lastName: person.lastName ?? person.LastName ?? form.applicant.lastName,
+            fatherOrSpouseName: person.fatherSpouseName ?? person.FatherSpouseName ?? form.applicant.fatherOrSpouseName,
+            dateOfBirth: person.dateOfBirth ?? person.DateOfBirth ?? form.applicant.dateOfBirth,
+            gender: person.genderId ?? person.GenderId ?? form.applicant.gender,
+            mobileNo: person.mobileNumber ?? person.MobileNumber ?? person.mobile ?? person.Mobile ?? person.aadhaarLinkedMobileNumber ?? person.AadhaarLinkedMobileNumber ?? form.applicant.mobileNo,
+          },
+        };
+        setForm(next);
+        saveApplication(appId, buildRegistrationPayload(next, getApplication(appId), applicantHeaderName));
       } catch (error) {
         console.error('Unable to load Aadhaar personal prefill:', error);
       }
     })();
     return () => { active = false; };
-  }, [appData, appId, getApplication, saveApplication, applicantHeaderName]);
+  }, [appData, appId, form, getApplication, saveApplication, applicantHeaderName]);
+
+  // Aadhaar verification can also belong to a co-applicant.  Hydrate each
+  // co-applicant from its own KYC row instead of applying the primary
+  // applicant's prefill response to the whole form.
+  useEffect(() => {
+    const kycApplicants = appData?.sections?.kycDocuments?.coApplicants || appData?.kycDocuments?.coApplicants || [];
+    if (!Array.isArray(kycApplicants) || kycApplicants.length === 0) return undefined;
+
+    let active = true;
+    (async () => {
+      const prefills = await Promise.all(kycApplicants.map(async (kyc, index) => {
+        const kycDocumentId = kyc?.kycDocumentId || kyc?.applicationKYCDocumentId || kyc?.ApplicationKYCDocumentId;
+        if (!kycDocumentId || aadhaarPrefillLoadedRef.current === `co:${index}:${kycDocumentId}`) return null;
+        try {
+          const response = await rmCustomerService.getAadhaarPersonalPrefill(kycDocumentId);
+          const data = response?.data?.data || response?.data?.value || response?.data || response?.value || response;
+          const person = Array.isArray(data) ? data[0] : data;
+          return person ? { index, kycDocumentId, person } : null;
+        } catch (error) {
+          console.error(`Unable to load Aadhaar personal prefill for co-applicant ${index + 1}:`, error);
+          return null;
+        }
+      }));
+
+      if (!active) return;
+      const validPrefills = prefills.filter(Boolean);
+      if (validPrefills.length === 0) return;
+
+      const next = {
+        ...form,
+        coApplicants: form.coApplicants.map((coApplicant, index) => {
+          const match = validPrefills.find((item) => item.index === index);
+          if (!match) return coApplicant;
+          const person = match.person;
+          aadhaarPrefillLoadedRef.current = `co:${index}:${match.kycDocumentId}`;
+          return {
+            ...coApplicant,
+            relationshipWithApplicant: person.relationshipId ?? person.RelationshipId ?? coApplicant.relationshipWithApplicant,
+            title: person.titleId ?? person.TitleId ?? coApplicant.title,
+            firstName: person.firstName ?? person.FirstName ?? coApplicant.firstName,
+            middleName: person.middleName ?? person.MiddleName ?? coApplicant.middleName,
+            lastName: person.lastName ?? person.LastName ?? coApplicant.lastName,
+            fatherOrSpouseName: person.fatherSpouseName ?? person.FatherSpouseName ?? coApplicant.fatherOrSpouseName,
+            dateOfBirth: person.dateOfBirth ?? person.DateOfBirth ?? coApplicant.dateOfBirth,
+            gender: person.genderId ?? person.GenderId ?? coApplicant.gender,
+            mobileNo: person.mobileNumber ?? person.MobileNumber ?? person.mobile ?? person.Mobile ?? person.aadhaarLinkedMobileNumber ?? person.AadhaarLinkedMobileNumber ?? coApplicant.mobileNo,
+          };
+        }),
+      };
+      setForm(next);
+      saveApplication(appId, buildRegistrationPayload(next, getApplication(appId), applicantHeaderName));
+    })();
+
+    return () => { active = false; };
+  }, [appData, appId, form, getApplication, saveApplication, applicantHeaderName]);
 
   const resolvedApplicationProductDetailsId = useMemo(() => {
     const raw = (
