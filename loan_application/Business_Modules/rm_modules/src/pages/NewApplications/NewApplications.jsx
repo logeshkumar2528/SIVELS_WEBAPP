@@ -172,6 +172,104 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
   const rawCustomerCode = item.customerCode || item.CustomerCode || '';
   const customerCode = rawCustomerCode ? String(rawCustomerCode).trim() : 'N/A';
 
+  let sourcerName = '—';
+  let sourcerRole = '—';
+  let sourcerCode = '—';
+
+  if (ownership.isAgentCreated) {
+    sourcerRole = 'Agent';
+    const agentRecord = (ownership.agentId && agentsById[String(ownership.agentId)]) || {};
+    sourcerName =
+      agentRecord.fullName ||
+      agentRecord.FullName ||
+      agentRecord.agentName ||
+      agentRecord.AgentName ||
+      agentRecord.name ||
+      agentRecord.Name ||
+      ownership.agentName ||
+      'Agent';
+    const rawCode =
+      agentRecord.agentCode ||
+      agentRecord.AgentCode ||
+      agentRecord.code ||
+      agentRecord.Code ||
+      item.agentCode ||
+      item.AgentCode ||
+      '';
+    sourcerCode = rawCode ? String(rawCode).trim() : '—';
+  } else if (ownership.isDirectRm) {
+    sourcerRole = 'RM';
+    const rmRecord = (ownership.rmId && rmsById[String(ownership.rmId)]) || {};
+    sourcerName =
+      rmRecord.fullName ||
+      rmRecord.FullName ||
+      rmRecord.rmName ||
+      rmRecord.RMName ||
+      rmRecord.name ||
+      rmRecord.Name ||
+      ownership.rmName ||
+      'RM';
+    const rawCode =
+      rmRecord.rmCode ||
+      rmRecord.RMCode ||
+      rmRecord.code ||
+      rmRecord.Code ||
+      item.rmCode ||
+      item.RMCode ||
+      '';
+    sourcerCode = rawCode ? String(rawCode).trim() : '—';
+  } else {
+    const hasAgent = Boolean(ownership.agentId || item.agentId || item.AgentId);
+    const hasRm = Boolean(ownership.rmId || item.rmId || item.RmId || item.RMId);
+    if (hasAgent) {
+      sourcerRole = 'Agent';
+      const aId = ownership.agentId || item.agentId || item.AgentId;
+      const agentRecord = (aId && agentsById[String(aId)]) || {};
+      sourcerName =
+        agentRecord.fullName ||
+        agentRecord.FullName ||
+        agentRecord.agentName ||
+        agentRecord.AgentName ||
+        agentRecord.name ||
+        agentRecord.Name ||
+        ownership.agentName ||
+        'Agent';
+      const rawCode =
+        agentRecord.agentCode ||
+        agentRecord.AgentCode ||
+        agentRecord.code ||
+        agentRecord.Code ||
+        item.agentCode ||
+        item.AgentCode ||
+        '';
+      sourcerCode = rawCode ? String(rawCode).trim() : '—';
+    } else if (hasRm) {
+      sourcerRole = 'RM';
+      const rId = ownership.rmId || item.rmId || item.RmId || item.RMId;
+      const rmRecord = (rId && rmsById[String(rId)]) || {};
+      sourcerName =
+        rmRecord.fullName ||
+        rmRecord.FullName ||
+        rmRecord.rmName ||
+        rmRecord.RMName ||
+        rmRecord.name ||
+        rmRecord.Name ||
+        ownership.rmName ||
+        'RM';
+      const rawCode =
+        rmRecord.rmCode ||
+        rmRecord.RMCode ||
+        rmRecord.code ||
+        rmRecord.Code ||
+        item.rmCode ||
+        item.RMCode ||
+        '';
+      sourcerCode = rawCode ? String(rawCode).trim() : '—';
+    } else {
+      sourcerName = ownership.agentName || '—';
+    }
+  }
+
   return {
     id: String(applicationId),
     appId: officialAppId,
@@ -182,6 +280,9 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
     loanType: item.loanProductName || item.loanPurposeName || item.loanType || '',
     amount: formatCurrency(item.expectedLoanAmount ?? item.amount),
     agentName: ownership.agentName,
+    sourcerName,
+    sourcerRole,
+    sourcerCode,
     createdDate: formatDate(item.createdAt || item.createdDate),
     createdAt: item.createdAt || item.createdDate || item.CreatedAt || item.CreatedDate || null,
     rawCreatedAt: item.createdAt || item.createdDate || item.CreatedAt || item.CreatedDate || item.submittedAt || item.SubmittedAt || null,
@@ -881,7 +982,26 @@ export default function NewApplications({ initialFilter = 'All' }) {
     { key: 'mobile', label: 'MOBILE' },
     { key: 'loanType', label: 'LOAN PURPOSE' },
     { key: 'amount', label: 'AMOUNT' },
-    { key: 'agentName', label: 'FIELD AGENT' },
+    {
+      key: 'sourcedBy',
+      label: 'SOURCED BY',
+      render: (row) => {
+        const role = row.sourcerRole && row.sourcerRole !== '—' ? String(row.sourcerRole).toUpperCase() : '';
+        const code = row.sourcerCode && row.sourcerCode !== '—' ? row.sourcerCode : '';
+        const metaText = role && code ? `${role} · ${code}` : (role || code || '—');
+
+        return (
+          <div className="new-apps-sourced-cell">
+            <span className="new-apps-sourcer-name" title={row.sourcerName}>
+              {row.sourcerName || '—'}
+            </span>
+            <span className="new-apps-sourcer-meta" title={metaText}>
+              {metaText}
+            </span>
+          </div>
+        );
+      },
+    },
     { key: 'createdDate', label: 'DATE' },
     {
       key: 'status',
