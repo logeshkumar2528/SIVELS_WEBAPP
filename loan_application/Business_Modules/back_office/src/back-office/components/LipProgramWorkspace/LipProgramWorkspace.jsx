@@ -111,6 +111,7 @@ export default function LipProgramWorkspace({
   applicantSequence = 0,
   onOpenProposedLoan,
   onBack,
+  readOnly = false,
 }) {
   const [mode, setMode] = useState('loading');
   const [record, setRecord] = useState(null);
@@ -189,6 +190,7 @@ export default function LipProgramWorkspace({
   useEffect(() => { loadCurrent(); return () => clearTimeout(debounceRef.current); }, [loadCurrent]);
 
   const startEdit = (selected = record) => {
+    if (readOnly) return;
     if (!selected) { setMode('new'); return; }
     setDraft(responseInputs(selected));
     setFoirPercent(String(selected.foirPercentApplied ?? 60));
@@ -197,6 +199,7 @@ export default function LipProgramWorkspace({
   };
 
   const updateInput = (key, value) => {
+    if (readOnly) return;
     const clean = value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
     setDraft((previous) => ({ ...previous, [key]: clean })); setDirty(true);
     clearTimeout(debounceRef.current);
@@ -204,6 +207,7 @@ export default function LipProgramWorkspace({
   };
 
   const updateFoir = (value) => {
+    if (readOnly) return;
     const clean = value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
     setFoirPercent(clean); setDirty(true);
     clearTimeout(debounceRef.current);
@@ -211,6 +215,7 @@ export default function LipProgramWorkspace({
   };
 
   const save = async () => {
+    if (readOnly) return;
     setSaving(true); setError(null);
     try {
       const saved = await backOfficeService.calculateLipProgram(payloadFromInputs(draft, foirPercent, context));
@@ -243,7 +248,7 @@ export default function LipProgramWorkspace({
     if (edit) startEdit(selected); else setMode(selected.isCurrent ? 'view' : 'old');
   };
 
-  const editable = mode === 'new' || mode === 'edit';
+  const editable = !readOnly && (mode === 'new' || mode === 'edit');
   // View/old mode must render the persisted record exactly as saved. Preview
   // values are only allowed to replace calculated fields while editing/new.
   const data = editable ? (preview || record || {}) : (record || preview || {});
@@ -287,6 +292,6 @@ export default function LipProgramWorkspace({
       {renderRow('Max total obligations allowed at FOIR', 'maxObligationsAllowed')}{renderRow('Max EMI permitted by FOIR (after existing EMIs)', 'maxEMIByFOIR')}{renderRow('ELIGIBLE PRESENT LOAN EMI', 'eligibleEMI', { total: true, highlight: true })}{renderRow('Binding constraint', 'bindingConstraint')}{renderRow('FOIR achieved ((existing EMIs + new EMI) / income)', 'foirAchieved')}{renderRow('ROI p.a.', 'proposedROI', { hint: 'From Proposed Loan', decimal: true })}{renderRow('Tenure (months)', 'proposedTenureMonths', { hint: 'From Proposed Loan' })}{renderRow('Indicative loan amount supported by EMI', 'eligibleLoanAmount', { total: true })}{renderRow('EMI per lakh (Rs.)', 'emiPerLakh', { decimal: true })}
     </div>
 
-    {historyOpen && <div className="lip-history-backdrop" onClick={() => setHistoryOpen(false)}><aside className="lip-history-panel" role="dialog" aria-modal="true" aria-labelledby="lip-history-title" onClick={(event) => event.stopPropagation()}><div className="lip-history-head"><h3 id="lip-history-title">LIP Assessment History</h3><button type="button" aria-label="Close history" onClick={() => setHistoryOpen(false)}>×</button></div>{historyLoading ? <div className="lip-loading">Loading history…</div> : history.length === 0 ? <p className="lip-history-empty">No saved assessments yet.</p> : <div className="lip-history-list">{history.map((item) => <div className="lip-history-item" key={item.lipProgramAssessmentId}><div className="lip-history-item-head"><div><strong>Version {item.calculationVersion}</strong>{item.isCurrent && <span className="lip-current">Current</span>}<small>{formatDate(item.calculatedAt)} · {item.calculatedByRole || '–'}</small></div></div><div className="lip-history-stats"><div><strong>{formatAmount(item.totalMonthlyIncome)}</strong><small>Total monthly income</small></div><div><strong>{formatAmount(item.eligibleEMI)}</strong><small>Eligible EMI</small></div><div><strong>{formatAmount(item.eligibleLoanAmount)}</strong><small>Eligible loan</small></div></div><div className="lip-history-actions"><button type="button" onClick={() => selectHistoryRecord(item)}>View</button><button type="button" onClick={() => selectHistoryRecord(item, true)}>Edit from this version</button></div></div>)}</div>}</aside></div>}
+    {historyOpen && <div className="lip-history-backdrop" onClick={() => setHistoryOpen(false)}><aside className="lip-history-panel" role="dialog" aria-modal="true" aria-labelledby="lip-history-title" onClick={(event) => event.stopPropagation()}><div className="lip-history-head"><h3 id="lip-history-title">LIP Assessment History</h3><button type="button" aria-label="Close history" onClick={() => setHistoryOpen(false)}>×</button></div>{historyLoading ? <div className="lip-loading">Loading history…</div> : history.length === 0 ? <p className="lip-history-empty">No saved assessments yet.</p> : <div className="lip-history-list">{history.map((item) => <div className="lip-history-item" key={item.lipProgramAssessmentId}><div className="lip-history-item-head"><div><strong>Version {item.calculationVersion}</strong>{item.isCurrent && <span className="lip-current">Current</span>}<small>{formatDate(item.calculatedAt)} · {item.calculatedByRole || '–'}</small></div></div><div className="lip-history-stats"><div><strong>{formatAmount(item.totalMonthlyIncome)}</strong><small>Total monthly income</small></div><div><strong>{formatAmount(item.eligibleEMI)}</strong><small>Eligible EMI</small></div><div><strong>{formatAmount(item.eligibleLoanAmount)}</strong><small>Eligible loan</small></div></div><div className="lip-history-actions"><button type="button" onClick={() => selectHistoryRecord(item)}>View</button>{!readOnly && <button type="button" onClick={() => selectHistoryRecord(item, true)}>Edit from this version</button>}</div></div>)}</div>}</aside></div>}
   </div>;
 }

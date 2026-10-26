@@ -30,6 +30,7 @@ import { useVerificationWorkspace } from '../../../back_office/src/back-office/h
 import ApprovedDocumentsViewer, {
   DOC_TYPES,
 } from '../../../../Core/src/features/approval-documents/components/ApprovedDocumentsViewer';
+import approvalDocumentService from '../../../../Core/src/features/approval-documents/services/approvalDocumentService';
 import { setActingIdentity } from '../../../back_office/src/back-office/auth/authStorage';
 import {
   RETURN_ITEM_STATUS,
@@ -176,6 +177,8 @@ function CreditDecisionPanel({
   onAction,
   onViewDocument,
   onDownloadDocument,
+  identifierWarning,
+  onDismissIdentifierWarning,
 }) {
   const { can } = usePermissions();
   const canDecide = can('CREDIT.APPROVE');
@@ -230,6 +233,23 @@ function CreditDecisionPanel({
       )}
 
       {error && <div className="cm-form-alert" role="alert">{error}</div>}
+
+      {identifierWarning && (
+        <div className="cm-form-alert" role="alert" style={{ marginBottom: 12 }}>
+          {AlertCircleIcon && <AlertCircleIcon size={16} />}
+          <span>{identifierWarning}</span>
+          {onDismissIdentifierWarning && (
+            <button
+              type="button"
+              onClick={onDismissIdentifierWarning}
+              aria-label="Dismiss warning"
+              style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}
+            >
+              {XIcon && <XIcon size={14} />}
+            </button>
+          )}
+        </div>
+      )}
 
       {awaitingReviewSections.length > 0 && (
         <div className="crp-strip" role="region" aria-label="Back Office resolutions awaiting review">
@@ -505,6 +525,7 @@ export default function ApplicationReview() {
   const [returnItems, setReturnItems] = useState([]);
   const [decisionLoading, setDecisionLoading] = useState(true);
   const [decisionError, setDecisionError] = useState('');
+  const [identifierWarning, setIdentifierWarning] = useState('');
   const review = useReviewSections(customerId);
   const { flags: pendingFlags, setFlags: setPendingFlags, addFlag } = review;
 
@@ -706,6 +727,18 @@ export default function ApplicationReview() {
     setSuccessMessage(action.successMessage);
     refetchQueue();
     loadDecisions();
+
+    if (action?.key === 'APPROVE') {
+      try {
+        await approvalDocumentService.generateLoanIdentifier(customerId);
+        setIdentifierWarning('');
+      } catch (idErr) {
+        console.warn('[ApplicationReview] Loan identifier generation failed after approval:', idErr);
+        setIdentifierWarning(
+          'Application approved successfully, but official Loan Identifier generation encountered a network issue. You can retry generating identifiers from the Approved Documents section.'
+        );
+      }
+    }
   };
 
   return (
@@ -741,6 +774,8 @@ export default function ApplicationReview() {
             onAction={setActiveAction}
             onViewDocument={handleViewDocument}
             onDownloadDocument={handleDownloadDocument}
+            identifierWarning={identifierWarning}
+            onDismissIdentifierWarning={() => setIdentifierWarning('')}
           />
         }
       />

@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Building2, CalendarDays, ChevronDown, Download } from 'lucide-react';
 import { useCustomerIdentity } from '../../hooks/useCustomerIdentity';
 import Pagination from '../../components/Pagination/Pagination';
+import approvalDocumentService from '../../../../../Core/src/features/approval-documents/services/approvalDocumentService';
 import './EMIHistory.css';
 
 const payments = [
@@ -19,10 +20,34 @@ const payments = [
 
 export default function EMIHistory() {
   const { customerData } = useCustomerIdentity();
+  const [loanIdentifier, setLoanIdentifier] = useState(null);
+  const [loadingIdentifier, setLoadingIdentifier] = useState(true);
 
-  const loanId = customerData?.agentCustomerId
-    ? `LN${String(customerData.agentCustomerId).padStart(6, '0')}`
-    : 'LN2025001234';
+  useEffect(() => {
+    let isMounted = true;
+    approvalDocumentService
+      .getMyLoanIdentifier()
+      .then((data) => {
+        if (isMounted) {
+          setLoanIdentifier(data);
+          setLoadingIdentifier(false);
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          console.warn('[EMIHistory] Failed to load customer loan identifier:', err?.message || err);
+          setLoanIdentifier(null);
+          setLoadingIdentifier(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const officialLoanAccountNumber = loanIdentifier?.loanAccountNumber || (loadingIdentifier ? 'Loading…' : '—');
+  const hasApprovedLoan = Boolean(loanIdentifier?.loanAccountNumber);
 
   const loanType = customerData?.loanPurposeName
     ? `${customerData.loanPurposeName} Loan`
@@ -44,7 +69,7 @@ export default function EMIHistory() {
 
   return <div className="emi-history-page">
     <header className="emi-page-heading"><h1>EMI History</h1><p>View your all EMI payments in one place</p></header>
-    <section className="emi-loan-banner"><div className="emi-loan-id"><span className="emi-building"><Building2 size={25} /></span><div><small>Loan ID</small><strong>{loanId}</strong><b>{loanType}</b></div><span className="emi-active-badge">Active</span></div><div className="emi-loan-metrics"><BannerMetric label="Loan Amount" value={loanAmount} /><BannerMetric label="EMI Amount" value="₹4,980" /><BannerMetric label="Tenure" value="36 Months" /><BannerMetric label="EMI Paid" value="18" /><BannerMetric label="EMI Remaining" value="18" /></div></section>
+    <section className="emi-loan-banner"><div className="emi-loan-id"><span className="emi-building"><Building2 size={25} /></span><div><small>Loan Account Number</small><strong>{officialLoanAccountNumber}</strong><b>{loanType}</b></div><span className="emi-active-badge">{hasApprovedLoan ? 'Active' : (loadingIdentifier ? 'Checking…' : 'No Active Loan')}</span></div><div className="emi-loan-metrics"><BannerMetric label="Loan Amount" value={loanAmount} /><BannerMetric label="EMI Amount" value="₹4,980" /><BannerMetric label="Tenure" value="36 Months" /><BannerMetric label="EMI Paid" value="18" /><BannerMetric label="EMI Remaining" value="18" /></div></section>
     <section className="emi-filter-bar"><label>Filter by Status<select value={status} onChange={changeStatus}><option>All</option><option>Paid</option><option>Upcoming</option><option>Overdue</option></select><ChevronDown size={16} /></label><label>From Date<span className="date-input">Select date <CalendarDays size={16} /></span></label><label>To Date<span className="date-input">Select date <CalendarDays size={16} /></span></label><button type="button" className="export-csv"><Download size={17} /> Export CSV</button></section>
     <section className="emi-table-card"><div className="emi-table-scroll emi-table-scrollable"><table><thead><tr><th>EMI No.</th><th>Due Date</th><th>Principal (₹)</th><th>Interest (₹)</th><th>Penalty (₹)</th><th>Total Amount (₹)</th><th>Amount Paid (₹)</th><th>Payment Date</th><th>Status</th></tr></thead><tbody>{visibleRows.map((payment) => <tr key={payment.number}><td>{payment.number}</td><td>{payment.due}</td><td>{payment.principal}</td><td>{payment.interest}</td><td className={payment.status === 'Overdue' ? 'overdue-value' : ''}>{payment.penalty}</td><td className={payment.status === 'Overdue' ? 'overdue-value' : ''}>{payment.total}</td><td>{payment.paid}</td><td>{payment.date}</td><td><span className={`emi-status ${payment.status.toLowerCase()}`}>{payment.status}</span></td></tr>)}</tbody></table></div><Pagination currentPage={currentPage} totalItems={rows.length} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={changePageSize} pageSizeOptions={[5, 10, 25, 50]} /></section>
   </div>;

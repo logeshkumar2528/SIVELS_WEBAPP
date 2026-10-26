@@ -142,7 +142,7 @@ function withTitle(title, name) {
   return name.toLowerCase().startsWith(title.toLowerCase()) ? name : `${prefix} ${name}`;
 }
 
-function buildLetterData(verificationData, coApplicants, approvedTerms = null) {
+function buildLetterData(verificationData, coApplicants, approvedTerms = null, loanIdentifier = null) {
   const app = verificationData?.applicationDetails || {};
   const personal = verificationData?.personalInformation || {};
   const address = verificationData?.addressDetails || {};
@@ -195,8 +195,13 @@ function buildLetterData(verificationData, coApplicants, approvedTerms = null) {
 
   const letterDate = approvedTerms?.sanctionDate || formatLetterDate(new Date());
 
+  const officialSanctionLetterId = clean(loanIdentifier?.sanctionLetterId);
+  const officialLoanAccountNumber = clean(loanIdentifier?.loanAccountNumber);
+
   return {
-    refNo: clean(verificationData?.appId) || clean(verificationData?.customerCode) || clean(verificationData?.customerId),
+    refNo: officialSanctionLetterId || EMPTY,
+    sanctionLetterRef: officialSanctionLetterId || EMPTY,
+    loanAccountNumber: officialLoanAccountNumber || EMPTY,
     branch: clean(app.sourcingBranch) || clean(verificationData?.districtName),
     letterDate,
     applicationDate: formatLongDate(verificationData?.appliedDate || app.appliedDate),
@@ -391,6 +396,9 @@ export default function SanctionLetter({
   pdDoneBy = '',
   agentCustomerId = null,
   creditDecision: creditDecisionProp = null,
+  loanIdentifier = null,
+  onGenerateIdentifier = null,
+  isGeneratingIdentifier = false,
 }) {
   const pageRefs = useRef([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -510,6 +518,11 @@ export default function SanctionLetter({
     null;
   const sanctionDate = rawDecidedAt ? formatLetterDate(rawDecidedAt) : null;
 
+  const hasOfficialIdentifiers = Boolean(
+    loanIdentifier?.loanAccountNumber && loanIdentifier?.sanctionLetterId
+  );
+  const canExport = Boolean(isCompleteApproved && hasOfficialIdentifiers);
+
   const approvedTerms = useMemo(() => ({
     isApproved,
     isCompleteApproved,
@@ -529,8 +542,8 @@ export default function SanctionLetter({
   }, [pdSheet, decisionConditions]);
 
   const data = useMemo(
-    () => buildLetterData(verificationData, coApplicants, approvedTerms),
-    [verificationData, coApplicants, approvedTerms]
+    () => buildLetterData(verificationData, coApplicants, approvedTerms, loanIdentifier),
+    [verificationData, coApplicants, approvedTerms, loanIdentifier]
   );
 
   const v = (value) => value || EMPTY;
@@ -559,7 +572,7 @@ export default function SanctionLetter({
   };
 
   const handlePrint = async () => {
-    if (isGenerating) return;
+    if (isGenerating || isPrinting || !canExport) return;
     setIsGenerating(true);
     setIsPrinting(true);
     setDownloadError('');
@@ -604,7 +617,7 @@ export default function SanctionLetter({
   };
 
   const handleDownload = async () => {
-    if (isGenerating) return;
+    if (isGenerating || !canExport) return;
     setIsGenerating(true);
     setDownloadError('');
     try {
@@ -632,7 +645,8 @@ export default function SanctionLetter({
           'FAST'
         );
       }
-      pdf.save(`Sanction_Letter_${data.refNo || 'Sivels_Finance'}.pdf`);
+      const filenameLoanPart = data.loanAccountNumber !== EMPTY ? data.loanAccountNumber : (data.sanctionLetterRef !== EMPTY ? data.sanctionLetterRef : 'Official');
+      pdf.save(`Sanction_Letter_${filenameLoanPart}.pdf`);
     } catch (err) {
       console.error('[SanctionLetter] PDF generation failed:', err);
       setDownloadError('Failed to generate the Sanction Letter PDF. Please try again.');
@@ -658,7 +672,8 @@ export default function SanctionLetter({
           type="button"
           className="sl-download-btn sl-print-btn"
           onClick={handlePrint}
-          disabled={isGenerating || isPrinting || !isCompleteApproved}
+          disabled={isGenerating || isPrinting || !canExport}
+          title={!canExport ? 'Official identifiers and complete approved terms required for printing' : 'Print Sanction Letter'}
         >
           <Printer size={14} />
           <span>{isPrinting ? 'Preparing...' : 'Print'}</span>
@@ -667,7 +682,8 @@ export default function SanctionLetter({
           type="button"
           className="sl-download-btn"
           onClick={handleDownload}
-          disabled={isGenerating || isPrinting || !isCompleteApproved}
+          disabled={isGenerating || isPrinting || !canExport}
+          title={!canExport ? 'Official identifiers and complete approved terms required for PDF download' : 'Download Sanction Letter PDF'}
         >
           <Download size={14} />
           <span>{isGenerating && !isPrinting ? 'Generating PDF...' : 'Download PDF'}</span>
@@ -681,6 +697,33 @@ export default function SanctionLetter({
             : !isApproved
             ? `Not Approved: This application has a Credit Manager decision of "${decisionStatus}". A Sanction Letter can only be generated for approved applications.`
             : 'Incomplete Sanction Data: The Credit Manager approval decision is missing required financial terms (sanctioned amount, interest rate, or tenure).'}
+        </div>
+      )}
+
+      {isCompleteApproved && !hasOfficialIdentifiers && (
+        <div style={{ maxWidth: 820, margin: '0 auto 16px', padding: '10px 14px', background: '#fef3c7', color: '#92400e', borderRadius: 6, fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>
+            Official Loan Identifiers Missing: Official Loan Account Number and Sanction Letter ID have not been generated. Official PDF export and printing are disabled until identifiers are generated.
+          </span>
+          {onGenerateIdentifier && (
+            <button
+              type="button"
+              onClick={onGenerateIdentifier}
+              disabled={isGeneratingIdentifier}
+              style={{
+                marginLeft: 12,
+                padding: '4px 10px',
+                background: '#0F7A4C',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 4,
+                cursor: isGeneratingIdentifier ? 'not-allowed' : 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              {isGeneratingIdentifier ? 'Generating...' : 'Generate Now'}
+            </button>
+          )}
         </div>
       )}
 
@@ -702,7 +745,8 @@ export default function SanctionLetter({
         >
           <table className="sl-meta-table">
             <tbody>
-              <tr><th scope="row">Ref. No</th><td>{v(data.refNo)}</td></tr>
+              <tr><th scope="row">Ref. No</th><td>{v(data.sanctionLetterRef)}</td></tr>
+              <tr><th scope="row">Loan Account No</th><td>{v(data.loanAccountNumber)}</td></tr>
               <tr><th scope="row">Branch Office</th><td>{v(data.branch)}</td></tr>
               <tr><th scope="row">Date</th><td>{v(data.letterDate)}</td></tr>
             </tbody>
@@ -802,6 +846,7 @@ export default function SanctionLetter({
               <col />
             </colgroup>
             <tbody>
+              <TermRow label="Loan Account Number">{v(data.loanAccountNumber)}</TermRow>
               <TermRow label="Product">{v(data.product)}</TermRow>
               <TermRow label="Nature & Amount of Loan">
                 Term Loan of {formatRupees(data.loanAmount)}

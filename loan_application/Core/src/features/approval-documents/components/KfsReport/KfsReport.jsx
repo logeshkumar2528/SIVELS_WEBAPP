@@ -147,7 +147,15 @@ function ScheduleTable({ rows, totalRows = rows, showTotals = false }) {
   );
 }
 
-export default function KfsReport({ verificationData, applicationProductDetailsId, agentCustomerId, creditDecision: creditDecisionProp = null }) {
+export default function KfsReport({
+  verificationData,
+  applicationProductDetailsId,
+  agentCustomerId,
+  creditDecision: creditDecisionProp = null,
+  loanIdentifier = null,
+  onGenerateIdentifier = null,
+  isGeneratingIdentifier = false,
+}) {
   const reportRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState({});
@@ -254,7 +262,12 @@ export default function KfsReport({ verificationData, applicationProductDetailsI
 
   /* ── Parties ─────────────────────────────────────────────────────── */
 
-  const accountNo = verificationData?.appId || verificationData?.customerCode || '';
+  const officialLoanAccountNo = !isBlank(loanIdentifier?.loanAccountNumber)
+    ? String(loanIdentifier.loanAccountNumber).trim()
+    : '';
+  const hasOfficialIdentifiers = Boolean(officialLoanAccountNo);
+  const canExport = Boolean(isCompleteApproved && hasOfficialIdentifiers);
+  const accountNo = officialLoanAccountNo || '';
   const loanType =
     pick(productWrapper, ['loanProductName', 'LoanProductName', 'productName', 'ProductName']) ??
     pick(productRecord, ['loanProductName', 'LoanProductName', 'productName', 'ProductName']) ??
@@ -285,7 +298,7 @@ export default function KfsReport({ verificationData, applicationProductDetailsI
 
   const { handlePrint, handleDownloadPdf, isExporting, exportError } = usePrintAndPdf(reportRef, {
     title: 'KFS',
-    fileName: `KFS-${accountNo || agentCustomerId || 'Application'}.pdf`,
+    fileName: `KFS-${officialLoanAccountNo || 'Official'}.pdf`,
   });
 
   /*
@@ -293,6 +306,7 @@ export default function KfsReport({ verificationData, applicationProductDetailsI
    * the global `img { display: block }` reset skews it and every line is drawn low.
    */
   const handleDownload = async () => {
+    if (!canExport || isExporting) return;
     const metricsFix = document.createElement('style');
     metricsFix.textContent =
       'body > div[style*="visibility: hidden"][style*="white-space: nowrap"] > img { display: inline !important; }';
@@ -324,8 +338,8 @@ export default function KfsReport({ verificationData, applicationProductDetailsI
         <span className="cam-toolbar-status">{loading ? 'Loading KFS data…' : DOC_LABEL}</span>
         <div className="cam-toolbar-actions">
           {exportError && <span className="cam-toolbar-error">{exportError}</span>}
-          <button type="button" className="cam-btn" onClick={handlePrint} disabled={loading || !isCompleteApproved}>Print</button>
-          <button type="button" className="cam-btn cam-btn-primary" onClick={handleDownload} disabled={loading || isExporting || !isCompleteApproved}>
+          <button type="button" className="cam-btn" onClick={() => { if (!canExport || loading) return; handlePrint(); }} disabled={loading || !canExport} title={!canExport ? 'Official Loan Account Number and complete approved terms required for printing' : 'Print KFS'}>Print</button>
+          <button type="button" className="cam-btn cam-btn-primary" onClick={handleDownload} disabled={loading || isExporting || !canExport} title={!canExport ? 'Official Loan Account Number and complete approved terms required for PDF download' : 'Download KFS PDF'}>
             {isExporting ? 'Generating PDF…' : 'Download PDF'}
           </button>
         </div>
@@ -338,6 +352,31 @@ export default function KfsReport({ verificationData, applicationProductDetailsI
             : !isApproved
             ? `Not Approved: This application has a Credit Manager decision of "${decisionStatus}". A Key Facts Statement can only be generated for approved loans.`
             : 'Incomplete Sanction Data: The Credit Manager approval decision is missing required financial terms (sanctioned amount, interest rate, or tenure).'}
+        </div>
+      )}
+
+      {isCompleteApproved && !hasOfficialIdentifiers && !loading && (
+        <div className="kfs-notice" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>Official Loan Identifiers Missing: The official Loan Account Number has not been generated for this approved loan. KFS export and printing are disabled.</span>
+          {onGenerateIdentifier && (
+            <button
+              type="button"
+              onClick={onGenerateIdentifier}
+              disabled={isGeneratingIdentifier}
+              style={{
+                marginLeft: 12,
+                padding: '4px 10px',
+                background: '#0F7A4C',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 4,
+                cursor: isGeneratingIdentifier ? 'not-allowed' : 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              {isGeneratingIdentifier ? 'Generating...' : 'Generate Now'}
+            </button>
+          )}
         </div>
       )}
 
@@ -360,7 +399,7 @@ export default function KfsReport({ verificationData, applicationProductDetailsI
               <tr>
                 <td className="kfs-no">1</td>
                 <td>Loan proposal/ account No.</td>
-                <td>{nil(accountNo)}</td>
+                <td>{officialLoanAccountNo || NIL}</td>
                 <td>Type of Loan</td>
                 <td>{nil(loanType)}</td>
               </tr>

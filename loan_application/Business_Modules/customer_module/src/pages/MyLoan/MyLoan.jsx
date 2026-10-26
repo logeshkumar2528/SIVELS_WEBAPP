@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Building2, Download, FileText, Landmark } from 'lucide-react';
 import { useCustomerIdentity } from '../../hooks/useCustomerIdentity';
+import approvalDocumentService from '../../../../../Core/src/features/approval-documents/services/approvalDocumentService';
 import './MyLoan.css';
 
 const repaymentDetails = [
@@ -16,10 +17,34 @@ const repaymentDetails = [
 
 export default function MyLoan() {
   const { customerData } = useCustomerIdentity();
+  const [loanIdentifier, setLoanIdentifier] = useState(null);
+  const [loadingIdentifier, setLoadingIdentifier] = useState(true);
 
-  const loanId = customerData?.agentCustomerId
-    ? `LN${String(customerData.agentCustomerId).padStart(6, '0')}`
-    : 'LN2025001234';
+  useEffect(() => {
+    let isMounted = true;
+    approvalDocumentService
+      .getMyLoanIdentifier()
+      .then((data) => {
+        if (isMounted) {
+          setLoanIdentifier(data);
+          setLoadingIdentifier(false);
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          console.warn('[MyLoan] Failed to load customer loan identifier:', err?.message || err);
+          setLoanIdentifier(null);
+          setLoadingIdentifier(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const officialLoanAccountNumber = loanIdentifier?.loanAccountNumber || (loadingIdentifier ? 'Loading…' : '—');
+  const hasApprovedLoan = Boolean(loanIdentifier?.loanAccountNumber);
 
   const loanType = customerData?.loanPurposeName
     ? `${customerData.loanPurposeName} Loan`
@@ -30,7 +55,7 @@ export default function MyLoan() {
     : '₹2,00,000';
 
   const loanDetails = [
-    ['Loan ID', loanId],
+    ['Loan Account Number', officialLoanAccountNumber],
     ['Loan Type', loanType],
     ['Sanctioned Amount', loanAmount],
     ['Disbursed Amount', loanAmount],
@@ -49,11 +74,13 @@ export default function MyLoan() {
         <div className="loan-identity">
           <div className="loan-identity-icon"><Building2 size={26} /></div>
           <div>
-            <span>Loan ID</span>
-            <strong>{loanId}</strong>
+            <span>Loan Account Number</span>
+            <strong>{officialLoanAccountNumber}</strong>
             <small>Loan Type <b>{loanType}</b></small>
           </div>
-          <span className="loan-active-badge">Active</span>
+          <span className="loan-active-badge">
+            {hasApprovedLoan ? 'Active' : (loadingIdentifier ? 'Checking…' : 'No Active Loan')}
+          </span>
         </div>
         <div className="loan-overview-metrics">
           <Metric label="Sanctioned Amount" value={loanAmount} />
