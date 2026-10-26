@@ -70,7 +70,14 @@ function App() {
 
   const rawDailyUsage = Array.isArray(summary?.dailyUsage) ? summary.dailyUsage : [];
   const daily = useMemo(() => buildDailyUsageAxis(rawDailyUsage), [summary]);
-  const totalCalls = daily.reduce((sum, item) => sum + item.calls, 0), totalCost = daily.reduce((sum, item) => sum + item.cost, 0);
+  const [dailyDateFilter, setDailyDateFilter] = useState('');
+  const [dailyMonthFilter, setDailyMonthFilter] = useState('');
+  const filteredDaily = useMemo(() => daily.filter((item) => {
+    const matchesDate = !dailyDateFilter || item.key === dailyDateFilter;
+    const matchesMonth = !dailyMonthFilter || item.key.slice(0, 7) === dailyMonthFilter;
+    return matchesDate && matchesMonth;
+  }), [daily, dailyDateFilter, dailyMonthFilter]);
+  const totalCalls = filteredDaily.reduce((sum, item) => sum + item.calls, 0), totalCost = filteredDaily.reduce((sum, item) => sum + item.cost, 0);
   const hasUsageRows = rawDailyUsage.length > 0;
   const hasRenderableUsage = daily.some((item) => item.calls > 0 || item.cost > 0);
   if (import.meta.env.DEV && hasUsageRows && !hasRenderableUsage) console.warn('[AadhaarWallet] dailyUsage did not match the local 14-day axis:', rawDailyUsage);
@@ -225,6 +232,25 @@ function App() {
           <div>
             <h2>Daily breakdown</h2>
           </div>
+          <div className="wl-usage-filters" aria-label="Daily breakdown filters">
+            <label>
+              <span>Date</span>
+              <input type="date" value={dailyDateFilter} onChange={(event) => setDailyDateFilter(event.target.value)} />
+            </label>
+            <label>
+              <span>Month</span>
+              <input type="month" value={dailyMonthFilter} onChange={(event) => setDailyMonthFilter(event.target.value)} />
+            </label>
+            {(dailyDateFilter || dailyMonthFilter) && (
+              <button
+                type="button"
+                className="wl-btn wl-btn-outline wl-filter-clear"
+                onClick={() => { setDailyDateFilter(''); setDailyMonthFilter(''); }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
 
         {!hasUsageRows ? (
@@ -235,6 +261,12 @@ function App() {
           </div>
         ) : !hasRenderableUsage ? (
           <div className="wl-alert wl-alert-warning wl-inline-alert"><AlertIcon size={18} /><div className="wl-alert-body"><p>Daily usage was received, but no valid rows could be displayed.</p></div></div>
+        ) : filteredDaily.length === 0 ? (
+          <div className="wl-empty">
+            <span className="wl-empty-icon"><ActivityIcon size={24} /></span>
+            <strong>No matching activity</strong>
+            <p>No daily usage matches the selected date or month.</p>
+          </div>
         ) : (
           <>
             <div className="wl-table-wrap">
@@ -243,7 +275,7 @@ function App() {
                   <tr><th>Date</th><th>Day</th><th className="wl-center">No. of Aadhaar verified</th><th className="wl-center">Cost per verification</th><th className="wl-num">GST</th><th className="wl-num">Total</th></tr>
                 </thead>
                 <tbody>
-                  {[...daily].reverse().map((item) => (
+                  {[...filteredDaily].reverse().map((item) => (
                     <tr key={`table-${item.key}`} className={item.calls === 0 ? 'is-muted' : ''}>
                       <td>{longDate.format(item.date)}{item.key === todayKey && <span className="wl-pill wl-pill-neutral wl-pill-sm">Today</span>}</td>
                       <td>{weekday.format(item.date)}</td>
