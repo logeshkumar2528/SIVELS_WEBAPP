@@ -1320,6 +1320,9 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
 
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [selectedApplication, setSelectedApplication] = useState(null);
+  const [customerDocuments, setCustomerDocuments] = useState([]);
+  const [customerDocumentsLoading, setCustomerDocumentsLoading] = useState(false);
+  const [customerDocumentsError, setCustomerDocumentsError] = useState('');
   const [selectedAms, setSelectedAms] = useState(null);
   const [loadingAmsModal, setLoadingAmsModal] = useState(false);
   const [previewDoc, setPreviewDoc] = useState(null);
@@ -1339,6 +1342,42 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const customerId = selectedApplication?.id;
+
+    if (roleKey !== 'customer' || !customerId) {
+      setCustomerDocuments([]);
+      setCustomerDocumentsLoading(false);
+      setCustomerDocumentsError('');
+      return undefined;
+    }
+
+    setCustomerDocumentsLoading(true);
+    setCustomerDocumentsError('');
+    agentCustomerService.getDocumentsByCustomerId(customerId)
+      .then((response) => {
+        if (!active) return;
+        const documents = Array.isArray(response)
+          ? response
+          : (response?.data || response?.value || []);
+        setCustomerDocuments(Array.isArray(documents) ? documents : []);
+      })
+      .catch(() => {
+        if (active) {
+          setCustomerDocuments([]);
+          setCustomerDocumentsError('Unable to load agent-uploaded documents.');
+        }
+      })
+      .finally(() => {
+        if (active) setCustomerDocumentsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [roleKey, selectedApplication?.id]);
 
   const blobUrlsRef = useRef([]);
 
@@ -2183,6 +2222,26 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
     }
   };
 
+  const handlePreviewAgentDocument = async (document) => {
+    const documentId = document?.agentCustomerDocumentId ?? document?.AgentCustomerDocumentId ?? document?.id ?? document?.Id;
+    if (!documentId) return;
+
+    const title = document?.documentTypeName || document?.customerDocumentTypeName || document?.documentName || document?.fileName || 'Customer Document';
+    const fileName = document?.fileName || document?.documentName || '';
+    setPreviewDoc({ title, name: title, url: '', rawPath: fileName, isPdf: isPdfFile(fileName), loading: true });
+
+    try {
+      const blob = await agentCustomerService.downloadDocument(documentId);
+      const objectUrl = URL.createObjectURL(blob);
+      blobUrlsRef.current.push(objectUrl);
+      const isPdf = blob.type === 'application/pdf' || isPdfFile(fileName);
+      setPreviewDoc({ title, name: title, url: objectUrl, rawPath: fileName, isPdf, loading: false });
+    } catch (error) {
+      console.warn('Could not preview customer document:', error);
+      setPreviewDoc((previous) => (previous ? { ...previous, loading: false } : null));
+    }
+  };
+
   return (
     <div className="people-directory-page">
       <button
@@ -2872,97 +2931,195 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
       {/* Customer / Application Details Modal */}
       {selectedApplication && (
         <div
-          className="person-dialog-backdrop"
+          className="exec-record-backdrop"
           role="presentation"
           onMouseDown={() => setSelectedApplication(null)}
         >
           <section
-            className="person-dialog application-dialog"
+            className="exec-record-dialog"
             role="dialog"
             aria-modal="true"
-            aria-label="Application details"
+            aria-label="Customer details"
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <button
-              className="person-dialog-close"
-              onClick={() => setSelectedApplication(null)}
-              aria-label="Close application details"
-            >
-              <X size={18} />
-            </button>
-            <div className="person-dialog-avatar" style={{ overflow: 'hidden', padding: 0 }}>
-              <CustomerDirectoryAvatar
-                customerId={selectedApplication.id}
-                name={selectedApplication.customerName}
-                style={{ width: '100%', height: '100%', borderRadius: 'inherit' }}
-              />
+            <div className="exec-record-header">
+              <div className="exec-header-identity">
+                <CustomerDirectoryAvatar
+                  customerId={selectedApplication.id}
+                  name={selectedApplication.customerName}
+                  className="exec-header-avatar"
+                  style={{ width: '44px', height: '44px', borderRadius: '50%' }}
+                />
+                <div className="exec-header-text">
+                  <h2 className="exec-header-name">{selectedApplication.customerName}</h2>
+                  <div className="exec-header-meta">
+                    <span className="exec-header-role">Customer</span>
+                    <span className="exec-header-dot">•</span>
+                    <span className="exec-header-code">
+                      {selectedApplication.customerCode || `APP #${selectedApplication.id}`}
+                    </span>
+                    <span className="exec-header-status-badge active">
+                      {selectedApplication.status}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="exec-dialog-close"
+                onClick={() => setSelectedApplication(null)}
+                aria-label="Close customer details"
+              >
+                <X size={18} />
+              </button>
             </div>
-            <span className="eyebrow">
-              {selectedApplication.customerCode
-                ? `Customer ${selectedApplication.customerCode} (App #${selectedApplication.id})`
-                : `Application #${selectedApplication.id}`}
-            </span>
-            <h2>{selectedApplication.customerName}</h2>
-            <span className={`status ${selectedApplication.status.toLowerCase().replace(/\s+/g, '-')}`}>
-              {selectedApplication.status}
-            </span>
-            <dl className="person-detail-grid application-detail-grid">
-              <div>
-                <dt>Mobile</dt>
-                <dd>{selectedApplication.mobile}</dd>
+
+            <div className="exec-record-body">
+              <div className="exec-section">
+                <div className="exec-section-header">
+                  <Users size={15} className="exec-section-icon" />
+                  <h3 className="exec-section-title">Personal & Contact Information</h3>
+                </div>
+                <div className="exec-grid-4col">
+                  <div className="exec-field">
+                    <span className="exec-field-label">Full Name</span>
+                    <span className="exec-field-value">{selectedApplication.customerName}</span>
+                  </div>
+                  <div className="exec-field">
+                    <span className="exec-field-label">Mobile Number</span>
+                    <span className="exec-field-value">{selectedApplication.mobile || '—'}</span>
+                  </div>
+                  <div className="exec-field exec-field-span-2">
+                    <span className="exec-field-label">Email Address</span>
+                    <span className="exec-field-value">{selectedApplication.email || '—'}</span>
+                  </div>
+                  <div className="exec-field">
+                    <span className="exec-field-label">Employment Type</span>
+                    <span className="exec-field-value">{selectedApplication.employmentType || '—'}</span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <dt>Email</dt>
-                <dd>{selectedApplication.email}</dd>
+
+              <div className="exec-section">
+                <div className="exec-section-header">
+                  <BriefcaseBusiness size={15} className="exec-section-icon" />
+                  <h3 className="exec-section-title">Loan & Application Information</h3>
+                </div>
+                <div className="exec-grid-4col">
+                  <div className="exec-field exec-field-span-2">
+                    <span className="exec-field-label">Loan Product</span>
+                    <span className="exec-field-value">{selectedApplication.loanPurpose || '—'}</span>
+                  </div>
+                  <div className="exec-field">
+                    <span className="exec-field-label">Expected Amount</span>
+                    <span className="exec-field-value highlight">{formatAmount(selectedApplication.amount)}</span>
+                  </div>
+                  <div className="exec-field">
+                    <span className="exec-field-label">Application Status</span>
+                    <span className="exec-field-value">{selectedApplication.status || '—'}</span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <dt>Loan product</dt>
-                <dd>{selectedApplication.loanPurpose}</dd>
+
+              <div className="exec-section">
+                <div className="exec-section-header">
+                  <Building2 size={15} className="exec-section-icon" />
+                  <h3 className="exec-section-title">Assignment & Organization</h3>
+                </div>
+                <div className="exec-grid-4col">
+                  <div className="exec-field">
+                    <span className="exec-field-label">Branch</span>
+                    <span className="exec-field-value">{selectedApplication.branch || '—'}</span>
+                  </div>
+                  <div className="exec-field">
+                    <span className="exec-field-label">Field Agent</span>
+                    <span className="exec-field-value">{selectedApplication.agentName || '—'}</span>
+                  </div>
+                  <div className="exec-field">
+                    <span className="exec-field-label">Agent Mobile</span>
+                    <span className="exec-field-value">{selectedApplication.agentPhone || '—'}</span>
+                  </div>
+                  <div className="exec-field">
+                    <span className="exec-field-label">Relationship Manager</span>
+                    <span className="exec-field-value">{selectedApplication.rmName || '—'}</span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <dt>Expected amount</dt>
-                <dd>{formatAmount(selectedApplication.amount)}</dd>
+
+              <div className="exec-section">
+                <div className="exec-section-header">
+                  <FileText size={15} className="exec-section-icon" />
+                  <h3 className="exec-section-title">Agent Uploaded Documents</h3>
+                </div>
+                {customerDocumentsLoading ? (
+                  <div className="exec-record-loading">Loading uploaded documents…</div>
+                ) : customerDocumentsError ? (
+                  <div className="exec-doc-unavailable">{customerDocumentsError}</div>
+                ) : customerDocuments.length === 0 ? (
+                  <div className="exec-doc-unavailable">No documents uploaded by the agent.</div>
+                ) : (
+                  <div className="exec-docs-grid-3col">
+                    {customerDocuments.map((document, index) => {
+                      const documentId = document?.agentCustomerDocumentId ?? document?.AgentCustomerDocumentId ?? document?.id ?? document?.Id ?? index;
+                      const title = document?.documentTypeName || document?.customerDocumentTypeName || document?.documentName || document?.fileName || 'Customer Document';
+                      const fileName = document?.fileName || document?.documentName || 'Uploaded document';
+                      return (
+                        <div className="exec-doc-card" key={`${documentId}-${index}`}>
+                          <div className="exec-doc-card-info">
+                            <FileText size={17} className="exec-doc-icon" />
+                            <div className="exec-doc-text">
+                              <strong className="exec-doc-title">{title}</strong>
+                              <span className="exec-doc-subtext" title={fileName}>Uploaded by Agent</span>
+                            </div>
+                          </div>
+                          {documentId !== index ? (
+                            <button
+                              type="button"
+                              className="exec-doc-view-btn"
+                              onClick={() => handlePreviewAgentDocument(document)}
+                            >
+                              <Eye size={13} /> View
+                            </button>
+                          ) : (
+                            <span className="exec-doc-unavailable">Unavailable</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-              <div>
-                <dt>Employment type</dt>
-                <dd>{selectedApplication.employmentType}</dd>
+
+              <div className="exec-section exec-section-compact">
+                <div className="exec-section-header">
+                  <FileText size={15} className="exec-section-icon" />
+                  <h3 className="exec-section-title">Application Timeline & Remarks</h3>
+                </div>
+                <div className="exec-grid-4col">
+                  <div className="exec-field exec-field-span-2">
+                    <span className="exec-field-label">Submitted (IST)</span>
+                    <span className="exec-field-value">{formatDateTime(selectedApplication.createdAt)}</span>
+                  </div>
+                  <div className="exec-field exec-field-span-2">
+                    <span className="exec-field-label">Last Updated (IST)</span>
+                    <span className="exec-field-value">{formatDateTime(selectedApplication.updatedAt)}</span>
+                  </div>
+                  <div className="exec-field exec-field-full">
+                    <span className="exec-field-label">Remarks</span>
+                    <span className="exec-field-value">{selectedApplication.remarks || '—'}</span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <dt>Branch</dt>
-                <dd>{selectedApplication.branch}</dd>
-              </div>
-              <div>
-                <dt>Field agent</dt>
-                <dd>
-                  {selectedApplication.agentName}
-                  <small>{selectedApplication.agentPhone}</small>
-                </dd>
-              </div>
-              <div>
-                <dt>Relationship manager</dt>
-                <dd>{selectedApplication.rmName}</dd>
-              </div>
-              <div>
-                <dt>Submitted (IST)</dt>
-                <dd>{formatDateTime(selectedApplication.createdAt)}</dd>
-              </div>
-              <div>
-                <dt>Last updated (IST)</dt>
-                <dd>{formatDateTime(selectedApplication.updatedAt)}</dd>
-              </div>
-              <div className="full-width">
-                <dt>Remarks</dt>
-                <dd>{selectedApplication.remarks}</dd>
-              </div>
-            </dl>
-            <div className="person-dialog-actions">
-              <button className="masters-btn-secondary" onClick={() => setSelectedApplication(null)}>
+            </div>
+
+            <div className="exec-record-footer">
+              <button className="exec-footer-close-btn" onClick={() => setSelectedApplication(null)}>
                 Close
               </button>
               {isCustomerEditable(selectedApplication) && (
                 <button
                   type="button"
-                  className="masters-btn-primary"
+                  className="exec-doc-view-btn"
                   onClick={() => {
                     const id = selectedApplication.id;
                     setSelectedApplication(null);

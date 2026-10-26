@@ -5946,6 +5946,62 @@ export default function CustomerVerification({
   const [workflowHistory, setWorkflowHistory] = useState([]);
   const [isFetchingWorkflowHistory, setIsFetchingWorkflowHistory] = useState(false);
   const [workflowHistoryError, setWorkflowHistoryError] = useState(null);
+  const [workflowActorDirectory, setWorkflowActorDirectory] = useState({});
+
+  useEffect(() => {
+    const actors = workflowHistory
+      .map((item) => ({
+        role: String(item.performedByRole || item.PerformedByRole || 'BackOffice'),
+        id: item.performedByUserId || item.PerformedByUserId,
+      }))
+      .filter((actor) => actor.id !== undefined && actor.id !== null && actor.id !== '')
+      .filter((actor, index, list) => list.findIndex((candidate) =>
+        String(candidate.id) === String(actor.id) && candidate.role.toLowerCase() === actor.role.toLowerCase()
+      ) === index);
+
+    if (!actors.length) {
+      setWorkflowActorDirectory({});
+      return undefined;
+    }
+
+    let active = true;
+    const creditManagerActors = actors.filter((actor) => actor.role.toLowerCase().includes('credit'));
+    const backOfficeActors = actors.filter((actor) => !actor.role.toLowerCase().includes('credit'));
+
+    Promise.allSettled([
+      creditManagerActors.length ? backOfficeService.getCreditManagers() : Promise.resolve([]),
+      ...backOfficeActors.map((actor) => backOfficeService.getBackOfficeProfile(actor.id)),
+    ]).then((results) => {
+      if (!active) return;
+      const directory = {};
+      let resultIndex = 0;
+      const creditManagersResult = creditManagerActors.length ? results[resultIndex++] : null;
+      const creditManagers = creditManagersResult?.status === 'fulfilled'
+        ? (Array.isArray(creditManagersResult.value)
+          ? creditManagersResult.value
+          : creditManagersResult.value?.value || creditManagersResult.value?.data || creditManagersResult.value?.items || [])
+        : [];
+
+      creditManagerActors.forEach((actor) => {
+        const record = creditManagers.find((candidate) => String(
+          candidate.creditManagerId ?? candidate.CreditManagerId ?? candidate.id ?? candidate.Id
+        ) === String(actor.id));
+        if (record) directory[`credit:${actor.id}`] = record;
+      });
+
+      backOfficeActors.forEach((actor) => {
+        const result = results[resultIndex++];
+        if (result?.status === 'fulfilled' && result.value) {
+          directory[`backoffice:${actor.id}`] = result.value;
+        }
+      });
+      setWorkflowActorDirectory(directory);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [workflowHistory]);
   const [workflowActionFeedback, setWorkflowActionFeedback] = useState(null);
   const [step13Readiness, setStep13Readiness] = useState({
     ...EMPTY_READINESS,
@@ -19862,6 +19918,19 @@ export default function CustomerVerification({
                       const isResubmit = actionType.includes('resubmit') || item.nextStatus === 2;
                       const role = item.performedByRole || item.PerformedByRole || 'BackOffice';
                       const actorId = item.performedByUserId || item.PerformedByUserId || item.performedByName || 'Operator';
+                      const actorRoleKey = String(role).toLowerCase().includes('credit') ? 'credit' : 'backoffice';
+                      const actorRecord = workflowActorDirectory[`${actorRoleKey}:${actorId}`] || {};
+                      const actorName = item.performedByName || item.PerformedByName ||
+                        actorRecord.name || actorRecord.Name || actorRecord.fullName || actorRecord.FullName ||
+                        actorRecord.displayName || actorRecord.DisplayName ||
+                        actorRecord.backOfficeName || actorRecord.BackOfficeName ||
+                        actorRecord.creditManagerName || actorRecord.CreditManagerName;
+                      const actorCode = item.performedByCode || item.PerformedByCode ||
+                        actorRecord.code || actorRecord.Code || actorRecord.employeeCode || actorRecord.EmployeeCode ||
+                        actorRecord.creditManagerCode || actorRecord.CreditManagerCode || actorRecord.backOfficeCode || actorRecord.BackOfficeCode;
+                      const actorLabel = actorName && actorCode
+                        ? `${actorName} (${actorCode})`
+                        : actorName || actorCode || `ID: ${actorId}`;
                       const remarks = item.remarks || item.Remarks || '—';
                       const createdDate = item.createdDate || item.CreatedDate || item.createdAt || item.CreatedAt;
 
@@ -19893,7 +19962,7 @@ export default function CustomerVerification({
                                   (isReturn ? '↩ Returned to RM (2 → 6)' : isCredit ? '✓ Sent to Credit Manager (2 → 3)' : isResubmit ? '⚡ Resubmitted to BO (6 → 2)' : (item.actionType || 'Workflow Action'))}
                               </span>
                               <span className="bo-cv-audit-actor">
-                                by <strong>{role}</strong> (ID: {actorId})
+                                by <strong>{role}</strong>: {actorLabel}
                               </span>
                             </div>
                             <span className="bo-cv-audit-time">
