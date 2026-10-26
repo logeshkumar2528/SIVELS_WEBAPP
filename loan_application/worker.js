@@ -9,6 +9,7 @@ const routes = [
   { prefix: "/emi-history", file: "/Business_Modules/customer_module/index.html" },
   { prefix: "/profile", file: "/Business_Modules/customer_module/index.html" },
   { prefix: "/credit", file: "/Business_Modules/credit_manager/index.html" },
+  { prefix: "/aadhaar-wallet", file: "/Business_Modules/aadhaar_api_wallet/index.html" },
   { prefix: "/company", file: "/Business_Modules/company details/index.html" },
   { prefix: "/master", file: "/Master_Module/index.html" },
   { prefix: "/Master_Module", file: "/Master_Module/index.html" },
