@@ -69,6 +69,10 @@ function isObsoleteRmName(val) {
   );
 }
 
+function isFallbackProductName(value) {
+  return !value || isNumericId(value) || isObsoleteMock(value) || String(value).trim().toLowerCase() === 'personal loan';
+}
+
 async function fetchLiveRMNameFromApi() {
   const currentRmObj = getLoggedInRMFromStorage();
   const fallbackName = currentRmObj.fullName || currentRmObj.name || '';
@@ -282,8 +286,28 @@ export default function Declaration() {
           customerRecord = Array.isArray(custData) ? custData[0] : (custData?.value ? custData.value[0] : custData);
         }
 
+        // Application Details stores the selected product as LoanProductId /
+        // appData.loanProduct. Resolve that ID through the product master so
+        // Declaration never falls back to a hardcoded product name when the
+        // application already has a selected product.
+        let productMasterName = '';
+        const productResponse = await apiFetch(`${API_BASE}/LoanProductMaster`);
+        if (productResponse.ok) {
+          const productData = await productResponse.json();
+          const productRows = Array.isArray(productData)
+            ? productData
+            : (productData?.value || productData?.data || productData?.items || []);
+          const selectedProductId = appData?.loanProduct ?? appData?.LoanProductId;
+          const selectedProduct = productRows.find((product) => {
+            const productId = product.loanProductId ?? product.LoanProductId ?? product.id ?? product.Id;
+            return selectedProductId !== undefined && selectedProductId !== null && String(productId) === String(selectedProductId);
+          });
+          productMasterName = selectedProduct?.productName ?? selectedProduct?.ProductName ?? selectedProduct?.loanProductName ?? selectedProduct?.LoanProductName ?? '';
+        }
+
         const custName = customerRecord?.fullName || customerRecord?.customerName || appData?.customerName || '';
         const prodName =
+          (!isNumericId(productMasterName) ? productMasterName : '') ||
           (!isNumericId(customerRecord?.loanPurposeName) ? customerRecord?.loanPurposeName : '') ||
           (!isNumericId(customerRecord?.loanProductName) ? customerRecord?.loanProductName : '') ||
           (!isNumericId(customerRecord?.loanType) ? customerRecord?.loanType : '') ||
@@ -311,7 +335,7 @@ export default function Declaration() {
           // Update form state with live API values
           const shouldOverwriteAck = isObsoleteMock(form.ackApplicantName) || !form.ackApplicantName || form.ackApplicantName === 'Muthu A';
           const shouldOverwriteRm = isObsoleteRmName(form.ackReceivedBy) || !form.ackReceivedBy;
-          const shouldOverwriteProduct = !form.ackProduct || isNumericId(form.ackProduct) || isObsoleteMock(form.ackProduct);
+          const shouldOverwriteProduct = isFallbackProductName(form.ackProduct);
 
           const next = {
             ...form,
@@ -338,7 +362,7 @@ export default function Declaration() {
     return () => {
       active = false;
     };
-  }, [appId, isViewMode]);
+  }, [appId, isViewMode, appData?.loanProduct, appData?.LoanProductId]);
 
   const persist = (nextForm) => {
     setForm(nextForm);

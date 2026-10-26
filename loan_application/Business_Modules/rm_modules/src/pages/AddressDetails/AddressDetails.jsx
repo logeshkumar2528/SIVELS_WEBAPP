@@ -595,6 +595,13 @@ export default function AddressDetails() {
           mailingAsCurrent: person.mailingSameAsCurrent === 'Yes',
         };
 
+        // The update API requires the address record ID in both the URL and
+        // payload. Keep this out of POST requests, but include it for PUT so
+        // the backend can validate that both IDs refer to the same record.
+        if (isUpdate) {
+          payload.ApplicationAddressDetailsId = validAddressId;
+        }
+
         console.log(`Saving Address [${isUpdate ? 'PUT' : 'POST'}]:`, payload);
 
         const response = await apiFetch(url, {

@@ -3809,7 +3809,7 @@ export default function PdfView() {
               })}
 
             <div>
-              <div style={{ fontWeight: '700', marginBottom: '4px', fontSize: '11px' }}>Received By (RM Sign):</div>
+              <div style={{ fontWeight: '700', marginBottom: '4px', fontSize: '11px' }}>Received by RM</div>
               <div style={{ fontSize: '13px', color: '#0F7A4C', fontWeight: '700' }}>
                 {resolvedRMSignature}
               </div>
