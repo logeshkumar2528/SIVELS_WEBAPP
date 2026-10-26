@@ -1504,13 +1504,45 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
 
         setRecords(liveAgents);
       } else if (roleKey === 'rm') {
-        const [rmResult, agentResult] = await Promise.allSettled([
+        const [rmResult, agentResult, appResult] = await Promise.allSettled([
           getAllRelationshipManagers(),
           getAllAgents(),
+          agentCustomerService.getAllCustomers(),
         ]);
 
         const rmRows = rmResult.status === 'fulfilled' ? unwrap(rmResult.value) : [];
         const agentRows = agentResult.status === 'fulfilled' ? unwrap(agentResult.value) : [];
+        const isCustomerApiSuccess = appResult.status === 'fulfilled';
+        const customerRows = isCustomerApiSuccess ? unwrap(appResult.value) : [];
+
+        const directCustomersByRm = new Map();
+        const seenCustomerIdsByRm = new Map();
+        if (isCustomerApiSuccess) {
+          customerRows.forEach((customer) => {
+            const rawRole = String(read(customer, ['createdByRole', 'CreatedByRole']) || '').trim().toLowerCase();
+            if (rawRole !== 'rm') return;
+
+            const rawAgentId = read(customer, ['agentId', 'AgentId']);
+            if (rawAgentId !== null && rawAgentId !== undefined && String(rawAgentId).trim() !== '' && Number(rawAgentId) !== 0) {
+              return;
+            }
+
+            const rawRmId = read(customer, ['rmId', 'RMId']);
+            const targetRmId = Number(rawRmId);
+            if (!Number.isFinite(targetRmId) || targetRmId <= 0) return;
+
+            const custKey = String(read(customer, ['agentCustomerId', 'AgentCustomerId', 'id', 'Id']) || '');
+            if (!custKey) return;
+
+            const rmKey = String(targetRmId);
+            if (!seenCustomerIdsByRm.has(rmKey)) seenCustomerIdsByRm.set(rmKey, new Set());
+            if (seenCustomerIdsByRm.get(rmKey).has(custKey)) return;
+            seenCustomerIdsByRm.get(rmKey).add(custKey);
+
+            if (!directCustomersByRm.has(rmKey)) directCustomersByRm.set(rmKey, []);
+            directCustomersByRm.get(rmKey).push(customer);
+          });
+        }
 
         const liveRms = rmRows
           .map((rm) => {
@@ -1546,6 +1578,29 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               };
             });
 
+            const rawDirectCusts = directCustomersByRm.get(String(id)) || [];
+            const sortedDirectCusts = [...rawDirectCusts].sort((a, b) => {
+              const idA = Number(read(a, ['agentCustomerId', 'AgentCustomerId', 'id', 'Id']) || 0);
+              const idB = Number(read(b, ['agentCustomerId', 'AgentCustomerId', 'id', 'Id']) || 0);
+              if (idA && idB && idA !== idB) return idA - idB;
+              const nameA = String(read(a, ['fullName', 'FullName', 'customerName', 'name', 'Name']) || '');
+              const nameB = String(read(b, ['fullName', 'FullName', 'customerName', 'name', 'Name']) || '');
+              return nameA.localeCompare(nameB);
+            });
+            const directCustomersList = sortedDirectCusts.map((cust, index) => {
+              const custName = read(cust, ['fullName', 'FullName', 'customerName', 'name', 'Name'], 'Unknown Customer');
+              const rawCustCode = read(cust, ['customerCode', 'CustomerCode', 'appId', 'AppId']);
+              const codeVal = (rawCustCode && String(rawCustCode).trim() && String(rawCustCode).trim() !== 'null' && String(rawCustCode).trim() !== 'undefined')
+                ? String(rawCustCode).trim()
+                : '—';
+              return {
+                sNo: index + 1,
+                id: read(cust, ['agentCustomerId', 'AgentCustomerId', 'id', 'Id']),
+                name: custName,
+                code: codeVal,
+              };
+            });
+
             return {
               id,
               rmId: id,
@@ -1557,6 +1612,9 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               status: status(read(rm, ['status', 'Status', 'isActive', 'IsActive'])),
               agents: assignedAgentsList.length,
               assignedAgentsList,
+              directCustomersLoadingError: !isCustomerApiSuccess,
+              directCustomersCount: isCustomerApiSuccess ? directCustomersList.length : null,
+              directCustomersList,
               aadhaarDocumentPath: getAadhaarPath(rm),
               panCardPath: getPanPath(rm),
               profileImagePath: getProfilePath(rm),
@@ -2400,13 +2458,14 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                   <th>Contact</th>
                   <th>Branch</th>
                   <th>Assigned Agents</th>
+                  <th>RM Direct Customers</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td className="empty-table" colSpan="6">Loading live manager data…</td></tr>
+                  <tr><td className="empty-table" colSpan="7">Loading live manager data…</td></tr>
                 ) : visibleRecords.length ? (
                   visibleRecords.map((rm) => (
                     <tr key={rm.id || rm.name}>
@@ -2444,6 +2503,36 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                         </div>
                       </td>
                       <td>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', whiteSpace: 'nowrap' }}>
+                          {rm.directCustomersLoadingError ? (
+                            <span style={{ fontSize: '12px', color: '#94A3B8' }}>Unavailable</span>
+                          ) : (
+                            <>
+                              <span style={{ fontSize: '13px', color: '#374151', display: 'inline-flex', alignItems: 'baseline', gap: '4px' }}>
+                                <strong style={{ color: '#111827' }}>{rm.directCustomersCount ?? 0}</strong>
+                                <span style={{ color: '#6B7280', fontSize: '12px' }}>
+                                  {rm.directCustomersCount === 1 ? 'customer' : 'customers'}
+                                </span>
+                              </span>
+                              {Number(rm.directCustomersCount || 0) > 0 && (
+                                <button
+                                  type='button'
+                                  className='details-button'
+                                  style={{ padding: '3px 8px', fontSize: '12px', height: 'auto', lineHeight: '1.2' }}
+                                  onClick={() => setSublistModal({
+                                    title: `RM Direct Customers — ${rm.name}`,
+                                    type: 'customers',
+                                    records: rm.directCustomersList || []
+                                  })}
+                                >
+                                  View Customers
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                      <td>
                         <span className={`status ${String(rm.status || 'active').toLowerCase().replace(/\s+/g, '-')}`}>
                           {rm.status || 'Active'}
                         </span>
@@ -2470,7 +2559,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                   ))
                 ) : (
                   <tr>
-                    <td className="empty-table" colSpan="6">
+                    <td className="empty-table" colSpan="7">
                       {searchQuery ? 'No matching relationship managers found.' : meta.emptyText}
                     </td>
                   </tr>
