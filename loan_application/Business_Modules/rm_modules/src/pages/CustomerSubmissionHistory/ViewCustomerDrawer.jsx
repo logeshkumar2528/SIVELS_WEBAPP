@@ -50,7 +50,7 @@ export default function ViewCustomerDrawer({
     };
   }, []);
 
-  const { loanPurposes = [], employmentTypes = [], documentTypes = [] } = masterData;
+  const { loanPurposes = [], loanProducts = [], employmentTypes = [], documentTypes = [] } = masterData;
 
   const rmContext = getCurrentRMContext();
   const currentRmId = rmContext.rmId ? Number(rmContext.rmId) : null;
@@ -206,9 +206,24 @@ export default function ViewCustomerDrawer({
   if (!customer) return null;
 
   const customerName = customer.fullName || 'Unknown Customer';
+  const rawCustomerCode =
+    customer.customerCode ||
+    customer.CustomerCode ||
+    '';
+  const displayCustomerCode =
+    rawCustomerCode && String(rawCustomerCode).trim() !== ''
+      ? String(rawCustomerCode).trim()
+      : '—';
   const initial = customerName.charAt(0).toUpperCase();
   const mobile = customer.mobileNumber || 'N/A';
-  const email = customer.email || 'N/A';
+  const email =
+    customer.email ||
+    customer.Email ||
+    customer.emailAddress ||
+    customer.EmailAddress ||
+    customer.emailId ||
+    customer.EmailId ||
+    'N/A';
 
   const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -229,9 +244,19 @@ export default function ViewCustomerDrawer({
 
   // Resolve Names
   let loanPurposeName = customer.loanPurposeName;
-  if (!loanPurposeName && customer.loanPurposeId) {
-    const p = loanPurposes.find((x) => Number(x.loanPurposeId || x.id) === Number(customer.loanPurposeId));
-    if (p) loanPurposeName = p.productName || p.purposeName || p.name;
+  if (!loanPurposeName || loanPurposeName === 'N/A') {
+    const rawProdId = customer.loanProductId ?? customer.LoanProductId;
+    const rawPurpId = customer.loanPurposeId ?? customer.LoanPurposeId;
+
+    if (rawProdId !== null && rawProdId !== undefined && rawProdId !== '') {
+      const prod = loanProducts.find((x) => Number(x.loanProductId || x.id) === Number(rawProdId));
+      if (prod) loanPurposeName = prod.productName || prod.name;
+    }
+
+    if ((!loanPurposeName || loanPurposeName === 'N/A') && rawPurpId !== null && rawPurpId !== undefined && rawPurpId !== '') {
+      const p = loanPurposes.find((x) => Number(x.loanPurposeId || x.id) === Number(rawPurpId));
+      if (p) loanPurposeName = p.productName || p.purposeName || p.name;
+    }
   }
 
   let employmentTypeName = customer.employmentTypeName;
@@ -349,7 +374,7 @@ export default function ViewCustomerDrawer({
               </div>
               <div className="drawer-title-text">
                 <h2>{customerName}</h2>
-                <span>ID: {rmCustomerId}</span>
+                <span>Customer Code: {displayCustomerCode}</span>
               </div>
             </div>
             <button

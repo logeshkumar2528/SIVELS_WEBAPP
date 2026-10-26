@@ -48,6 +48,7 @@ export default function CustomerSubmissionHistory() {
   // Master Data State
   const [masterData, setMasterData] = useState({
     loanPurposes: [],
+    loanProducts: [],
     employmentTypes: [],
     documentTypes: [],
     sourcingChannels: [],
@@ -102,6 +103,7 @@ export default function CustomerSubmissionHistory() {
       const [
         customersRes,
         purpRes,
+        productsRes,
         empRes,
         docTypesRes,
         sourcingRes,
@@ -112,6 +114,7 @@ export default function CustomerSubmissionHistory() {
       ] = await Promise.all([
         rmCustomerService.getAllCustomers().catch(() => []),
         masterService.getLoanPurposes().catch(() => []),
+        masterService.getLoanProducts().catch(() => []),
         masterService.getEmploymentTypes().catch(() => []),
         masterService.getDocumentTypes().catch(() => []),
         axiosInstance.get('/SourcingChannelMaster').then((r) => r.data).catch(() => []),
@@ -123,6 +126,7 @@ export default function CustomerSubmissionHistory() {
 
       const allCustomers = extractArray(customersRes);
       const loanPurposes = extractArray(purpRes);
+      const loanProducts = extractArray(productsRes);
       const employmentTypes = extractArray(empRes);
       const documentTypes = extractArray(docTypesRes);
       const sourcingChannels = extractArray(sourcingRes);
@@ -133,6 +137,7 @@ export default function CustomerSubmissionHistory() {
 
       setMasterData({
         loanPurposes,
+        loanProducts,
         employmentTypes,
         documentTypes,
         sourcingChannels,
@@ -198,13 +203,37 @@ export default function CustomerSubmissionHistory() {
 
       setSubmissions(
         myCustomers.map((customer) => {
-          const lp = loanPurposes.find((p) => Number(p.loanPurposeId || p.id) === Number(customer.loanPurposeId));
+          const rawProductId = customer.loanProductId ?? customer.LoanProductId ?? null;
+          const rawPurposeId = customer.loanPurposeId ?? customer.LoanPurposeId ?? null;
+
+          const matchedProduct =
+            rawProductId !== null && rawProductId !== undefined && rawProductId !== ''
+              ? loanProducts.find((p) => Number(p.loanProductId || p.id) === Number(rawProductId))
+              : null;
+
+          const matchedPurpose =
+            rawPurposeId !== null && rawPurposeId !== undefined && rawPurposeId !== ''
+              ? loanPurposes.find((p) => Number(p.loanPurposeId || p.id) === Number(rawPurposeId))
+              : null;
+
+          const resolvedLoanName =
+            customer.loanProductName ||
+            customer.LoanProductName ||
+            matchedProduct?.productName ||
+            matchedProduct?.name ||
+            customer.loanPurposeName ||
+            customer.LoanPurposeName ||
+            matchedPurpose?.purposeName ||
+            matchedPurpose?.productName ||
+            matchedPurpose?.name ||
+            'N/A';
+
           const et = employmentTypes.find((e) => Number(e.employmentTypeId || e.id) === Number(customer.employmentTypeId));
 
           return {
             ...customer,
             rmCustomerId: customer.rmCustomerId || customer.rMCustomerId || customer.id,
-            loanPurposeName: customer.loanPurposeName || lp?.productName || lp?.purposeName || lp?.name || 'N/A',
+            loanPurposeName: resolvedLoanName,
             employmentTypeName: customer.employmentTypeName || et?.employmentTypeName || et?.name || 'N/A',
             status: normalizeApplicationStatus(customer.status ?? customer.Status, customer.statusName ?? customer.StatusName),
           };
