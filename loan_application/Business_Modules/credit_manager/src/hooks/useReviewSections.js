@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CREDIT_REVIEW_SECTIONS,
+  getApplicableCreditSections,
   resolveReviewSectionId,
 } from '../../../back_office/src/back-office/pages/CustomerVerification/CustomerVerification';
 import {
@@ -71,7 +72,7 @@ function clearLegacyStorage(customerId) {
   }
 }
 
-export function useReviewSections(customerId) {
+export function useReviewSections(customerId, isUnsecured = false) {
   // sectionId -> { isApproved, flags }
   const [sections, setSections] = useState({});
   const [loading, setLoading] = useState(false);
@@ -229,7 +230,12 @@ export function useReviewSections(customerId) {
     [save]
   );
 
-  const approvedCount = CREDIT_REVIEW_SECTIONS.filter((s) => getStatus(s.id) === 'APPROVED').length;
+  const applicableSections = useMemo(
+    () => getApplicableCreditSections(Boolean(isUnsecured)),
+    [isUnsecured]
+  );
+
+  const approvedCount = applicableSections.filter((s) => getStatus(s.id) === 'APPROVED').length;
 
   return {
     flags,
@@ -240,8 +246,9 @@ export function useReviewSections(customerId) {
     unapprove,
     clearSectionFlags,
     reload,
+    applicableSections,
     approvedCount,
-    totalSections: CREDIT_REVIEW_SECTIONS.length,
+    totalSections: applicableSections.length,
     loading,
     error,
   };

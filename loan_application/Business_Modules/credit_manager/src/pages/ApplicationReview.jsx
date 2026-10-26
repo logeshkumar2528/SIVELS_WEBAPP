@@ -132,6 +132,7 @@ function PendingFlagsCard({ flags, onRemove, onReturn, canReturn }) {
 }
 
 function SectionChecklistCard({ review, onOpenSection }) {
+  const sections = review.applicableSections || CREDIT_REVIEW_SECTIONS;
   return (
     <div className="stc-submit-card">
       <div className="cm-issues-card-head">
@@ -141,7 +142,7 @@ function SectionChecklistCard({ review, onOpenSection }) {
         </span>
       </div>
       <ul className="cm-section-checklist">
-        {CREDIT_REVIEW_SECTIONS.map((section) => {
+        {sections.map((section) => {
           const status = review.getStatus(section.id);
           return (
             <li key={section.id}>
@@ -526,7 +527,19 @@ export default function ApplicationReview() {
   const [decisionLoading, setDecisionLoading] = useState(true);
   const [decisionError, setDecisionError] = useState('');
   const [identifierWarning, setIdentifierWarning] = useState('');
-  const review = useReviewSections(customerId);
+  const [loanClassification, setLoanClassification] = useState(null);
+  const isUnsecured =
+    loanClassification?.status === 'RESOLVED' && loanClassification?.typeCode === 'UNSEC';
+
+  const handleClassificationChange = useCallback((classification) => {
+    setLoanClassification(classification);
+  }, []);
+
+  useEffect(() => {
+    setLoanClassification(null);
+  }, [customerId]);
+
+  const review = useReviewSections(customerId, isUnsecured);
   const { flags: pendingFlags, setFlags: setPendingFlags, addFlag } = review;
 
   const { verificationData } = useVerificationWorkspace(customerId);
@@ -756,6 +769,7 @@ export default function ApplicationReview() {
         onCreditManagerFlag={handleSectionFlag}
         sectionReview={sectionReview}
         creditReturn={creditReturn}
+        onClassificationChange={handleClassificationChange}
         finalActionsSlot={
           <CreditDecisionPanel
             isPending={isPending}
