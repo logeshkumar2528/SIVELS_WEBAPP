@@ -159,7 +159,15 @@ export const getRejectedDocumentLabel = (rejection) => {
 const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejections = [], matchedProduct = null) => {
   const applicationId = item.applicationId || item.applicationNumber || item.agentCustomerId || item.customerId || `${index + 1}`;
   const ownership = resolveApplicationOwnership(item, agentsById, rmsById);
+  const rawStatusNum = Number(item.status ?? item.Status);
   let normalizedStatus = normalizeApplicationStatus(item.status, item.statusName || item.StatusName);
+  if (Number.isFinite(rawStatusNum)) {
+    if (rawStatusNum === 2) normalizedStatus = 'Logged to HO';
+    else if (rawStatusNum === 3) normalizedStatus = 'Under Review';
+    else if (rawStatusNum === 4) normalizedStatus = 'Approved';
+    else if (rawStatusNum === 5) normalizedStatus = 'Rejected';
+    else if (rawStatusNum === 6) normalizedStatus = 'Returned';
+  }
 
   if (rejections && rejections.length > 0) {
     const hasActiveReturn = rejections.some((r) => r.status === 'ReturnedToRM');
@@ -302,11 +310,13 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
 };
 
 export default function NewApplications({ initialFilter = 'All' }) {
+  const isLoggedToHoRoute = initialFilter === 'Logged to HO';
+  const defaultFilter = isLoggedToHoRoute ? 'All' : initialFilter;
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-  const [statusFilter, setStatusFilter] = useState(initialFilter);
+  const [statusFilter, setStatusFilter] = useState(defaultFilter);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(7);
   const [applications, setApplications] = useState([]);
@@ -330,7 +340,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
   const FilterIcon = iconMap['Filter'];
 
   useEffect(() => {
-    setStatusFilter(initialFilter);
+    setStatusFilter(defaultFilter);
     setCurrentPage(1);
     setSearchTerm('');
     setFromDate('');
@@ -922,7 +932,14 @@ export default function NewApplications({ initialFilter = 'All' }) {
           app.id.toLowerCase().includes(searchLower) ||
           app.mobile.includes(searchTrimmed);
 
-        const matchesStatus = statusFilter === 'All' || app.status === statusFilter;
+        const appStatusCode = Number(app.rawStatusCode ?? app.rawStatus);
+        const isHoSubmitted = Number.isFinite(appStatusCode) && (appStatusCode === 2 || appStatusCode === 3 || appStatusCode === 4 || appStatusCode === 5 || appStatusCode === 6);
+        if (isLoggedToHoRoute && !isHoSubmitted) return false;
+
+        const matchesStatus =
+          statusFilter === 'All'
+            ? (isLoggedToHoRoute ? isHoSubmitted : true)
+            : app.status === statusFilter;
         return matchesSearch && matchesStatus;
       })
       .sort((a, b) => {
@@ -1010,7 +1027,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
         <div className="new-apps-status-cell">
           <StatusBadge
             status={row.status}
-            label={row.status === 'Logged to HO' ? 'Logged to HO' : undefined}
+            label={row.status}
           />
         </div>
       ),
@@ -1089,7 +1106,9 @@ export default function NewApplications({ initialFilter = 'All' }) {
           );
         }
 
-        if (row.status === 'Logged to HO' || row.rawStatus === 2 || row.rawStatus === '2') {
+        const rowStatusCode = Number(row.rawStatusCode ?? row.rawStatus);
+        const isCompletedHoStatus = isLoggedToHoRoute && (rowStatusCode === 3 || rowStatusCode === 4 || rowStatusCode === 5 || rowStatusCode === 6);
+        if (row.status === 'Logged to HO' || row.rawStatus === 2 || row.rawStatus === '2' || isCompletedHoStatus) {
           const canEdit = getCanEdit(row);
           return (
             <div className="new-apps-actions-cell" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -1246,19 +1265,30 @@ export default function NewApplications({ initialFilter = 'All' }) {
                   setStatusFilter(val);
                   setCurrentPage(1);
                 }}
-                options={[
-                  { value: 'All', label: 'All Statuses' },
-                  { value: 'New', label: 'New' },
-                  { value: 'Pending', label: 'RM Pending' },
-                  { value: 'Under Review', label: 'CM Pending' },
-                  { value: 'Logged to HO', label: 'Logged to HO' },
-                  { value: 'Returned', label: 'BO Returned' },
-                ]}
+                options={
+                  isLoggedToHoRoute
+                    ? [
+                        { value: 'All', label: 'All HO Submissions' },
+                        { value: 'Logged to HO', label: 'Logged to HO' },
+                        { value: 'Under Review', label: 'Under Review' },
+                        { value: 'Approved', label: 'Approved' },
+                        { value: 'Rejected', label: 'Rejected' },
+                        { value: 'Returned', label: 'Returned' },
+                      ]
+                    : [
+                        { value: 'All', label: 'All Statuses' },
+                        { value: 'New', label: 'New' },
+                        { value: 'Pending', label: 'RM Pending' },
+                        { value: 'Under Review', label: 'CM Pending' },
+                        { value: 'Logged to HO', label: 'Logged to HO' },
+                        { value: 'Returned', label: 'BO Returned' },
+                      ]
+                }
                 placeholder={null}
               />
             </div>
 
-            {(searchTerm || fromDate || toDate || statusFilter !== 'All') && (
+            {(searchTerm || fromDate || toDate || statusFilter !== defaultFilter) && (
               <button
                 type="button"
                 className="btn-reset-filter"
@@ -1266,7 +1296,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
                   setSearchTerm('');
                   setFromDate('');
                   setToDate('');
-                  setStatusFilter('All');
+                  setStatusFilter(defaultFilter);
                   setCurrentPage(1);
                 }}
               >
