@@ -238,6 +238,8 @@ export default function AddressDetails() {
   const { applications, getApplication, ensureApplication, saveApplication, loadApplicationFromBackend } = useApplicationDraftStore();
   const hydratedAt = applications?.[appId]?._hydratedAt || 0;
   const [form, setForm] = useState(() => buildAddressState(getApplication(appId)));
+  const formRef = useRef(form);
+  formRef.current = form;
   const [errors, setErrors] = useState({});
   const [errorPopup, setErrorPopup] = useState(null);
 
@@ -325,26 +327,80 @@ export default function AddressDetails() {
         const address = Array.isArray(data) ? data[0] : data;
         if (!active || !address) return;
         aadhaarPrefillLoadedRef.current = String(kycDocumentId);
-        setForm((prev) => {
-          const applicant = {
-            ...prev.applicant,
-            addressLine1: address.addressLine1 ?? address.AddressLine1 ?? prev.applicant.addressLine1,
-            addressLine2: address.addressLine2 ?? address.AddressLine2 ?? prev.applicant.addressLine2,
-            landmark: address.landmark ?? address.Landmark ?? prev.applicant.landmark,
-            pincode: address.pincode ?? address.Pincode ?? prev.applicant.pincode,
-            state: address.state ?? address.State ?? address.stateName ?? address.StateName ?? prev.applicant.state,
-            city: address.cityOrDistrict ?? address.CityOrDistrict ?? address.city ?? address.cityName ?? address.CityName ?? prev.applicant.city,
-            stateId: address.stateId ?? address.StateId ?? null,
-            cityId: address.cityId ?? address.CityId ?? null,
-          };
-          const next = { ...prev, applicant };
-          saveApplication(appId, buildSectionUpdate(appData, 'addressDetails', next));
-          return next;
-        });
+        const next = {
+          ...formRef.current,
+          applicant: {
+            ...formRef.current.applicant,
+            addressLine1: formRef.current.applicant.addressLine1 || address.addressLine1 || address.AddressLine1 || '',
+            addressLine2: formRef.current.applicant.addressLine2 || address.addressLine2 || address.AddressLine2 || '',
+            landmark: formRef.current.applicant.landmark || address.landmark || address.Landmark || '',
+            pincode: formRef.current.applicant.pincode || address.pincode || address.Pincode || '',
+            state: formRef.current.applicant.state || address.state || address.State || address.stateName || address.StateName || '',
+            city: formRef.current.applicant.city || address.cityOrDistrict || address.CityOrDistrict || address.city || address.cityName || address.CityName || '',
+            stateId: formRef.current.applicant.stateId || address.stateId || address.StateId || null,
+            cityId: formRef.current.applicant.cityId || address.cityId || address.CityId || null,
+          },
+        };
+        setForm(next);
+        saveApplication(appId, buildSectionUpdate(appData, 'addressDetails', next));
       } catch (error) {
         console.error('Unable to load Aadhaar address prefill:', error);
       }
     })();
+    return () => { active = false; };
+  }, [appData, appId, saveApplication, coApplicantKycIdsKey]);
+
+  // Load Aadhaar address data for each co-applicant using that person's KYC
+  // document ID.  The primary-applicant prefill above must not be reused for
+  // co-applicant address cards.
+  useEffect(() => {
+    const kycApplicants = appData?.sections?.kycDocuments?.coApplicants || appData?.kycDocuments?.coApplicants || [];
+    if (!Array.isArray(kycApplicants) || kycApplicants.length === 0) return undefined;
+
+    let active = true;
+    (async () => {
+      const prefills = await Promise.all(kycApplicants.map(async (kyc, index) => {
+        const kycDocumentId = kyc?.kycDocumentId || kyc?.applicationKYCDocumentId || kyc?.ApplicationKYCDocumentId;
+        if (!kycDocumentId || aadhaarPrefillLoadedRef.current === `co:${index}:${kycDocumentId}`) return null;
+        try {
+          const response = await rmCustomerService.getAadhaarAddressPrefill(kycDocumentId);
+          const data = response?.data?.data || response?.data?.value || response?.data || response?.value || response;
+          const address = Array.isArray(data) ? data[0] : data;
+          return address ? { index, kycDocumentId, address } : null;
+        } catch (error) {
+          console.error(`Unable to load Aadhaar address prefill for co-applicant ${index + 1}:`, error);
+          return null;
+        }
+      }));
+
+      if (!active) return;
+      const validPrefills = prefills.filter(Boolean);
+      if (validPrefills.length === 0) return;
+
+      const next = {
+        ...formRef.current,
+        coApplicants: formRef.current.coApplicants.map((coApplicant, index) => {
+          const match = validPrefills.find((item) => item.index === index);
+          if (!match) return coApplicant;
+          const address = match.address;
+          aadhaarPrefillLoadedRef.current = `co:${index}:${match.kycDocumentId}`;
+          return {
+            ...coApplicant,
+            addressLine1: coApplicant.addressLine1 || address.addressLine1 || address.AddressLine1 || '',
+            addressLine2: coApplicant.addressLine2 || address.addressLine2 || address.AddressLine2 || '',
+            landmark: coApplicant.landmark || address.landmark || address.Landmark || '',
+            pincode: coApplicant.pincode || address.pincode || address.Pincode || '',
+            state: coApplicant.state || address.state || address.State || address.stateName || address.StateName || '',
+            city: coApplicant.city || address.cityOrDistrict || address.CityOrDistrict || address.city || address.cityName || address.CityName || '',
+            stateId: coApplicant.stateId || address.stateId || address.StateId || null,
+            cityId: coApplicant.cityId || address.cityId || address.CityId || null,
+          };
+        }),
+      };
+      setForm(next);
+      saveApplication(appId, buildSectionUpdate(appData, 'addressDetails', next));
+    })();
+
     return () => { active = false; };
   }, [appData, appId, saveApplication, coApplicantKycIdsKey]);
 
