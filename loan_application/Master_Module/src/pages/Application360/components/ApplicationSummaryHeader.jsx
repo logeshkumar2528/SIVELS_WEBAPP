@@ -30,7 +30,12 @@ export function ApplicationSummaryHeader({
   if (!data) return null;
 
   const customer = data.customer || {};
-  const product = data.productDetails || (data.productDetailsList && data.productDetailsList[0]) || {};
+  const productDetails = data.productDetails || (data.productDetailsList && data.productDetailsList[0]) || {};
+  // ApplicationFullDetails wraps the actual product values in productDetails.product.
+  // Keep support for older flat responses as well.
+  const product = productDetails.product
+    ? { ...productDetails.product, ...productDetails }
+    : productDetails;
   const ownership = data.ownership || {};
   const agent = ownership.agent || {};
   const rm = ownership.rm || {};
@@ -84,9 +89,6 @@ export function ApplicationSummaryHeader({
           </div>
 
           <div className="app360-meta-pills">
-            <span className="app360-pill">
-              <strong>App ID:</strong> {mainAppId} {rawApplicationId && rawApplicationId !== mainAppId ? `(#${data.agentCustomerId || data.customer?.agentCustomerId})` : ''}
-            </span>
             <span className="app360-pill">
               <strong>PAN:</strong> {resolvedPan}
             </span>

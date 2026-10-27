@@ -500,6 +500,16 @@
   grid-column: span 2;
 }
 
+.app360-pd-conditions {
+  margin: 8px 0 0;
+  padding-left: 22px;
+  color: var(--app360-text, #1f2937);
+}
+
+.app360-pd-conditions li {
+  margin: 4px 0;
+}
+
 .app360-mt-2 { margin-top: 8px; }
 .app360-mt-4 { margin-top: 16px; }
 .app360-mb-4 { margin-bottom: 16px; }

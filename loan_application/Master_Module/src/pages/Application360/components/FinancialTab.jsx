@@ -13,7 +13,11 @@ export function FinancialTab({ data, masterLookups = {} }) {
   if (!data) return null;
 
   const employmentList = Array.isArray(data.employmentIncome) ? data.employmentIncome : [];
-  const bankList = Array.isArray(data.bankExistingLoans) ? data.bankExistingLoans : [];
+  const bankList = (Array.isArray(data.bankExistingLoans) ? data.bankExistingLoans : []).map((bankRecord) => (
+    bankRecord.bankLoan
+      ? { ...bankRecord.bankLoan, ...bankRecord }
+      : bankRecord
+  ));
   const collateralList = Array.isArray(data.collateral) ? data.collateral : [];
   const referenceList = Array.isArray(data.references) ? data.references : [];
 
@@ -96,8 +100,8 @@ export function FinancialTab({ data, masterLookups = {} }) {
                   </thead>
                   <tbody>
                     {bankList.map((bank, idx) => {
-                      const bankName = bank.bankId ? (masterLookups.banks?.[bank.bankId] || `Bank #${bank.bankId}`) : '—';
-                      const branchName = bank.bankBranchId ? (masterLookups.bankBranches?.[bank.bankBranchId] || `Branch #${bank.bankBranchId}`) : '—';
+                      const bankName = bank.bankName || (bank.bankId ? (masterLookups.banks?.[bank.bankId] || `Bank #${bank.bankId}`) : '—');
+                      const branchName = bank.bankBranchName || (bank.bankBranchId ? (masterLookups.bankBranches?.[bank.bankBranchId] || `Branch #${bank.bankBranchId}`) : '—');
 
                       return (
                         <tr key={bank.applicationBankExistingLoanDetailsId || bank.bankId || idx}>
@@ -138,7 +142,7 @@ export function FinancialTab({ data, masterLookups = {} }) {
                     : (col.propertyName || 'Property Asset');
                   const propertyUsageName = col.propertyUsageId 
                     ? (masterLookups.propertyUsages?.[col.propertyUsageId] || `Usage #${col.propertyUsageId}`) 
-                    : (col.propertyUsageName || '—');
+                    : (col.propertyUsageName || col.propertyUsage || '—');
 
                   return (
                     <div key={col.applicationCollateralDetailsId || col.collateralId || idx} className="app360-subcard">
@@ -149,7 +153,15 @@ export function FinancialTab({ data, masterLookups = {} }) {
                       <div className="app360-details-grid app360-mt-2">
                         <div className="app360-detail-item app360-col-span-2">
                           <span className="label">Location Address</span>
-                          <span className="value">{col.locationAddress || col.address || '—'}</span>
+                          <span className="value">{col.propertyAddress || col.locationAddress || col.address || '—'}</span>
+                        </div>
+                        <div className="app360-detail-item">
+                          <span className="label">Property Owner</span>
+                          <span className="value">{col.propertyOwner || col.ownerName || '—'}</span>
+                        </div>
+                        <div className="app360-detail-item">
+                          <span className="label">Mortgage Status</span>
+                          <span className="value">{col.mortgageStatusName || col.mortgageStatus || (col.mortgageStatusId ? `Status #${col.mortgageStatusId}` : '—')}</span>
                         </div>
                         <div className="app360-detail-item app360-col-span-2">
                           <span className="label">Estimated Market Value</span>

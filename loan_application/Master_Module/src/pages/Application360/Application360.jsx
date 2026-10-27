@@ -1,10 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
-  FileText, Users, ShieldCheck, DollarSign, Activity, Calculator,
+  Users, ShieldCheck, DollarSign, Activity, Calculator,
   Search, AlertCircle, RefreshCw, Layers
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { searchApplicationFullDetailsByPan } from '../../api/application360Api';
+import {
+  getApplicationFullDetailsByCustomerCode,
+  getApplicationAssetsByApplication,
+  getEligibilityAssessmentsByApplication,
+} from '../../api/application360Api';
 import { buildApplicationDisplayId } from '../../../../Business_Modules/rm_modules/src/pages/applicationWizard/flowUtils';
 
 // Master API imports for accurate label resolution
@@ -50,7 +54,7 @@ const TABS = [
 ];
 
 export function Application360() {
-  const [currentPan, setCurrentPan] = useState('');
+  const [currentCustomerCode, setCurrentCustomerCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [applicationData, setApplicationData] = useState(null);
@@ -238,7 +242,7 @@ export function Application360() {
 
     // 5. PAN Resolution Logic
     let resolvedPan = '—';
-    const cleanSearched = (currentPan || '').trim().toUpperCase();
+    const cleanSearched = (currentCustomerCode || '').trim().toUpperCase();
 
     const matchingKyc = kycList.find(k => k.panCardNo && k.panCardNo.trim().toUpperCase() === cleanSearched);
     const matchingPerson = personalList.find(p => (p.panNumber || p.panCardNo || '').trim().toUpperCase() === cleanSearched);
@@ -273,29 +277,68 @@ export function Application360() {
       displayApplicationId,
       rawApplicationId: rawAppId ? `APP-${rawAppId}` : '',
     };
-  }, [applicationData, currentPan]);
+  }, [applicationData, currentCustomerCode]);
 
-  const handleSearch = async (pan) => {
-    setCurrentPan(pan);
+  const handleSearch = async (customerCode) => {
+    setCurrentCustomerCode(customerCode);
     setIsLoading(true);
     setError('');
 
     try {
-      const data = await searchApplicationFullDetailsByPan(pan);
+      const data = await getApplicationFullDetailsByCustomerCode(customerCode);
       if (!data || (!data.customer && !data.agentCustomerId && !data.personalInformation)) {
         setApplicationData(null);
-        setError(`No active application found matching PAN "${pan}".`);
-        toast.error(`No application found for PAN ${pan}`);
+        setError(`No customer or application history found for customer code "${customerCode}".`);
+        toast.error(`No application found for ${customerCode}`);
       } else {
-        setApplicationData(data);
+        // Asset Base is exposed separately from ApplicationFullDetails.
+        // Merge those saved Back Office records into the existing collateral view.
+        let enrichedData = data;
+        const applicationProductDetailsId =
+          data.productDetails?.product?.applicationProductDetailsId ??
+          data.productDetails?.applicationProductDetailsId ??
+          data.productDetailsList?.[0]?.product?.applicationProductDetailsId ??
+          data.productDetailsList?.[0]?.applicationProductDetailsId;
+
+        if (applicationProductDetailsId) {
+          try {
+            const assetResponse = await getApplicationAssetsByApplication(applicationProductDetailsId);
+            const assets = Array.isArray(assetResponse)
+              ? assetResponse
+              : (assetResponse?.assets || assetResponse?.data || assetResponse?.value || []);
+            enrichedData = { ...data, collateral: Array.isArray(assets) ? assets : [] };
+          } catch (assetError) {
+            console.warn('Unable to load Application Asset Base records:', assetError);
+          }
+
+          try {
+            const assessmentResponse = await getEligibilityAssessmentsByApplication(applicationProductDetailsId);
+            const assessments = Array.isArray(assessmentResponse)
+              ? assessmentResponse
+              : (assessmentResponse?.assessments ||
+                assessmentResponse?.data ||
+                assessmentResponse?.value ||
+                assessmentResponse?.result ||
+                assessmentResponse?.items ||
+                assessmentResponse?.records ||
+                (assessmentResponse?.assessment ? [assessmentResponse] : []));
+            if (Array.isArray(assessments) && assessments.length > 0) {
+              enrichedData = { ...enrichedData, currentEligibilityAssessments: assessments };
+            }
+          } catch (assessmentError) {
+            console.warn('Unable to load saved eligibility assessment values:', assessmentError);
+          }
+        }
+
+        setApplicationData(enrichedData);
         setError('');
-        toast.success(`Application loaded for PAN ${pan}`);
+        toast.success(`Application loaded for ${customerCode}`);
       }
     } catch (err) {
       setApplicationData(null);
       const statusCode = err.response?.status;
       if (statusCode === 404) {
-        setError(`No application found matching PAN "${pan}".`);
+        setError(`No customer or application history found for customer code "${customerCode}".`);
       } else {
         const errorMsg = err.response?.data?.message || err.message || 'Failed to fetch application details.';
         setError(errorMsg);
@@ -307,7 +350,7 @@ export function Application360() {
   };
 
   const handleClear = () => {
-    setCurrentPan('');
+    setCurrentCustomerCode('');
     setApplicationData(null);
     setError('');
   };
@@ -317,20 +360,16 @@ export function Application360() {
       {/* Top Header */}
       <div className="app360-header">
         <div className="app360-header-left">
-          <span className="eyebrow">ADMINISTRATIVE INTELLIGENCE</span>
           <h1 className="app360-title">Application 360</h1>
-          <p className="app360-description">
-            Comprehensive single-pane lookup for end-to-end customer, underwriting, document, and ownership details.
-          </p>
         </div>
       </div>
 
-      {/* PAN Search Bar */}
+      {/* Customer Code Search Bar */}
       <ApplicationSearch
         onSearch={handleSearch}
         onClear={handleClear}
         isLoading={isLoading}
-        currentPan={currentPan}
+        currentCustomerCode={currentCustomerCode}
       />
 
       {/* Error Message */}
@@ -427,12 +466,12 @@ export function Application360() {
           <div className="app360-placeholder-icon">
             <Search size={36} />
           </div>
-          <h3>Enter a PAN to View Application 360</h3>
+          <h3>Enter a Customer Code to View Application 360</h3>
           <p>
             Lookup full applicant profiles, co-applicants, verified documents, collateral, field investigations, and underwriting calculations.
           </p>
           <div className="app360-sample-hints">
-            <span>Format: 5 letters, 4 digits, 1 letter</span>
+            <span>Example: CU000018</span>
           </div>
         </div>
       )}

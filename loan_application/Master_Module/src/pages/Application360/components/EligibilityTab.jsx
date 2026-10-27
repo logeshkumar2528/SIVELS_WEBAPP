@@ -1,4 +1,4 @@
-import { Calculator, FileSpreadsheet, Percent, DollarSign, CheckCircle } from 'lucide-react';
+import { Calculator, FileSpreadsheet, Percent, DollarSign, CheckCircle, AlertCircle } from 'lucide-react';
 
 function formatCurrency(amount) {
   if (amount === undefined || amount === null || amount === '' || isNaN(Number(amount))) return '—';
@@ -24,6 +24,9 @@ function formatDate(dateStr) {
 
 export function EligibilityTab({ data, masterLookups = {} }) {
   if (!data) return null;
+
+  const savedAssessment = data.selectedFinalAssessment;
+  const latestMethods = Array.isArray(data.eligibility?.methods) ? data.eligibility.methods : [];
 
   // Extract All Eligibility Assessments (supporting both wrapper and flat structures)
   const rawAssessments = Array.isArray(data.currentEligibilityAssessments) 
@@ -67,13 +70,57 @@ export function EligibilityTab({ data, masterLookups = {} }) {
 
   // Extract Flat RTR Assessment
   const rawRtr = data.currentRTRAssessments || data.rtrAssessments;
-  const rtr = Array.isArray(rawRtr) ? rawRtr[0] : (rawRtr || {});
+  const rtr = Array.isArray(rawRtr) ? (rawRtr[0] || {}) : (rawRtr || {});
 
   // Extract RTR Loan Details
   const rtrLoans = Array.isArray(data.rtrLoanDetails) ? data.rtrLoanDetails : (Array.isArray(data.rtrLoans) ? data.rtrLoans : []);
 
   return (
     <div className="app360-tab-pane">
+      {savedAssessment && savedAssessment.isValidCompletedAssessment === false && (
+        <div className="app360-error-banner app360-mb-4" role="alert">
+          <span className="app360-error-icon"><AlertCircle size={18} /></span>
+          <div className="app360-error-text">
+            <strong>Stale assessment selection</strong>
+            <span>The selected assessment is from an older calculation. The latest completed assessment is available for review.</span>
+          </div>
+        </div>
+      )}
+
+      {savedAssessment && (
+        <div className="app360-content-card app360-mb-4">
+          <div className="app360-card-header">
+            <div className="app360-card-title">
+              <CheckCircle size={18} className="app360-card-icon" />
+              <h3>Final Assessment Selection</h3>
+            </div>
+            <span className="app360-badge app360-badge-primary">Saved selection</span>
+          </div>
+          <div className="app360-card-body">
+            <div className="app360-details-grid">
+              <div className="app360-detail-item">
+                <span className="label">Selected Method</span>
+                <strong className="value">{savedAssessment.methodName || savedAssessment.selection?.methodCode || '—'}</strong>
+              </div>
+              <div className="app360-detail-item">
+                <span className="label">Saved Assessment ID</span>
+                <span className="value">{savedAssessment.selection?.assessmentId ?? '—'}</span>
+              </div>
+              <div className="app360-detail-item">
+                <span className="label">Latest Completed Assessment</span>
+                <span className="value">
+                  {latestMethods.find((method) => method.isCompleted)?.methodName || '—'}
+                </span>
+              </div>
+              <div className="app360-detail-item">
+                <span className="label">Selection Status</span>
+                <span className="value">{savedAssessment.isValidCompletedAssessment ? 'Current' : 'Older calculation'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Metrics Ribbon */}
       <div className="app360-metrics-grid app360-mb-4">
         <div className="app360-metric-card">
