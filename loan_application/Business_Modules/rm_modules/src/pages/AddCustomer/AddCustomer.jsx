@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import {
   User,
   Phone,
@@ -38,10 +38,20 @@ import './AddCustomer.css';
 
 export default function AddCustomer() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
 
   // RM Identity Resolution
   const rmContext = getCurrentRMContext();
   const rmId = rmContext.rmId ? Number(rmContext.rmId) : null;
+
+  // Edit Mode Resolution
+  const editCustomerId = searchParams.get('id') || location.state?.customerId || null;
+  const mode = searchParams.get('mode') || location.state?.mode || null;
+  const isEditMode = Boolean(editCustomerId && (mode === 'edit' || searchParams.has('id')));
+  const [loadingCustomer, setLoadingCustomer] = useState(false);
+  const [existingCustomerDocs, setExistingCustomerDocs] = useState([]);
+  const initialPreloadDoneRef = useRef(false);
 
   // Master Data State
   const [employmentTypes, setEmploymentTypes] = useState([]);
@@ -151,6 +161,146 @@ export default function AddCustomer() {
       isMounted = false;
     };
   }, []);
+
+  // In Edit Mode -> Fetch Existing Customer Data & Documents
+  useEffect(() => {
+    initialPreloadDoneRef.current = false;
+  }, [editCustomerId]);
+
+  useEffect(() => {
+    if (!isEditMode || !editCustomerId) return;
+
+    let isMounted = true;
+    const loadCustomerData = async () => {
+      setLoadingCustomer(true);
+      setGlobalBanner(null);
+
+      try {
+        const [custRes, docsRes] = await Promise.all([
+          rmCustomerService.getCustomerById(editCustomerId),
+          rmCustomerService.getAgentCustomerDocumentsByCustomerId(editCustomerId).catch(() => []),
+        ]);
+
+        const extractArray = (res) => {
+          if (Array.isArray(res)) return res;
+          if (res && typeof res === 'object') {
+            if (Array.isArray(res.data)) return res.data;
+            if (Array.isArray(res.items)) return res.items;
+            if (Array.isArray(res.result)) return res.result;
+            if (Array.isArray(res.list)) return res.list;
+          }
+          return [];
+        };
+
+        const customer = custRes?.data || custRes;
+        const docList = extractArray(docsRes);
+
+        if (isMounted && customer) {
+          const statusVal = customer.status !== undefined ? Number(customer.status) : 0;
+          const isConvertedVal = Boolean(customer.isConverted || customer.applicationId || customer.applicationProductDetailsId);
+          if (statusVal !== 0 || isConvertedVal) {
+            setGlobalBanner({
+              type: 'error',
+              message: 'This customer has already been converted or is not in New status, and cannot be edited.',
+            });
+            return;
+          }
+
+          const ownerRmId = customer.rmId || customer.RMId || customer.createdBy || customer.CreatedBy;
+          if (rmId && ownerRmId && Number(ownerRmId) !== Number(rmId)) {
+            setGlobalBanner({
+              type: 'error',
+              message: 'You are not authorized to edit this customer as it belongs to another Relationship Manager.',
+            });
+            return;
+          }
+
+          const empTypeId = customer.employmentTypeId ? String(customer.employmentTypeId) : '';
+          const savedProdId = customer.loanProductId ? String(customer.loanProductId) : '';
+
+          let derivedLoanTypeId = '';
+          if (savedProdId && loanProducts.length > 0) {
+            const matchedProd = loanProducts.find(
+              (p) => String(p.loanProductId ?? p.id) === savedProdId
+            );
+            if (matchedProd && matchedProd.loanTypeId) {
+              derivedLoanTypeId = String(matchedProd.loanTypeId);
+              initialPreloadDoneRef.current = true;
+            }
+          }
+
+          setFormData((prev) => ({
+            ...prev,
+            fullName: customer.fullName || '',
+            mobileNumber: customer.mobileNumber || '',
+            email: customer.email || '',
+            employmentTypeId: empTypeId,
+            loanTypeId: prev.loanTypeId || derivedLoanTypeId,
+            loanProductId: savedProdId,
+            expectedAmount: customer.expectedLoanAmount ? formatIndianAmount(customer.expectedLoanAmount, true, 2) : '',
+            remarks: customer.remarks || '',
+          }));
+
+          setExistingCustomerDocs(docList);
+
+          const uploadedKeys = new Set();
+          docList.forEach((d) => {
+            if (d.customerDocumentTypeId) {
+              uploadedKeys.add(`c-${d.customerDocumentTypeId}`);
+            }
+            if (d.documentTypeId) {
+              uploadedKeys.add(`d-${d.documentTypeId}`);
+            }
+          });
+          setUploadedDocTypeIds(uploadedKeys);
+        }
+      } catch (err) {
+        console.error('Failed to load customer details for edit:', err);
+        if (isMounted) {
+          const errMsg =
+            err?.response?.data?.message ||
+            err?.message ||
+            'Unable to load customer details for editing. Please try again.';
+          setGlobalBanner({
+            type: 'error',
+            message: errMsg,
+          });
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingCustomer(false);
+        }
+      }
+    };
+
+    loadCustomerData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isEditMode, editCustomerId, rmId]);
+
+  // Derive loanTypeId from saved loanProductId for existing customer edit mode
+  useEffect(() => {
+    if (!isEditMode || initialPreloadDoneRef.current) return;
+    if (loadingMasters || loanProducts.length === 0 || !formData.loanProductId) return;
+
+    const savedProdId = String(formData.loanProductId);
+    const matchedProd = loanProducts.find(
+      (p) => String(p.loanProductId ?? p.id) === savedProdId
+    );
+
+    if (matchedProd && matchedProd.loanTypeId) {
+      const derivedTypeId = String(matchedProd.loanTypeId);
+      setFormData((prev) => {
+        if (!prev.loanTypeId) {
+          return { ...prev, loanTypeId: derivedTypeId };
+        }
+        return prev;
+      });
+      initialPreloadDoneRef.current = true;
+    }
+  }, [isEditMode, loadingMasters, loanProducts, formData.loanProductId]);
 
   // When Employment Type Changes -> Load Document Mappings dynamically
   useEffect(() => {
@@ -479,7 +629,14 @@ export default function AddCustomer() {
     for (const mapping of documentMappings) {
       if (mapping.isMandatory) {
         const files = selectedFiles[mapping.docKey];
-        if (!files || (Array.isArray(files) && files.length === 0)) {
+        const hasFile = files && (!Array.isArray(files) || files.length > 0);
+        const hasExisting = existingCustomerDocs.some((d) => {
+          if (mapping.customerDocumentTypeId && Number(d.customerDocumentTypeId) === Number(mapping.customerDocumentTypeId)) return true;
+          if (mapping.documentTypeId && Number(d.documentTypeId) === Number(mapping.documentTypeId)) return true;
+          return false;
+        }) || uploadedDocTypeIds.has(mapping.docKey);
+
+        if (!hasFile && !hasExisting) {
           setGlobalBanner({
             type: 'error',
             message: `Please upload the required document: ${mapping.documentTypeName || 'Document'}.`,
@@ -516,10 +673,23 @@ export default function AddCustomer() {
     setSubmitting(true);
 
     try {
-      // Step 1: Create or reuse existing RM customer record
-      let targetCustomerId = createdRmCustomerId;
+      // Step 1: Update existing RM customer (PUT) or create new RM customer (POST)
+      let targetCustomerId = isEditMode ? editCustomerId : createdRmCustomerId;
 
-      if (!targetCustomerId) {
+      if (isEditMode) {
+        const updatePayload = {
+          agentCustomerId: Number(editCustomerId),
+          fullName: formData.fullName.trim(),
+          mobileNumber: formData.mobileNumber.trim(),
+          email: formData.email && formData.email.trim() !== '' ? formData.email.trim() : null,
+          employmentTypeId: Number(formData.employmentTypeId),
+          loanProductId: Number(formData.loanProductId),
+          expectedLoanAmount: parseAmountToNumber(formData.expectedAmount),
+          remarks: formData.remarks.trim(),
+        };
+
+        await rmCustomerService.updateCustomer(editCustomerId, updatePayload);
+      } else if (!targetCustomerId) {
         const customerPayload = {
           rmId: Number(rmId),
           fullName: formData.fullName.trim(),
@@ -694,6 +864,17 @@ export default function AddCustomer() {
     ? 'No loan products mapped to this loan type'
     : 'Select product';
 
+  if (loadingCustomer) {
+    return (
+      <div className="add-customer">
+        <div className="add-customer-card" style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>
+          <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 12px auto', display: 'block', color: '#005239' }} />
+          <p>Loading customer details...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="add-customer">
       {/* Session Identity Notice if RM ID is missing */}
@@ -751,7 +932,7 @@ export default function AddCustomer() {
                   placeholder="Enter full name"
                   value={formData.fullName}
                   onChange={handleInputChange}
-                  disabled={submitting || Boolean(createdRmCustomerId)}
+                  disabled={submitting || loadingCustomer || (!isEditMode && Boolean(createdRmCustomerId))}
                   required
                 />
               </div>
@@ -776,7 +957,7 @@ export default function AddCustomer() {
                   value={formData.mobileNumber}
                   onChange={handleInputChange}
                   maxLength={10}
-                  disabled={submitting || Boolean(createdRmCustomerId)}
+                  disabled={submitting || loadingCustomer || (!isEditMode && Boolean(createdRmCustomerId))}
                   required
                 />
               </div>
@@ -800,7 +981,7 @@ export default function AddCustomer() {
                   placeholder="Enter email address"
                   value={formData.email}
                   onChange={handleInputChange}
-                  disabled={submitting || Boolean(createdRmCustomerId)}
+                  disabled={submitting || loadingCustomer || (!isEditMode && Boolean(createdRmCustomerId))}
                 />
               </div>
               {fieldErrors.email && <div className="form-field-error">{fieldErrors.email}</div>}
@@ -832,7 +1013,7 @@ export default function AddCustomer() {
                 onChange={(val) => handleSelectChange('loanTypeId', val)}
                 options={loanTypeOptions}
                 placeholder={loanTypePlaceholder}
-                disabled={loadingMasters || !!mastersError || submitting || Boolean(createdRmCustomerId)}
+                disabled={loadingCustomer || loadingMasters || !!mastersError || submitting || (!isEditMode && Boolean(createdRmCustomerId))}
                 error={Boolean(fieldErrors.loanTypeId)}
                 icon={<Landmark size={16} strokeWidth={1.8} />}
               />
@@ -851,7 +1032,7 @@ export default function AddCustomer() {
                 onChange={(val) => handleSelectChange('loanProductId', val)}
                 options={loanProductOptions}
                 placeholder={loanProductPlaceholder}
-                disabled={!formData.loanTypeId || loadingMasters || !!mastersError || submitting || Boolean(createdRmCustomerId)}
+                disabled={loadingCustomer || !formData.loanTypeId || loadingMasters || !!mastersError || submitting || (!isEditMode && Boolean(createdRmCustomerId))}
                 error={Boolean(fieldErrors.loanProductId)}
                 icon={<Target size={16} strokeWidth={1.8} />}
               />
@@ -870,7 +1051,7 @@ export default function AddCustomer() {
                 onChange={(val) => handleSelectChange('employmentTypeId', val)}
                 options={employmentTypeOptions}
                 placeholder={employmentPlaceholder}
-                disabled={loadingMasters || !!mastersError || submitting || Boolean(createdRmCustomerId)}
+                disabled={loadingCustomer || loadingMasters || !!mastersError || submitting || (!isEditMode && Boolean(createdRmCustomerId))}
                 error={Boolean(fieldErrors.employmentTypeId)}
                 icon={<Briefcase size={16} strokeWidth={1.8} />}
               />
@@ -895,7 +1076,7 @@ export default function AddCustomer() {
                   placeholder="Enter expected loan amount"
                   value={formData.expectedAmount}
                   onChange={handleInputChange}
-                  disabled={submitting || Boolean(createdRmCustomerId)}
+                  disabled={submitting || loadingCustomer || (!isEditMode && Boolean(createdRmCustomerId))}
                   required
                 />
               </div>
@@ -917,7 +1098,7 @@ export default function AddCustomer() {
                 rows={3}
                 value={formData.remarks}
                 onChange={handleInputChange}
-                disabled={submitting || Boolean(createdRmCustomerId)}
+                disabled={submitting || loadingCustomer || (!isEditMode && Boolean(createdRmCustomerId))}
                 required
               />
               {fieldErrors.remarks && <div className="form-field-error">{fieldErrors.remarks}</div>}
@@ -959,12 +1140,21 @@ export default function AddCustomer() {
                   const files = selectedFiles[mapping.docKey];
                   const hasFile = isMultiple ? files && files.length > 0 : Boolean(files);
                   const IconComponent = getDocumentIcon(docName);
-                  const isUploaded = uploadedDocTypeIds.has(mapping.docKey);
+                  const existingDoc = existingCustomerDocs.find((d) => {
+                    if (mapping.customerDocumentTypeId && Number(d.customerDocumentTypeId) === Number(mapping.customerDocumentTypeId)) {
+                      return true;
+                    }
+                    if (mapping.documentTypeId && Number(d.documentTypeId) === Number(mapping.documentTypeId)) {
+                      return true;
+                    }
+                    return false;
+                  });
+                  const isUploaded = Boolean(existingDoc) || uploadedDocTypeIds.has(mapping.docKey);
 
                   return (
                     <div
                       key={mapping.docKey}
-                      className={`document-upload-card ${hasFile ? 'has-file' : ''}`}
+                      className={`document-upload-card ${hasFile || isUploaded ? 'has-file' : ''}`}
                     >
                       <div className="document-card-top">
                         <div className="document-icon-badge">
@@ -975,7 +1165,7 @@ export default function AddCustomer() {
                             {docName}
                             {mapping.isMandatory && <span className="required-star">*</span>}
                           </h4>
-                          {!hasFile && (
+                          {!hasFile && !isUploaded && (
                             <>
                               <p>Upload clear image of {docName}</p>
                               <p className="document-card-subtitle">
@@ -986,7 +1176,7 @@ export default function AddCustomer() {
                         </div>
                       </div>
 
-                      {hasFile && (
+                      {hasFile ? (
                         isMultiple ? (
                           <div className="file-preview-box" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px' }}>
                             {files.map((file, index) => (
@@ -1013,17 +1203,15 @@ export default function AddCustomer() {
                                     </span>
                                   </div>
                                 </div>
-                                {!isUploaded && (
-                                  <button
-                                    type="button"
-                                    className="file-remove-btn"
-                                    onClick={() => handleRemoveFile(mapping.docKey, index)}
-                                    style={{ padding: '2px 4px', background: 'transparent', border: 'none' }}
-                                    disabled={submitting}
-                                  >
-                                    <Trash2 size={13} color="#EF4444" />
-                                  </button>
-                                )}
+                                <button
+                                  type="button"
+                                  className="file-remove-btn"
+                                  onClick={() => handleRemoveFile(mapping.docKey, index)}
+                                  style={{ padding: '2px 4px', background: 'transparent', border: 'none' }}
+                                  disabled={submitting}
+                                >
+                                  <Trash2 size={13} color="#EF4444" />
+                                </button>
                               </div>
                             ))}
                           </div>
@@ -1054,47 +1242,52 @@ export default function AddCustomer() {
                             )}
                           </div>
                         )
-                      )}
+                      ) : isUploaded ? (
+                        <div className="file-preview-box" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+                            <CheckCircle2 size={18} color="#16A34A" style={{ flexShrink: 0 }} />
+                            <div className="file-preview-details" style={{ margin: 0 }}>
+                              <span className="file-preview-name" style={{ color: '#166534', fontWeight: 600 }}>
+                                {existingDoc?.fileName || existingDoc?.documentName || 'Saved Document'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
 
                       <div className="file-actions-row">
-                        {!isUploaded ? (
-                          <>
-                            <label className={`file-upload-btn ${submitting ? 'disabled' : ''}`}>
-                              <Upload size={13} strokeWidth={2} />
-                              <span>
-                                {hasFile
-                                  ? isMultiple
-                                    ? 'Add More'
-                                    : 'Change'
-                                  : isMultiple
-                                  ? 'Choose Files'
-                                  : 'Upload Document'}
-                              </span>
-                              <input
-                                type="file"
-                                multiple={isMultiple}
-                                className="file-input-hidden"
-                                accept=".pdf,.jpg,.jpeg,.png"
-                                onChange={(e) => handleFileChange(e, mapping.docKey, isMultiple)}
-                                disabled={submitting}
-                              />
-                            </label>
-                            {hasFile && !isMultiple && (
-                              <button
-                                type="button"
-                                className="file-remove-btn"
-                                onClick={() => handleRemoveFile(mapping.docKey)}
-                                disabled={submitting}
-                              >
-                                <Trash2 size={13} />
-                                <span>Remove</span>
-                              </button>
-                            )}
-                          </>
-                        ) : (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1A7A3C', fontSize: '12px', fontWeight: 600 }}>
-                            <CheckCircle2 size={14} /> Uploaded Successfully
-                          </div>
+                        <label className={`file-upload-btn ${submitting ? 'disabled' : ''}`}>
+                          <Upload size={13} strokeWidth={2} />
+                          <span>
+                            {hasFile
+                              ? isMultiple
+                                ? 'Add More'
+                                : 'Change'
+                              : isUploaded
+                              ? 'Replace Document'
+                              : isMultiple
+                              ? 'Choose Files'
+                              : 'Upload Document'}
+                          </span>
+                          <input
+                            type="file"
+                            multiple={isMultiple}
+                            className="file-input-hidden"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(e) => handleFileChange(e, mapping.docKey, isMultiple)}
+                            disabled={submitting}
+                          />
+                        </label>
+                        {hasFile && !isMultiple && (
+                          <button
+                            type="button"
+                            className="file-remove-btn"
+                            onClick={() => handleRemoveFile(mapping.docKey)}
+                            disabled={submitting}
+                          >
+                            <Trash2 size={13} />
+                            <span>Remove</span>
+                          </button>
                         )}
                       </div>
                     </div>
@@ -1118,11 +1311,15 @@ export default function AddCustomer() {
           <button
             type="submit"
             className="btn-submit"
-            disabled={submitting || !rmId}
+            disabled={submitting || loadingCustomer || !rmId}
           >
             {submitting ? (
               <>
-                <RefreshCw size={15} className="animate-spin" /> Submitting...
+                <RefreshCw size={15} className="animate-spin" /> {isEditMode ? 'Updating Customer...' : 'Submitting...'}
+              </>
+            ) : isEditMode ? (
+              <>
+                Update Customer <ArrowRight size={15} strokeWidth={2} />
               </>
             ) : createdRmCustomerId ? (
               <>

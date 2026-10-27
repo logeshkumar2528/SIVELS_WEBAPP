@@ -59,6 +59,16 @@ export const rmCustomerService = {
     return normalizeCustomerResponse(response.data);
   },
 
+  updateCustomer: async (id, customerData) => {
+    const response = await axiosInstance.put(`/AgentAddCustomer/${encodeURIComponent(id)}`, customerData);
+    return normalizeCustomerResponse(response?.data ?? { success: true });
+  },
+
+  deleteCustomer: async (id) => {
+    const response = await axiosInstance.delete(`/AgentAddCustomer/${encodeURIComponent(id)}`);
+    return response?.data ?? { success: true };
+  },
+
   uploadDocument: async (formData) => {
     const response = await axiosInstance.post('/RMCustomerDocument/upload', formData);
     return response.data;

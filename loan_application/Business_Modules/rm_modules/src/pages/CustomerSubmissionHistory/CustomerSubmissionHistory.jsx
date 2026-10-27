@@ -13,6 +13,8 @@ import {
   UserPlus,
   UserCheck,
   ArrowRight,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 import Pagination from '../../components/Pagination/Pagination';
 import Select from '../../components/Select/Select';
@@ -75,6 +77,55 @@ export default function CustomerSubmissionHistory() {
 
   // View Customer Drawer State
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+
+  // Delete Customer Modal State
+  const [customerToDelete, setCustomerToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+
+  const handleEditCustomer = (customer) => {
+    const custId = customer.rmCustomerId || customer.rMCustomerId || customer.id;
+    if (!custId) return;
+    navigate(`${ROUTES.ADD_CUSTOMER}?id=${custId}&mode=edit`, {
+      state: { customerId: custId, mode: 'edit' },
+    });
+  };
+
+  const handleOpenDeleteModal = (customer) => {
+    setCustomerToDelete(customer);
+    setDeleteError(null);
+  };
+
+  const handleCloseDeleteModal = () => {
+    if (!isDeleting) {
+      setCustomerToDelete(null);
+      setDeleteError(null);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!customerToDelete || isDeleting) return;
+    const custId = customerToDelete.rmCustomerId || customerToDelete.rMCustomerId || customerToDelete.id;
+    if (!custId) return;
+
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await rmCustomerService.deleteCustomer(custId);
+      setCustomerToDelete(null);
+      await fetchSubmissions();
+    } catch (err) {
+      console.error('Failed to delete customer', err);
+      const errMsg =
+        err?.response?.data?.message ||
+        err?.response?.data?.title ||
+        err?.message ||
+        'Failed to delete customer. Please try again.';
+      setDeleteError(errMsg);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
@@ -684,6 +735,9 @@ export default function CustomerSubmissionHistory() {
                     (!item.agentId || item.agentId === '') &&
                     Number(item.rmId || item.RMId || item.createdBy || item.CreatedBy) === Number(currentRmId);
                   const isItemConverted = Boolean(item.isConverted || item.IsConverted || isDirectRmOwned);
+                  const hasBeenConverted = Boolean(item.isConverted || item.IsConverted || item.applicationId || item.ApplicationId || item.applicationProductDetailsId);
+                  const isNewStatus = item.status === 'New' || Number(item.raw?.status ?? item.Status ?? item.status) === 0;
+                  const canEditOrDelete = isNewStatus && isDirectRmOwned && !hasBeenConverted;
 
                   return (
                     <tr key={item.rmCustomerId || idx} className="rm-csh-tr">
@@ -707,10 +761,35 @@ export default function CustomerSubmissionHistory() {
                             type="button"
                             className="btn-view-details"
                             onClick={() => setSelectedCustomer(item)}
+                            title="View customer details"
                           >
                             <Eye size={15} strokeWidth={1.8} />
                             <span>View Details</span>
                           </button>
+                          {canEditOrDelete && (
+                            <>
+                              <button
+                                type="button"
+                                className="btn-edit-customer"
+                                onClick={() => handleEditCustomer(item)}
+                                title="Edit customer details"
+                                aria-label={`Edit ${item.fullName || 'Customer'}`}
+                              >
+                                <Edit2 size={14} strokeWidth={1.8} />
+                                <span>Edit</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-delete-customer"
+                                onClick={() => handleOpenDeleteModal(item)}
+                                title="Delete customer application"
+                                aria-label={`Delete ${item.fullName || 'Customer'}`}
+                              >
+                                <Trash2 size={14} strokeWidth={1.8} />
+                                <span>Delete</span>
+                              </button>
+                            </>
+                          )}
                           {!isItemConverted && (
                             <button
                               type="button"
@@ -769,6 +848,60 @@ export default function CustomerSubmissionHistory() {
           onContinueToApp={handleContinueToApp}
           isPromoting={selectedCustomer ? Boolean(isPromoting[selectedCustomer.rmCustomerId]) : false}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {customerToDelete && (
+        <div
+          className="history-delete-modal-backdrop"
+          onClick={handleCloseDeleteModal}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-modal-title"
+        >
+          <div
+            className="history-delete-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="history-delete-modal-header">
+              <div className="history-delete-modal-icon">
+                <Trash2 size={20} />
+              </div>
+              <h3 id="delete-modal-title" className="history-delete-modal-title">
+                Delete Customer Application
+              </h3>
+            </div>
+
+            {deleteError && (
+              <div className="history-delete-modal-error">
+                {deleteError}
+              </div>
+            )}
+
+            <p className="history-delete-modal-message">
+              Are you sure you want to delete customer <strong>"{customerToDelete?.fullName || 'this customer'}"</strong>? This action cannot be undone.
+            </p>
+
+            <div className="history-delete-modal-actions">
+              <button
+                type="button"
+                className="history-delete-modal-btn-cancel"
+                onClick={handleCloseDeleteModal}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="history-delete-modal-btn-confirm"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
