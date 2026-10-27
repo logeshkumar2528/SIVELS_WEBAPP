@@ -1,6 +1,6 @@
 import { apiFetch } from '../../../../../Core/src/api/apiFetch';
 import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -10,6 +10,7 @@ import {
   FileText,
   GitBranch,
   IndianRupee,
+  Landmark,
   MapPin,
   Percent,
   RefreshCw,
@@ -115,15 +116,27 @@ async function updateCustomerStatusToInProgress(baseUrl, customerId, record = {}
   }
 }
 
-function validateApplication(record = {}, requiresVariation = false, isRmSourced = false) {
+function validateApplication(record = {}, requiresVariation = false, isRmSourced = false, selectedLoanTypeId = '', loanProductOptions = []) {
   const errors = {};
 
   if (!isRmSourced && (record.sourcingChannel === '' || record.sourcingChannel === null || record.sourcingChannel === undefined)) {
     errors.sourcingChannel = 'Sourcing channel is required';
   }
 
+  if (!selectedLoanTypeId || String(selectedLoanTypeId).trim() === '') {
+    errors.loanType = 'Loan type is required';
+  }
+
   if (!record.loanProduct || String(record.loanProduct).trim() === '') {
     errors.loanProduct = 'Loan product is required';
+  } else if (selectedLoanTypeId && loanProductOptions.length > 0) {
+    const selectedProd = loanProductOptions.find(
+      (p) => String(p.value) === String(record.loanProduct) || Number(p.value) === Number(record.loanProduct)
+    );
+    const prodTypeId = selectedProd?.raw?.loanTypeId ?? selectedProd?.raw?.LoanTypeId;
+    if (!selectedProd || String(prodTypeId) !== String(selectedLoanTypeId)) {
+      errors.loanProduct = 'Selected Loan Product is not valid for the chosen Loan Type';
+    }
   }
 
   if (!record.loanTransactionType || String(record.loanTransactionType).trim() === '') {
@@ -183,6 +196,8 @@ export default function ApplicationDetails() {
     hydratedFromBackend,
   } = useApplicationDraftStore();
 
+  const appData = getApplication(appId);
+
   const [errors, setErrors] = useState({});
   const [isLoadingApplication, setIsLoadingApplication] = useState(false);
   const [errorPopup, setErrorPopup] = useState(null);
@@ -208,6 +223,9 @@ export default function ApplicationDetails() {
   const [rateOfInterests, setRateOfInterests] = useState([]);
   const [loanTenures, setLoanTenures] = useState([]);
 
+  const [loanTypeOptions, setLoanTypeOptions] = useState([]);
+  const [selectedLoanTypeId, setSelectedLoanTypeId] = useState(appData.selectedLoanTypeId || '');
+  const [coApplicantsDraftValue, setCoApplicantsDraftValue] = useState(null);
   const [sourcingChannelOptions, setSourcingChannelOptions] = useState([]);
   const [loanProductOptions, setLoanProductOptions] = useState([]);
   const [loanTransactionTypeOptions, setLoanTransactionTypeOptions] = useState([]);
@@ -415,8 +433,6 @@ export default function ApplicationDetails() {
   // Customers created by a field agent must always use the Field Agent
   // sourcing channel. Resolve the ID from the master table instead of
   // hard-coding a database identity.
-  const appData = getApplication(appId);
-
   useEffect(() => {
     if (isLoadingApplication || !displayRecord) {
       return;
@@ -469,6 +485,7 @@ export default function ApplicationDetails() {
     async function loadAllMasters() {
       setIsLoadingMasters(true);
       await Promise.allSettled([
+        fetchMasterData('LoanTypeMaster', 'loanTypeId', 'typeName', setLoanTypeOptions),
         fetchMasterData('SourcingChannelMaster', 'sourcingChannelId', 'sourcingChannelName', setSourcingChannelOptions),
         fetchMasterData('LoanProductMaster', 'loanProductId', 'productName', setLoanProductOptions),
         fetchMasterData('LoanTransactionTypeMaster', 'loanTransactionTypeId', 'transactionTypeName', setLoanTransactionTypeOptions),
@@ -507,20 +524,123 @@ export default function ApplicationDetails() {
     }
   }, [appId, appData.purposeOfLoan, appData.loanProduct, loanPurposeOptions, saveApplication]);
 
-  const effectiveLoanProductOptions = useMemo(() => {
-    const options = [...loanProductOptions];
-    if (appData.loanProduct !== '' && appData.loanProduct !== null && appData.loanProduct !== undefined) {
-      const match = options.find((p) => String(p.value) === String(appData.loanProduct) || Number(p.value) === Number(appData.loanProduct));
-      if (!match) {
-        options.unshift({
-          value: Number(appData.loanProduct) || appData.loanProduct,
-          label: displayRecord?.loanProductName || displayRecord?.productName || displayRecord?.loanProductDisplay || String(appData.loanProduct),
-          raw: { loanProductId: appData.loanProduct }
-        });
+  // Track active application ID to handle route changes across applications without remount
+  const currentAppIdRef = useRef(appId);
+
+  useEffect(() => {
+    if (currentAppIdRef.current !== appId) {
+      currentAppIdRef.current = appId;
+      setDisplayRecord(null);
+      setSelectedLoanTypeId(appData.selectedLoanTypeId || '');
+      setCoApplicantsDraftValue(null);
+    }
+  }, [appId, appData.selectedLoanTypeId]);
+
+  // Auto-derive Loan Type from preloaded or saved loanProduct
+  useEffect(() => {
+    if (loanProductOptions.length === 0) {
+      return;
+    }
+
+    // Ensure displayRecord matches current appId to prevent old application leakage
+    const recordAppId = displayRecord?.id || displayRecord?.applicationId || displayRecord?.agentCustomerId;
+    const isRecordForCurrentApp = !displayRecord || !recordAppId || String(recordAppId) === String(appId);
+
+    // Only fallback to displayRecord if appData.loanProduct has not yet been initialized (undefined/null),
+    // NEVER when appData.loanProduct has been explicitly cleared to '' by user or type change.
+    const isDraftInitialized = appData.loanProduct !== undefined && appData.loanProduct !== null;
+    const currentProductId = isDraftInitialized
+      ? appData.loanProduct
+      : (isRecordForCurrentApp ? (displayRecord?.loanProductId || displayRecord?.customer?.loanProductId || '') : '');
+
+    if (!currentProductId) {
+      return;
+    }
+
+    const matchedProduct = loanProductOptions.find(
+      (p) => String(p.value) === String(currentProductId) || Number(p.value) === Number(currentProductId)
+    );
+
+    const derivedTypeId = matchedProduct?.raw?.loanTypeId ?? matchedProduct?.raw?.LoanTypeId;
+
+    if (derivedTypeId) {
+      const derivedStr = String(derivedTypeId);
+      if (selectedLoanTypeId !== derivedStr) {
+        setSelectedLoanTypeId(derivedStr);
       }
     }
-    return options;
-  }, [loanProductOptions, appData.loanProduct, displayRecord]);
+  }, [appId, appData.loanProduct, displayRecord, loanProductOptions, selectedLoanTypeId]);
+
+  const effectiveLoanTypeOptions = useMemo(() => {
+    const activeTypes = loanTypeOptions.filter((opt) => opt.raw?.isActive !== false);
+
+    if (selectedLoanTypeId) {
+      const isAlreadyIncluded = activeTypes.some(
+        (opt) => String(opt.value) === String(selectedLoanTypeId)
+      );
+      if (!isAlreadyIncluded) {
+        const fullMatch = loanTypeOptions.find(
+          (opt) => String(opt.value) === String(selectedLoanTypeId)
+        );
+        if (fullMatch) {
+          activeTypes.unshift({
+            ...fullMatch,
+            label: `${fullMatch.label}${fullMatch.raw?.isActive === false ? ' (Inactive)' : ''}`
+          });
+        }
+      }
+    }
+
+    return activeTypes;
+  }, [loanTypeOptions, selectedLoanTypeId]);
+
+  const effectiveLoanProductOptions = useMemo(() => {
+    if (!selectedLoanTypeId) {
+      return [];
+    }
+
+    const filtered = loanProductOptions.filter((opt) => {
+      const raw = opt.raw;
+      if (!raw || raw.isActive === false) return false;
+      const typeId = raw.loanTypeId ?? raw.LoanTypeId;
+      return String(typeId) === String(selectedLoanTypeId);
+    });
+
+    if (appData.loanProduct !== '' && appData.loanProduct !== null && appData.loanProduct !== undefined) {
+      const hasMatch = filtered.some(
+        (p) => String(p.value) === String(appData.loanProduct) || Number(p.value) === Number(appData.loanProduct)
+      );
+
+      if (!hasMatch) {
+        const fullMatch = loanProductOptions.find(
+          (p) => String(p.value) === String(appData.loanProduct) || Number(p.value) === Number(appData.loanProduct)
+        );
+
+        if (fullMatch) {
+          const matchTypeId = fullMatch.raw?.loanTypeId ?? fullMatch.raw?.LoanTypeId;
+          if (String(matchTypeId) === String(selectedLoanTypeId)) {
+            filtered.unshift({
+              ...fullMatch,
+              label: `${fullMatch.label}${fullMatch.raw?.isActive === false ? ' (Inactive)' : ''}`
+            });
+          }
+        } else if (displayRecord?.loanProductName || displayRecord?.productName || displayRecord?.loanProductDisplay) {
+          // Preserve historical unverified product for view mode without fabricating loanTypeId mapping
+          filtered.unshift({
+            value: Number(appData.loanProduct) || appData.loanProduct,
+            label: `${displayRecord.loanProductName || displayRecord.productName || displayRecord.loanProductDisplay} (Unverified)`,
+            raw: {
+              loanProductId: appData.loanProduct,
+              isUnverified: true,
+              loanTypeId: displayRecord?.loanTypeId || displayRecord?.customer?.loanTypeId || null,
+            }
+          });
+        }
+      }
+    }
+
+    return filtered;
+  }, [loanProductOptions, selectedLoanTypeId, appData.loanProduct, displayRecord]);
 
   const effectiveLoanTransactionTypeOptions = useMemo(() => {
     const options = [...loanTransactionTypeOptions];
@@ -721,6 +841,31 @@ export default function ApplicationDetails() {
 
   const activeStep = useMemo(() => getWizardActiveStepByPath(location.pathname, APPLICATION_WIZARD_STEPS), [location.pathname]);
 
+  const handleLoanTypeChange = (newLoanTypeId) => {
+    const finalTypeId = newLoanTypeId !== null && newLoanTypeId !== undefined ? String(newLoanTypeId) : '';
+    setSelectedLoanTypeId(finalTypeId);
+    saveApplication(appId, { selectedLoanTypeId: finalTypeId });
+
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.loanType;
+      return next;
+    });
+
+    // Check compatibility of existing loanProduct
+    const currentProdId = appData.loanProduct;
+    if (currentProdId !== '' && currentProdId !== null && currentProdId !== undefined) {
+      const currentProduct = loanProductOptions.find(
+        (p) => String(p.value) === String(currentProdId) || Number(p.value) === Number(currentProdId)
+      );
+      const productLoanTypeId = currentProduct?.raw?.loanTypeId ?? currentProduct?.raw?.LoanTypeId;
+
+      if (!finalTypeId || !currentProduct || String(productLoanTypeId) !== finalTypeId) {
+        updateField('loanProduct', '');
+      }
+    }
+  };
+
   const updateField = (field, rawValue) => {
     let nextValue = rawValue;
     if (field === 'loanAmount') {
@@ -797,7 +942,7 @@ export default function ApplicationDetails() {
     }
 
     const isRmSourced = Boolean(sourcingInfo.isRmSourced || displayRecord?.isRmSourced || appData.isRmSourced);
-    const validationErrors = validateApplication(appData, requiresVariation, isRmSourced);
+    const validationErrors = validateApplication(appData, requiresVariation, isRmSourced, selectedLoanTypeId, loanProductOptions);
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) {
@@ -829,12 +974,36 @@ export default function ApplicationDetails() {
       const ownership = resolveApplicationOwnership(displayRecord || appData);
 
       // 1. Validate required master selections
+      if (!selectedLoanTypeId) {
+        setErrors((current) => ({ ...current, loanType: 'Loan type is required' }));
+        setErrorPopup({
+          title: 'Validation Error',
+          message: 'Please select a valid Loan Type.',
+          variant: 'warning',
+        });
+        return;
+      }
+
       const loanProductId = Number(appData.loanProduct);
       if (!loanProductId || loanProductId <= 0) {
         setErrors((current) => ({ ...current, loanProduct: 'Loan product is required' }));
         setErrorPopup({
           title: 'Validation Error',
           message: 'Please select a valid Loan Product.',
+          variant: 'warning',
+        });
+        return;
+      }
+
+      const selectedProdRecord = loanProductOptions.find(
+        (p) => String(p.value) === String(loanProductId) || Number(p.value) === loanProductId
+      );
+      const prodTypeId = selectedProdRecord?.raw?.loanTypeId ?? selectedProdRecord?.raw?.LoanTypeId;
+      if (!selectedProdRecord || String(prodTypeId) !== String(selectedLoanTypeId)) {
+        setErrors((current) => ({ ...current, loanProduct: 'Selected Loan Product is not valid for the chosen Loan Type' }));
+        setErrorPopup({
+          title: 'Validation Error',
+          message: 'Selected Loan Product is not valid for the chosen Loan Type.',
           variant: 'warning',
         });
         return;
@@ -1286,6 +1455,24 @@ export default function ApplicationDetails() {
 
               <div className="compact-section-title">Loan Information</div>
               <div className="compact-grid">
+                {/* Loan Type */}
+                <div className="compact-field">
+                  <label className="compact-label">Loan Type</label>
+                  <div className="compact-input-wrapper">
+                    <Select
+                      error={!!errors.loanType}
+                      value={selectedLoanTypeId || ''}
+                      onChange={(val) => handleLoanTypeChange(val)}
+                      placeholder={isLoadingMasters && effectiveLoanTypeOptions.length === 0 ? "Loading..." : "Select loan type"}
+                      options={effectiveLoanTypeOptions}
+                      icon={<Landmark size={16} />}
+                      disabled={isLoadingMasters && effectiveLoanTypeOptions.length === 0}
+                    />
+                  </div>
+                  {errors.loanType && <span className="ad-field-error">{errors.loanType}</span>}
+                </div>
+
+                {/* Loan Product */}
                 <div className="compact-field">
                   <label className="compact-label">Loan Product</label>
                   <div className="compact-input-wrapper">
@@ -1293,10 +1480,18 @@ export default function ApplicationDetails() {
                       error={!!errors.loanProduct}
                       value={selectedProductOption ? selectedProductOption.value : (appData.loanProduct || '')}
                       onChange={(val) => updateField('loanProduct', val)}
-                      placeholder={isLoadingMasters && effectiveLoanProductOptions.length === 0 ? "Loading..." : "Select loan product"}
+                      placeholder={
+                        isLoadingMasters && effectiveLoanProductOptions.length === 0
+                          ? "Loading..."
+                          : !selectedLoanTypeId
+                          ? "Select Loan Type first"
+                          : effectiveLoanProductOptions.length === 0
+                          ? "No loan products mapped to this loan type"
+                          : "Select loan product"
+                      }
                       options={effectiveLoanProductOptions}
                       icon={<Briefcase size={16} />}
-                      disabled={isLoadingMasters && effectiveLoanProductOptions.length === 0}
+                      disabled={!selectedLoanTypeId || (isLoadingMasters && effectiveLoanProductOptions.length === 0)}
                     />
                   </div>
                   {errors.loanProduct && <span className="ad-field-error">{errors.loanProduct}</span>}
@@ -1436,8 +1631,24 @@ export default function ApplicationDetails() {
                       min="0"
                       step="1"
                       inputMode="numeric"
-                      value={appData.coApplicantsCount ?? 0}
-                      onChange={(event) => updateField('coApplicantsCount', event.target.value)}
+                      value={coApplicantsDraftValue !== null ? coApplicantsDraftValue : (appData.coApplicantsCount ?? 0)}
+                      onFocus={(event) => {
+                        event.target.select();
+                      }}
+                      onChange={(event) => {
+                        let rawVal = event.target.value;
+                        if (rawVal.length > 1 && rawVal.startsWith('0')) {
+                          rawVal = rawVal.replace(/^0+/, '') || '0';
+                        }
+                        setCoApplicantsDraftValue(rawVal);
+                        updateField('coApplicantsCount', rawVal === '' ? '' : Math.max(0, parseInt(rawVal, 10) || 0));
+                      }}
+                      onBlur={() => {
+                        if (coApplicantsDraftValue === '' || coApplicantsDraftValue === null || isNaN(Number(coApplicantsDraftValue)) || Number(coApplicantsDraftValue) < 0) {
+                          updateField('coApplicantsCount', 0);
+                        }
+                        setCoApplicantsDraftValue(null);
+                      }}
                       placeholder="0"
                     />
                   </div>

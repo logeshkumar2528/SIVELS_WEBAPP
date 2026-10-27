@@ -45,6 +45,7 @@ export default function AddCustomer() {
 
   // Master Data State
   const [employmentTypes, setEmploymentTypes] = useState([]);
+  const [loanTypes, setLoanTypes] = useState([]);
   const [loanProducts, setLoanProducts] = useState([]);
   const [documentTypes, setDocumentTypes] = useState([]);
   const [customerDocumentTypes, setCustomerDocumentTypes] = useState([]);
@@ -69,6 +70,7 @@ export default function AddCustomer() {
     mobileNumber: '',
     email: '',
     employmentTypeId: '',
+    loanTypeId: '',
     loanProductId: '',
     expectedAmount: '',
     remarks: '',
@@ -102,8 +104,9 @@ export default function AddCustomer() {
       };
 
       try {
-        const [typesRes, productsRes, docTypesRes, customerDocTypesRes] = await Promise.all([
+        const [typesRes, loanTypesRes, productsRes, docTypesRes, customerDocTypesRes] = await Promise.all([
           masterService.getEmploymentTypes(),
+          masterService.getLoanTypes(),
           masterService.getLoanProducts(),
           masterService.getDocumentTypes().catch((err) => {
             console.error('Failed to load legacy document types for RM Add Customer:', err);
@@ -121,6 +124,9 @@ export default function AddCustomer() {
           const typesArr = extractArray(typesRes);
           setEmploymentTypes(typesArr.filter((t) => t.isActive !== false));
 
+          const loanTypesArr = extractArray(loanTypesRes);
+          setLoanTypes(loanTypesArr.filter((lt) => lt.isActive !== false));
+
           const productsArr = extractArray(productsRes);
           setLoanProducts(productsArr.filter((p) => p.isActive !== false));
 
@@ -130,7 +136,7 @@ export default function AddCustomer() {
       } catch (err) {
         if (isMounted) {
           console.error('Failed to load master data for RM Add Customer:', err);
-          setMastersError('Failed to load Employment Types or Loan Products. Please refresh.');
+          setMastersError('Failed to load Employment Types, Loan Types, or Loan Products. Please refresh.');
         }
       } finally {
         if (isMounted) {
@@ -368,9 +374,23 @@ export default function AddCustomer() {
       value = valueOrEvent.target.value;
     }
     const finalValue = value !== null && value !== undefined ? String(value) : '';
-    setFormData((prev) => ({ ...prev, [name]: finalValue }));
+    setFormData((prev) => {
+      const updated = { ...prev, [name]: finalValue };
+      if (name === 'loanTypeId') {
+        const currentProd = loanProducts.find(
+          (p) => String(p.loanProductId ?? p.id) === String(prev.loanProductId)
+        );
+        if (!finalValue || !currentProd || String(currentProd.loanTypeId) !== String(finalValue)) {
+          updated.loanProductId = '';
+        }
+      }
+      return updated;
+    });
     if (fieldErrors[name]) {
       setFieldErrors((prev) => ({ ...prev, [name]: null }));
+    }
+    if (name === 'loanTypeId' && fieldErrors.loanProductId) {
+      setFieldErrors((prev) => ({ ...prev, loanProductId: null }));
     }
     if (globalBanner) {
       setGlobalBanner(null);
@@ -416,10 +436,24 @@ export default function AddCustomer() {
       isValid = false;
     }
 
+    // Loan Type
+    if (!formData.loanTypeId) {
+      errors.loanTypeId = 'Loan Type is required.';
+      isValid = false;
+    }
+
     // Loan Product
     if (!formData.loanProductId) {
       errors.loanProductId = 'Loan Product is required.';
       isValid = false;
+    } else {
+      const selectedProd = loanProducts.find(
+        (p) => String(p.loanProductId ?? p.id) === String(formData.loanProductId)
+      );
+      if (!selectedProd || !formData.loanTypeId || String(selectedProd.loanTypeId) !== String(formData.loanTypeId)) {
+        errors.loanProductId = 'Selected Loan Product is not valid for the chosen Loan Type.';
+        isValid = false;
+      }
     }
 
     // Expected Loan Amount
@@ -620,7 +654,16 @@ export default function AddCustomer() {
     label: type.employmentTypeName || type.name || 'Employment Type',
   }));
 
-  const loanProductOptions = loanProducts.map((product) => ({
+  const loanTypeOptions = loanTypes.map((type) => ({
+    value: String(type.loanTypeId ?? type.id),
+    label: type.typeName || type.name || type.typeCode || 'Loan Type',
+  }));
+
+  const filteredLoanProducts = formData.loanTypeId
+    ? loanProducts.filter((product) => String(product.loanTypeId) === String(formData.loanTypeId))
+    : [];
+
+  const loanProductOptions = filteredLoanProducts.map((product) => ({
     value: String(product.loanProductId ?? product.id),
     label: product.productName || product.productCode || 'Unnamed Product',
   }));
@@ -633,12 +676,22 @@ export default function AddCustomer() {
     ? 'No employment types available'
     : 'Select employment type';
 
+  const loanTypePlaceholder = loadingMasters
+    ? 'Loading loan types...'
+    : mastersError
+    ? 'Unable to load loan types. Please try again.'
+    : loanTypes.length === 0
+    ? 'No loan types available'
+    : 'Select loan type';
+
   const loanProductPlaceholder = loadingMasters
     ? 'Loading loan products...'
     : mastersError
     ? 'Unable to load loan products. Please try again.'
-    : loanProducts.length === 0
-    ? 'No loan products available'
+    : !formData.loanTypeId
+    ? 'Select Loan Type first'
+    : filteredLoanProducts.length === 0
+    ? 'No loan products mapped to this loan type'
     : 'Select product';
 
   return (
@@ -767,6 +820,44 @@ export default function AddCustomer() {
           </div>
 
           <div className="form-grid-3">
+            {/* Loan Type */}
+            <div className="form-group">
+              <label className="form-label" htmlFor="loanTypeId">
+                Loan Type<span className="required-star">*</span>
+              </label>
+              <Select
+                id="loanTypeId"
+                name="loanTypeId"
+                value={formData.loanTypeId}
+                onChange={(val) => handleSelectChange('loanTypeId', val)}
+                options={loanTypeOptions}
+                placeholder={loanTypePlaceholder}
+                disabled={loadingMasters || !!mastersError || submitting || Boolean(createdRmCustomerId)}
+                error={Boolean(fieldErrors.loanTypeId)}
+                icon={<Landmark size={16} strokeWidth={1.8} />}
+              />
+              {fieldErrors.loanTypeId && <div className="form-field-error">{fieldErrors.loanTypeId}</div>}
+            </div>
+
+            {/* Loan Product */}
+            <div className="form-group">
+              <label className="form-label" htmlFor="loanProductId">
+                Loan Product<span className="required-star">*</span>
+              </label>
+              <Select
+                id="loanProductId"
+                name="loanProductId"
+                value={formData.loanProductId}
+                onChange={(val) => handleSelectChange('loanProductId', val)}
+                options={loanProductOptions}
+                placeholder={loanProductPlaceholder}
+                disabled={!formData.loanTypeId || loadingMasters || !!mastersError || submitting || Boolean(createdRmCustomerId)}
+                error={Boolean(fieldErrors.loanProductId)}
+                icon={<Target size={16} strokeWidth={1.8} />}
+              />
+              {fieldErrors.loanProductId && <div className="form-field-error">{fieldErrors.loanProductId}</div>}
+            </div>
+
             {/* Employment Type */}
             <div className="form-group">
               <label className="form-label" htmlFor="employmentTypeId">
@@ -784,25 +875,6 @@ export default function AddCustomer() {
                 icon={<Briefcase size={16} strokeWidth={1.8} />}
               />
               {fieldErrors.employmentTypeId && <div className="form-field-error">{fieldErrors.employmentTypeId}</div>}
-            </div>
-
-            {/* Loan Product */}
-            <div className="form-group">
-              <label className="form-label" htmlFor="loanProductId">
-                Loan Product<span className="required-star">*</span>
-              </label>
-              <Select
-                id="loanProductId"
-                name="loanProductId"
-                value={formData.loanProductId}
-                onChange={(val) => handleSelectChange('loanProductId', val)}
-                options={loanProductOptions}
-                placeholder={loanProductPlaceholder}
-                disabled={loadingMasters || !!mastersError || submitting || Boolean(createdRmCustomerId)}
-                error={Boolean(fieldErrors.loanProductId)}
-                icon={<Target size={16} strokeWidth={1.8} />}
-              />
-              {fieldErrors.loanProductId && <div className="form-field-error">{fieldErrors.loanProductId}</div>}
             </div>
 
             {/* Expected Loan Amount */}
@@ -894,7 +966,27 @@ export default function AddCustomer() {
                       key={mapping.docKey}
                       className={`document-upload-card ${hasFile ? 'has-file' : ''}`}
                     >
-                      {hasFile ? (
+                      <div className="document-card-top">
+                        <div className="document-icon-badge">
+                          <IconComponent size={16} strokeWidth={1.8} />
+                        </div>
+                        <div className="document-card-info">
+                          <h4>
+                            {docName}
+                            {mapping.isMandatory && <span className="required-star">*</span>}
+                          </h4>
+                          {!hasFile && (
+                            <>
+                              <p>Upload clear image of {docName}</p>
+                              <p className="document-card-subtitle">
+                                {isMultiple ? 'Upload multiple files' : 'JPG, PNG or PDF (Max. 10MB)'}
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {hasFile && (
                         isMultiple ? (
                           <div className="file-preview-box" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px' }}>
                             {files.map((file, index) => (
@@ -962,22 +1054,6 @@ export default function AddCustomer() {
                             )}
                           </div>
                         )
-                      ) : (
-                        <div className="document-card-top">
-                          <div className="document-icon-badge">
-                            <IconComponent size={16} strokeWidth={1.8} />
-                          </div>
-                          <div className="document-card-info">
-                            <h4>
-                              {docName}
-                              {mapping.isMandatory && <span className="required-star">*</span>}
-                            </h4>
-                            <p>Upload clear image of {docName}</p>
-                            <p className="document-card-subtitle">
-                              {isMultiple ? 'Upload multiple files' : 'JPG, PNG or PDF (Max. 10MB)'}
-                            </p>
-                          </div>
-                        </div>
                       )}
 
                       <div className="file-actions-row">

@@ -78,8 +78,8 @@ export default function CustomerSubmissionHistory() {
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
-  const pageSizeOptions = [5, 10, 15, 20];
+  const [pageSize, setPageSize] = useState(8);
+  const pageSizeOptions = [5, 8, 10, 15, 20];
 
   const fetchSubmissions = async () => {
     setLoading(true);
@@ -104,6 +104,7 @@ export default function CustomerSubmissionHistory() {
         customersRes,
         purpRes,
         productsRes,
+        loanTypesRes,
         empRes,
         docTypesRes,
         sourcingRes,
@@ -115,6 +116,7 @@ export default function CustomerSubmissionHistory() {
         rmCustomerService.getAllCustomers().catch(() => []),
         masterService.getLoanPurposes().catch(() => []),
         masterService.getLoanProducts().catch(() => []),
+        masterService.getLoanTypes().catch(() => []),
         masterService.getEmploymentTypes().catch(() => []),
         masterService.getDocumentTypes().catch(() => []),
         axiosInstance.get('/SourcingChannelMaster').then((r) => r.data).catch(() => []),
@@ -127,6 +129,7 @@ export default function CustomerSubmissionHistory() {
       const allCustomers = extractArray(customersRes);
       const loanPurposes = extractArray(purpRes);
       const loanProducts = extractArray(productsRes);
+      const loanTypes = extractArray(loanTypesRes);
       const employmentTypes = extractArray(empRes);
       const documentTypes = extractArray(docTypesRes);
       const sourcingChannels = extractArray(sourcingRes);
@@ -138,6 +141,7 @@ export default function CustomerSubmissionHistory() {
       setMasterData({
         loanPurposes,
         loanProducts,
+        loanTypes,
         employmentTypes,
         documentTypes,
         sourcingChannels,
@@ -707,17 +711,7 @@ export default function CustomerSubmissionHistory() {
                             <Eye size={15} strokeWidth={1.8} />
                             <span>View Details</span>
                           </button>
-                          {isItemConverted ? (
-                            <button
-                              type="button"
-                              className="btn-continue-app"
-                              onClick={() => handleContinueToApp(item)}
-                              title="Open in New Applications"
-                            >
-                              <ArrowRight size={14} />
-                              <span>Continue to Application</span>
-                            </button>
-                          ) : (
+                          {!isItemConverted && (
                             <button
                               type="button"
                               className="btn-promote-app"

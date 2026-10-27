@@ -94,7 +94,7 @@ function SubmissionHistory() {
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(7)
+  const [pageSize, setPageSize] = useState(8)
 
   // Fetch DocumentTypeMaster and DocumentRejections once on mount
   useEffect(() => {
@@ -725,7 +725,7 @@ function SubmissionHistory() {
               setPageSize(size)
               setCurrentPage(1)
             }}
-            pageSizeOptions={[5, 7, 10]}
+            pageSizeOptions={[5, 8, 10]}
             useCustomSelect={true}
           />
         )}

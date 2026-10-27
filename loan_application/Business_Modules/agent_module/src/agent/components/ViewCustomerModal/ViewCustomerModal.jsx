@@ -27,6 +27,8 @@ function ViewCustomerModal({ customer, onClose }) {
   // Masters for name lookup if backend only returned IDs
   const [employmentTypes, setEmploymentTypes] = useState([])
   const [documentTypes, setDocumentTypes] = useState([])
+  const [loanProducts, setLoanProducts] = useState([])
+  const [loanTypes, setLoanTypes] = useState([])
 
   // Group and sort documents chronologically into Original (V1) and Updated (V2+)
   const { originalDocs, updatedDocs } = useMemo(() => {
@@ -92,11 +94,13 @@ function ViewCustomerModal({ customer, onClose }) {
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const [docsRes, empRes, docTypeRes, rejectionsRes] = await Promise.all([
+        const [docsRes, empRes, docTypeRes, rejectionsRes, loanProductsRes, loanTypesRes] = await Promise.all([
           agentCustomerService.getDocumentsByCustomerId(targetCustId).catch(() => []),
           masterService.getEmploymentTypes().catch(() => []),
           masterService.getDocumentTypes().catch(() => []),
-          apiFetch(`${API_BASE}/BackOfficeDocumentRejection`, { headers }).then(r => r.ok ? r.json() : []).catch(() => [])
+          apiFetch(`${API_BASE}/BackOfficeDocumentRejection`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+          masterService.getLoanProducts().catch(() => []),
+          masterService.getLoanTypes().catch(() => []),
         ])
 
         const extractArray = (res) => {
@@ -113,6 +117,10 @@ function ViewCustomerModal({ customer, onClose }) {
         const rawDocs = extractArray(docsRes);
         const allRejections = extractArray(rejectionsRes);
         const docTypeList = extractArray(docTypeRes);
+        const rawProducts = extractArray(loanProductsRes);
+        const rawTypes = extractArray(loanTypesRes);
+        setLoanProducts(rawProducts);
+        setLoanTypes(rawTypes);
 
         // Resolve a rejection record onto a numeric DocumentTypeId from the active
         // DocumentTypeMaster. BackOfficeDocumentRejection identifies the document by
@@ -265,7 +273,19 @@ function ViewCustomerModal({ customer, onClose }) {
   const status = customer.status || 'Draft'
   
   // Resolve Names
-  const productName = customer.loanProductName || customer.productName || 'N/A'
+  const rawProdId = customer.loanProductId ?? customer.LoanProductId ?? customer.loanProduct;
+  const matchedProd = rawProdId !== null && rawProdId !== undefined && rawProdId !== ''
+    ? loanProducts.find((p) => String(p.loanProductId ?? p.id) === String(rawProdId) || Number(p.loanProductId ?? p.id) === Number(rawProdId))
+    : null;
+
+  const productName = matchedProd?.productName || matchedProd?.name || customer.loanProductName || customer.productName || 'N/A';
+
+  const rawTypeId = matchedProd?.loanTypeId ?? matchedProd?.LoanTypeId ?? customer.loanTypeId ?? customer.LoanTypeId;
+  const matchedType = rawTypeId !== null && rawTypeId !== undefined && rawTypeId !== ''
+    ? loanTypes.find((t) => String(t.loanTypeId ?? t.id) === String(rawTypeId) || Number(t.loanTypeId ?? t.id) === Number(rawTypeId))
+    : null;
+
+  const loanTypeName = matchedType?.typeName || matchedType?.name || customer.loanTypeName || customer.LoanTypeName || 'N/A';
   
   let employmentTypeName = customer.employmentTypeName
   if (!employmentTypeName && customer.employmentTypeId) {
@@ -506,8 +526,12 @@ function ViewCustomerModal({ customer, onClose }) {
               </div>
               <div className="drawer-grid-2">
                 <div className="drawer-detail-item">
-                  <span className="detail-label">Product Name</span>
-                  <span className="detail-value">{customer.loanProductName || customer.productName || 'N/A'}</span>
+                  <span className="detail-label">Loan Type</span>
+                  <span className="detail-value">{loanTypeName}</span>
+                </div>
+                <div className="drawer-detail-item">
+                  <span className="detail-label">Loan Product</span>
+                  <span className="detail-value">{productName}</span>
                 </div>
                 <div className="drawer-detail-item">
                   <span className="detail-label">Expected Loan Amount</span>

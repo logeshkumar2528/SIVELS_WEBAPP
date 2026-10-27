@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import {
   User,
@@ -50,11 +50,15 @@ function AddCustomer() {
 
   // Master Data State
   const [employmentTypes, setEmploymentTypes] = useState([])
+  const [loanTypes, setLoanTypes] = useState([])
+  const [rawLoanTypes, setRawLoanTypes] = useState([])
   const [loanProducts, setLoanProducts] = useState([])
+  const [rawLoanProducts, setRawLoanProducts] = useState([])
   const [customerDocumentTypes, setCustomerDocumentTypes] = useState([])
   
   // Specific Error States
   const [employmentTypesError, setEmploymentTypesError] = useState(false)
+  const [loanTypesError, setLoanTypesError] = useState(false)
   const [loanProductsError, setLoanProductsError] = useState(false)
   
   // Loading States
@@ -76,6 +80,7 @@ function AddCustomer() {
     mobileNumber: '',
     email: '',
     employmentTypeId: '',
+    loanTypeId: '',
     loanProductId: '',
     expectedAmount: '',
     remarks: '',
@@ -124,13 +129,25 @@ function AddCustomer() {
       }
 
       try {
+        const loanTypesRes = await masterService.getLoanTypes()
+        const arr = extractArray(loanTypesRes)
+        setRawLoanTypes(arr)
+        setLoanTypes(arr.filter(lt => lt.isActive !== false))
+      } catch (err) {
+        console.error("Failed to load loan types for Agent Add Customer:", err)
+        setLoanTypesError(true)
+      }
+
+      try {
         const productsRes = await masterService.getLoanProducts()
         const arr = extractArray(productsRes)
+        setRawLoanProducts(arr)
         const activeProducts = arr.filter(
           (product) => product.isActive === true
         );
         setLoanProducts(activeProducts);
       } catch (err) {
+        console.error("Failed to load loan products for Agent Add Customer:", err)
         setLoanProductsError(true);
       }
       
@@ -177,16 +194,31 @@ function AddCustomer() {
 
           if (isMounted && customer) {
             const empTypeId = customer.employmentTypeId ? String(customer.employmentTypeId) : ''
+            const savedProdId = customer.loanProductId ? String(customer.loanProductId) : ''
+            let derivedLoanTypeId = ''
+
+            if (savedProdId && rawLoanProducts.length > 0) {
+              const matchedProd = rawLoanProducts.find(
+                (p) => String(p.loanProductId ?? p.id) === savedProdId
+              )
+              if (matchedProd && matchedProd.loanTypeId) {
+                derivedLoanTypeId = String(matchedProd.loanTypeId)
+                initialPreloadDoneRef.current = true
+              }
+            }
+
             setLoadedEmploymentTypeId(empTypeId)
-            setFormData({
+            setFormData((prev) => ({
+              ...prev,
               fullName: customer.fullName || '',
               mobileNumber: customer.mobileNumber || '',
               email: customer.email || '',
               employmentTypeId: empTypeId,
-              loanProductId: customer.loanProductId ? String(customer.loanProductId) : '',
+              loanTypeId: prev.loanTypeId || derivedLoanTypeId,
+              loanProductId: savedProdId,
               expectedAmount: customer.expectedLoanAmount ? formatIndianAmount(customer.expectedLoanAmount, true, 2) : '',
               remarks: customer.remarks || '',
-            })
+            }))
 
             const customerDocs = docList.map(normalizeAgentCustomerDocument).filter(d => d.isActive).sort(sortByLatest)
             const uploadedIds = customerDocs.map(d => Number(d.customerDocumentTypeId)).filter(Boolean)
@@ -213,6 +245,39 @@ function AddCustomer() {
       isMounted = false
     }
   }, [isEditMode, editCustomerId, withLoading])
+
+  // Ref to track edit-mode preload derivation
+  const initialPreloadDoneRef = useRef(false)
+
+  useEffect(() => {
+    initialPreloadDoneRef.current = false
+  }, [editCustomerId])
+
+  // Derive loanTypeId from saved loanProductId for existing customer edit mode
+  useEffect(() => {
+    if (!isEditMode || initialPreloadDoneRef.current) return
+    if (loadingMasters || rawLoanProducts.length === 0 || !formData.loanProductId) return
+
+    const savedProdId = String(formData.loanProductId)
+    const matchedProd = rawLoanProducts.find(
+      (p) => String(p.loanProductId ?? p.id) === savedProdId
+    )
+
+    if (matchedProd && matchedProd.loanTypeId) {
+      const derivedTypeId = String(matchedProd.loanTypeId)
+      setFormData((prev) => {
+        if (!prev.loanTypeId) {
+          return { ...prev, loanTypeId: derivedTypeId }
+        }
+        return prev
+      })
+      initialPreloadDoneRef.current = true
+    } else {
+      console.warn(`Saved loan product ${savedProdId} could not be resolved from master data.`)
+      setGlobalError(`The previously saved Loan Product (ID: ${savedProdId}) could not be resolved from Loan Product Master records. Please re-select the Loan Type and Loan Product.`)
+      initialPreloadDoneRef.current = true
+    }
+  }, [isEditMode, loadingMasters, rawLoanProducts, formData.loanProductId])
 
   // When Employment Type Changes -> Load Document Mappings
   useEffect(() => {
@@ -312,9 +377,25 @@ function AddCustomer() {
       value = formatIndianAmount(value, true, 2)
     }
 
-    setFormData((prev) => ({ ...prev, [name]: value }))
+    setFormData((prev) => {
+      const updated = { ...prev, [name]: value }
+      if (name === 'loanTypeId') {
+        const finalValue = value !== null && value !== undefined ? String(value) : ''
+        const currentProd = rawLoanProducts.find(
+          (p) => String(p.loanProductId ?? p.id) === String(prev.loanProductId)
+        )
+        if (!finalValue || !currentProd || String(currentProd.loanTypeId) !== String(finalValue)) {
+          updated.loanProductId = ''
+        }
+      }
+      return updated
+    })
+
     if (fieldErrors[name]) {
       setFieldErrors(prev => ({ ...prev, [name]: null }))
+    }
+    if (name === 'loanTypeId' && fieldErrors.loanProductId) {
+      setFieldErrors(prev => ({ ...prev, loanProductId: null }))
     }
     if (name === 'expectedAmount' && fieldErrors.expectedLoanAmount) {
       setFieldErrors(prev => ({ ...prev, expectedLoanAmount: null }))
@@ -436,10 +517,24 @@ function AddCustomer() {
       isValid = false
     }
 
+    // Loan Type Validation
+    if (!formData.loanTypeId) {
+      newFieldErrors.loanTypeId = 'Loan Type is required.'
+      isValid = false
+    }
+
     // Loan Product Validation
     if (!formData.loanProductId) {
       newFieldErrors.loanProductId = 'Loan Product is required.'
       isValid = false
+    } else {
+      const selectedProd = rawLoanProducts.find(
+        (p) => String(p.loanProductId ?? p.id) === String(formData.loanProductId)
+      )
+      if (!selectedProd || !formData.loanTypeId || String(selectedProd.loanTypeId) !== String(formData.loanTypeId)) {
+        newFieldErrors.loanProductId = 'Selected Loan Product is not valid for the chosen Loan Type.'
+        isValid = false
+      }
     }
 
     // Expected Loan Amount Validation
@@ -673,11 +768,13 @@ function AddCustomer() {
     setSubmittedData(null)
     setCreatedCustomerId(null)
     setUploadedDocuments([])
+    initialPreloadDoneRef.current = false
     setFormData({
       fullName: '',
       mobileNumber: '',
       email: '',
       employmentTypeId: '',
+      loanTypeId: '',
       loanProductId: '',
       expectedAmount: '',
       remarks: '',
@@ -701,9 +798,42 @@ function AddCustomer() {
     label: type.employmentTypeName || type.name
   }))
 
-  const loanProductOptions = loanProducts.map((product) => ({
+  // Loan Type & Product Options with Inactive Historical Support
+  const selectedTypeRecord = rawLoanTypes.find(
+    (t) => String(t.loanTypeId ?? t.id) === String(formData.loanTypeId)
+  )
+  let displayLoanTypes = [...loanTypes]
+  if (
+    selectedTypeRecord &&
+    !displayLoanTypes.some((t) => String(t.loanTypeId ?? t.id) === String(formData.loanTypeId))
+  ) {
+    displayLoanTypes.push(selectedTypeRecord)
+  }
+
+  const loanTypeOptions = displayLoanTypes.map((type) => ({
+    value: String(type.loanTypeId ?? type.id),
+    label: `${type.typeName || type.name || type.typeCode || 'Loan Type'}${type.isActive === false ? ' (Inactive)' : ''}`
+  }))
+
+  const filteredLoanProducts = formData.loanTypeId
+    ? loanProducts.filter((product) => String(product.loanTypeId) === String(formData.loanTypeId))
+    : []
+
+  const selectedProductRecord = rawLoanProducts.find(
+    (p) => String(p.loanProductId ?? p.id) === String(formData.loanProductId)
+  )
+  let displayLoanProducts = [...filteredLoanProducts]
+  if (
+    selectedProductRecord &&
+    String(selectedProductRecord.loanTypeId) === String(formData.loanTypeId) &&
+    !displayLoanProducts.some((p) => String(p.loanProductId ?? p.id) === String(formData.loanProductId))
+  ) {
+    displayLoanProducts.push(selectedProductRecord)
+  }
+
+  const loanProductOptions = displayLoanProducts.map((product) => ({
     value: String(product.loanProductId ?? product.id),
-    label: product.productName || product.productCode || 'Unnamed Product'
+    label: `${product.productName || product.productCode || 'Unnamed Product'}${product.isActive === false ? ' (Inactive)' : ''}`
   }))
 
   const employmentPlaceholder = loadingMasters 
@@ -714,13 +844,23 @@ function AddCustomer() {
         ? 'No employment types available' 
         : 'Select employment type'
 
+  const loanTypePlaceholder = loadingMasters
+    ? 'Loading loan types...'
+    : loanTypesError
+      ? 'Unable to load loan types. Please try again.'
+      : loanTypes.length === 0
+        ? 'No loan types available'
+        : 'Select loan type'
+
   const loanProductPlaceholder = loadingMasters 
     ? 'Loading loan products...' 
     : loanProductsError 
       ? 'Unable to load loan products. Please try again.' 
-      : loanProducts.length === 0 
-        ? 'No loan products available' 
-        : 'Select product'
+      : !formData.loanTypeId
+        ? 'Select Loan Type first'
+        : displayLoanProducts.length === 0
+          ? 'No loan products mapped to this loan type'
+          : 'Select product'
 
   if (loadingCustomer) {
     return (
@@ -831,6 +971,47 @@ function AddCustomer() {
           </div>
 
           <div className="form-grid-3">
+            {/* Loan Type */}
+            <div className="form-group">
+              <label className="form-label" htmlFor="loanTypeId">
+                Loan Type<span className="required-star">*</span>
+              </label>
+              <CustomSelect
+                id="loanTypeId"
+                name="loanTypeId"
+                value={formData.loanTypeId}
+                onChange={handleInputChange}
+                options={loanTypeOptions}
+                placeholder={loanTypePlaceholder}
+                disabled={loadingMasters || loanTypesError}
+                error={!!fieldErrors.loanTypeId}
+                icon={Landmark}
+                required
+              />
+              {fieldErrors.loanTypeId && <div className="form-field-error">{fieldErrors.loanTypeId}</div>}
+            </div>
+
+            {/* Loan Product */}
+            <div className="form-group">
+              <label className="form-label" htmlFor="loanProductId">
+                Loan Product<span className="required-star">*</span>
+              </label>
+              <CustomSelect
+                id="loanProductId"
+                name="loanProductId"
+                value={formData.loanProductId}
+                onChange={handleInputChange}
+                options={loanProductOptions}
+                placeholder={loanProductPlaceholder}
+                disabled={!formData.loanTypeId || loadingMasters || loanProductsError}
+                error={!!fieldErrors.loanProductId}
+                icon={Target}
+                required
+              />
+              {fieldErrors.loanProductId && <div className="form-field-error">{fieldErrors.loanProductId}</div>}
+            </div>
+
+            {/* Employment Type */}
             <div className="form-group">
               <label className="form-label" htmlFor="employmentTypeId">
                 Employment Type<span className="required-star">*</span>
@@ -848,25 +1029,6 @@ function AddCustomer() {
                 required
               />
               {fieldErrors.employmentTypeId && <div className="form-field-error">{fieldErrors.employmentTypeId}</div>}
-            </div>
-
-            <div className="form-group">
-              <label className="form-label" htmlFor="loanProductId">
-                Loan Product<span className="required-star">*</span>
-              </label>
-              <CustomSelect
-                id="loanProductId"
-                name="loanProductId"
-                value={formData.loanProductId}
-                onChange={handleInputChange}
-                options={loanProductOptions}
-                placeholder={loanProductPlaceholder}
-                disabled={loadingMasters || loanProductsError}
-                error={!!fieldErrors.loanProductId}
-                icon={Target}
-                required
-              />
-              {fieldErrors.loanProductId && <div className="form-field-error">{fieldErrors.loanProductId}</div>}
             </div>
 
             <div className="form-group">

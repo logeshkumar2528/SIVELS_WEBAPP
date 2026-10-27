@@ -6,6 +6,11 @@ export const masterService = {
     return response.data;
   },
 
+  getLoanTypes: async () => {
+    const response = await axiosInstance.get('/LoanTypeMaster');
+    return response.data;
+  },
+
   getLoanPurposes: async () => {
     const response = await axiosInstance.get('/LoanPurposeMaster');
     return response.data;
