@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -29,6 +29,10 @@ import { resolveVerificationIdByCodeOrName } from '../../../../../Core/src/utils
 import { matchesListingDateCriteria } from '../../utils/dateHelper';
 import { ROUTES } from '../../config/routeConfig';
 import { Can } from '../../../../../Core/src/auth/permissions';
+import {
+  resolveDocumentTypeId,
+  selectLatestCustomerPhotoDoc,
+} from '../../../../../Core/src/utils/documentTypeHelper';
 import './CustomerSubmissionHistory.css';
 
 const STATUS_OPTIONS = [
@@ -39,6 +43,115 @@ const STATUS_OPTIONS = [
   { value: 'Returned', label: 'BO Returned' },
   { value: 'Logged to HO', label: 'Logged to HO' },
 ];
+
+/**
+ * Correlates a customer record with their corresponding ApplicationProductDetails record.
+ * Checks existing application identifiers, active flags, and RM relationship fields.
+ * If multiple records share the same customer identifier:
+ * - Prioritizes exact applicationProductDetailsId if present on the customer
+ * - Filters for active records (isActive !== false)
+ * - Checks RM ownership (rmId === currentRmId)
+ * - Checks consensus if all candidate records point to the exact same LoanProductId
+ * - If matching remains ambiguous with conflicting LoanProductIds, reports the ambiguity and returns null
+ */
+function correlateCustomerWithApplicationProduct(customer, allAppProducts = [], currentRmId = null) {
+  if (!customer || !Array.isArray(allAppProducts) || allAppProducts.length === 0) {
+    return null;
+  }
+
+  const customerAgentId = Number(customer.agentCustomerId ?? customer.AgentCustomerId ?? 0);
+  const customerRmId = Number(customer.rmCustomerId ?? customer.rMCustomerId ?? customer.id ?? 0);
+  const customerAppProdId = Number(customer.applicationProductDetailsId ?? customer.ApplicationProductDetailsId ?? 0);
+  const targetRmId = Number(currentRmId || customer.rmId || customer.RmId || customer.createdBy || customer.CreatedBy || 0);
+
+  // Establish eligible candidates strictly upfront before any early return
+  const eligibleCandidates = allAppProducts.filter((p) => {
+    if (!p) return false;
+
+    // 1. Exclude explicitly inactive application records
+    if (p.isActive === false || p.IsActive === false) {
+      return false;
+    }
+
+    // 2. Separate customer/product ID namespace matching
+    const pAppProdId = Number(p.applicationProductDetailsId ?? p.ApplicationProductDetailsId ?? 0);
+    const pAgentCustId = Number(p.agentCustomerId ?? p.AgentCustomerId ?? 0);
+    const pRmCustId = Number(p.rmCustomerId ?? p.RmCustomerId ?? p.RMCustomerId ?? 0);
+
+    const isExactAppProdMatch = customerAppProdId > 0 && pAppProdId > 0 && pAppProdId === customerAppProdId;
+    const isAgentCustomerMatch = customerAgentId > 0 && pAgentCustId > 0 && pAgentCustId === customerAgentId;
+    const isRmCustomerMatch = customerRmId > 0 && pRmCustId > 0 && pRmCustId === customerRmId;
+
+    if (!isExactAppProdMatch && !isAgentCustomerMatch && !isRmCustomerMatch) {
+      return false;
+    }
+
+    // 3. Exclude Agent-owned applications
+    const pAgentId = Number(p.agentId ?? p.AgentId ?? 0);
+    if (pAgentId > 0) {
+      return false;
+    }
+
+    // 4. Enforce confirmed RM ownership when ownership information is available.
+    // Do not treat missing ownership metadata as evidence of ownership.
+    if (targetRmId > 0) {
+      const pRmId = Number(p.rmId ?? p.RmId ?? 0);
+      const pCreatedBy = Number(p.createdBy ?? p.CreatedBy ?? 0);
+
+      const isConfirmedRmOwned = pRmId === targetRmId || (pRmId === 0 && pCreatedBy === targetRmId);
+      if (!isConfirmedRmOwned) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  // If no eligible application record remains, fall back safely
+  if (eligibleCandidates.length === 0) {
+    return null;
+  }
+
+  // Exactly one confirmed, active, RM-owned application record
+  if (eligibleCandidates.length === 1) {
+    return eligibleCandidates[0];
+  }
+
+  // --- MULTIPLE ELIGIBLE CANDIDATES HANDLING ---
+
+  // Priority A: Exact primary key match if customer carries applicationProductDetailsId
+  if (customerAppProdId > 0) {
+    const exactMatches = eligibleCandidates.filter((p) => {
+      const pAppProdId = Number(p.applicationProductDetailsId ?? p.ApplicationProductDetailsId ?? 0);
+      return pAppProdId === customerAppProdId;
+    });
+    if (exactMatches.length === 1) {
+      return exactMatches[0];
+    }
+  }
+
+  // Priority B: Product consensus across all eligible candidates
+  const distinctProductIds = Array.from(
+    new Set(
+      eligibleCandidates
+        .map((p) => Number(p.loanProductId ?? p.LoanProductId ?? 0))
+        .filter((id) => id > 0)
+    )
+  );
+
+  if (distinctProductIds.length === 1) {
+    return eligibleCandidates[0];
+  }
+
+  // Priority C: Ambiguity with conflicting LoanProductIds - do NOT select arbitrarily
+  console.warn(
+    `[CustomerSubmissionHistory] Ambiguous ApplicationProductDetails for customer "${customer.fullName || ''}" (ID: ${customerAgentId || customerRmId}): ` +
+    `Found ${eligibleCandidates.length} eligible application records with conflicting LoanProductIds: [${distinctProductIds.join(', ')}]. ` +
+    `Preserving initial customer intake product to avoid arbitrary selection.`,
+    { customer, candidates: eligibleCandidates }
+  );
+  return null;
+}
 
 export default function CustomerSubmissionHistory() {
   const navigate = useNavigate();
@@ -77,6 +190,12 @@ export default function CustomerSubmissionHistory() {
 
   // View Customer Drawer State
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+
+  // Photo Resolution and Caching States
+  const [photoDocTypeId, setPhotoDocTypeId] = useState(null);
+  const [customerPhotos, setCustomerPhotos] = useState({});
+  const photoUrlsRef = useRef({});
+  const inFlightCustIdsRef = useRef(new Set());
 
   // Delete Customer Modal State
   const [customerToDelete, setCustomerToDelete] = useState(null);
@@ -163,6 +282,7 @@ export default function CustomerSubmissionHistory() {
         intTypesRes,
         roiRes,
         verificationsRes,
+        appProdRes,
       ] = await Promise.all([
         rmCustomerService.getAllCustomers().catch(() => []),
         masterService.getLoanPurposes().catch(() => []),
@@ -175,6 +295,7 @@ export default function CustomerSubmissionHistory() {
         axiosInstance.get('/InterestTypeMaster').then((r) => r.data).catch(() => []),
         axiosInstance.get('/RateOfInterestMaster').then((r) => r.data).catch(() => []),
         axiosInstance.get('/VerificationMaster').then((r) => r.data).catch(() => []),
+        axiosInstance.get('/ApplicationProductDetails/my').then((r) => r.data).catch(() => []),
       ]);
 
       const allCustomers = extractArray(customersRes);
@@ -188,6 +309,7 @@ export default function CustomerSubmissionHistory() {
       const interestTypes = extractArray(intTypesRes);
       const rateOfInterests = extractArray(roiRes);
       const verifications = extractArray(verificationsRes);
+      const allApplicationProducts = extractArray(appProdRes);
 
       setMasterData({
         loanPurposes,
@@ -201,6 +323,11 @@ export default function CustomerSubmissionHistory() {
         rateOfInterests,
         verifications,
       });
+
+      const resolvedPhotoDocId = resolveDocumentTypeId(documentTypes, 'photo');
+      if (resolvedPhotoDocId) {
+        setPhotoDocTypeId(resolvedPhotoDocId);
+      }
 
       // Filter by current RM identity: strictly records created through RM Add Customer flow
       const myCustomers = currentRmId
@@ -258,12 +385,32 @@ export default function CustomerSubmissionHistory() {
 
       setSubmissions(
         myCustomers.map((customer) => {
-          const rawProductId = customer.loanProductId ?? customer.LoanProductId ?? null;
+          const rawIntakeProductId = customer.loanProductId ?? customer.LoanProductId ?? null;
           const rawPurposeId = customer.loanPurposeId ?? customer.LoanPurposeId ?? null;
 
+          // Correlate customer with application product details
+          const matchedAppProduct = correlateCustomerWithApplicationProduct(
+            customer,
+            allApplicationProducts,
+            currentRmId
+          );
+
+          // For converted/application-stage customers with a valid matched application product record,
+          // prioritize ApplicationProductDetails.LoanProductId.
+          // For New/unconverted customers, preserve AgentAddCustomer.loanProductId.
+          const appLoanProductId = matchedAppProduct
+            ? (matchedAppProduct.loanProductId ?? matchedAppProduct.LoanProductId ?? null)
+            : null;
+
+          const effectiveProductId =
+            appLoanProductId !== null && appLoanProductId !== undefined && appLoanProductId !== ''
+              ? appLoanProductId
+              : rawIntakeProductId;
+
+          // Derive displayed product name from LoanProductMaster using the effective LoanProductId
           const matchedProduct =
-            rawProductId !== null && rawProductId !== undefined && rawProductId !== ''
-              ? loanProducts.find((p) => Number(p.loanProductId || p.id) === Number(rawProductId))
+            effectiveProductId !== null && effectiveProductId !== undefined && effectiveProductId !== ''
+              ? loanProducts.find((p) => Number(p.loanProductId || p.id) === Number(effectiveProductId))
               : null;
 
           const matchedPurpose =
@@ -271,11 +418,31 @@ export default function CustomerSubmissionHistory() {
               ? loanPurposes.find((p) => Number(p.loanPurposeId || p.id) === Number(rawPurposeId))
               : null;
 
+          // Derive Loan Type from the effective product
+          const effectiveLoanTypeId =
+            matchedProduct?.loanTypeId ??
+            matchedProduct?.LoanTypeId ??
+            customer.loanTypeId ??
+            customer.LoanTypeId ??
+            null;
+
+          const matchedType =
+            effectiveLoanTypeId !== null && effectiveLoanTypeId !== undefined && effectiveLoanTypeId !== ''
+              ? loanTypes.find((t) => Number(t.loanTypeId || t.id) === Number(effectiveLoanTypeId))
+              : null;
+
+          const effectiveTypeName =
+            matchedType?.typeName ||
+            matchedType?.name ||
+            customer.loanTypeName ||
+            customer.LoanTypeName ||
+            'N/A';
+
+          const effectiveProductName = matchedProduct?.productName || matchedProduct?.name || null;
+
           const resolvedLoanName =
-            customer.loanProductName ||
-            customer.LoanProductName ||
-            matchedProduct?.productName ||
-            matchedProduct?.name ||
+            effectiveProductName ||
+            (!matchedAppProduct ? (customer.loanProductName || customer.LoanProductName) : null) ||
             customer.loanPurposeName ||
             customer.LoanPurposeName ||
             matchedPurpose?.purposeName ||
@@ -288,7 +455,21 @@ export default function CustomerSubmissionHistory() {
           return {
             ...customer,
             rmCustomerId: customer.rmCustomerId || customer.rMCustomerId || customer.id,
+            loanProductId: effectiveProductId,
+            LoanProductId: effectiveProductId,
+            loanProductName: resolvedLoanName,
+            LoanProductName: resolvedLoanName,
             loanPurposeName: resolvedLoanName,
+            loanTypeId: effectiveLoanTypeId,
+            LoanTypeId: effectiveLoanTypeId,
+            loanTypeName: effectiveTypeName,
+            LoanTypeName: effectiveTypeName,
+            applicationProductDetailsId:
+              matchedAppProduct?.applicationProductDetailsId ??
+              matchedAppProduct?.ApplicationProductDetailsId ??
+              customer.applicationProductDetailsId ??
+              customer.ApplicationProductDetailsId ??
+              null,
             employmentTypeName: customer.employmentTypeName || et?.employmentTypeName || et?.name || 'N/A',
             status: normalizeApplicationStatus(customer.status ?? customer.Status, customer.statusName ?? customer.StatusName),
           };
@@ -481,6 +662,119 @@ export default function CustomerSubmissionHistory() {
     const start = (currentPage - 1) * pageSize;
     return filteredSubmissions.slice(start, start + pageSize);
   }, [filteredSubmissions, currentPage, pageSize]);
+
+  // Load Photos for current visible page (paginatedData) with priority:
+  // 1. Original / Latest Photo from AgentCustomerDocument
+  // 2. Initial letter avatar (null)
+  useEffect(() => {
+    if (!paginatedData || paginatedData.length === 0) return;
+
+    let isMounted = true;
+
+    // Identify customers on the current visible page that haven't been checked/cached yet
+    const uncheckedCustomers = paginatedData.filter((item) => {
+      const custId = item.agentCustomerId ?? item.AgentCustomerId ?? item.rmCustomerId ?? item.rMCustomerId ?? item.id;
+      return custId && customerPhotos[custId] === undefined && !inFlightCustIdsRef.current.has(custId);
+    });
+
+    if (uncheckedCustomers.length === 0) return;
+
+    const fetchPhotos = async () => {
+      for (const item of uncheckedCustomers) {
+        if (!isMounted) break;
+        const custId = item.agentCustomerId ?? item.AgentCustomerId ?? item.rmCustomerId ?? item.rMCustomerId ?? item.id;
+        if (!custId) continue;
+
+        inFlightCustIdsRef.current.add(custId);
+        let loadedPhotoUrl = null;
+
+        try {
+          const docsRes = await rmCustomerService.getAgentCustomerDocumentsByCustomerId(custId);
+          const extractArray = (res) => {
+            if (Array.isArray(res)) return res;
+            if (res && typeof res === 'object') {
+              if (Array.isArray(res.data)) return res.data;
+              if (Array.isArray(res.items)) return res.items;
+              if (Array.isArray(res.result)) return res.result;
+              if (Array.isArray(res.list)) return res.list;
+            }
+            return [];
+          };
+          const docList = extractArray(docsRes);
+
+          const photoDoc = selectLatestCustomerPhotoDoc(docList, photoDocTypeId);
+          if (photoDoc) {
+            const docId = photoDoc.agentCustomerDocumentId ?? photoDoc.AgentCustomerDocumentId ?? photoDoc.id;
+            if (docId) {
+              const blob = await rmCustomerService.downloadAgentCustomerDocument(docId);
+              if (blob && blob.size > 0) {
+                let mimeType = blob.type || 'image/jpeg';
+                const fileName = photoDoc.fileName || photoDoc.documentName || '';
+                if (/\.png$/i.test(fileName)) mimeType = 'image/png';
+                else if (/\.(jpg|jpeg)$/i.test(fileName)) mimeType = 'image/jpeg';
+                else if (/\.webp$/i.test(fileName)) mimeType = 'image/webp';
+
+                const typedBlob = blob.type ? blob : new Blob([blob], { type: mimeType });
+                loadedPhotoUrl = URL.createObjectURL(typedBlob);
+              }
+            }
+          }
+
+          if (isMounted) {
+            if (loadedPhotoUrl) {
+              photoUrlsRef.current[custId] = loadedPhotoUrl;
+              setCustomerPhotos((prev) => ({ ...prev, [custId]: loadedPhotoUrl }));
+            } else {
+              setCustomerPhotos((prev) => ({ ...prev, [custId]: null }));
+            }
+          } else if (loadedPhotoUrl) {
+            URL.revokeObjectURL(loadedPhotoUrl);
+          }
+        } catch (err) {
+          if (isMounted) {
+            setCustomerPhotos((prev) => ({ ...prev, [custId]: null }));
+          }
+        } finally {
+          inFlightCustIdsRef.current.delete(custId);
+        }
+      }
+    };
+
+    fetchPhotos();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [paginatedData, photoDocTypeId, customerPhotos]);
+
+  // Cleanup all created Object URLs on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(photoUrlsRef.current).forEach((url) => {
+        if (url) {
+          try {
+            URL.revokeObjectURL(url);
+          } catch (e) {
+            // ignore
+          }
+        }
+      });
+      photoUrlsRef.current = {};
+    };
+  }, []);
+
+  const handleImageError = (custId) => {
+    const url = photoUrlsRef.current[custId];
+    if (url) {
+      try {
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        // ignore
+      }
+      delete photoUrlsRef.current[custId];
+    }
+    setCustomerPhotos((prev) => ({ ...prev, [custId]: null }));
+  };
 
   const handleResetFilters = () => {
     setSearchTerm('');
@@ -728,8 +1022,10 @@ export default function CustomerSubmissionHistory() {
               </thead>
               <tbody>
                 {paginatedData.map((item, idx) => {
+                  const custId = item.agentCustomerId ?? item.AgentCustomerId ?? item.rmCustomerId ?? item.rMCustomerId ?? item.id;
                   const initial = (item.fullName || 'U').charAt(0).toUpperCase();
                   const avatarClass = initial.match(/[A-M]/i) ? 'avatar--A' : 'avatar--R';
+                  const photoUrl = customerPhotos[custId];
                   const isItemPromoting = Boolean(isPromoting[item.rmCustomerId]);
                   const isDirectRmOwned =
                     (!item.agentId || item.agentId === '') &&
@@ -746,7 +1042,16 @@ export default function CustomerSubmissionHistory() {
                       </td>
                       <td className="rm-csh-td">
                         <div className="history-customer-cell">
-                          <div className={`history-avatar ${avatarClass}`}>{initial}</div>
+                          {photoUrl ? (
+                            <img
+                              src={photoUrl}
+                              alt={item.fullName || 'Customer'}
+                              className="history-avatar history-avatar-img"
+                              onError={() => handleImageError(custId)}
+                            />
+                          ) : (
+                            <div className={`history-avatar ${avatarClass}`}>{initial}</div>
+                          )}
                           <span className="customer-name-text">{item.fullName}</span>
                         </div>
                       </td>
