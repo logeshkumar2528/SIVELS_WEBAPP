@@ -34,10 +34,11 @@ export default function ApprovedDocumentsViewer({
   coApplicants = [],
   applicationProductDetailsId = null,
   creditDecision = null,
+  initialLoanIdentifier = null,
 }) {
   const [activeDoc, setActiveDoc] = useState(initialDocument || DOC_TYPES.SANCTION_LETTER);
   const [autoDownloadTriggered, setAutoDownloadTriggered] = useState(false);
-  const [loanIdentifier, setLoanIdentifier] = useState(null);
+  const [loanIdentifier, setLoanIdentifier] = useState(initialLoanIdentifier || null);
   const [identifierLoading, setIdentifierLoading] = useState(false);
   const [identifierError, setIdentifierError] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -89,10 +90,19 @@ export default function ApprovedDocumentsViewer({
 
   // Fetch persisted official identifiers on-demand for approved applications
   useEffect(() => {
-    if (!isOpen || !customerId || !isApproved) {
+    if (!isOpen) return undefined;
+
+    if (initialLoanIdentifier) {
+      setLoanIdentifier(initialLoanIdentifier);
+      setIdentifierError('');
+      setIdentifierLoading(false);
+      return undefined;
+    }
+
+    if (!customerId || !isApproved) {
       setLoanIdentifier(null);
       setIdentifierError('');
-      return;
+      return undefined;
     }
 
     let isMounted = true;
@@ -121,7 +131,7 @@ export default function ApprovedDocumentsViewer({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, customerId, isApproved]);
+  }, [isOpen, customerId, isApproved, initialLoanIdentifier]);
 
   const handleGenerateIdentifier = async () => {
     if (!customerId || isGenerating || !isApproved) return;

@@ -41,6 +41,15 @@ export const NAV_ITEMS = [
     permission: 'APPLICATIONS.VIEW',
   },
   {
+    id:       'field-verification',
+    label:    'Field Verification',
+    icon:     'MapPin',
+    route:    ROUTES.FIELD_VERIFICATION,
+    badgeKey: null,
+    section:  'APPLICATIONS',
+    permission: 'APPLICATIONS.VIEW',
+  },
+  {
     id:       'approved-applications',
     label:    'Logged to HO',
     icon:     'CheckCircle',

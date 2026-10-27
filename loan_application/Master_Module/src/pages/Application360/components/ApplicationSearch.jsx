@@ -1,15 +1,15 @@
 import { useState } from 'react';
-import { Search, X, Loader2, CreditCard, AlertCircle } from 'lucide-react';
+import { Search, X, Loader2, UserRound, AlertCircle } from 'lucide-react';
 
-const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+const CUSTOMER_CODE_REGEX = /^CU[A-Z0-9]+$/;
 
-export function ApplicationSearch({ onSearch, onClear, isLoading, currentPan = '' }) {
-  const [panInput, setPanInput] = useState(currentPan);
+export function ApplicationSearch({ onSearch, onClear, isLoading, currentCustomerCode = '' }) {
+  const [customerCodeInput, setCustomerCodeInput] = useState(currentCustomerCode);
   const [validationError, setValidationError] = useState('');
 
   const handleInputChange = (e) => {
-    const rawVal = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
-    setPanInput(rawVal);
+    const rawVal = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+    setCustomerCodeInput(rawVal);
     if (validationError) {
       setValidationError('');
     }
@@ -17,24 +17,24 @@ export function ApplicationSearch({ onSearch, onClear, isLoading, currentPan = '
 
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
-    const cleanPan = panInput.trim().toUpperCase();
+    const cleanCustomerCode = customerCodeInput.trim().toUpperCase();
 
-    if (!cleanPan) {
-      setValidationError('Please enter a PAN number.');
+    if (!cleanCustomerCode) {
+      setValidationError('Please enter a customer code.');
       return;
     }
 
-    if (!PAN_REGEX.test(cleanPan)) {
-      setValidationError('Please enter a valid 10-character PAN (5 letters, 4 digits, 1 letter).');
+    if (!CUSTOMER_CODE_REGEX.test(cleanCustomerCode)) {
+      setValidationError('Please enter a valid customer code beginning with CU.');
       return;
     }
 
     setValidationError('');
-    onSearch(cleanPan);
+    onSearch(cleanCustomerCode);
   };
 
   const handleClear = () => {
-    setPanInput('');
+    setCustomerCodeInput('');
     setValidationError('');
     if (onClear) onClear();
   };
@@ -49,20 +49,20 @@ export function ApplicationSearch({ onSearch, onClear, isLoading, currentPan = '
     <div className="app360-search-container">
       <form className="app360-search-form" onSubmit={handleSubmit}>
         <div className="app360-search-input-wrapper">
-          <CreditCard className="app360-search-icon" size={20} />
+          <UserRound className="app360-search-icon" size={20} />
           <input
             type="text"
             className={`app360-search-input ${validationError ? 'has-error' : ''}`}
-            placeholder="Enter 10-character PAN Number..."
-            value={panInput}
+            placeholder="Enter customer code (e.g. CU000018)..."
+            value={customerCodeInput}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            maxLength={10}
+            maxLength={20}
             autoFocus
             disabled={isLoading}
-            aria-label="PAN Number Search"
+            aria-label="Customer Code Search"
           />
-          {panInput && !isLoading && (
+          {customerCodeInput && !isLoading && (
             <button
               type="button"
               className="app360-search-clear-btn"
@@ -79,7 +79,7 @@ export function ApplicationSearch({ onSearch, onClear, isLoading, currentPan = '
           <button
             type="submit"
             className="app360-search-btn"
-            disabled={isLoading || !panInput.trim()}
+            disabled={isLoading || !customerCodeInput.trim()}
           >
             {isLoading ? (
               <>

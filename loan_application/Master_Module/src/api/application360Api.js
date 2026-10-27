@@ -1,25 +1,42 @@
 import axiosInstance from './axiosInstance';
 
 /**
- * Search complete 360-degree application details by PAN number.
- * 
- * Endpoint: GET /api/ApplicationFullDetails/search?panNumber={panNumber}
- * 
- * @param {string} panNumber - 10-character PAN number
- * @returns {Promise<Object>} Full application details payload
+ * Load complete customer and application history by customer code.
+ * Endpoint: GET /ApplicationFullDetails/{customerCode}
  */
-export const searchApplicationFullDetailsByPan = async (panNumber) => {
-  if (!panNumber || typeof panNumber !== 'string') {
-    throw new Error('Please provide a valid PAN number.');
+export const getApplicationFullDetailsByCustomerCode = async (customerCode) => {
+  if (!customerCode || typeof customerCode !== 'string') {
+    throw new Error('Please provide a valid customer code.');
   }
 
-  const cleanPan = panNumber.trim().toUpperCase();
-  const response = await axiosInstance.get('/ApplicationFullDetails/search', {
-    params: { panNumber: cleanPan }
-  });
+  const cleanCustomerCode = customerCode.trim().toUpperCase();
+  const response = await axiosInstance.get(`/ApplicationFullDetails/${encodeURIComponent(cleanCustomerCode)}`);
 
   return response.data;
 };
+
+/**
+ * Load Asset Base records saved from Back Office step 7/Asset Base.
+ */
+export const getApplicationAssetsByApplication = async (applicationProductDetailsId) => {
+  const response = await axiosInstance.get(
+    `/ApplicationAssetDetails/by-application/${encodeURIComponent(applicationProductDetailsId)}`
+  );
+  return response.data;
+};
+
+/**
+ * Load saved eligibility calculation results for an application product.
+ */
+export const getEligibilityAssessmentsByApplication = async (applicationProductDetailsId) => {
+  const response = await axiosInstance.get(
+    `/calculation/assessments/by-application/${encodeURIComponent(applicationProductDetailsId)}`
+  );
+  return response.data;
+};
+
+// Backward-compatible alias for existing imports.
+export const searchApplicationFullDetailsByPan = getApplicationFullDetailsByCustomerCode;
 
 /**
  * Download or fetch Agent Customer document as blob
@@ -47,6 +64,9 @@ export const downloadKycDocumentByPath = async (path) => {
 };
 
 export default {
+  getApplicationFullDetailsByCustomerCode,
+  getApplicationAssetsByApplication,
+  getEligibilityAssessmentsByApplication,
   searchApplicationFullDetailsByPan,
   downloadAgentCustomerDoc,
   downloadKycDocumentByPath,

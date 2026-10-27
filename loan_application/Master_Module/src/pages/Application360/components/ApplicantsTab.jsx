@@ -38,7 +38,11 @@ export function ApplicantsTab({ applicants = [], masterLookups = {} }) {
   const currentPersonal = currentApplicant.person || {};
   const currentAddresses = currentApplicant.addresses || [];
   const currentEmployment = currentApplicant.employments || [];
-  const currentBanks = currentApplicant.banks || [];
+  const currentBanks = (currentApplicant.banks || []).map((bankRecord) => (
+    bankRecord.bankLoan
+      ? { ...bankRecord.bankLoan, ...bankRecord }
+      : bankRecord
+  ));
   const identityKyc = currentApplicant.identityKyc || {};
 
   // Resolve Master Labels
@@ -184,8 +188,10 @@ export function ApplicantsTab({ applicants = [], masterLookups = {} }) {
             ) : (
               <div className="app360-sublist">
                 {currentAddresses.map((addr, idx) => {
-                  const cityName = addr.cityId ? (masterLookups.cities?.[addr.cityId] || `City #${addr.cityId}`) : (addr.cityName || '—');
-                  const stateName = addr.stateId ? (masterLookups.states?.[addr.stateId] || `State #${addr.stateId}`) : (addr.stateName || '—');
+                  // ApplicationAddressDetails now stores editable text in city/state.
+                  // Keep the legacy master-ID fallback for older address records.
+                  const cityName = addr.city || addr.cityName || (addr.cityId ? (masterLookups.cities?.[addr.cityId] || `City #${addr.cityId}`) : '—');
+                  const stateName = addr.state || addr.stateName || (addr.stateId ? (masterLookups.states?.[addr.stateId] || `State #${addr.stateId}`) : '—');
 
                   return (
                     <div key={addr.applicationAddressDetailsId || addr.addressDetailsId || idx} className="app360-subcard">
@@ -314,8 +320,8 @@ export function ApplicantsTab({ applicants = [], masterLookups = {} }) {
             ) : (
               <div className="app360-sublist">
                 {currentBanks.map((bank, idx) => {
-                  const bankName = bank.bankId ? (masterLookups.banks?.[bank.bankId] || `Bank #${bank.bankId}`) : '—';
-                  const branchName = bank.bankBranchId ? (masterLookups.bankBranches?.[bank.bankBranchId] || `Branch #${bank.bankBranchId}`) : '—';
+                  const bankName = bank.bankName || (bank.bankId ? (masterLookups.banks?.[bank.bankId] || `Bank #${bank.bankId}`) : '—');
+                  const branchName = bank.bankBranchName || (bank.bankBranchId ? (masterLookups.bankBranches?.[bank.bankBranchId] || `Branch #${bank.bankBranchId}`) : '—');
 
                   return (
                     <div key={bank.applicationBankExistingLoanDetailsId || bank.bankId || idx} className="app360-subcard">
