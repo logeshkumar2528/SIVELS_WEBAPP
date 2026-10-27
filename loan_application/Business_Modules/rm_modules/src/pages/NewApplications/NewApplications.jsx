@@ -156,7 +156,125 @@ export const getRejectedDocumentLabel = (rejection) => {
   return `${prefix} ${rejection.rejectedDocumentType || 'Document'}`;
 };
 
-const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejections = [], matchedProduct = null) => {
+/**
+ * Correlates a customer/application record with their corresponding ApplicationProductDetails record.
+ * Supports both direct-RM and Agent-sourced applications according to ownership rules.
+ *
+ * Safety rules:
+ * 1. Excludes explicitly inactive application records (isActive === false || IsActive === false).
+ * 2. Matches across customer/application ID fields without cross-namespace pollution.
+ * 3. Enforces ownership alignment:
+ *    - For direct RM applications: verifies RM identity and excludes agent-owned records.
+ *    - For Agent-sourced applications: verifies Agent identity.
+ * 4. Disambiguates multiple candidates:
+ *    - Checks exact applicationProductDetailsId match priority.
+ *    - Checks consensus on LoanProductId across active records.
+ *    - If multiple records conflict with different LoanProductIds, reports ambiguity and returns null.
+ * 5. Returns null when no valid application product exists (enables fallback to intake product).
+ */
+function correlateApplicationProduct(item, appProdList = [], ownership = {}, currentRmId = null) {
+  if (!item || !Array.isArray(appProdList) || appProdList.length === 0) {
+    return null;
+  }
+
+  const rawAgentCustId = item.agentCustomerId ?? item.AgentCustomerId ?? (item.rmCustomerId || item.RmCustomerId || item.rMCustomerId ? null : (item.customerId ?? item.CustomerId ?? null));
+  const itemAgentCustId = (rawAgentCustId !== null && rawAgentCustId !== undefined && rawAgentCustId !== '') ? Number(rawAgentCustId) : 0;
+
+  const rawRmCustId = item.rmCustomerId ?? item.RmCustomerId ?? item.rMCustomerId ?? null;
+  const itemRmCustId = (rawRmCustId !== null && rawRmCustId !== undefined && rawRmCustId !== '') ? Number(rawRmCustId) : 0;
+
+  const rawAppProdId = item.applicationProductDetailsId ?? item.ApplicationProductDetailsId ?? null;
+  const itemAppProdId = (rawAppProdId !== null && rawAppProdId !== undefined && rawAppProdId !== '') ? Number(rawAppProdId) : 0;
+
+  const targetRmId = Number(currentRmId || ownership?.rmId || item.rmId || item.RmId || item.createdBy || item.CreatedBy || 0);
+  const targetAgentId = Number(ownership?.agentId || item.agentId || item.AgentId || 0);
+
+  const eligibleCandidates = appProdList.filter((p) => {
+    if (!p) return false;
+
+    // 1. Exclude explicitly inactive application records
+    if (p.isActive === false || p.IsActive === false) {
+      return false;
+    }
+
+    // 2. ID matching across segregated customer/application identifiers
+    const pAppProdId = Number(p.applicationProductDetailsId ?? p.ApplicationProductDetailsId ?? 0);
+    const pAgentCustId = Number(p.agentCustomerId ?? p.AgentCustomerId ?? 0);
+    const pRmCustId = Number(p.rmCustomerId ?? p.RmCustomerId ?? p.RMCustomerId ?? 0);
+
+    const isExactAppProdMatch = itemAppProdId > 0 && pAppProdId > 0 && pAppProdId === itemAppProdId;
+    const isAgentCustMatch = itemAgentCustId > 0 && pAgentCustId > 0 && pAgentCustId === itemAgentCustId;
+    const isRmCustMatch = itemRmCustId > 0 && pRmCustId > 0 && pRmCustId === itemRmCustId;
+
+    if (!isExactAppProdMatch && !isAgentCustMatch && !isRmCustMatch) {
+      return false;
+    }
+
+    // 3. Ownership alignment for direct-RM vs Agent-sourced applications
+    const pAgentId = Number(p.agentId ?? p.AgentId ?? 0);
+    const pRmId = Number(p.rmId ?? p.RmId ?? 0);
+    const pCreatedBy = Number(p.createdBy ?? p.CreatedBy ?? 0);
+
+    if (ownership?.isDirectRm) {
+      if (pAgentId > 0) return false;
+      if (targetRmId > 0) {
+        const isConfirmedRm = pRmId === targetRmId || (pRmId === 0 && pCreatedBy === targetRmId);
+        if (!isConfirmedRm) return false;
+      }
+    } else if (ownership?.isAgentCreated) {
+      if (targetAgentId > 0 && pAgentId > 0 && pAgentId !== targetAgentId) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  if (eligibleCandidates.length === 0) {
+    return null;
+  }
+
+  if (eligibleCandidates.length === 1) {
+    return eligibleCandidates[0];
+  }
+
+  // --- MULTIPLE CANDIDATES DISAMBIGUATION ---
+
+  // Priority A: Exact primary key match
+  if (itemAppProdId > 0) {
+    const exactMatches = eligibleCandidates.filter((p) => {
+      const pAppProdId = Number(p.applicationProductDetailsId ?? p.ApplicationProductDetailsId ?? 0);
+      return pAppProdId === itemAppProdId;
+    });
+    if (exactMatches.length === 1) {
+      return exactMatches[0];
+    }
+  }
+
+  // Priority B: Consensus on LoanProductId
+  const distinctProductIds = Array.from(
+    new Set(
+      eligibleCandidates
+        .map((p) => Number(p.loanProductId ?? p.LoanProductId ?? 0))
+        .filter((id) => id > 0)
+    )
+  );
+
+  if (distinctProductIds.length === 1) {
+    return eligibleCandidates[0];
+  }
+
+  // Priority C: Ambiguity with conflicting LoanProductIds
+  console.warn(
+    `[NewApplications] Ambiguous ApplicationProductDetails for customer "${item.fullName || item.customerName || ''}" (ID: ${itemAgentCustId || itemRmCustId || itemAppProdId || 'N/A'}): ` +
+    `Found ${eligibleCandidates.length} eligible application records with conflicting LoanProductIds: [${distinctProductIds.join(', ')}]. ` +
+    `Preserving initial customer intake product to avoid arbitrary selection.`,
+    { item, candidates: eligibleCandidates }
+  );
+  return null;
+}
+
+const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejections = [], matchedProduct = null, loanProductsById = {}) => {
   const applicationId = item.applicationId || item.applicationNumber || item.agentCustomerId || item.customerId || `${index + 1}`;
   const ownership = resolveApplicationOwnership(item, agentsById, rmsById);
   const rawStatusNum = Number(item.status ?? item.Status);
@@ -278,6 +396,25 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
     }
   }
 
+  const appLoanProductId = matchedProduct
+    ? (matchedProduct.loanProductId ?? matchedProduct.LoanProductId ?? null)
+    : null;
+
+  const matchedProductMaster =
+    appLoanProductId !== null && appLoanProductId !== undefined && appLoanProductId !== ''
+      ? (loanProductsById[String(appLoanProductId)] || loanProductsById[Number(appLoanProductId)])
+      : null;
+
+  const resolvedLoanProduct =
+    matchedProductMaster?.productName ||
+    matchedProductMaster?.name ||
+    (matchedProduct ? (matchedProduct.loanProductName || matchedProduct.LoanProductName || matchedProduct.productName || matchedProduct.ProductName) : null) ||
+    item.loanProductName ||
+    item.loanPurposeName ||
+    item.loanType ||
+    '';
+
+
   return {
     id: String(applicationId),
     appId: officialAppId,
@@ -285,7 +422,7 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
     displayId: officialAppId || buildApplicationDisplayId(item, 'N/A'),
     customerName: item.fullName || item.customerName || '',
     mobile: normalizeMobile(item.mobileNumber || item.mobile || ''),
-    loanType: item.loanProductName || item.loanPurposeName || item.loanType || '',
+    loanType: resolvedLoanProduct,
     amount: formatCurrency(item.expectedLoanAmount ?? item.amount),
     agentName: ownership.agentName,
     sourcerName,
@@ -363,12 +500,13 @@ export default function NewApplications({ initialFilter = 'All' }) {
       const authHeaders = {};
       if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
-      const [agentRes, customerRes, rmRes, rejectionsRes, appProdRes] = await Promise.all([
+      const [agentRes, customerRes, rmRes, rejectionsRes, appProdRes, loanProductsRes] = await Promise.all([
         apiFetch(`${API_BASE}/AgentMaster/my`, { headers: authHeaders }),
         apiFetch(`${API_BASE}/AgentAddCustomer/my`, { headers: authHeaders }),
         apiFetch(`${API_BASE}/RMMaster/my`, { headers: authHeaders }).catch(() => null),
         apiFetch(`${API_BASE}/BackOfficeDocumentRejection/rm/${rmContext.rmId}/returned`, { headers: authHeaders }).catch(() => null),
         apiFetch(`${API_BASE}/ApplicationProductDetails/my`, { headers: authHeaders }).catch(() => null),
+        apiFetch(`${API_BASE}/LoanProductMaster`, { headers: authHeaders }).catch(() => null),
       ]);
 
       if (!agentRes.ok) {
@@ -418,6 +556,25 @@ export default function NewApplications({ initialFilter = 'All' }) {
         }
       }
 
+      let loanProductsList = [];
+      if (loanProductsRes && loanProductsRes.ok) {
+        try {
+          const lpData = await loanProductsRes.json();
+          loanProductsList = resolveApiArray(lpData);
+        } catch {
+          loanProductsList = [];
+        }
+      }
+
+      const loanProductsById = loanProductsList.reduce((result, p) => {
+        const id = p.loanProductId || p.LoanProductId || p.id || p.Id;
+        if (id !== undefined && id !== null) {
+          result[String(id)] = p;
+          result[Number(id)] = p;
+        }
+        return result;
+      }, {});
+
       // Build Set of customer IDs that belong directly to this RM
       const rmOwnedCustomerIds = new Set();
       appProdList.forEach((p) => {
@@ -458,7 +615,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
       const filtered = allCustomers.filter((item) => {
         const ownership = resolveApplicationOwnership(item, agentsById, rmsById);
         const rowCustId = String(item.agentCustomerId || item.customerId || '');
-        
+
         // 1. Normal agent-sourced customer: belongs to an agent assigned to this RM
         const isAgentMapped = Boolean(
           ownership.isAgentCreated &&
@@ -486,10 +643,9 @@ export default function NewApplications({ initialFilter = 'All' }) {
         const custId = String(item.agentCustomerId || item.customerId || '');
         const rawItemRejections = activeRejectionsByCustId[custId] || [];
         const itemRejections = deduplicateRejectionsPerSlot(rawItemRejections);
-        const matchedProduct = appProdList.find(
-          (p) => String(p.agentCustomerId || p.AgentCustomerId) === custId
-        );
-        return mapBackendApplication(item, index, agentsById, rmsById, itemRejections, matchedProduct);
+        const itemOwnership = resolveApplicationOwnership(item, agentsById, rmsById);
+        const matchedProduct = correlateApplicationProduct(item, appProdList, itemOwnership, rmContext.rmId);
+        return mapBackendApplication(item, index, agentsById, rmsById, itemRejections, matchedProduct, loanProductsById);
       });
 
       setApplications(mapped);

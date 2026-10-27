@@ -50,7 +50,7 @@ export default function ViewCustomerDrawer({
     };
   }, []);
 
-  const { loanPurposes = [], loanProducts = [], employmentTypes = [], documentTypes = [] } = masterData;
+  const { loanPurposes = [], loanProducts = [], loanTypes = [], employmentTypes = [], documentTypes = [] } = masterData;
 
   const rmContext = getCurrentRMContext();
   const currentRmId = rmContext.rmId ? Number(rmContext.rmId) : null;
@@ -243,21 +243,34 @@ export default function ViewCustomerDrawer({
   const status = customer.status || 'New';
 
   // Resolve Names
-  let loanPurposeName = customer.loanPurposeName;
-  if (!loanPurposeName || loanPurposeName === 'N/A') {
-    const rawProdId = customer.loanProductId ?? customer.LoanProductId;
-    const rawPurpId = customer.loanPurposeId ?? customer.LoanPurposeId;
+  let productName = customer.loanProductName || customer.productName;
+  const rawProdId = customer.loanProductId ?? customer.LoanProductId;
+  const rawPurpId = customer.loanPurposeId ?? customer.LoanPurposeId;
 
-    if (rawProdId !== null && rawProdId !== undefined && rawProdId !== '') {
-      const prod = loanProducts.find((x) => Number(x.loanProductId || x.id) === Number(rawProdId));
-      if (prod) loanPurposeName = prod.productName || prod.name;
-    }
-
-    if ((!loanPurposeName || loanPurposeName === 'N/A') && rawPurpId !== null && rawPurpId !== undefined && rawPurpId !== '') {
-      const p = loanPurposes.find((x) => Number(x.loanPurposeId || x.id) === Number(rawPurpId));
-      if (p) loanPurposeName = p.productName || p.purposeName || p.name;
+  let matchedProd = null;
+  if (rawProdId !== null && rawProdId !== undefined && rawProdId !== '') {
+    matchedProd = loanProducts.find((x) => Number(x.loanProductId || x.id) === Number(rawProdId) || String(x.loanProductId || x.id) === String(rawProdId));
+    if (matchedProd) {
+      productName = matchedProd.productName || matchedProd.name;
     }
   }
+
+  if (!productName || productName === 'N/A') {
+    if (rawPurpId !== null && rawPurpId !== undefined && rawPurpId !== '') {
+      const p = loanPurposes.find((x) => Number(x.loanPurposeId || x.id) === Number(rawPurpId) || String(x.loanPurposeId || x.id) === String(rawPurpId));
+      if (p) productName = p.productName || p.purposeName || p.name;
+    }
+  }
+  if (!productName) {
+    productName = 'N/A';
+  }
+
+  const rawTypeId = matchedProd?.loanTypeId ?? matchedProd?.LoanTypeId ?? customer.loanTypeId ?? customer.LoanTypeId;
+  const matchedType = rawTypeId !== null && rawTypeId !== undefined && rawTypeId !== ''
+    ? loanTypes.find((t) => Number(t.loanTypeId || t.id) === Number(rawTypeId) || String(t.loanTypeId || t.id) === String(rawTypeId))
+    : null;
+
+  const loanTypeName = matchedType?.typeName || matchedType?.name || customer.loanTypeName || customer.LoanTypeName || 'N/A';
 
   let employmentTypeName = customer.employmentTypeName;
   if (!employmentTypeName && customer.employmentTypeId) {
@@ -438,8 +451,12 @@ export default function ViewCustomerDrawer({
               </div>
               <div className="drawer-grid-2">
                 <div className="drawer-detail-item">
-                  <span className="detail-label">Loan Purpose</span>
-                  <span className="detail-value">{loanPurposeName || 'N/A'}</span>
+                  <span className="detail-label">Loan Type</span>
+                  <span className="detail-value">{loanTypeName}</span>
+                </div>
+                <div className="drawer-detail-item">
+                  <span className="detail-label">Loan Product</span>
+                  <span className="detail-value">{productName}</span>
                 </div>
                 <div className="drawer-detail-item">
                   <span className="detail-label">Expected Loan Amount</span>
