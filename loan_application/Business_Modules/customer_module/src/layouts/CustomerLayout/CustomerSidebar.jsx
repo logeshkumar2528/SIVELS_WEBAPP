@@ -60,12 +60,13 @@ export default function CustomerSidebar() {
 
         <div className="customer-sidebar-footer">
           <div className="customer-support-card">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <HeadphonesIcon size={16} color="var(--color-sidebar-icon)" />
-              <h4>Need Help?</h4>
+            <div className="customer-support-icon">
+              <HeadphonesIcon size={18} strokeWidth={1.8} />
             </div>
-            <p>We're here to help you</p>
-            <button className="customer-support-btn">Contact Support</button>
+            <div className="customer-support-text">
+              <span className="customer-support-label">Need Help?</span>
+              <a href="mailto:support@sivelsfinance.com" className="customer-support-link">Contact Support</a>
+            </div>
           </div>
         </div>
       </aside>

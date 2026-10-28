@@ -1,66 +1,51 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Building2, Download, FileText, Landmark } from 'lucide-react';
-import { useCustomerIdentity } from '../../hooks/useCustomerIdentity';
-import approvalDocumentService from '../../../../../Core/src/features/approval-documents/services/approvalDocumentService';
+import { useCustomerProfile } from '../../hooks/useCustomerProfile';
 import './MyLoan.css';
 
-const repaymentDetails = [
-  ['Loan Tenure', '36 Months'],
-  ['EMI Amount', '₹4,980'],
-  ['EMI Day', '5th of every month'],
-  ['Outstanding Amount', '₹1,24,560', 'danger'],
-  ['Interest Paid', '₹18,720'],
-  ['Principal Paid', '₹56,720'],
-  ['Remaining Tenure', '18 Months'],
-  ['Remaining EMI', '18'],
-];
+const show = (value, fallback = '—') => value === null || value === undefined || value === '' ? fallback : value;
+const money = (value) => {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? `₹${amount.toLocaleString('en-IN')}` : '—';
+};
+const formatDate = (value) => {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+};
 
 export default function MyLoan() {
-  const { customerData } = useCustomerIdentity();
-  const [loanIdentifier, setLoanIdentifier] = useState(null);
-  const [loadingIdentifier, setLoadingIdentifier] = useState(true);
-
-  useEffect(() => {
-    let isMounted = true;
-    approvalDocumentService
-      .getMyLoanIdentifier()
-      .then((data) => {
-        if (isMounted) {
-          setLoanIdentifier(data);
-          setLoadingIdentifier(false);
-        }
-      })
-      .catch((err) => {
-        if (isMounted) {
-          console.warn('[MyLoan] Failed to load customer loan identifier:', err?.message || err);
-          setLoanIdentifier(null);
-          setLoadingIdentifier(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  const officialLoanAccountNumber = loanIdentifier?.loanAccountNumber || (loadingIdentifier ? 'Loading…' : '—');
-  const hasApprovedLoan = Boolean(loanIdentifier?.loanAccountNumber);
-
-  const loanType = customerData?.loanPurposeName
-    ? `${customerData.loanPurposeName} Loan`
-    : 'Personal Loan';
-
-  const loanAmount = customerData?.expectedLoanAmount != null && !isNaN(Number(customerData.expectedLoanAmount))
-    ? `₹${Number(customerData.expectedLoanAmount).toLocaleString('en-IN')}`
-    : '₹2,00,000';
+  const { profile, fallbackIdentity } = useCustomerProfile();
+  const customerData = profile || fallbackIdentity || {};
+  const applications = Array.isArray(customerData.applications) ? customerData.applications : [];
+  const application = applications.find((item) => String(item.status || '').toLowerCase() === 'approved') || applications[0] || {};
+  const officialLoanAccountNumber = show(application.loanAccountNumber);
+  const hasApprovedLoan = String(application.status || '').toLowerCase() === 'approved' || Boolean(application.loanAccountNumber);
+  const loanType = show(application.loanProductName || customerData.loanProductName);
+  const loanAmount = money(application.loanAmount ?? customerData.expectedLoanAmount);
+  const sanctionedAmount = money(application.sanctionedAmount);
+  const disbursedAmount = money(application.disbursedAmount);
+  const outstandingAmount = money(application.outstandingAmount ?? application.outstandingBalance);
+  const interestRate = application.roi == null ? '—' : `${application.roi}%`;
+  const tenure = application.loanTenure == null ? '—' : `${application.loanTenure} Months`;
+  const repaymentDetails = [
+    ['Loan Tenure', tenure],
+    ['EMI Amount', money(application.emi ?? application.monthlyEmi)],
+    ['EMI Day', show(application.emiDay)],
+    ['Outstanding Amount', outstandingAmount, outstandingAmount === '—' ? '' : 'danger'],
+    ['Interest Paid', money(application.interestPaid)],
+    ['Principal Paid', money(application.principalPaid)],
+    ['Remaining Tenure', application.remainingTenure == null ? '—' : `${application.remainingTenure} Months`],
+    ['Remaining EMI', show(application.remainingEmi)],
+  ];
 
   const loanDetails = [
     ['Loan Account Number', officialLoanAccountNumber],
     ['Loan Type', loanType],
-    ['Sanctioned Amount', loanAmount],
-    ['Disbursed Amount', loanAmount],
-    ['Disbursement Date', '15 May 2025'],
-    ['Interest Rate (ROI)', '11.50%'],
+    ['Sanctioned Amount', sanctionedAmount],
+    ['Disbursed Amount', disbursedAmount],
+    ['Disbursement Date', formatDate(application.disbursementDate)],
+    ['Interest Rate (ROI)', interestRate],
   ];
 
   return (
@@ -79,15 +64,15 @@ export default function MyLoan() {
             <small>Loan Type <b>{loanType}</b></small>
           </div>
           <span className="loan-active-badge">
-            {hasApprovedLoan ? 'Active' : (loadingIdentifier ? 'Checking…' : 'No Active Loan')}
+            {hasApprovedLoan ? 'Active' : 'No Active Loan'}
           </span>
         </div>
         <div className="loan-overview-metrics">
-          <Metric label="Sanctioned Amount" value={loanAmount} />
-          <Metric label="Disbursed Amount" value={loanAmount} />
-          <Metric label="Outstanding Amount" value="₹1,24,560" danger />
-          <Metric label="Interest Rate (ROI)" value="11.50%" />
-          <Metric label="Loan Tenure" value="36 Months" />
+          <Metric label="Sanctioned Amount" value={sanctionedAmount} />
+          <Metric label="Disbursed Amount" value={disbursedAmount} />
+          <Metric label="Outstanding Amount" value={outstandingAmount} danger={outstandingAmount !== '—'} />
+          <Metric label="Interest Rate (ROI)" value={interestRate} />
+          <Metric label="Loan Tenure" value={tenure} />
         </div>
       </section>
 
@@ -98,8 +83,8 @@ export default function MyLoan() {
           <DetailList items={repaymentDetails} bordered />
           <aside className="loan-active-panel">
             <div className="loan-active-icon"><Landmark size={24} /></div>
-            <strong>Your loan is active</strong>
-            <p>Keep up the good work! You are on track with your payments.</p>
+            <strong>{hasApprovedLoan ? 'Your loan is active' : 'Loan status unavailable'}</strong>
+            <p>{hasApprovedLoan ? 'Loan details are shown from your account.' : 'No approved loan details are available.'}</p>
             <button type="button"><Download size={17} /> Download Loan Summary</button>
           </aside>
         </div>

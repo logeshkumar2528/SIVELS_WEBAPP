@@ -1,6 +1,8 @@
 import React from 'react';
 import { Bell, ChevronDown } from 'lucide-react';
-import { useCustomerIdentity } from '../../hooks/useCustomerIdentity';
+import { useCustomerProfile } from '../../hooks/useCustomerProfile';
+import { resolveApiUrl, normalizeUploadedFilePath } from '../../../../../Core/src/api/apiConfig';
+import { useAuthedObjectUrl } from '../../../../../Core/src/auth/useAuthedObjectUrl';
 
 function getInitials(name) {
   if (!name || typeof name !== 'string') return 'CU';
@@ -18,10 +20,21 @@ function getInitials(name) {
 }
 
 export default function CustomerHeader() {
-  const { customerData, loading } = useCustomerIdentity();
+  const { profile, fallbackIdentity, loading } = useCustomerProfile();
+  const customerData = profile || fallbackIdentity;
   const rawFullName = customerData?.fullName?.trim();
   const fullName = rawFullName || (loading ? 'Loading…' : 'Customer');
   const initials = getInitials(rawFullName || 'Customer');
+  const profileImagePath =
+    profile?.kyc?.profileImagePath ||
+    profile?.profileImagePath ||
+    fallbackIdentity?.profileImagePath ||
+    fallbackIdentity?.profileImage;
+  const imagePath = normalizeUploadedFilePath(profileImagePath);
+  const imageUrl = imagePath
+    ? resolveApiUrl(`/ApplicationKYCDocuments/download?path=${encodeURIComponent(imagePath)}`)
+    : null;
+  const authedImageUrl = useAuthedObjectUrl(imageUrl);
 
   return (
     <header className="customer-header">
@@ -36,7 +49,9 @@ export default function CustomerHeader() {
         </button>
 
         <div className="customer-profile-menu">
-          <div className="customer-avatar">{initials}</div>
+          <div className="customer-avatar">
+            {authedImageUrl ? <img src={authedImageUrl} alt={fullName} /> : initials}
+          </div>
           <span className="customer-profile-name">{fullName}</span>
           <ChevronDown size={16} color="var(--color-text-secondary)" />
         </div>

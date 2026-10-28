@@ -20,7 +20,7 @@ import { useCustomerProfile } from '../../hooks/useCustomerProfile';
 import { resolveApplicationStatus } from '../../config/statusConfig';
 import StatusBadge from '../../components/StatusBadge/StatusBadge';
 import approvalDocumentService from '../../../../../Core/src/features/approval-documents/services/approvalDocumentService';
-import { resolveApiUrl } from '../../../../../Core/src/api/apiConfig';
+import { resolveApiUrl, normalizeUploadedFilePath } from '../../../../../Core/src/api/apiConfig';
 import { useAuthedObjectUrl } from '../../../../../Core/src/auth/useAuthedObjectUrl';
 import {
   formatDisplayDate,
@@ -118,8 +118,18 @@ export default function Profile() {
   }, []);
 
   // Profile photograph resolution with authenticated blob fetch
-  const profileImagePath = profile?.kyc?.profileImagePath;
-  const imageApiUrl = profileImagePath ? resolveApiUrl(profileImagePath) : null;
+  const profileImagePath =
+    profile?.kyc?.profileImagePath ||
+    profile?.profileImagePath ||
+    fallbackIdentity?.profileImagePath ||
+    fallbackIdentity?.profileImage;
+  const imageApiUrl = profileImagePath
+    ? resolveApiUrl(
+        `/ApplicationKYCDocuments/download?path=${encodeURIComponent(
+          normalizeUploadedFilePath(profileImagePath)
+        )}`
+      )
+    : null;
   const authedImageUrl = useAuthedObjectUrl(imageApiUrl);
 
   // Customer identity resolution
@@ -193,8 +203,6 @@ export default function Profile() {
   const maskedAccount = primaryBank?.maskedAccountNumber
     ? primaryBank.maskedAccountNumber
     : maskAccountNumber(fallbackIdentity?.accountNumber);
-  const ifscCode = primaryBank?.ifsc || fallbackIdentity?.ifscCode || 'Not provided';
-  const branchName = primaryBank?.branchName || fallbackIdentity?.branchName || 'Not provided';
 
   // Authoritative KYC status values
   const aadhaarStatus =
@@ -237,7 +245,6 @@ export default function Profile() {
         <header className="profile-heading">
           <div>
             <h1>Customer Profile</h1>
-            <p>Manage your personal and financial information</p>
           </div>
         </header>
         <div className="profile-error-card" role="alert">
@@ -260,7 +267,6 @@ export default function Profile() {
       <header className="profile-heading">
         <div>
           <h1>Customer Profile</h1>
-          <p>Manage your personal and financial information</p>
         </div>
       </header>
 
@@ -346,7 +352,6 @@ export default function Profile() {
                 <div className="card-header-icon"><CircleUserRound size={18} /></div>
                 <div>
                   <h3>Personal Information</h3>
-                  <small>Basic demographic details from your identity record</small>
                 </div>
               </header>
               <dl className="profile-data-grid">
@@ -393,7 +398,6 @@ export default function Profile() {
                 <div className="card-header-icon"><Phone size={18} /></div>
                 <div>
                   <h3>Contact & Address</h3>
-                  <small>Verified communication channels and residential records</small>
                 </div>
               </header>
               <dl className="profile-data-grid">
@@ -442,11 +446,6 @@ export default function Profile() {
                 <div className="card-header-icon"><BriefcaseBusiness size={18} /></div>
                 <div>
                   <h3>Employment & Business</h3>
-                  <small>
-                    {isBusinessEmployment
-                      ? 'Enterprise and operational business registration details'
-                      : 'Corporate employer and compensation profile'}
-                  </small>
                 </div>
               </header>
               {isBusinessEmployment ? (
@@ -518,7 +517,6 @@ export default function Profile() {
                 <div className="card-header-icon"><Landmark size={18} /></div>
                 <div>
                   <h3>Bank Information</h3>
-                  <small>Disbursement and repayment banking mandate details</small>
                 </div>
               </header>
               <dl className="profile-data-grid">
@@ -534,14 +532,6 @@ export default function Profile() {
                   <dt>Masked Account Number</dt>
                   <dd className={maskedAccount === 'Not provided' ? 'not-provided' : ''}>{maskedAccount}</dd>
                 </div>
-                <div>
-                  <dt>IFSC Code</dt>
-                  <dd className={ifscCode === 'Not provided' ? 'not-provided' : ''}>{ifscCode}</dd>
-                </div>
-                <div className="grid-col-full">
-                  <dt>Branch Name</dt>
-                  <dd className={branchName === 'Not provided' ? 'not-provided' : ''}>{branchName}</dd>
-                </div>
               </dl>
             </section>
           )}
@@ -553,7 +543,6 @@ export default function Profile() {
                 <div className="card-header-icon"><ShieldCheck size={18} /></div>
                 <div>
                   <h3>KYC Verification Status</h3>
-                  <small>Statutory compliance and identity verification records</small>
                 </div>
               </header>
               <div className="profile-kyc-list">
@@ -619,7 +608,6 @@ export default function Profile() {
                 <div className="card-header-icon"><UsersRound size={18} /></div>
                 <div>
                   <h3>Reference Information</h3>
-                  <small>Personal contacts maintained for loan verification compliance</small>
                 </div>
               </header>
               <div className="profile-references-grid">
@@ -678,7 +666,6 @@ export default function Profile() {
               <div className="card-header-icon"><CreditCard size={18} /></div>
               <div>
                 <h3>Loan Accounts & Applications</h3>
-                <small>Summary of authenticated loan requests and active credit facilities</small>
               </div>
             </header>
 
@@ -767,10 +754,6 @@ export default function Profile() {
                   );
                 })}
 
-                <div className="profile-loan-empty-banner">
-                  <FileText size={18} />
-                  <span>No additional loan accounts found for this profile. Subsequent applications will synchronize here.</span>
-                </div>
               </div>
             ) : hasFallbackApplication ? (
               <div className="profile-loan-accounts-list">
@@ -825,10 +808,6 @@ export default function Profile() {
                   </div>
                 </div>
 
-                <div className="profile-loan-empty-banner">
-                  <FileText size={18} />
-                  <span>No additional loan accounts found for this profile. Subsequent applications will synchronize here.</span>
-                </div>
               </div>
             ) : (
               <div className="profile-loan-empty-state">
