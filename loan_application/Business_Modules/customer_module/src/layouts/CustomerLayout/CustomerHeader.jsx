@@ -3,7 +3,7 @@ import { Bell, ChevronDown } from 'lucide-react';
 import { useCustomerIdentity } from '../../hooks/useCustomerIdentity';
 
 function getInitials(name) {
-  if (!name || typeof name !== 'string') return 'AK';
+  if (!name || typeof name !== 'string') return 'CU';
   const trimmed = name.trim();
   const parts = trimmed.split(/\s+/);
   if (parts.length >= 2) {
@@ -18,18 +18,19 @@ function getInitials(name) {
 }
 
 export default function CustomerHeader() {
-  const { customerData } = useCustomerIdentity();
-  const fullName = customerData?.fullName?.trim() || 'Arjun Kumar';
-  const initials = getInitials(fullName);
+  const { customerData, loading } = useCustomerIdentity();
+  const rawFullName = customerData?.fullName?.trim();
+  const fullName = rawFullName || (loading ? 'Loading…' : 'Customer');
+  const initials = getInitials(rawFullName || 'Customer');
 
   return (
     <header className="customer-header">
       <div className="customer-header-title">
-        <h2>Welcome back, {fullName}! 👋</h2>
+        <h2>Welcome back{rawFullName ? `, ${rawFullName}` : ''}! 👋</h2>
       </div>
 
       <div className="customer-header-actions">
-        <button className="customer-notification-btn">
+        <button className="customer-notification-btn" aria-label="Notifications">
           <Bell size={20} />
           <span className="customer-notification-badge">3</span>
         </button>
