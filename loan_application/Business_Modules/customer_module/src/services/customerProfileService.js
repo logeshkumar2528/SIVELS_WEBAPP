@@ -108,6 +108,8 @@ function extractMasterName(item, type) {
       return item.productName || item.loanProductName || item.name || item.label || null;
     case 'relationship':
       return item.relationshipName || item.name || item.label || null;
+    case 'bankBranch':
+      return item.branchName || item.BranchName || item.bankBranchName || item.BankBranchName || item.name || item.label || null;
     default:
       return item.name || item.label || item.title || null;
   }
@@ -129,6 +131,8 @@ function extractMasterId(item, type) {
       return item.loanProductId ?? item.id ?? item.value;
     case 'relationship':
       return item.relationshipId ?? item.id ?? item.value;
+    case 'bankBranch':
+      return item.bankBranchId ?? item.BankBranchId ?? item.branchId ?? item.id ?? item.value;
     default:
       return item.id ?? item.value;
   }
@@ -148,6 +152,7 @@ export async function fetchMasterLookups(forceRefresh = false) {
     { key: 'employmentType', path: '/EmploymentType' },
     { key: 'loanProduct', path: '/LoanProductMaster' },
     { key: 'relationship', path: '/RelationshipMaster' },
+    { key: 'bankBranch', path: '/BankBranch' },
   ];
 
   const results = await Promise.allSettled(
@@ -165,6 +170,7 @@ export async function fetchMasterLookups(forceRefresh = false) {
     employmentType: new Map(),
     loanProduct: new Map(),
     relationship: new Map(),
+    bankBranch: new Map(),
   };
 
   results.forEach((res) => {
@@ -345,7 +351,18 @@ export function normalizeCustomerProfile(raw, masters) {
     accountHolderName: (b.accountHolderName ?? b.AccountHolderName ?? '').trim(),
     maskedAccountNumber: maskAccountNumber(b.maskedAccountNumber ?? b.accountNumber ?? b.AccountNumber),
     ifsc: (b.ifsc ?? b.Ifsc ?? b.ifscCode ?? b.IfscCode ?? '').trim(),
-    branchName: (b.branchName ?? b.BranchName ?? '').trim(),
+    branchName: (
+      b.branchName ??
+      b.BranchName ??
+      b.bankBranchName ??
+      b.BankBranchName ??
+      b.bankBranch ??
+      b.BankBranch ??
+      b.branch ??
+      b.Branch ??
+      (b.bankBranchId != null ? masters?.bankBranch?.get(Number(b.bankBranchId)) : '') ??
+      ''
+    ).trim(),
   }));
 
   // 5. KYC Normalization

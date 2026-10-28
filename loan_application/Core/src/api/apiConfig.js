@@ -16,6 +16,29 @@ export function resolveApiUrl(url) {
   return `${API_BASE_URL}${value.startsWith('/') ? '' : '/'}${value}`;
 }
 
+// Uploaded files are served by the application host outside the API route.
+// Keep this separate from resolveApiUrl because normal JSON endpoints require /api.
+export function resolveFileUrl(url) {
+  const value = String(url ?? '').replace(/\\/g, '/');
+  if (!value || isPassThroughScheme(value)) return value;
+
+  const normalized = value.replace(/^\/+/, '');
+  if (/^https?:\/\//i.test(value)) {
+    return value.replace('/sivels/api/UploadedFiles/', '/sivels/UploadedFiles/');
+  }
+
+  const filePath = normalized.replace(/^sivels\/api\//i, 'sivels/');
+  const fileHost = API_BASE_URL.replace(/\/api\/?$/i, '');
+  return `${fileHost}/${filePath}`;
+}
+
+export function normalizeUploadedFilePath(path) {
+  const value = String(path ?? '').replace(/\\/g, '/').trim();
+  if (!value) return '';
+  const marker = value.toLowerCase().indexOf('uploadedfiles/');
+  return marker >= 0 ? value.slice(marker) : `UploadedFiles/${value.replace(/^\/+/, '')}`;
+}
+
 export function isApiUrl(url) {
   const value = String(url ?? '');
   if (!value || isPassThroughScheme(value)) return false;
