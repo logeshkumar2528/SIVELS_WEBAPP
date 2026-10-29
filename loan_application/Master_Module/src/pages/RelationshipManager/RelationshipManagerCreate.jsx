@@ -19,12 +19,16 @@ import { DocumentUploadCard, DocumentPreviewModal, fetchDocumentBlobUrl, isPdfUr
 import { getProfileImageUrl, getRmDocumentDownloadUrl, buildFileUrl, getDocumentUrl } from '../../utils/profileImageHelper';
 import { isPdfFile, getAadhaarPath, getPanPath, getProfilePath } from '../Dashboard/Dashboard';
 import { StaffRoleSelect, toRoleId } from '../../components/StaffRoleSelect/StaffRoleSelect';
+import { getCountries } from '../../api/masters/countryApi';
+import { getStates } from '../../api/masters/stateApi';
+import { getDistricts } from '../../api/masters/districtApi';
+import { getCities } from '../../api/masters/cityApi';
 import './RelationshipManagerCreate.css';
 
 const fields = [
   ['rmCode', 'RM Code', 'text'], ['fullName', 'Full Name', 'text'], ['dateOfBirth', 'Date of Birth', 'date'],
-  ['address', 'Address', 'text'], ['stateId', 'State ID', 'number'],
-  ['cityId', 'City ID', 'number'], ['pincode', 'Pincode', 'text'], ['mobileNumber', 'Mobile Number', 'tel'],
+  ['address', 'Address', 'text'], ['countryId', 'Country', 'select'], ['stateId', 'State', 'select'],
+  ['districtId', 'District', 'select'], ['cityId', 'City', 'select'], ['pincode', 'Pincode', 'text'], ['mobileNumber', 'Mobile Number', 'tel'],
   ['emailAddress', 'Email Address', 'email'], ['branch', 'Branch', 'text'], ['dateJoined', 'Date Joined', 'date'],
   ['accountNumber', 'Account Number', 'text'], ['ifscCode', 'IFSC Code', 'text'],
 ];
@@ -50,6 +54,8 @@ export default function RelationshipManagerCreate() {
   const [error, setError] = useState('');
   const [genders, setGenders] = useState([]);
   const [states, setStates] = useState([]);
+  const [countries, setCountries] = useState([]);
+  const [districts, setDistricts] = useState([]);
   const [cities, setCities] = useState([]);
   const [branches, setBranches] = useState([]);
   const [loadingGenders, setLoadingGenders] = useState(true);
@@ -148,11 +154,13 @@ export default function RelationshipManagerCreate() {
   };
 
   useEffect(() => {
-    Promise.all([masterService.getGenders(), masterService.getStates(), masterService.getCities(), getBankBranches()])
-      .then(([genderResponse, stateResponse, cityResponse, branchResponse]) => {
+    Promise.all([masterService.getGenders(), getCountries(), getStates(), getDistricts(), getCities(), getBankBranches()])
+      .then(([genderResponse, countryResponse, stateResponse, districtResponse, cityResponse, branchResponse]) => {
         const records = (response) => Array.isArray(response) ? response : response?.data || [];
         setGenders(records(genderResponse));
+        setCountries(records(countryResponse));
         setStates(records(stateResponse));
+        setDistricts(records(districtResponse));
         setCities(records(cityResponse));
         setBranches(records(branchResponse));
       })
@@ -181,7 +189,9 @@ export default function RelationshipManagerCreate() {
           dateOfBirth: record.dateOfBirth ? String(record.dateOfBirth).slice(0, 10) : '',
           genderId: record.genderId ?? '',
           address: record.address || '',
+          countryId: record.countryId ?? record.CountryId ?? '',
           stateId: record.stateId ?? '',
+          districtId: record.districtId ?? record.DistrictId ?? '',
           cityId: record.cityId ?? '',
           pincode: record.pincode || '',
           mobileNumber: record.mobileNumber || '',
@@ -328,7 +338,9 @@ export default function RelationshipManagerCreate() {
       'dateOfBirth',
       'genderId',
       'address',
+      'countryId',
       'stateId',
+      'districtId',
       'cityId',
       'pincode',
       'mobileNumber',
@@ -349,7 +361,9 @@ export default function RelationshipManagerCreate() {
         ...(existingRecord || {}),
         ...form,
         genderId: Number(form.genderId),
+        countryId: Number(form.countryId),
         stateId: Number(form.stateId),
+        districtId: Number(form.districtId),
         cityId: Number(form.cityId),
         isActive,
         roleId: toRoleId(staffRoleId),
@@ -409,32 +423,57 @@ export default function RelationshipManagerCreate() {
     }
   };
 
-  const getId = (record) => record?.stateId ?? record?.cityId;
-  const getName = (record) => record?.stateName ?? record?.cityName ?? record?.name ?? record?.description;
+  const getId = (record, key) => record?.[`${key}Id`] ?? record?.[`${key}ID`] ?? record?.id;
+  const getName = (record, key) => record?.[`${key}Name`] ?? record?.name ?? record?.description;
   const selectedState = String(form.stateId);
+  const selectedCountry = String(form.countryId);
+  const selectedDistrict = String(form.districtId);
+  const visibleStates = states.filter((state) => {
+    const countryId = state.countryId ?? state.CountryId ?? state.countryID;
+    return !countryId || !selectedCountry || String(countryId) === selectedCountry;
+  });
+  const visibleDistricts = districts.filter((district) => {
+    const stateId = district.stateId ?? district.StateId ?? district.stateID;
+    return !stateId || !selectedState || String(stateId) === selectedState;
+  });
   const visibleCities = cities.filter((city) => {
     const cityStateId = city.stateId ?? city.StateId ?? city.stateID;
-    return !cityStateId || !selectedState || String(cityStateId) === selectedState;
+    const cityDistrictId = city.districtId ?? city.DistrictId ?? city.districtID;
+    return (!cityStateId || !selectedState || String(cityStateId) === selectedState) &&
+      (!cityDistrictId || !selectedDistrict || String(cityDistrictId) === selectedDistrict);
   });
 
   const renderField = ([key, label, type]) => (
     <label className={`form-group ${key === 'address' ? 'rm-field-wide' : ''}`} key={key}>
       <span className="form-label">{label} <b className="text-danger">*</b></span>
-      {key === 'stateId' || key === 'cityId' ? (
+      {['countryId', 'stateId', 'districtId', 'cityId'].includes(key) ? (
         <select
           className={`form-input ${fieldErrors[key] ? 'rm-invalid' : ''}`}
           value={form[key]}
           onBlur={() => validateField(key)}
           onChange={(event) => {
             update(key, event.target.value);
-            if (key === 'stateId') update('cityId', '');
+            if (key === 'countryId') {
+              update('stateId', '');
+              update('districtId', '');
+              update('cityId', '');
+            } else if (key === 'stateId') {
+              update('districtId', '');
+              update('cityId', '');
+            } else if (key === 'districtId') {
+              update('cityId', '');
+            }
           }}
-          disabled={saving || loadingGenders || loadingRecord}
+          disabled={saving || loadingGenders || loadingRecord ||
+            (key !== 'countryId' && !form.countryId) ||
+            (key !== 'stateId' && ['districtId', 'cityId'].includes(key) && !form.stateId) ||
+            (key === 'cityId' && !form.districtId)}
           required
         >
-          <option value="">Select {key === 'stateId' ? 'state' : 'city'}</option>
-          {(key === 'stateId' ? states : visibleCities).filter((record) => record.isActive !== false).map((record) => (
-            <option key={getId(record)} value={getId(record)}>{getName(record)}</option>
+          <option value="">Select {key.replace('Id', '').toLowerCase()}</option>
+          {(key === 'countryId' ? countries : key === 'stateId' ? visibleStates : key === 'districtId' ? visibleDistricts : visibleCities)
+            .filter((record) => record.isActive !== false).map((record) => (
+            <option key={getId(record, key.replace('Id', ''))} value={getId(record, key.replace('Id', ''))}>{getName(record, key.replace('Id', ''))}</option>
           ))}
         </select>
       ) : key === 'branch' ? (

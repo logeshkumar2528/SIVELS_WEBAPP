@@ -20,6 +20,7 @@ import { DocumentUploadCard, DocumentPreviewModal, fetchDocumentBlobUrl, isPdfUr
 import { getProfileImageUrl } from '../../utils/profileImageHelper';
 import { getFileUrl, isPdfFile, getAadhaarPath, getPanPath, getDocumentUrl } from '../Dashboard/Dashboard';
 import { StaffRoleSelect, toRoleId } from '../../components/StaffRoleSelect/StaffRoleSelect';
+import { getCountries } from '../../api/masters/countryApi';
 import '../RelationshipManager/RelationshipManagerCreate.css';
 import './AMSCreate.css';
 
@@ -29,7 +30,9 @@ const createInitialForm = () => ({
   dateOfBirth: '',
   genderId: '',
   address: '',
+  countryId: '',
   stateId: '',
+  districtId: '',
   cityId: '',
   pincode: '',
   mobileNumber: '',
@@ -58,7 +61,9 @@ const FIELD_GROUPS = [
     icon: MapPin,
     fields: [
       ['address', 'Address', 'text', true],
+      ['countryId', 'Country', 'select'],
       ['stateId', 'State', 'select'],
+      ['districtId', 'District', 'select'],
       ['cityId', 'City', 'select'],
       ['pincode', 'Pincode', 'text'],
       ['mobileNumber', 'Mobile Number', 'tel'],
@@ -95,6 +100,7 @@ export default function AMSCreate() {
 
   // Master data states
   const [genders, setGenders] = useState([]);
+  const [countries, setCountries] = useState([]);
   const [states, setStates] = useState([]);
   const [cities, setCities] = useState([]);
   const [districts, setDistricts] = useState([]);
@@ -155,14 +161,16 @@ export default function AMSCreate() {
 
     Promise.all([
       masterService.getGenders(),
+      getCountries(),
       masterService.getStates(),
       masterService.getCities(),
       masterService.getDistricts(),
       getBankBranches(),
     ])
-      .then(([genderRes, stateRes, cityRes, districtRes, branchRes]) => {
+      .then(([genderRes, countryRes, stateRes, cityRes, districtRes, branchRes]) => {
         if (!active) return;
         setGenders(normalize(genderRes));
+        setCountries(normalize(countryRes));
         setStates(normalize(stateRes));
         setCities(normalize(cityRes));
         setDistricts(normalize(districtRes));
@@ -233,7 +241,9 @@ export default function AMSCreate() {
           dateOfBirth: record.dateOfBirth ? String(record.dateOfBirth).slice(0, 10) : '',
           genderId: record.genderId ?? record.GenderId ?? '',
           address: record.address || record.Address || '',
+          countryId: record.countryId ?? record.CountryId ?? '',
           stateId: record.stateId ?? record.StateId ?? '',
+          districtId: record.districtId ?? record.DistrictId ?? '',
           cityId: record.cityId ?? record.CityId ?? '',
           pincode: record.pincode || record.Pincode || '',
           mobileNumber: record.mobileNumber || record.MobileNumber || record.phone || '',
@@ -366,6 +376,13 @@ export default function AMSCreate() {
 
 
   const selectedStateId = String(form.stateId || '');
+  const selectedCountryId = String(form.countryId || '');
+  const selectedDistrictId = String(form.districtId || '');
+
+  const visibleStates = useMemo(() => states.filter((state) => {
+    const countryId = state.countryId ?? state.CountryId ?? state.countryID;
+    return !countryId || !selectedCountryId || String(countryId) === selectedCountryId;
+  }), [states, selectedCountryId]);
 
   const visibleCities = useMemo(() => {
     if (!selectedStateId) return [];
@@ -383,18 +400,25 @@ export default function AMSCreate() {
     });
   }, [districts, selectedStateId]);
 
-  const handleStateChange = (newStateId) => {
+  const visibleCitiesForDistrict = useMemo(() => visibleCities.filter((city) => {
+    const districtId = city.districtId ?? city.DistrictId ?? city.districtID;
+    return !districtId || !selectedDistrictId || String(districtId) === selectedDistrictId;
+  }), [visibleCities, selectedDistrictId]);
+
+  const handleLocationChange = (key, value) => {
     setForm((prev) => ({
       ...prev,
-      stateId: newStateId,
-      cityId: '',
+      [key]: value,
+      ...(key === 'countryId' ? { stateId: '', districtId: '', cityId: '' } : {}),
+      ...(key === 'stateId' ? { districtId: '', cityId: '' } : {}),
+      ...(key === 'districtId' ? { cityId: '' } : {}),
     }));
-    // Clear selected districts on state change to prevent cross-state invalid selections
-    setSelectedDistrictIds([]);
+    if (key === 'countryId' || key === 'stateId') setSelectedDistrictIds([]);
     setFieldErrors((prev) => ({
       ...prev,
-      stateId: '',
-      cityId: '',
+      ...(key === 'countryId' ? { stateId: '', districtId: '', cityId: '' } : {}),
+      ...(key === 'stateId' ? { districtId: '', cityId: '' } : {}),
+      ...(key === 'districtId' ? { cityId: '' } : {}),
       districts: '',
     }));
   };
@@ -564,7 +588,9 @@ export default function AMSCreate() {
       'dateOfBirth',
       'genderId',
       'address',
+      'countryId',
       'stateId',
+      'districtId',
       'cityId',
       'pincode',
       'mobileNumber',
@@ -605,8 +631,14 @@ export default function AMSCreate() {
         dateOfBirth: form.dateOfBirth,
         genderId: Number(form.genderId),
         address: form.address.trim(),
+        countryId: Number(form.countryId),
         stateId: Number(form.stateId),
+        districtId: Number(form.districtId),
         cityId: Number(form.cityId),
+        country: countries.find((row) => String(row.countryId ?? row.id) === String(form.countryId))?.countryName ?? '',
+        state: states.find((row) => String(row.stateId ?? row.id) === String(form.stateId))?.stateName ?? '',
+        district: districts.find((row) => String(row.districtId ?? row.id) === String(form.districtId))?.districtName ?? '',
+        city: cities.find((row) => String(row.cityId ?? row.id) === String(form.cityId))?.cityName ?? '',
         pincode: form.pincode.trim(),
         mobileNumber: form.mobileNumber.trim(),
         emailAddress: form.emailAddress.trim(),
@@ -726,18 +758,26 @@ export default function AMSCreate() {
             className={`form-input ${isInvalid ? 'rm-invalid' : ''}`}
             value={form[key]}
             onChange={(event) => {
-              if (key === 'stateId') {
-                handleStateChange(event.target.value);
+              if (['countryId', 'stateId', 'districtId'].includes(key)) {
+                handleLocationChange(key, event.target.value);
               } else {
                 update(key, event.target.value);
               }
             }}
             onBlur={() => validateField(key)}
-            disabled={key === 'cityId' && !form.stateId}
+            disabled={
+              (key === 'stateId' && !form.countryId) ||
+              (key === 'districtId' && !form.stateId) ||
+              (key === 'cityId' && !form.districtId)
+            }
           >
             <option value="">
-              {key === 'cityId' && !form.stateId
-                ? 'Select state first'
+              {key === 'stateId' && !form.countryId
+                ? 'Select country first'
+                : key === 'districtId' && !form.stateId
+                  ? 'Select state first'
+                  : key === 'cityId' && !form.districtId
+                    ? 'Select district first'
                 : `Select ${label.toLowerCase()}`}
             </option>
 
@@ -753,7 +793,7 @@ export default function AMSCreate() {
               })}
 
             {key === 'stateId' &&
-              states.map((s) => {
+              visibleStates.map((s) => {
                 const id = s.stateId ?? s.id;
                 const name = s.stateName ?? s.name;
                 return (
@@ -764,7 +804,7 @@ export default function AMSCreate() {
               })}
 
             {key === 'cityId' &&
-              visibleCities.map((c) => {
+              visibleCitiesForDistrict.map((c) => {
                 const id = c.cityId ?? c.id;
                 const name = c.cityName ?? c.name;
                 return (
@@ -773,6 +813,16 @@ export default function AMSCreate() {
                   </option>
                 );
               })}
+
+            {key === 'countryId' && countries.map((c) => {
+              const id = c.countryId ?? c.id;
+              return <option key={id} value={id}>{c.countryName ?? c.name}</option>;
+            })}
+
+            {key === 'districtId' && visibleDistricts.map((d) => {
+              const id = d.districtId ?? d.id;
+              return <option key={id} value={id}>{d.districtName ?? d.name}</option>;
+            })}
 
             {key === 'branch' &&
               branches

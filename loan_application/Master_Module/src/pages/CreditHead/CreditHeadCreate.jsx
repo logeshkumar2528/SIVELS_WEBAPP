@@ -17,6 +17,7 @@ import { getCurrentUserId } from '../../utils/authHelper';
 import { DocumentPreviewModal, DocumentUploadCard, fetchDocumentBlobUrl, isPdfUrl } from '../../components/DocumentUpload/DocumentUploadSection';
 import { getProfileImageUrl, getDocumentUrl } from '../../utils/profileImageHelper';
 import { StaffRoleSelect, toRoleId } from '../../components/StaffRoleSelect/StaffRoleSelect';
+import { getCountries } from '../../api/masters/countryApi';
 import '../RelationshipManager/RelationshipManagerCreate.css';
 
 const createInitialForm = () => ({
@@ -25,6 +26,7 @@ const createInitialForm = () => ({
   dateOfBirth: '',
   genderId: '',
   address: '',
+  countryId: '',
   stateId: '',
   cityId: '',
   districtId: '',
@@ -66,6 +68,7 @@ export default function CreditHeadCreate({ onSuccessRedirect = '/credit-heads' }
   const [isActive, setIsActive] = useState(true);
   const [staffRoleId, setStaffRoleId] = useState('');
   const [genders, setGenders] = useState([]);
+  const [countries, setCountries] = useState([]);
   const [states, setStates] = useState([]);
   const [cities, setCities] = useState([]);
   const [districts, setDistricts] = useState([]);
@@ -115,14 +118,16 @@ export default function CreditHeadCreate({ onSuccessRedirect = '/credit-heads' }
 
     Promise.all([
       masterService.getGenders(),
+      getCountries(),
       masterService.getStates(),
       masterService.getCities(),
       masterService.getDistricts(),
       getBankBranches(),
     ])
-      .then(([genderRes, stateRes, cityRes, districtRes, branchRes]) => {
+      .then(([genderRes, countryRes, stateRes, cityRes, districtRes, branchRes]) => {
         if (!active) return;
         setGenders(normalise(genderRes));
+        setCountries(normalise(countryRes));
         setStates(normalise(stateRes));
         setCities(normalise(cityRes));
         setDistricts(normalise(districtRes));
@@ -165,6 +170,7 @@ export default function CreditHeadCreate({ onSuccessRedirect = '/credit-heads' }
           dateOfBirth: record.dateOfBirth ? String(record.dateOfBirth).slice(0, 10) : '',
           genderId: record.genderId ? String(record.genderId) : '',
           address: record.address || '',
+          countryId: record.countryId ? String(record.countryId) : '',
           stateId: record.stateId ? String(record.stateId) : '',
           cityId: record.cityId ? String(record.cityId) : '',
           districtId: record.districtId ? String(record.districtId) : '',
@@ -265,6 +271,13 @@ export default function CreditHeadCreate({ onSuccessRedirect = '/credit-heads' }
     }
   };
 
+  const selectedCountryId = String(form.countryId || '');
+  const selectedDistrictId = String(form.districtId || '');
+  const visibleStates = useMemo(() => states.filter((state) => {
+    const countryId = state.countryId ?? state.CountryId ?? state.countryID;
+    return !countryId || !selectedCountryId || String(countryId) === selectedCountryId;
+  }), [states, selectedCountryId]);
+
   const filteredDistricts = useMemo(() => {
     if (!form.stateId) return districts;
     return districts.filter((d) => String(d.stateId) === String(form.stateId));
@@ -278,11 +291,19 @@ export default function CreditHeadCreate({ onSuccessRedirect = '/credit-heads' }
       return matchState && matchDistrict;
     });
   }, [cities, form.stateId, form.districtId]);
+  const filteredCitiesByDistrict = useMemo(() => filteredCities.filter((city) => {
+    const districtId = city.districtId ?? city.DistrictId ?? city.districtID;
+    return !districtId || !selectedDistrictId || String(districtId) === selectedDistrictId;
+  }), [filteredCities, selectedDistrictId]);
 
   const handleFieldChange = (field, value) => {
     setForm((prev) => {
       const next = { ...prev, [field]: value };
-      if (field === 'stateId') {
+      if (field === 'countryId') {
+        next.stateId = '';
+        next.districtId = '';
+        next.cityId = '';
+      } else if (field === 'stateId') {
         next.districtId = '';
         next.cityId = '';
       } else if (field === 'districtId') {
@@ -386,6 +407,7 @@ export default function CreditHeadCreate({ onSuccessRedirect = '/credit-heads' }
     if (!form.dateOfBirth) errors.dateOfBirth = 'Date of birth is required.';
     if (!form.genderId) errors.genderId = 'Gender is required.';
     if (!form.address.trim()) errors.address = 'Address is required.';
+    if (!form.countryId) errors.countryId = 'Country is required.';
     if (!form.stateId) errors.stateId = 'State is required.';
     if (!form.cityId) errors.cityId = 'City is required.';
     if (!form.districtId) errors.districtId = 'District is required.';
@@ -459,9 +481,14 @@ export default function CreditHeadCreate({ onSuccessRedirect = '/credit-heads' }
           dateOfBirth: form.dateOfBirth,
           genderId: Number(form.genderId || 0),
           address: form.address.trim(),
+          countryId: Number(form.countryId || 0),
           stateId: Number(form.stateId || 0),
           cityId: Number(form.cityId || 0),
           districtId: Number(form.districtId || 0),
+          country: countries.find((row) => String(row.countryId ?? row.id) === String(form.countryId))?.countryName ?? '',
+          state: states.find((row) => String(row.stateId ?? row.id) === String(form.stateId))?.stateName ?? '',
+          district: districts.find((row) => String(row.districtId ?? row.id) === String(form.districtId))?.districtName ?? '',
+          city: cities.find((row) => String(row.cityId ?? row.id) === String(form.cityId))?.cityName ?? '',
           pincode: form.pincode.trim(),
           mobileNumber: form.mobileNumber.trim(),
           emailAddress: form.emailAddress.trim() || null,
@@ -482,9 +509,14 @@ export default function CreditHeadCreate({ onSuccessRedirect = '/credit-heads' }
           dateOfBirth: form.dateOfBirth,
           genderId: Number(form.genderId || 0),
           address: form.address.trim(),
+          countryId: Number(form.countryId || 0),
           stateId: Number(form.stateId || 0),
           cityId: Number(form.cityId || 0),
           districtId: Number(form.districtId || 0),
+          country: countries.find((row) => String(row.countryId ?? row.id) === String(form.countryId))?.countryName ?? '',
+          state: states.find((row) => String(row.stateId ?? row.id) === String(form.stateId))?.stateName ?? '',
+          district: districts.find((row) => String(row.districtId ?? row.id) === String(form.districtId))?.districtName ?? '',
+          city: cities.find((row) => String(row.cityId ?? row.id) === String(form.cityId))?.cityName ?? '',
           pincode: form.pincode.trim(),
           mobileNumber: form.mobileNumber.trim(),
           emailAddress: form.emailAddress.trim() || null,
@@ -751,16 +783,25 @@ export default function CreditHeadCreate({ onSuccessRedirect = '/credit-heads' }
               </div>
 
               <div className="form-group">
+                <label className="form-label" htmlFor="countryId">Country <b style={{ color: '#da1e28' }}>*</b></label>
+                <select id="countryId" className={`form-input ${fieldErrors.countryId ? 'rm-invalid' : ''}`} value={form.countryId} onChange={(e) => handleFieldChange('countryId', e.target.value)} onBlur={() => validateField('countryId')} disabled={saving}>
+                  <option value="">Select country</option>
+                  {countries.map((country) => { const id = country.countryId ?? country.id; return <option key={id} value={id}>{country.countryName ?? country.name}</option>; })}
+                </select>
+                {fieldErrors.countryId && <small className="rm-validation-error">{fieldErrors.countryId}</small>}
+              </div>
+
+              <div className="form-group">
                 <label className="form-label" htmlFor="stateId">State <b style={{ color: '#da1e28' }}>*</b></label>
                 <select
                   id="stateId"
                   className={`form-input ${fieldErrors.stateId ? 'rm-invalid' : ''}`}
                   value={form.stateId}
                   onChange={(e) => handleFieldChange('stateId', e.target.value)}
-                  disabled={saving}
+                  disabled={saving || !form.countryId}
                 >
                   <option value="">Select state</option>
-                  {states.map((s) => {
+                  {visibleStates.map((s) => {
                     const id = s.stateId ?? s.id;
                     const name = s.stateName ?? s.name;
                     return (
@@ -803,10 +844,10 @@ export default function CreditHeadCreate({ onSuccessRedirect = '/credit-heads' }
                   className={`form-input ${fieldErrors.cityId ? 'rm-invalid' : ''}`}
                   value={form.cityId}
                   onChange={(e) => handleFieldChange('cityId', e.target.value)}
-                  disabled={saving || !form.stateId}
+                  disabled={saving || !form.districtId}
                 >
-                  <option value="">{form.stateId ? 'Select city' : 'Select state first'}</option>
-                  {filteredCities.map((c) => {
+                  <option value="">{form.districtId ? 'Select city' : 'Select district first'}</option>
+                  {filteredCitiesByDistrict.map((c) => {
                     const id = c.cityId ?? c.id;
                     const name = c.cityName ?? c.name;
                     return (

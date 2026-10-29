@@ -17,6 +17,7 @@ import { getCurrentUserId } from '../../utils/authHelper';
 import { DocumentPreviewModal, DocumentUploadCard, fetchDocumentBlobUrl, isPdfUrl } from '../../components/DocumentUpload/DocumentUploadSection';
 import { getProfileImageUrl, getDocumentUrl } from '../../utils/profileImageHelper';
 import { StaffRoleSelect, toRoleId } from '../../components/StaffRoleSelect/StaffRoleSelect';
+import { getCountries } from '../../api/masters/countryApi';
 import '../RelationshipManager/RelationshipManagerCreate.css';
 
 const createInitialForm = () => ({
@@ -25,6 +26,7 @@ const createInitialForm = () => ({
   dateOfBirth: '',
   genderId: '',
   address: '',
+  countryId: '',
   stateId: '',
   cityId: '',
   districtId: '',
@@ -66,6 +68,7 @@ export default function CreditManagerCreate({ onSuccessRedirect = '/credit-manag
   const [isActive, setIsActive] = useState(true);
   const [staffRoleId, setStaffRoleId] = useState('');
   const [genders, setGenders] = useState([]);
+  const [countries, setCountries] = useState([]);
   const [states, setStates] = useState([]);
   const [cities, setCities] = useState([]);
   const [districts, setDistricts] = useState([]);
@@ -115,14 +118,16 @@ export default function CreditManagerCreate({ onSuccessRedirect = '/credit-manag
 
     Promise.all([
       masterService.getGenders(),
+      getCountries(),
       masterService.getStates(),
       masterService.getCities(),
       masterService.getDistricts(),
       getBankBranches(),
     ])
-      .then(([genderRes, stateRes, cityRes, districtRes, branchRes]) => {
+      .then(([genderRes, countryRes, stateRes, cityRes, districtRes, branchRes]) => {
         if (!active) return;
         setGenders(normalise(genderRes));
+        setCountries(normalise(countryRes));
         setStates(normalise(stateRes));
         setCities(normalise(cityRes));
         setDistricts(normalise(districtRes));
@@ -164,6 +169,7 @@ export default function CreditManagerCreate({ onSuccessRedirect = '/credit-manag
           dateOfBirth: record.dateOfBirth ? String(record.dateOfBirth).slice(0, 10) : '',
           genderId: record.genderId ?? record.GenderId ?? '',
           address: record.address || record.Address || '',
+          countryId: record.countryId ?? record.CountryId ?? '',
           stateId: record.stateId ?? record.StateId ?? '',
           cityId: record.cityId ?? record.CityId ?? '',
           districtId: record.districtId ?? record.DistrictId ?? '',
@@ -284,6 +290,12 @@ export default function CreditManagerCreate({ onSuccessRedirect = '/credit-manag
   };
 
   const selectedStateId = String(form.stateId || '');
+  const selectedCountryId = String(form.countryId || '');
+  const selectedDistrictId = String(form.districtId || '');
+  const visibleStates = useMemo(() => states.filter((state) => {
+    const countryId = state.countryId ?? state.CountryId ?? state.countryID;
+    return !countryId || !selectedCountryId || String(countryId) === selectedCountryId;
+  }), [states, selectedCountryId]);
   const visibleCities = useMemo(
     () =>
       !selectedStateId
@@ -305,13 +317,23 @@ export default function CreditManagerCreate({ onSuccessRedirect = '/credit-manag
           }),
     [districts, selectedStateId]
   );
+  const visibleCitiesForDistrict = useMemo(() => visibleCities.filter((city) => {
+    const districtId = city.districtId ?? city.DistrictId ?? city.districtID;
+    return !districtId || !selectedDistrictId || String(districtId) === selectedDistrictId;
+  }), [visibleCities, selectedDistrictId]);
 
   const update = (key, value) => {
     setForm((current) => {
       const next = { ...current, [key]: value };
-      if (key === 'stateId') {
+      if (key === 'countryId') {
+        next.stateId = '';
         next.cityId = '';
         next.districtId = '';
+      } else if (key === 'stateId') {
+        next.cityId = '';
+        next.districtId = '';
+      } else if (key === 'districtId') {
+        next.cityId = '';
       }
       return next;
     });
@@ -352,6 +374,7 @@ export default function CreditManagerCreate({ onSuccessRedirect = '/credit-manag
       'dateOfBirth',
       'genderId',
       'address',
+      'countryId',
       'stateId',
       'cityId',
       'districtId',
@@ -422,9 +445,14 @@ export default function CreditManagerCreate({ onSuccessRedirect = '/credit-manag
           dateOfBirth: form.dateOfBirth,
           genderId: Number(form.genderId || 0),
           address: form.address.trim(),
+          countryId: Number(form.countryId || 0),
           stateId: Number(form.stateId || 0),
           cityId: Number(form.cityId || 0),
           districtId: Number(form.districtId || 0),
+          country: countries.find((row) => String(row.countryId ?? row.id) === String(form.countryId))?.countryName ?? '',
+          state: states.find((row) => String(row.stateId ?? row.id) === String(form.stateId))?.stateName ?? '',
+          district: districts.find((row) => String(row.districtId ?? row.id) === String(form.districtId))?.districtName ?? '',
+          city: cities.find((row) => String(row.cityId ?? row.id) === String(form.cityId))?.cityName ?? '',
           pincode: form.pincode.trim(),
           mobileNumber: form.mobileNumber.trim(),
           emailAddress: form.emailAddress.trim() || null,
@@ -445,9 +473,14 @@ export default function CreditManagerCreate({ onSuccessRedirect = '/credit-manag
           dateOfBirth: form.dateOfBirth,
           genderId: Number(form.genderId || 0),
           address: form.address.trim(),
+          countryId: Number(form.countryId || 0),
           stateId: Number(form.stateId || 0),
           cityId: Number(form.cityId || 0),
           districtId: Number(form.districtId || 0),
+          country: countries.find((row) => String(row.countryId ?? row.id) === String(form.countryId))?.countryName ?? '',
+          state: states.find((row) => String(row.stateId ?? row.id) === String(form.stateId))?.stateName ?? '',
+          district: districts.find((row) => String(row.districtId ?? row.id) === String(form.districtId))?.districtName ?? '',
+          city: cities.find((row) => String(row.cityId ?? row.id) === String(form.cityId))?.cityName ?? '',
           pincode: form.pincode.trim(),
           mobileNumber: form.mobileNumber.trim(),
           emailAddress: form.emailAddress.trim() || null,
@@ -718,6 +751,15 @@ export default function CreditManagerCreate({ onSuccessRedirect = '/credit-manag
               </div>
 
               <div className="form-group">
+                <label className="form-label" htmlFor="countryId">Country <b style={{ color: '#da1e28' }}>*</b></label>
+                <select id="countryId" className={`form-input ${fieldErrors.countryId ? 'rm-invalid' : ''}`} value={form.countryId} onChange={(e) => update('countryId', e.target.value)} onBlur={() => validateField('countryId')} disabled={saving}>
+                  <option value="">Select country</option>
+                  {countries.map((country) => { const id = country.countryId ?? country.id; return <option key={id} value={id}>{country.countryName ?? country.name}</option>; })}
+                </select>
+                {fieldErrors.countryId && <small className="rm-validation-error">{fieldErrors.countryId}</small>}
+              </div>
+
+              <div className="form-group">
                 <label className="form-label" htmlFor="stateId">State <b style={{ color: '#da1e28' }}>*</b></label>
                 <select
                   id="stateId"
@@ -725,10 +767,10 @@ export default function CreditManagerCreate({ onSuccessRedirect = '/credit-manag
                   value={form.stateId}
                   onChange={(e) => update('stateId', e.target.value)}
                   onBlur={() => validateField('stateId')}
-                  disabled={saving}
+                  disabled={saving || !form.countryId}
                 >
                   <option value="">Select state</option>
-                  {states.map((st) => {
+                  {visibleStates.map((st) => {
                     const id = st.stateId ?? st.StateId ?? st.stateID ?? st.id;
                     const name = st.stateName ?? st.StateName ?? st.name;
                     return (
@@ -773,10 +815,10 @@ export default function CreditManagerCreate({ onSuccessRedirect = '/credit-manag
                   value={form.cityId}
                   onChange={(e) => update('cityId', e.target.value)}
                   onBlur={() => validateField('cityId')}
-                  disabled={saving || !form.stateId}
+                  disabled={saving || !form.districtId}
                 >
-                  <option value="">{form.stateId ? 'Select city' : 'Select state first'}</option>
-                  {visibleCities.map((ct) => {
+                  <option value="">{form.districtId ? 'Select city' : 'Select district first'}</option>
+                  {visibleCitiesForDistrict.map((ct) => {
                     const id = ct.cityId ?? ct.CityId ?? ct.cityID ?? ct.id;
                     const name = ct.cityName ?? ct.CityName ?? ct.name;
                     return (
