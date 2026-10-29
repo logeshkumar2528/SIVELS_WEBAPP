@@ -19,6 +19,7 @@ import { DocumentPreviewModal, DocumentUploadCard, fetchDocumentBlobUrl, isPdfUr
 import { getProfileImageUrl } from '../../utils/profileImageHelper';
 import { getFileUrl, isPdfFile, getAadhaarPath, getPanPath, getProfilePath, getDocumentUrl } from '../Dashboard/Dashboard';
 import { StaffRoleSelect, toRoleId } from '../../components/StaffRoleSelect/StaffRoleSelect';
+import { getCountries } from '../../api/masters/countryApi';
 import '../RelationshipManager/RelationshipManagerCreate.css';
 
 const createInitialForm = () => ({
@@ -27,6 +28,7 @@ const createInitialForm = () => ({
   dateOfBirth: '',
   genderId: '',
   address: '',
+  countryId: '',
   stateId: '',
   cityId: '',
   districtId: '',
@@ -68,6 +70,7 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
   const [isActive, setIsActive] = useState(true);
   const [staffRoleId, setStaffRoleId] = useState('');
   const [genders, setGenders] = useState([]);
+  const [countries, setCountries] = useState([]);
   const [states, setStates] = useState([]);
   const [cities, setCities] = useState([]);
   const [districts, setDistricts] = useState([]);
@@ -118,14 +121,16 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
 
     Promise.all([
       masterService.getGenders(),
+      getCountries(),
       masterService.getStates(),
       masterService.getCities(),
       masterService.getDistricts(),
       getBankBranches(),
     ])
-      .then(([genderRes, stateRes, cityRes, districtRes, branchRes]) => {
+      .then(([genderRes, countryRes, stateRes, cityRes, districtRes, branchRes]) => {
         if (!active) return;
         setGenders(normalise(genderRes));
+        setCountries(normalise(countryRes));
         setStates(normalise(stateRes));
         setCities(normalise(cityRes));
         setDistricts(normalise(districtRes));
@@ -167,6 +172,7 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
           dateOfBirth: record.dateOfBirth ? String(record.dateOfBirth).slice(0, 10) : '',
           genderId: record.genderId ?? record.GenderId ?? '',
           address: record.address || record.Address || '',
+          countryId: record.countryId ?? record.CountryId ?? '',
           stateId: record.stateId ?? record.StateId ?? '',
           cityId: record.cityId ?? record.CityId ?? '',
           districtId: record.districtId ?? record.DistrictId ?? '',
@@ -278,6 +284,12 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
 
 
   const selectedStateId = String(form.stateId || '');
+  const selectedCountryId = String(form.countryId || '');
+  const selectedDistrictId = String(form.districtId || '');
+  const visibleStates = useMemo(() => states.filter((state) => {
+    const countryId = state.countryId ?? state.CountryId ?? state.countryID;
+    return !countryId || !selectedCountryId || String(countryId) === selectedCountryId;
+  }), [states, selectedCountryId]);
   const visibleCities = useMemo(
     () =>
       !selectedStateId
@@ -299,11 +311,19 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
           }),
     [districts, selectedStateId]
   );
+  const visibleCitiesForDistrict = useMemo(() => visibleCities.filter((city) => {
+    const districtId = city.districtId ?? city.DistrictId ?? city.districtID;
+    return !districtId || !selectedDistrictId || String(districtId) === selectedDistrictId;
+  }), [visibleCities, selectedDistrictId]);
 
   const update = (key, value) => {
     setForm((current) => {
       const next = { ...current, [key]: value };
-      if (key === 'stateId') {
+      if (key === 'countryId') {
+        next.stateId = '';
+        next.cityId = '';
+        next.districtId = '';
+      } else if (key === 'stateId') {
         next.cityId = '';
         next.districtId = '';
       }
@@ -346,6 +366,7 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
       'dateOfBirth',
       'genderId',
       'address',
+      'countryId',
       'stateId',
       'cityId',
       'districtId',
@@ -411,9 +432,14 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
         dateOfBirth: form.dateOfBirth,
         genderId: Number(form.genderId || 0),
         address: form.address.trim(),
+        countryId: Number(form.countryId || 0),
         stateId: Number(form.stateId || 0),
         cityId: Number(form.cityId || 0),
         districtId: Number(form.districtId || 0),
+        country: countries.find((row) => String(row.countryId ?? row.id) === String(form.countryId))?.countryName ?? '',
+        state: states.find((row) => String(row.stateId ?? row.id) === String(form.stateId))?.stateName ?? '',
+        district: districts.find((row) => String(row.districtId ?? row.id) === String(form.districtId))?.districtName ?? '',
+        city: cities.find((row) => String(row.cityId ?? row.id) === String(form.cityId))?.cityName ?? '',
         pincode: form.pincode.trim(),
         mobileNumber: form.mobileNumber.trim(),
         emailAddress: form.emailAddress.trim() || null,
@@ -470,7 +496,7 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
       <span className="form-label">
         {label} {key !== 'emailAddress' && <b className="text-danger">*</b>}
       </span>
-      {['genderId', 'stateId', 'cityId', 'districtId', 'branch'].includes(key) ? (
+      {['genderId', 'countryId', 'stateId', 'cityId', 'districtId', 'branch'].includes(key) ? (
         <select
           className={`form-input ${fieldErrors[key] ? 'rm-invalid' : ''}`}
           value={form[key]}
@@ -480,16 +506,20 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
             saving ||
             loadingMasterData ||
             loadingRecord ||
+            (key === 'stateId' && !form.countryId) ||
+            (key === 'districtId' && !form.stateId) ||
             (key === 'cityId' && !form.stateId) ||
-            (key === 'districtId' && !form.stateId)
+            (key === 'cityId' && !form.districtId)
           }
         >
           <option value="">
-            {key === 'cityId' && !form.stateId
-              ? 'Select state first'
+            {key === 'stateId' && !form.countryId
+              ? 'Select country first'
               : key === 'districtId' && !form.stateId
                 ? 'Select state first'
-                : `Select ${label.toLowerCase()}`}
+                : key === 'cityId' && !form.districtId
+                  ? 'Select district first'
+                  : `Select ${label.toLowerCase()}`}
           </option>
           {key === 'genderId' &&
             genders.map((gender) => {
@@ -498,13 +528,13 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
               return <option key={id} value={id}>{name}</option>;
             })}
           {key === 'stateId' &&
-            states.map((state) => {
+            visibleStates.map((state) => {
               const id = state.stateId ?? state.id;
               const name = state.stateName ?? state.name;
               return <option key={id} value={id}>{name}</option>;
             })}
           {key === 'cityId' &&
-            visibleCities.map((city) => {
+            visibleCitiesForDistrict.map((city) => {
               const id = city.cityId ?? city.id;
               const name = city.cityName ?? city.name;
               return <option key={id} value={id}>{name}</option>;
@@ -514,6 +544,11 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
               const id = district.districtId ?? district.id;
               const name = district.districtName ?? district.name;
               return <option key={id} value={id}>{name}</option>;
+            })}
+          {key === 'countryId' &&
+            countries.map((country) => {
+              const id = country.countryId ?? country.id;
+              return <option key={id} value={id}>{country.countryName ?? country.name}</option>;
             })}
           {key === 'branch' &&
             branches
@@ -560,6 +595,7 @@ export default function BackOfficeCreate({ onSuccessRedirect = '/dashboard' } = 
       icon: MapPin,
       fields: [
         ['address', 'Address', 'text'],
+        ['countryId', 'Country', 'select'],
         ['stateId', 'State', 'select'],
         ['cityId', 'City', 'select'],
         ['districtId', 'District', 'select'],

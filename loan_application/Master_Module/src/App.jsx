@@ -115,6 +115,7 @@ function App() {
               <Route path="back-office" element={<PeopleDirectoryPage roleKey="backOffice" />} />
               <Route path="ams" element={<PeopleDirectoryPage roleKey="ams" />} />
               <Route path="credit-managers" element={<PeopleDirectoryPage roleKey="creditManager" />} />
+              <Route path="credit-heads" element={<PeopleDirectoryPage roleKey="creditHead" />} />
               <Route path="customers" element={<PeopleDirectoryPage roleKey="customer" />} />
               <Route path="application-360" element={<Application360 />} />
               <Route path="ams-dashboard" element={<AMSDashboard />} />
@@ -125,6 +126,7 @@ function App() {
               <Route path="edit-relationship-manager/:rmId" element={<RelationshipManagerCreate />} />
               <Route path="create-credit-manager" element={<CreditManagerCreate />} />
               <Route path="edit-credit-manager/:cmId" element={<CreditManagerCreate />} />
+              <Route path="edit-credit-head/:chId" element={<CreditHeadCreate onSuccessRedirect="/dashboard" />} />
               <Route path="edit-customer/:customerId" element={<CustomerEdit />} />
               <Route path="edit-ams/:amsId" element={<AMSCreate />} />
               <Route path="edit-back-office/:backOfficeId" element={<BackOfficeCreate />} />

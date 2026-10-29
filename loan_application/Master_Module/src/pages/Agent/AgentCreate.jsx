@@ -37,6 +37,10 @@ import '../RelationshipManager/RelationshipManagerCreate.css';
 import './AgentCreate.css';
 import { getCurrentUserId } from '../../utils/authHelper';
 import { StaffRoleSelect, toRoleId } from '../../components/StaffRoleSelect/StaffRoleSelect';
+import { getCountries } from '../../api/masters/countryApi';
+import { getStates } from '../../api/masters/stateApi';
+import { getDistricts } from '../../api/masters/districtApi';
+import { getCities } from '../../api/masters/cityApi';
 
 const API_BASE = API_BASE_URL;
 
@@ -81,7 +85,10 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
     genderId: '',
     relationshipManager: '',
     address: '',
-    state: '',
+    countryId: '',
+    stateId: '',
+    districtId: '',
+    cityId: '',
     pincode: '',
     mobileNumber: '',
     emailAddress: '',
@@ -138,6 +145,37 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [createdAgentId, setCreatedAgentId] = useState(null);
+  const [countries, setCountries] = useState([]);
+  const [states, setStates] = useState([]);
+  const [districts, setDistricts] = useState([]);
+  const [cities, setCities] = useState([]);
+
+  const unwrap = (response) => response?.value ?? response?.data ?? response ?? [];
+  useEffect(() => {
+    Promise.all([getCountries(), getStates(), getDistricts(), getCities()])
+      .then(([countryRows, stateRows, districtRows, cityRows]) => {
+        setCountries(Array.isArray(unwrap(countryRows)) ? unwrap(countryRows) : []);
+        setStates(Array.isArray(unwrap(stateRows)) ? unwrap(stateRows) : []);
+        setDistricts(Array.isArray(unwrap(districtRows)) ? unwrap(districtRows) : []);
+        setCities(Array.isArray(unwrap(cityRows)) ? unwrap(cityRows) : []);
+      })
+      .catch(() => {});
+  }, []);
+
+  const visibleStates = useMemo(() => states.filter((row) => {
+    const countryId = row.countryId ?? row.CountryId;
+    return !formData.countryId || !countryId || String(countryId) === String(formData.countryId);
+  }), [states, formData.countryId]);
+  const visibleDistricts = useMemo(() => districts.filter((row) => {
+    const stateId = row.stateId ?? row.StateId;
+    return !formData.stateId || !stateId || String(stateId) === String(formData.stateId);
+  }), [districts, formData.stateId]);
+  const visibleCities = useMemo(() => cities.filter((row) => {
+    const stateId = row.stateId ?? row.StateId;
+    const districtId = row.districtId ?? row.DistrictId;
+    return (!formData.stateId || !stateId || String(stateId) === String(formData.stateId)) &&
+      (!formData.districtId || !districtId || String(districtId) === String(formData.districtId));
+  }), [cities, formData.stateId, formData.districtId]);
 
 
   useEffect(() => {
@@ -192,7 +230,10 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
           genderId: record.genderId ?? '',
           relationshipManager: record.rmName || record.relationshipManager || '',
           address: record.address || '',
-          state: record.state || '',
+          countryId: record.countryId ?? record.CountryId ?? '',
+          stateId: record.stateId ?? record.StateId ?? '',
+          districtId: record.districtId ?? record.DistrictId ?? '',
+          cityId: record.cityId ?? record.CityId ?? '',
           pincode: record.pincode || '',
           mobileNumber: record.mobileNumber || record.phone || '',
           emailAddress: record.emailAddress || record.email || '',
@@ -325,10 +366,20 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
   };
 
   const handleInputChange = (field, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'countryId') {
+        next.stateId = '';
+        next.districtId = '';
+        next.cityId = '';
+      } else if (field === 'stateId') {
+        next.districtId = '';
+        next.cityId = '';
+      } else if (field === 'districtId') {
+        next.cityId = '';
+      }
+      return next;
+    });
   };
 
   const getAuthHeaders = () => {
@@ -400,7 +451,10 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
       ['dateOfBirth', 'date of birth'],
       ['genderId', 'gender'],
       ['address', 'address'],
-      ['state', 'state'],
+      ['countryId', 'country'],
+      ['stateId', 'state'],
+      ['districtId', 'district'],
+      ['cityId', 'city'],
       ['pincode', 'pincode'],
       ['mobileNumber', 'mobile number'],
       ['dateJoined', 'date joined'],
@@ -471,7 +525,15 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
     genderId: Number(formData.genderId || 0),
     rmId: Number(selectedRmId),
     address: formData.address.trim(),
-    state: formData.state.trim(),
+    countryId: Number(formData.countryId || 0),
+    stateId: Number(formData.stateId || 0),
+    districtId: Number(formData.districtId || 0),
+    cityId: Number(formData.cityId || 0),
+    // Keep the legacy text values while the deployed Agent API is being rolled out.
+    country: countries.find((row) => String(row.countryId ?? row.id) === String(formData.countryId))?.countryName ?? '',
+    state: states.find((row) => String(row.stateId ?? row.id) === String(formData.stateId))?.stateName ?? '',
+    district: districts.find((row) => String(row.districtId ?? row.id) === String(formData.districtId))?.districtName ?? '',
+    city: cities.find((row) => String(row.cityId ?? row.id) === String(formData.cityId))?.cityName ?? '',
     pincode: formData.pincode.trim(),
     mobileNumber: formData.mobileNumber.trim(),
     emailAddress: formData.emailAddress.trim(),
@@ -521,10 +583,13 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
           try {
             errorDetailsFromApi = errorText ? JSON.parse(errorText) : null;
           } catch {}
+          const modelState = errorDetailsFromApi?.errors || errorDetailsFromApi?.Errors || errorDetailsFromApi?.ModelState;
+          const validationText = modelState && typeof modelState === 'object'
+            ? Object.entries(modelState).flatMap(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`).join(' | ')
+            : '';
           throw new Error(
-            errorDetailsFromApi?.message ||
-              errorDetailsFromApi?.Message ||
-              errorText ||
+            validationText || errorDetailsFromApi?.message ||
+              errorDetailsFromApi?.Message || errorText ||
               `Failed to save agent (${response.status})`
           );
         }
@@ -796,19 +861,80 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
                 />
               </div>
 
-              {/* Row 4 */}
+              {/* Location hierarchy */}
+              <div className="agent-field-group">
+                <label className="agent-field-label">
+                  Country <span className="req-star">*</span>
+                </label>
+                <select
+                  className="agent-input"
+                  value={formData.countryId}
+                  onChange={(e) => handleInputChange('countryId', e.target.value)}
+                  required
+                >
+                  <option value="">Select country</option>
+                  {countries.map((row) => {
+                    const id = row.countryId ?? row.id;
+                    return <option key={id} value={id}>{row.countryName ?? row.name ?? row.label}</option>;
+                  })}
+                </select>
+              </div>
+
               <div className="agent-field-group">
                 <label className="agent-field-label">
                   State <span className="req-star">*</span>
                 </label>
-                <input
-                  type="text"
+                <select
                   className="agent-input"
-                  placeholder="Enter state"
-                  value={formData.state}
-                  onChange={(e) => handleInputChange('state', e.target.value)}
+                  value={formData.stateId}
+                  onChange={(e) => handleInputChange('stateId', e.target.value)}
+                  disabled={!formData.countryId}
                   required
-                />
+                >
+                  <option value="">Select state</option>
+                  {visibleStates.map((row) => {
+                    const id = row.stateId ?? row.id;
+                    return <option key={id} value={id}>{row.stateName ?? row.name ?? row.label}</option>;
+                  })}
+                </select>
+              </div>
+
+              <div className="agent-field-group">
+                <label className="agent-field-label">
+                  District <span className="req-star">*</span>
+                </label>
+                <select
+                  className="agent-input"
+                  value={formData.districtId}
+                  onChange={(e) => handleInputChange('districtId', e.target.value)}
+                  disabled={!formData.stateId}
+                  required
+                >
+                  <option value="">Select district</option>
+                  {visibleDistricts.map((row) => {
+                    const id = row.districtId ?? row.id;
+                    return <option key={id} value={id}>{row.districtName ?? row.name ?? row.label}</option>;
+                  })}
+                </select>
+              </div>
+
+              <div className="agent-field-group">
+                <label className="agent-field-label">
+                  City <span className="req-star">*</span>
+                </label>
+                <select
+                  className="agent-input"
+                  value={formData.cityId}
+                  onChange={(e) => handleInputChange('cityId', e.target.value)}
+                  disabled={!formData.districtId}
+                  required
+                >
+                  <option value="">Select city</option>
+                  {visibleCities.map((row) => {
+                    const id = row.cityId ?? row.id;
+                    return <option key={id} value={id}>{row.cityName ?? row.name ?? row.label}</option>;
+                  })}
+                </select>
               </div>
 
               <div className="agent-field-group">
