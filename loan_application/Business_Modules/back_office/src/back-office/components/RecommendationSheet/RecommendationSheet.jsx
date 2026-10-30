@@ -8,6 +8,9 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import backOfficeService from '../../api/backOfficeService';
+import { apiFetch } from '../../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../../../Core/src/auth/tokenStore';
 import {
   BRAND_NAME,
   LogoImage,
@@ -154,9 +157,42 @@ export default function RecommendationSheet({
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState({});
   const exportRef = verificationData?.appId || verificationData?.customerCode || agentCustomerId || 'Application';
+  const saveRecommendationSheet = async (pdf, fileName) => {
+    const productId = Number(applicationProductDetailsId);
+    const customerId = Number(agentCustomerId);
+    const rawCustomer = firstRecord(verificationData?.raw?.customer || verificationData?.raw?.Customer) || {};
+    const customerCode =
+      verificationData?.customerCode ||
+      verificationData?.raw?.customerCode ||
+      verificationData?.raw?.CustomerCode ||
+      rawCustomer.customerCode ||
+      rawCustomer.CustomerCode;
+    if (!productId || !customerId || !customerCode) {
+      throw new Error('Application or customer details are missing. Please reload the Recommendation Sheet.');
+    }
+    const formData = new FormData();
+    formData.append('file', pdf.output('blob'), fileName);
+    formData.append('applicationProductDetailsId', String(productId));
+    formData.append('agentCustomerId', String(customerId));
+    formData.append('customerCode', String(customerCode));
+    formData.append('documentType', 'RECOMMENDATION_SHEET');
+    const uploadedBy = verificationData?.userId || verificationData?.rmId || localStorage.getItem('userId');
+    if (uploadedBy) formData.append('uploadedBy', String(uploadedBy));
+    const token = getAccessToken();
+    const response = await apiFetch(`${API_BASE_URL}/ApplicationDocuments/application-pdf`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (!response.ok) {
+      const message = await response.text().catch(() => '');
+      throw new Error(message || `Recommendation Sheet upload failed (HTTP ${response.status}).`);
+    }
+  };
   const { handlePrint, handleDownloadPdf, isExporting, exportError } = usePrintAndPdf(reportRef, {
     title: 'Recommendation Sheet',
     fileName: `Recommendation_Sheet_${exportRef}.pdf`,
+    onPdfGenerated: saveRecommendationSheet,
   });
 
   /*
