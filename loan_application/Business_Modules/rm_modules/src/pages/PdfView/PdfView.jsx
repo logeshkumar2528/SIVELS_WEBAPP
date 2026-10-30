@@ -1313,7 +1313,7 @@ export default function PdfView() {
                   fileName,
                   filePath: doc.filePath,
                   fileType: isPdf ? 'pdf' : 'image',
-                  previewUrl,
+                  previewUrl: null,
                   createdAt: doc.createdAt,
                   isActive: doc.isActive !== false,
                 };
@@ -1526,7 +1526,13 @@ export default function PdfView() {
       await withLoading(async () => {
         const pdf = await generatePdfInstance();
         const fileName = `Loan_Application_${applicationId}.pdf`;
-        await saveApplicationPdfToServer(pdf, fileName);
+        // The server copy is created once by RM. Back Office can download the
+        // generated view but must not attempt a second upload, which is rejected
+        // by the backend with 403.
+        const isBackOfficeView = location.pathname.startsWith('/backoffice');
+        if (!isBackOfficeView) {
+          await saveApplicationPdfToServer(pdf, fileName);
+        }
         pdf.save(fileName);
       }, { message: 'Generating application PDF...' });
     } catch (err) {
