@@ -380,6 +380,7 @@ export default function PdfView() {
   const [isMastersLoading, setIsMastersLoading] = useState(true);
   const [isMetadataLoading, setIsMetadataLoading] = useState(true);
   const [isDocsDownloading, setIsDocsDownloading] = useState(true);
+  const [isPdfSaving, setIsPdfSaving] = useState(false);
   const [isCoPhotosLoading, setIsCoPhotosLoading] = useState(false);
   const [masterMaps, setMasterMaps] = useState({
     sourcingChannels: {},
@@ -1462,15 +1463,71 @@ export default function PdfView() {
     return pdf;
   };
 
+  // Store the generated application PDF against the current application. The PDF view
+  // route parameter may be a customer/application key, so resolve the product ID from
+  // the hydrated application/KYC data instead of hardcoding it.
+  const saveApplicationPdfToServer = async (pdf, fileName) => {
+    const token = getAccessToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const productId =
+      appData?.applicationProductDetailsId ??
+      appData?.ApplicationProductDetailsId ??
+      liveApplicantKyc?.applicationProductDetailsId ??
+      liveApplicantKyc?.ApplicationProductDetailsId ??
+      liveAllKycRecords?.find((row) => row?.applicationProductDetailsId ?? row?.ApplicationProductDetailsId)?.applicationProductDetailsId ??
+      liveAllKycRecords?.find((row) => row?.applicationProductDetailsId ?? row?.ApplicationProductDetailsId)?.ApplicationProductDetailsId;
+    const customerId =
+      liveCustomer?.agentCustomerId ??
+      liveCustomer?.AgentCustomerId ??
+      appData?.agentCustomerId ??
+      appData?.AgentCustomerId ??
+      applicationId;
+    const customerCode =
+      liveCustomer?.customerCode ??
+      liveCustomer?.CustomerCode ??
+      appData?.customerCode ??
+      appData?.CustomerCode;
+
+    if (!productId || !customerId || !customerCode) {
+      throw new Error('Application details are incomplete. Please reload the application and try again.');
+    }
+
+    const formData = new FormData();
+    formData.append('file', pdf.output('blob'), fileName);
+    formData.append('applicationProductDetailsId', String(productId));
+    formData.append('agentCustomerId', String(customerId));
+    formData.append('customerCode', String(customerCode));
+    formData.append('documentType', 'APPLICATION_PDF');
+    const rmContext = getCurrentRMContext();
+    const uploadedBy = rmContext?.rmId ?? rmContext?.userId ?? localStorage.getItem('userId');
+    if (uploadedBy) formData.append('uploadedBy', String(uploadedBy));
+
+    const response = await apiFetch(`${API_BASE}/ApplicationDocuments/application-pdf`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(body || `Server PDF upload failed (HTTP ${response.status}).`);
+    }
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : null;
+    return data;
+  };
+
   // Generate continuous single long page PDF for download
   const handleDownloadPdf = async () => {
     if (!pdfRef.current || isGeneratingPdf || !isPdfMediaReady) return;
     setIsGeneratingPdf(true);
+    setIsPdfSaving(true);
 
     try {
       await withLoading(async () => {
         const pdf = await generatePdfInstance();
-        pdf.save(`Loan_Application_${applicationId}.pdf`);
+        const fileName = `Loan_Application_${applicationId}.pdf`;
+        await saveApplicationPdfToServer(pdf, fileName);
+        pdf.save(fileName);
       }, { message: 'Generating application PDF...' });
     } catch (err) {
       console.error('Error generating PDF:', err);
@@ -1480,6 +1537,7 @@ export default function PdfView() {
         variant: 'error',
       });
     } finally {
+      setIsPdfSaving(false);
       setIsGeneratingPdf(false);
     }
   };
@@ -2924,7 +2982,7 @@ export default function PdfView() {
         </Button>
         <Button onClick={handleDownloadPdf} disabled={isGeneratingPdf || !isPdfMediaReady}>
           {isGeneratingPdf
-            ? 'Generating PDF...'
+            ? isPdfSaving ? 'Saving PDF...' : 'Generating PDF...'
             : !isPdfMediaReady
             ? 'Preparing documents...'
             : 'Download PDF'}
