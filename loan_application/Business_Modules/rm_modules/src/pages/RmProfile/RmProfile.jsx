@@ -98,7 +98,6 @@ export default function RmProfile() {
   const BadgeIcon = iconMap['BadgeIndianRupee'] || iconMap['ShieldCheck'] || iconMap['Shield'];
   const ShieldIcon = iconMap['ShieldCheck'] || iconMap['Shield'];
   const RefreshIcon = iconMap['RefreshCw'] || iconMap['Clock'];
-  const CheckIcon = iconMap['CheckCircle2'] || iconMap['Check'];
   const CalendarIcon = iconMap['Calendar'] || iconMap['Clock'];
   const MapPinIcon = iconMap['MapPin'];
 
@@ -496,22 +495,6 @@ export default function RmProfile() {
               <div className="rm-sage-field-item">
                 <span className="rm-sage-label">Department</span>
                 <span className="rm-sage-value">{department}</span>
-              </div>
-            </div>
-            <div className="rm-sage-row rm-sage-row-alt-1">
-              <div className="rm-sage-field-item rm-sage-col-full">
-                <span className="rm-sage-label">Access Scope &amp; Responsibilities</span>
-                <div className="rm-sage-permissions-wrap">
-                  <span className="rm-sage-perm-tag">
-                    {CheckIcon && <CheckIcon size={12} />} Customer onboarding &amp; loan sourcing
-                  </span>
-                  <span className="rm-sage-perm-tag">
-                    {CheckIcon && <CheckIcon size={12} />} KYC collection &amp; initial verification
-                  </span>
-                  <span className="rm-sage-perm-tag">
-                    {CheckIcon && <CheckIcon size={12} />} Submission to Back Office &amp; status tracking
-                  </span>
-                </div>
               </div>
             </div>
           </section>

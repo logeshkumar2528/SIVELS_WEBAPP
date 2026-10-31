@@ -196,13 +196,13 @@
   height: 100%;
   box-sizing: border-box;
   box-shadow: 0 4px 16px rgba(23, 74, 47, 0.05);
-  justify-content: space-between;
+  justify-content: flex-start;
 }
 
 .rm-sage-section {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  flex: 0 0 auto;
 }
 
 .rm-sage-section-header {
@@ -282,26 +282,6 @@
   color: #173B28;
   word-break: break-word;
   line-height: 1.35;
-}
-
-.rm-sage-permissions-wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 3px;
-}
-
-.rm-sage-perm-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 6px;
-  background-color: #D9E9DE;
-  color: #174A2F;
-  border: 1px solid #C4DBCB;
 }
 
 /* Skeleton and Error states */

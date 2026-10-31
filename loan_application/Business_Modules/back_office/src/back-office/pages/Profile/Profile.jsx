@@ -26,7 +26,6 @@ export default function Profile() {
   const BadgeIcon = iconMap.BadgeIndianRupee || iconMap.ShieldCheck;
   const ShieldIcon = iconMap.ShieldCheck;
   const RefreshIcon = iconMap.RefreshCw;
-  const CheckIcon = iconMap.CheckCircle2 || iconMap.Check;
   const CalendarIcon = iconMap.Calendar;
   const MapPinIcon = iconMap.MapPin;
 
@@ -242,24 +241,6 @@ export default function Profile() {
               <div className="bo-sage-field-item">
                 <span className="bo-sage-label">Department</span>
                 <span className="bo-sage-value">{profile?.department || 'Operations'}</span>
-              </div>
-            </div>
-            <div className="bo-sage-row bo-sage-row-alt-1">
-              <div className="bo-sage-field-item bo-sage-col-full">
-                <span className="bo-sage-label">Access Scope &amp; Permissions</span>
-                <div className="bo-sage-permissions-wrap">
-                  {profile?.permissions?.length ? (
-                    profile.permissions.map((perm, idx) => (
-                      <span key={idx} className="bo-sage-perm-tag">
-                        <CheckIcon size={12} /> {perm}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="bo-sage-perm-tag is-role">
-                      <ShieldIcon size={12} /> Role-based operational access &amp; verification
-                    </span>
-                  )}
-                </div>
               </div>
             </div>
           </section>

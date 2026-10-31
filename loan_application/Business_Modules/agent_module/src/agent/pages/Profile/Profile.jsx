@@ -5,7 +5,6 @@ import {
   Calendar,
   Shield,
   User,
-  CheckCircle2,
   Building2,
   MapPin,
   X,
@@ -474,22 +473,6 @@ export default function Profile() {
               <div className="agent-sage-field-item">
                 <span className="agent-sage-label">Department</span>
                 <span className="agent-sage-value">{department}</span>
-              </div>
-            </div>
-            <div className="agent-sage-row agent-sage-row-alt-1">
-              <div className="agent-sage-field-item agent-sage-col-full">
-                <span className="agent-sage-label">Access Scope &amp; Responsibilities</span>
-                <div className="agent-sage-permissions-wrap">
-                  <span className="agent-sage-perm-tag">
-                    <CheckCircle2 size={12} /> Direct loan application sourcing &amp; onboarding
-                  </span>
-                  <span className="agent-sage-perm-tag">
-                    <CheckCircle2 size={12} /> Customer document verification &amp; submission
-                  </span>
-                  <span className="agent-sage-perm-tag">
-                    <CheckCircle2 size={12} /> Sourced Customers ({customersCount})
-                  </span>
-                </div>
               </div>
             </div>
           </section>

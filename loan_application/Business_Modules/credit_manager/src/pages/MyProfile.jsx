@@ -38,7 +38,6 @@ export default function MyProfile() {
   const BadgeIcon = iconMap.BadgeIndianRupee || iconMap.ShieldCheck;
   const ShieldIcon = iconMap.ShieldCheck;
   const RefreshIcon = iconMap.RefreshCw;
-  const CheckIcon = iconMap.CheckCircle2 || iconMap.Check;
   const CalendarIcon = iconMap.Calendar;
   const MapPinIcon = iconMap.MapPin;
 
@@ -247,32 +246,6 @@ export default function MyProfile() {
               <div className="cm-sage-field-item">
                 <span className="cm-sage-label">Department</span>
                 <span className="cm-sage-value">{profile?.department || 'Credit Assessment'}</span>
-              </div>
-            </div>
-            <div className="cm-sage-row cm-sage-row-alt-1">
-              <div className="cm-sage-field-item cm-sage-col-full">
-                <span className="cm-sage-label">Access Scope &amp; Permissions</span>
-                <div className="cm-sage-permissions-wrap">
-                  {profile?.permissions?.length ? (
-                    profile.permissions.map((perm, idx) => (
-                      <span key={idx} className="cm-sage-perm-tag">
-                        <CheckIcon size={12} /> {perm}
-                      </span>
-                    ))
-                  ) : (
-                    <>
-                      <span className="cm-sage-perm-tag">
-                        <CheckIcon size={12} /> Review applications forwarded by Back Office
-                      </span>
-                      <span className="cm-sage-perm-tag">
-                        <CheckIcon size={12} /> Approve, reject, or return applications with remarks
-                      </span>
-                      <span className="cm-sage-perm-tag">
-                        <CheckIcon size={12} /> Access credit assessment reports &amp; history
-                      </span>
-                    </>
-                  )}
-                </div>
               </div>
             </div>
           </section>
