@@ -38,7 +38,6 @@ export default function MyProfile() {
   const BadgeIcon = iconMap.BadgeIndianRupee || iconMap.ShieldCheck;
   const ShieldIcon = iconMap.ShieldCheck;
   const RefreshIcon = iconMap.RefreshCw;
-  const CheckIcon = iconMap.CheckCircle2 || iconMap.Check;
   const CalendarIcon = iconMap.Calendar;
   const MapPinIcon = iconMap.MapPin;
 
@@ -62,13 +61,6 @@ export default function MyProfile() {
 
   const formattedDob = formatDate(profile?.dateOfBirth, '—');
   const formattedDateJoined = formatDate(profile?.dateJoined, '—');
-  const fullLocation = [
-    profile?.cityName,
-    profile?.districtName,
-    profile?.stateName,
-    profile?.pincode,
-  ].filter(Boolean).join(', ') || '—';
-
   if (loading) return <ProfileSkeleton />;
 
   if (error) {
@@ -201,9 +193,31 @@ export default function MyProfile() {
                 <span className="cm-sage-label">Residential Address</span>
                 <span className="cm-sage-value">{profile?.address || '—'}</span>
               </div>
+            </div>
+            <div className="cm-sage-row cm-sage-row-alt-1">
               <div className="cm-sage-field-item">
-                <span className="cm-sage-label">Location</span>
-                <span className="cm-sage-value">{fullLocation}</span>
+                <span className="cm-sage-label">Country</span>
+                <span className="cm-sage-value">{profile?.countryName || '—'}</span>
+              </div>
+              <div className="cm-sage-field-item">
+                <span className="cm-sage-label">State</span>
+                <span className="cm-sage-value">{profile?.stateName || '—'}</span>
+              </div>
+            </div>
+            <div className="cm-sage-row cm-sage-row-alt-2">
+              <div className="cm-sage-field-item">
+                <span className="cm-sage-label">District</span>
+                <span className="cm-sage-value">{profile?.districtName || '—'}</span>
+              </div>
+              <div className="cm-sage-field-item">
+                <span className="cm-sage-label">City</span>
+                <span className="cm-sage-value">{profile?.cityName || '—'}</span>
+              </div>
+            </div>
+            <div className="cm-sage-row cm-sage-row-alt-1">
+              <div className="cm-sage-field-item">
+                <span className="cm-sage-label">Pincode</span>
+                <span className="cm-sage-value">{profile?.pincode || '—'}</span>
               </div>
             </div>
           </section>
@@ -232,32 +246,6 @@ export default function MyProfile() {
               <div className="cm-sage-field-item">
                 <span className="cm-sage-label">Department</span>
                 <span className="cm-sage-value">{profile?.department || 'Credit Assessment'}</span>
-              </div>
-            </div>
-            <div className="cm-sage-row cm-sage-row-alt-1">
-              <div className="cm-sage-field-item cm-sage-col-full">
-                <span className="cm-sage-label">Access Scope &amp; Permissions</span>
-                <div className="cm-sage-permissions-wrap">
-                  {profile?.permissions?.length ? (
-                    profile.permissions.map((perm, idx) => (
-                      <span key={idx} className="cm-sage-perm-tag">
-                        <CheckIcon size={12} /> {perm}
-                      </span>
-                    ))
-                  ) : (
-                    <>
-                      <span className="cm-sage-perm-tag">
-                        <CheckIcon size={12} /> Review applications forwarded by Back Office
-                      </span>
-                      <span className="cm-sage-perm-tag">
-                        <CheckIcon size={12} /> Approve, reject, or return applications with remarks
-                      </span>
-                      <span className="cm-sage-perm-tag">
-                        <CheckIcon size={12} /> Access credit assessment reports &amp; history
-                      </span>
-                    </>
-                  )}
-                </div>
               </div>
             </div>
           </section>

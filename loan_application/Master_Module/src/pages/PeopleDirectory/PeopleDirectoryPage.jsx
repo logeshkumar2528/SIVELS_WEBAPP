@@ -33,6 +33,7 @@ import { agentCustomerService } from '../../../../Core/src/services/agentCustome
 import { selectLatestCustomerPhotoDoc } from '../../../../Core/src/utils/documentTypeHelper';
 import { getProfileImageUrl, getDocumentUrl, buildFileUrl } from '../../utils/profileImageHelper';
 import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
+import { getCountries } from '../../api/masters/countryApi';
 import { getStates } from '../../api/masters/stateApi';
 import { getCities } from '../../api/masters/cityApi';
 import { getDistricts } from '../../api/masters/districtApi';
@@ -58,9 +59,10 @@ let locationLookupPromise = null;
 export const fetchLocationLookups = () => {
   if (locationLookupCache) return Promise.resolve(locationLookupCache);
   if (!locationLookupPromise) {
-    locationLookupPromise = Promise.allSettled([getStates(), getCities(), getDistricts()])
-      .then(([statesRes, citiesRes, districtsRes]) => {
+    locationLookupPromise = Promise.allSettled([getCountries(), getStates(), getCities(), getDistricts()])
+      .then(([countriesRes, statesRes, citiesRes, districtsRes]) => {
         locationLookupCache = {
+          countries: countriesRes.status === 'fulfilled' ? unwrap(countriesRes.value) : [],
           states: statesRes.status === 'fulfilled' ? unwrap(statesRes.value) : [],
           cities: citiesRes.status === 'fulfilled' ? unwrap(citiesRes.value) : [],
           districts: districtsRes.status === 'fulfilled' ? unwrap(districtsRes.value) : [],
@@ -68,7 +70,7 @@ export const fetchLocationLookups = () => {
         return locationLookupCache;
       })
       .catch(() => {
-        locationLookupCache = { states: [], cities: [], districts: [] };
+        locationLookupCache = { countries: [], states: [], cities: [], districts: [] };
         return locationLookupCache;
       });
   }
@@ -651,13 +653,19 @@ export function ExecutiveEmployeeRecordModal({
 }) {
   if (!person) return null;
 
-  const [activeLocations, setActiveLocations] = useState(() => locations || locationLookupCache || { states: [], cities: [], districts: [] });
+  const [activeLocations, setActiveLocations] = useState(() => locations || locationLookupCache || { countries: [], states: [], cities: [], districts: [] });
 
   useEffect(() => {
-    if (locations && (locations.states?.length || locations.cities?.length || locations.districts?.length)) {
+    const hasLocationLookupShape = locations && ['countries', 'states', 'cities', 'districts']
+      .every((key) => Array.isArray(locations[key]));
+
+    if (hasLocationLookupShape) {
       setActiveLocations(locations);
       return;
     }
+
+    if (locations) setActiveLocations(locations);
+
     let isMounted = true;
     fetchLocationLookups().then((data) => {
       if (isMounted && data) {
@@ -668,6 +676,21 @@ export function ExecutiveEmployeeRecordModal({
       isMounted = false;
     };
   }, [locations]);
+
+  const countryLookupMap = useMemo(() => {
+    const list = activeLocations?.countries || [];
+    const map = new Map();
+    list.forEach((item) => {
+      const id = item?.countryId ?? item?.CountryId ?? item?.id ?? item?.Id;
+      const name = item?.countryName ?? item?.CountryName ?? item?.name ?? item?.Name;
+      if (id !== undefined && id !== null && name && typeof name === 'string') {
+        const cleanName = name.trim();
+        map.set(String(id).trim(), cleanName);
+        map.set(Number(id), cleanName);
+      }
+    });
+    return map;
+  }, [activeLocations?.countries]);
 
   const stateLookupMap = useMemo(() => {
     const list = activeLocations?.states || [];
@@ -736,6 +759,28 @@ export function ExecutiveEmployeeRecordModal({
       default: return roleType || 'Employee';
     }
   }, [normRole, roleType]);
+
+  const countryVal = useMemo(() => {
+    const existingName = read(person, ['countryName', 'CountryName', 'country', 'Country']);
+    if (typeof existingName === 'string') {
+      const cleanName = existingName.trim();
+      if (cleanName && Number.isNaN(Number(cleanName)) && !/^country\s*id/i.test(cleanName)) {
+        return cleanName;
+      }
+    }
+
+    const rawId = [person?.countryId, person?.CountryId, person?.country, person?.Country]
+      .find((value) => (
+        typeof value === 'number' ||
+        (typeof value === 'string' && /^\d+$/.test(value.trim()))
+      ));
+    if (rawId !== undefined && rawId !== null && String(rawId).trim() !== '') {
+      const resolved = countryLookupMap.get(String(rawId).trim()) ?? countryLookupMap.get(Number(rawId));
+      if (resolved) return resolved;
+    }
+
+    return '';
+  }, [person, countryLookupMap]);
 
   const personId =
     person?.id ||
@@ -970,22 +1015,26 @@ export function ExecutiveEmployeeRecordModal({
                     {read(person, ['address', 'Address', 'streetAddress']) || '—'}
                   </span>
                 </div>
-                {(cityVal || normRole !== 'Agent') && (
-                  <div className="exec-field">
-                    <span className="exec-field-label">City</span>
-                    <span className="exec-field-value">{cityVal || '—'}</span>
-                  </div>
-                )}
+                <div className="exec-field">
+                  <span className="exec-field-label">Country</span>
+                  <span className="exec-field-value">{countryVal || '—'}</span>
+                </div>
+                <div className="exec-field">
+                  <span className="exec-field-label">State</span>
+                  <span className="exec-field-value">{stateVal || '—'}</span>
+                </div>
                 {(districtVal || normRole === 'BackOffice' || normRole === 'CreditManager') && (
                   <div className="exec-field">
                     <span className="exec-field-label">District</span>
                     <span className="exec-field-value">{districtVal || '—'}</span>
                   </div>
                 )}
-                <div className="exec-field">
-                  <span className="exec-field-label">State</span>
-                  <span className="exec-field-value">{stateVal || '—'}</span>
-                </div>
+                {(cityVal || normRole !== 'Agent') && (
+                  <div className="exec-field">
+                    <span className="exec-field-label">City</span>
+                    <span className="exec-field-value">{cityVal || '—'}</span>
+                  </div>
+                )}
                 <div className="exec-field">
                   <span className="exec-field-label">Pincode</span>
                   <span className="exec-field-value monospace">{pincodeVal || '—'}</span>

@@ -12,6 +12,16 @@ import { useState, useEffect, useCallback } from 'react';
 import creditManagerService from '../api/creditManagerService';
 import { mapCreditManagerProfile } from '../mappers/creditMapper';
 import { getCreditManagerId } from '../auth/authStorage';
+import { masterService } from '../../../../Core/src/services/masterService';
+
+function unwrapLookup(response) {
+  const value = response?.value ?? response?.data ?? response?.result ?? response;
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.value)) return value.value;
+  if (Array.isArray(value?.data)) return value.data;
+  if (Array.isArray(value?.result)) return value.result;
+  return [];
+}
 
 const INITIAL_PROFILE = {
   id: '',
@@ -42,8 +52,26 @@ export function useCreditManagerProfile() {
         return;
       }
 
-      const apiResponse = await creditManagerService.getCreditManagerProfile(targetId);
-      const liveProfile = mapCreditManagerProfile(apiResponse);
+      const [profileResult, countriesResult, statesResult, districtsResult, citiesResult] = await Promise.allSettled([
+        creditManagerService.getCreditManagerProfile(targetId),
+        masterService.getCountries(),
+        masterService.getStates(),
+        masterService.getDistricts(),
+        masterService.getCities(),
+      ]);
+
+      if (profileResult.status !== 'fulfilled') {
+        throw profileResult.reason || new Error('Failed to load profile details.');
+      }
+
+      const lookupData = {
+        countries: countriesResult.status === 'fulfilled' ? unwrapLookup(countriesResult.value) : [],
+        states: statesResult.status === 'fulfilled' ? unwrapLookup(statesResult.value) : [],
+        districts: districtsResult.status === 'fulfilled' ? unwrapLookup(districtsResult.value) : [],
+        cities: citiesResult.status === 'fulfilled' ? unwrapLookup(citiesResult.value) : [],
+      };
+
+      const liveProfile = mapCreditManagerProfile(profileResult.value, lookupData);
       if (!liveProfile) {
         throw new Error('The profile API returned an empty response.');
       }

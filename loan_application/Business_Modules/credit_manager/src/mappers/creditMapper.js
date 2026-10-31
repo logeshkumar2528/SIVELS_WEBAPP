@@ -7,6 +7,34 @@
 import { getValue, mapCustomer } from '../../../back_office/src/back-office/mappers/hierarchyMapper';
 import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
 
+function isPresent(value) {
+  return value !== undefined && value !== null && String(value).trim() !== '';
+}
+
+function isDisplayName(value) {
+  const text = String(value ?? '').trim();
+  return Boolean(text) && text !== '—' && text !== '0' && !/^\d+$/.test(text) && !/\bid\b/i.test(text);
+}
+
+function isNumericId(value) {
+  return isPresent(value) && /^\d+$/.test(String(value).trim()) && String(value).trim() !== '0';
+}
+
+function resolveLocation(source, config, lookupData) {
+  const rawId = config.idKeys.map((key) => source?.[key]).find(isNumericId);
+  const name = config.nameKeys.map((key) => source?.[key]).find(isDisplayName);
+  if (name !== undefined) return { id: rawId ?? null, name: String(name).trim() };
+
+  const match = rawId == null
+    ? null
+    : (lookupData?.[config.collection] || []).find((item) => {
+      const itemId = config.itemIdKeys.map((key) => item?.[key]).find(isPresent);
+      return itemId !== undefined && String(itemId).trim() === String(rawId).trim();
+    });
+  const resolvedName = match && config.itemNameKeys.map((key) => match?.[key]).find(isDisplayName);
+  return { id: rawId ?? null, name: resolvedName ? String(resolvedName).trim() : '' };
+}
+
 /**
  * Application workflow status codes (AgentAddCustomer.status).
  * Back Office moves an application to PENDING via send-to-credit-manager.
@@ -122,7 +150,7 @@ export function mapWorkflowHistoryEntry(raw) {
   };
 }
 
-export function mapCreditManagerProfile(raw) {
+export function mapCreditManagerProfile(raw, lookupData = {}) {
   if (!raw) return null;
   const source = raw.creditManager || raw.data || raw;
 
@@ -148,10 +176,36 @@ export function mapCreditManagerProfile(raw) {
   const rawGenderName = getValue(source, 'genderName', 'GenderName', 'gender', 'Gender');
   const gender = rawGenderName || (genderId === 1 || genderId === 6 ? 'Male' : genderId === 2 || genderId === 7 ? 'Female' : genderId === 3 ? 'Other' : '');
   const address = getValue(source, 'address', 'Address') || '';
-  const cityName = getValue(source, 'cityName', 'CityName', 'city', 'City') || '';
-  const districtName = getValue(source, 'districtName', 'DistrictName', 'district', 'District') || '';
-  const stateName = getValue(source, 'stateName', 'StateName', 'state', 'State') || '';
-  const pincode = getValue(source, 'pincode', 'Pincode') || '';
+  const country = resolveLocation(source, {
+    nameKeys: ['countryName', 'CountryName', 'country', 'Country'],
+    idKeys: ['countryId', 'CountryId', 'country', 'Country'],
+    collection: 'countries',
+    itemIdKeys: ['countryId', 'CountryId', 'id', 'Id'],
+    itemNameKeys: ['countryName', 'CountryName', 'name', 'Name'],
+  }, lookupData);
+  const state = resolveLocation(source, {
+    nameKeys: ['stateName', 'StateName', 'state', 'State'],
+    idKeys: ['stateId', 'StateId', 'state', 'State'],
+    collection: 'states',
+    itemIdKeys: ['stateId', 'StateId', 'id', 'Id'],
+    itemNameKeys: ['stateName', 'StateName', 'name', 'Name'],
+  }, lookupData);
+  const district = resolveLocation(source, {
+    nameKeys: ['districtName', 'DistrictName', 'district', 'District'],
+    idKeys: ['districtId', 'DistrictId', 'district', 'District'],
+    collection: 'districts',
+    itemIdKeys: ['districtId', 'DistrictId', 'id', 'Id'],
+    itemNameKeys: ['districtName', 'DistrictName', 'name', 'Name'],
+  }, lookupData);
+  const city = resolveLocation(source, {
+    nameKeys: ['cityName', 'CityName', 'city', 'City'],
+    idKeys: ['cityId', 'CityId', 'city', 'City'],
+    collection: 'cities',
+    itemIdKeys: ['cityId', 'CityId', 'id', 'Id'],
+    itemNameKeys: ['cityName', 'CityName', 'name', 'Name'],
+  }, lookupData);
+  const rawPincode = getValue(source, 'pincode', 'Pincode', 'pinCode', 'PinCode', 'postalCode', 'PostalCode');
+  const pincode = isPresent(rawPincode) && String(rawPincode).trim() !== '0' ? String(rawPincode).trim() : '';
 
   return {
     id: creditManagerId != null ? String(creditManagerId) : '',
@@ -170,9 +224,14 @@ export function mapCreditManagerProfile(raw) {
     gender,
     genderName: gender,
     address,
-    cityName,
-    districtName,
-    stateName,
+    countryId: country.id,
+    countryName: country.name,
+    stateId: state.id,
+    stateName: state.name,
+    districtId: district.id,
+    districtName: district.name,
+    cityId: city.id,
+    cityName: city.name,
     pincode,
     raw: source,
   };

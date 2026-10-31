@@ -14,6 +14,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import backOfficeService from '../api/backOfficeService';
 import { mapBackOfficeProfile } from '../mappers/hierarchyMapper';
+import { masterService } from '../../../../../Core/src/services/masterService';
+
+function unwrapLookup(response) {
+  const value = response?.value ?? response?.data ?? response?.result ?? response;
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.value)) return value.value;
+  if (Array.isArray(value?.data)) return value.data;
+  if (Array.isArray(value?.result)) return value.result;
+  return [];
+}
 
 /**
  * Retrieve session user from browser localStorage across known authentication keys.
@@ -88,10 +98,27 @@ export function useBackOfficeProfile() {
 
       // 3. If authentic ID is available, fetch live profile from API (Priority 2)
       if (targetId) {
-        const apiResponse = await backOfficeService.getBackOfficeProfile(targetId);
+        const [profileResult, countriesResult, statesResult, districtsResult, citiesResult] = await Promise.allSettled([
+          backOfficeService.getBackOfficeProfile(targetId),
+          masterService.getCountries(),
+          masterService.getStates(),
+          masterService.getDistricts(),
+          masterService.getCities(),
+        ]);
         if (!isMounted) return;
 
-        const liveProfile = mapBackOfficeProfile(apiResponse);
+        if (profileResult.status !== 'fulfilled') {
+          throw profileResult.reason || new Error('Failed to load profile details.');
+        }
+
+        const lookupData = {
+          countries: countriesResult.status === 'fulfilled' ? unwrapLookup(countriesResult.value) : [],
+          states: statesResult.status === 'fulfilled' ? unwrapLookup(statesResult.value) : [],
+          districts: districtsResult.status === 'fulfilled' ? unwrapLookup(districtsResult.value) : [],
+          cities: citiesResult.status === 'fulfilled' ? unwrapLookup(citiesResult.value) : [],
+        };
+
+        const liveProfile = mapBackOfficeProfile(profileResult.value, lookupData);
         if (!liveProfile) {
           throw new Error('The profile API returned an empty response.');
         }
