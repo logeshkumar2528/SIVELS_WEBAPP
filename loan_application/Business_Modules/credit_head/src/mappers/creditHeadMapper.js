@@ -14,6 +14,34 @@ function getValue(obj, ...keys) {
   return undefined;
 }
 
+function isPresent(value) {
+  return value !== undefined && value !== null && String(value).trim() !== '';
+}
+
+function isDisplayName(value) {
+  const text = String(value ?? '').trim();
+  return Boolean(text) && text !== '—' && text !== '0' && !/^\d+$/.test(text) && !/\bid\b/i.test(text);
+}
+
+function isNumericId(value) {
+  return isPresent(value) && /^\d+$/.test(String(value).trim()) && String(value).trim() !== '0';
+}
+
+function resolveLocation(source, config, lookupData) {
+  const rawId = config.idKeys.map((key) => source?.[key]).find(isNumericId);
+  const name = config.nameKeys.map((key) => source?.[key]).find(isDisplayName);
+  if (name !== undefined) return { id: rawId ?? null, name: String(name).trim() };
+
+  const match = rawId == null
+    ? null
+    : (lookupData?.[config.collection] || []).find((item) => {
+      const itemId = config.itemIdKeys.map((key) => item?.[key]).find(isPresent);
+      return itemId !== undefined && String(itemId).trim() === String(rawId).trim();
+    });
+  const resolvedName = match && config.itemNameKeys.map((key) => match?.[key]).find(isDisplayName);
+  return { id: rawId ?? null, name: resolvedName ? String(resolvedName).trim() : '' };
+}
+
 export function mapCreditHeadProfile(raw, lookupData = {}) {
   if (!raw) return null;
   const source = raw.creditHead || raw.data || raw;
@@ -55,29 +83,37 @@ export function mapCreditHeadProfile(raw, lookupData = {}) {
 
   // Address and Locations
   const address = getValue(source, 'address', 'Address') || '—';
-  const stateId = getValue(source, 'stateId', 'StateId');
-  const districtId = getValue(source, 'districtId', 'DistrictId');
-  const cityId = getValue(source, 'cityId', 'CityId');
+  const country = resolveLocation(source, {
+    nameKeys: ['countryName', 'CountryName', 'country', 'Country'],
+    idKeys: ['countryId', 'CountryId', 'country', 'Country'],
+    collection: 'countries',
+    itemIdKeys: ['countryId', 'CountryId', 'id', 'Id'],
+    itemNameKeys: ['countryName', 'CountryName', 'name', 'Name'],
+  }, lookupData);
+  const state = resolveLocation(source, {
+    nameKeys: ['stateName', 'StateName', 'state', 'State'],
+    idKeys: ['stateId', 'StateId', 'state', 'State'],
+    collection: 'states',
+    itemIdKeys: ['stateId', 'StateId', 'id', 'Id'],
+    itemNameKeys: ['stateName', 'StateName', 'name', 'Name'],
+  }, lookupData);
+  const district = resolveLocation(source, {
+    nameKeys: ['districtName', 'DistrictName', 'district', 'District'],
+    idKeys: ['districtId', 'DistrictId', 'district', 'District'],
+    collection: 'districts',
+    itemIdKeys: ['districtId', 'DistrictId', 'id', 'Id'],
+    itemNameKeys: ['districtName', 'DistrictName', 'name', 'Name'],
+  }, lookupData);
+  const city = resolveLocation(source, {
+    nameKeys: ['cityName', 'CityName', 'city', 'City'],
+    idKeys: ['cityId', 'CityId', 'city', 'City'],
+    collection: 'cities',
+    itemIdKeys: ['cityId', 'CityId', 'id', 'Id'],
+    itemNameKeys: ['cityName', 'CityName', 'name', 'Name'],
+  }, lookupData);
 
-  let stateName = getValue(source, 'stateName', 'StateName', 'state', 'State') || '';
-  if (!stateName && stateId && lookupData.states) {
-    const match = lookupData.states.find(s => Number(s.stateId || s.id) === Number(stateId));
-    if (match) stateName = match.stateName || match.name || '';
-  }
-
-  let districtName = getValue(source, 'districtName', 'DistrictName', 'district', 'District') || '';
-  if (!districtName && districtId && lookupData.districts) {
-    const match = lookupData.districts.find(d => Number(d.districtId || d.id) === Number(districtId));
-    if (match) districtName = match.districtName || match.name || '';
-  }
-
-  let cityName = getValue(source, 'cityName', 'CityName', 'city', 'City') || '';
-  if (!cityName && cityId && lookupData.cities) {
-    const match = lookupData.cities.find(c => Number(c.cityId || c.id) === Number(cityId));
-    if (match) cityName = match.cityName || match.name || '';
-  }
-
-  const pincode = getValue(source, 'pincode', 'Pincode') || '—';
+  const rawPincode = getValue(source, 'pincode', 'Pincode', 'pinCode', 'PinCode', 'postalCode', 'PostalCode');
+  const pincode = isPresent(rawPincode) && String(rawPincode).trim() !== '0' ? String(rawPincode).trim() : '';
 
   // Banking
   const accountNumber = getValue(source, 'accountNumber', 'AccountNumber') || '—';
@@ -101,12 +137,14 @@ export function mapCreditHeadProfile(raw, lookupData = {}) {
     gender: gender || '—',
     genderName: gender || '—',
     address,
-    stateId,
-    stateName,
-    districtId,
-    districtName,
-    cityId,
-    cityName,
+    countryId: country.id,
+    countryName: country.name,
+    stateId: state.id,
+    stateName: state.name,
+    districtId: district.id,
+    districtName: district.name,
+    cityId: city.id,
+    cityName: city.name,
     pincode,
     accountNumber,
     ifscCode,

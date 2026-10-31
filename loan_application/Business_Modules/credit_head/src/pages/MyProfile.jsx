@@ -49,13 +49,6 @@ export default function MyProfile() {
 
   const formattedDob = formatDate(profile?.dateOfBirth, '—');
   const formattedDateJoined = formatDate(profile?.dateJoined, '—');
-  const fullLocation = [
-    profile?.cityName,
-    profile?.districtName,
-    profile?.stateName,
-    profile?.pincode && profile?.pincode !== '—' ? profile.pincode : null,
-  ].filter(Boolean).join(', ') || '—';
-
   if (loading) return <ProfileSkeleton />;
 
   if (error) {
@@ -188,9 +181,31 @@ export default function MyProfile() {
                 <span className="ch-sage-label">Residential Address</span>
                 <span className="ch-sage-value">{profile?.address || '—'}</span>
               </div>
+            </div>
+            <div className="ch-sage-row ch-sage-row-alt-1">
               <div className="ch-sage-field-item">
-                <span className="ch-sage-label">Location</span>
-                <span className="ch-sage-value">{fullLocation}</span>
+                <span className="ch-sage-label">Country</span>
+                <span className="ch-sage-value">{profile?.countryName || '—'}</span>
+              </div>
+              <div className="ch-sage-field-item">
+                <span className="ch-sage-label">State</span>
+                <span className="ch-sage-value">{profile?.stateName || '—'}</span>
+              </div>
+            </div>
+            <div className="ch-sage-row ch-sage-row-alt-2">
+              <div className="ch-sage-field-item">
+                <span className="ch-sage-label">District</span>
+                <span className="ch-sage-value">{profile?.districtName || '—'}</span>
+              </div>
+              <div className="ch-sage-field-item">
+                <span className="ch-sage-label">City</span>
+                <span className="ch-sage-value">{profile?.cityName || '—'}</span>
+              </div>
+            </div>
+            <div className="ch-sage-row ch-sage-row-alt-1">
+              <div className="ch-sage-field-item">
+                <span className="ch-sage-label">Pincode</span>
+                <span className="ch-sage-value">{profile?.pincode || '—'}</span>
               </div>
             </div>
           </section>

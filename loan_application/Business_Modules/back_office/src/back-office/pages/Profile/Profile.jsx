@@ -189,9 +189,31 @@ export default function Profile() {
                 <span className="bo-sage-label">Residential Address</span>
                 <span className="bo-sage-value">{profile?.address || '—'}</span>
               </div>
+            </div>
+            <div className="bo-sage-row bo-sage-row-alt-1">
               <div className="bo-sage-field-item">
-                <span className="bo-sage-label">Location</span>
-                <span className="bo-sage-value">{[profile?.cityName, profile?.districtName, profile?.stateName, profile?.pincode].filter(Boolean).join(', ') || '—'}</span>
+                <span className="bo-sage-label">Country</span>
+                <span className="bo-sage-value">{profile?.countryName || '—'}</span>
+              </div>
+              <div className="bo-sage-field-item">
+                <span className="bo-sage-label">State</span>
+                <span className="bo-sage-value">{profile?.stateName || '—'}</span>
+              </div>
+            </div>
+            <div className="bo-sage-row bo-sage-row-alt-2">
+              <div className="bo-sage-field-item">
+                <span className="bo-sage-label">District</span>
+                <span className="bo-sage-value">{profile?.districtName || '—'}</span>
+              </div>
+              <div className="bo-sage-field-item">
+                <span className="bo-sage-label">City</span>
+                <span className="bo-sage-value">{profile?.cityName || '—'}</span>
+              </div>
+            </div>
+            <div className="bo-sage-row bo-sage-row-alt-1">
+              <div className="bo-sage-field-item">
+                <span className="bo-sage-label">Pincode</span>
+                <span className="bo-sage-value">{profile?.pincode || '—'}</span>
               </div>
             </div>
           </section>

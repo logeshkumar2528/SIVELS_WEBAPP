@@ -60,6 +60,26 @@ const unwrap = (response) => {
 const read = (record, keys, fallback = '') =>
   keys.map((key) => record?.[key]).find((value) => value !== undefined && value !== null && value !== '') ?? fallback;
 
+const isDisplayLocationName = (value) => {
+  const text = String(value ?? '').trim();
+  return Boolean(text) && text !== '—' && text !== '0' && !/^\d+$/.test(text) && !/\bid\b/i.test(text);
+};
+
+const resolveAmsLocation = (record, config, locations) => {
+  const rawName = read(record, config.nameKeys);
+  if (isDisplayLocationName(rawName)) return String(rawName).trim();
+
+  const rawId = read(record, config.idKeys, '');
+  if (!rawId || String(rawId).trim() === '0') return '';
+
+  const match = (locations?.[config.collection] || []).find((item) => {
+    const itemId = read(item, config.itemIdKeys, '');
+    return itemId !== '' && String(itemId).trim() === String(rawId).trim();
+  });
+  const resolved = match && read(match, config.itemNameKeys, '');
+  return isDisplayLocationName(resolved) ? String(resolved).trim() : '';
+};
+
 const initials = (name = '') =>
   String(name || '')
     .trim()
@@ -474,7 +494,10 @@ export default function AMSDashboard() {
   const profileMobile = read(amsProfile, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']) || sessionUser.mobileNumber || '';
   const profileEmail = read(amsProfile, ['emailAddress', 'EmailAddress', 'email', 'Email']) || sessionUser.emailAddress || '';
   const profileAddress = read(amsProfile, ['address', 'Address']);
-  const profilePincode = read(amsProfile, ['pincode', 'Pincode']);
+  const profilePincodeRaw = read(amsProfile, ['pincode', 'Pincode', 'pinCode', 'PinCode', 'postalCode', 'PostalCode']);
+  const profilePincode = profilePincodeRaw && String(profilePincodeRaw).trim() !== '0'
+    ? String(profilePincodeRaw).trim()
+    : '';
 
   const profileGender = useMemo(() => {
     const raw = read(amsProfile, ['genderName', 'GenderName', 'gender', 'Gender']);
@@ -486,54 +509,37 @@ export default function AMSDashboard() {
     return '—';
   }, [amsProfile]);
 
-  const profileCity = useMemo(() => {
-    const raw = read(amsProfile, ['cityName', 'CityName', 'city', 'City']);
-    if (raw && isNaN(Number(String(raw).trim())) && !/^city\s*id/i.test(String(raw).trim())) {
-      return String(raw).trim();
-    }
-    const id = amsProfile?.cityId ?? amsProfile?.CityId;
-    if (id !== undefined && id !== null && locations?.cities) {
-      const match = locations.cities.find((c) => String(c.cityId ?? c.id) === String(id));
-      if (match) return match.cityName || match.name || '';
-    }
-    return raw || '';
-  }, [amsProfile, locations]);
+  const profileCountry = useMemo(() => resolveAmsLocation(amsProfile, {
+    nameKeys: ['countryName', 'CountryName', 'country', 'Country'],
+    idKeys: ['countryId', 'CountryId', 'country', 'Country'],
+    collection: 'countries',
+    itemIdKeys: ['countryId', 'CountryId', 'id', 'Id'],
+    itemNameKeys: ['countryName', 'CountryName', 'name', 'Name'],
+  }, locations), [amsProfile, locations]);
 
-  const profileDistrict = useMemo(() => {
-    const raw = read(amsProfile, ['districtName', 'DistrictName', 'district', 'District']);
-    if (raw && isNaN(Number(String(raw).trim())) && !/^district\s*id/i.test(String(raw).trim())) {
-      return String(raw).trim();
-    }
-    const id = amsProfile?.districtId ?? amsProfile?.DistrictId;
-    if (id !== undefined && id !== null && locations?.districts) {
-      const match = locations.districts.find((d) => String(d.districtId ?? d.id) === String(id));
-      if (match) return match.districtName || match.name || '';
-    }
-    return raw || '';
-  }, [amsProfile, locations]);
+  const profileState = useMemo(() => resolveAmsLocation(amsProfile, {
+    nameKeys: ['stateName', 'StateName', 'state', 'State'],
+    idKeys: ['stateId', 'StateId', 'state', 'State'],
+    collection: 'states',
+    itemIdKeys: ['stateId', 'StateId', 'id', 'Id'],
+    itemNameKeys: ['stateName', 'StateName', 'name', 'Name'],
+  }, locations), [amsProfile, locations]);
 
-  const profileState = useMemo(() => {
-    const raw = read(amsProfile, ['stateName', 'StateName', 'state', 'State']);
-    if (raw && isNaN(Number(String(raw).trim())) && !/^state\s*id/i.test(String(raw).trim())) {
-      return String(raw).trim();
-    }
-    const id = amsProfile?.stateId ?? amsProfile?.StateId;
-    if (id !== undefined && id !== null && locations?.states) {
-      const match = locations.states.find((s) => String(s.stateId ?? s.id) === String(id));
-      if (match) return match.stateName || match.name || '';
-    }
-    return raw || '';
-  }, [amsProfile, locations]);
+  const profileDistrict = useMemo(() => resolveAmsLocation(amsProfile, {
+    nameKeys: ['districtName', 'DistrictName', 'district', 'District'],
+    idKeys: ['districtId', 'DistrictId', 'district', 'District'],
+    collection: 'districts',
+    itemIdKeys: ['districtId', 'DistrictId', 'id', 'Id'],
+    itemNameKeys: ['districtName', 'DistrictName', 'name', 'Name'],
+  }, locations), [amsProfile, locations]);
 
-  const profileLocationSummary = useMemo(() => {
-    const parts = [
-      profileCity,
-      profileDistrict,
-      profileState,
-      profilePincode ? `PIN: ${profilePincode}` : '',
-    ].filter(Boolean);
-    return parts.length > 0 ? parts.join(', ') : '—';
-  }, [profileCity, profileDistrict, profileState, profilePincode]);
+  const profileCity = useMemo(() => resolveAmsLocation(amsProfile, {
+    nameKeys: ['cityName', 'CityName', 'city', 'City'],
+    idKeys: ['cityId', 'CityId', 'city', 'City'],
+    collection: 'cities',
+    itemIdKeys: ['cityId', 'CityId', 'id', 'Id'],
+    itemNameKeys: ['cityName', 'CityName', 'name', 'Name'],
+  }, locations), [amsProfile, locations]);
 
   const profileBankAccount = useMemo(() => {
     const raw = read(amsProfile, ['bankAccountNumber', 'BankAccountNumber', 'accountNumber', 'AccountNumber']);
@@ -1050,9 +1056,31 @@ export default function AMSDashboard() {
                       <span className="asm-sage-label">Residential Address</span>
                       <span className="asm-sage-value">{profileAddress || '—'}</span>
                     </div>
+                  </div>
+                  <div className="asm-sage-row asm-sage-row-alt-1">
                     <div className="asm-sage-field-item">
-                      <span className="asm-sage-label">Location</span>
-                      <span className="asm-sage-value">{profileLocationSummary}</span>
+                      <span className="asm-sage-label">Country</span>
+                      <span className="asm-sage-value">{profileCountry || '—'}</span>
+                    </div>
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">State</span>
+                      <span className="asm-sage-value">{profileState || '—'}</span>
+                    </div>
+                  </div>
+                  <div className="asm-sage-row asm-sage-row-alt-2">
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">District</span>
+                      <span className="asm-sage-value">{profileDistrict || '—'}</span>
+                    </div>
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">City</span>
+                      <span className="asm-sage-value">{profileCity || '—'}</span>
+                    </div>
+                  </div>
+                  <div className="asm-sage-row asm-sage-row-alt-1">
+                    <div className="asm-sage-field-item">
+                      <span className="asm-sage-label">Pincode</span>
+                      <span className="asm-sage-value">{profilePincode || '—'}</span>
                     </div>
                   </div>
                 </section>

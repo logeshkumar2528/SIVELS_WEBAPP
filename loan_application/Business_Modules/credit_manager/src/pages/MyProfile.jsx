@@ -62,13 +62,6 @@ export default function MyProfile() {
 
   const formattedDob = formatDate(profile?.dateOfBirth, '—');
   const formattedDateJoined = formatDate(profile?.dateJoined, '—');
-  const fullLocation = [
-    profile?.cityName,
-    profile?.districtName,
-    profile?.stateName,
-    profile?.pincode,
-  ].filter(Boolean).join(', ') || '—';
-
   if (loading) return <ProfileSkeleton />;
 
   if (error) {
@@ -201,9 +194,31 @@ export default function MyProfile() {
                 <span className="cm-sage-label">Residential Address</span>
                 <span className="cm-sage-value">{profile?.address || '—'}</span>
               </div>
+            </div>
+            <div className="cm-sage-row cm-sage-row-alt-1">
               <div className="cm-sage-field-item">
-                <span className="cm-sage-label">Location</span>
-                <span className="cm-sage-value">{fullLocation}</span>
+                <span className="cm-sage-label">Country</span>
+                <span className="cm-sage-value">{profile?.countryName || '—'}</span>
+              </div>
+              <div className="cm-sage-field-item">
+                <span className="cm-sage-label">State</span>
+                <span className="cm-sage-value">{profile?.stateName || '—'}</span>
+              </div>
+            </div>
+            <div className="cm-sage-row cm-sage-row-alt-2">
+              <div className="cm-sage-field-item">
+                <span className="cm-sage-label">District</span>
+                <span className="cm-sage-value">{profile?.districtName || '—'}</span>
+              </div>
+              <div className="cm-sage-field-item">
+                <span className="cm-sage-label">City</span>
+                <span className="cm-sage-value">{profile?.cityName || '—'}</span>
+              </div>
+            </div>
+            <div className="cm-sage-row cm-sage-row-alt-1">
+              <div className="cm-sage-field-item">
+                <span className="cm-sage-label">Pincode</span>
+                <span className="cm-sage-value">{profile?.pincode || '—'}</span>
               </div>
             </div>
           </section>

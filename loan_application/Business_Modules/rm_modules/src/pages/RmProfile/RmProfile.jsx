@@ -6,8 +6,52 @@ import { formatDate } from '../../utils/dateHelper';
 import { getProfileImageUrl, getInitials } from '../../utils/profileImageHelper';
 import './RmProfile.css';
 import AuthImage from '../../../../../Core/src/auth/AuthImage';
+import { masterService } from '../../../../../Core/src/services/masterService';
 
 const API_BASE = API_BASE_URL;
+
+const EMPTY_LOCATIONS = { countries: [], states: [], districts: [], cities: [] };
+
+function unwrapLookup(response) {
+  const value = response?.value ?? response?.data ?? response?.result ?? response;
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.value)) return value.value;
+  if (Array.isArray(value?.data)) return value.data;
+  if (Array.isArray(value?.result)) return value.result;
+  return [];
+}
+
+function isPresent(value) {
+  return value !== undefined && value !== null && String(value).trim() !== '';
+}
+
+function isDisplayName(value) {
+  const text = String(value ?? '').trim();
+  return Boolean(text) && text !== '—' && text !== '0' && !/^\d+$/.test(text) && !/\bid\b/i.test(text);
+}
+
+function resolveLocation(record, config, locations) {
+  const source = record || {};
+  const name = config.nameKeys.map((key) => source[key]).find(isDisplayName);
+  if (name !== undefined) return String(name).trim();
+
+  const rawId = config.idKeys.map((key) => source[key]).find((value) => isPresent(value) && String(value).trim() !== '0');
+  if (!isPresent(rawId)) return '—';
+
+  const match = (locations?.[config.collection] || []).find((item) => {
+    const itemId = config.itemIdKeys.map((key) => item?.[key]).find(isPresent);
+    return itemId !== undefined && String(itemId).trim() === String(rawId).trim();
+  });
+  const resolved = match && config.itemNameKeys.map((key) => match?.[key]).find(isDisplayName);
+  return resolved ? String(resolved).trim() : '—';
+}
+
+function resolvePincode(record) {
+  const value = ['pincode', 'Pincode', 'pinCode', 'PinCode', 'postalCode', 'PostalCode']
+    .map((key) => record?.[key])
+    .find(isPresent);
+  return isPresent(value) && String(value).trim() !== '0' ? String(value).trim() : '—';
+}
 
 function normalizePhone(phone = '') {
   const digits = String(phone).replace(/\D/g, '');
@@ -45,6 +89,7 @@ export default function RmProfile() {
   const [imageFailed, setImageFailed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [locations, setLocations] = useState(EMPTY_LOCATIONS);
 
   const UserIcon = iconMap['UserCircle'] || iconMap['User'];
   const MailIcon = iconMap['Mail'];
@@ -130,6 +175,27 @@ export default function RmProfile() {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    Promise.allSettled([
+      masterService.getCountries(),
+      masterService.getStates(),
+      masterService.getDistricts(),
+      masterService.getCities(),
+    ]).then(([countries, states, districts, cities]) => {
+      if (!active) return;
+      setLocations({
+        countries: countries.status === 'fulfilled' ? unwrapLookup(countries.value) : [],
+        states: states.status === 'fulfilled' ? unwrapLookup(states.value) : [],
+        districts: districts.status === 'fulfilled' ? unwrapLookup(districts.value) : [],
+        cities: cities.status === 'fulfilled' ? unwrapLookup(cities.value) : [],
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   if (isLoading && !profileData) {
     return <ProfileSkeleton />;
   }
@@ -212,12 +278,42 @@ export default function RmProfile() {
     currentUser?.address ||
     '—';
 
-  const fullLocation = [
-    profileData?.cityName || profileData?.city,
-    profileData?.districtName || profileData?.district,
-    profileData?.stateName || profileData?.state,
-    profileData?.pincode,
-  ].filter(Boolean).join(', ') || '—';
+  const locationConfigs = {
+    country: {
+      nameKeys: ['countryName', 'CountryName', 'country', 'Country'],
+      idKeys: ['countryId', 'CountryId', 'country', 'Country'],
+      collection: 'countries',
+      itemIdKeys: ['countryId', 'CountryId', 'id', 'Id'],
+      itemNameKeys: ['countryName', 'CountryName', 'name', 'Name'],
+    },
+    state: {
+      nameKeys: ['stateName', 'StateName', 'state', 'State'],
+      idKeys: ['stateId', 'StateId', 'state', 'State'],
+      collection: 'states',
+      itemIdKeys: ['stateId', 'StateId', 'id', 'Id'],
+      itemNameKeys: ['stateName', 'StateName', 'name', 'Name'],
+    },
+    district: {
+      nameKeys: ['districtName', 'DistrictName', 'district', 'District'],
+      idKeys: ['districtId', 'DistrictId', 'district', 'District'],
+      collection: 'districts',
+      itemIdKeys: ['districtId', 'DistrictId', 'id', 'Id'],
+      itemNameKeys: ['districtName', 'DistrictName', 'name', 'Name'],
+    },
+    city: {
+      nameKeys: ['cityName', 'CityName', 'city', 'City'],
+      idKeys: ['cityId', 'CityId', 'city', 'City'],
+      collection: 'cities',
+      itemIdKeys: ['cityId', 'CityId', 'id', 'Id'],
+      itemNameKeys: ['cityName', 'CityName', 'name', 'Name'],
+    },
+  };
+
+  const countryName = resolveLocation(profileData, locationConfigs.country, locations);
+  const stateName = resolveLocation(profileData, locationConfigs.state, locations);
+  const districtName = resolveLocation(profileData, locationConfigs.district, locations);
+  const cityName = resolveLocation(profileData, locationConfigs.city, locations);
+  const pincode = resolvePincode(profileData);
 
   const isActive =
     profileData?.isActive ??
@@ -347,9 +443,31 @@ export default function RmProfile() {
                 <span className="rm-sage-label">Residential Address</span>
                 <span className="rm-sage-value">{address}</span>
               </div>
+            </div>
+            <div className="rm-sage-row rm-sage-row-alt-1">
               <div className="rm-sage-field-item">
-                <span className="rm-sage-label">Location</span>
-                <span className="rm-sage-value">{fullLocation}</span>
+                <span className="rm-sage-label">Country</span>
+                <span className="rm-sage-value">{countryName}</span>
+              </div>
+              <div className="rm-sage-field-item">
+                <span className="rm-sage-label">State</span>
+                <span className="rm-sage-value">{stateName}</span>
+              </div>
+            </div>
+            <div className="rm-sage-row rm-sage-row-alt-2">
+              <div className="rm-sage-field-item">
+                <span className="rm-sage-label">District</span>
+                <span className="rm-sage-value">{districtName}</span>
+              </div>
+              <div className="rm-sage-field-item">
+                <span className="rm-sage-label">City</span>
+                <span className="rm-sage-value">{cityName}</span>
+              </div>
+            </div>
+            <div className="rm-sage-row rm-sage-row-alt-1">
+              <div className="rm-sage-field-item">
+                <span className="rm-sage-label">Pincode</span>
+                <span className="rm-sage-value">{pincode}</span>
               </div>
             </div>
           </section>

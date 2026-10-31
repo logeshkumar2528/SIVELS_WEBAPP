@@ -198,7 +198,8 @@
   background-color: #EAF2EB;
   border: 1px solid #D5E3D8;
   border-radius: 16px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   height: 100%;

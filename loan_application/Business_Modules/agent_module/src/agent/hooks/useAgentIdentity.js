@@ -2,6 +2,23 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../../../../Core/src/context/AuthContext';
 import axiosInstance from '../../../../../Core/src/api/axiosInstance';
 import { getStoredRoleCode } from '../../../../../Core/src/auth/session';
+import { masterService } from '../../../../../Core/src/services/masterService';
+
+const EMPTY_LOCATIONS = {
+  countries: [],
+  states: [],
+  districts: [],
+  cities: [],
+};
+
+function unwrapLookup(response) {
+  const value = response?.value ?? response?.data ?? response?.result ?? response;
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.value)) return value.value;
+  if (Array.isArray(value?.data)) return value.data;
+  if (Array.isArray(value?.result)) return value.result;
+  return [];
+}
 
 /**
  * Safely unwrap agent object from potential API response variations (array, wrapped value/data, or single object).
@@ -52,6 +69,34 @@ export function useAgentIdentity() {
   const [agentId, setAgentId] = useState(initialAgentId);
   const [agentData, setAgentData] = useState(initialAgentData);
   const [loading, setLoading] = useState(!initialAgentId);
+  const [locations, setLocations] = useState(EMPTY_LOCATIONS);
+
+  useEffect(() => {
+    if (!currentUser || !isAgent) {
+      setLocations(EMPTY_LOCATIONS);
+      return undefined;
+    }
+
+    let isMounted = true;
+    Promise.allSettled([
+      masterService.getCountries(),
+      masterService.getStates(),
+      masterService.getDistricts(),
+      masterService.getCities(),
+    ]).then(([countries, states, districts, cities]) => {
+      if (!isMounted) return;
+      setLocations({
+        countries: countries.status === 'fulfilled' ? unwrapLookup(countries.value) : [],
+        states: states.status === 'fulfilled' ? unwrapLookup(states.value) : [],
+        districts: districts.status === 'fulfilled' ? unwrapLookup(districts.value) : [],
+        cities: cities.status === 'fulfilled' ? unwrapLookup(cities.value) : [],
+      });
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser, isAgent]);
 
   useEffect(() => {
     let isMounted = true;
@@ -111,5 +156,5 @@ export function useAgentIdentity() {
   }, [currentUser]);
 
   // Wrong-role sessions are rejected by RequireAuth before this hook runs.
-  return { agentId, agentData, loadingAgent: loading, isAgent, isUnauthorized: false };
+  return { agentId, agentData, loadingAgent: loading, isAgent, isUnauthorized: false, locations };
 }

@@ -28,6 +28,51 @@ function isAgentRole(role) {
   return s === 'agent' || s === 'field agent' || s === 'dsa' || s === 'direct selling agent';
 }
 
+function isPresent(value) {
+  return value !== undefined && value !== null && String(value).trim() !== '';
+}
+
+function isDisplayName(value) {
+  const text = String(value ?? '').trim();
+  return Boolean(text) && text !== '—' && text !== '0' && !/^\d+$/.test(text) && !/\bid\b/i.test(text);
+}
+
+function resolveLocationValue(record, config, locations) {
+  const source = record || {};
+  const nameValue = config.nameKeys
+    .map((key) => source[key])
+    .find((value) => isDisplayName(value));
+  if (nameValue !== undefined) return String(nameValue).trim();
+
+  const rawId = config.idKeys
+    .map((key) => source[key])
+    .find((value) => isPresent(value) && String(value).trim() !== '0');
+  if (!isPresent(rawId)) return '';
+
+  const list = locations?.[config.collection] || [];
+  const match = list.find((item) => {
+    const itemId = config.itemIdKeys.map((key) => item?.[key]).find(isPresent);
+    return itemId !== undefined && String(itemId).trim() === String(rawId).trim();
+  });
+  const resolvedName = match && config.itemNameKeys.map((key) => match?.[key]).find(isDisplayName);
+  return resolvedName ? String(resolvedName).trim() : '';
+}
+
+function resolveLocationField(primary, fallback, config, locations) {
+  const hasPrimaryValue = [...config.nameKeys, ...config.idKeys].some((key) => isPresent(primary?.[key]));
+  const value = resolveLocationValue(hasPrimaryValue ? primary : fallback, config, locations);
+  return value || '—';
+}
+
+function resolvePincode(primary, fallback) {
+  const keys = ['pincode', 'Pincode', 'pinCode', 'PinCode', 'postalCode', 'PostalCode'];
+  const primaryValue = keys.map((key) => primary?.[key]).find(isPresent);
+  const value = primaryValue !== undefined
+    ? primaryValue
+    : keys.map((key) => fallback?.[key]).find(isPresent);
+  return isPresent(value) && String(value).trim() !== '0' ? String(value).trim() : '—';
+}
+
 function ProfileSkeleton() {
   return (
     <div className="agent-profile-dashboard agent-profile-skeleton" aria-label="Loading profile">
@@ -44,7 +89,7 @@ export default function Profile() {
   const [customersCount, setCustomersCount] = useState('...');
 
   const { currentUser } = useAuth();
-  const { agentData, loadingAgent, agentId, isAgent, isUnauthorized } = useAgentIdentity();
+  const { agentData, loadingAgent, agentId, isAgent, isUnauthorized, locations } = useAgentIdentity();
 
   // Authoritative numeric Agent ID (distinct from alphanumeric Agent Code)
   const resolvedAgentId =
@@ -210,12 +255,42 @@ export default function Profile() {
     (isAgent ? (currentUser?.address || currentUser?.Address) : null) ||
     '—';
 
-  const fullLocation = [
-    agentData?.cityName || agentData?.city,
-    agentData?.districtName || agentData?.district,
-    agentData?.state || agentData?.State || (isAgent ? (currentUser?.state || currentUser?.State) : null),
-    agentData?.pincode || agentData?.Pincode || (isAgent ? (currentUser?.pincode || currentUser?.Pincode) : null),
-  ].filter(Boolean).join(', ') || '—';
+  const locationConfigs = {
+    country: {
+      nameKeys: ['countryName', 'CountryName', 'country', 'Country'],
+      idKeys: ['countryId', 'CountryId', 'country', 'Country'],
+      collection: 'countries',
+      itemIdKeys: ['countryId', 'CountryId', 'id', 'Id'],
+      itemNameKeys: ['countryName', 'CountryName', 'name', 'Name'],
+    },
+    state: {
+      nameKeys: ['stateName', 'StateName', 'state', 'State'],
+      idKeys: ['stateId', 'StateId', 'state', 'State'],
+      collection: 'states',
+      itemIdKeys: ['stateId', 'StateId', 'id', 'Id'],
+      itemNameKeys: ['stateName', 'StateName', 'name', 'Name'],
+    },
+    district: {
+      nameKeys: ['districtName', 'DistrictName', 'district', 'District'],
+      idKeys: ['districtId', 'DistrictId', 'district', 'District'],
+      collection: 'districts',
+      itemIdKeys: ['districtId', 'DistrictId', 'id', 'Id'],
+      itemNameKeys: ['districtName', 'DistrictName', 'name', 'Name'],
+    },
+    city: {
+      nameKeys: ['cityName', 'CityName', 'city', 'City'],
+      idKeys: ['cityId', 'CityId', 'city', 'City'],
+      collection: 'cities',
+      itemIdKeys: ['cityId', 'CityId', 'id', 'Id'],
+      itemNameKeys: ['cityName', 'CityName', 'name', 'Name'],
+    },
+  };
+
+  const countryName = resolveLocationField(agentData, isAgent ? currentUser : null, locationConfigs.country, locations);
+  const stateName = resolveLocationField(agentData, isAgent ? currentUser : null, locationConfigs.state, locations);
+  const districtName = resolveLocationField(agentData, isAgent ? currentUser : null, locationConfigs.district, locations);
+  const cityName = resolveLocationField(agentData, isAgent ? currentUser : null, locationConfigs.city, locations);
+  const pincode = resolvePincode(agentData, isAgent ? currentUser : null);
 
   const department =
     agentData?.department ||
@@ -346,9 +421,31 @@ export default function Profile() {
                 <span className="agent-sage-label">Residential Address</span>
                 <span className="agent-sage-value">{agentAddress}</span>
               </div>
+            </div>
+            <div className="agent-sage-row agent-sage-row-alt-1">
               <div className="agent-sage-field-item">
-                <span className="agent-sage-label">Location</span>
-                <span className="agent-sage-value">{fullLocation}</span>
+                <span className="agent-sage-label">Country</span>
+                <span className="agent-sage-value">{countryName}</span>
+              </div>
+              <div className="agent-sage-field-item">
+                <span className="agent-sage-label">State</span>
+                <span className="agent-sage-value">{stateName}</span>
+              </div>
+            </div>
+            <div className="agent-sage-row agent-sage-row-alt-2">
+              <div className="agent-sage-field-item">
+                <span className="agent-sage-label">District</span>
+                <span className="agent-sage-value">{districtName}</span>
+              </div>
+              <div className="agent-sage-field-item">
+                <span className="agent-sage-label">City</span>
+                <span className="agent-sage-value">{cityName}</span>
+              </div>
+            </div>
+            <div className="agent-sage-row agent-sage-row-alt-1">
+              <div className="agent-sage-field-item">
+                <span className="agent-sage-label">Pincode</span>
+                <span className="agent-sage-value">{pincode}</span>
               </div>
             </div>
           </section>

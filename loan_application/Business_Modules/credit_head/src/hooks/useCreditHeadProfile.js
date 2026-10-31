@@ -44,12 +44,13 @@ export function useCreditHeadProfile() {
       }
 
       // Fetch profile and master lookups in parallel for location & gender names
-      const [apiResponse, gendersRes, statesRes, districtsRes, citiesRes] = await Promise.allSettled([
+      const [apiResponse, gendersRes, statesRes, districtsRes, citiesRes, countriesRes] = await Promise.allSettled([
         creditHeadService.getCreditHeadProfile(targetId),
         masterService.getGenders(),
         masterService.getStates(),
         masterService.getDistricts(),
         masterService.getCities(),
+        masterService.getCountries(),
       ]);
 
       if (apiResponse.status !== 'fulfilled' || !apiResponse.value) {
@@ -61,6 +62,7 @@ export function useCreditHeadProfile() {
         states: statesRes.status === 'fulfilled' ? statesRes.value : [],
         districts: districtsRes.status === 'fulfilled' ? districtsRes.value : [],
         cities: citiesRes.status === 'fulfilled' ? citiesRes.value : [],
+        countries: countriesRes.status === 'fulfilled' ? countriesRes.value : [],
       };
 
       const liveProfile = mapCreditHeadProfile(apiResponse.value, lookupData);
