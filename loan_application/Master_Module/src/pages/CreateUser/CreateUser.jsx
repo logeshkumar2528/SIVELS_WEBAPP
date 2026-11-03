@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { ArrowLeft, BriefcaseBusiness, Building2, Landmark, ShieldCheck, UserPlus, Users } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import AgentCreate from '../Agent/AgentCreate';
 import RelationshipManagerCreate from '../RelationshipManager/RelationshipManagerCreate';
 import AMSCreate from '../AMS/AMSCreate';
 import BackOfficeCreate from '../BackOffice/BackOfficeCreate';
 import CreditManagerCreate from '../CreditManager/CreditManagerCreate';
 import CreditHeadCreate from '../CreditHead/CreditHeadCreate';
+import InvestorCreate from '../Investor/InvestorCreate';
 import './CreateUser.css';
 
 const USER_TYPES = {
@@ -40,11 +41,19 @@ const USER_TYPES = {
     description: 'Add a senior credit head to oversee credit policies and sanctions.',
     icon: Landmark,
   },
+  investor: {
+    title: 'Create investor',
+    description: 'Add an investor account for loan investments.',
+    icon: Landmark,
+  },
 };
 
 export default function CreateUser() {
   const navigate = useNavigate();
-  const [userType, setUserType] = useState('');
+  const [searchParams] = useSearchParams();
+  const requestedType = searchParams.get('type') || '';
+  const requestedInvestorId = searchParams.get('investorId') || '';
+  const [userType, setUserType] = useState(requestedType);
 
   const renderContent = () => {
     if (!userType) {
@@ -79,6 +88,7 @@ export default function CreateUser() {
     if (userType === 'backOffice') return <BackOfficeCreate />;
     if (userType === 'creditManager') return <CreditManagerCreate />;
     if (userType === 'creditHead') return <CreditHeadCreate onSuccessRedirect="/dashboard" />;
+    if (userType === 'investor') return <InvestorCreate investorId={requestedInvestorId || null} onSuccessRedirect="/investors" />;
     return <AMSCreate />;
   };
 
@@ -108,6 +118,7 @@ export default function CreateUser() {
           <option value="backOffice">Create back office</option>
           <option value="creditManager">Create credit manager</option>
           <option value="creditHead">Create credit head</option>
+          <option value="investor">Create investor</option>
         </select>
       </section>
 

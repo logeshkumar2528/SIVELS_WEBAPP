@@ -2,13 +2,14 @@
  * profileImageHelper.js
  * --------------------
  * Centralised utility for resolving backend profile image URLs
- * across all Sivels Finance roles (BackOffice, RM, Agent, AMS).
+ * across all Sivels Finance roles (BackOffice, RM, Agent, AMS, Investor).
  *
  * Backend Endpoints:
  *   - BackOffice : GET /api/BackOfficeMaster/{backOfficeId}/profile-image
  *   - RM         : GET /api/RMMaster/{rmId}/profile-image
  *   - Agent      : GET /api/AgentMaster/{agentId}/profile-image
  *   - AMS        : GET /api/AMSMaster/{amsId}/profile-image
+ *   - Investor   : GET /api/InvestorsMaster/{investorId}/profile-image
  */
 
 import { apiFetch } from '../api/apiFetch';
@@ -60,6 +61,11 @@ const ROLE_ENDPOINT_MAP = {
   credit_head: 'CreditHeadMaster',
   'credit head': 'CreditHeadMaster',
   creditheadmaster: 'CreditHeadMaster',
+
+  // Investor mappings
+  investor: 'InvestorsMaster',
+  investors: 'InvestorsMaster',
+  investormaster: 'InvestorsMaster',
 };
 
 /**

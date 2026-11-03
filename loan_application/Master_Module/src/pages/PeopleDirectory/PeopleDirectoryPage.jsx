@@ -740,6 +740,7 @@ export function ExecutiveEmployeeRecordModal({
   const normRole = useMemo(() => {
     const t = String(roleType || person?.type || '').toLowerCase();
     if (t.includes('credithead') || t.includes('credit head')) return 'CreditHead';
+    if (t.includes('investor')) return 'Investor';
     if (t.includes('agent')) return 'Agent';
     if (t.includes('relation') || t === 'rm') return 'RM';
     if (t.includes('back')) return 'BackOffice';
@@ -756,6 +757,7 @@ export function ExecutiveEmployeeRecordModal({
       case 'AMS': return 'Area Sourcing Manager (ASM)';
       case 'CreditManager': return 'Credit Manager';
       case 'CreditHead': return 'Credit Head';
+      case 'Investor': return 'Investor';
       default: return roleType || 'Employee';
     }
   }, [normRole, roleType]);
@@ -790,7 +792,9 @@ export function ExecutiveEmployeeRecordModal({
     person?.creditManagerId ||
     person?.creditHeadId ||
     person?.amsId ||
-    person?.AmsId;
+    person?.AmsId ||
+    person?.investorId ||
+    person?.InvestorId;
 
   const fullName =
     read(person, ['fullName', 'FullName', 'agentName', 'rmName', 'name', 'Name']) ||
@@ -810,6 +814,8 @@ export function ExecutiveEmployeeRecordModal({
         return read(person, ['creditManagerCode', 'CreditManagerCode', 'code', 'Code']);
       case 'CreditHead':
         return read(person, ['creditHeadCode', 'CreditHeadCode', 'code', 'Code']);
+      case 'Investor':
+        return read(person, ['investorCode', 'InvestorCode', 'code', 'Code']);
       default:
         return read(person, ['code', 'Code']);
     }
