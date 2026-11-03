@@ -222,6 +222,7 @@ export function Dashboard() {
   const [backOfficeList, setBackOfficeList] = useState([]);
   const [creditManagers, setCreditManagers] = useState([]);
   const [creditHeads, setCreditHeads] = useState([]);
+  const [investors, setInvestors] = useState([]);
   const [query, setQuery] = useState('');
   const [applicationQuery, setApplicationQuery] = useState('');
   const [applicationStatusFilter, setApplicationStatusFilter] = useState('All');
@@ -242,7 +243,7 @@ export function Dashboard() {
     setError('');
     try {
       const headers = authHeaders();
-      const [agentResult, applicationResult, rmResult, amsResult, backOfficeResult, cmResult, chResult] = await Promise.allSettled([
+      const [agentResult, applicationResult, rmResult, amsResult, backOfficeResult, cmResult, chResult, investorResult] = await Promise.allSettled([
         apiFetch(`${API_BASE}/AgentMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Agents request failed'))),
         apiFetch(`${API_BASE}/AgentAddCustomer`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Applications request failed'))),
         apiFetch(`${API_BASE}/RMMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('RM request failed'))),
@@ -250,13 +251,16 @@ export function Dashboard() {
         getAllBackOffice(),
         getAllCreditManagers(),
         getAllCreditHeads(),
+        apiFetch(`${API_BASE}/InvestorsMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Investors request failed'))),
       ]);
 
-      if ([agentResult, applicationResult, rmResult, amsResult, backOfficeResult, cmResult, chResult].some((result) => result.status === 'rejected')) {
+      if ([agentResult, applicationResult, rmResult, amsResult, backOfficeResult, cmResult, chResult, investorResult].some((result) => result.status === 'rejected')) {
         setError('Some live records could not be loaded. Available data is shown below.');
       }
 
       const rmRows = rmResult.status === 'fulfilled' ? unwrap(rmResult.value) : [];
+      const investorRows = investorResult.status === 'fulfilled' ? unwrap(investorResult.value) : [];
+      setInvestors(investorRows);
       const liveRms = rmRows.map((rm) => {
         const id = read(rm, ['rmId', 'RMId', 'id', 'Id']);
         const rmName = read(rm, ['fullName', 'FullName', 'rmName', 'RMName', 'name', 'Name']) || `${read(rm, ['firstName', 'FirstName'], '')} ${read(rm, ['lastName', 'LastName'], '')}`.trim() || 'Unnamed RM';
@@ -1055,7 +1059,7 @@ export function Dashboard() {
             <span className="section-kicker">PEOPLE & ACCESS</span>
             <h2>Manage Your Lending Team</h2>
           </div>
-          <span className="admin-subheading-badge">7 Directories</span>
+            <span className="admin-subheading-badge">8 Directories</span>
         </div>
 
         <div className="people-role-card-grid">
@@ -1188,6 +1192,25 @@ export function Dashboard() {
             </div>
             <div className="people-role-metric">
               <span className="people-role-count">{applications.length}</span>
+              <ArrowUpRight size={16} className="people-role-arrow" />
+            </div>
+          </button>
+
+          {/* 8. INVESTORS */}
+          <button
+            type="button"
+            className="people-role-card people-role-card-investor"
+            onClick={() => navigate('/investors')}
+          >
+            <div className="people-role-icon green">
+              <Landmark size={20} />
+            </div>
+            <div className="people-role-info">
+              <h3 className="people-role-title">Investors</h3>
+              <span className="people-role-subtitle">Directory records</span>
+            </div>
+            <div className="people-role-metric">
+              <span className="people-role-count">{investors.length}</span>
               <ArrowUpRight size={16} className="people-role-arrow" />
             </div>
           </button>

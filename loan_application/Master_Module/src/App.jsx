@@ -56,6 +56,7 @@ import CreditManagerCreate from './pages/CreditManager/CreditManagerCreate';
 import CreditHeadCreate from './pages/CreditHead/CreditHeadCreate';
 import CustomerEdit from './pages/Customer/CustomerEdit';
 import CreateUser from './pages/CreateUser/CreateUser';
+import InvestorDirectory from './pages/Investor/InvestorDirectory';
 import AMSDashboard from './pages/AMSDashboard/AMSDashboard';
 import { Application360 } from './pages/Application360/Application360';
 import { PeopleDirectoryPage } from './pages/PeopleDirectory/PeopleDirectoryPage';
@@ -117,6 +118,7 @@ function App() {
               <Route path="credit-managers" element={<PeopleDirectoryPage roleKey="creditManager" />} />
               <Route path="credit-heads" element={<PeopleDirectoryPage roleKey="creditHead" />} />
               <Route path="customers" element={<PeopleDirectoryPage roleKey="customer" />} />
+              <Route path="investors" element={<InvestorDirectory />} />
               <Route path="application-360" element={<Application360 />} />
               <Route path="ams-dashboard" element={<AMSDashboard />} />
               <Route path="create-user" element={<CreateUser />} />

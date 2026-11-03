@@ -1,0 +1,55 @@
+.investor-create-page{max-width:1100px;margin:0 auto;padding:28px}.investor-create-page h1{margin:0 0 20px}.investor-create-page form{display:grid;gap:18px}.investor-create-page section{background:#fff;border:1px solid #dce7df;border-radius:14px;padding:20px}.investor-create-page h2{font-size:18px;margin:0 0 16px;color:#075e3d}.investor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.investor-create-page label{display:grid;gap:6px;font-weight:600;color:#344054}.investor-create-page input,.investor-create-page select{min-height:42px;padding:9px 11px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;background:#fff}.investor-create-page .wide{grid-column:1/-1}.investor-create-page button{justify-self:end;border:0;border-radius:8px;background:#07834f;color:#fff;font-weight:700;padding:12px 24px;cursor:pointer}.investor-create-page button:disabled{opacity:.6}@media(max-width:700px){.investor-grid{grid-template-columns:1fr}.investor-create-page .wide{grid-column:auto}}
+
+/* Keep investor document uploads aligned with the RM edit form. */
+.rm-create-page .doc-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.rm-create-page .document-upload-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 10px;
+  min-height: 104px;
+  padding: 16px;
+  border: 1px solid #dce7df;
+  border-radius: 10px;
+  background: #f8fbf9;
+  box-sizing: border-box;
+}
+
+.rm-create-page .document-upload-card .form-label {
+  min-height: 20px;
+  color: #344054;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.rm-create-page .document-upload-card input[type='file'] {
+  width: 100%;
+  min-width: 0;
+  padding: 8px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.rm-create-page .investor-existing-profile {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #b8c9bf;
+}
+
+.rm-create-page .investor-existing-file,
+.rm-create-page .investor-replacement-note {
+  color: #18794e;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .rm-create-page .doc-upload-grid { grid-template-columns: 1fr; }
+}
