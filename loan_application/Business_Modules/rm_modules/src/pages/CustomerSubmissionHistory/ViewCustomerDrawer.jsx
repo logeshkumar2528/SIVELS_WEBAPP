@@ -13,8 +13,17 @@ import {
   UserCheck,
   RefreshCw,
 } from 'lucide-react';
+import { apiFetch } from '../../../../../Core/src/api/apiFetch';
+import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
+import { getAccessToken } from '../../../../../Core/src/auth/tokenStore';
 import { rmCustomerService } from '../../services/rmCustomerService';
 import { getCurrentRMContext } from '../../utils/rmContext';
+import {
+  getCustomerDocumentTypes,
+  normalizeAgentCustomerDocument,
+  normalizeCustomerDocumentType,
+  normalizeRejection,
+} from '../../../../../Core/src/services/customerDocumentService';
 import './CustomerSubmissionHistory.css';
 
 export default function ViewCustomerDrawer({
@@ -27,6 +36,8 @@ export default function ViewCustomerDrawer({
 }) {
   const [modalImage, setModalImage] = useState(null);
   const [documents, setDocuments] = useState([]);
+  const [customerDocumentTypes, setCustomerDocumentTypes] = useState([]);
+  const [rejectionRecords, setRejectionRecords] = useState([]);
   const [activeDocTab, setActiveDocTab] = useState('original');
   const [loadingDocs, setLoadingDocs] = useState(true);
   const [viewError, setViewError] = useState('');
@@ -61,66 +72,225 @@ export default function ViewCustomerDrawer({
 
   const rmCustomerId = customer?.rmCustomerId || customer?.rMCustomerId || customer?.id;
 
-  // Group and sort documents chronologically into Original (V1) and Updated (V2+)
+  const valueFrom = (row, ...keys) => {
+    if (!row || typeof row !== 'object') return undefined;
+    for (const key of keys) {
+      const value = row[key];
+      if (value !== undefined && value !== null && value !== '') return value;
+    }
+    return undefined;
+  };
+
+  const hasValue = (value) => value !== undefined && value !== null && String(value).trim() !== '';
+  const sameId = (a, b) => hasValue(a) && hasValue(b) && String(a) === String(b);
+  const normalizePath = (value) => String(value || '')
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '')
+    .toLowerCase();
+
+  const documentIdFor = (doc) => valueFrom(
+    doc,
+    'agentCustomerDocumentId',
+    'AgentCustomerDocumentId',
+    'rmCustomerDocumentId',
+    'RMCustomerDocumentId',
+    'RmCustomerDocumentId',
+    'id',
+    'Id'
+  );
+
+  const documentKeyFor = (doc) => `${doc.documentSource || 'document'}:${documentIdFor(doc) || normalizePath(
+    valueFrom(doc, 'filePath', 'FilePath', 'documentPath', 'DocumentPath', 'path', 'Path')
+  ) || doc.__historyIndex || 'unknown'}`;
+
+  const documentPathsFor = (doc) => [
+    valueFrom(doc, 'currentDocumentPath', 'CurrentDocumentPath'),
+    valueFrom(doc, 'filePath', 'FilePath'),
+    valueFrom(doc, 'documentPath', 'DocumentPath'),
+    valueFrom(doc, 'path', 'Path'),
+  ].map(normalizePath).filter(Boolean);
+
+  const getCustomerCategoryId = (doc) => valueFrom(doc, 'customerDocumentTypeId', 'CustomerDocumentTypeId');
+  const getLegacyCategoryId = (doc) => valueFrom(doc, 'documentTypeId', 'DocumentTypeId');
+
+  const documentCategoryKey = (doc, index) => {
+    const customerCategoryId = getCustomerCategoryId(doc);
+    if (hasValue(customerCategoryId)) return `customer:${String(customerCategoryId)}`;
+
+    const legacyCategoryId = getLegacyCategoryId(doc);
+    if (hasValue(legacyCategoryId)) return `legacy:${String(legacyCategoryId)}`;
+
+    const name = valueFrom(
+      doc,
+      'customerDocumentTypeName',
+      'CustomerDocumentTypeName',
+      'documentTypeName',
+      'DocumentTypeName',
+      'documentName',
+      'DocumentName'
+    );
+    if (hasValue(name)) return `name:${String(name).trim().toLowerCase().replace(/\s+/g, ' ')}`;
+
+    return `record:${documentIdFor(doc) || index}`;
+  };
+
+  const documentTimestamp = (doc) => new Date(
+    valueFrom(doc, 'createdAt', 'CreatedAt', 'updatedAt', 'UpdatedAt') || 0
+  ).getTime() || 0;
+
+  const sortDocuments = (a, b) => {
+    const timeDiff = documentTimestamp(a) - documentTimestamp(b);
+    if (timeDiff !== 0) return timeDiff;
+    return (Number(documentIdFor(a)) || 0) - (Number(documentIdFor(b)) || 0);
+  };
+
+  const customerTypeNameById = useMemo(() => new Map(
+    customerDocumentTypes
+      .map((rawType) => {
+        const type = normalizeCustomerDocumentType(rawType);
+        return {
+          ...type,
+          documentTypeName: type.documentTypeName
+            || valueFrom(rawType, 'customerDocumentTypeName', 'CustomerDocumentTypeName', 'name', 'Name'),
+        };
+      })
+      .filter((type) => hasValue(type.customerDocumentTypeId))
+      .map((type) => [String(type.customerDocumentTypeId), type.documentTypeName])
+  ), [customerDocumentTypes]);
+
+  const legacyTypeNameById = useMemo(() => new Map(
+    documentTypes
+      .map((type) => [
+        valueFrom(type, 'documentTypeId', 'DocumentTypeId', 'id', 'Id'),
+        valueFrom(type, 'documentTypeName', 'DocumentTypeName', 'name', 'Name'),
+      ])
+      .filter(([id, name]) => hasValue(id) && hasValue(name))
+      .map(([id, name]) => [String(id), name])
+  ), [documentTypes]);
+
+  const getDocumentName = (doc) => {
+    const customerCategoryId = getCustomerCategoryId(doc);
+    const customerName = hasValue(customerCategoryId)
+      ? customerTypeNameById.get(String(customerCategoryId))
+        || valueFrom(doc, 'customerDocumentTypeName', 'CustomerDocumentTypeName')
+      : null;
+    if (hasValue(customerName)) return customerName;
+
+    const legacyCategoryId = getLegacyCategoryId(doc);
+    const legacyName = hasValue(legacyCategoryId)
+      ? legacyTypeNameById.get(String(legacyCategoryId))
+        || valueFrom(doc, 'documentTypeName', 'DocumentTypeName')
+      : null;
+    if (hasValue(legacyName)) return legacyName;
+
+    return valueFrom(doc, 'documentName', 'DocumentName', 'documentTypeName', 'DocumentTypeName')
+      || valueFrom(doc, 'fileName', 'FileName')
+      || 'Document';
+  };
+
+  // A document is Updated only when an active rejection record points at the
+  // path of an actual uploaded replacement. Initial rows remain Original.
   const { originalDocs, updatedDocs } = useMemo(() => {
     const active = (documents || []).filter((d) => d && d.isActive !== false);
+    const targetCustomerId = customer?.agentCustomerId
+      || customer?.AgentCustomerId
+      || customer?.rmCustomerId
+      || customer?.rMCustomerId
+      || customer?.id;
+    const targetApplicationId = customer?.applicationProductDetailsId
+      || customer?.ApplicationProductDetailsId;
 
-    const grouped = {};
-    active.forEach((doc) => {
-      const key = doc.documentTypeId
-        ? String(doc.documentTypeId)
-        : String(doc.documentTypeName || doc.documentName || 'other').trim().toLowerCase();
-      if (!grouped[key]) grouped[key] = [];
-      grouped[key].push(doc);
+    const matchingRejections = (rejectionRecords || []).filter((rejection) => {
+      if (!rejection || rejection.isActive === false) return false;
+      const matchesCustomer = hasValue(targetCustomerId)
+        && sameId(rejection.agentCustomerId, targetCustomerId);
+      const matchesApplication = hasValue(targetApplicationId)
+        && sameId(rejection.applicationProductDetailsId, targetApplicationId);
+      if (!matchesCustomer && !matchesApplication) return false;
+      if (hasValue(rejection.applicantSequence) && Number(rejection.applicantSequence) !== 0) return false;
+      const rejectedType = String(rejection.rejectedDocumentType || '').toUpperCase();
+      if (rejectedType.startsWith('CO_APPLICANT') || rejectedType.startsWith('COAPPLICANT')) return false;
+      const currentPath = normalizePath(rejection.currentDocumentPath);
+      const originalPath = normalizePath(rejection.originalDocumentPath);
+      return Boolean(currentPath && currentPath !== originalPath);
+    });
+
+    const replacementByDocumentKey = new Map();
+    [...matchingRejections]
+      .sort((a, b) => {
+        const timeA = new Date(a.resubmittedAt || a.rejectedAt || a.createdAt || 0).getTime() || 0;
+        const timeB = new Date(b.resubmittedAt || b.rejectedAt || b.createdAt || 0).getTime() || 0;
+        if (timeA !== timeB) return timeA - timeB;
+        return (Number(a.backOfficeDocumentRejectionId) || 0) - (Number(b.backOfficeDocumentRejectionId) || 0);
+      })
+      .forEach((rejection) => {
+        const currentPath = normalizePath(rejection.currentDocumentPath);
+        const replacement = active.find((doc) => documentPathsFor(doc).includes(currentPath));
+        if (!replacement) return;
+
+        const originalPath = normalizePath(rejection.originalDocumentPath);
+        const originalId = rejection.agentCustomerDocumentId;
+        const originalIsLinked = active.some((doc) => (
+          (originalPath && documentPathsFor(doc).includes(originalPath))
+          || (hasValue(originalId) && sameId(documentIdFor(doc), originalId))
+        ));
+        if ((originalPath || hasValue(originalId)) && !originalIsLinked) return;
+
+        const rejectionCustomerTypeId = rejection.customerDocumentTypeId;
+        const replacementCustomerTypeId = getCustomerCategoryId(replacement);
+        if (hasValue(rejectionCustomerTypeId) && hasValue(replacementCustomerTypeId)
+          && !sameId(rejectionCustomerTypeId, replacementCustomerTypeId)) return;
+
+        const rejectionLegacyTypeId = rejection.documentTypeId;
+        const replacementLegacyTypeId = getLegacyCategoryId(replacement);
+        if (hasValue(rejectionLegacyTypeId) && hasValue(replacementLegacyTypeId)
+          && !sameId(rejectionLegacyTypeId, replacementLegacyTypeId)) return;
+
+        replacementByDocumentKey.set(documentKeyFor(replacement), {
+          timestamp: new Date(rejection.resubmittedAt || rejection.rejectedAt || rejection.createdAt || 0).getTime() || 0,
+        });
+      });
+
+    const grouped = new Map();
+    active.forEach((doc, index) => {
+      const key = documentCategoryKey(doc, index);
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(doc);
     });
 
     const original = [];
     const updated = [];
+    grouped.forEach((list) => {
+      list.sort(sortDocuments);
+      const replacements = list
+        .filter((doc) => replacementByDocumentKey.has(documentKeyFor(doc)))
+        .sort((a, b) => {
+          const timeA = replacementByDocumentKey.get(documentKeyFor(a)).timestamp;
+          const timeB = replacementByDocumentKey.get(documentKeyFor(b)).timestamp;
+          return timeA - timeB || sortDocuments(a, b);
+        });
+      const replacementVersions = new Map(
+        replacements.map((doc, index) => [documentKeyFor(doc), `V${index + 2}`])
+      );
 
-    Object.keys(grouped).forEach((key) => {
-      const list = grouped[key];
-      // Sort chronologically ascending
-      list.sort((a, b) => {
-        const timeA = new Date(a.createdAt || 0).getTime();
-        const timeB = new Date(b.createdAt || 0).getTime();
-        if (timeA !== timeB) return timeA - timeB;
-        const docIdA = Number(a.agentCustomerDocumentId ?? a.rmCustomerDocumentId ?? a.id) || 0;
-        const docIdB = Number(b.agentCustomerDocumentId ?? b.rmCustomerDocumentId ?? b.id) || 0;
-        return docIdA - docIdB;
-      });
-
-      list.forEach((doc, index) => {
-        const isOrig = index === 0;
-        const isLat = index === list.length - 1;
-        const versionLabel = `V${index + 1}`;
+      list.forEach((doc) => {
+        const replacementVersion = replacementVersions.get(documentKeyFor(doc));
         const item = {
           ...doc,
-          isOriginal: isOrig,
-          isLatest: isLat,
-          versionLabel,
-          versionDisplay: isOrig ? 'Original' : versionLabel,
+          isOriginal: !replacementVersion,
+          isLatest: Boolean(replacementVersion && replacementVersion === `V${replacements.length + 1}`),
+          versionLabel: replacementVersion || 'Original',
+          versionDisplay: replacementVersion || 'Original',
         };
-
-        if (isOrig) {
-          original.push(item);
-        } else {
-          updated.push(item);
-        }
+        if (replacementVersion) updated.push(item);
+        else original.push(item);
       });
     });
 
-    // In Updated tab, sort descending by version / createdAt (latest first)
-    updated.sort((a, b) => {
-      const timeA = new Date(a.createdAt || 0).getTime();
-      const timeB = new Date(b.createdAt || 0).getTime();
-      if (timeA !== timeB) return timeB - timeA;
-      const docIdA = Number(a.agentCustomerDocumentId ?? a.rmCustomerDocumentId ?? a.id) || 0;
-      const docIdB = Number(b.agentCustomerDocumentId ?? b.rmCustomerDocumentId ?? b.id) || 0;
-      return docIdB - docIdA;
-    });
-
+    updated.sort((a, b) => sortDocuments(b, a));
     return { originalDocs: original, updatedDocs: updated };
-  }, [documents]);
+  }, [documents, rejectionRecords, customer, customerTypeNameById, legacyTypeNameById]);
 
   useEffect(() => {
     let isMounted = true;
@@ -139,6 +309,35 @@ export default function ViewCustomerDrawer({
       return [];
     };
 
+    const normalizeHistoryDocument = (rawDocument, source) => {
+      const normalized = normalizeAgentCustomerDocument(rawDocument);
+      const commonId = valueFrom(rawDocument, 'agentCustomerDocumentId', 'AgentCustomerDocumentId');
+      const legacyId = valueFrom(rawDocument, 'rmCustomerDocumentId', 'RMCustomerDocumentId', 'RmCustomerDocumentId');
+      const genericId = valueFrom(rawDocument, 'id', 'Id');
+      const filePath = valueFrom(rawDocument, 'filePath', 'FilePath', 'documentPath', 'DocumentPath', 'path', 'Path') || '';
+
+      return {
+        ...rawDocument,
+        ...normalized,
+        documentSource: source,
+        agentCustomerDocumentId: source === 'common' ? (commonId || genericId) : commonId,
+        rmCustomerDocumentId: source === 'legacy' ? (legacyId || genericId) : legacyId,
+        customerDocumentTypeId: valueFrom(rawDocument, 'customerDocumentTypeId', 'CustomerDocumentTypeId'),
+        customerDocumentTypeName: valueFrom(rawDocument, 'customerDocumentTypeName', 'CustomerDocumentTypeName'),
+        documentTypeId: valueFrom(rawDocument, 'documentTypeId', 'DocumentTypeId'),
+        documentTypeName: valueFrom(rawDocument, 'documentTypeName', 'DocumentTypeName'),
+        documentName: valueFrom(rawDocument, 'documentName', 'DocumentName'),
+        fileName: valueFrom(rawDocument, 'fileName', 'FileName') || normalized.fileName || filePath.split(/[\\/]/).pop(),
+        filePath,
+        documentPath: valueFrom(rawDocument, 'documentPath', 'DocumentPath') || filePath,
+        createdAt: valueFrom(rawDocument, 'createdAt', 'CreatedAt'),
+        updatedAt: valueFrom(rawDocument, 'updatedAt', 'UpdatedAt'),
+        currentDocumentPath: valueFrom(rawDocument, 'currentDocumentPath', 'CurrentDocumentPath'),
+        originalDocumentPath: valueFrom(rawDocument, 'originalDocumentPath', 'OriginalDocumentPath'),
+        isActive: valueFrom(rawDocument, 'isActive', 'IsActive') !== false,
+      };
+    };
+
     const loadDocuments = async () => {
       if (!rmCustomerId) {
         setLoadingDocs(false);
@@ -155,10 +354,7 @@ export default function ViewCustomerDrawer({
           const commonRes = await rmCustomerService.getAgentCustomerDocumentsByCustomerId(rmCustomerId);
           const commonList = extractArray(commonRes);
           if (commonList.length > 0) {
-            loadedList = commonList.map((doc) => ({
-              ...doc,
-              documentSource: 'common',
-            }));
+            loadedList = commonList.map((doc) => normalizeHistoryDocument(doc, 'common'));
             isCommon = true;
           }
         } catch (commonErr) {
@@ -171,18 +367,26 @@ export default function ViewCustomerDrawer({
             const legacyRes = await rmCustomerService.getDocumentsByCustomerId(rmCustomerId);
             const legacyList = extractArray(legacyRes);
             if (legacyList.length > 0) {
-              loadedList = legacyList.map((doc) => ({
-                ...doc,
-                documentSource: 'legacy',
-              }));
+              loadedList = legacyList.map((doc) => normalizeHistoryDocument(doc, 'legacy'));
             }
           } catch (legacyErr) {
             console.warn('Legacy RMCustomerDocument lookup failed:', legacyErr);
           }
         }
 
+        const token = getAccessToken();
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const [customerTypesRes, rejectionRes] = await Promise.all([
+          getCustomerDocumentTypes().catch(() => []),
+          apiFetch(`${API_BASE_URL}/BackOfficeDocumentRejection`, { headers })
+            .then((response) => (response.ok ? response.json() : []))
+            .catch(() => []),
+        ]);
+
         if (isMounted) {
-          setDocuments(loadedList);
+          setDocuments(loadedList.map((doc, index) => ({ ...doc, __historyIndex: index })));
+          setCustomerDocumentTypes(extractArray(customerTypesRes));
+          setRejectionRecords(extractArray(rejectionRes).map(normalizeRejection));
         }
       } catch (err) {
         if (isMounted) {
@@ -294,12 +498,6 @@ export default function ViewCustomerDrawer({
     return FileText;
   };
 
-  const getDocumentName = (docTypeId, fallbackName) => {
-    if (fallbackName) return fallbackName;
-    const type = documentTypes.find((t) => Number(t.documentTypeId || t.id) === Number(docTypeId));
-    return type ? type.documentTypeName || type.name : 'Document';
-  };
-
   const handleViewDocument = async (doc) => {
     setViewError('');
     try {
@@ -335,7 +533,7 @@ export default function ViewCustomerDrawer({
       if (isImage) {
         setModalImage({
           src: url,
-          title: getDocumentName(doc.documentTypeId, doc.documentName || doc.documentTypeName),
+          title: getDocumentName(doc),
         });
       } else {
         window.open(url, '_blank');
@@ -513,7 +711,7 @@ export default function ViewCustomerDrawer({
                     </div>
                   ) : (
                     originalDocs.map((doc, idx) => {
-                      const docName = getDocumentName(doc.documentTypeId, doc.documentName || doc.documentTypeName);
+                      const docName = getDocumentName(doc);
                       const IconComp = getDocumentIcon(docName);
                       return (
                         <div className="drawer-doc-card" key={doc.agentCustomerDocumentId || doc.rmCustomerDocumentId || doc.id || idx}>
@@ -551,7 +749,7 @@ export default function ViewCustomerDrawer({
                   </div>
                 ) : (
                   updatedDocs.map((doc, idx) => {
-                    const docName = getDocumentName(doc.documentTypeId, doc.documentName || doc.documentTypeName);
+                    const docName = getDocumentName(doc);
                     const IconComp = getDocumentIcon(docName);
                     return (
                       <div className="drawer-doc-card" key={doc.agentCustomerDocumentId || doc.rmCustomerDocumentId || doc.id || idx}>
