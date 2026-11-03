@@ -5,6 +5,8 @@ import Sidebar from '../../components/Sidebar/Sidebar';
 import Header from '../../components/Header/Header';
 import { NAV_ITEMS } from '../../config/navConfig';
 import './MainLayout.css';
+import { getStoredUser } from '../../../../../../Core/src/auth/session';
+import { API_BASE_URL } from '../../../../../../Core/src/api/apiConfig';
 
 function formatHeaderDate(date) {
   return date.toLocaleDateString('en-IN', {
@@ -18,12 +20,19 @@ export default function MainLayout({
   title = 'Investor Portal',
   subtitle = 'Overview of your investments and earnings',
   badgeCounts = { customers: 10 },
-  user = { name: 'Rajesh Kumar', role: 'Investor' },
-  notificationCount = 2,
+  user,
+  notificationCount = 0,
   onNotificationsClick,
   onUserMenuClick,
   children,
 }) {
+  const sessionUser = getStoredUser(['INVESTOR']) || {};
+  const investor = sessionUser.investor || sessionUser;
+  const resolvedUser = user || {
+    name: investor.fullName || investor.name || 'Investor',
+    role: investor.roleName || investor.role || 'Investor',
+    avatarUrl: `${API_BASE_URL}/InvestorsMaster/me/profile-image`,
+  };
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -71,7 +80,7 @@ export default function MainLayout({
           subtitle={subtitle}
           date={todayDate}
           notificationCount={notificationCount}
-          user={user}
+          user={resolvedUser}
           onMenuToggle={handleMenuToggle}
           onNotificationsClick={onNotificationsClick}
           onUserMenuClick={onUserMenuClick}

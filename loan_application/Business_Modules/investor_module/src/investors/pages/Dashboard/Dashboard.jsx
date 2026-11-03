@@ -76,22 +76,22 @@ export default function Dashboard() {
           </div>
           <div className="dashboard-chart-body">
             <div className="dashboard-pie-wrap">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
+              <PieChart width={140} height={140}>
                   <Pie
                     data={distributionData}
                     dataKey="value"
-                    innerRadius={55}
-                    outerRadius={80}
-                    stroke="none"
-                    paddingAngle={2}
+                    innerRadius={52}
+                    outerRadius={72}
+                    stroke="#ffffff"
+                    strokeWidth={2}
+                    paddingAngle={0}
+                    cornerRadius={2}
                   >
                     {distributionData.map((d, i) => (
                       <Cell key={i} fill={d.color} />
                     ))}
                   </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+              </PieChart>
               <div className="dashboard-pie-center">
                 <span className="pie-center-val">₹ 10,00,000</span>
                 <span className="pie-center-sub">Total Invested</span>

@@ -36,6 +36,7 @@ export const ROLE_CONFIG = {
   CREDIT_MANAGER: { legacyRole: 'CreditManager', landingPath: CREDIT_MANAGER_DASHBOARD, accountKey: 'creditManager' },
   // Credit Head uses the Credit Manager module.
   CREDIT_HEAD: { legacyRole: 'CreditManager', landingPath: CREDIT_MANAGER_DASHBOARD, accountKey: 'creditHead' },
+  INVESTOR: { legacyRole: 'Investor', landingPath: '/investors', accountKey: 'investor' },
   CUSTOMER: { legacyRole: 'Customer', landingPath: CUSTOMER_DASHBOARD, accountKey: 'customer' },
 };
 
@@ -48,6 +49,7 @@ const ROLE_NAME_TO_CODE = {
   backoffice: 'BACK_OFFICE',
   creditmanager: 'CREDIT_MANAGER',
   credithead: 'CREDIT_HEAD',
+  investor: 'INVESTOR',
   customer: 'CUSTOMER',
 };
 

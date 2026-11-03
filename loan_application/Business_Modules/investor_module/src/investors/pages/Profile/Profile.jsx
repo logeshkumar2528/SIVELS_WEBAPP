@@ -1,519 +1,93 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import iconMap from '../../config/iconMap';
-import Breadcrumb from '../../components/Breadcrumb/Breadcrumb';
-import { ROUTES } from '../../config/routeConfig';
-import {
-  investorData,
-  personalInfoData,
-  securityInfoData,
-  recentActivityData,
-  TABS,
-} from './profileData';
+import { getStoredUser } from '../../../../../../Core/src/auth/session';
+import { getInitials } from '../../../../../../Core/src/utils/profileImageHelper';
+import { API_BASE_URL } from '../../../../../../Core/src/api/apiConfig';
+import AuthImage from '../../../../../../Core/src/auth/AuthImage';
+import { apiFetch } from '../../../../../../Core/src/api/apiFetch';
 import './Profile.css';
+import '../../../../../back_office/src/back-office/pages/Profile/Profile.css';
+
+const display = (value) => (value === null || value === undefined || value === '' ? '—' : value);
+
+function Field({ label, value }) {
+  return <div className="bo-sage-field-item"><span className="bo-sage-label">{label}</span><span className="bo-sage-value">{display(value)}</span></div>;
+}
 
 export default function Profile() {
-  const [activeTab, setActiveTab] = useState('Personal Information');
-  const [emailNotif, setEmailNotif] = useState(true);
-  const [smsNotif, setSmsNotif] = useState(true);
-  const [theme, setTheme] = useState('Light Mode');
-  const [language, setLanguage] = useState('English');
+  const sessionUser = getStoredUser(['INVESTOR']) || {};
+  const [investor, setInvestor] = useState(sessionUser.investor || sessionUser);
+  const [profileError, setProfileError] = useState('');
+  const [genderName, setGenderName] = useState(null);
 
-  const MailIcon = iconMap['Mail'];
-  const PhoneIcon = iconMap['Phone'];
-  const MapPinIcon = iconMap['MapPin'];
-  const CalendarIcon = iconMap['Calendar'];
-  const ShieldIcon = iconMap['Shield'];
-  const UserIcon = iconMap['User'];
-  const UserCheckIcon = iconMap['UserCheck'];
-  const BuildingIcon = iconMap['Building2'];
-  const EditIcon = iconMap['Edit2'];
-  const LockIcon = iconMap['Lock'];
-  const SmartphoneIcon = iconMap['Smartphone'];
-  const HomeIcon = iconMap['Home'];
-  const CreditCardIcon = iconMap['CreditCard'];
-  const GlobeIcon = iconMap['Globe'];
-  const MoonIcon = iconMap['Moon'];
-  const BellIcon = iconMap['Bell'];
-  const ChevronRightIcon = iconMap['ChevronRight'];
-  const DownloadIcon = iconMap['Download'];
-  const CameraIcon = iconMap['Camera'];
-  const KeyRoundIcon = iconMap['KeyRound'];
-  const UserXIcon = iconMap['UserX'] || iconMap['Trash2'];
-  const InfoIcon = iconMap['Info'];
-  const MonitorIcon = iconMap['Monitor'] || iconMap['LayoutDashboard'];
+  useEffect(() => {
+    let active = true;
+    apiFetch('/InvestorsMaster/me')
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Investor profile request failed (${response.status})`);
+        const body = await response.json();
+        const data = body?.data ?? body?.result ?? body?.value ?? body;
+        if (active && data) setInvestor(data.investor || data);
+      })
+      .catch((error) => {
+        if (active) setProfileError(error.message || 'Unable to load investor profile.');
+      });
+    return () => { active = false; };
+  }, []);
 
-  const breadcrumbItems = [
-    { label: 'Dashboard', route: ROUTES.DASHBOARD },
-    { label: 'My Profile', route: '' },
-    { label: 'Profile', route: '' },
-  ];
+  useEffect(() => {
+    const genderId = investor?.genderId ?? investor?.GenderId;
+    if (genderId == null || genderId === '') return undefined;
+    let active = true;
+    apiFetch('/gender')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => {
+        const rows = body?.data ?? body?.result ?? body?.value ?? body;
+        const list = Array.isArray(rows) ? rows : [];
+        const match = list.find((row) => String(row?.id ?? row?.genderId ?? row?.GenderId) === String(genderId));
+        if (active) setGenderName(match?.name ?? match?.genderName ?? match?.GenderName ?? null);
+      })
+      .catch(() => { if (active) setGenderName(null); });
+    return () => { active = false; };
+  }, [investor?.genderId, investor?.GenderId]);
+  const get = (...keys) => display(keys.map((key) => investor?.[key]).find((value) => value !== null && value !== undefined && value !== ''));
+  const name = get('fullName', 'name');
+  const roleDesignation = display(investor?.designation || investor?.designationName || investor?.roleName || investor?.role || sessionUser.roleName || sessionUser.role);
+  // The Investor image endpoint resolves the image for the authenticated user;
+  // do not use the stored relative path directly because it cannot carry the JWT.
+  const imageUrl = `${API_BASE_URL}/InvestorsMaster/me/profile-image`;
+  const rawStatus = investor?.status ?? investor?.isActive;
+  const status = rawStatus === true ? 'Active' : display(rawStatus);
+  const initials = useMemo(() => getInitials(name, 'IN'), [name]);
+  const UserIcon = iconMap.UserCircle || iconMap.User;
+  const MapPinIcon = iconMap.MapPin;
+  const ShieldIcon = iconMap.ShieldCheck || iconMap.Shield;
+  const BuildingIcon = iconMap.Building2;
+  const CalendarIcon = iconMap.Calendar;
+  const CheckIcon = iconMap.CheckCircle2 || iconMap.Check;
 
-  return (
-    <div className="profile-page-container">
-      <Breadcrumb items={breadcrumbItems} />
-
-      {/* TOP HERO PROFILE BANNER CARD */}
-      <div className="profile-card profile-hero-card">
-        {/* Left Column: Avatar & Main Bio */}
-        <div className="hero-bio-col">
-          <div className="hero-avatar-wrap">
-            <img
-              src="https://i.pravatar.cc/150?img=68"
-              alt={investorData.name}
-              className="hero-avatar-img"
-            />
-          </div>
-          <div className="hero-bio-info">
-            <div className="hero-name-row">
-              <h2 className="hero-name">{investorData.name}</h2>
-              <span className="hero-role-pill">{investorData.role}</span>
-            </div>
-
-            <div className="hero-contact-list">
-              <div className="hero-contact-item">
-                {MailIcon && <MailIcon size={14} className="hero-icon" />}
-                <span>{investorData.email}</span>
-              </div>
-              <div className="hero-contact-item">
-                {PhoneIcon && <PhoneIcon size={14} className="hero-icon" />}
-                <span>{investorData.phone}</span>
-              </div>
-              <div className="hero-contact-item">
-                {MapPinIcon && <MapPinIcon size={14} className="hero-icon" />}
-                <span>{investorData.location}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Middle Column: Org & Employee Grid */}
-        <div className="hero-details-grid">
-          <div className="hero-grid-item">
-            {CalendarIcon && <CalendarIcon size={16} className="grid-icon" />}
-            <div>
-              <span className="grid-label">Employee ID</span>
-              <span className="grid-val">{investorData.employeeId}</span>
-            </div>
-          </div>
-
-          <div className="hero-grid-item">
-            {ShieldIcon && <ShieldIcon size={16} className="grid-icon" />}
-            <div>
-              <span className="grid-label">Role</span>
-              <span className="grid-val">{investorData.role}</span>
-            </div>
-          </div>
-
-          <div className="hero-grid-item">
-            {UserIcon && <UserIcon size={16} className="grid-icon" />}
-            <div>
-              <span className="grid-label">Department</span>
-              <span className="grid-val">{investorData.department}</span>
-            </div>
-          </div>
-
-          <div className="hero-grid-item">
-            {UserCheckIcon && <UserCheckIcon size={16} className="grid-icon" />}
-            <div>
-              <span className="grid-label">Reporting Manager</span>
-              <span className="grid-val">{investorData.reportingManager}</span>
-            </div>
-          </div>
-
-          <div className="hero-grid-item">
-            {CalendarIcon && <CalendarIcon size={16} className="grid-icon" />}
-            <div>
-              <span className="grid-label">Date of Joining</span>
-              <span className="grid-val">{investorData.dateOfJoining}</span>
-            </div>
-          </div>
-
-          <div className="hero-grid-item">
-            {BuildingIcon && <BuildingIcon size={16} className="grid-icon" />}
-            <div>
-              <span className="grid-label">Branch</span>
-              <span className="grid-val">{investorData.branch}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Profile Completion Box */}
-        <div className="hero-completion-card">
-          <span className="completion-title">Profile Completion</span>
-          <div className="completion-radial-wrap">
-            <div className="completion-donut">
-              <span className="donut-text">90%</span>
-            </div>
-            <p className="completion-hint">
-              Keep your profile updated to get the best experience.
-            </p>
-          </div>
-          <button type="button" className="btn-update-profile">
-            Update Profile
-          </button>
-        </div>
+  return <div className="bo-profile-dashboard"><div className="bo-profile-grid-layout">
+    <aside className="bo-identity-panel">
+      <div className="bo-identity-avatar-wrap">{imageUrl ? <AuthImage src={imageUrl} alt={name} className="bo-identity-avatar-img" /> : <span className="bo-identity-initials">{initials}</span>}</div>
+      <h2 className="bo-identity-name">{name}</h2>
+      <div className="bo-identity-code-badge"><ShieldIcon size={13} /><span>{get('investorCode', 'code')}</span></div>
+      <p className="bo-identity-role">{roleDesignation}</p>
+      <div className={`bo-identity-status-pill ${status === 'Active' ? 'is-active' : 'is-inactive'}`}><span className="bo-identity-status-dot" /><span>{status}</span></div>
+      <div className="bo-identity-divider" />
+      <div className="bo-identity-meta-list">
+        <Meta icon={BuildingIcon} label="Branch" value={get('branch', 'branchName')} />
+        <Meta icon={ShieldIcon} label="Department" value={investor?.department || investor?.departmentName || 'NA'} />
+        <Meta icon={CalendarIcon} label="Member Since" value={get('createdAt', 'dateJoined', 'dateOfJoining')} />
       </div>
-
-      {/* NAVIGATION TABS */}
-      <div className="profile-tabs-bar">
-        {TABS.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            className={`profile-tab-item ${
-              activeTab === tab ? 'profile-tab-item--active' : ''
-            }`}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab === 'Personal Information' && UserIcon && <UserIcon size={16} />}
-            {tab === 'Security' && ShieldIcon && <ShieldIcon size={16} />}
-            {tab === 'Preferences' && GlobeIcon && <GlobeIcon size={16} />}
-            {tab === 'Activity Log' && CalendarIcon && <CalendarIcon size={16} />}
-            <span>{tab}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* MIDDLE ROW CARDS: Personal Info & Security */}
-      <div className="profile-middle-grid">
-        {/* Personal Information Card */}
-        <div className="profile-card">
-          <div className="card-header-row">
-            <h3 className="card-title">Personal Information</h3>
-            <button type="button" className="btn-edit-info">
-              {EditIcon && <EditIcon size={14} />} Edit Information
-            </button>
-          </div>
-
-          <div className="personal-fields-grid">
-            <div className="field-item">
-              <div className="field-icon-wrap">
-                {UserIcon && <UserIcon size={16} />}
-              </div>
-              <div className="field-content">
-                <span className="field-label">Full Name</span>
-                <span className="field-val">{personalInfoData.fullName}</span>
-              </div>
-            </div>
-
-            <div className="field-item">
-              <div className="field-icon-wrap">
-                {MailIcon && <MailIcon size={16} />}
-              </div>
-              <div className="field-content">
-                <span className="field-label">Email Address</span>
-                <span className="field-val">{personalInfoData.email}</span>
-              </div>
-            </div>
-
-            <div className="field-item">
-              <div className="field-icon-wrap">
-                {CalendarIcon && <CalendarIcon size={16} />}
-              </div>
-              <div className="field-content">
-                <span className="field-label">Date of Birth</span>
-                <span className="field-val">{personalInfoData.dob}</span>
-              </div>
-            </div>
-
-            <div className="field-item">
-              <div className="field-icon-wrap">
-                {PhoneIcon && <PhoneIcon size={16} />}
-              </div>
-              <div className="field-content">
-                <span className="field-label">Mobile Number</span>
-                <span className="field-val">{personalInfoData.mobile}</span>
-              </div>
-            </div>
-
-            <div className="field-item">
-              <div className="field-icon-wrap">
-                {UserIcon && <UserIcon size={16} />}
-              </div>
-              <div className="field-content">
-                <span className="field-label">Gender</span>
-                <span className="field-val">{personalInfoData.gender}</span>
-              </div>
-            </div>
-
-            <div className="field-item">
-              <div className="field-icon-wrap">
-                {SmartphoneIcon && <SmartphoneIcon size={16} />}
-              </div>
-              <div className="field-content">
-                <span className="field-label">Alternate Number</span>
-                <span className="field-val">{personalInfoData.alternateNumber}</span>
-              </div>
-            </div>
-
-            <div className="field-item field-item--full">
-              <div className="field-icon-wrap">
-                {HomeIcon && <HomeIcon size={16} />}
-              </div>
-              <div className="field-content">
-                <span className="field-label">Address</span>
-                <span className="field-val">{personalInfoData.address}</span>
-              </div>
-            </div>
-
-            <div className="field-item">
-              <div className="field-icon-wrap">
-                {CreditCardIcon && <CreditCardIcon size={16} />}
-              </div>
-              <div className="field-content">
-                <span className="field-label">PAN Number</span>
-                <span className="field-val">{personalInfoData.pan}</span>
-              </div>
-            </div>
-
-            <div className="field-item">
-              <div className="field-icon-wrap">
-                {CreditCardIcon && <CreditCardIcon size={16} />}
-              </div>
-              <div className="field-content">
-                <span className="field-label">Aadhaar Number</span>
-                <span className="field-val">{personalInfoData.aadhaar}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Security Information Card */}
-        <div className="profile-card">
-          <div className="card-header-row">
-            <h3 className="card-title">Security Information</h3>
-          </div>
-
-          <div className="security-items-list">
-            <div className="sec-item">
-              <div className="sec-icon-wrap">
-                {LockIcon && <LockIcon size={16} />}
-              </div>
-              <div className="sec-content">
-                <span className="sec-label">Password</span>
-                <span className="sec-val">••••••••</span>
-              </div>
-              <button type="button" className="sec-link-btn">Change</button>
-            </div>
-
-            <div className="sec-item">
-              <div className="sec-icon-wrap">
-                {ShieldIcon && <ShieldIcon size={16} />}
-              </div>
-              <div className="sec-content">
-                <span className="sec-label">Two-Factor Authentication</span>
-                <span className="sec-badge-enabled">Enabled</span>
-              </div>
-              <button type="button" className="sec-link-btn">Manage</button>
-            </div>
-
-            <div className="sec-item">
-              <div className="sec-icon-wrap">
-                {MailIcon && <MailIcon size={16} />}
-              </div>
-              <div className="sec-content">
-                <span className="sec-label">Backup Email</span>
-                <span className="sec-val">rajesh.kumar@gmail.com</span>
-              </div>
-              <button type="button" className="sec-link-btn">Change</button>
-            </div>
-
-            <div className="sec-item">
-              <div className="sec-icon-wrap">
-                {SmartphoneIcon && <SmartphoneIcon size={16} />}
-              </div>
-              <div className="sec-content">
-                <span className="sec-label">Backup Mobile</span>
-                <span className="sec-val">+91 91234 56789</span>
-              </div>
-              <button type="button" className="sec-link-btn">Change</button>
-            </div>
-
-            <div className="sec-item">
-              <div className="sec-icon-wrap">
-                {KeyRoundIcon && <KeyRoundIcon size={16} />}
-              </div>
-              <div className="sec-content">
-                <span className="sec-label">Last Password Change</span>
-                <span className="sec-val">05 Jun 2025, 10:30 AM</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* BOTTOM ROW CARDS: Preferences, Recent Activity, Quick Actions */}
-      <div className="profile-bottom-grid">
-        {/* Preferences Card */}
-        <div className="profile-card">
-          <h3 className="card-title mb-3">Preferences</h3>
-
-          <div className="pref-items-list">
-            <div className="pref-item">
-              <div className="pref-left">
-                {MoonIcon && <MoonIcon size={16} className="pref-icon" />}
-                <span className="pref-label">Theme</span>
-              </div>
-              <select
-                className="pref-select"
-                value={theme}
-                onChange={(e) => setTheme(e.target.value)}
-              >
-                <option value="Light Mode">Light Mode</option>
-                <option value="Dark Mode">Dark Mode</option>
-                <option value="System">System Default</option>
-              </select>
-            </div>
-
-            <div className="pref-item">
-              <div className="pref-left">
-                {GlobeIcon && <GlobeIcon size={16} className="pref-icon" />}
-                <span className="pref-label">Language</span>
-              </div>
-              <select
-                className="pref-select"
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-              >
-                <option value="English">English</option>
-                <option value="Tamil">Tamil</option>
-                <option value="Hindi">Hindi</option>
-              </select>
-            </div>
-
-            <div className="pref-item">
-              <div className="pref-left">
-                {BellIcon && <BellIcon size={16} className="pref-icon" />}
-                <span className="pref-label">Email Notifications</span>
-              </div>
-              <label className="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={emailNotif}
-                  onChange={(e) => setEmailNotif(e.target.checked)}
-                />
-                <span className="toggle-slider" />
-              </label>
-            </div>
-
-            <div className="pref-item">
-              <div className="pref-left">
-                {SmartphoneIcon && <SmartphoneIcon size={16} className="pref-icon" />}
-                <span className="pref-label">SMS Notifications</span>
-              </div>
-              <label className="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={smsNotif}
-                  onChange={(e) => setSmsNotif(e.target.checked)}
-                />
-                <span className="toggle-slider" />
-              </label>
-            </div>
-          </div>
-        </div>
-
-        {/* Recent Activity Card */}
-        <div className="profile-card">
-          <div className="card-header-row mb-3">
-            <h3 className="card-title">Recent Activity</h3>
-            <a href="#view-all" className="link-view-all">View All</a>
-          </div>
-
-          <div className="act-items-list">
-            <div className="act-item">
-              <div className="act-icon-wrap">
-                {MonitorIcon && <MonitorIcon size={14} />}
-              </div>
-              <div className="act-content">
-                <div className="act-title">Logged in from Windows · Chennai, India</div>
-                <div className="act-time">05 Jun 2025, 10:30 AM</div>
-              </div>
-              <span className="badge-current">Current</span>
-            </div>
-
-            <div className="act-item">
-              <div className="act-icon-wrap">
-                {LockIcon && <LockIcon size={14} />}
-              </div>
-              <div className="act-content">
-                <div className="act-title">Password changed successfully</div>
-                <div className="act-time">31 May 2025, 04:15 PM</div>
-              </div>
-              {ChevronRightIcon && <ChevronRightIcon size={14} className="act-arrow" />}
-            </div>
-
-            <div className="act-item">
-              <div className="act-icon-wrap">
-                {UserIcon && <UserIcon size={14} />}
-              </div>
-              <div className="act-content">
-                <div className="act-title">Profile information updated</div>
-                <div className="act-time">28 May 2025, 02:40 PM</div>
-              </div>
-              {ChevronRightIcon && <ChevronRightIcon size={14} className="act-arrow" />}
-            </div>
-
-            <div className="act-item">
-              <div className="act-icon-wrap">
-                {SmartphoneIcon && <SmartphoneIcon size={14} />}
-              </div>
-              <div className="act-content">
-                <div className="act-title">Logged in from Android · Chennai, India</div>
-                <div className="act-time">25 May 2025, 11:22 AM</div>
-              </div>
-              {ChevronRightIcon && <ChevronRightIcon size={14} className="act-arrow" />}
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Actions Card */}
-        <div className="profile-card">
-          <h3 className="card-title mb-3">Quick Actions</h3>
-
-          <div className="quick-actions-list">
-            <button type="button" className="quick-action-item">
-              <div className="quick-left">
-                {CameraIcon && <CameraIcon size={16} />}
-                <span>Update Profile Picture</span>
-              </div>
-              {ChevronRightIcon && <ChevronRightIcon size={16} />}
-            </button>
-
-            <button type="button" className="quick-action-item">
-              <div className="quick-left">
-                {DownloadIcon && <DownloadIcon size={16} />}
-                <span>Download Profile Summary</span>
-              </div>
-              {ChevronRightIcon && <ChevronRightIcon size={16} />}
-            </button>
-
-            <button type="button" className="quick-action-item">
-              <div className="quick-left">
-                {KeyRoundIcon && <KeyRoundIcon size={16} />}
-                <span>Change Password</span>
-              </div>
-              {ChevronRightIcon && <ChevronRightIcon size={16} />}
-            </button>
-
-            <button type="button" className="quick-action-item action-danger">
-              <div className="quick-left">
-                {UserXIcon && <UserXIcon size={16} />}
-                <span>Deactivate Account</span>
-              </div>
-              {ChevronRightIcon && <ChevronRightIcon size={16} />}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* BOTTOM NOTICE BANNER */}
-      <div className="profile-notice-banner">
-        {InfoIcon && <InfoIcon size={16} color="#15803d" className="notice-icon" />}
-        <span>
-          Keeping your profile information updated helps us serve you better and ensures account security.
-        </span>
-      </div>
-    </div>
-  );
+    </aside>
+    <main className="bo-sage-panel">
+      {profileError && <div className="bo-sage-row bo-sage-row-alt-2"><Field label="Profile status" value={profileError} /></div>}
+      <section className="bo-sage-section"><SectionHeader icon={UserIcon} title="Personal Information" /><div className="bo-sage-row bo-sage-row-alt-1"><Field label="Full Name" value={name} /><Field label="Date of Birth" value={get('dateOfBirth', 'dob')} /></div><div className="bo-sage-row bo-sage-row-alt-2"><Field label="Gender" value={genderName || get('gender')} /><Field label="Joining Date" value={get('dateJoined', 'dateOfJoining')} /></div></section>
+      <section className="bo-sage-section"><SectionHeader icon={MapPinIcon} title="Contact & Location" /><div className="bo-sage-row bo-sage-row-alt-1"><Field label="Mobile Number" value={get('mobileNumber', 'phone')} /><Field label="Email Address" value={get('emailAddress', 'email')} /></div><div className="bo-sage-row bo-sage-row-alt-2"><Field label="Residential Address" value={get('address')} /><Field label="Location" value={[investor?.location, investor?.cityName, investor?.stateName, investor?.pincode].filter(Boolean).join(', ')} /></div></section>
+      <section className="bo-sage-section"><SectionHeader icon={ShieldIcon} title="Work Information" /><div className="bo-sage-row bo-sage-row-alt-1"><Field label="Investor Code" value={get('investorCode', 'code')} /><Field label="Role / Designation" value={roleDesignation} /></div><div className="bo-sage-row bo-sage-row-alt-2"><Field label="Assigned Branch" value={get('branch', 'branchName')} /><Field label="Department" value={investor?.department || investor?.departmentName || 'NA'} /></div><div className="bo-sage-row bo-sage-row-alt-1"><div className="bo-sage-field-item bo-sage-col-full"><span className="bo-sage-label">Access Scope & Permissions</span><div className="bo-sage-permissions-wrap">{sessionUser.permissions?.length ? sessionUser.permissions.map((permission) => <span key={permission} className="bo-sage-perm-tag"><CheckIcon size={12} /> {permission}</span>) : <span className="bo-sage-perm-tag is-role"><ShieldIcon size={12} /> Role-based operational access &amp; verification</span>}</div></div></div></section>
+    </main>
+  </div></div>;
 }
+
+function SectionHeader({ icon: Icon, title }) { return <div className="bo-sage-section-header"><Icon size={14} className="bo-sage-section-icon" /><h3>{title}</h3></div>; }
+function Meta({ icon: Icon, label, value }) { return <div className="bo-identity-meta-item"><Icon size={14} className="bo-identity-meta-icon" /><div className="bo-identity-meta-content"><span className="bo-identity-meta-label">{label}</span><span className="bo-identity-meta-value">{value}</span></div></div>; }

@@ -1,15 +1,12 @@
 import React from "react";
 import { Row, Col, Button, Dropdown } from "react-bootstrap";
 import { Bell, User, ChevronDown } from "../icons/icons";
-
-// TODO: replace with the logged-in investor from auth/context once available
-const investor = {
-  name: "Rajesh Kumar",
-  id: "RN700245",
-  date: "05 Jun 2025",
-};
+import { getStoredUser } from "../../../../../Core/src/auth/session";
 
 export default function Header({ onAction, activeKey }) {
+  const sessionUser = getStoredUser(['INVESTOR']) || {};
+  const investor = sessionUser.investor || sessionUser;
+  const display = (value, fallback = '—') => value ?? fallback;
   const isDashboard = activeKey === "dashboard";
   const isNewInvestment = activeKey === "new-investment";
   const isCustomerAllocation = activeKey === "customer-allocation";
@@ -61,7 +58,6 @@ export default function Header({ onAction, activeKey }) {
           style={{ width: "36px", height: "36px", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #e2e8f0", background: "#fff" }}
         >
           <Bell size={18} color="#64748b" />
-          <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "16px", height: "16px", background: "#ef4444", borderRadius: "50%", color: "#fff", fontSize: "10px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>8</span>
         </Button>
 
         <Dropdown align="end">
@@ -70,8 +66,8 @@ export default function Header({ onAction, activeKey }) {
               <User size={20} color="#94a3b8" />
             </div>
             <div className="lh-sm text-start d-none d-sm-block">
-              <p style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", margin: 0 }}>{investor.name}</p>
-              <p style={{ fontSize: "11px", color: "#1e3a8a", fontWeight: 600, margin: 0 }}>{investor.id}</p>
+              <p style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", margin: 0 }}>{display(investor.fullName || investor.name)}</p>
+              <p style={{ fontSize: "11px", color: "#1e3a8a", fontWeight: 600, margin: 0 }}>{display(investor.investorCode || investor.id)}</p>
             </div>
             <ChevronDown size={14} color="#64748b" className="ms-1" />
           </Dropdown.Toggle>
@@ -88,7 +84,7 @@ export default function Header({ onAction, activeKey }) {
             className="d-flex align-items-center gap-1 date-btn ms-2"
             onClick={() => onAction("Date filter")}
           >
-            {investor.date}
+            {display(investor.createdAt || investor.date)}
             <ChevronDown size={14} />
           </Button>
         )}
