@@ -69,7 +69,10 @@
   width: 140px;
   height: 140px;
   position: relative;
-  flex-shrink: 0;
+  flex: 0 0 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .dashboard-pie-center {

@@ -52,7 +52,7 @@ const adminRoutes = [
   { path: '/admin',        element: <AdminDashboard /> },
   { path: '/agent',        element: <AgentDashboard /> },
   { path: '/rm/dashboard', element: <RmDashboard /> },
-  { path: '/investor',     element: <InvestorDashboard /> },
+  { path: '/investor',     element: <Navigate to="/investors" replace /> },
   { path: '/investor-new', element: <InvestorApp /> },
 ];
 

@@ -105,7 +105,7 @@ export default function DashboardPage({ onToast }) {
             <div style={{ width: "160px", height: "160px", position: "relative" }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={distribution} dataKey="value" innerRadius={55} outerRadius={80} stroke="none" paddingAngle={2}>
+                  <Pie data={distribution} dataKey="value" innerRadius={52} outerRadius={72} stroke="#ffffff" strokeWidth={2} paddingAngle={0} cornerRadius={2}>
                     {distribution.map((d, i) => <Cell key={i} fill={d.color} />)}
                   </Pie>
                 </PieChart>

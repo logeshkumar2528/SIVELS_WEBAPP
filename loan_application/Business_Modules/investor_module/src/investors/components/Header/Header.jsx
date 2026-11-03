@@ -1,11 +1,12 @@
 import { memo } from 'react';
 import iconMap from '../../config/iconMap';
+import AuthImage from '../../../../../../Core/src/auth/AuthImage';
 import './Header.css';
 
 function UserAvatar({ name, avatarUrl }) {
   if (avatarUrl) {
     return (
-      <img
+      <AuthImage
         src={avatarUrl}
         alt={`${name} avatar`}
         className="header-avatar-img"
