@@ -88,7 +88,7 @@ export const fmtDateTime = (v) => {
 
 /* ── Export Hook ───────────────────────────────────────────────────── */
 
-export function usePrintAndPdf(ref, { title, fileName }) {
+export function usePrintAndPdf(ref, { title, fileName, onPdfGenerated }) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState(null);
 
@@ -135,6 +135,7 @@ export function usePrintAndPdf(ref, { title, fileName }) {
         }
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, width, imgHeight, undefined, 'FAST');
       }
+      if (pdf && onPdfGenerated) await onPdfGenerated(pdf, fileName);
       pdf?.save(fileName);
     } catch (err) {
       console.error(`[${title}] Failed to generate PDF:`, err);
@@ -142,7 +143,7 @@ export function usePrintAndPdf(ref, { title, fileName }) {
     } finally {
       setIsExporting(false);
     }
-  }, [ref, title, fileName]);
+  }, [ref, title, fileName, onPdfGenerated]);
 
   return { handlePrint, handleDownloadPdf, isExporting, exportError };
 }

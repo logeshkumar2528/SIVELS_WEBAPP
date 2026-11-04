@@ -7,7 +7,11 @@
  * loan terms. Values the system does not capture yet are shown as NIL.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import approvalDocumentService from '../../services/approvalDocumentService';
+import approvalDocumentService, {
+  resolveApplicationProductDetailsId,
+  resolveCustomerCode,
+  resolveUploadedBy,
+} from '../../services/approvalDocumentService';
 import {
   BRAND_NAME,
   LogoImage,
@@ -296,9 +300,25 @@ export default function KfsReport({
   const emiText = fmtRupee(totals.emi);
   const firstDue = totals.firstDueDate;
 
+  const saveKfsDocument = async (pdf, fileName) => {
+    const customerCode = resolveCustomerCode(verificationData);
+    const uploadedBy = resolveUploadedBy(verificationData);
+
+    await approvalDocumentService.uploadApplicationDocument({
+      pdf,
+      fileName,
+      applicationProductDetailsId: applicationProductDetailsId || resolveApplicationProductDetailsId(verificationData),
+      agentCustomerId,
+      customerCode,
+      documentType: 'KFS',
+      uploadedBy,
+    });
+  };
+
   const { handlePrint, handleDownloadPdf, isExporting, exportError } = usePrintAndPdf(reportRef, {
     title: 'KFS',
     fileName: `KFS-${officialLoanAccountNo || 'Official'}.pdf`,
+    onPdfGenerated: saveKfsDocument,
   });
 
   /*
