@@ -76,6 +76,38 @@ function fullAadhaarFromValue(value = '') {
   return digits.length === 12 ? digits : '';
 }
 
+// Aadhaar details responses have appeared both as a direct object and wrapped
+// in data/value properties. Keep the UI independent of that transport shape
+// and support the API's PascalCase response as well.
+function readAadhaarShareCode(value) {
+  const candidates = [
+    value,
+    value?.data,
+    value?.Data,
+    value?.value,
+    value?.Value,
+    value?.result,
+    value?.Result,
+    value?.details,
+    value?.Details,
+    value?.aadhaarKycDetails,
+    value?.AadhaarKycDetails,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
+    const shareCode =
+      candidate.shareCode ??
+      candidate.ShareCode ??
+      candidate.share_code;
+    if (shareCode !== undefined && shareCode !== null && String(shareCode).trim()) {
+      return String(shareCode);
+    }
+  }
+
+  return '';
+}
+
 function formatFileSize(bytes) {
   if (!bytes || isNaN(bytes) || bytes <= 0) return '';
   if (bytes < 1024) return `${bytes} B`;
@@ -1514,18 +1546,18 @@ export default function KycDocuments() {
             const appDocPath =
               appKycRec?.documentPath ||
               appKycRec?.DocumentPath ||
-              prev.applicant.documentPath ||
               null;
             const rawAppNum = appKycRec?.numberOfDocuments ?? appKycRec?.NumberOfDocuments;
             const backendAppNum = rawAppNum !== undefined && rawAppNum !== null ? Number(rawAppNum) : null;
-            const appNumDocs = backendAppNum !== null
-              ? backendAppNum
-              : (prev.applicant.numberOfDocuments !== undefined && prev.applicant.numberOfDocuments !== null
-                  ? Number(prev.applicant.numberOfDocuments)
-                  : documentPaths(appDocPath).length);
 
             setForm((prev) => {
               if (savingRef.current) return prev;
+              const resolvedAppDocPath = appDocPath || prev.applicant.documentPath || null;
+              const appNumDocs = backendAppNum !== null
+                ? backendAppNum
+                : (prev.applicant.numberOfDocuments !== undefined && prev.applicant.numberOfDocuments !== null
+                    ? Number(prev.applicant.numberOfDocuments)
+                    : documentPaths(resolvedAppDocPath).length);
               const updatedApplicant = {
                 ...prev.applicant,
                 // Live value only - never retain a previously drafted id.
@@ -1547,7 +1579,7 @@ export default function KycDocuments() {
                   appKycRec?.ProfileImagePath ||
                   prev.applicant.profileImagePath ||
                   null,
-                documentPath: appDocPath,
+                documentPath: resolvedAppDocPath,
               };
 
               // Co-Applicant seeding resolved strictly by applicantSequence (1..N), excluding document tuples.
@@ -1718,6 +1750,17 @@ export default function KycDocuments() {
             if (!isMounted) return;
             hydratedKycIdsRef.current.add(applicantKycId);
             if (data) {
+              let aadhaarDetails = null;
+              try {
+                const detailsRes = await apiFetch(`${API_BASE}/AadhaarKyc/details/${applicantKycId}`, { headers });
+                if (detailsRes.ok) aadhaarDetails = await detailsRes.json();
+                else console.warn(`Aadhaar details request failed for KYC document ${applicantKycId}:`, detailsRes.status);
+              } catch (err) {
+                console.warn('Could not load Aadhaar share code:', err);
+              }
+              const aadhaarShareCode =
+                readAadhaarShareCode(aadhaarDetails) ||
+                readAadhaarShareCode(data);
               const isTuple = isApplicantDocumentTuple(data);
               const rawDocPath =
                 data.documentPath ||
@@ -1752,7 +1795,7 @@ export default function KycDocuments() {
                       (data.aadhaarLastFourDigits ? String(data.aadhaarLastFourDigits) : ''),
                     panCardNo: app.panCardNo || data.panCardNo || data.PANCardNo || '',
                     identityDocumentNo:
-                      app.identityDocumentNo || data.documentNumber || data.DocumentNumber || '',
+                      aadhaarShareCode || app.identityDocumentNo || data.documentNumber || data.DocumentNumber || '',
                     identityDocumentType:
                       app.identityDocumentType || (data.documentTypeId ? String(data.documentTypeId) : ''),
                     verificationStatus:
@@ -1801,6 +1844,17 @@ export default function KycDocuments() {
               if (!isMounted) return;
               hydratedKycIdsRef.current.add(coKycId);
               if (data) {
+                let aadhaarDetails = null;
+                try {
+                  const detailsRes = await apiFetch(`${API_BASE}/AadhaarKyc/details/${coKycId}`, { headers });
+                  if (detailsRes.ok) aadhaarDetails = await detailsRes.json();
+                  else console.warn(`Co-applicant Aadhaar details request failed for KYC document ${coKycId}:`, detailsRes.status);
+                } catch (err) {
+                  console.warn('Could not load co-applicant Aadhaar share code:', err);
+                }
+                const aadhaarShareCode =
+                  readAadhaarShareCode(aadhaarDetails) ||
+                  readAadhaarShareCode(data);
                 const isTuple = isApplicantDocumentTuple(data);
                 const rawDocPath =
                   data.documentPath ||
@@ -1835,7 +1889,7 @@ export default function KycDocuments() {
                         (data.aadhaarLastFourDigits ? String(data.aadhaarLastFourDigits) : ''),
                       panCardNo: co.panCardNo || data.panCardNo || data.PANCardNo || '',
                       identityDocumentNo:
-                        co.identityDocumentNo || data.documentNumber || data.DocumentNumber || '',
+                        aadhaarShareCode || co.identityDocumentNo || data.documentNumber || data.DocumentNumber || '',
                       identityDocumentType:
                         co.identityDocumentType || (data.documentTypeId ? String(data.documentTypeId) : ''),
                       verificationStatus:
