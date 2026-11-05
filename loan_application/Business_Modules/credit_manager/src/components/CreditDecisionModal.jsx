@@ -22,7 +22,8 @@ export const DECISION_ACTIONS = {
     title: 'Approve Application',
     confirmLabel: 'Approve Application',
     remarksLabel: 'Approval Remarks',
-    remarksPlaceholder: 'Summarise the credit assessment behind this approval.',
+    remarksPlaceholder: 'Optional. Summarise the credit assessment behind this approval.',
+    defaultRemarks: 'Approved as per RTR proposed loan terms.',
     successMessage: 'Application approved successfully.',
     call: creditManagerService.creditApprove,
   },
@@ -58,9 +59,18 @@ export function getErrorMessage(err, fallback) {
   return err?.message || fallback;
 }
 
+function positive(value) {
+  const num = Number(value);
+  return value !== null && value !== undefined && value !== '' && Number.isFinite(num) && num > 0 ? num : null;
+}
+
+function formatAmount(value) {
+  return `₹${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+}
+
 export default function CreditDecisionModal({
   action,
-  requestedAmount,
+  sanctionTerms,
   initialIssues = [],
   onIssuesChange,
   onClose,
@@ -69,13 +79,19 @@ export default function CreditDecisionModal({
   const isApprove = action.key === 'APPROVE';
   const isReturn = action.key === 'RETURN';
   const [issues, setIssues] = useState(initialIssues);
-  const [form, setForm] = useState({
-    sanctionedLoanAmount: requestedAmount ? String(requestedAmount) : '',
-    sanctionedROI: '',
-    sanctionedTenureMonths: '',
-    conditions: '',
-    remarks: '',
-  });
+  const [form, setForm] = useState({ conditions: '', remarks: '' });
+  const termsLoading = Boolean(sanctionTerms?.loading);
+  const sanctionedAmount = positive(sanctionTerms?.amount);
+  const sanctionedROI = positive(sanctionTerms?.roi);
+  const sanctionedTenure = positive(sanctionTerms?.tenure);
+  const hasSanctionTerms =
+    sanctionedAmount != null &&
+    sanctionedROI != null &&
+    sanctionedROI <= 100 &&
+    sanctionedTenure != null &&
+    Number.isInteger(sanctionedTenure) &&
+    sanctionedTenure <= 480;
+  const approveBlocked = isApprove && (termsLoading || !hasSanctionTerms);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -94,32 +110,17 @@ export default function CreditDecisionModal({
     const remarks = form.remarks.trim();
     if (isReturn) {
       if (issues.length === 0) next.issues = 'Add at least one field the Back Office must correct.';
-    } else if (!remarks) {
+    } else if (!remarks && !isApprove) {
       next.remarks = `${action.remarksLabel} is required.`;
     }
     if (remarks.length > REMARKS_MAX) next.remarks = `Maximum ${REMARKS_MAX} characters allowed.`;
-
-    if (isApprove) {
-      const amount = Number(form.sanctionedLoanAmount);
-      if (!form.sanctionedLoanAmount || isNaN(amount) || amount <= 0) {
-        next.sanctionedLoanAmount = 'Enter a sanctioned amount greater than 0.';
-      }
-      const roi = Number(form.sanctionedROI);
-      if (!form.sanctionedROI || isNaN(roi) || roi <= 0 || roi > 100) {
-        next.sanctionedROI = 'ROI must be greater than 0 and at most 100.';
-      }
-      const tenure = Number(form.sanctionedTenureMonths);
-      if (!form.sanctionedTenureMonths || !Number.isInteger(tenure) || tenure < 1 || tenure > 480) {
-        next.sanctionedTenureMonths = 'Tenure must be a whole number between 1 and 480 months.';
-      }
-    }
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (submitting || !validate()) return;
+    if (submitting || approveBlocked || !validate()) return;
 
     const creditManagerId = getCreditManagerId();
     if (!creditManagerId) {
@@ -148,9 +149,10 @@ export default function CreditDecisionModal({
       }
     }
     if (isApprove) {
-      payload.sanctionedLoanAmount = Number(form.sanctionedLoanAmount);
-      payload.sanctionedROI = Number(form.sanctionedROI);
-      payload.sanctionedTenureMonths = Number(form.sanctionedTenureMonths);
+      payload.remarks = payload.remarks || action.defaultRemarks;
+      payload.sanctionedLoanAmount = sanctionedAmount;
+      payload.sanctionedROI = sanctionedROI;
+      payload.sanctionedTenureMonths = sanctionedTenure;
       payload.conditions = form.conditions.trim() || null;
     }
 
@@ -197,46 +199,34 @@ export default function CreditDecisionModal({
             </div>
           )}
 
+          {isApprove && !termsLoading && !hasSanctionTerms && (
+            <div className="cm-form-alert" role="alert">
+              {AlertCircleIcon && <AlertCircleIcon size={16} />}
+              <span>RTR proposed loan terms are not saved. Complete the RTR Common Sheet (amount, ROI and tenure) before approving.</span>
+            </div>
+          )}
+
           {isApprove && (
             <div className="cm-form-grid">
-              <label className="cm-form-field">
-                <span>Sanctioned Loan Amount (₹) *</span>
-                <input
-                  type="number"
-                  min="1"
-                  step="0.01"
-                  value={form.sanctionedLoanAmount}
-                  onChange={setField('sanctionedLoanAmount')}
-                  className={errors.sanctionedLoanAmount ? 'cm-input--error' : ''}
-                />
-                {errors.sanctionedLoanAmount && <small>{errors.sanctionedLoanAmount}</small>}
-              </label>
-              <label className="cm-form-field">
-                <span>Sanctioned ROI (% p.a.) *</span>
-                <input
-                  type="number"
-                  min="0.01"
-                  max="100"
-                  step="0.01"
-                  value={form.sanctionedROI}
-                  onChange={setField('sanctionedROI')}
-                  className={errors.sanctionedROI ? 'cm-input--error' : ''}
-                />
-                {errors.sanctionedROI && <small>{errors.sanctionedROI}</small>}
-              </label>
-              <label className="cm-form-field">
-                <span>Sanctioned Tenure (Months) *</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="480"
-                  step="1"
-                  value={form.sanctionedTenureMonths}
-                  onChange={setField('sanctionedTenureMonths')}
-                  className={errors.sanctionedTenureMonths ? 'cm-input--error' : ''}
-                />
-                {errors.sanctionedTenureMonths && <small>{errors.sanctionedTenureMonths}</small>}
-              </label>
+              <div className="cm-form-field">
+                <span>Sanctioned Loan Amount (₹)</span>
+                <div className="cm-form-readonly">
+                  {termsLoading ? 'Loading…' : sanctionedAmount != null ? formatAmount(sanctionedAmount) : '—'}
+                </div>
+              </div>
+              <div className="cm-form-field">
+                <span>Sanctioned ROI (% p.a.)</span>
+                <div className="cm-form-readonly">
+                  {termsLoading ? 'Loading…' : sanctionedROI != null ? `${sanctionedROI}%` : '—'}
+                </div>
+              </div>
+              <div className="cm-form-field">
+                <span>Sanctioned Tenure (Months)</span>
+                <div className="cm-form-readonly">
+                  {termsLoading ? 'Loading…' : sanctionedTenure != null ? `${sanctionedTenure} months` : '—'}
+                </div>
+              </div>
+              <p className="cm-form-note">Taken from the RTR Common Sheet proposed loan and cannot be changed here.</p>
               <label className="cm-form-field cm-form-field--full">
                 <span>Sanction Conditions</span>
                 <textarea
@@ -263,7 +253,7 @@ export default function CreditDecisionModal({
           )}
 
           <label className="cm-form-field cm-form-field--full">
-            <span>{action.remarksLabel}{isReturn ? '' : ' *'}</span>
+            <span>{action.remarksLabel}{isReturn || isApprove ? '' : ' *'}</span>
             <textarea
               rows={isReturn ? 2 : 4}
               maxLength={REMARKS_MAX}
@@ -286,7 +276,7 @@ export default function CreditDecisionModal({
           <button
             type="submit"
             className={`stc-btn-doc cm-btn-${action.key.toLowerCase()}`}
-            disabled={submitting}
+            disabled={submitting || approveBlocked}
           >
             {submitting ? 'Saving...' : action.confirmLabel}
           </button>

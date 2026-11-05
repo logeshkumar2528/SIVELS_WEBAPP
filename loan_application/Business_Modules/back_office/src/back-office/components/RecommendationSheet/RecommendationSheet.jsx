@@ -76,6 +76,58 @@ const fmtCoverDate = (d) =>
 const NIL = 'NIL';
 const nil = (v) => (isBlank(v) ? NIL : v);
 
+const FINAL_METHOD_NAMES = {
+  INCOME: 'Eligibility - Salaried',
+  NORMAL_INCOME: 'Eligibility - Normal Income',
+  LIP_PROGRAM: 'LIP Program',
+  RTR: 'Eligibility - RTR Sheet',
+  BANKING: 'Eligibility - Banking Program',
+};
+const NOT_APPLICABLE = 'Not applicable';
+const SALARIED_METHOD_ID = 1;
+
+const ratioToPercent = (v) => {
+  const n = toNumber(v);
+  return n == null ? null : n * 100;
+};
+
+const emiPerLakh = (annualRate, months) => {
+  const rate = toNumber(annualRate);
+  const n = toNumber(months);
+  if (rate == null || !(n > 0)) return null;
+  const r = rate / 1200;
+  if (r === 0) return 100000 / n;
+  const factor = (1 + r) ** n;
+  return (100000 * r * factor) / (factor - 1);
+};
+
+/** The saved result of the method marked "Selected for Loan" in the eligibility step. */
+async function loadFinalMethodResult(appProdId, finalAssessment) {
+  const code = String(pick(finalAssessment, ['methodCode', 'MethodCode']) || '').trim().toUpperCase();
+  const completed = finalAssessment?.isCompleted ?? finalAssessment?.IsCompleted;
+  if (!FINAL_METHOD_NAMES[code] || completed === false) return null;
+
+  const assessmentId = Number(pick(finalAssessment, ['assessmentId', 'AssessmentId']) || 0);
+  const applicantSequence = Number(pick(finalAssessment, ['applicantSequence', 'ApplicantSequence']) || 0);
+  const result = { code, assessmentId, applicantSequence, record: null };
+
+  if (code === 'LIP_PROGRAM') {
+    const byId = assessmentId > 0 ? await backOfficeService.getLipProgramRecord(assessmentId).catch(() => null) : null;
+    result.record = firstRecord(byId) || firstRecord(
+      await backOfficeService.getLipProgramCurrent(appProdId, applicantSequence).catch(() => null)
+    );
+  } else if (code === 'RTR') {
+    const list = toList(await backOfficeService.getRTRAssessmentsBySeq(appProdId, applicantSequence).catch(() => []));
+    result.record =
+      list.find((r) => Number(pick(r, ['applicationRTRAssessmentId', 'ApplicationRTRAssessmentId'])) === assessmentId) ||
+      list.find((r) => r?.isCurrent !== false) ||
+      null;
+  } else if (code === 'BANKING') {
+    result.record = await backOfficeService.getBankingEligibilityAnalysis(appProdId).catch(() => null);
+  }
+  return result;
+}
+
 /** Lines of text, dropping blanks; preserves line breaks typed into the source fields. */
 function Lines({ values }) {
   const lines = values.filter((v) => !isBlank(v));
@@ -266,6 +318,7 @@ export default function RecommendationSheet({
         backOfficeService.getApplicationNegativeFIDecisions(appProdId),
         custId ? backOfficeService.getLatestCreditDecision(custId) : Promise.resolve(null),
         backOfficeService.getCreditManagers(),
+        backOfficeService.getFinalAssessment(appProdId),
       ]);
       if (!isMounted) return;
 
@@ -275,8 +328,12 @@ export default function RecommendationSheet({
         deviationMasters, deviationDecisions,
         cirDeviationMasters, cirDeviationDecisions,
         negativeFiMasters, negativeFiDecisions,
-        creditDecision, creditManagers,
+        creditDecision, creditManagers, finalAssessmentRes,
       ] = results.map(settledValue);
+
+      const finalAssessment = finalAssessmentRes?.value !== undefined ? finalAssessmentRes.value : finalAssessmentRes;
+      const finalMethod = await loadFinalMethodResult(appProdId, finalAssessment);
+      if (!isMounted) return;
 
       setData({
         sourcingChannels: toList(sourcingChannels),
@@ -307,6 +364,7 @@ export default function RecommendationSheet({
         negativeFiDecisions: toList(negativeFiDecisions),
         creditDecision: firstRecord(creditDecision),
         creditManagers: toList(creditManagers),
+        finalMethod,
       });
       setLoading(false);
     }
@@ -433,7 +491,6 @@ export default function RecommendationSheet({
   }, [data.assessments]);
 
   const niSummary = data.normalIncomeSummary || {};
-  const firstValue = (...values) => values.find((v) => !isBlank(v) && !Number.isNaN(v)) ?? null;
   const proposedROI =
     sanctioned(['sanctionedROI', 'SanctionedROI', 'sanctionedRoi']) ??
     pick(data.obligationSummary, ['proposedROI']) ??
@@ -445,21 +502,144 @@ export default function RecommendationSheet({
     pick(assessment, ['proposedTenureMonths']) ??
     toNumber(app.loanTenure);
   const proposedEMI = pick(data.obligationSummary, ['proposedEMI']) ?? pick(assessment, ['proposedEMI']);
-  const actualFoir = (() => {
-    const ratio = toNumber(assessment?.actualFOIR);
-    if (ratio != null) return ratio <= 1 ? ratio * 100 : ratio;
-    return toNumber(niSummary.actualFoirPercent);
+
+  // Only the method marked "Selected for Loan" in the eligibility step feeds this table.
+  const finalMethod = data.finalMethod || null;
+  const finalCode = finalMethod?.code || null;
+  const salariedAssessment = useMemo(() => {
+    if (finalCode !== 'INCOME') return null;
+    const list = (data.assessments || []).filter((a) => a && a.isActive !== false);
+    return (
+      list.find((a) => Number(a.loanEligibilityAssessmentId) === Number(finalMethod?.assessmentId)) ||
+      list.find(
+        (a) =>
+          Number(a.assessmentMethodId) === SALARIED_METHOD_ID &&
+          a.isCurrent !== false &&
+          Number(a.applicantSequence || 0) === Number(finalMethod?.applicantSequence || 0)
+      ) ||
+      null
+    );
+  }, [data.assessments, finalCode, finalMethod?.assessmentId, finalMethod?.applicantSequence]);
+
+  const eligibility = (() => {
+    const get = (obj, ...keys) => pick(obj, keys);
+    const money = (v) => fmtINR(v);
+    const lacs = (v) => {
+      const n = toNumber(v);
+      return n == null ? '' : fmtNum(n / 100000);
+    };
+    const percent = (v) => (v == null ? '' : `${fmtNum(v)}%`);
+    const labels = {
+      A: 'Net Monthly Income as per memorandum of monthly income and expenditure statement',
+      B: 'Total Eligible Monthly Income (A × FOIR%)',
+      C: 'Existing Monthly Loan Obligations',
+      D: 'Net Serviceable Income (B-C)',
+      E: 'EMI Factor @IRR/Tenor',
+      F: 'Loan Eligibility (D/E)',
+      G: 'Proposed Loan Amount (in lacs)',
+      H: 'Actual FOIR',
+    };
+    const record = finalMethod?.record;
+    let values = null;
+    let foir = null;
+
+    if (finalCode === 'INCOME' && salariedAssessment) {
+      const a = salariedAssessment;
+      const eligibleEmi = toNumber(get(a, 'eligibleEMI', 'EligibleEMI'));
+      const existingEmi = toNumber(get(a, 'existingEMI', 'ExistingEMI'));
+      foir = ratioToPercent(get(a, 'actualFOIR', 'ActualFOIR'));
+      values = {
+        A: money(get(a, 'totalConsideredIncome', 'TotalConsideredIncome')),
+        B: money(eligibleEmi),
+        C: money(existingEmi),
+        D: money(get(a, 'netServiceableIncome', 'NetServiceableIncome') ??
+          (eligibleEmi != null && existingEmi != null ? eligibleEmi - existingEmi : null)),
+        E: money(get(a, 'emiFactor', 'EMIFactor')),
+        F: fmtNum(get(a, 'maximumEligibleLoanAmount', 'MaximumEligibleLoanAmount')),
+        H: percent(foir),
+      };
+    } else if (finalCode === 'NORMAL_INCOME' && Object.keys(niSummary).length > 0) {
+      const annual = toNumber(niSummary.totalIncomeAnnual);
+      foir = toNumber(niSummary.actualFoirPercent);
+      labels.B = 'Total Eligible Monthly Income (as per FOIR norms)';
+      values = {
+        A: money(toNumber(niSummary.totalIncomeMonthly) ?? (annual != null ? annual / 12 : null)),
+        B: money(niSummary.eligibleMonthlyIncome),
+        C: money(niSummary.existingMonthlyObligations),
+        D: money(niSummary.netServiceableIncome),
+        E: money(niSummary.emiFactor),
+        F: fmtNum(niSummary.loanEligibilityLacs),
+        H: percent(foir),
+      };
+    } else if (finalCode === 'LIP_PROGRAM' && record) {
+      foir = ratioToPercent(get(record, 'foirAchieved', 'FOIRAchieved'));
+      labels.B = 'Maximum Obligations Allowed (A × FOIR%)';
+      labels.D = 'Eligible EMI (lower of B-C and net surplus)';
+      labels.H = 'FOIR Achieved';
+      values = {
+        A: money(get(record, 'totalMonthlyIncome', 'TotalMonthlyIncome')),
+        B: money(get(record, 'maxObligationsAllowed', 'MaxObligationsAllowed')),
+        C: money(get(record, 'existingEMI', 'ExistingEMI')),
+        D: money(get(record, 'eligibleEMI', 'EligibleEMI')),
+        E: money(get(record, 'emiPerLakh', 'EMIPerLakh')),
+        F: lacs(get(record, 'eligibleLoanAmount', 'EligibleLoanAmount')),
+        H: percent(foir),
+      };
+    } else if (finalCode === 'RTR' && record) {
+      const assessedIncome = get(record, 'assessedIncome', 'AssessedIncome');
+      labels.A = 'Assessed Income (Existing EMI × EMI Multiplier)';
+      labels.D = 'Net Serviceable Income (A)';
+      labels.F = 'Loan Eligibility (lower of D/E and POS + Top-up)';
+      values = {
+        A: money(assessedIncome),
+        B: NOT_APPLICABLE,
+        C: money(get(record, 'totalLiveEMI', 'TotalLiveEMI')),
+        D: money(assessedIncome),
+        E: money(get(record, 'calculatedEMIAmountFactor', 'CalculatedEMIAmountFactor', 'emiAmountFactor', 'EMIAmountFactor')),
+        F: lacs(get(record, 'finalLoanEligibility', 'FinalLoanEligibility')),
+        H: NOT_APPLICABLE,
+      };
+    } else if (finalCode === 'BANKING' && record) {
+      const pooled = get(record, 'pooledEligibility', 'PooledEligibility') || {};
+      const factor = emiPerLakh(
+        get(record, 'interestRatePercent', 'InterestRatePercent'),
+        get(record, 'proposedTenureMonths', 'ProposedTenureMonths')
+      );
+      const eligibleLacs = toNumber(get(pooled, 'loanEligibilityInLacs', 'LoanEligibilityInLacs'));
+      labels.A = 'Average Bank Balance (ABB)';
+      labels.D = 'Eligible EMI ((ABB - EMIs started in last 3 months) / 2)';
+      labels.H = 'ABB : EMI';
+      values = {
+        A: money(get(pooled, 'abb', 'ABB')),
+        B: NOT_APPLICABLE,
+        C: NOT_APPLICABLE,
+        D: money(factor != null && eligibleLacs != null ? factor * eligibleLacs : null),
+        E: money(factor),
+        F: fmtNum(eligibleLacs),
+        H: fmtNum(get(pooled, 'abbToEMI', 'ABBToEMI')),
+      };
+    }
+
+    const methodName = FINAL_METHOD_NAMES[finalCode];
+    if (!values) {
+      return {
+        title: methodName ? `Eligibility Calculation as per ${methodName}` : 'Eligibility Calculation as per Assessment Program',
+        message: loading
+          ? 'Loading…'
+          : methodName ? `Saved ${methodName} result not found.` : 'Final assessment method not selected.',
+        rows: [],
+        foir: null,
+      };
+    }
+    const proposedLacs = loanAmount != null ? fmtNum(loanAmount / 100000) : '';
+    return {
+      title: `Eligibility Calculation as per ${methodName}`,
+      message: null,
+      rows: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((k) => [k, labels[k], k === 'G' ? proposedLacs : values[k]]),
+      foir,
+    };
   })();
-  const eligibilityRows = [
-    ['A', 'Net Monthly Income as per memorandum of monthly income and expenditure statement', fmtINR(firstValue(assessment?.totalConsideredIncome, niSummary.totalIncomeMonthly))],
-    ['B', 'Total Eligible Monthly Income ((B-C)* FOIR%)/12', fmtINR(firstValue(assessment?.eligibleEMI, niSummary.eligibleMonthlyIncome))],
-    ['C', 'Existing Monthly Loan Obligations', fmtINR(firstValue(assessment?.existingEMI, niSummary.existingMonthlyObligations))],
-    ['D', 'Net Serviceable Income (B-C)', fmtINR(firstValue(assessment?.netServiceableIncome, niSummary.netServiceableIncome))],
-    ['E', 'EMI Factor @IRR/Tenor', fmtINR(firstValue(assessment?.emiFactor, niSummary.emiFactor))],
-    ['F', 'Loan Eligibility (E/F)', fmtNum(firstValue(assessment?.maximumEligibleLoanAmount, niSummary.loanEligibilityLacs))],
-    ['G', 'Proposed Loan Amount (in lacs)', loanAmount != null ? fmtNum(loanAmount / 100000) : ''],
-    ['H', 'Actual FOIR', actualFoir != null ? `${Math.round(actualFoir)}%` : ''],
-  ];
+  const actualFoir = eligibility.foir;
 
   /* ── Applicants ──────────────────────────────────────────────────── */
 
@@ -795,84 +975,48 @@ export default function RecommendationSheet({
                   <div className="rs-note-indent">Note: Pre-payment is allowed only twice a year.</div>
                 </td>
               </tr>
-              <tr>
-                <th>PD comment</th>
-                <td colSpan={3}>
-                  <div className="rs-pd-comment-block" style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                    {pdCommentSummary && <div style={{ marginBottom: '2px', lineHeight: '1.4' }}>{pdCommentSummary}</div>}
-                    <div>
-                      <strong>1. Address Where PD Was Conducted</strong>
-                      <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.pdAddress)}</div>
-                    </div>
-                    <div>
-                      <strong>2. Personal Discussion / Site Visit</strong>
-                      <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.personalDiscussionSiteVisit)}</div>
-                    </div>
-                    <div>
-                      <strong>3. Applicant Profile</strong>
-                      <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.applicantProfile)}</div>
-                    </div>
-                    <div>
-                      <strong>4. Co-Applicant Profile</strong>
-                      <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.coApplicantProfile)}</div>
-                    </div>
-                    <div>
-                      <strong>5. About Bureau Report of Applicant &amp; Co-Applicant</strong>
-                      <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.bureauReport)}</div>
-                    </div>
-                    <div>
-                      <strong>6. About Proposed Collateral (Including Legal and Technical)</strong>
-                      <div style={{ paddingLeft: '12px', display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '2px' }}>
-                        <div>
-                          <strong>a. Proposed Collateral Details</strong>
-                          <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.proposedCollateral)}</div>
-                        </div>
-                        <div>
-                          <strong>b. Legal &amp; Technical Review</strong>
-                          <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.legalAndTechnical)}</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <strong>7. Strengths</strong>
-                      <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.strengths)}</div>
-                    </div>
-                    <div>
-                      <strong>8. Concerns (If Any)</strong>
-                      <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.concerns)}</div>
-                    </div>
-                    <div>
-                      <strong>9. Recommendation</strong>
-                      <div style={{ paddingLeft: '12px', whiteSpace: 'pre-wrap' }}>{nil(pd.recommendation)}</div>
-                    </div>
-                  </div>
-                </td>
-              </tr>
             </tbody>
           </table>
-        </SheetPage>
 
-        {/* Page 3: End use, profile, eligibility, RTR */}
-        <SheetPage>
-          <table className="rs-table rs-kv">
+          <table className="rs-table rs-kv rs-pd-comment-table">
             <colgroup>
               <col className="rs-col-label" />
-              <col />
+              <col className="rs-col-value" />
+              <col className="rs-col-label" />
+              <col className="rs-col-value" />
             </colgroup>
             <tbody>
+              <tr><td colSpan={4} className="rs-caption">PD Comment:</td></tr>
+              {pdCommentSummary && (
+                <tr><td colSpan={4} className="rs-pd-summary">{pdCommentSummary}</td></tr>
+              )}
+              <tr><th>Address Where PD Was Conducted</th><td colSpan={3}>{nil(pd.pdAddress)}</td></tr>
+              <tr><th>Personal Discussion / Site Visit</th><td colSpan={3}>{nil(pd.personalDiscussionSiteVisit)}</td></tr>
+              <tr><th>Applicant Profile</th><td colSpan={3}>{nil(pd.applicantProfile)}</td></tr>
+              <tr><th>Co-Applicant Profile</th><td colSpan={3}>{nil(pd.coApplicantProfile)}</td></tr>
+              <tr><th>About Bureau Report of Applicant &amp; Co-Applicant</th><td colSpan={3}>{nil(pd.bureauReport)}</td></tr>
+              <tr><th>Proposed Collateral Details</th><td colSpan={3}>{nil(pd.proposedCollateral)}</td></tr>
+              <tr><th>Legal &amp; Technical Review</th><td colSpan={3}>{nil(pd.legalAndTechnical)}</td></tr>
+              <tr><th>Strengths</th><td colSpan={3}>{nil(pd.strengths)}</td></tr>
+              <tr><th>Concerns (If Any)</th><td colSpan={3}>{nil(pd.concerns)}</td></tr>
+              <tr><th>Recommendation</th><td colSpan={3}>{nil(pd.recommendation)}</td></tr>
               <tr>
                 <th>End use of Proposed loan</th>
-                <td>
+                <td colSpan={3}>
                   {!isBlank(pd.endUseCategory) && <strong className="rs-block">{pd.endUseCategory}</strong>}
                   {(!isBlank(pd.endUse) || isBlank(pd.endUseCategory)) && <Lines values={[pd.endUse]} />}
                 </td>
               </tr>
               <tr>
                 <th>Disbursement schedule</th>
-                <td><Lines values={[pd.disbursementTransaction]} /></td>
+                <td colSpan={3}><Lines values={[pd.disbursementTransaction]} /></td>
               </tr>
             </tbody>
           </table>
+        </SheetPage>
+
+        {/* Page 3: Profile, eligibility, RTR */}
+        <SheetPage>
 
           <SubHeading>Applicant&apos;s Profile –</SubHeading>
           <p className="rs-paragraph">
@@ -892,10 +1036,13 @@ export default function RecommendationSheet({
               <col className="rs-col-amount" />
             </colgroup>
             <thead>
-              <tr><th colSpan={3} className="rs-table-title">Eligibility Calculation as per Assessment Program</th></tr>
+              <tr><th colSpan={3} className="rs-table-title">{eligibility.title}</th></tr>
             </thead>
             <tbody>
-              {eligibilityRows.map(([letter, label, value]) => (
+              {eligibility.message && (
+                <tr><td colSpan={3} className="rs-nil-row">{eligibility.message}</td></tr>
+              )}
+              {eligibility.rows.map(([letter, label, value]) => (
                 <tr key={letter} className={letter === 'F' || letter === 'H' ? 'rs-strong-row' : ''}>
                   <td>{letter}</td>
                   <td>{label}</td>
