@@ -201,6 +201,20 @@
   text-align: justify;
 }
 
+.rs-pd-comment-table > tbody > tr > th,
+.rs-pd-comment-table > tbody > tr > td {
+  vertical-align: top;
+}
+
+.rs-pd-comment-table > tbody > tr > td:not(.rs-caption) {
+  white-space: pre-wrap;
+}
+
+.rs-pd-summary {
+  color: var(--rs-text);
+  line-height: 1.4;
+}
+
 .rs-eligibility .rs-col-letter {
   width: 9%;
 }

@@ -27,6 +27,43 @@ describe('CreditDecisionModal', () => {
     expect(onSubmitted).not.toHaveBeenCalled();
   });
 
+  it('approves with the RTR proposed terms and a default remark', async () => {
+    const onSubmitted = vi.fn().mockResolvedValue(undefined);
+    render(
+      <CreditDecisionModal
+        action={DECISION_ACTIONS.APPROVE}
+        sanctionTerms={{ loading: false, amount: 2500000, roi: 9.5, tenure: 240 }}
+        onClose={vi.fn()}
+        onSubmitted={onSubmitted}
+      />
+    );
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve Application' }));
+    await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+    expect(onSubmitted.mock.calls[0][1]).toEqual({
+      performedByUserId: 21,
+      performedByRole: 'CreditManager',
+      remarks: 'Approved as per RTR proposed loan terms.',
+      sanctionedLoanAmount: 2500000,
+      sanctionedROI: 9.5,
+      sanctionedTenureMonths: 240,
+      conditions: null,
+    });
+  });
+
+  it('blocks approval when the RTR proposed terms are missing', () => {
+    render(
+      <CreditDecisionModal
+        action={DECISION_ACTIONS.APPROVE}
+        sanctionTerms={{ loading: false, amount: null, roi: null, tenure: null }}
+        onClose={vi.fn()}
+        onSubmitted={vi.fn()}
+      />
+    );
+    expect(screen.getByText(/RTR proposed loan terms are not saved/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Approve Application' })).toBeDisabled();
+  });
+
   it('requires at least one rejected section to return to the Back Office', async () => {
     const onSubmitted = vi.fn();
     render(<CreditDecisionModal action={DECISION_ACTIONS.RETURN} onClose={vi.fn()} onSubmitted={onSubmitted} />);

@@ -30,7 +30,9 @@ import { useVerificationWorkspace } from '../../../back_office/src/back-office/h
 import ApprovedDocumentsViewer, {
   DOC_TYPES,
 } from '../../../../Core/src/features/approval-documents/components/ApprovedDocumentsViewer';
-import approvalDocumentService from '../../../../Core/src/features/approval-documents/services/approvalDocumentService';
+import approvalDocumentService, {
+  resolveApplicationProductDetailsId,
+} from '../../../../Core/src/features/approval-documents/services/approvalDocumentService';
 import { setActingIdentity } from '../../../back_office/src/back-office/auth/authStorage';
 import {
   RETURN_ITEM_STATUS,
@@ -521,6 +523,7 @@ export default function ApplicationReview() {
 
   const [showReport, setShowReport] = useState(false);
   const [activeAction, setActiveAction] = useState(null);
+  const [rtrTerms, setRtrTerms] = useState({ loading: false, amount: null, roi: null, tenure: null });
   const [successMessage, setSuccessMessage] = useState('');
   const [decisions, setDecisions] = useState([]);
   const [returnItems, setReturnItems] = useState([]);
@@ -616,7 +619,41 @@ export default function ApplicationReview() {
   const applicationProductDetailsId =
     verificationData?.applicationProductDetailsId ||
     queueApp?.applicationProductDetailsId ||
+    resolveApplicationProductDetailsId(verificationData) ||
     null;
+
+  const isApproveOpen = activeAction?.key === 'APPROVE';
+  useEffect(() => {
+    if (!isApproveOpen) return undefined;
+    let cancelled = false;
+    const empty = { loading: false, amount: null, roi: null, tenure: null };
+    if (!applicationProductDetailsId) {
+      setRtrTerms({ ...empty, loading: !verificationData });
+      return undefined;
+    }
+    setRtrTerms({ ...empty, loading: true });
+    approvalDocumentService
+      .getLoanObligationsSummary(applicationProductDetailsId, 0)
+      .then((summary) => {
+        if (cancelled) return;
+        setRtrTerms({
+          loading: false,
+          amount: summary?.proposedLoanAmount ?? summary?.ProposedLoanAmount ?? null,
+          roi: summary?.proposedROI ?? summary?.ProposedROI ?? summary?.proposedRoi ?? null,
+          tenure: summary?.proposedTenureMonths ?? summary?.ProposedTenureMonths ?? null,
+        });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err?.response?.status !== 404) {
+          console.error('[ApplicationReview] Failed to load RTR proposed loan terms:', err);
+        }
+        setRtrTerms(empty);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isApproveOpen, applicationProductDetailsId, verificationData]);
 
   const status = Number(queueApp?.status);
   const isPending = status === CM_STATUS.PENDING;
@@ -832,7 +869,7 @@ export default function ApplicationReview() {
       {activeAction && (
         <CreditDecisionModal
           action={activeAction}
-          requestedAmount={queueApp?.expectedLoanAmount}
+          sanctionTerms={rtrTerms}
           initialIssues={activeAction.key === 'RETURN' ? pendingFlags : []}
           onIssuesChange={setPendingFlags}
           onClose={() => setActiveAction(null)}

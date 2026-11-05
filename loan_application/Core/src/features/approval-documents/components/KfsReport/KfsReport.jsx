@@ -7,7 +7,11 @@
  * loan terms. Values the system does not capture yet are shown as NIL.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import approvalDocumentService from '../../services/approvalDocumentService';
+import approvalDocumentService, {
+  resolveApplicationProductDetailsId,
+  resolveCustomerCode,
+  resolveUploadedBy,
+} from '../../services/approvalDocumentService';
 import {
   BRAND_NAME,
   LogoImage,
@@ -30,6 +34,7 @@ const LENDER_SHORT = 'Sivels';
 const LENDER_ADDRESS_LINES = ['New No. 86, Old No. 1091,', 'Periyar EVR High Road,', 'Chennai - 600007.'];
 const DOC_LABEL = 'Key Facts Statement';
 const RATE_SHOCK = 0.25;
+const MAX_TENOR_EXTENSION_MONTHS = 12;
 const RESET_PERIODICITY_MONTHS = 3;
 const SCHEDULE_FIRST_PAGE_ROWS = 14;
 const SCHEDULE_ROWS_PER_PAGE = 44;
@@ -147,6 +152,27 @@ function ScheduleTable({ rows, totalRows = rows, showTotals = false }) {
   );
 }
 
+/** The product's Rate Of Interest Master rate in force on `onDate`, else its latest active rate. */
+function productBaseRate(rateRows, loanProductId, onDate) {
+  if (isBlank(loanProductId)) return null;
+  const toTime = (v) => {
+    const t = v ? new Date(v).getTime() : NaN;
+    return Number.isNaN(t) ? null : t;
+  };
+  const rows = (rateRows || []).filter(
+    (r) => r && r.isActive !== false && String(pick(r, ['loanProductId', 'LoanProductId'])) === String(loanProductId)
+  );
+  if (rows.length === 0) return null;
+  const at = toTime(onDate) ?? Date.now();
+  const effectiveFrom = (r) => toTime(pick(r, ['effectiveFrom', 'EffectiveFrom'])) ?? 0;
+  const inForce = rows.filter((r) => {
+    const to = toTime(pick(r, ['effectiveTo', 'EffectiveTo']));
+    return effectiveFrom(r) <= at && (to == null || to >= at);
+  });
+  const latest = (inForce.length ? inForce : rows).reduce((a, b) => (effectiveFrom(b) > effectiveFrom(a) ? b : a));
+  return toNumber(pick(latest, ['interestRate', 'InterestRate']));
+}
+
 export default function KfsReport({
   verificationData,
   applicationProductDetailsId,
@@ -175,10 +201,12 @@ export default function KfsReport({
         getMaster('/company/companymaster'),
         getMaster('/company/companycontactpersonmaster'),
         getMaster('/LoanTransactionTypeMaster'),
+        getMaster('/RateOfInterestMaster'),
       ]);
       if (!isMounted) return;
       const [
         creditDecision, obligationSummary, assessments, loanSettings, companies, contacts, transactionTypes,
+        rateOfInterests,
       ] = results.map(settledValue);
 
       setData({
@@ -189,6 +217,7 @@ export default function KfsReport({
         company: firstRecord(toList(companies).filter((c) => c && c.status !== false)),
         contact: firstRecord(toList(contacts)),
         transactionTypes: toList(transactionTypes),
+        rateOfInterests: toList(rateOfInterests),
       });
       setLoading(false);
     }
@@ -243,7 +272,13 @@ export default function KfsReport({
   const documentationFeePct = toNumber(loanSetting.defaultDocumentationFee);
   const insurancePct = toNumber(loanSetting.defaultInsurancePercentage);
   const penaltyPct = toNumber(loanSetting.defaultPenaltyPercentage);
-  const baseRate = toNumber(pick(loanSetting, ['baseRate', 'BaseRate', 'benchmarkRate', 'BenchmarkRate']));
+  const loanProductId =
+    pick(productRecord, ['loanProductId', 'LoanProductId']) ??
+    pick(productWrapper, ['loanProductId', 'LoanProductId']) ??
+    pick(app, ['loanProductId', 'LoanProductId']);
+  const baseRate = productBaseRate(data.rateOfInterests, loanProductId, sanctionDate);
+  const rtrRoi = toNumber(pick(data.obligationSummary, ['proposedROI', 'ProposedROI', 'proposedRoi']));
+  const finalRate = rtrRoi > 0 ? rtrRoi : rate;
 
   const totals = useMemo(
     () => calcKfsTotals({ principal, annualRate: rate, months: tenure, processingFeePct, startDate: sanctionDate }),
@@ -257,8 +292,9 @@ export default function KfsReport({
   const netDisbursed = principal > 0 ? principal - feesToLender : null;
   const apr = totals.emi ? calcApr(netDisbursed, totals.emi, tenure) : null;
 
-  const spread = baseRate != null && rate != null ? rate - baseRate : null;
-  const shockedEmi = calcEmi(principal, (rate || 0) + RATE_SHOCK, tenure);
+  const spread = baseRate != null && finalRate != null ? finalRate - baseRate : null;
+  const shockedEmi = calcEmi(principal, (finalRate || 0) + RATE_SHOCK, tenure);
+  const extendedTenure = tenure ? tenure + MAX_TENOR_EXTENSION_MONTHS : null;
 
   /* ── Parties ─────────────────────────────────────────────────────── */
 
@@ -296,9 +332,25 @@ export default function KfsReport({
   const emiText = fmtRupee(totals.emi);
   const firstDue = totals.firstDueDate;
 
+  const saveKfsDocument = async (pdf, fileName) => {
+    const customerCode = resolveCustomerCode(verificationData);
+    const uploadedBy = resolveUploadedBy(verificationData);
+
+    await approvalDocumentService.uploadApplicationDocument({
+      pdf,
+      fileName,
+      applicationProductDetailsId: applicationProductDetailsId || resolveApplicationProductDetailsId(verificationData),
+      agentCustomerId,
+      customerCode,
+      documentType: 'KFS',
+      uploadedBy,
+    });
+  };
+
   const { handlePrint, handleDownloadPdf, isExporting, exportError } = usePrintAndPdf(reportRef, {
     title: 'KFS',
     fileName: `KFS-${officialLoanAccountNo || 'Official'}.pdf`,
+    onPdfGenerated: saveKfsDocument,
   });
 
   /*
@@ -493,11 +545,11 @@ export default function KfsReport({
                 <td className="kfs-strong">Base Rate</td>
                 <td>{nil(fmtPct(baseRate))}</td>
                 <td>{spread != null ? `(${spread < 0 ? '-' : '+'})${fmtPct(Math.abs(spread))}` : NIL}</td>
-                <td>{nil(fmtPct(rate))}</td>
+                <td>{nil(fmtPct(finalRate))}</td>
                 <td>{RESET_PERIODICITY_MONTHS}</td>
                 <td>{RESET_PERIODICITY_MONTHS}</td>
                 <td>{nil(fmtRupee(shockedEmi))}</td>
-                <td>{nil(tenure)}</td>
+                <td>{nil(extendedTenure)}</td>
               </tr>
             </tbody>
           </table>

@@ -9,7 +9,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Download, Printer } from 'lucide-react';
-import approvalDocumentService from '../../services/approvalDocumentService';
+import approvalDocumentService, {
+  resolveApplicationProductDetailsId,
+  resolveCustomerCode,
+  resolveUploadedBy,
+} from '../../services/approvalDocumentService';
 import { calcEmi } from '../../utils/kfsCalc';
 import SivelsLogo from '../../../../assets/branding/SivelsFinanceLogo.jpg';
 import './SanctionLetter.css';
@@ -646,6 +650,17 @@ export default function SanctionLetter({
         );
       }
       const filenameLoanPart = data.loanAccountNumber !== EMPTY ? data.loanAccountNumber : (data.sanctionLetterRef !== EMPTY ? data.sanctionLetterRef : 'Official');
+      const customerCode = resolveCustomerCode(verificationData);
+      const uploadedBy = resolveUploadedBy(verificationData);
+      await approvalDocumentService.uploadApplicationDocument({
+        pdf,
+        fileName: `Sanction_Letter_${filenameLoanPart}.pdf`,
+        applicationProductDetailsId: applicationProductDetailsId || resolveApplicationProductDetailsId(verificationData),
+        agentCustomerId: resolvedCustomerId,
+        customerCode,
+        documentType: 'SANCTION_LETTER',
+        uploadedBy,
+      });
       pdf.save(`Sanction_Letter_${filenameLoanPart}.pdf`);
     } catch (err) {
       console.error('[SanctionLetter] PDF generation failed:', err);
