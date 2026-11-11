@@ -83,5 +83,28 @@ export const rmAgentColumn = {
 export const statusColumn = {
   key: 'status',
   header: 'Status',
-  render: (app) => <StatusPill status={app.status} />,
+  render: (app) => <StatusPill status={app.status} escalation={app.pendingEscalation} />,
+};
+
+export const escalationColumn = {
+  key: 'escalation',
+  header: 'Escalation',
+  render: (app) => {
+    const escalation = app.pendingEscalation;
+    if (!escalation) return <span className="stc-customer-sub">—</span>;
+    return (
+      <div className="cm-escalation-cell">
+        <span className="stc-pill stc-pill--progress">
+          {escalation.canCurrentUserApprove ? 'Escalated to you' : `Waiting for ${escalation.toRoleName || 'another role'}`}
+        </span>
+        <div className="stc-customer-sub">
+          {formatCurrency(escalation.loanAmount)} over {formatCurrency(escalation.approvalLimit)} limit
+        </div>
+        <div className="stc-customer-sub">
+          {escalation.fromRoleName ? `From ${escalation.fromRoleName} · ` : ''}
+          {formatDate(escalation.escalatedAt)}
+        </div>
+      </div>
+    );
+  },
 };

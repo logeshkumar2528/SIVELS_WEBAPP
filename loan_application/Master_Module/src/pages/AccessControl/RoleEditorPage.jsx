@@ -21,6 +21,13 @@ import {
   setModule,
   togglePermission,
 } from './permissionGrid';
+import {
+  amountToText,
+  formatApprovalRange,
+  isCreditRole,
+  parseAmount,
+  validateApprovalLimits,
+} from './approvalLimits';
 import '../masters/StatusRole/StatusRole.css';
 import './AccessControl.css';
 
@@ -31,6 +38,7 @@ export function RoleEditorPage() {
   const { can } = usePermissions();
 
   const [catalog, setCatalog] = useState([]);
+  const [allRoles, setAllRoles] = useState([]);
   const [systemRoles, setSystemRoles] = useState([]);
   const [role, setRole] = useState(null);
   const [roleName, setRoleName] = useState('');
@@ -39,6 +47,9 @@ export function RoleEditorPage() {
   const [departments, setDepartments] = useState([]);
   const [departmentId, setDepartmentId] = useState('');
   const [departmentPicked, setDepartmentPicked] = useState(false);
+  const [minimumAmount, setMinimumAmount] = useState('');
+  const [maximumAmount, setMaximumAmount] = useState('');
+  const [escalationRoleId, setEscalationRoleId] = useState('');
   const [available, setAvailable] = useState([]);
   const [selected, setSelected] = useState([]);
   const [saved, setSaved] = useState([]);
@@ -59,6 +70,7 @@ export function RoleEditorPage() {
         ]);
         if (cancelled) return;
         setCatalog(catalogData);
+        setAllRoles(rolesData);
         setSystemRoles(rolesData.filter((r) => r.isSystemRole && r.isActive));
         setDepartments(departmentData);
         if (roleData) {
@@ -67,6 +79,9 @@ export function RoleEditorPage() {
           setDescription(roleData.role.description || '');
           setBaseRoleId(String(roleData.role.baseRoleId ?? ''));
           setDepartmentId(String(roleData.role.departmentId ?? ''));
+          setMinimumAmount(amountToText(roleData.role.minimumApprovalAmount));
+          setMaximumAmount(amountToText(roleData.role.maximumApprovalAmount));
+          setEscalationRoleId(String(roleData.role.escalationRoleId ?? ''));
           setAvailable(roleData.availablePermissions);
           setSelected(roleData.permissions);
           setSaved(roleData.permissions);
@@ -116,6 +131,30 @@ export function RoleEditorPage() {
     return [...departments, { departmentId: role.departmentId, departmentName: `${role.departmentName} (inactive)` }];
   }, [departments, role]);
 
+  const baseRole = allRoles.find((r) => String(r.roleId) === baseRoleId) || null;
+  const baseRoleCode = isNew ? baseRole?.roleCode : role?.baseRoleCode;
+  const showLimits = !isLocked && isCreditRole(baseRoleCode);
+  const escalationOptions = useMemo(() => {
+    const options = allRoles.filter(
+      (r) => r.isActive && isCreditRole(r.baseRoleCode) && r.roleId !== role?.roleId
+    );
+    if (role?.escalationRoleId && !options.some((r) => r.roleId === role.escalationRoleId)) {
+      options.push({ roleId: role.escalationRoleId, roleName: `${role.escalationRoleName || 'Role'} (inactive)` });
+    }
+    return options;
+  }, [allRoles, role]);
+  const minimumValue = parseAmount(minimumAmount);
+  const maximumValue = parseAmount(maximumAmount);
+  const escalationName = escalationOptions.find((r) => String(r.roleId) === escalationRoleId)?.roleName || null;
+  const limitsEmpty = minimumValue === null && maximumValue === null && !escalationRoleId;
+  const inheritsBase = !isSystem && Boolean(baseRole) && limitsEmpty;
+  const rangePreview = Number.isNaN(minimumValue) || Number.isNaN(maximumValue)
+    ? null
+    : formatApprovalRange(minimumValue, maximumValue, escalationName);
+  const baseRangeText = baseRole
+    ? formatApprovalRange(baseRole.minimumApprovalAmount, baseRole.maximumApprovalAmount, baseRole.escalationRoleName)
+    : null;
+
   const save = async () => {
     const name = roleName.trim();
     if (!name) {
@@ -130,6 +169,11 @@ export function RoleEditorPage() {
       setError('Choose the department this role belongs to.');
       return;
     }
+    const limitsError = showLimits ? validateApprovalLimits({ minimum: minimumValue, maximum: maximumValue }) : null;
+    if (limitsError) {
+      setError(limitsError);
+      return;
+    }
     setError(null);
     setIsSaving(true);
     const payload = {
@@ -138,6 +182,14 @@ export function RoleEditorPage() {
       baseRoleId: baseRoleId ? Number(baseRoleId) : null,
       departmentId: Number(departmentId),
       permissions: selected,
+      // Left out for other roles so the backend keeps their stored values.
+      ...(showLimits
+        ? {
+            minimumApprovalAmount: minimumValue,
+            maximumApprovalAmount: maximumValue,
+            escalationRoleId: escalationRoleId ? Number(escalationRoleId) : null,
+          }
+        : {}),
     };
     try {
       if (isNew) {
@@ -279,6 +331,85 @@ export function RoleEditorPage() {
           </div>
           {error && <span className="form-error-msg">{error}</span>}
         </section>
+
+        {showLimits && (
+          <section className="access-card" aria-labelledby="approvalLimitsTitle">
+            <h2 id="approvalLimitsTitle">Approval limits</h2>
+            <p className="access-muted access-limits-intro">
+              The loan amounts this role can approve. Approvals above the maximum go to the escalation role.
+            </p>
+            <div className="access-fields">
+              <div className="form-group">
+                <label htmlFor="minimumApprovalAmount" className="form-label">
+                  Minimum approval amount (₹)
+                </label>
+                <input
+                  id="minimumApprovalAmount"
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputMode="decimal"
+                  className="form-input"
+                  value={minimumAmount}
+                  onChange={(e) => setMinimumAmount(e.target.value)}
+                  disabled={readOnly || isSaving}
+                  placeholder="0"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="maximumApprovalAmount" className="form-label">
+                  Maximum approval amount (₹)
+                </label>
+                <input
+                  id="maximumApprovalAmount"
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputMode="decimal"
+                  className="form-input"
+                  value={maximumAmount}
+                  onChange={(e) => setMaximumAmount(e.target.value)}
+                  disabled={readOnly || isSaving}
+                  placeholder="No upper limit"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="escalationRole" className="form-label">
+                  Escalation role
+                </label>
+                <select
+                  id="escalationRole"
+                  className="form-input access-select"
+                  value={escalationRoleId}
+                  onChange={(e) => setEscalationRoleId(e.target.value)}
+                  disabled={readOnly || isSaving}
+                >
+                  <option value="">No escalation</option>
+                  {escalationOptions.map((r) => (
+                    <option key={r.roleId} value={r.roleId}>
+                      {r.roleName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="access-limits-summary">
+              {inheritsBase ? (
+                <span className="access-muted">
+                  Uses the {baseRole.roleName} range: {baseRangeText || 'no limit and no escalation'}. Fill in any field
+                  to give this role its own range.
+                </span>
+              ) : (
+                rangePreview && <span className="access-limits-preview">{rangePreview}</span>
+              )}
+              {!inheritsBase && maximumValue !== null && !Number.isNaN(maximumValue) && !escalationRoleId && (
+                <span className="access-warning">
+                  No escalation role: amounts above the maximum will be blocked.
+                </span>
+              )}
+            </div>
+          </section>
+        )}
 
         <section className="access-card">
           <h2>Permissions</h2>

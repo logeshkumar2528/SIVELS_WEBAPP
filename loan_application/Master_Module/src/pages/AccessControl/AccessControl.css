@@ -120,6 +120,38 @@
   min-width: 220px;
 }
 
+.access-limits-intro {
+  margin: -0.5rem 0 var(--spacing-md, 1rem);
+}
+
+.access-limits-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: var(--spacing-md, 1rem);
+}
+
+.access-limits-preview {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.access-warning {
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  align-self: flex-start;
+}
+
+@media (max-width: 640px) {
+  .access-select {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
 .access-confirm-list {
   margin: 0.5rem 0 1rem;
   padding-left: 1.2rem;

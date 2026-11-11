@@ -350,6 +350,7 @@ const WORKFLOW_ACTION_LABELS = {
   SentToCreditManager: '✓ Sent to Credit Manager (2 → 3)',
   ResubmittedToCreditManager: '⚡ Resubmitted to Credit Manager (2 → 3)',
   ReturnedToBackOffice: '↩ Returned to Back Office by Credit Manager (3 → 2)',
+  ApprovalEscalated: '⇪ Approval escalated above the approver\u2019s limit (stays at 3)',
   CreditApproved: '✓ Credit Approved (3 → 4)',
   CreditRejected: '✕ Credit Rejected (3 → 5)',
 };

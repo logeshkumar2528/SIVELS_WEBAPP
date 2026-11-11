@@ -9,6 +9,7 @@ import { MasterStatusBadge } from '../../components/masters/MasterStatusBadge/Ma
 import { Can, usePermissions } from '../../../../Core/src/auth/permissions';
 import { deactivateRole, getRoles } from '../../api/accessControlApi';
 import { getErrorMessage } from '../../utils/errorHelper';
+import { formatApprovalRange } from './approvalLimits';
 import '../masters/StatusRole/StatusRole.css';
 import './AccessControl.css';
 
@@ -32,6 +33,14 @@ const COLUMNS = [
   { key: 'departmentName', label: 'Department', render: (row) => row.departmentName || '—' },
   { key: 'staffCount', label: 'Staff' },
   { key: 'permissionCount', label: 'Permissions' },
+  {
+    key: 'approvalRange',
+    label: 'Approval range',
+    render: (row) =>
+      formatApprovalRange(row.minimumApprovalAmount, row.maximumApprovalAmount, row.escalationRoleName) || (
+        <span className="access-muted">—</span>
+      ),
+  },
   { key: 'isActive', label: 'Status', render: (row) => <MasterStatusBadge status={row.isActive} /> },
 ];
 

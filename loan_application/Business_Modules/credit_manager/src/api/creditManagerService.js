@@ -36,6 +36,8 @@ const creditManagerService = {
   /**
    * Status 3 -> 4. Payload: { performedByUserId, performedByRole, remarks,
    * sanctionedLoanAmount, sanctionedROI, sanctionedTenureMonths, conditions }
+   * Above the approver's limit the backend answers 202 with { escalated: true, toRoleName, message }
+   * and the application stays in status 3.
    */
   creditApprove: async (agentCustomerId, payload) => {
     const response = await axiosInstance.post(CREDIT_MANAGER_ENDPOINTS.CREDIT_APPROVE(agentCustomerId), payload);
@@ -113,6 +115,29 @@ const creditManagerService = {
       payload
     );
     return unwrapResponse(response);
+  },
+
+  /**
+   * The caller's approval range. With `amount` it also says whether approving that amount is
+   * WithinLimit, Escalate or Blocked; with `agentCustomerId` it includes that application's pending escalation.
+   */
+  getMyApprovalLimit: async ({ amount, agentCustomerId } = {}) => {
+    const params = {};
+    if (amount != null) params.amount = amount;
+    if (agentCustomerId != null) params.agentCustomerId = agentCustomerId;
+    const response = await axiosInstance.get(CREDIT_MANAGER_ENDPOINTS.MY_APPROVAL_LIMIT, { params });
+    return unwrapResponse(response);
+  },
+
+  /** Escalation history, newest first. [] when none exist (404). */
+  getApprovalEscalations: async (agentCustomerId) => {
+    try {
+      const response = await axiosInstance.get(CREDIT_MANAGER_ENDPOINTS.APPROVAL_ESCALATIONS(agentCustomerId));
+      return unwrapList(response);
+    } catch (err) {
+      if (err?.response?.status === 404) return [];
+      throw err;
+    }
   },
 
   /** Resolves to null when no decision exists yet (backend returns 404). */

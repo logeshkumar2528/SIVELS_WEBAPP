@@ -64,6 +64,75 @@ describe('CreditDecisionModal', () => {
     expect(screen.getByRole('button', { name: 'Approve Application' })).toBeDisabled();
   });
 
+  it('says when approving will escalate and relabels the confirm button', async () => {
+    const onSubmitted = vi.fn().mockResolvedValue(undefined);
+    render(
+      <CreditDecisionModal
+        action={DECISION_ACTIONS.APPROVE}
+        sanctionTerms={{ loading: false, amount: 900000, roi: 12, tenure: 36 }}
+        approvalCheck={{
+          loading: false,
+          outcome: 'Escalate',
+          message: '₹9,00,000 is above your approval limit of ₹7,50,000; approving it sends it to Credit Head.',
+          escalationRoleName: 'Credit Head',
+        }}
+        onClose={vi.fn()}
+        onSubmitted={onSubmitted}
+      />
+    );
+    expect(screen.getByText(/approving it sends it to Credit Head/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Send to Credit Head for Approval' }));
+    await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+    expect(onSubmitted.mock.calls[0][1].sanctionedLoanAmount).toBe(900000);
+  });
+
+  it('blocks approval outside the approval range', () => {
+    render(
+      <CreditDecisionModal
+        action={DECISION_ACTIONS.APPROVE}
+        sanctionTerms={{ loading: false, amount: 50000, roi: 12, tenure: 36 }}
+        approvalCheck={{
+          loading: false,
+          outcome: 'Blocked',
+          message: '₹50,000 is below the Senior Credit Manager approval range, which starts at ₹1,00,000.',
+        }}
+        onClose={vi.fn()}
+        onSubmitted={vi.fn()}
+      />
+    );
+    expect(screen.getByText(/below the Senior Credit Manager approval range/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Approve Application' })).toBeDisabled();
+  });
+
+  it('waits for the approval-limit check before allowing approval', () => {
+    render(
+      <CreditDecisionModal
+        action={DECISION_ACTIONS.APPROVE}
+        sanctionTerms={{ loading: false, amount: 500000, roi: 12, tenure: 36 }}
+        approvalCheck={{ loading: true }}
+        onClose={vi.fn()}
+        onSubmitted={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('button', { name: 'Checking approval limit…' })).toBeDisabled();
+  });
+
+  it('shows the backend message on a 409', async () => {
+    const error = Object.assign(new Error('Conflict'), {
+      response: { status: 409, data: { message: 'This approval (₹9,00,000) has been escalated and is waiting for Credit Head.' } },
+    });
+    render(
+      <CreditDecisionModal
+        action={DECISION_ACTIONS.APPROVE}
+        sanctionTerms={{ loading: false, amount: 900000, roi: 12, tenure: 36 }}
+        onClose={vi.fn()}
+        onSubmitted={vi.fn().mockRejectedValue(error)}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Approve Application' }));
+    expect(await screen.findByText(/has been escalated and is waiting for Credit Head/)).toBeInTheDocument();
+  });
+
   it('requires at least one rejected section to return to the Back Office', async () => {
     const onSubmitted = vi.fn();
     render(<CreditDecisionModal action={DECISION_ACTIONS.RETURN} onClose={vi.fn()} onSubmitted={onSubmitted} />);

@@ -24,6 +24,9 @@ export const CREDIT_MANAGER_ENDPOINTS = {
     `/ApplicationCreditDecision/by-customer/${encodeURIComponent(agentCustomerId)}`,
   LATEST_CREDIT_DECISION: (agentCustomerId) =>
     `/ApplicationCreditDecision/by-customer/${encodeURIComponent(agentCustomerId)}/latest`,
+  MY_APPROVAL_LIMIT: '/ApplicationCreditDecision/my-approval-limit',
+  APPROVAL_ESCALATIONS: (agentCustomerId) =>
+    `/ApplicationCreditDecision/by-customer/${encodeURIComponent(agentCustomerId)}/escalations`,
 
   CREDIT_RETURN_ITEMS_BY_CUSTOMER: (agentCustomerId) =>
     `/ApplicationCreditReturnItem/by-customer/${encodeURIComponent(agentCustomerId)}`,

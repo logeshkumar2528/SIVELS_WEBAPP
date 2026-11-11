@@ -762,6 +762,82 @@
   cursor: not-allowed;
 }
 
+/* Approval limits and escalation */
+.cm-escalation-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.825rem;
+}
+
+.cm-escalation-banner--to-you {
+  border-color: #bae6fd;
+  background: #f0f9ff;
+  color: #075985;
+}
+
+.cm-escalation-banner strong {
+  display: block;
+  font-size: 0.85rem;
+}
+
+.cm-escalation-banner p {
+  margin: 4px 0 0;
+}
+
+.cm-escalation-remarks {
+  margin: 6px 0 0;
+  font-style: italic;
+  color: #475569;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cm-approval-range {
+  margin: 12px 0 0;
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.cm-escalation-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cm-escalation-history li {
+  padding: 0.75rem 0.875rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 0.82rem;
+}
+
+.cm-escalation-history-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: #0f172a;
+}
+
+.cm-escalation-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
 /* ══════════════════════════════════════════════════════════
    CREDIT MANAGER QUEUES — BACK OFFICE CONSISTENCY
    Scoped to .stc-page-container to match
