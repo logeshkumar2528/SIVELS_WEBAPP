@@ -6,6 +6,7 @@ import {
   productColumn,
   amountColumn,
   rmAgentColumn,
+  escalationColumn,
   actionColumn,
 } from '../components/applicationColumns';
 import { useCreditApplications } from '../context/CreditApplicationsContext';
@@ -29,6 +30,7 @@ const columns = [
     header: 'Days in Pending',
     render: (app) => <span className="cm-days-pill">{formatDays(app.statusUpdatedAt)}</span>,
   },
+  escalationColumn,
   actionColumn,
 ];
 

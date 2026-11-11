@@ -17,6 +17,8 @@ import { ROUTES } from '../config/routeConfig';
 import Dashboard from '../pages/Dashboard';
 import ReceivedApplications from '../pages/ReceivedApplications';
 import PendingReview from '../pages/PendingReview';
+import EscalatedApplications from '../pages/EscalatedApplications';
+import WaitingApplications from '../pages/WaitingApplications';
 import ApprovedApplications from '../pages/ApprovedApplications';
 import RejectedApplications from '../pages/RejectedApplications';
 import Reports from '../pages/Reports';
@@ -61,6 +63,18 @@ const PAGES = [
     title: 'Pending Review',
     subtitle: 'Applications awaiting Credit Manager review and decision.',
     element: <PendingReview />,
+  },
+  {
+    path: ROUTES.ESCALATED,
+    title: 'Escalated to Me',
+    subtitle: 'Approvals above another role\u2019s limit that you can decide.',
+    element: <EscalatedApplications />,
+  },
+  {
+    path: ROUTES.WAITING,
+    title: 'Waiting for Another Role',
+    subtitle: 'Approvals escalated above your limit and waiting for the escalation role.',
+    element: <WaitingApplications />,
   },
   {
     path: ROUTES.APPROVED,

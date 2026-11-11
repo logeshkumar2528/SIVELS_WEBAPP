@@ -9,6 +9,8 @@ export const ROUTES = {
   DASHBOARD: '/dashboard',
   RECEIVED: '/received',
   PENDING: '/pending',
+  ESCALATED: '/escalated',
+  WAITING: '/waiting',
   APPROVED: '/approved',
   REJECTED: '/rejected',
   REPORTS: '/reports',

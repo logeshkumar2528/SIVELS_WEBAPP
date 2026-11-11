@@ -26,7 +26,17 @@ function isWithinRange(value, fromDate, toDate) {
   return true;
 }
 
-export function StatusPill({ status }) {
+export function StatusPill({ status, escalation = null }) {
+  if (escalation) {
+    return (
+      <span
+        className="stc-pill stc-pill--progress"
+        title={escalation.toRoleName ? `Escalated to ${escalation.toRoleName}` : undefined}
+      >
+        Escalated
+      </span>
+    );
+  }
   const meta = CM_STATUS_META[status];
   if (!meta) return <span className="stc-pill stc-pill--pending">—</span>;
   return <span className={`stc-pill ${meta.className}`}>{meta.label}</span>;

@@ -52,10 +52,18 @@ import {
   CM_STATUS_META,
   CREDIT_DECISION,
   CREDIT_DECISION_META,
+  mapApprovalEscalation,
+  mapApprovalLimit,
   mapCreditDecision,
 } from '../mappers/creditMapper';
 import CreditDecisionModal, { DECISION_ACTIONS, getErrorMessage } from '../components/CreditDecisionModal';
 import ReturnIssuesList from '../components/ReturnIssuesList';
+import {
+  ApprovalRangeNote,
+  EscalationBanner,
+  EscalationHistoryCard,
+  escalationBlockReason,
+} from '../components/ApprovalEscalation';
 import SectionReviewBar from '../components/SectionReviewBar';
 import { useReviewSections } from '../hooks/useReviewSections';
 import { getApplicationNo, parseDate } from '../utils/formatters';
@@ -163,7 +171,7 @@ function SectionChecklistCard({ review, onOpenSection }) {
   );
 }
 
-function CreditDecisionPanel({
+export function CreditDecisionPanel({
   isPending,
   review,
   onOpenSection,
@@ -182,6 +190,9 @@ function CreditDecisionPanel({
   onDownloadDocument,
   identifierWarning,
   onDismissIdentifierWarning,
+  approvalLimit = null,
+  pendingEscalation = null,
+  escalations = [],
 }) {
   const { can } = usePermissions();
   const canDecide = can('CREDIT.APPROVE');
@@ -215,7 +226,10 @@ function CreditDecisionPanel({
   const acceptedCount = latestReturnItems.filter((item) => item.itemStatus === RETURN_ITEM_STATUS.ACCEPTED).length;
   const awaitingReviewCount = awaitingReviewSections.reduce((sum, s) => sum + s.count, 0);
   const allSectionsApproved = review.approvedCount === review.totalSections;
-  const approveBlockedReason = awaitingReviewCount
+  const escalationReason = escalationBlockReason(pendingEscalation);
+  const approveBlockedReason = escalationReason
+    ? escalationReason
+    : awaitingReviewCount
     ? `Review and accept ${awaitingReviewCount} Back Office resolution${awaitingReviewCount === 1 ? '' : 's'} first.`
     : pendingFlags.length
       ? 'Some sections are rejected. Return the application to the Back Office, or clear the flags first.'
@@ -292,6 +306,8 @@ function CreditDecisionPanel({
         />
       )}
 
+      <EscalationHistoryCard escalations={escalations} />
+
       {latestReturnItems.length > 0 && (
         <div className="stc-submit-card">
           <div className="cm-issues-card-head">
@@ -310,6 +326,10 @@ function CreditDecisionPanel({
 
         {isPending ? (
           <>
+            <EscalationBanner
+              escalation={pendingEscalation}
+              remarks={escalations.find((item) => item.isPending)?.remarks}
+            />
             <div className="stc-submit-info-box">
               {AlertCircleIcon && <AlertCircleIcon size={18} style={{ flexShrink: 0 }} />}
               <div>
@@ -318,36 +338,45 @@ function CreditDecisionPanel({
                 <strong>Return to Back Office</strong>. The application can be approved once every section is approved.
               </div>
             </div>
-            {approveBlockedReason && <p className="cm-approve-blocked">{approveBlockedReason}</p>}
-            <div className="cm-decision-actions">
-              <button
-                type="button"
-                className="stc-btn-doc cm-btn-approve"
-                onClick={() => onAction(DECISION_ACTIONS.APPROVE)}
-                disabled={!!approveBlockedReason}
-                title={approveBlockedReason || undefined}
-              >
-                {CheckCircleIcon && <CheckCircleIcon size={15} />}
-                <span>Approve</span>
-              </button>
-              <button type="button" className="stc-btn-doc cm-btn-reject" onClick={() => onAction(DECISION_ACTIONS.REJECT)}>
-                {XCircleIcon && <XCircleIcon size={15} />}
-                <span>Reject</span>
-              </button>
-              <button type="button" className="stc-btn-doc cm-btn-return" onClick={() => onAction(DECISION_ACTIONS.RETURN)}>
-                {RotateCcwIcon && <RotateCcwIcon size={15} />}
-                <span>Return to Back Office</span>
-              </button>
-              <button
-                type="button"
-                className="stc-btn-doc cm-btn-forward"
-                disabled
-                title="Forward workflow will be available in a future release"
-              >
-                {ArrowRightIcon && <ArrowRightIcon size={15} />}
-                <span>Forward</span>
-              </button>
-            </div>
+            <ApprovalRangeNote limit={canDecide ? approvalLimit : null} />
+            {canDecide ? (
+              <>
+                {approveBlockedReason && <p className="cm-approve-blocked">{approveBlockedReason}</p>}
+                <div className="cm-decision-actions">
+                  <button
+                    type="button"
+                    className="stc-btn-doc cm-btn-approve"
+                    onClick={() => onAction(DECISION_ACTIONS.APPROVE)}
+                    disabled={!!approveBlockedReason}
+                    title={approveBlockedReason || undefined}
+                  >
+                    {CheckCircleIcon && <CheckCircleIcon size={15} />}
+                    <span>Approve</span>
+                  </button>
+                  <button type="button" className="stc-btn-doc cm-btn-reject" onClick={() => onAction(DECISION_ACTIONS.REJECT)}>
+                    {XCircleIcon && <XCircleIcon size={15} />}
+                    <span>Reject</span>
+                  </button>
+                  <button type="button" className="stc-btn-doc cm-btn-return" onClick={() => onAction(DECISION_ACTIONS.RETURN)}>
+                    {RotateCcwIcon && <RotateCcwIcon size={15} />}
+                    <span>Return to Back Office</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="stc-btn-doc cm-btn-forward"
+                    disabled
+                    title="Forward workflow will be available in a future release"
+                  >
+                    {ArrowRightIcon && <ArrowRightIcon size={15} />}
+                    <span>Forward</span>
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="cm-approve-blocked">
+                Your role can review this application but can&apos;t record a credit decision.
+              </p>
+            )}
           </>
         ) : latestDecision ? (
           <div className="cm-decision-summary">
@@ -530,6 +559,9 @@ export default function ApplicationReview() {
   const [decisionLoading, setDecisionLoading] = useState(true);
   const [decisionError, setDecisionError] = useState('');
   const [identifierWarning, setIdentifierWarning] = useState('');
+  const [approvalLimit, setApprovalLimit] = useState(null);
+  const [escalations, setEscalations] = useState([]);
+  const [approvalCheck, setApprovalCheck] = useState(null);
   const [loanClassification, setLoanClassification] = useState(null);
   const isUnsecured =
     loanClassification?.status === 'RESOLVED' && loanClassification?.typeCode === 'UNSEC';
@@ -611,6 +643,27 @@ export default function ApplicationReview() {
     loadDecisions();
   }, [loadDecisions]);
 
+  const loadApprovalState = useCallback(async () => {
+    if (!customerId) return;
+    const [limitRes, escalationRes] = await Promise.allSettled([
+      creditManagerService.getMyApprovalLimit({ agentCustomerId: customerId }),
+      creditManagerService.getApprovalEscalations(customerId),
+    ]);
+    if (limitRes.status === 'fulfilled') {
+      setApprovalLimit(mapApprovalLimit(limitRes.value));
+    } else {
+      console.warn('[ApplicationReview] Unable to load the approval limit:', limitRes.reason);
+      setApprovalLimit(null);
+    }
+    setEscalations(
+      escalationRes.status === 'fulfilled' ? escalationRes.value.map(mapApprovalEscalation).filter(Boolean) : []
+    );
+  }, [customerId]);
+
+  useEffect(() => {
+    loadApprovalState();
+  }, [loadApprovalState]);
+
   const queueApp = useMemo(
     () => applications.find((app) => String(app.agentCustomerId) === String(customerId)),
     [applications, customerId]
@@ -655,6 +708,41 @@ export default function ApplicationReview() {
     };
   }, [isApproveOpen, applicationProductDetailsId, verificationData]);
 
+  useEffect(() => {
+    if (!isApproveOpen) {
+      setApprovalCheck(null);
+      return undefined;
+    }
+    const amount = Number(rtrTerms.amount);
+    if (rtrTerms.loading || !(amount > 0)) {
+      setApprovalCheck(rtrTerms.loading ? { loading: true } : null);
+      return undefined;
+    }
+    let cancelled = false;
+    setApprovalCheck({ loading: true });
+    creditManagerService
+      .getMyApprovalLimit({ amount, agentCustomerId: customerId })
+      .then((raw) => {
+        if (cancelled) return;
+        const limit = mapApprovalLimit(raw);
+        setApprovalCheck({
+          loading: false,
+          outcome: limit?.outcome || null,
+          message: limit?.message || '',
+          escalationRoleName: limit?.escalationRoleName || '',
+        });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        // The backend checks the limit again on approve, so the modal works without this preview.
+        console.warn('[ApplicationReview] Unable to check the approval limit:', err);
+        setApprovalCheck(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isApproveOpen, rtrTerms.loading, rtrTerms.amount, customerId]);
+
   const status = Number(queueApp?.status);
   const isPending = status === CM_STATUS.PENDING;
   const statusMeta = CM_STATUS_META[status];
@@ -680,6 +768,7 @@ export default function ApplicationReview() {
     return counts;
   }, [returnItems]);
   const isResubmitted = isPending && latestDecision?.decision === CREDIT_DECISION.RETURNED;
+  const pendingEscalation = approvalLimit ? approvalLimit.pendingEscalation : queueApp?.pendingEscalation || null;
 
   const handleBack = useCallback(() => {
     // 1. Priority: Validated originating queue route from navigation state
@@ -687,10 +776,14 @@ export default function ApplicationReview() {
     const validQueues = [
       ROUTES.RECEIVED,
       ROUTES.PENDING,
+      ROUTES.ESCALATED,
+      ROUTES.WAITING,
       ROUTES.APPROVED,
       ROUTES.REJECTED,
       `/credit${ROUTES.RECEIVED}`,
       `/credit${ROUTES.PENDING}`,
+      `/credit${ROUTES.ESCALATED}`,
+      `/credit${ROUTES.WAITING}`,
       `/credit${ROUTES.APPROVED}`,
       `/credit${ROUTES.REJECTED}`,
     ];
@@ -771,14 +864,21 @@ export default function ApplicationReview() {
   };
 
   const handleDecisionSubmit = async (action, payload) => {
-    await action.call(customerId, payload);
+    const result = await action.call(customerId, payload);
+    const escalated = action?.key === 'APPROVE' && Boolean(result?.escalated);
     setActiveAction(null);
     review.reload();
-    setSuccessMessage(action.successMessage);
+    setSuccessMessage(
+      escalated
+        ? result.message || `Sent to ${result.toRoleName || 'the escalation role'} for approval.`
+        : action.successMessage
+    );
     refetchQueue();
     loadDecisions();
+    loadApprovalState();
 
-    if (action?.key === 'APPROVE') {
+    // An escalated approval stays in credit review, so there is no loan identifier to generate yet.
+    if (action?.key === 'APPROVE' && !escalated) {
       try {
         await approvalDocumentService.generateLoanIdentifier(customerId);
         setIdentifierWarning('');
@@ -827,6 +927,9 @@ export default function ApplicationReview() {
             onDownloadDocument={handleDownloadDocument}
             identifierWarning={identifierWarning}
             onDismissIdentifierWarning={() => setIdentifierWarning('')}
+            approvalLimit={approvalLimit}
+            pendingEscalation={pendingEscalation}
+            escalations={escalations}
           />
         }
       />
@@ -870,6 +973,7 @@ export default function ApplicationReview() {
         <CreditDecisionModal
           action={activeAction}
           sanctionTerms={rtrTerms}
+          approvalCheck={activeAction.key === 'APPROVE' ? approvalCheck : null}
           initialIssues={activeAction.key === 'RETURN' ? pendingFlags : []}
           onIssuesChange={setPendingFlags}
           onClose={() => setActiveAction(null)}

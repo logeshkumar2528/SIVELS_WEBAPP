@@ -50,6 +50,8 @@ function MainLayout({ title = '', subtitle = '', children }) {
     pendingReview: counts.pending,
     approved: counts.approved,
     rejected: counts.rejected,
+    escalated: counts.escalated,
+    waiting: counts.waiting,
   }), [counts]);
 
   const user = useMemo(() => {

@@ -101,6 +101,7 @@ export function mapCreditApplication(raw, agentsById = {}, rmsById = {}) {
   ) || '';
 
   const loanProductName = getValue(raw, 'loanProductName', 'LoanProductName');
+  const pendingEscalation = mapPendingEscalation(getValue(raw, 'pendingEscalation', 'PendingEscalation'));
 
   return {
     ...customer,
@@ -115,6 +116,67 @@ export function mapCreditApplication(raw, agentsById = {}, rmsById = {}) {
     status,
     statusUpdatedAt,
     remarks,
+    pendingEscalation,
+  };
+}
+
+const toNumberOrNull = (value) => (value === null || value === undefined || value === '' ? null : Number(value));
+
+/** The escalation an application in credit is waiting on, from the current user's point of view. */
+export function mapPendingEscalation(raw) {
+  if (!raw) return null;
+  return {
+    escalationId: getValue(raw, 'escalationId', 'EscalationId'),
+    fromRoleId: getValue(raw, 'fromRoleId', 'FromRoleId'),
+    fromRoleName: getValue(raw, 'fromRoleName', 'FromRoleName') || '',
+    toRoleId: getValue(raw, 'toRoleId', 'ToRoleId'),
+    toRoleName: getValue(raw, 'toRoleName', 'ToRoleName') || '',
+    toStaffId: getValue(raw, 'toStaffId', 'ToStaffId') ?? null,
+    loanAmount: toNumberOrNull(getValue(raw, 'loanAmount', 'LoanAmount')),
+    approvalLimit: toNumberOrNull(getValue(raw, 'approvalLimit', 'ApprovalLimit')),
+    escalatedAt: getValue(raw, 'escalatedAt', 'EscalatedAt'),
+    canCurrentUserApprove: Boolean(getValue(raw, 'canCurrentUserApprove', 'CanCurrentUserApprove')),
+    isWaitingForAnotherRole: Boolean(getValue(raw, 'isWaitingForAnotherRole', 'IsWaitingForAnotherRole')),
+  };
+}
+
+export const APPROVAL_OUTCOME = {
+  WITHIN_LIMIT: 'WithinLimit',
+  ESCALATE: 'Escalate',
+  BLOCKED: 'Blocked',
+};
+
+/** GET my-approval-limit. maximumApprovalAmount null means no upper limit. */
+export function mapApprovalLimit(raw) {
+  if (!raw) return null;
+  return {
+    roleId: getValue(raw, 'roleId', 'RoleId'),
+    roleName: getValue(raw, 'roleName', 'RoleName') || '',
+    canApprove: Boolean(getValue(raw, 'canApprove', 'CanApprove')),
+    minimumApprovalAmount: toNumberOrNull(getValue(raw, 'minimumApprovalAmount', 'MinimumApprovalAmount')) ?? 0,
+    maximumApprovalAmount: toNumberOrNull(getValue(raw, 'maximumApprovalAmount', 'MaximumApprovalAmount')),
+    escalationRoleId: getValue(raw, 'escalationRoleId', 'EscalationRoleId') ?? null,
+    escalationRoleName: getValue(raw, 'escalationRoleName', 'EscalationRoleName') || '',
+    amount: toNumberOrNull(getValue(raw, 'amount', 'Amount')),
+    outcome: getValue(raw, 'outcome', 'Outcome') || null,
+    message: getValue(raw, 'message', 'Message') || '',
+    pendingEscalation: mapPendingEscalation(getValue(raw, 'pendingEscalation', 'PendingEscalation')),
+  };
+}
+
+export function mapApprovalEscalation(raw) {
+  if (!raw) return null;
+  return {
+    id: getValue(raw, 'escalationId', 'EscalationId'),
+    fromRoleName: getValue(raw, 'fromRoleName', 'FromRoleName') || '',
+    fromStaffName: getValue(raw, 'fromStaffName', 'FromStaffName') || '',
+    toRoleName: getValue(raw, 'toRoleName', 'ToRoleName') || '',
+    toStaffName: getValue(raw, 'toStaffName', 'ToStaffName') || '',
+    loanAmount: toNumberOrNull(getValue(raw, 'loanAmount', 'LoanAmount')),
+    approvalLimit: toNumberOrNull(getValue(raw, 'approvalLimit', 'ApprovalLimit')),
+    remarks: getValue(raw, 'escalationRemarks', 'EscalationRemarks') || '',
+    createdAt: getValue(raw, 'createdAt', 'CreatedAt'),
+    isPending: Boolean(getValue(raw, 'isPending', 'IsPending')),
   };
 }
 

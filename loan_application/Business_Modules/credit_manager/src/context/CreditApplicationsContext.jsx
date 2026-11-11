@@ -87,17 +87,23 @@ export function CreditApplicationsProvider({ children }) {
     const pending = byStatus(CM_STATUS.PENDING);
     const approved = byStatus(CM_STATUS.APPROVED);
     const rejected = byStatus(CM_STATUS.REJECTED);
+    const escalated = pending.filter((app) => app.pendingEscalation?.canCurrentUserApprove);
+    const waiting = pending.filter((app) => app.pendingEscalation?.isWaitingForAnotherRole);
 
     return {
       applications,
       pending,
       approved,
       rejected,
+      escalated,
+      waiting,
       counts: {
         received: applications.length,
         pending: pending.length,
         approved: approved.length,
         rejected: rejected.length,
+        escalated: escalated.length,
+        waiting: waiting.length,
       },
       loading,
       error,

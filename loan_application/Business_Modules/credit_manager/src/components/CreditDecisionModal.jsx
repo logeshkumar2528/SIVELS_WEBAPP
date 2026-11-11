@@ -13,6 +13,7 @@ import iconMap from '../../../back_office/src/back-office/config/iconMap';
 import creditManagerService from '../api/creditManagerService';
 import { getCreditManagerId } from '../auth/authStorage';
 import ReturnIssuesBuilder from './ReturnIssuesBuilder';
+import { APPROVAL_OUTCOME } from '../mappers/creditMapper';
 
 export const REMARKS_MAX = 2000;
 
@@ -71,6 +72,7 @@ function formatAmount(value) {
 export default function CreditDecisionModal({
   action,
   sanctionTerms,
+  approvalCheck = null,
   initialIssues = [],
   onIssuesChange,
   onClose,
@@ -91,7 +93,13 @@ export default function CreditDecisionModal({
     sanctionedTenure != null &&
     Number.isInteger(sanctionedTenure) &&
     sanctionedTenure <= 480;
-  const approveBlocked = isApprove && (termsLoading || !hasSanctionTerms);
+  const checkLoading = isApprove && Boolean(approvalCheck?.loading);
+  const willEscalate = isApprove && approvalCheck?.outcome === APPROVAL_OUTCOME.ESCALATE;
+  const limitBlocked = isApprove && approvalCheck?.outcome === APPROVAL_OUTCOME.BLOCKED;
+  const approveBlocked = isApprove && (termsLoading || !hasSanctionTerms || checkLoading || limitBlocked);
+  const confirmLabel = willEscalate
+    ? `Send to ${approvalCheck.escalationRoleName || 'Escalation Role'} for Approval`
+    : action.confirmLabel;
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -164,7 +172,8 @@ export default function CreditDecisionModal({
       const status = err?.response?.status;
       setSubmitError(
         status === 409
-          ? 'This application has already been actioned. Refresh the page to see the latest status.'
+          ? err?.response?.data?.message ||
+              'This application has already been actioned. Refresh the page to see the latest status.'
           : getErrorMessage(err, 'Unable to save the decision. Please try again.')
       );
       setSubmitting(false);
@@ -203,6 +212,23 @@ export default function CreditDecisionModal({
             <div className="cm-form-alert" role="alert">
               {AlertCircleIcon && <AlertCircleIcon size={16} />}
               <span>RTR proposed loan terms are not saved. Complete the RTR Common Sheet (amount, ROI and tenure) before approving.</span>
+            </div>
+          )}
+
+          {limitBlocked && (
+            <div className="cm-form-alert" role="alert">
+              {AlertCircleIcon && <AlertCircleIcon size={16} />}
+              <span>{approvalCheck.message || 'This amount is outside your approval range.'}</span>
+            </div>
+          )}
+
+          {willEscalate && (
+            <div className="cm-escalation-banner" role="status">
+              {AlertCircleIcon && <AlertCircleIcon size={16} style={{ flexShrink: 0 }} />}
+              <div>
+                <strong>Above your approval limit</strong>
+                <p>{approvalCheck.message}</p>
+              </div>
             </div>
           )}
 
@@ -278,7 +304,7 @@ export default function CreditDecisionModal({
             className={`stc-btn-doc cm-btn-${action.key.toLowerCase()}`}
             disabled={submitting || approveBlocked}
           >
-            {submitting ? 'Saving...' : action.confirmLabel}
+            {submitting ? 'Saving...' : checkLoading ? 'Checking approval limit…' : confirmLabel}
           </button>
         </div>
       </form>
