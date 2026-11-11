@@ -88,17 +88,21 @@ export const statusColumn = {
 
 export const escalationColumn = {
   key: 'escalation',
-  header: 'Escalation',
+  header: 'Forwarded',
   render: (app) => {
     const escalation = app.pendingEscalation;
     if (!escalation) return <span className="stc-customer-sub">—</span>;
+    const overLimit =
+      escalation.loanAmount != null && escalation.approvalLimit != null && escalation.loanAmount > escalation.approvalLimit;
     return (
       <div className="cm-escalation-cell">
         <span className="stc-pill stc-pill--progress">
-          {escalation.canCurrentUserApprove ? 'Escalated to you' : `Waiting for ${escalation.toRoleName || 'another role'}`}
+          {escalation.canCurrentUserApprove ? 'Forwarded to you' : `Waiting for ${escalation.toRoleName || 'another role'}`}
         </span>
         <div className="stc-customer-sub">
-          {formatCurrency(escalation.loanAmount)} over {formatCurrency(escalation.approvalLimit)} limit
+          {overLimit
+            ? `${formatCurrency(escalation.loanAmount)} over ${formatCurrency(escalation.approvalLimit)} limit`
+            : formatCurrency(escalation.loanAmount)}
         </div>
         <div className="stc-customer-sub">
           {escalation.fromRoleName ? `From ${escalation.fromRoleName} · ` : ''}

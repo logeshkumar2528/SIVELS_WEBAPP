@@ -66,14 +66,14 @@ const PAGES = [
   },
   {
     path: ROUTES.ESCALATED,
-    title: 'Escalated to Me',
-    subtitle: 'Approvals above another role\u2019s limit that you can decide.',
+    title: 'Forwarded to Me',
+    subtitle: 'Applications another role forwarded to your role for a decision.',
     element: <EscalatedApplications />,
   },
   {
     path: ROUTES.WAITING,
     title: 'Waiting for Another Role',
-    subtitle: 'Approvals escalated above your limit and waiting for the escalation role.',
+    subtitle: 'Applications you forwarded that are waiting for the approving authority.',
     element: <WaitingApplications />,
   },
   {

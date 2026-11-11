@@ -26,12 +26,12 @@ export default function WaitingApplications() {
     <ApplicationQueue
       applications={waiting}
       columns={columns}
-      title="Escalated Approvals Waiting for Another Role"
+      title="Forwarded Applications Waiting for Another Role"
       dateField="statusUpdatedAt"
       loading={loading}
       error={error}
       onRetry={refetch}
-      emptyMessage="No escalated approvals are waiting for another role."
+      emptyMessage="No forwarded applications are waiting for another role."
     />
   );
 }

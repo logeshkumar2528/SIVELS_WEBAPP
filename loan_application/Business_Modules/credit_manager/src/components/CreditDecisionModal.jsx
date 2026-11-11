@@ -1,19 +1,21 @@
 /**
  * CreditDecisionModal.jsx
  * --------------------
- * Approve / Reject / Return-to-Back-Office dialog for the Credit Manager.
+ * Approve / Reject / Return-to-Back-Office / Forward dialog for the Credit Manager.
  *
  *   - Approve -> POST /ApplicationWorkflow/:id/credit-approve        (3 -> 4)
  *   - Reject  -> POST /ApplicationWorkflow/:id/credit-reject         (3 -> 5)
  *   - Return  -> POST /ApplicationWorkflow/:id/return-to-backoffice  (3 -> 2), with flagged fields
+ *   - Forward -> POST /ApplicationWorkflow/:id/credit-forward        (stays 3), to an approving-authority role
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import iconMap from '../../../back_office/src/back-office/config/iconMap';
 import creditManagerService from '../api/creditManagerService';
 import { getCreditManagerId } from '../auth/authStorage';
 import ReturnIssuesBuilder from './ReturnIssuesBuilder';
-import { APPROVAL_OUTCOME } from '../mappers/creditMapper';
+import { mapApprovingAuthority } from '../mappers/creditMapper';
+import { formatApprovalRange, limitExceededReason } from './ApprovalEscalation';
 
 export const REMARKS_MAX = 2000;
 
@@ -46,6 +48,15 @@ export const DECISION_ACTIONS = {
     successMessage: 'Application returned to the Back Office for correction.',
     call: creditManagerService.returnToBackOffice,
   },
+  FORWARD: {
+    key: 'FORWARD',
+    title: 'Forward to Approving Authority',
+    confirmLabel: 'Forward Application',
+    remarksLabel: 'Forward Remarks',
+    remarksPlaceholder: 'Explain why you are forwarding this application.',
+    successMessage: 'Application forwarded.',
+    call: creditManagerService.creditForward,
+  },
 };
 
 export function getErrorMessage(err, fallback) {
@@ -71,6 +82,7 @@ function formatAmount(value) {
 
 export default function CreditDecisionModal({
   action,
+  agentCustomerId,
   sanctionTerms,
   approvalCheck = null,
   initialIssues = [],
@@ -80,8 +92,32 @@ export default function CreditDecisionModal({
 }) {
   const isApprove = action.key === 'APPROVE';
   const isReturn = action.key === 'RETURN';
+  const isForward = action.key === 'FORWARD';
   const [issues, setIssues] = useState(initialIssues);
-  const [form, setForm] = useState({ conditions: '', remarks: '' });
+  const [form, setForm] = useState({ conditions: '', remarks: '', toRoleId: '' });
+  const [authorities, setAuthorities] = useState({ loading: isForward, list: [], error: '' });
+
+  useEffect(() => {
+    if (!isForward) return undefined;
+    let cancelled = false;
+    creditManagerService
+      .getApprovingAuthorities({ agentCustomerId })
+      .then((rows) => {
+        if (cancelled) return;
+        setAuthorities({ loading: false, list: rows.map(mapApprovingAuthority).filter(Boolean), error: '' });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setAuthorities({
+          loading: false,
+          list: [],
+          error: getErrorMessage(err, 'Unable to load the approving authorities.'),
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isForward, agentCustomerId]);
   const termsLoading = Boolean(sanctionTerms?.loading);
   const sanctionedAmount = positive(sanctionTerms?.amount);
   const sanctionedROI = positive(sanctionTerms?.roi);
@@ -94,12 +130,9 @@ export default function CreditDecisionModal({
     Number.isInteger(sanctionedTenure) &&
     sanctionedTenure <= 480;
   const checkLoading = isApprove && Boolean(approvalCheck?.loading);
-  const willEscalate = isApprove && approvalCheck?.outcome === APPROVAL_OUTCOME.ESCALATE;
-  const limitBlocked = isApprove && approvalCheck?.outcome === APPROVAL_OUTCOME.BLOCKED;
-  const approveBlocked = isApprove && (termsLoading || !hasSanctionTerms || checkLoading || limitBlocked);
-  const confirmLabel = willEscalate
-    ? `Send to ${approvalCheck.escalationRoleName || 'Escalation Role'} for Approval`
-    : action.confirmLabel;
+  const limitReason = isApprove ? limitExceededReason(approvalCheck) : '';
+  const approveBlocked = isApprove && (termsLoading || !hasSanctionTerms || checkLoading || Boolean(limitReason));
+  const forwardBlocked = isForward && (authorities.loading || authorities.list.length === 0);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -121,6 +154,7 @@ export default function CreditDecisionModal({
     } else if (!remarks && !isApprove) {
       next.remarks = `${action.remarksLabel} is required.`;
     }
+    if (isForward && !form.toRoleId) next.toRoleId = 'Select the approving authority to forward to.';
     if (remarks.length > REMARKS_MAX) next.remarks = `Maximum ${REMARKS_MAX} characters allowed.`;
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -128,7 +162,7 @@ export default function CreditDecisionModal({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (submitting || approveBlocked || !validate()) return;
+    if (submitting || approveBlocked || forwardBlocked || !validate()) return;
 
     const creditManagerId = getCreditManagerId();
     if (!creditManagerId) {
@@ -162,6 +196,9 @@ export default function CreditDecisionModal({
       payload.sanctionedROI = sanctionedROI;
       payload.sanctionedTenureMonths = sanctionedTenure;
       payload.conditions = form.conditions.trim() || null;
+    }
+    if (isForward) {
+      payload.toRoleId = Number(form.toRoleId);
     }
 
     setSubmitting(true);
@@ -215,21 +252,37 @@ export default function CreditDecisionModal({
             </div>
           )}
 
-          {limitBlocked && (
+          {limitReason && (
             <div className="cm-form-alert" role="alert">
               {AlertCircleIcon && <AlertCircleIcon size={16} />}
-              <span>{approvalCheck.message || 'This amount is outside your approval range.'}</span>
+              <span>{limitReason}</span>
             </div>
           )}
 
-          {willEscalate && (
-            <div className="cm-escalation-banner" role="status">
-              {AlertCircleIcon && <AlertCircleIcon size={16} style={{ flexShrink: 0 }} />}
-              <div>
-                <strong>Above your approval limit</strong>
-                <p>{approvalCheck.message}</p>
-              </div>
-            </div>
+          {isForward && (
+            <label className="cm-form-field cm-form-field--full">
+              <span>Approving Authority *</span>
+              <select
+                value={form.toRoleId}
+                onChange={setField('toRoleId')}
+                disabled={submitting || forwardBlocked}
+                className={errors.toRoleId ? 'cm-input--error' : ''}
+              >
+                <option value="">
+                  {authorities.loading ? 'Loading approving authorities…' : 'Select approving authority'}
+                </option>
+                {authorities.list.map((role) => (
+                  <option key={role.roleId} value={String(role.roleId)}>
+                    {role.roleName} ({formatApprovalRange(role.minimumApprovalAmount, role.maximumApprovalAmount)})
+                  </option>
+                ))}
+              </select>
+              {errors.toRoleId && <small>{errors.toRoleId}</small>}
+              {!authorities.loading && authorities.error && <small>{authorities.error}</small>}
+              {!authorities.loading && !authorities.error && authorities.list.length === 0 && (
+                <small>No approving authority roles are configured. Ask an administrator to set approval ranges in Roles.</small>
+              )}
+            </label>
           )}
 
           {isApprove && (
@@ -302,9 +355,9 @@ export default function CreditDecisionModal({
           <button
             type="submit"
             className={`stc-btn-doc cm-btn-${action.key.toLowerCase()}`}
-            disabled={submitting || approveBlocked}
+            disabled={submitting || approveBlocked || forwardBlocked}
           >
-            {submitting ? 'Saving...' : checkLoading ? 'Checking approval limit…' : confirmLabel}
+            {submitting ? 'Saving...' : checkLoading ? 'Checking approval limit…' : action.confirmLabel}
           </button>
         </div>
       </form>

@@ -36,7 +36,7 @@ export const NAV_ITEMS = [
   },
   {
     id:       'escalated',
-    label:    'Escalated to Me',
+    label:    'Forwarded to Me',
     icon:     'ArrowUpRight',
     route:    ROUTES.ESCALATED,
     badgeKey: 'escalated',

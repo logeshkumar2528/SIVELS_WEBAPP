@@ -36,12 +36,28 @@ const creditManagerService = {
   /**
    * Status 3 -> 4. Payload: { performedByUserId, performedByRole, remarks,
    * sanctionedLoanAmount, sanctionedROI, sanctionedTenureMonths, conditions }
-   * Above the approver's limit the backend answers 202 with { escalated: true, toRoleName, message }
-   * and the application stays in status 3.
+   * Above the approver's limit the backend answers 409; the application must be forwarded instead.
    */
   creditApprove: async (agentCustomerId, payload) => {
     const response = await axiosInstance.post(CREDIT_MANAGER_ENDPOINTS.CREDIT_APPROVE(agentCustomerId), payload);
     return unwrapResponse(response);
+  },
+
+  /**
+   * Forwards the application to an approving-authority role; it stays in status 3.
+   * Payload: { performedByUserId, performedByRole, toRoleId, remarks }
+   * Resolves to { escalated: true, toRoleId, toRoleName, loanAmount, message }.
+   */
+  creditForward: async (agentCustomerId, payload) => {
+    const response = await axiosInstance.post(CREDIT_MANAGER_ENDPOINTS.CREDIT_FORWARD(agentCustomerId), payload);
+    return unwrapResponse(response);
+  },
+
+  /** Active roles with an approval range, excluding the caller's own role. */
+  getApprovingAuthorities: async ({ agentCustomerId } = {}) => {
+    const params = agentCustomerId != null ? { agentCustomerId } : {};
+    const response = await axiosInstance.get(CREDIT_MANAGER_ENDPOINTS.APPROVING_AUTHORITIES, { params });
+    return unwrapList(response);
   },
 
   /** Status 3 -> 5. Payload: { performedByUserId, performedByRole, remarks } */
