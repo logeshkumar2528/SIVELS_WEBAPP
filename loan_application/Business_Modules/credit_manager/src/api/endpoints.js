@@ -17,6 +17,8 @@ export const CREDIT_MANAGER_ENDPOINTS = {
     `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/credit-reject`,
   RETURN_TO_BACK_OFFICE: (agentCustomerId) =>
     `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/return-to-backoffice`,
+  CREDIT_FORWARD: (agentCustomerId) =>
+    `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/credit-forward`,
   WORKFLOW_HISTORY: (agentCustomerId) =>
     `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/history`,
 
@@ -25,6 +27,7 @@ export const CREDIT_MANAGER_ENDPOINTS = {
   LATEST_CREDIT_DECISION: (agentCustomerId) =>
     `/ApplicationCreditDecision/by-customer/${encodeURIComponent(agentCustomerId)}/latest`,
   MY_APPROVAL_LIMIT: '/ApplicationCreditDecision/my-approval-limit',
+  APPROVING_AUTHORITIES: '/ApplicationCreditDecision/approving-authorities',
   APPROVAL_ESCALATIONS: (agentCustomerId) =>
     `/ApplicationCreditDecision/by-customer/${encodeURIComponent(agentCustomerId)}/escalations`,
 

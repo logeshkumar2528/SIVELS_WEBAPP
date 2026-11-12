@@ -26,12 +26,12 @@ export default function EscalatedApplications() {
     <ApplicationQueue
       applications={escalated}
       columns={columns}
-      title="Approvals Escalated to You"
+      title="Applications Forwarded to You"
       dateField="statusUpdatedAt"
       loading={loading}
       error={error}
       onRetry={refetch}
-      emptyMessage="No approvals are escalated to you."
+      emptyMessage="No applications are forwarded to you."
     />
   );
 }

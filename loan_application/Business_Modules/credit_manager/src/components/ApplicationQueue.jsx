@@ -31,9 +31,9 @@ export function StatusPill({ status, escalation = null }) {
     return (
       <span
         className="stc-pill stc-pill--progress"
-        title={escalation.toRoleName ? `Escalated to ${escalation.toRoleName}` : undefined}
+        title={escalation.toRoleName ? `Forwarded to ${escalation.toRoleName}` : undefined}
       >
-        Escalated
+        Forwarded
       </span>
     );
   }

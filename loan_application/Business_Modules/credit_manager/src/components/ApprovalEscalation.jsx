@@ -1,12 +1,13 @@
 /**
  * ApprovalEscalation.jsx
  * --------------------
- * Approval-limit and escalation pieces of the Credit Manager decision panel.
- * The backend decides limits and escalations; these only display what it returns.
+ * Approval-limit and forwarding pieces of the Credit Manager decision panel.
+ * The backend decides limits and who holds a forwarded application; these only display what it returns.
  */
 
 import React from 'react';
 import iconMap from '../../../back_office/src/back-office/config/iconMap';
+import { APPROVAL_OUTCOME } from '../mappers/creditMapper';
 import { parseDate } from '../utils/formatters';
 
 export function formatRupees(amount) {
@@ -27,25 +28,43 @@ function formatDateTime(value) {
   });
 }
 
-/** Why Approve is unavailable while an escalation waits for another role, or '' when it isn't. */
-export function escalationBlockReason(pendingEscalation) {
-  if (!pendingEscalation?.isWaitingForAnotherRole) return '';
-  return `This approval has been escalated and is waiting for ${pendingEscalation.toRoleName || 'another role'}.`;
+/** "₹7,50,001 – ₹25,00,000", or "₹7,50,001 – no upper limit". */
+export function formatApprovalRange(minimum, maximum) {
+  const from = minimum == null ? formatRupees(0) : formatRupees(minimum);
+  return `${from} – ${maximum == null ? 'no upper limit' : formatRupees(maximum)}`;
+}
+
+const FORWARD_HINT = 'Forward it to an approving authority.';
+
+/** Why the current user can't approve this amount, or '' when it is within their range. */
+export function limitExceededReason(check) {
+  if (!check || check.loading) return '';
+  if (check.outcome === APPROVAL_OUTCOME.ESCALATE) {
+    return check.maximumApprovalAmount == null
+      ? `This amount exceeds your approval limit. ${FORWARD_HINT}`
+      : `${formatRupees(check.amount)} exceeds your approval limit of ${formatRupees(check.maximumApprovalAmount)}. ${FORWARD_HINT}`;
+  }
+  if (check.outcome === APPROVAL_OUTCOME.BLOCKED) {
+    const reason = String(check.message || 'This amount is outside your approval range.').trim();
+    return `${/[.!?]$/.test(reason) ? reason : `${reason}.`} ${FORWARD_HINT}`;
+  }
+  return '';
+}
+
+function amountVsLimit(loanAmount, approvalLimit, roleName) {
+  if (loanAmount != null && approvalLimit != null && loanAmount > approvalLimit) {
+    return `${formatRupees(loanAmount)} is above the ${roleName || 'sender'} limit of ${formatRupees(approvalLimit)}`;
+  }
+  return `Loan amount ${formatRupees(loanAmount)}`;
 }
 
 export function ApprovalRangeNote({ limit }) {
   if (!limit) return null;
-  const range = `${formatRupees(limit.minimumApprovalAmount)} – ${
-    limit.maximumApprovalAmount == null ? 'no upper limit' : formatRupees(limit.maximumApprovalAmount)
-  }`;
-  const above = limit.maximumApprovalAmount == null
-    ? ''
-    : limit.escalationRoleName
-      ? `; above that escalates to ${limit.escalationRoleName}`
-      : '; amounts above that cannot be approved';
+  const above = limit.maximumApprovalAmount == null ? '' : '; above that, forward it to an approving authority';
   return (
     <p className="cm-approval-range" data-testid="approval-range">
-      Your approval range{limit.roleName ? ` (${limit.roleName})` : ''}: <strong>{range}</strong>
+      Your approval range{limit.roleName ? ` (${limit.roleName})` : ''}:{' '}
+      <strong>{formatApprovalRange(limit.minimumApprovalAmount, limit.maximumApprovalAmount)}</strong>
       {above}.
     </p>
   );
@@ -57,9 +76,8 @@ export function EscalationBanner({ escalation, remarks }) {
   const ArrowUpRightIcon = iconMap['ArrowUpRight'];
   const toYou = escalation.canCurrentUserApprove;
   const Icon = toYou ? ArrowUpRightIcon : AlertTriangleIcon;
-  const amountText = `${formatRupees(escalation.loanAmount)} is above the ${
-    escalation.fromRoleName || 'approver'
-  } limit of ${formatRupees(escalation.approvalLimit)}`;
+  const toRole = escalation.toRoleName || 'another role';
+  const from = escalation.fromRoleName ? ` by ${escalation.fromRoleName}` : '';
 
   return (
     <div className={`cm-escalation-banner${toYou ? ' cm-escalation-banner--to-you' : ''}`} role="status">
@@ -67,14 +85,14 @@ export function EscalationBanner({ escalation, remarks }) {
       <div>
         <strong>
           {toYou
-            ? `Escalated to you on ${formatDateTime(escalation.escalatedAt)}`
-            : `Escalated to ${escalation.toRoleName || 'another role'} on ${formatDateTime(escalation.escalatedAt)}`}
+            ? `Forwarded to you${from} on ${formatDateTime(escalation.escalatedAt)}`
+            : `Forwarded to ${toRole} on ${formatDateTime(escalation.escalatedAt)}`}
         </strong>
         <p>
-          {amountText}.{' '}
+          {amountVsLimit(escalation.loanAmount, escalation.approvalLimit, escalation.fromRoleName)}.{' '}
           {toYou
-            ? 'You can approve it, reject it or return it to the Back Office.'
-            : `Waiting for ${escalation.toRoleName || 'the escalation role'} to decide. You can still reject it or return it to the Back Office.`}
+            ? 'You can approve it if it is within your approval range, forward it to a higher authority, reject it or return it to the Back Office.'
+            : `Waiting for ${toRole} to decide. This application is read-only for you.`}
         </p>
         {remarks && <p className="cm-escalation-remarks">“{remarks}”</p>}
       </div>
@@ -87,9 +105,9 @@ export function EscalationHistoryCard({ escalations }) {
   return (
     <div className="stc-submit-card">
       <div className="cm-issues-card-head">
-        <h3 className="stc-docs-section-title" style={{ margin: 0 }}>Escalation History</h3>
+        <h3 className="stc-docs-section-title" style={{ margin: 0 }}>Forward History</h3>
         <span className="stc-customer-sub">
-          {escalations.length} escalation{escalations.length === 1 ? '' : 's'}
+          {escalations.length} forward{escalations.length === 1 ? '' : 's'}
         </span>
       </div>
       <ul className="cm-escalation-history">
@@ -104,8 +122,7 @@ export function EscalationHistoryCard({ escalations }) {
               {item.isPending && <span className="stc-pill stc-pill--progress">Pending</span>}
             </div>
             <div className="stc-customer-sub">
-              {formatDateTime(item.createdAt)} · {formatRupees(item.loanAmount)} above the limit of{' '}
-              {formatRupees(item.approvalLimit)}
+              {formatDateTime(item.createdAt)} · {amountVsLimit(item.loanAmount, item.approvalLimit, item.fromRoleName)}
             </div>
             {item.remarks && <p className="cm-escalation-remarks">{item.remarks}</p>}
           </li>

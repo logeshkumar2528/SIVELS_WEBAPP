@@ -164,6 +164,19 @@ export function mapApprovalLimit(raw) {
   };
 }
 
+/** GET approving-authorities row. maximumApprovalAmount null means no upper limit. */
+export function mapApprovingAuthority(raw) {
+  if (!raw) return null;
+  const roleId = getValue(raw, 'roleId', 'RoleId');
+  if (roleId === null || roleId === undefined) return null;
+  return {
+    roleId,
+    roleName: getValue(raw, 'roleName', 'RoleName') || `Role ${roleId}`,
+    minimumApprovalAmount: toNumberOrNull(getValue(raw, 'minimumApprovalAmount', 'MinimumApprovalAmount')),
+    maximumApprovalAmount: toNumberOrNull(getValue(raw, 'maximumApprovalAmount', 'MaximumApprovalAmount')),
+  };
+}
+
 export function mapApprovalEscalation(raw) {
   if (!raw) return null;
   return {

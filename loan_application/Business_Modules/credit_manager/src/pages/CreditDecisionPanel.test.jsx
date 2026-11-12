@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../back_office/src/back-office/pages/CustomerVerification/CustomerVerification', () => ({
@@ -79,16 +79,32 @@ describe('CreditDecisionPanel', () => {
     localStorage.clear();
   });
 
-  it('shows the approval range and lets the approver decide', () => {
+  it('shows the approval range and lets the approver approve or forward', () => {
     grant(['CREDIT.VIEW', 'CREDIT.EDIT', 'CREDIT.APPROVE']);
-    renderPanel();
+    renderPanel({ approvalCheck: { loading: false, amount: 500000, outcome: 'WithinLimit', maximumApprovalAmount: 750000 } });
     expect(screen.getByTestId('approval-range')).toHaveTextContent(
-      'Your approval range (Credit Manager): ₹0 – ₹7,50,000; above that escalates to Credit Head.'
+      'Your approval range (Credit Manager): ₹0 – ₹7,50,000; above that, forward it to an approving authority.'
     );
     expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Forward' })).toBeEnabled();
   });
 
-  it('disables Approve while the escalation waits for another role, keeping Reject and Return', () => {
+  it('disables Approve above the limit and points to Forward', () => {
+    grant(['CREDIT.VIEW', 'CREDIT.EDIT', 'CREDIT.APPROVE']);
+    const onAction = vi.fn();
+    renderPanel({
+      onAction,
+      approvalCheck: { loading: false, amount: 1000000, outcome: 'Escalate', maximumApprovalAmount: 750000 },
+    });
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    expect(
+      screen.getByText('₹10,00,000 exceeds your approval limit of ₹7,50,000. Forward it to an approving authority.')
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Forward' }));
+    expect(onAction).toHaveBeenCalledWith(expect.objectContaining({ key: 'FORWARD' }));
+  });
+
+  it('makes the application read-only for the sender after forwarding', () => {
     grant(['CREDIT.VIEW', 'CREDIT.EDIT', 'CREDIT.APPROVE']);
     renderPanel({
       pendingEscalation: waitingEscalation,
@@ -106,21 +122,25 @@ describe('CreditDecisionPanel', () => {
         },
       ],
     });
-    expect(screen.getByText(/Escalated to Credit Head on/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Reject' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Return to Back Office' })).toBeEnabled();
-    expect(screen.getByText('Escalation History')).toBeInTheDocument();
+    expect(screen.getByText(/Forwarded to Credit Head on/)).toBeInTheDocument();
+    expect(screen.getByTestId('forwarded-read-only')).toHaveTextContent('forwarded to Credit Head and is read-only');
+    ['Approve', 'Reject', 'Return to Back Office', 'Forward'].forEach((name) => {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('approval-range')).not.toBeInTheDocument();
+    expect(screen.getByText('Forward History')).toBeInTheDocument();
     expect(screen.getAllByText(/Strong income, above my limit/).length).toBeGreaterThan(0);
   });
 
-  it('lets the escalation role approve', () => {
+  it('lets the target role approve, forward, reject or return', () => {
     grant(['CREDIT.VIEW', 'CREDIT.EDIT', 'CREDIT.APPROVE']);
     renderPanel({
       pendingEscalation: { ...waitingEscalation, canCurrentUserApprove: true, isWaitingForAnotherRole: false },
     });
-    expect(screen.getByText(/Escalated to you on/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(screen.getByText(/Forwarded to you by Credit Manager on/)).toBeInTheDocument();
+    ['Approve', 'Reject', 'Return to Back Office', 'Forward'].forEach((name) => {
+      expect(screen.getByRole('button', { name })).toBeEnabled();
+    });
   });
 
   it('hides the decision buttons without CREDIT.APPROVE', () => {

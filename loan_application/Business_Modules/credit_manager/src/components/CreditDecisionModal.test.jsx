@@ -3,10 +3,17 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('../api/creditManagerService', () => ({
-  default: { creditApprove: vi.fn(), creditReject: vi.fn(), returnToBackOffice: vi.fn() },
+  default: {
+    creditApprove: vi.fn(),
+    creditReject: vi.fn(),
+    returnToBackOffice: vi.fn(),
+    creditForward: vi.fn(),
+    getApprovingAuthorities: vi.fn(),
+  },
 }));
 vi.mock('../auth/authStorage', () => ({ getCreditManagerId: () => 21 }));
 
+const { default: creditManagerService } = await import('../api/creditManagerService');
 const { default: CreditDecisionModal, DECISION_ACTIONS } = await import('./CreditDecisionModal');
 
 const legalFlag = {
@@ -64,26 +71,22 @@ describe('CreditDecisionModal', () => {
     expect(screen.getByRole('button', { name: 'Approve Application' })).toBeDisabled();
   });
 
-  it('says when approving will escalate and relabels the confirm button', async () => {
-    const onSubmitted = vi.fn().mockResolvedValue(undefined);
+  it('blocks approval above the limit and asks to forward', () => {
+    const onSubmitted = vi.fn();
     render(
       <CreditDecisionModal
         action={DECISION_ACTIONS.APPROVE}
         sanctionTerms={{ loading: false, amount: 900000, roi: 12, tenure: 36 }}
-        approvalCheck={{
-          loading: false,
-          outcome: 'Escalate',
-          message: '₹9,00,000 is above your approval limit of ₹7,50,000; approving it sends it to Credit Head.',
-          escalationRoleName: 'Credit Head',
-        }}
+        approvalCheck={{ loading: false, amount: 900000, outcome: 'Escalate', maximumApprovalAmount: 750000 }}
         onClose={vi.fn()}
         onSubmitted={onSubmitted}
       />
     );
-    expect(screen.getByText(/approving it sends it to Credit Head/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Send to Credit Head for Approval' }));
-    await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
-    expect(onSubmitted.mock.calls[0][1].sanctionedLoanAmount).toBe(900000);
+    expect(
+      screen.getByText('₹9,00,000 exceeds your approval limit of ₹7,50,000. Forward it to an approving authority.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Approve Application' })).toBeDisabled();
+    expect(onSubmitted).not.toHaveBeenCalled();
   });
 
   it('blocks approval outside the approval range', () => {
@@ -131,6 +134,54 @@ describe('CreditDecisionModal', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Approve Application' }));
     expect(await screen.findByText(/has been escalated and is waiting for Credit Head/)).toBeInTheDocument();
+  });
+
+  it('lists the approving authorities and forwards to the selected role', async () => {
+    creditManagerService.getApprovingAuthorities.mockResolvedValue([
+      { roleId: 8, roleName: 'Credit Head', minimumApprovalAmount: 750001, maximumApprovalAmount: null },
+      { roleId: 14, roleName: 'ABH', minimumApprovalAmount: 750001, maximumApprovalAmount: 2500000 },
+    ]);
+    const onSubmitted = vi.fn().mockResolvedValue(undefined);
+    render(
+      <CreditDecisionModal
+        action={DECISION_ACTIONS.FORWARD}
+        agentCustomerId="95"
+        onClose={vi.fn()}
+        onSubmitted={onSubmitted}
+      />
+    );
+    expect(await screen.findByRole('option', { name: 'ABH (₹7,50,001 – ₹25,00,000)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Credit Head (₹7,50,001 – no upper limit)' })).toBeInTheDocument();
+    expect(creditManagerService.getApprovingAuthorities).toHaveBeenCalledWith({ agentCustomerId: '95' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Forward Application' }));
+    expect(await screen.findByText('Select the approving authority to forward to.')).toBeInTheDocument();
+    expect(screen.getByText('Forward Remarks is required.')).toBeInTheDocument();
+    expect(onSubmitted).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '14' } });
+    fireEvent.change(screen.getByPlaceholderText('Explain why you are forwarding this application.'), {
+      target: { value: 'Above my limit.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Forward Application' }));
+    await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+    const [action, payload] = onSubmitted.mock.calls[0];
+    expect(action.key).toBe('FORWARD');
+    expect(payload).toEqual({
+      performedByUserId: 21,
+      performedByRole: 'CreditManager',
+      remarks: 'Above my limit.',
+      toRoleId: 14,
+    });
+  });
+
+  it('blocks forwarding when no approving authority is configured', async () => {
+    creditManagerService.getApprovingAuthorities.mockResolvedValue([]);
+    render(
+      <CreditDecisionModal action={DECISION_ACTIONS.FORWARD} agentCustomerId="95" onClose={vi.fn()} onSubmitted={vi.fn()} />
+    );
+    expect(await screen.findByText(/No approving authority roles are configured/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Forward Application' })).toBeDisabled();
   });
 
   it('requires at least one rejected section to return to the Back Office', async () => {
