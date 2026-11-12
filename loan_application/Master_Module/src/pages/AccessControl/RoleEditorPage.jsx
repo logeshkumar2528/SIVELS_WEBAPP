@@ -83,7 +83,8 @@ export function RoleEditorPage() {
           setMaximumAmount(amountToText(roleData.role.maximumApprovalAmount));
           setEscalationRoleId(String(roleData.role.escalationRoleId ?? ''));
           setAvailable(roleData.availablePermissions);
-          setSelected(roleData.permissions);
+          // Grants the base role can no longer use would be rejected on save, so they start unticked.
+          setSelected(roleData.permissions.filter((c) => roleData.availablePermissions.includes(c)));
           setSaved(roleData.permissions);
         }
       } catch (err) {

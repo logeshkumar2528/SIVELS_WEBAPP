@@ -362,10 +362,24 @@ export const CREDIT_REVIEW_SECTIONS = VERIFICATION_WORKFLOW_STEPS
 
 export const SECURED_FI_SECTION_IDS = [8, 9, 10];
 
+/** View permission each step's data needs; steps not listed are open to everyone who can reach the page. */
+const STEP_VIEW_PERMISSIONS = {
+  2: 'DOCUMENTS.VIEW', 3: 'DOCUMENTS.VIEW', 4: 'DOCUMENTS.VIEW', 5: 'DOCUMENTS.VIEW', 6: 'DOCUMENTS.VIEW', 7: 'DOCUMENTS.VIEW',
+  8: 'VERIFICATION.VIEW', 9: 'VERIFICATION.VIEW', 10: 'VERIFICATION.VIEW', 11: 'VERIFICATION.VIEW', 12: 'VERIFICATION.VIEW',
+  14: 'VERIFICATION.VIEW', 20: 'VERIFICATION.VIEW',
+  15: 'ELIGIBILITY.VIEW', 16: 'ELIGIBILITY.VIEW', 19: 'ELIGIBILITY.VIEW', 22: 'ELIGIBILITY.VIEW',
+  21: 'DEVIATION.VIEW',
+};
+
+export function canViewStep(stepId) {
+  return hasPermission(STEP_VIEW_PERMISSIONS[stepId]);
+}
+
+/** Sections the Credit Manager must approve; sections the role can't view are left out. */
 export function getApplicableCreditSections(isUnsecured) {
-  return isUnsecured
-    ? CREDIT_REVIEW_SECTIONS.filter((s) => !SECURED_FI_SECTION_IDS.includes(s.id))
-    : CREDIT_REVIEW_SECTIONS;
+  return CREDIT_REVIEW_SECTIONS.filter(
+    (s) => canViewStep(s.id) && !(isUnsecured && SECURED_FI_SECTION_IDS.includes(s.id))
+  );
 }
 
 /** Document sub-steps 2-7 all belong to the "Document Verification" section. */
@@ -426,6 +440,11 @@ const INTERNAL_TO_VISIBLE_STEP = {
 };
 
 function resolveInternalStepFromQuery(stepParam) {
+  const step = resolveStepParam(stepParam);
+  return canViewStep(step) ? step : 1;
+}
+
+function resolveStepParam(stepParam) {
   if (stepParam == null || stepParam === '') return 1;
   const parsed = Number(stepParam);
   if (!Number.isInteger(parsed) || parsed < 1) {
@@ -1583,6 +1602,7 @@ export default function CustomerVerification({
     if (isUnsecured && (targetNum === 8 || targetNum === 9 || targetNum === 10)) {
       targetNum = 11;
     }
+    if (!canViewStep(targetNum)) return;
     const visibleStep = resolveVisibleStepFromInternal(targetNum);
     setActiveStep(targetNum);
     setSearchParams((prev) => {
@@ -12650,7 +12670,10 @@ export default function CustomerVerification({
   const statusInfo = getStatusInfo(verificationData.overallStatus);
 
   const visibleSidebarSteps = VERIFICATION_WORKFLOW_STEPS.filter(
-    (step) => ![9, 10, 11, 12].includes(step.id) && (SHOW_CAM_STEP || step.id !== CAM_STEP_ID)
+    (step) =>
+      ![9, 10, 11, 12].includes(step.id) &&
+      (SHOW_CAM_STEP || step.id !== CAM_STEP_ID) &&
+      canViewStep(step.id)
   );
 
   const visibleAssessmentMethods = (assessmentMethods.length > 0
