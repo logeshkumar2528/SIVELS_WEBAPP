@@ -42,7 +42,7 @@ vi.mock('../../api/accessControlApi', () => ({
 }));
 vi.mock('react-hot-toast', () => ({ default: { error: vi.fn(), success: vi.fn() } }));
 
-const { createRole, updateRole } = await import('../../api/accessControlApi');
+const { createRole, getRole, updateRole } = await import('../../api/accessControlApi');
 const { RoleEditorPage } = await import('./RoleEditorPage');
 
 function renderEditor(path) {
@@ -107,6 +107,18 @@ describe('RoleEditorPage approval limits', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(updateRole).toHaveBeenCalledTimes(1));
     expect(updateRole.mock.calls[0][1]).not.toHaveProperty('maximumApprovalAmount');
+  });
+
+  it('drops grants the base role can no longer use so the role still saves', async () => {
+    getRole.mockImplementationOnce(async (roleId) => ({
+      ...roleDetail(roleId),
+      permissions: ['CREDIT.VIEW', 'ELIGIBILITY.VIEW'],
+    }));
+    renderEditor('/roles/3');
+    await screen.findByRole('button', { name: 'Save' });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(updateRole).toHaveBeenCalledTimes(1));
+    expect(updateRole.mock.calls[0][1].permissions).toEqual(['CREDIT.VIEW']);
   });
 
   it('shows the inherited base range for a new role based on Credit Manager', async () => {

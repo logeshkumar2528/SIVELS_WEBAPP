@@ -116,11 +116,7 @@ export default function RmProfile() {
     setLoadError('');
 
     try {
-      const token = localStorage.getItem('authToken') || localStorage.getItem('token');
-      const authHeaders = {};
-      if (token) authHeaders['Authorization'] = `Bearer ${token}`;
-
-      const response = await fetch(`${API_BASE}/RMMaster`, { headers: authHeaders });
+      const response = await apiFetch(`${API_BASE}/RMMaster`);
       if (!isLive()) return;
 
       if (!response.ok) {

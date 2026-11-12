@@ -949,7 +949,7 @@ export default function AMSDashboard() {
               <aside className="asm-identity-panel">
                 <div className="asm-identity-avatar-wrap">
                   {profileImageUrl && !profileImageFailed ? (
-                    <img
+                    <AuthImage
                       src={profileImageUrl}
                       alt={profileFullName}
                       className="asm-identity-avatar-img"

@@ -3,6 +3,7 @@ import iconMap from '../../../back_office/src/back-office/config/iconMap';
 import { getProfileImageUrl, getInitials } from '../../../../Core/src/utils/profileImageHelper';
 import { formatDate } from '../../../../Core/src/utils/dateHelper';
 import { useCreditHeadProfile } from '../hooks/useCreditHeadProfile';
+import AuthImage from '../../../../Core/src/auth/AuthImage';
 import './MyProfile.css';
 
 function ProfileSkeleton() {
@@ -74,7 +75,7 @@ export default function MyProfile() {
         <aside className="ch-identity-panel">
           <div className="ch-identity-avatar-wrap">
             {showImage ? (
-              <img
+              <AuthImage
                 src={imageUrl}
                 alt={profile?.fullName || 'Credit Head'}
                 className="ch-identity-avatar-img"
