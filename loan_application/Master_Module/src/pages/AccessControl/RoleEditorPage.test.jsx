@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,6 +20,14 @@ const roles = [
   {
     roleId: 60, roleCode: 'CM_SENIOR', roleName: 'Senior Credit Manager', baseRoleCode: 'CREDIT_MANAGER', baseRoleId: 7,
     departmentId: 2, isSystemRole: false, isActive: true,
+  },
+  {
+    roleId: 61, roleCode: 'CM_INACTIVE', roleName: 'Inactive Credit Manager', baseRoleCode: 'CREDIT_MANAGER', baseRoleId: 7,
+    departmentId: 2, isSystemRole: false, isActive: false,
+  },
+  {
+    roleId: 62, roleCode: 'MASTER_ADMIN', roleName: 'Master Admin', baseRoleCode: 'MASTER_ADMIN', baseRoleId: null,
+    departmentId: 1, isSystemRole: true, isActive: true, isLocked: true,
   },
 ];
 
@@ -43,6 +51,7 @@ vi.mock('../../api/accessControlApi', () => ({
 vi.mock('react-hot-toast', () => ({ default: { error: vi.fn(), success: vi.fn() } }));
 
 const { createRole, updateRole } = await import('../../api/accessControlApi');
+const { default: toast } = await import('react-hot-toast');
 const { RoleEditorPage } = await import('./RoleEditorPage');
 
 function renderEditor(path) {
@@ -60,6 +69,7 @@ function renderEditor(path) {
 describe('RoleEditorPage approval limits', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
 
   it('shows the limits card for a credit role and saves the three fields', async () => {
@@ -75,8 +85,11 @@ describe('RoleEditorPage approval limits', () => {
     fireEvent.change(screen.getByLabelText('Maximum approval amount (₹)'), { target: { value: '900000' } });
     fireEvent.change(screen.getByLabelText('Minimum approval amount (₹)'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, Save' }));
 
     await waitFor(() => expect(updateRole).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Roles list')).toBeInTheDocument();
+    expect(toast.success).toHaveBeenCalledWith('Credit Manager saved');
     expect(updateRole.mock.calls[0][1]).toMatchObject({
       minimumApprovalAmount: null,
       maximumApprovalAmount: 900000,
@@ -89,6 +102,7 @@ describe('RoleEditorPage approval limits', () => {
     await screen.findByText('Approval limits');
     fireEvent.change(screen.getByLabelText('Minimum approval amount (₹)'), { target: { value: '800000' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, Save' }));
     expect(await screen.findByText("The minimum approval amount can't be above the maximum.")).toBeInTheDocument();
     expect(updateRole).not.toHaveBeenCalled();
   });
@@ -105,8 +119,59 @@ describe('RoleEditorPage approval limits', () => {
     await screen.findByRole('button', { name: 'Save' });
     expect(screen.queryByText('Approval limits')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, Save' }));
     await waitFor(() => expect(updateRole).toHaveBeenCalledTimes(1));
     expect(updateRole.mock.calls[0][1]).not.toHaveProperty('maximumApprovalAmount');
+  });
+
+  it('opens confirmation and preserves unsaved changes when cancelled', async () => {
+    renderEditor('/roles/60');
+    const description = await screen.findByLabelText('Description');
+    fireEvent.change(description, { target: { value: 'Updated description' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(screen.getByRole('heading', { name: 'Confirm Changes' })).toBeInTheDocument();
+    expect(screen.getByText('Are you sure you want to save these changes?')).toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('heading', { name: 'Confirm Changes' })).not.toBeInTheDocument();
+    expect(description).toHaveValue('Updated description');
+    expect(updateRole).not.toHaveBeenCalled();
+  });
+
+  it('does not submit more than once when confirmation is clicked rapidly', async () => {
+    renderEditor('/roles/60');
+    await screen.findByRole('button', { name: 'Save' });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const confirmButton = screen.getByRole('button', { name: 'Yes, Save' });
+    fireEvent.click(confirmButton);
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => expect(updateRole).toHaveBeenCalledTimes(1));
+  });
+
+  it('preserves existing API error handling after confirmation', async () => {
+    updateRole.mockRejectedValueOnce(new Error('Save failed'));
+    renderEditor('/roles/60');
+    await screen.findByRole('button', { name: 'Save' });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, Save' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not save the role.'));
+    expect(screen.queryByText('Roles list')).not.toBeInTheDocument();
+  });
+
+  it.each(['/roles/61', '/roles/62'])('keeps %s read-only', async (path) => {
+    renderEditor(path);
+    expect(await screen.findByRole('button', { name: 'Back' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the editor read-only without the role edit permission', async () => {
+    localStorage.setItem('sivels_currentUser', JSON.stringify({ permissions: ['ROLES.VIEW'] }));
+    renderEditor('/roles/60');
+    expect(await screen.findByRole('button', { name: 'Back' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
   });
 
   it('shows the inherited base range for a new role based on Credit Manager', async () => {
