@@ -540,10 +540,14 @@ export default function SanctionLetter({
   const pdSheet = hasPdContent(savedPdSheet) ? savedPdSheet : unsavedPdSheet;
   const pdPoints = useMemo(() => buildPdPoints(pdSheet, pdDoneBy), [pdSheet, pdDoneBy]);
   const specificConditions = useMemo(() => {
-    const fromPd = toList(pdSheet?.otherSanctionConditions).map(clean).filter(Boolean);
-    const combined = [...decisionConditions, ...fromPd];
-    return Array.from(new Set(combined));
-  }, [pdSheet, decisionConditions]);
+    return toList(pdSheet?.otherSanctionConditions)
+      .filter((condition) => condition && condition.isActive !== false && condition.IsActive !== false)
+      .map((condition) =>
+        typeof condition === 'string' ? condition : condition.conditionText ?? condition.ConditionText ?? ''
+      )
+      .map(clean)
+      .filter(Boolean);
+  }, [pdSheet]);
 
   const data = useMemo(
     () => buildLetterData(verificationData, coApplicants, approvedTerms, loanIdentifier),
@@ -1004,18 +1008,13 @@ export default function SanctionLetter({
               <TermRow label="Other Specific Conditions / Compliance">
                 {pdSheetLoading && !hasPdContent(pdSheet) ? (
                   <span className="sl-muted">Loading PD sheet details...</span>
-                ) : pdPoints.length > 0 || specificConditions.length > 0 ? (
+                ) : specificConditions.length > 0 ? (
                   <NumberedList
                     items={[
-                      ...pdPoints,
-                      ...(specificConditions.length > 0
-                        ? [
-                            <React.Fragment key="case-specific">
-                              <strong>Case Specific Sanction Condition:</strong>
-                              <BulletList items={specificConditions} />
-                            </React.Fragment>,
-                          ]
-                        : []),
+                      <React.Fragment key="case-specific">
+                        <strong>Case Specific Sanction Condition:</strong>
+                        <BulletList items={specificConditions} />
+                      </React.Fragment>,
                     ]}
                   />
                 ) : (
