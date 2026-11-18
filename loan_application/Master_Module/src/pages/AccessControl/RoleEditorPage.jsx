@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../../../Core/src/auth/permissions';
@@ -12,6 +12,7 @@ import {
   updateRole,
 } from '../../api/accessControlApi';
 import { getErrorMessage } from '../../utils/errorHelper';
+import { MasterModal } from '../../components/masters/MasterModal/MasterModal';
 import {
   LEVELS,
   LEVEL_LABELS,
@@ -55,6 +56,8 @@ export function RoleEditorPage() {
   const [saved, setSaved] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSaveConfirmationOpen, setIsSaveConfirmationOpen] = useState(false);
+  const saveConfirmationLockRef = useRef(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -204,6 +207,27 @@ export function RoleEditorPage() {
       toast.error(getErrorMessage(err, 'Could not save the role.'));
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const requestSaveConfirmation = () => {
+    if (isNew || isSaving || saveConfirmationLockRef.current) return;
+    saveConfirmationLockRef.current = true;
+    setIsSaveConfirmationOpen(true);
+  };
+
+  const cancelSaveConfirmation = () => {
+    saveConfirmationLockRef.current = false;
+    setIsSaveConfirmationOpen(false);
+  };
+
+  const confirmSave = async () => {
+    if (!saveConfirmationLockRef.current || isSaving) return;
+    setIsSaveConfirmationOpen(false);
+    try {
+      await save();
+    } finally {
+      saveConfirmationLockRef.current = false;
     }
   };
 
@@ -498,13 +522,32 @@ export function RoleEditorPage() {
               {readOnly ? 'Back' : 'Cancel'}
             </button>
             {!readOnly && (
-              <button type="button" className="masters-btn-primary" onClick={save} disabled={isSaving}>
+              <button
+                type="button"
+                className="masters-btn-primary"
+                onClick={isNew ? save : requestSaveConfirmation}
+                disabled={isSaving}
+              >
                 {isSaving ? 'Saving...' : isNew ? 'Create role' : 'Save'}
               </button>
             )}
           </div>
         </div>
       </div>
+
+      {!isNew && (
+        <MasterModal isOpen={isSaveConfirmationOpen} onClose={cancelSaveConfirmation} title="Confirm Changes">
+          <p>Are you sure you want to save these changes?</p>
+          <div className="form-actions">
+            <button type="button" className="masters-btn-secondary" onClick={cancelSaveConfirmation}>
+              Cancel
+            </button>
+            <button type="button" className="masters-btn-primary" onClick={confirmSave}>
+              Yes, Save
+            </button>
+          </div>
+        </MasterModal>
+      )}
     </div>
   );
 }
