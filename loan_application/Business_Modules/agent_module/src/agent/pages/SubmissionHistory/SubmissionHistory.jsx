@@ -640,7 +640,7 @@ function SubmissionHistory() {
                   return (
                     <tr key={custId}>
                       <td className="index-col">{(currentPage - 1) * pageSize + idx + 1}</td>
-                      <td>
+                      <td className="history-customer-column">
                         <div className="history-customer-cell">
                           <button
                             type="button"
@@ -665,7 +665,14 @@ function SubmissionHistory() {
                               <Eye size={14} strokeWidth={2} />
                             </span>
                           </button>
-                          <span>{item.fullName}</span>
+                          <div className="history-customer-text">
+                            <span className="history-customer-name" title={item.fullName || 'Customer'}>
+                              {item.fullName}
+                            </span>
+                            <span className="history-customer-id">
+                              ID: {item.customerCode || item.CustomerCode || '—'}
+                            </span>
+                          </div>
                         </div>
                       </td>
                       <td>{item.mobileNumber}</td>
