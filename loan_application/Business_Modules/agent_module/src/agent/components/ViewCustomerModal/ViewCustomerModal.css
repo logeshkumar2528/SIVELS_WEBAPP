@@ -50,6 +50,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex: 1;
+  min-width: 0;
 }
 
 .drawer-avatar {
@@ -71,6 +73,14 @@
   font-weight: 700;
   color: #FFFFFF;
   line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer-title-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .drawer-title-text span {

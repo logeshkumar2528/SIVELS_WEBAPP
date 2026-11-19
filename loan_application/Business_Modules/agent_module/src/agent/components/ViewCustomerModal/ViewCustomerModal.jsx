@@ -451,7 +451,7 @@ function ViewCustomerModal({ customer, onClose }) {
             <div className="drawer-header-info">
               <div className="drawer-avatar" style={{ backgroundColor: initial.match(/[A-M]/) ? '#f0fdf4' : '#fef2f2', color: initial.match(/[A-M]/) ? '#16a34a' : '#ef4444' }}>{initial}</div>
               <div className="drawer-title-text">
-                <h2>{customerName}</h2>
+                <h2 title={customerName}>{customerName}</h2>
                 <span>ID: {customer.customerCode || customer.CustomerCode || '—'}</span>
               </div>
             </div>
