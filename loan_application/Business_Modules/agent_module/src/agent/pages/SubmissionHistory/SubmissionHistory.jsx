@@ -742,6 +742,14 @@ function SubmissionHistory() {
       {selectedCustomer && (
         <ViewCustomerModal
           customer={selectedCustomer}
+          profileImageUrl={customerPhotos[
+            selectedCustomer.agentCustomerId || selectedCustomer.AgentCustomerId || selectedCustomer.id
+          ]}
+          onProfileImageError={() => {
+            const selectedCustomerId =
+              selectedCustomer.agentCustomerId || selectedCustomer.AgentCustomerId || selectedCustomer.id
+            if (selectedCustomerId) handleImageError(selectedCustomerId)
+          }}
           onClose={() => setSelectedCustomer(null)}
         />
       )}
