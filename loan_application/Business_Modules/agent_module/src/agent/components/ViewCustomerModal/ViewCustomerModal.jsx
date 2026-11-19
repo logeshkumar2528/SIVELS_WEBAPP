@@ -17,7 +17,7 @@ import { masterService } from '../../../../../../Core/src/services/masterService
 import { resolveDocumentTypeId } from '../../../../../../Core/src/utils/documentTypeHelper'
 import './ViewCustomerModal.css'
 
-function ViewCustomerModal({ customer, onClose }) {
+function ViewCustomerModal({ customer, onClose, profileImageUrl, onProfileImageError }) {
   const [modalImage, setModalImage] = useState(null)
   const [documents, setDocuments] = useState([])
   const [activeDocTab, setActiveDocTab] = useState('original')
@@ -449,7 +449,16 @@ function ViewCustomerModal({ customer, onClose }) {
           {/* Header Bar */}
           <div className="drawer-header">
             <div className="drawer-header-info">
-              <div className="drawer-avatar" style={{ backgroundColor: initial.match(/[A-M]/) ? '#f0fdf4' : '#fef2f2', color: initial.match(/[A-M]/) ? '#16a34a' : '#ef4444' }}>{initial}</div>
+              {profileImageUrl ? (
+                <img
+                  src={profileImageUrl}
+                  alt={customerName}
+                  className="drawer-avatar drawer-avatar-img"
+                  onError={onProfileImageError}
+                />
+              ) : (
+                <div className="drawer-avatar" style={{ backgroundColor: initial.match(/[A-M]/) ? '#f0fdf4' : '#fef2f2', color: initial.match(/[A-M]/) ? '#16a34a' : '#ef4444' }}>{initial}</div>
+              )}
               <div className="drawer-title-text">
                 <h2 title={customerName}>{customerName}</h2>
                 <span>ID: {customer.customerCode || customer.CustomerCode || '—'}</span>
