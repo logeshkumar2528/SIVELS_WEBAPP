@@ -28,6 +28,8 @@ import './CustomerSubmissionHistory.css';
 
 export default function ViewCustomerDrawer({
   customer,
+  profileImageUrl,
+  onProfileImageError,
   masterData = {},
   onClose,
   onPromote,
@@ -574,17 +576,26 @@ export default function ViewCustomerDrawer({
           {/* Header Bar */}
           <div className="drawer-header">
             <div className="drawer-header-info">
-              <div
-                className="drawer-avatar"
-                style={{
-                  backgroundColor: initial.match(/[A-M]/) ? '#EAF5EE' : '#EFF6FF',
-                  color: initial.match(/[A-M]/) ? '#1A7A3C' : '#2563EB',
-                }}
-              >
-                {initial}
-              </div>
+              {profileImageUrl ? (
+                <img
+                  src={profileImageUrl}
+                  alt={customerName}
+                  className="drawer-avatar drawer-avatar-img"
+                  onError={onProfileImageError}
+                />
+              ) : (
+                <div
+                  className="drawer-avatar"
+                  style={{
+                    backgroundColor: initial.match(/[A-M]/) ? '#EAF5EE' : '#EFF6FF',
+                    color: initial.match(/[A-M]/) ? '#1A7A3C' : '#2563EB',
+                  }}
+                >
+                  {initial}
+                </div>
+              )}
               <div className="drawer-title-text">
-                <h2>{customerName}</h2>
+                <h2 title={customerName}>{customerName}</h2>
                 <span>Customer Code: {displayCustomerCode}</span>
               </div>
             </div>
