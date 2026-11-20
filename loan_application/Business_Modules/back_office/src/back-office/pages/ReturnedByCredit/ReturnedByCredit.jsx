@@ -577,6 +577,7 @@ export default function ReturnedByCredit() {
               <table className="stc-table">
                 <thead>
                   <tr>
+                    <th>S.No</th>
                     <th>Application No &amp; Date</th>
                     <th>Customer Name</th>
                     <th>Loan Product</th>
@@ -588,12 +589,13 @@ export default function ReturnedByCredit() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginated.map((c) => {
+                  {paginated.map((c, index) => {
                     const custId = c.agentCustomerId || c.id;
                     const appNo = getAppNo(c);
                     const appliedDate = c.createdAt || c.appliedDate;
                     return (
                       <tr key={custId}>
+                        <td>{(currentPage - 1) * pageSize + index + 1}</td>
                         <td>
                           <strong>{appNo}</strong>
                           <div className="stc-customer-sub">
@@ -686,7 +688,7 @@ export default function ReturnedByCredit() {
                   })}
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={8} style={{ textAlign: 'center', padding: '2.5rem', color: '#64748b' }}>
+                      <td colSpan={9} style={{ textAlign: 'center', padding: '2.5rem', color: '#64748b' }}>
                         {returnedApplications.length === 0
                           ? 'No applications have been returned by the Credit Manager.'
                           : 'No returned applications match your filters.'}
