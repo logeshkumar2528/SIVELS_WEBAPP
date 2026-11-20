@@ -266,6 +266,7 @@ export default function AgentMonitoring() {
             <table className="bo-table">
               <thead>
                 <tr>
+                  <th>S.No</th>
                   <th>Agent Info</th>
                   <th>Assigned RM</th>
                   <th>District</th>
@@ -277,7 +278,7 @@ export default function AgentMonitoring() {
                 </tr>
               </thead>
               <tbody>
-                {filteredAgents.map((ag) => {
+                {filteredAgents.map((ag, index) => {
                   const targetAgentId = ag.agentId || ag.id;
                   const agentName = ag.name || ag.fullName || '—';
                   const agentCode = ag.code || ag.agentCode || '—';
@@ -287,6 +288,7 @@ export default function AgentMonitoring() {
 
                   return (
                     <tr key={ag.agentId || ag.id}>
+                      <td>{index + 1}</td>
                       <td>
                         <div className="bo-user-cell">
                           <BoAvatar
@@ -351,7 +353,7 @@ export default function AgentMonitoring() {
                 })}
                 {filteredAgents.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="bo-empty-table-cell">
+                    <td colSpan={9} className="bo-empty-table-cell">
                       No field agents found matching your filter criteria.
                     </td>
                   </tr>

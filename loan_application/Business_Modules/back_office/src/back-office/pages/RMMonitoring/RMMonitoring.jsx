@@ -198,6 +198,7 @@ export default function RMMonitoring() {
             <table className="bo-table">
               <thead>
                 <tr>
+                  <th>S.No</th>
                   <th>RM Info</th>
                   <th>District &amp; Branch</th>
                   <th>Contact</th>
@@ -209,7 +210,7 @@ export default function RMMonitoring() {
                 </tr>
               </thead>
               <tbody>
-                {filteredRMs.map((rm) => {
+                {filteredRMs.map((rm, index) => {
                   const targetRmId = rm.rmId || rm.id;
                   const rmName = rm.name || rm.fullName || '—';
                   const rmCode = rm.code || rm.employeeCode || rm.rmCode || '—';
@@ -220,6 +221,7 @@ export default function RMMonitoring() {
 
                   return (
                     <tr key={rm.rmId || rm.id}>
+                      <td>{index + 1}</td>
                       <td>
                         <div className="bo-user-cell">
                           <BoAvatar
@@ -289,7 +291,7 @@ export default function RMMonitoring() {
                 })}
                 {filteredRMs.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="bo-empty-table-cell">
+                    <td colSpan={9} className="bo-empty-table-cell">
                       No Relationship Managers found matching your filters.
                     </td>
                   </tr>

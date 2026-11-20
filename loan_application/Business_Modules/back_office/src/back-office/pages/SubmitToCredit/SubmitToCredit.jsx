@@ -345,6 +345,7 @@ export default function SubmitToCredit() {
               <table className="stc-table">
                 <thead>
                   <tr>
+                    <th>S.No</th>
                     <th>Application No &amp; Date</th>
                     <th>Customer Name</th>
                     <th>Loan Product</th>
@@ -355,7 +356,7 @@ export default function SubmitToCredit() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedCustomers.map((c) => {
+                  {paginatedCustomers.map((c, index) => {
                     const custId = c.agentCustomerId || c.id;
                     const custName = c.customerName || c.fullName || 'Customer';
                     const appNo = c.appId || (c.applicationNo && c.applicationNo !== 'N/A' && !c.applicationNo.startsWith('APP-') ? c.applicationNo : 'N/A');
@@ -364,6 +365,7 @@ export default function SubmitToCredit() {
 
                     return (
                       <tr key={custId}>
+                        <td>{(currentPage - 1) * pageSize + index + 1}</td>
                         <td>
                           <strong>{appNo}</strong>
                           <div className="stc-customer-sub">
@@ -407,7 +409,7 @@ export default function SubmitToCredit() {
                   })}
                   {filteredCustomers.length === 0 && (
                     <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem', color: '#64748b' }}>
+                      <td colSpan={8} style={{ textAlign: 'center', padding: '2.5rem', color: '#64748b' }}>
                         No customer applications found matching your criteria.
                       </td>
                     </tr>

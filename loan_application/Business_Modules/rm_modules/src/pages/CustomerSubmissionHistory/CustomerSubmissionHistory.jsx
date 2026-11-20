@@ -195,7 +195,7 @@ export default function CustomerSubmissionHistory() {
   const [photoDocTypeId, setPhotoDocTypeId] = useState(null);
   const [customerPhotos, setCustomerPhotos] = useState({});
   const photoUrlsRef = useRef({});
-  const inFlightCustIdsRef = useRef(new Set());
+  const inFlightCustIdsRef = useRef(new Map());
 
   // Delete Customer Modal State
   const [customerToDelete, setCustomerToDelete] = useState(null);
@@ -670,22 +670,24 @@ export default function CustomerSubmissionHistory() {
     if (!paginatedData || paginatedData.length === 0) return;
 
     let isMounted = true;
+    const subscriptions = [];
 
     // Identify customers on the current visible page that haven't been checked/cached yet
     const uncheckedCustomers = paginatedData.filter((item) => {
       const custId = item.agentCustomerId ?? item.AgentCustomerId ?? item.rmCustomerId ?? item.rMCustomerId ?? item.id;
-      return custId && customerPhotos[custId] === undefined && !inFlightCustIdsRef.current.has(custId);
+      return custId && customerPhotos[custId] === undefined;
     });
 
     if (uncheckedCustomers.length === 0) return;
 
-    const fetchPhotos = async () => {
-      for (const item of uncheckedCustomers) {
-        if (!isMounted) break;
-        const custId = item.agentCustomerId ?? item.AgentCustomerId ?? item.rmCustomerId ?? item.rMCustomerId ?? item.id;
-        if (!custId) continue;
+    const createPhotoRequest = (custId) => {
+      const request = {
+        committed: false,
+        subscribers: new Set(),
+        promise: null,
+      };
 
-        inFlightCustIdsRef.current.add(custId);
+      request.promise = (async () => {
         let loadedPhotoUrl = null;
 
         try {
@@ -719,8 +721,42 @@ export default function CustomerSubmissionHistory() {
               }
             }
           }
+        } catch (err) {
+          loadedPhotoUrl = null;
+        }
 
-          if (isMounted) {
+        return loadedPhotoUrl;
+      })();
+
+      inFlightCustIdsRef.current.set(custId, request);
+      request.promise.then(
+        () => {
+          if (inFlightCustIdsRef.current.get(custId) === request) {
+            inFlightCustIdsRef.current.delete(custId);
+          }
+        },
+        () => {
+          if (inFlightCustIdsRef.current.get(custId) === request) {
+            inFlightCustIdsRef.current.delete(custId);
+          }
+        }
+      );
+
+      return request;
+    };
+
+    const subscribeToPhotoRequest = (custId) => {
+      const request = inFlightCustIdsRef.current.get(custId) || createPhotoRequest(custId);
+      const subscriber = { active: true };
+      request.subscribers.add(subscriber);
+      subscriptions.push({ request, subscriber });
+
+      request.promise.then((loadedPhotoUrl) => {
+        if (!request.committed) {
+          const hasActiveSubscriber = Array.from(request.subscribers).some((entry) => entry.active);
+          request.committed = true;
+
+          if (hasActiveSubscriber) {
             if (loadedPhotoUrl) {
               photoUrlsRef.current[custId] = loadedPhotoUrl;
               setCustomerPhotos((prev) => ({ ...prev, [custId]: loadedPhotoUrl }));
@@ -730,13 +766,20 @@ export default function CustomerSubmissionHistory() {
           } else if (loadedPhotoUrl) {
             URL.revokeObjectURL(loadedPhotoUrl);
           }
-        } catch (err) {
-          if (isMounted) {
-            setCustomerPhotos((prev) => ({ ...prev, [custId]: null }));
-          }
-        } finally {
-          inFlightCustIdsRef.current.delete(custId);
         }
+
+        request.subscribers.delete(subscriber);
+      });
+    };
+
+    const fetchPhotos = async () => {
+      for (const item of uncheckedCustomers) {
+        if (!isMounted) break;
+        const custId = item.agentCustomerId ?? item.AgentCustomerId ?? item.rmCustomerId ?? item.rMCustomerId ?? item.id;
+        if (!custId) continue;
+        subscribeToPhotoRequest(custId);
+        const request = inFlightCustIdsRef.current.get(custId);
+        if (request) await request.promise;
       }
     };
 
@@ -744,6 +787,10 @@ export default function CustomerSubmissionHistory() {
 
     return () => {
       isMounted = false;
+      subscriptions.forEach(({ request, subscriber }) => {
+        subscriber.active = false;
+        request.subscribers.delete(subscriber);
+      });
     };
   }, [paginatedData, photoDocTypeId, customerPhotos]);
 
@@ -1011,7 +1058,7 @@ export default function CustomerSubmissionHistory() {
               <thead>
                 <tr>
                   <th className="rm-csh-th index-col">S.NO</th>
-                  <th className="rm-csh-th">CUSTOMER NAME</th>
+                  <th className="rm-csh-th customer-name-col">CUSTOMER NAME</th>
                   <th className="rm-csh-th">MOBILE NUMBER</th>
                   <th className="rm-csh-th">LOAN PURPOSE</th>
                   <th className="rm-csh-th">EXPECTED AMOUNT</th>
@@ -1040,7 +1087,7 @@ export default function CustomerSubmissionHistory() {
                       <td className="rm-csh-td index-col">
                         {(currentPage - 1) * pageSize + idx + 1}
                       </td>
-                      <td className="rm-csh-td">
+                      <td className="rm-csh-td customer-name-col">
                         <div className="history-customer-cell">
                           {photoUrl ? (
                             <img
@@ -1052,7 +1099,14 @@ export default function CustomerSubmissionHistory() {
                           ) : (
                             <div className={`history-avatar ${avatarClass}`}>{initial}</div>
                           )}
-                          <span className="customer-name-text">{item.fullName}</span>
+                          <div className="history-customer-text">
+                            <span className="customer-name-text" title={item.fullName}>
+                              {item.fullName}
+                            </span>
+                            <span className="history-customer-id">
+                              ID: {item.customerCode || item.CustomerCode || '—'}
+                            </span>
+                          </div>
                         </div>
                       </td>
                       <td className="rm-csh-td">{item.mobileNumber}</td>
@@ -1147,6 +1201,22 @@ export default function CustomerSubmissionHistory() {
       {selectedCustomer && (
         <ViewCustomerDrawer
           customer={selectedCustomer}
+          profileImageUrl={customerPhotos[
+            selectedCustomer.agentCustomerId ||
+            selectedCustomer.AgentCustomerId ||
+            selectedCustomer.rmCustomerId ||
+            selectedCustomer.rMCustomerId ||
+            selectedCustomer.id
+          ]}
+          onProfileImageError={() => {
+            const selectedCustomerId =
+              selectedCustomer.agentCustomerId ||
+              selectedCustomer.AgentCustomerId ||
+              selectedCustomer.rmCustomerId ||
+              selectedCustomer.rMCustomerId ||
+              selectedCustomer.id;
+            if (selectedCustomerId) handleImageError(selectedCustomerId);
+          }}
           masterData={masterData}
           onClose={() => setSelectedCustomer(null)}
           onPromote={handlePromoteCustomer}
