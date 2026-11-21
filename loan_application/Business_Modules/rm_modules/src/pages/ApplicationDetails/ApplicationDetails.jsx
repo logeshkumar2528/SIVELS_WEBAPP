@@ -937,7 +937,9 @@ export default function ApplicationDetails() {
 
   const handleProceed = async () => {
     if (isViewMode) {
-      navigate(`${ROUTES.KYC_DOCUMENTS.replace(':applicationId', appId)}?mode=view`);
+      navigate(`${ROUTES.KYC_DOCUMENTS.replace(':applicationId', appId)}?mode=view`, {
+        state: location.state,
+      });
       return;
     }
 
@@ -1293,7 +1295,9 @@ export default function ApplicationDetails() {
       saveApplication(appId, { 
         applicationProductDetailsId: savedData.applicationProductDetailsId || savedData.ApplicationProductDetailsId || appData.applicationProductDetailsId
       });
-      navigate(ROUTES.KYC_DOCUMENTS.replace(':applicationId', appId));
+      navigate(ROUTES.KYC_DOCUMENTS.replace(':applicationId', appId), {
+        state: location.state,
+      });
     } catch (error) {
       console.error('Error saving application:', error);
       setErrorPopup({
@@ -1305,7 +1309,7 @@ export default function ApplicationDetails() {
   };
 
   const handleBack = () => {
-    navigate(isViewMode ? ROUTES.APPROVED_APPLICATIONS : ROUTES.NEW_APPLICATIONS);
+    navigate(isViewMode ? ROUTES.APPROVED_APPLICATIONS : (location.state?.returnTo || ROUTES.NEW_APPLICATIONS));
   };
 
   const applicantName = resolveApplicantName({

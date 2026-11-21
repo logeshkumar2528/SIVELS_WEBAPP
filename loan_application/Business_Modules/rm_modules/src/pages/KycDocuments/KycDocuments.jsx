@@ -3,7 +3,7 @@ import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
 import { getAccessToken } from '../../../../../Core/src/auth/tokenStore';
 import { needsAuthedFetch } from '../../../../../Core/src/auth/useAuthedObjectUrl';
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   FileText,
   UserCheck,
@@ -1135,6 +1135,7 @@ function KycCard({
 
 export default function KycDocuments() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { applicationId } = useParams();
   const [searchParams] = useSearchParams();
   const isViewMode = searchParams.get('mode') === 'view';
@@ -4715,7 +4716,12 @@ export default function KycDocuments() {
   };
 
   const handleBack = () => {
-    navigate(isViewMode ? `${ROUTES.APPLICATION_DETAILS.replace(':applicationId', appId)}?mode=view` : ROUTES.APPLICATION_DETAILS.replace(':applicationId', appId));
+    navigate(
+      isViewMode
+        ? `${ROUTES.APPLICATION_DETAILS.replace(':applicationId', appId)}?mode=view`
+        : ROUTES.APPLICATION_DETAILS.replace(':applicationId', appId),
+      { state: location.state }
+    );
   };
 
   const viewingPersonTitle =
