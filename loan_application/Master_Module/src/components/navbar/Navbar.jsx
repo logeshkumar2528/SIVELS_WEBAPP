@@ -6,7 +6,8 @@ import {
   CreditCard, Package, Target, Repeat, User, Heart, Building, 
   Map, Building2, Briefcase, Landmark, Globe, MapPin, Link, 
   Layers, ShieldCheck, Home, Key, GraduationCap, Star, Contact, Shield, TrendingUp, LogOut, ArrowLeft,
-  Factory, Clock, Calculator, UserCheck, FileSpreadsheet, Activity, FileCheck, ShieldAlert
+  Factory, Clock, Calculator, UserCheck, FileSpreadsheet, Activity, FileCheck, ShieldAlert,
+  Wallet, Flag
 } from 'lucide-react';
 import { MasterModal } from '../masters/MasterModal/MasterModal';
 import { logout } from '../../../../Core/src/auth/session';
@@ -53,6 +54,10 @@ const MASTERS_MENU = [
   { label: 'Health Check Type', path: '/masters/health-check-type', icon: Activity },
   { label: 'Proof Master', path: '/masters/proof-master', icon: FileCheck },
   { label: 'Mortgage Status', path: '/masters/mortgage-status', icon: ShieldCheck },
+  { label: 'Payment Method', path: '/masters/payment-method', icon: Wallet },
+  { label: 'Loan Flag', path: '/masters/loan-flag', icon: Flag },
+  { label: 'Division', path: '/masters/division', icon: Building2 },
+  { label: 'Frequency', path: '/masters/frequency', icon: Repeat },
   { label: 'Deviation List', path: '/masters/deviation-list', icon: ShieldCheck },
   { label: 'CIR Deviations', path: '/masters/cir-deviations', icon: Activity },
   { label: 'Negative FI Deviations', path: '/masters/negative-fi-deviations', icon: ShieldAlert },
@@ -89,6 +94,9 @@ const MASTER_CATEGORIES = [
       MASTERS_BY_PATH['/masters/foir'],
       MASTERS_BY_PATH['/masters/rtr-norm-master'],
       MASTERS_BY_PATH['/masters/rtr-loan-status'],
+      MASTERS_BY_PATH['/masters/payment-method'],
+      MASTERS_BY_PATH['/masters/loan-flag'],
+      MASTERS_BY_PATH['/masters/frequency'],
     ].filter(Boolean),
   },
   {
@@ -135,6 +143,7 @@ const MASTER_CATEGORIES = [
       MASTERS_BY_PATH['/masters/employment-type'],
       MASTERS_BY_PATH['/masters/industry-type'],
       MASTERS_BY_PATH['/masters/assessment-method'],
+      MASTERS_BY_PATH['/masters/division'],
     ].filter(Boolean),
   },
 ];

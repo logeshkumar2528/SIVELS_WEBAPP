@@ -47,6 +47,10 @@ import { RTRLoanStatus } from './pages/masters/RTRLoanStatus/RTRLoanStatus';
 import { HealthCheckType } from './pages/masters/HealthCheckType/HealthCheckType';
 import { ProofMaster } from './pages/masters/ProofMaster/ProofMaster';
 import { MortgageStatus } from './pages/masters/MortgageStatus/MortgageStatus';
+import { PaymentMethod } from './pages/masters/PaymentMethod/PaymentMethod';
+import { LoanFlag } from './pages/masters/LoanFlag/LoanFlag';
+import { Division } from './pages/masters/Division/Division';
+import { Frequency } from './pages/masters/Frequency/Frequency';
 import { CompanyConfiguration } from './features/company/CompanyConfiguration';
 import AgentCreate from './pages/Agent/AgentCreate';
 import RelationshipManagerCreate from './pages/RelationshipManager/RelationshipManagerCreate';
@@ -183,6 +187,10 @@ function App() {
                 <Route path="health-check-type" element={<HealthCheckType />} />
                 <Route path="proof-master" element={<ProofMaster />} />
                 <Route path="mortgage-status" element={<MortgageStatus />} />
+                <Route path="payment-method" element={<PaymentMethod />} />
+                <Route path="loan-flag" element={<LoanFlag />} />
+                <Route path="division" element={<Division />} />
+                <Route path="frequency" element={<Frequency />} />
                 <Route path="deviation-list" element={<GeneralDeviationMaster />} />
                 <Route path="cir-deviations" element={<CIRDeviationMaster />} />
                 <Route path="negative-fi-deviations" element={<NegativeFIDeviationMaster />} />
