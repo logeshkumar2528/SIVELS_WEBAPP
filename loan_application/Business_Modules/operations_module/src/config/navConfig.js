@@ -1,3 +1,5 @@
+import { ROUTES } from './routeConfig';
+
 export const NAV_ITEMS = [
   {
     id: 'dashboard',
@@ -5,6 +7,14 @@ export const NAV_ITEMS = [
     route: '/operations',
     icon: 'LayoutDashboard',
     section: 'OPERATIONS',
+  },
+  {
+    id: 'loan-basic-details',
+    label: 'Loan Basic Details',
+    route: ROUTES.MAKER_LOAN_BASIC_DETAILS,
+    icon: 'FileText',
+    section: 'OPERATIONS',
+    makerOnly: true,
   },
   {
     id: 'profile',

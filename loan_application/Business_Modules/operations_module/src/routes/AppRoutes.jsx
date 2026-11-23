@@ -3,6 +3,7 @@ import ErrorBoundary from '../../../back_office/src/back-office/components/Error
 import { getStoredLandingPath, getStoredRoleCode } from '../../../../Core/src/auth/session';
 import OperationsDashboard from '../components/OperationsDashboard';
 import OperationsGuard from '../auth/OperationsGuard';
+import LoanBasicDetails from '../pages/Maker/LoanBasicDetails/LoanBasicDetails';
 import Profile from '../pages/Profile/Profile';
 import { ROUTES } from '../config/routeConfig';
 
@@ -48,6 +49,14 @@ export default function AppRoutes() {
           element={
             <OperationsGuard allowedRoles={['MAKER', 'CHECKER']}>
               <Profile />
+            </OperationsGuard>
+          }
+        />
+        <Route
+          path={ROUTES.MAKER_LOAN_BASIC_DETAILS}
+          element={
+            <OperationsGuard allowedRoles={['MAKER']}>
+              <LoanBasicDetails />
             </OperationsGuard>
           }
         />

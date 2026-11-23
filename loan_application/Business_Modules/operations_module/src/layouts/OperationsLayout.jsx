@@ -2,18 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../../../back_office/src/back-office/components/Header/Header';
 import Sidebar from '../../../back_office/src/back-office/components/Sidebar/Sidebar';
+import { API_BASE_URL } from '../../../../Core/src/api/apiConfig';
 import { getStoredRoleCode, getStoredUser, logout } from '../../../../Core/src/auth/session';
 import { usePermissions } from '../../../../Core/src/auth/permissions';
 import { NAV_ITEMS } from '../config/navConfig';
+import { ROUTES } from '../config/routeConfig';
 import './OperationsLayout.css';
-
-function formatHeaderDate(date) {
-  return date.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-}
 
 function displayName(user) {
   return user?.fullName || user?.name || user?.displayName || 'Operations User';
@@ -31,6 +25,7 @@ export default function OperationsLayout({ title, subtitle, children, profile = 
   const roleCode = getStoredRoleCode(['MAKER', 'CHECKER']);
   const storedUser = getStoredUser(['MAKER', 'CHECKER']);
   const resolvedProfile = profile && Object.keys(profile).length > 0 ? profile : storedUser;
+  const visibleNav = filterNav(NAV_ITEMS).filter((item) => !item.makerOnly || roleCode === 'MAKER');
 
   useEffect(() => {
     document.body.classList.toggle('body--no-scroll', sidebarOpen);
@@ -48,17 +43,27 @@ export default function OperationsLayout({ title, subtitle, children, profile = 
   const user = useMemo(() => ({
     id: resolvedProfile?.operationsUserId || resolvedProfile?.id || storedUser?.userId || storedUser?.staffId || null,
     name: displayName(resolvedProfile),
-    role: displayRole(resolvedProfile, roleCode),
+    role: [
+      displayRole(resolvedProfile, roleCode),
+      resolvedProfile?.employeeCode || resolvedProfile?.staffCode || storedUser?.employeeCode
+        ? `Employee Code : ${resolvedProfile?.employeeCode || resolvedProfile?.staffCode || storedUser?.employeeCode}`
+        : '',
+    ].filter(Boolean).join('\n'),
     employeeCode: resolvedProfile?.employeeCode || resolvedProfile?.staffCode || storedUser?.employeeCode || '',
-    avatarUrl: resolvedProfile?.profileImage || resolvedProfile?.profileImageUrl || resolvedProfile?.avatarUrl || null,
+    avatarUrl: (() => {
+      const operationsUserId = resolvedProfile?.operationsUserId || resolvedProfile?.OperationsUserId || resolvedProfile?.id || storedUser?.userId || storedUser?.staffId;
+      return API_BASE_URL && operationsUserId
+        ? `${API_BASE_URL}/OperationsUsers/${encodeURIComponent(String(operationsUserId))}/profile-image`
+        : null;
+    })(),
     imageRole: 'Operations',
   }), [resolvedProfile, roleCode, storedUser]);
 
   return (
-    <div className={['layout', sidebarOpen ? 'layout--sidebar-open' : ''].join(' ').trim()}>
+    <div className={['layout', 'operations-layout', sidebarOpen ? 'layout--sidebar-open' : ''].join(' ').trim()}>
       <Sidebar
-        menu={filterNav(NAV_ITEMS)}
-        activeRoute={pathname === '/operations/profile' ? pathname : '/operations'}
+        menu={visibleNav}
+        activeRoute={pathname === ROUTES.PROFILE || pathname === ROUTES.MAKER_LOAN_BASIC_DETAILS ? pathname : ROUTES.ROOT}
         badgeCounts={{}}
         isOpen={sidebarOpen}
         onNavigate={handleNavigate}
@@ -70,7 +75,7 @@ export default function OperationsLayout({ title, subtitle, children, profile = 
         <Header
           title={title}
           subtitle={subtitle}
-          date={formatHeaderDate(new Date())}
+          date=""
           notificationCount={0}
           user={user}
           onMenuToggle={() => setSidebarOpen((open) => !open)}
