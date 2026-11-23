@@ -8,6 +8,7 @@ import BackOfficeCreate from '../BackOffice/BackOfficeCreate';
 import CreditManagerCreate from '../CreditManager/CreditManagerCreate';
 import CreditHeadCreate from '../CreditHead/CreditHeadCreate';
 import InvestorCreate from '../Investor/InvestorCreate';
+import OperationsUserCreate from '../Operations/OperationsUserCreate';
 import './CreateUser.css';
 
 const USER_TYPES = {
@@ -45,6 +46,16 @@ const USER_TYPES = {
     title: 'Create investor',
     description: 'Add an investor account for loan investments.',
     icon: Landmark,
+  },
+  operationsMaker: {
+    title: 'Create Operations Maker',
+    description: 'Add an Operations Maker account using backend role configuration.',
+    icon: ShieldCheck,
+  },
+  operationsChecker: {
+    title: 'Create Operations Checker',
+    description: 'Add an Operations Checker account using backend role configuration.',
+    icon: ShieldCheck,
   },
 };
 
@@ -89,6 +100,8 @@ export default function CreateUser() {
     if (userType === 'creditManager') return <CreditManagerCreate />;
     if (userType === 'creditHead') return <CreditHeadCreate onSuccessRedirect="/dashboard" />;
     if (userType === 'investor') return <InvestorCreate investorId={requestedInvestorId || null} onSuccessRedirect="/investors" />;
+    if (userType === 'operationsMaker') return <OperationsUserCreate initialRoleCode="MAKER" />;
+    if (userType === 'operationsChecker') return <OperationsUserCreate initialRoleCode="CHECKER" />;
     return <AMSCreate />;
   };
 
@@ -119,6 +132,8 @@ export default function CreateUser() {
           <option value="creditManager">Create credit manager</option>
           <option value="creditHead">Create credit head</option>
           <option value="investor">Create investor</option>
+          <option value="operationsMaker">Create Operations Maker</option>
+          <option value="operationsChecker">Create Operations Checker</option>
         </select>
       </section>
 
