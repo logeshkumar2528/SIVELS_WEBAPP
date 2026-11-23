@@ -1,0 +1,27 @@
+/*
+ * Shared Masters page shell - matches Agents (/master/agents) navbar-to-card spacing.
+ * Agents: page pad 28px + back-link row (~24px) + flex gap 20px = 72px to the card.
+ */
+.masters-page {
+  box-sizing: border-box;
+  max-width: 1440px;
+  margin: 72px max(24px, calc((100vw - 1440px) / 2 + 24px)) 40px;
+  padding: 24px;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+}
+
+/* Table sits inside the page card - avoid a second nested card. */
+.masters-page .master-table-container {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+@media (max-width: 768px) {
+  .masters-page {
+    margin: 48px 16px 32px;
+    padding: 16px;
+  }
+}

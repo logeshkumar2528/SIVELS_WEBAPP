@@ -1,9 +1,5 @@
 /* RTR Loan Status Master Styles */
-.masters-page {
-  padding: var(--spacing-xl);
-  max-width: 1200px;
-  margin: 0 auto;
-}
+/* Page shell spacing comes from styles/masters-page.css (Agents match). */
 
 .masters-page-header {
   display: flex;
@@ -202,9 +198,7 @@
 
 /* Responsive */
 @media (max-width: 768px) {
-  .masters-page {
-    padding: var(--spacing-md);
-  }
+  /* mobile shell spacing from styles/masters-page.css */
 
   .masters-page-toolbar {
     flex-direction: column;
