@@ -30,14 +30,16 @@
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 
-  padding: var(--spacing-xl);
-  max-width: 100%;
-  width: 100%;
-  margin: var(--spacing-xl) auto;
+  /* Navbar → card offset matches Agents (28 + back-link + 20 gap). */
+  padding: 24px;
+  max-width: 1440px;
+  width: auto;
+  margin: 72px max(24px, calc((100vw - 1440px) / 2 + 24px)) 40px;
   background-color: var(--color-surface);
-  border-radius: var(--border-radius-lg);
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: none;
+  border: 1px solid #e0e0e0;
+  box-sizing: border-box;
 }
 
 .masters-page-header {
@@ -250,8 +252,8 @@
 /* Responsive */
 @media (max-width: 768px) {
   .masters-page {
-    margin: var(--spacing-md);
-    padding: var(--spacing-md);
+    margin: 48px 16px 32px;
+    padding: 16px;
   }
 
   .masters-page-toolbar {
