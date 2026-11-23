@@ -60,6 +60,8 @@ import InvestorDirectory from './pages/Investor/InvestorDirectory';
 import AMSDashboard from './pages/AMSDashboard/AMSDashboard';
 import { Application360 } from './pages/Application360/Application360';
 import { PeopleDirectoryPage } from './pages/PeopleDirectory/PeopleDirectoryPage';
+import OperationsUserCreate from './pages/Operations/OperationsUserCreate';
+import OperationsUsersPage from './pages/Operations/OperationsUsersPage';
 import { RolesPage } from './pages/AccessControl/RolesPage';
 import { RoleEditorPage } from './pages/AccessControl/RoleEditorPage';
 import { StaffRolesPage } from './pages/AccessControl/StaffRolesPage';
@@ -118,10 +120,13 @@ function App() {
               <Route path="credit-managers" element={<PeopleDirectoryPage roleKey="creditManager" />} />
               <Route path="credit-heads" element={<PeopleDirectoryPage roleKey="creditHead" />} />
               <Route path="customers" element={<PeopleDirectoryPage roleKey="customer" />} />
+              <Route path="operations-users" element={<OperationsUsersPage />} />
               <Route path="investors" element={<InvestorDirectory />} />
               <Route path="application-360" element={<Application360 />} />
               <Route path="ams-dashboard" element={<AMSDashboard />} />
               <Route path="create-user" element={<CreateUser />} />
+              <Route path="create-operations-user" element={<OperationsUserCreate />} />
+              <Route path="edit-operations-user/:operationsUserId" element={<OperationsUserCreate />} />
               <Route path="add-agent" element={<AgentCreate onSuccessRedirect="/dashboard" />} />
               <Route path="edit-agent/:agentId" element={<AgentCreate onSuccessRedirect="/dashboard" />} />
               <Route path="create-relationship-manager" element={<RelationshipManagerCreate />} />

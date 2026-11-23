@@ -1,0 +1,33 @@
+import { ROUTES } from './routeConfig';
+
+export const NAV_ITEMS = [
+  {
+    id: 'dashboard',
+    label: 'Dashboard',
+    route: '/operations',
+    icon: 'LayoutDashboard',
+    section: 'OPERATIONS',
+  },
+  {
+    id: 'loan-basic-details',
+    label: 'Loan Basic Details',
+    route: ROUTES.MAKER_LOAN_BASIC_DETAILS,
+    icon: 'FileText',
+    section: 'OPERATIONS',
+    makerOnly: true,
+  },
+  {
+    id: 'profile',
+    label: 'Profile',
+    route: '/operations/profile',
+    icon: 'UserCircle',
+    section: 'ACCOUNT',
+  },
+  {
+    id: 'logout',
+    label: 'Logout',
+    route: '/login',
+    icon: 'LogOut',
+    section: 'BOTTOM',
+  },
+];

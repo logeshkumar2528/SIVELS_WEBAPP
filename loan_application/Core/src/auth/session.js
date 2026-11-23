@@ -36,6 +36,9 @@ export const ROLE_CONFIG = {
   CREDIT_MANAGER: { legacyRole: 'CreditManager', landingPath: CREDIT_MANAGER_DASHBOARD, accountKey: 'creditManager' },
   // Credit Head uses the Credit Manager module.
   CREDIT_HEAD: { legacyRole: 'CreditManager', landingPath: CREDIT_MANAGER_DASHBOARD, accountKey: 'creditHead' },
+  MAKER: { legacyRole: 'OperationsMaker', landingPath: '/operations/maker-dashboard', accountKey: 'staff' },
+  // Checker landing is supplied by the backend; do not invent a default path.
+  CHECKER: { legacyRole: 'OperationsChecker', landingPath: null, accountKey: 'staff' },
   INVESTOR: { legacyRole: 'Investor', landingPath: '/investors', accountKey: 'investor' },
   CUSTOMER: { legacyRole: 'Customer', landingPath: CUSTOMER_DASHBOARD, accountKey: 'customer' },
 };
@@ -49,6 +52,10 @@ const ROLE_NAME_TO_CODE = {
   backoffice: 'BACK_OFFICE',
   creditmanager: 'CREDIT_MANAGER',
   credithead: 'CREDIT_HEAD',
+  maker: 'MAKER',
+  operationsmaker: 'MAKER',
+  checker: 'CHECKER',
+  operationschecker: 'CHECKER',
   investor: 'INVESTOR',
   customer: 'CUSTOMER',
 };
@@ -57,6 +64,7 @@ const ROLE_NAME_TO_CODE = {
 const SERVED_PATH_PREFIXES = [
   '/Agent', '/backoffice', '/investors', '/rm', '/client', '/dashboard', '/my-loan',
   '/emi-history', '/profile', '/credit', '/company', '/master',
+  '/operations',
 ];
 
 export function normalizeRoleCode(roleCode, roleName) {

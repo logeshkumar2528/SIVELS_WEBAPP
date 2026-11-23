@@ -229,6 +229,7 @@ export function Navbar() {
     '/credit-managers',
     '/credit-heads',
     '/customers',
+    '/operations-users',
     '/master/agents',
     '/master/relationship-managers',
     '/master/back-office',

@@ -449,6 +449,11 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
 export default function NewApplications({ initialFilter = 'All' }) {
   const isLoggedToHoRoute = initialFilter === 'Logged to HO';
   const defaultFilter = isLoggedToHoRoute ? 'All' : initialFilter;
+  const applicationListRoute = initialFilter === 'Pending'
+    ? ROUTES.PENDING_APPLICATIONS
+    : initialFilter === 'New'
+      ? ROUTES.NEW_APPLICATIONS
+      : null;
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [fromDate, setFromDate] = useState('');
@@ -1342,7 +1347,11 @@ export default function NewApplications({ initialFilter = 'All' }) {
                     console.error('Failed to update status to Pending:', err);
                   }
                 }
-                navigate(ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId));
+                const applicationDetailsRoute = ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId);
+                navigate(
+                  applicationDetailsRoute,
+                  applicationListRoute ? { state: { returnTo: applicationListRoute } } : undefined
+                );
               }}
             >
               Verify Now

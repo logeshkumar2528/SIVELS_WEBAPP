@@ -21,6 +21,8 @@ export const KNOWN_ROLES = [
   'BACK_OFFICE',
   'CREDIT_MANAGER',
   'CREDIT_HEAD',
+  'MAKER',
+  'CHECKER',
   'CUSTOMER',
   'MASTER_ADMIN',
 ];

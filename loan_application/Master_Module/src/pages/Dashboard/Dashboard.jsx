@@ -26,6 +26,7 @@ import { getRelationshipManager } from '../../api/rmApi';
 import { getAgentById } from '../../api/agentApi';
 import { getAllCreditManagers, getCreditManagerById } from '../../api/creditManagerApi';
 import { getAllCreditHeads } from '../../api/creditHeadApi';
+import { getAllOperationsUsers } from '../../api/operationsUserApi';
 import { getProfileImageUrl, getDocumentUrl, buildFileUrl } from '../../utils/profileImageHelper';
 import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
 import sivelsLogo from '../../../../Core/src/assets/branding/SivelsFinanceLogo.jpg';
@@ -34,6 +35,17 @@ import AuthImage from '../../../../Core/src/auth/AuthImage';
 import { useAuthedObjectUrl } from '../../../../Core/src/auth/useAuthedObjectUrl';
 
 const API_BASE = API_BASE_URL;
+const DIRECTORY_CARD_KEYS = [
+  'agents',
+  'relationship-managers',
+  'back-office',
+  'ams',
+  'credit-managers',
+  'credit-heads',
+  'customers',
+  'investors',
+  'operations-users',
+];
 const unwrap = (response) => {
   if (Array.isArray(response)) return response;
   if (Array.isArray(response?.data)) return response.data;
@@ -223,6 +235,7 @@ export function Dashboard() {
   const [creditManagers, setCreditManagers] = useState([]);
   const [creditHeads, setCreditHeads] = useState([]);
   const [investors, setInvestors] = useState([]);
+  const [operationsUsers, setOperationsUsers] = useState([]);
   const [query, setQuery] = useState('');
   const [applicationQuery, setApplicationQuery] = useState('');
   const [applicationStatusFilter, setApplicationStatusFilter] = useState('All');
@@ -243,7 +256,7 @@ export function Dashboard() {
     setError('');
     try {
       const headers = authHeaders();
-      const [agentResult, applicationResult, rmResult, amsResult, backOfficeResult, cmResult, chResult, investorResult] = await Promise.allSettled([
+      const [agentResult, applicationResult, rmResult, amsResult, backOfficeResult, cmResult, chResult, investorResult, operationsUsersResult] = await Promise.allSettled([
         apiFetch(`${API_BASE}/AgentMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Agents request failed'))),
         apiFetch(`${API_BASE}/AgentAddCustomer`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Applications request failed'))),
         apiFetch(`${API_BASE}/RMMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('RM request failed'))),
@@ -252,15 +265,18 @@ export function Dashboard() {
         getAllCreditManagers(),
         getAllCreditHeads(),
         apiFetch(`${API_BASE}/InvestorsMaster`, { headers }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Investors request failed'))),
+        getAllOperationsUsers(),
       ]);
 
-      if ([agentResult, applicationResult, rmResult, amsResult, backOfficeResult, cmResult, chResult, investorResult].some((result) => result.status === 'rejected')) {
+      if ([agentResult, applicationResult, rmResult, amsResult, backOfficeResult, cmResult, chResult, investorResult, operationsUsersResult].some((result) => result.status === 'rejected')) {
         setError('Some live records could not be loaded. Available data is shown below.');
       }
 
       const rmRows = rmResult.status === 'fulfilled' ? unwrap(rmResult.value) : [];
       const investorRows = investorResult.status === 'fulfilled' ? unwrap(investorResult.value) : [];
+      const operationsUserRows = operationsUsersResult.status === 'fulfilled' ? operationsUsersResult.value : [];
       setInvestors(investorRows);
+      setOperationsUsers(Array.isArray(operationsUserRows) ? operationsUserRows : unwrap(operationsUserRows));
       const liveRms = rmRows.map((rm) => {
         const id = read(rm, ['rmId', 'RMId', 'id', 'Id']);
         const rmName = read(rm, ['fullName', 'FullName', 'rmName', 'RMName', 'name', 'Name']) || `${read(rm, ['firstName', 'FirstName'], '')} ${read(rm, ['lastName', 'LastName'], '')}`.trim() || 'Unnamed RM';
@@ -1059,7 +1075,7 @@ export function Dashboard() {
             <span className="section-kicker">PEOPLE & ACCESS</span>
             <h2>Manage Your Lending Team</h2>
           </div>
-            <span className="admin-subheading-badge">8 Directories</span>
+            <span className="admin-subheading-badge">{DIRECTORY_CARD_KEYS.length} Directories</span>
         </div>
 
         <div className="people-role-card-grid">
@@ -1211,6 +1227,25 @@ export function Dashboard() {
             </div>
             <div className="people-role-metric">
               <span className="people-role-count">{investors.length}</span>
+              <ArrowUpRight size={16} className="people-role-arrow" />
+            </div>
+          </button>
+
+          {/* 9. OPERATIONS USERS */}
+          <button
+            type="button"
+            className="people-role-card people-role-card-operations"
+            onClick={() => navigate('/operations-users')}
+          >
+            <div className="people-role-icon teal">
+              <ShieldCheck size={20} />
+            </div>
+            <div className="people-role-info">
+              <h3 className="people-role-title">Operations Users</h3>
+              <span className="people-role-subtitle">Directory records</span>
+            </div>
+            <div className="people-role-metric">
+              <span className="people-role-count">{operationsUsers.length}</span>
               <ArrowUpRight size={16} className="people-role-arrow" />
             </div>
           </button>
