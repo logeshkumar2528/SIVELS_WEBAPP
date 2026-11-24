@@ -48,6 +48,7 @@ import { HealthCheckType } from './pages/masters/HealthCheckType/HealthCheckType
 import { ProofMaster } from './pages/masters/ProofMaster/ProofMaster';
 import { MortgageStatus } from './pages/masters/MortgageStatus/MortgageStatus';
 import { PaymentMethod } from './pages/masters/PaymentMethod/PaymentMethod';
+import { FeeMaster } from './pages/masters/FeeMaster/FeeMaster';
 import { LoanFlag } from './pages/masters/LoanFlag/LoanFlag';
 import { Division } from './pages/masters/Division/Division';
 import { Frequency } from './pages/masters/Frequency/Frequency';
@@ -193,6 +194,7 @@ function App() {
                 <Route path="proof-master" element={<ProofMaster />} />
                 <Route path="mortgage-status" element={<MortgageStatus />} />
                 <Route path="payment-method" element={<PaymentMethod />} />
+                <Route path="fee-master" element={<FeeMaster />} />
                 <Route path="loan-flag" element={<LoanFlag />} />
                 <Route path="division" element={<Division />} />
                 <Route path="frequency" element={<Frequency />} />

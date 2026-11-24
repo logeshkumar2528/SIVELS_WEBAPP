@@ -161,17 +161,20 @@
 .operations-loan-fields {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px 14px;
+  align-items: start;
+  gap: 16px 14px;
   padding: 18px;
 }
 
 .operations-loan-field,
 .operations-loan-radio-field,
-.operations-loan-checkbox-field {
+.operations-loan-checkbox-field,
+.operations-loan-field--checkbox {
   min-width: 0;
 }
 
-.operations-loan-field {
+.operations-loan-field,
+.operations-loan-field--checkbox {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -226,7 +229,8 @@
 }
 
 .operations-loan-radio-field label,
-.operations-loan-checkbox-field {
+.operations-loan-checkbox-field,
+.operations-loan-checkbox-control {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -239,17 +243,57 @@
 }
 
 .operations-loan-radio-field input,
-.operations-loan-checkbox-field input {
+.operations-loan-checkbox-field input,
+.operations-loan-checkbox-control input {
   accent-color: #174a2f;
 }
 
+.operations-loan-field-label--spacer {
+  visibility: hidden;
+  user-select: none;
+}
+
+.operations-loan-checkbox-control {
+  min-height: 38px;
+  cursor: pointer;
+}
+
 .operations-loan-checkbox-field {
-  align-self: end;
   min-height: 38px;
 }
 
-.operations-loan-checkbox-field span {
+.operations-loan-checkbox-field span,
+.operations-loan-checkbox-control span {
   line-height: 1.25;
+}
+
+.operations-loan-checkbox-group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.operations-loan-field--full {
+  grid-column: 1 / -1;
+}
+
+.operations-loan-checkbox-group-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 28px;
+  min-height: 38px;
+}
+
+.operations-loan-checkbox-group .operations-loan-checkbox-field {
+  align-self: center;
+  min-height: auto;
+}
+
+.operations-loan-options-empty {
+  color: #6b7d71;
+  font-size: 12px;
 }
 
 .operations-loan-footer {
