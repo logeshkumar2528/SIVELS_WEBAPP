@@ -1,8 +1,9 @@
-import { ArrowLeft, ChevronRight, Save, Send, X } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowLeft, ChevronRight, FileText, Save, Send, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../../config/routeConfig';
 import OperationsLayout from '../../../layouts/OperationsLayout';
+import { mastersLookupService } from '../../../services/mastersLookupService';
 import './LoanBasicDetails.css';
 
 const WORKFLOW_STEPS = [
@@ -18,34 +19,25 @@ const INITIAL_FORM = {
   currency: '',
   applicationNumber: '',
   customerName: '',
-  customerId: '',
   loanStartDate: '',
   loanReferenceNumber: '',
   interestCapsBasis: '',
   applicationRequestCode: '',
-  applicationDate: '',
-  sanctionDate: '',
   branch: '',
   product: '',
   disbursementAmount: '',
   netLoanAmount: '',
   totalDisbursements: '',
-  quickDisbursement: '',
   repaymentMode: '',
   salesExecutive: '',
   sourcingType: '',
   employeeName: '',
   loanPurpose: '',
-  loanUsage: '',
-  disbursementDate: '',
   dsaDma: '',
   salesManager: '',
   salesDepartment: '',
-  takeover: false,
-  renewal: false,
+  loanFlagId: '',
   loanAmount: '',
-  tenureMonths: '',
-  firstDueDate: '',
   installmentCount: '',
   interestRateType: '',
   allowBpi: false,
@@ -56,9 +48,6 @@ const INITIAL_FORM = {
   capitalizationFrequency: '',
   repaymentFrequency: '',
   maturityDate: '',
-  advanceType: '',
-  advanceBasis: '',
-  emiAmount: '',
   bpiTreatment: '',
   interestRate: '',
   margin: '',
@@ -66,10 +55,6 @@ const INITIAL_FORM = {
   nextInterestReviewFrequencyDate: '',
   nextCapitalizationFrequencyDate: '',
   nextPaymentFrequencyDate: '',
-  prepaymentAllowed: false,
-  amountTreatment: '',
-  paymentStartDate: '',
-  paymentReference: '',
   penaltyApplicable: false,
   includeGraceDaysInPenaltyCalculation: false,
   penaltyType: '',
@@ -78,74 +63,84 @@ const INITIAL_FORM = {
   gracePeriodDays: '',
   allowWaivers: false,
   maximumWaiverPercentage: '',
-  maximumPenaltyAmount: '',
 };
+
+const EMPTY_OPTIONS = [];
 
 const SECTIONS = [
   {
     id: 'key-details',
     title: 'Key Details',
-    description: 'Core application and customer information.',
     fields: [
-      { name: 'division', label: 'Division', type: 'select', required: true },
+      { name: 'division', label: 'Division', type: 'select', required: true, optionsKey: 'divisions' },
       { name: 'product', label: 'Loan Type', type: 'select', required: true },
-      { name: 'currency', label: 'Currency', type: 'select', required: true },
+      { name: 'currency', label: 'Currency', type: 'select', required: true, optionsKey: 'currencies' },
       { name: 'customerName', label: 'Customer', type: 'select', required: true },
       { name: 'loanStartDate', label: 'Loan Start Date', type: 'date', required: true },
       { name: 'disbursementAmount', label: 'First Disbursement Amount', type: 'number', required: true },
       { name: 'loanAmount', label: 'Loan Amount', type: 'number', required: true },
       { name: 'loanReferenceNumber', label: 'Loan Reference No.', type: 'text', required: true },
-      { name: 'interestCapsBasis', label: 'Interest Caps Basis', type: 'select', required: true },
+      { name: 'interestCapsBasis', label: 'Interest Days Basis', type: 'select', required: true, optionsKey: 'dayBases' },
       { name: 'branch', label: 'Loan Branch', type: 'select', required: true },
-      { name: 'applicationRequestCode', label: 'Application Request Code', type: 'text' },
+      { name: 'applicationRequestCode', label: 'Application Request Date', type: 'date' },
       { name: 'netLoanAmount', label: 'Net Loan Amount', type: 'number', required: true },
       { name: 'totalDisbursements', label: 'Total Disbursements', type: 'number' },
-      { name: 'customerId', label: 'Customer ID', type: 'text' },
-      { name: 'applicationDate', label: 'Application Date', type: 'date' },
-      { name: 'sanctionDate', label: 'Sanction Date', type: 'date' },
     ],
   },
   {
     id: 'quick-disbursement',
     title: 'Quick Disbursement / Loan Information',
-    description: 'Loan terms and disbursement settings.',
     fields: [
-      { name: 'quickDisbursement', label: 'Quick Disbursement', type: 'radio' },
-      { name: 'repaymentMode', label: 'Payment Method', type: 'select', required: true },
+      { name: 'repaymentMode', label: 'Payment Method', type: 'select', required: true, optionsKey: 'paymentMethods' },
       { name: 'salesExecutive', label: 'Sales Executive', type: 'select' },
       { name: 'sourcingType', label: 'Sourcing Type', type: 'select', required: true },
       { name: 'employeeName', label: 'Employee Name', type: 'select' },
       { name: 'loanPurpose', label: 'Loan Purpose', type: 'select', required: true },
-      { name: 'loanUsage', label: 'Loan Usage', type: 'select' },
-      { name: 'disbursementDate', label: 'Disbursement Date', type: 'date', required: true },
       { name: 'dsaDma', label: 'DSA / DMA', type: 'select' },
       { name: 'salesManager', label: 'Sales Manager', type: 'select' },
       { name: 'salesDepartment', label: 'Sales Department', type: 'select' },
       { name: 'applicationNumber', label: 'Application Number', type: 'text', required: true },
-      { name: 'takeover', label: 'Takeover', type: 'checkbox' },
-      { name: 'renewal', label: 'Renewal', type: 'checkbox' },
-      { name: 'tenureMonths', label: 'Tenure (Months)', type: 'number' },
-      { name: 'firstDueDate', label: 'First Due Date', type: 'date' },
+      {
+        name: 'loanFlagId',
+        label: 'Loan Flag',
+        type: 'radio-group',
+        optionsKey: 'loanFlags',
+        fullWidth: true,
+      },
     ],
   },
   {
     id: 'payment-details',
     title: 'Payment Details',
-    description: 'Repayment setup and payment reference information.',
     fields: [
       { name: 'installmentCount', label: 'Number of Installments', type: 'number', required: true },
       { name: 'interestRateType', label: 'Interest Rate Type', type: 'select', required: true },
       { name: 'allowBpi', label: 'Allow BPI', type: 'checkbox' },
       { name: 'baseRate', label: 'Base Rate (%)', type: 'number' },
       { name: 'scheduleMethod', label: 'Schedule Method', type: 'select', required: true },
-      { name: 'interestFrequency', label: 'Interest Frequency', type: 'select', required: true },
-      { name: 'interestReviewFrequency', label: 'Interest Review Frequency', type: 'select', required: true },
-      { name: 'capitalizationFrequency', label: 'Capitalization Frequency', type: 'select', required: true },
-      { name: 'repaymentFrequency', label: 'Payment Frequency', type: 'select', required: true },
+      { name: 'interestFrequency', label: 'Interest Frequency', type: 'select', required: true, optionsKey: 'frequencies' },
+      {
+        name: 'interestReviewFrequency',
+        label: 'Interest Review Frequency',
+        type: 'select',
+        required: true,
+        optionsKey: 'frequencies',
+      },
+      {
+        name: 'capitalizationFrequency',
+        label: 'Capitalization Frequency',
+        type: 'select',
+        required: true,
+        optionsKey: 'frequencies',
+      },
+      {
+        name: 'repaymentFrequency',
+        label: 'Payment Frequency',
+        type: 'select',
+        required: true,
+        optionsKey: 'frequencies',
+      },
       { name: 'maturityDate', label: 'Maturity Date', type: 'date', required: true },
-      { name: 'advanceType', label: 'Advance Type', type: 'select' },
-      { name: 'advanceBasis', label: 'Advance Basis', type: 'select' },
-      { name: 'emiAmount', label: 'EMI Amount', type: 'number' },
       { name: 'bpiTreatment', label: 'BPI Treatment', type: 'select', required: true },
       { name: 'interestRate', label: 'Actual Interest Rate (%)', type: 'number', required: true },
       { name: 'margin', label: 'Margin (%)', type: 'number' },
@@ -153,41 +148,78 @@ const SECTIONS = [
       { name: 'nextInterestReviewFrequencyDate', label: 'Next Interest Review Frequency Date', type: 'date' },
       { name: 'nextCapitalizationFrequencyDate', label: 'Next Capitalization Frequency Date', type: 'date' },
       { name: 'nextPaymentFrequencyDate', label: 'Next Payment Frequency Date', type: 'date' },
-      { name: 'prepaymentAllowed', label: 'Prepayment Allowed', type: 'checkbox' },
-      { name: 'amountTreatment', label: 'Amount Treatment', type: 'select' },
-      { name: 'paymentStartDate', label: 'Payment Start Date', type: 'date' },
-      { name: 'paymentReference', label: 'Payment Reference / Account', type: 'text' },
     ],
   },
   {
     id: 'overdue-penalty-details',
     title: 'Overdue Penalty Details',
-    description: 'Penalty settings supplied for this application.',
     fields: [
       { name: 'penaltyApplicable', label: 'Apply Overdue Penalty', type: 'checkbox' },
       { name: 'includeGraceDaysInPenaltyCalculation', label: 'Include Grace Days in Penalty Calculation', type: 'checkbox' },
+      { name: 'allowWaivers', label: 'Allow Waivers', type: 'checkbox' },
       { name: 'penaltyType', label: 'Charge Type', type: 'select', required: true },
       { name: 'gracePeriodDays', label: 'Grace Days', type: 'number', required: true },
       { name: 'chargeCalculatedOn', label: 'Charge Calculated On', type: 'select', required: true },
       { name: 'penaltyRate', label: 'Charge Amount / %', type: 'number', required: true },
-      { name: 'allowWaivers', label: 'Allow Waivers', type: 'checkbox' },
       { name: 'maximumWaiverPercentage', label: 'Max Waiver %', type: 'number' },
-      { name: 'maximumPenaltyAmount', label: 'Maximum Penalty Amount', type: 'number' },
     ],
   },
 ];
 
-function Field({ field, value, onChange }) {
+function Field({ field, value, onChange, options = EMPTY_OPTIONS }) {
+  if (field.type === 'radio-group') {
+    const selected = value == null ? '' : String(value);
+
+    return (
+      <fieldset
+        className={[
+          'operations-loan-checkbox-group',
+          field.fullWidth ? 'operations-loan-field--full' : '',
+        ]
+          .join(' ')
+          .trim()}
+      >
+        <legend className="operations-loan-field-label">
+          {field.label}
+          {field.required && <span className="operations-loan-required">*</span>}
+        </legend>
+        <div className="operations-loan-checkbox-group-options">
+          {options.length ? (
+            options.map((option) => (
+              <label key={option.value} className="operations-loan-checkbox-field">
+                <input
+                  type="radio"
+                  name={field.name}
+                  value={option.value}
+                  checked={selected === String(option.value)}
+                  onChange={(event) => onChange(field.name, event.target.value)}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))
+          ) : (
+            <span className="operations-loan-options-empty">No loan flags available</span>
+          )}
+        </div>
+      </fieldset>
+    );
+  }
+
   if (field.type === 'checkbox') {
     return (
-      <label className="operations-loan-checkbox-field">
-        <input
-          type="checkbox"
-          checked={Boolean(value)}
-          onChange={(event) => onChange(field.name, event.target.checked)}
-        />
-        <span>{field.label}</span>
-      </label>
+      <div className="operations-loan-field operations-loan-field--checkbox">
+        <span className="operations-loan-field-label operations-loan-field-label--spacer" aria-hidden="true">
+          &nbsp;
+        </span>
+        <label className="operations-loan-checkbox-control">
+          <input
+            type="checkbox"
+            checked={Boolean(value)}
+            onChange={(event) => onChange(field.name, event.target.checked)}
+          />
+          <span>{field.label}</span>
+        </label>
+      </div>
     );
   }
 
@@ -232,6 +264,11 @@ function Field({ field, value, onChange }) {
           onChange={(event) => onChange(field.name, event.target.value)}
         >
           <option value="">Select</option>
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
         </select>
       ) : (
         <input
@@ -248,6 +285,67 @@ function Field({ field, value, onChange }) {
 export default function LoanBasicDetails() {
   const navigate = useNavigate();
   const [form, setForm] = useState(INITIAL_FORM);
+  const [masterOptions, setMasterOptions] = useState({
+    divisions: [],
+    paymentMethods: [],
+    frequencies: [],
+    loanFlags: [],
+    currencies: [],
+    dayBases: [],
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadMasters = async () => {
+      const [divisions, paymentMethods, frequencies, loanFlags, currencies, dayBases] = await Promise.all([
+        mastersLookupService.getDivisions().catch((error) => {
+          console.error('Failed to load divisions:', error);
+          return [];
+        }),
+        mastersLookupService.getPaymentMethods().catch((error) => {
+          console.error('Failed to load payment methods:', error);
+          return [];
+        }),
+        mastersLookupService.getFrequencies().catch((error) => {
+          console.error('Failed to load frequencies:', error);
+          return [];
+        }),
+        mastersLookupService.getLoanFlags().catch((error) => {
+          console.error('Failed to load loan flags:', error);
+          return [];
+        }),
+        mastersLookupService.getCurrencies().catch((error) => {
+          console.error('Failed to load currencies:', error);
+          return [];
+        }),
+        mastersLookupService.getDayBases().catch((error) => {
+          console.error('Failed to load day bases:', error);
+          return [];
+        }),
+      ]);
+
+      if (!isMounted) return;
+      setMasterOptions({ divisions, paymentMethods, frequencies, loanFlags, currencies, dayBases });
+    };
+
+    loadMasters();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const optionsByKey = useMemo(
+    () => ({
+      divisions: masterOptions.divisions,
+      paymentMethods: masterOptions.paymentMethods,
+      frequencies: masterOptions.frequencies,
+      loanFlags: masterOptions.loanFlags,
+      currencies: masterOptions.currencies,
+      dayBases: masterOptions.dayBases,
+    }),
+    [masterOptions]
+  );
 
   const updateField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -284,7 +382,6 @@ export default function LoanBasicDetails() {
               <div className="operations-loan-section-heading">
                 <div>
                   <h2>{section.title}</h2>
-                  <p>{section.description}</p>
                 </div>
               </div>
               <div className="operations-loan-fields">
@@ -294,6 +391,7 @@ export default function LoanBasicDetails() {
                     field={field}
                     value={form[field.name]}
                     onChange={updateField}
+                    options={field.optionsKey ? optionsByKey[field.optionsKey] || EMPTY_OPTIONS : EMPTY_OPTIONS}
                   />
                 ))}
               </div>
