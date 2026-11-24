@@ -49,6 +49,8 @@ import { ProofMaster } from './pages/masters/ProofMaster/ProofMaster';
 import { MortgageStatus } from './pages/masters/MortgageStatus/MortgageStatus';
 import { PaymentMethod } from './pages/masters/PaymentMethod/PaymentMethod';
 import { FeeMaster } from './pages/masters/FeeMaster/FeeMaster';
+import { Currency } from './pages/masters/Currency/Currency';
+import { DayBasis } from './pages/masters/DayBasis/DayBasis';
 import { LoanFlag } from './pages/masters/LoanFlag/LoanFlag';
 import { Division } from './pages/masters/Division/Division';
 import { Frequency } from './pages/masters/Frequency/Frequency';
@@ -195,6 +197,8 @@ function App() {
                 <Route path="mortgage-status" element={<MortgageStatus />} />
                 <Route path="payment-method" element={<PaymentMethod />} />
                 <Route path="fee-master" element={<FeeMaster />} />
+                <Route path="currency" element={<Currency />} />
+                <Route path="day-basis" element={<DayBasis />} />
                 <Route path="loan-flag" element={<LoanFlag />} />
                 <Route path="division" element={<Division />} />
                 <Route path="frequency" element={<Frequency />} />

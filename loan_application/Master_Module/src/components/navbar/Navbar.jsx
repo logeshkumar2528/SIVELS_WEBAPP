@@ -7,7 +7,7 @@ import {
   Map, Building2, Briefcase, Landmark, Globe, MapPin, Link, 
   Layers, ShieldCheck, Home, Key, GraduationCap, Star, Contact, Shield, TrendingUp, LogOut, ArrowLeft,
   Factory, Clock, Calculator, UserCheck, FileSpreadsheet, Activity, FileCheck, ShieldAlert,
-  Wallet, Flag, Receipt
+  Wallet, Flag, Receipt, Coins, CalendarDays
 } from 'lucide-react';
 import { MasterModal } from '../masters/MasterModal/MasterModal';
 import { logout } from '../../../../Core/src/auth/session';
@@ -56,6 +56,8 @@ const MASTERS_MENU = [
   { label: 'Mortgage Status', path: '/masters/mortgage-status', icon: ShieldCheck },
   { label: 'Payment Method', path: '/masters/payment-method', icon: Wallet },
   { label: 'Fee Master', path: '/masters/fee-master', icon: Receipt },
+  { label: 'Currency', path: '/masters/currency', icon: Coins },
+  { label: 'Day Basis', path: '/masters/day-basis', icon: CalendarDays },
   { label: 'Loan Flag', path: '/masters/loan-flag', icon: Flag },
   { label: 'Division', path: '/masters/division', icon: Building2 },
   { label: 'Frequency', path: '/masters/frequency', icon: Repeat },
@@ -97,6 +99,8 @@ const MASTER_CATEGORIES = [
       MASTERS_BY_PATH['/masters/rtr-loan-status'],
       MASTERS_BY_PATH['/masters/payment-method'],
       MASTERS_BY_PATH['/masters/fee-master'],
+      MASTERS_BY_PATH['/masters/currency'],
+      MASTERS_BY_PATH['/masters/day-basis'],
       MASTERS_BY_PATH['/masters/loan-flag'],
       MASTERS_BY_PATH['/masters/frequency'],
     ].filter(Boolean),

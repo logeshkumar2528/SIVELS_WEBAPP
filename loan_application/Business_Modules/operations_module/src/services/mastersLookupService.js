@@ -58,6 +58,30 @@ export const mastersLookupService = {
       (row) => row.loanFlagName ?? row.LoanFlagName ?? row.loanFlagCode ?? row.LoanFlagCode
     );
   },
+
+  async getCurrencies() {
+    const response = await axiosInstance.get('/CurrencyMaster');
+    return toOptions(
+      unwrapList(response.data),
+      (row) => row.currencyId ?? row.CurrencyId ?? row.id,
+      (row) => {
+        const name = row.currencyName ?? row.CurrencyName ?? '';
+        const code = row.currencyCode ?? row.CurrencyCode ?? '';
+        const symbol = row.symbol ?? row.Symbol ?? '';
+        if (name && code) return symbol ? `${code} - ${name} (${symbol})` : `${code} - ${name}`;
+        return name || code || symbol;
+      }
+    );
+  },
+
+  async getDayBases() {
+    const response = await axiosInstance.get('/DayBasisMaster');
+    return toOptions(
+      unwrapList(response.data),
+      (row) => row.dayBasisId ?? row.DayBasisId ?? row.id,
+      (row) => row.dayBasisName ?? row.DayBasisName ?? row.dayBasisCode ?? row.DayBasisCode
+    );
+  },
 };
 
 export default mastersLookupService;

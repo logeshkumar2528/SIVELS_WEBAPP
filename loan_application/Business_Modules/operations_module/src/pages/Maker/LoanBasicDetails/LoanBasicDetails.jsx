@@ -75,13 +75,13 @@ const SECTIONS = [
     fields: [
       { name: 'division', label: 'Division', type: 'select', required: true, optionsKey: 'divisions' },
       { name: 'product', label: 'Loan Type', type: 'select', required: true },
-      { name: 'currency', label: 'Currency', type: 'select', required: true },
+      { name: 'currency', label: 'Currency', type: 'select', required: true, optionsKey: 'currencies' },
       { name: 'customerName', label: 'Customer', type: 'select', required: true },
       { name: 'loanStartDate', label: 'Loan Start Date', type: 'date', required: true },
       { name: 'disbursementAmount', label: 'First Disbursement Amount', type: 'number', required: true },
       { name: 'loanAmount', label: 'Loan Amount', type: 'number', required: true },
       { name: 'loanReferenceNumber', label: 'Loan Reference No.', type: 'text', required: true },
-      { name: 'interestCapsBasis', label: 'Interest Days Basis', type: 'select', required: true },
+      { name: 'interestCapsBasis', label: 'Interest Days Basis', type: 'select', required: true, optionsKey: 'dayBases' },
       { name: 'branch', label: 'Loan Branch', type: 'select', required: true },
       { name: 'applicationRequestCode', label: 'Application Request Date', type: 'date' },
       { name: 'netLoanAmount', label: 'Net Loan Amount', type: 'number', required: true },
@@ -291,13 +291,15 @@ export default function LoanBasicDetails() {
     paymentMethods: [],
     frequencies: [],
     loanFlags: [],
+    currencies: [],
+    dayBases: [],
   });
 
   useEffect(() => {
     let isMounted = true;
 
     const loadMasters = async () => {
-      const [divisions, paymentMethods, frequencies, loanFlags] = await Promise.all([
+      const [divisions, paymentMethods, frequencies, loanFlags, currencies, dayBases] = await Promise.all([
         mastersLookupService.getDivisions().catch((error) => {
           console.error('Failed to load divisions:', error);
           return [];
@@ -314,10 +316,18 @@ export default function LoanBasicDetails() {
           console.error('Failed to load loan flags:', error);
           return [];
         }),
+        mastersLookupService.getCurrencies().catch((error) => {
+          console.error('Failed to load currencies:', error);
+          return [];
+        }),
+        mastersLookupService.getDayBases().catch((error) => {
+          console.error('Failed to load day bases:', error);
+          return [];
+        }),
       ]);
 
       if (!isMounted) return;
-      setMasterOptions({ divisions, paymentMethods, frequencies, loanFlags });
+      setMasterOptions({ divisions, paymentMethods, frequencies, loanFlags, currencies, dayBases });
     };
 
     loadMasters();
@@ -332,6 +342,8 @@ export default function LoanBasicDetails() {
       paymentMethods: masterOptions.paymentMethods,
       frequencies: masterOptions.frequencies,
       loanFlags: masterOptions.loanFlags,
+      currencies: masterOptions.currencies,
+      dayBases: masterOptions.dayBases,
     }),
     [masterOptions]
   );
