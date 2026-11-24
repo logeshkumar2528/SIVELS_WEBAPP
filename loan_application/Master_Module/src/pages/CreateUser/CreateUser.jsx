@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { ArrowLeft, BriefcaseBusiness, Building2, Landmark, ShieldCheck, UserPlus, Users } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { BriefcaseBusiness, Building2, Landmark, ShieldCheck, Users } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import AgentCreate from '../Agent/AgentCreate';
 import RelationshipManagerCreate from '../RelationshipManager/RelationshipManagerCreate';
 import AMSCreate from '../AMS/AMSCreate';
@@ -59,12 +59,30 @@ const USER_TYPES = {
   },
 };
 
+const TYPE_GROUPS = {
+  operationsMaker: ['operationsMaker', 'operationsChecker'],
+  operationsChecker: ['operationsMaker', 'operationsChecker'],
+};
+
+const getAllowedTypes = (requestedType) => {
+  if (!requestedType || !USER_TYPES[requestedType]) return Object.keys(USER_TYPES);
+  return TYPE_GROUPS[requestedType] || [requestedType];
+};
+
 export default function CreateUser() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedType = searchParams.get('type') || '';
   const requestedInvestorId = searchParams.get('investorId') || '';
-  const [userType, setUserType] = useState(requestedType);
+  const allowedTypes = useMemo(() => getAllowedTypes(requestedType), [requestedType]);
+  const isScopedFromDirectory = Boolean(requestedType && USER_TYPES[requestedType]);
+  const [userType, setUserType] = useState(
+    requestedType && USER_TYPES[requestedType] ? requestedType : ''
+  );
+
+  const selectableTypes = useMemo(
+    () => allowedTypes.filter((key) => USER_TYPES[key]),
+    [allowedTypes]
+  );
 
   const renderContent = () => {
     if (!userType) {
@@ -75,7 +93,8 @@ export default function CreateUser() {
             Select one of the options below. The appropriate creation form will appear here.
           </p>
           <div className="create-user-options">
-            {Object.entries(USER_TYPES).map(([key, option]) => {
+            {selectableTypes.map((key) => {
+              const option = USER_TYPES[key];
               const Icon = option.icon;
               return (
                 <button key={key} type="button" onClick={() => setUserType(key)}>
@@ -93,47 +112,41 @@ export default function CreateUser() {
       );
     }
 
-    if (userType === 'agent') return <AgentCreate onSuccessRedirect="/dashboard" />;
+    if (userType === 'agent') return <AgentCreate onSuccessRedirect="/agents" />;
     if (userType === 'rm') return <RelationshipManagerCreate />;
     if (userType === 'ams') return <AMSCreate />;
     if (userType === 'backOffice') return <BackOfficeCreate />;
     if (userType === 'creditManager') return <CreditManagerCreate />;
-    if (userType === 'creditHead') return <CreditHeadCreate onSuccessRedirect="/dashboard" />;
-    if (userType === 'investor') return <InvestorCreate investorId={requestedInvestorId || null} onSuccessRedirect="/investors" />;
+    if (userType === 'creditHead') return <CreditHeadCreate onSuccessRedirect="/credit-heads" />;
+    if (userType === 'investor') {
+      return (
+        <InvestorCreate
+          investorId={requestedInvestorId || null}
+          onSuccessRedirect="/investors"
+        />
+      );
+    }
     if (userType === 'operationsMaker') return <OperationsUserCreate initialRoleCode="MAKER" />;
     if (userType === 'operationsChecker') return <OperationsUserCreate initialRoleCode="CHECKER" />;
-    return <AMSCreate />;
+    return null;
   };
 
   return (
     <main className="create-user-page">
-      <button className="create-user-back" onClick={() => navigate('/dashboard')}>
-        <ArrowLeft size={16} /> Back to dashboard
-      </button>
-
-      <header className="create-user-header">
-        <div className="create-user-icon">
-          <UserPlus size={24} />
-        </div>
-        <div>
-          <span>USER MANAGEMENT</span>
-          <h1>Create user</h1>
-        </div>
-      </header>
-
       <section className="create-user-selector">
         <label htmlFor="user-type">What would you like to create?</label>
-        <select id="user-type" value={userType} onChange={(event) => setUserType(event.target.value)}>
-          <option value="">Select user type</option>
-          <option value="agent">Create agent</option>
-          <option value="rm">Create relationship manager</option>
-          <option value="ams">Create AMS</option>
-          <option value="backOffice">Create back office</option>
-          <option value="creditManager">Create credit manager</option>
-          <option value="creditHead">Create credit head</option>
-          <option value="investor">Create investor</option>
-          <option value="operationsMaker">Create Operations Maker</option>
-          <option value="operationsChecker">Create Operations Checker</option>
+        <select
+          id="user-type"
+          value={userType}
+          onChange={(event) => setUserType(event.target.value)}
+          disabled={isScopedFromDirectory && selectableTypes.length === 1}
+        >
+          {!isScopedFromDirectory && <option value="">Select user type</option>}
+          {selectableTypes.map((key) => (
+            <option key={key} value={key}>
+              {USER_TYPES[key].title}
+            </option>
+          ))}
         </select>
       </section>
 

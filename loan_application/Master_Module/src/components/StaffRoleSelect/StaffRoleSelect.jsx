@@ -67,7 +67,7 @@ export function StaffRoleSelect({
   const selectedRole = options.find((r) => String(r.roleId) === shown);
 
   return (
-    <div className={groupClassName}>
+    <div className={['staff-role-select', groupClassName].filter(Boolean).join(' ')}>
       <label htmlFor={id} className={labelClassName}>
         Access role
       </label>

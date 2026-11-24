@@ -1298,6 +1298,7 @@ const ROLE_META = {
     searchPlaceholder: 'Search agents by name, contact, RM, branch...',
     emptyText: 'No agents found.',
     addLabel: 'Add user',
+    createUserType: 'agent',
   },
   rm: {
     key: 'rm',
@@ -1308,6 +1309,7 @@ const ROLE_META = {
     searchPlaceholder: 'Search relationship managers by name, phone, branch...',
     emptyText: 'No relationship managers found.',
     addLabel: 'Add user',
+    createUserType: 'rm',
   },
   backOffice: {
     key: 'backOffice',
@@ -1318,6 +1320,7 @@ const ROLE_META = {
     searchPlaceholder: 'Search back office by name, code, contact, branch...',
     emptyText: 'No back office users found.',
     addLabel: 'Add user',
+    createUserType: 'backOffice',
   },
   ams: {
     key: 'ams',
@@ -1328,6 +1331,7 @@ const ROLE_META = {
     searchPlaceholder: 'Search ASM by name, code, contact, branch, city...',
     emptyText: 'No area specialists found.',
     addLabel: 'Add user',
+    createUserType: 'ams',
   },
   creditManager: {
     key: 'creditManager',
@@ -1338,6 +1342,7 @@ const ROLE_META = {
     searchPlaceholder: 'Search credit managers by name, code, contact, branch...',
     emptyText: 'No credit managers found.',
     addLabel: 'Add user',
+    createUserType: 'creditManager',
   },
   creditHead: {
     key: 'creditHead',
@@ -1348,6 +1353,7 @@ const ROLE_META = {
     searchPlaceholder: 'Search credit heads by name, code, contact, branch...',
     emptyText: 'No credit heads found.',
     addLabel: 'Add user',
+    createUserType: 'creditHead',
   },
   customer: {
     key: 'customer',
@@ -1358,6 +1364,7 @@ const ROLE_META = {
     searchPlaceholder: 'Search customers by name, mobile, loan product, status...',
     emptyText: 'No customer records found.',
     addLabel: 'Add user',
+    createUserType: null,
   },
 };
 
@@ -2381,13 +2388,15 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               </div>
             </div>
 
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => navigate('/create-user')}
-            >
-              <Plus size={16} /> {meta.addLabel}
-            </button>
+            {meta.createUserType ? (
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => navigate(`/create-user?type=${encodeURIComponent(meta.createUserType)}`)}
+              >
+                <Plus size={16} /> {meta.addLabel}
+              </button>
+            ) : null}
           </div>
 
           <div className="people-dir-controls">
