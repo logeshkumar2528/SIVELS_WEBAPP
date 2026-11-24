@@ -1,0 +1,436 @@
+.operations-fees-page {
+  width: 100%;
+  max-width: 1360px;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 4px 0 24px;
+  box-sizing: border-box;
+}
+
+.operations-fees-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 8px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.operations-fees-breadcrumb button {
+  padding: 0;
+  color: var(--color-primary);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.operations-fees-breadcrumb button:hover {
+  text-decoration: underline;
+}
+
+.operations-fees-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 8px;
+  margin: 8px 0 18px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.operations-fees-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 43px;
+  padding: 8px 10px;
+  color: #718078;
+  background: #f4f8f4;
+  border: 1px solid #dfe9e1;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.operations-fees-step:disabled {
+  cursor: not-allowed;
+}
+
+.operations-fees-step.is-active {
+  color: #174a2f;
+  background: #d9e9de;
+  border-color: #8fbd9d;
+  cursor: default;
+}
+
+.operations-fees-step-number {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #527964;
+  background: #e3eee5;
+  border-radius: 50%;
+  font-size: 10px;
+}
+
+.operations-fees-step.is-active .operations-fees-step-number {
+  color: #ffffff;
+  background: #174a2f;
+}
+
+.operations-fees-section {
+  margin-bottom: 16px;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #dfe9e1;
+  border-radius: 14px;
+  box-shadow: 0 5px 16px rgba(23, 74, 47, 0.04);
+}
+
+.operations-fees-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  background: #eaf2eb;
+  border-bottom: 1px solid #d5e3d8;
+}
+
+.operations-fees-section-heading h2 {
+  margin: 0;
+  color: #174a2f;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.operations-fees-section-heading p {
+  margin: 4px 0 0;
+  color: #6b7d71;
+  font-size: 11px;
+}
+
+.operations-fees-information-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 20px;
+  margin: 0;
+  padding: 18px;
+}
+
+.operations-fees-information-item {
+  min-width: 0;
+}
+
+.operations-fees-information-item dt {
+  margin-bottom: 4px;
+  color: #527964;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.operations-fees-information-item dd {
+  margin: 0;
+  color: #173b28;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.operations-fees-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  max-height: min(58vh, 620px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.operations-fees-table {
+  width: max-content;
+  min-width: 1740px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: #263c2e;
+  font-size: 11px;
+}
+
+.operations-fees-table th,
+.operations-fees-table td {
+  box-sizing: border-box;
+  border-right: 1px solid #d5e3d8;
+  border-bottom: 1px solid #d5e3d8;
+}
+
+.operations-fees-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 48px;
+  padding: 8px 9px;
+  color: #ffffff;
+  background: #174a2f;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  text-align: left;
+  white-space: normal;
+}
+
+.operations-fees-table th.operations-fees-col--financial,
+.operations-fees-table td.operations-fees-col--financial {
+  text-align: right;
+}
+
+.operations-fees-table th:first-child,
+.operations-fees-table td:first-child {
+  border-left: 1px solid #d5e3d8;
+}
+
+.operations-fees-table tbody tr:nth-child(odd) {
+  background: #f4f8f4;
+}
+
+.operations-fees-table tbody tr:nth-child(even) {
+  background: #eaf2eb;
+}
+
+.operations-fees-cell {
+  height: 54px;
+  padding: 8px 9px;
+  vertical-align: middle;
+}
+
+.operations-fees-cell--serial,
+.operations-fees-col--serial {
+  width: 48px;
+  min-width: 48px;
+  text-align: center;
+}
+
+.operations-fees-cell--name,
+.operations-fees-col--name {
+  width: 230px;
+  min-width: 230px;
+}
+
+.operations-fees-col--financial {
+  width: 122px;
+  min-width: 122px;
+}
+
+.operations-fees-cell--name {
+  color: #173b28;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.operations-fees-input {
+  width: 100%;
+  min-height: 32px;
+  box-sizing: border-box;
+  padding: 6px 7px;
+  color: #263c2e;
+  background: #ffffff;
+  border: 1px solid #cdded1;
+  border-radius: 6px;
+  outline: none;
+  font: inherit;
+  font-size: 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.operations-fees-input:focus {
+  border-color: #5d9d70;
+  box-shadow: 0 0 0 3px rgba(93, 157, 112, 0.12);
+}
+
+.operations-fees-empty-state {
+  height: 100px;
+  padding: 20px;
+  color: #6b7d71;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.operations-fees-receipt-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: -4px 0 16px;
+}
+
+.operations-fees-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.operations-fees-summary-card {
+  min-width: 0;
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #d5e3d8;
+  border-radius: 12px;
+  box-shadow: 0 5px 16px rgba(23, 74, 47, 0.04);
+}
+
+.operations-fees-summary-card span {
+  display: block;
+  color: #527964;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.operations-fees-summary-card strong {
+  display: block;
+  margin-top: 8px;
+  color: #174a2f;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.operations-fees-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 2px 0;
+}
+
+.operations-fees-footer-meta {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(280px, 1.3fr);
+  gap: 16px;
+  align-items: end;
+}
+
+.operations-fees-footer-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #6b7d71;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.operations-fees-status-dot {
+  width: 8px;
+  height: 8px;
+  background: #94a3b8;
+  border-radius: 50%;
+}
+
+.operations-fees-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #527964;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.operations-fees-notes textarea {
+  width: 100%;
+  min-height: 52px;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 8px 10px;
+  color: #263c2e;
+  background: #ffffff;
+  border: 1px solid #cdded1;
+  border-radius: 8px;
+  outline: none;
+  font: inherit;
+  font-size: 12px;
+}
+
+.operations-fees-notes textarea:focus {
+  border-color: #5d9d70;
+  box-shadow: 0 0 0 3px rgba(93, 157, 112, 0.12);
+}
+
+.operations-fees-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.operations-fees-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 8px 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.operations-fees-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.operations-fees-button--secondary {
+  color: #174a2f;
+  background: #ffffff;
+  border: 1px solid #9fbea8;
+}
+
+.operations-fees-button--primary {
+  color: #ffffff;
+  background: #174a2f;
+  border: 1px solid #174a2f;
+}
+
+.operations-fees-button--danger {
+  color: #a52d27;
+  background: #fffafa;
+  border: 1px solid #efbcb6;
+}
+
+@media (max-width: 1050px) {
+  .operations-fees-information-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .operations-fees-steps {
+    grid-template-columns: repeat(5, minmax(150px, 1fr));
+  }
+
+  .operations-fees-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .operations-fees-page {
+    padding-bottom: 16px;
+  }
+
+  .operations-fees-information-grid,
+  .operations-fees-footer-meta,
+  .operations-fees-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .operations-fees-actions {
+    justify-content: flex-start;
+  }
+}

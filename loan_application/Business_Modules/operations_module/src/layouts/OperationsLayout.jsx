@@ -63,7 +63,16 @@ export default function OperationsLayout({ title, subtitle, children, profile = 
     <div className={['layout', 'operations-layout', sidebarOpen ? 'layout--sidebar-open' : ''].join(' ').trim()}>
       <Sidebar
         menu={visibleNav}
-        activeRoute={pathname === ROUTES.PROFILE || pathname === ROUTES.MAKER_LOAN_BASIC_DETAILS ? pathname : ROUTES.ROOT}
+        activeRoute={
+          pathname === ROUTES.PROFILE
+            || pathname === ROUTES.MAKER_LOAN_BASIC_DETAILS
+            || pathname === ROUTES.MAKER_FEES
+            || pathname === ROUTES.MAKER_COVENANTS
+            || pathname === ROUTES.MAKER_MANDATE_DETAILS
+            || pathname === ROUTES.MAKER_CHEQUE_DETAILS
+            ? pathname
+            : ROUTES.ROOT
+        }
         badgeCounts={{}}
         isOpen={sidebarOpen}
         onNavigate={handleNavigate}
