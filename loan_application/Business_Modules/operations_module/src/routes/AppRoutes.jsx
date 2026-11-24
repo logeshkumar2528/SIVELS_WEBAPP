@@ -4,6 +4,10 @@ import { getStoredLandingPath, getStoredRoleCode } from '../../../../Core/src/au
 import OperationsDashboard from '../components/OperationsDashboard';
 import OperationsGuard from '../auth/OperationsGuard';
 import LoanBasicDetails from '../pages/Maker/LoanBasicDetails/LoanBasicDetails';
+import Fees from '../pages/Maker/Fees/Fees';
+import Covenants from '../pages/Maker/Covenants/Covenants';
+import MandateDetails from '../pages/Maker/MandateDetails/MandateDetails';
+import ChequeDetails from '../pages/Maker/ChequeDetails/ChequeDetails';
 import Profile from '../pages/Profile/Profile';
 import { ROUTES } from '../config/routeConfig';
 
@@ -57,6 +61,38 @@ export default function AppRoutes() {
           element={
             <OperationsGuard allowedRoles={['MAKER']}>
               <LoanBasicDetails />
+            </OperationsGuard>
+          }
+        />
+        <Route
+          path={ROUTES.MAKER_FEES}
+          element={
+            <OperationsGuard allowedRoles={['MAKER']}>
+              <Fees />
+            </OperationsGuard>
+          }
+        />
+        <Route
+          path={ROUTES.MAKER_COVENANTS}
+          element={
+            <OperationsGuard allowedRoles={['MAKER']}>
+              <Covenants />
+            </OperationsGuard>
+          }
+        />
+        <Route
+          path={ROUTES.MAKER_MANDATE_DETAILS}
+          element={
+            <OperationsGuard allowedRoles={['MAKER']}>
+              <MandateDetails />
+            </OperationsGuard>
+          }
+        />
+        <Route
+          path={ROUTES.MAKER_CHEQUE_DETAILS}
+          element={
+            <OperationsGuard allowedRoles={['MAKER']}>
+              <ChequeDetails />
             </OperationsGuard>
           }
         />
