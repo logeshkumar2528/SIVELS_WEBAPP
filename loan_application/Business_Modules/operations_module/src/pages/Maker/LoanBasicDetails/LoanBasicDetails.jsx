@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronRight, FileText, Save, Send, X } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Save, Send, X } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../../config/routeConfig';
@@ -6,12 +6,11 @@ import OperationsLayout from '../../../layouts/OperationsLayout';
 import './LoanBasicDetails.css';
 
 const WORKFLOW_STEPS = [
-  { id: 'loan-basic-details', label: 'Loan Basic Details', active: true },
-  { id: 'fees', label: 'Fees' },
-  { id: 'covenants', label: 'Covenants' },
-  { id: 'covenant-documents', label: 'Covenant Document Selection' },
-  { id: 'mandate-details', label: 'Mandate Details' },
-  { id: 'cheque-details', label: 'Cheque Details' },
+  { id: 'loan-basic-details', label: 'Loan Basic Details', active: true, route: ROUTES.MAKER_LOAN_BASIC_DETAILS },
+  { id: 'fees', label: 'Fees', route: ROUTES.MAKER_FEES },
+  { id: 'covenants', label: 'Covenants', route: ROUTES.MAKER_COVENANTS },
+  { id: 'mandate-details', label: 'Mandate Details', route: ROUTES.MAKER_MANDATE_DETAILS },
+  { id: 'cheque-details', label: 'Cheque Details', route: ROUTES.MAKER_CHEQUE_DETAILS },
 ];
 
 const INITIAL_FORM = {
@@ -263,18 +262,6 @@ export default function LoanBasicDetails() {
           <span>Loan Basic Details</span>
         </nav>
 
-        <header className="operations-loan-header">
-          <div>
-            <span className="operations-loan-eyebrow">APPLICATION WORKFLOW</span>
-            <h1>Loan Basic Details</h1>
-            <p>Enter and review the basic details for the selected loan application.</p>
-          </div>
-          <div className="operations-loan-application-badge">
-            <FileText size={17} aria-hidden="true" />
-            <span>Application details</span>
-          </div>
-        </header>
-
         <nav className="operations-loan-steps" aria-label="Application workflow steps">
           {WORKFLOW_STEPS.map((step, index) => (
             <button
@@ -282,7 +269,8 @@ export default function LoanBasicDetails() {
               type="button"
               className={['operations-loan-step', step.active ? 'is-active' : ''].join(' ').trim()}
               aria-current={step.active ? 'step' : undefined}
-              disabled={!step.active}
+              disabled={!step.route}
+              onClick={() => step.route && navigate(step.route)}
             >
               <span className="operations-loan-step-number">{index + 1}</span>
               <span>{step.label}</span>
