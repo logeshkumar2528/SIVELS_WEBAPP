@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ROUTES } from '../../../config/routeConfig';
+import { buildApplicationRoute, ROUTES } from '../../../config/routeConfig';
+import { useOperationsApplication } from '../../../context/OperationsApplicationContext';
 import OperationsLayout from '../../../layouts/OperationsLayout';
 import './MandateDetails.css';
 
@@ -115,7 +116,7 @@ function FieldError({ message }) {
   return message ? <span className="operations-mandate-error">{message}</span> : null;
 }
 
-function WorkflowSteps({ navigate }) {
+function WorkflowSteps({ navigate, applicationId }) {
   return (
     <nav className="operations-mandate-steps" aria-label="Application workflow steps">
       {WORKFLOW_STEPS.map((step, index) => (
@@ -124,7 +125,7 @@ function WorkflowSteps({ navigate }) {
           type="button"
           className={['operations-mandate-step', step.active ? 'is-active' : ''].join(' ').trim()}
           disabled={!step.route}
-          onClick={() => step.route && navigate(step.route)}
+          onClick={() => step.route && navigate(buildApplicationRoute(step.route, applicationId))}
         >
           <span className="operations-mandate-step-number">{index + 1}</span>
           <span>{step.label}</span>
@@ -198,6 +199,7 @@ function CheckboxField({ label, name, value, onChange, className = '' }) {
 
 export default function MandateDetails() {
   const navigate = useNavigate();
+  const { applicationId } = useOperationsApplication();
   const fileInputRef = useRef(null);
   const [form, setForm] = useState(INITIAL_FORM);
   const [validationErrors, setValidationErrors] = useState({});
@@ -327,7 +329,7 @@ export default function MandateDetails() {
           <span>Mandate Details</span>
         </nav>
 
-        <WorkflowSteps navigate={navigate} />
+        <WorkflowSteps navigate={navigate} applicationId={applicationId} />
 
         <form className="operations-mandate-form" onSubmit={handleSubmit} noValidate>
           <section className="operations-mandate-section" aria-labelledby="operations-mandate-information-title">

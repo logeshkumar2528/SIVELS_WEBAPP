@@ -10,7 +10,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ROUTES } from '../../../config/routeConfig';
+import { buildApplicationRoute, ROUTES } from '../../../config/routeConfig';
+import { useOperationsApplication } from '../../../context/OperationsApplicationContext';
 import OperationsLayout from '../../../layouts/OperationsLayout';
 import './ChequeDetails.css';
 
@@ -189,7 +190,7 @@ function FieldError({ message }) {
   return message ? <span className="operations-cheque-error">{message}</span> : null;
 }
 
-function WorkflowSteps({ navigate }) {
+function WorkflowSteps({ navigate, applicationId }) {
   return (
     <nav className="operations-cheque-steps" aria-label="Application workflow steps">
       {WORKFLOW_STEPS.map((step, index) => (
@@ -199,7 +200,7 @@ function WorkflowSteps({ navigate }) {
           className={['operations-cheque-step', step.active ? 'is-active' : ''].join(' ').trim()}
           aria-current={step.active ? 'step' : undefined}
           disabled={!step.route}
-          onClick={() => step.route && navigate(step.route)}
+          onClick={() => step.route && navigate(buildApplicationRoute(step.route, applicationId))}
         >
           <span className="operations-cheque-step-number">{index + 1}</span>
           <span>{step.label}</span>
@@ -255,6 +256,7 @@ function DynamicSelect({ label, value, options, onChange, error, required = fals
 
 export default function ChequeDetails() {
   const navigate = useNavigate();
+  const { applicationId, application } = useOperationsApplication();
   const fileInputRef = useRef(null);
   const fileTargetIdRef = useRef(null);
   const [form, setForm] = useState(INITIAL_FORM);
@@ -421,7 +423,7 @@ export default function ChequeDetails() {
           <span>Cheque Details</span>
         </nav>
 
-        <WorkflowSteps navigate={navigate} />
+        <WorkflowSteps navigate={navigate} applicationId={applicationId} />
 
         <div className="operations-cheque-summary-grid">
           <section className="operations-cheque-panel" aria-labelledby="operations-cheque-loan-summary-title">
@@ -439,7 +441,7 @@ export default function ChequeDetails() {
             <div className="operations-cheque-summary-fields">
               <SummaryField label="Currency" />
               <SummaryField label="Interest Days Basis" />
-              <SummaryField label="Customer Name" />
+              <SummaryField label="Customer Name" value={application?.fullName || '—'} />
             </div>
             <div className="operations-cheque-log-actions">
               <button type="button" className="operations-cheque-button operations-cheque-button--secondary" disabled title="Activity Log is not connected yet.">Activity Log</button>

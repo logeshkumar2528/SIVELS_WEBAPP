@@ -1,7 +1,9 @@
 import { ChevronRight, FileText, Send, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ROUTES } from '../../../config/routeConfig';
+import { getFees } from '../../../../../../Master_Module/src/api/masters/feeMasterApi';
+import { buildApplicationRoute, ROUTES } from '../../../config/routeConfig';
+import { useOperationsApplication } from '../../../context/OperationsApplicationContext';
 import OperationsLayout from '../../../layouts/OperationsLayout';
 import './Fees.css';
 
@@ -12,8 +14,6 @@ const WORKFLOW_STEPS = [
   { id: 'mandate-details', label: 'Mandate Details', route: ROUTES.MAKER_MANDATE_DETAILS },
   { id: 'cheque-details', label: 'Cheque Details', route: ROUTES.MAKER_CHEQUE_DETAILS },
 ];
-
-const FEE_MASTER_RECORDS = [];
 
 const FINANCIAL_FIELDS = [
   'calculatedFee',
@@ -65,7 +65,33 @@ function createEmptyFinancialValues() {
   return FINANCIAL_FIELDS.reduce((values, field) => ({ ...values, [field]: '' }), {});
 }
 
-function WorkflowSteps({ navigate }) {
+function normalizeFeeMasterRecords(response) {
+  const records = [response, response?.value, response?.data, response?.result]
+    .find((candidate) => Array.isArray(candidate)) || [];
+
+  if (!Array.isArray(records)) return [];
+
+  return records
+    .filter((record) => record?.isActive === true || record?.IsActive === true)
+    .map((record) => {
+      const feeId = record?.feeId ?? record?.FeeId ?? record?.id;
+      const feeName = record?.feeName ?? record?.FeeName;
+
+      return {
+        stableId: feeId,
+        feeName: typeof feeName === 'string' ? feeName.trim() : feeName,
+      };
+    })
+    .filter((record) => (
+      record.stableId !== undefined
+      && record.stableId !== null
+      && String(record.stableId).trim() !== ''
+      && typeof record.feeName === 'string'
+      && record.feeName.trim() !== ''
+    ));
+}
+
+function WorkflowSteps({ navigate, applicationId }) {
   return (
     <nav className="operations-fees-steps" aria-label="Application workflow steps">
       {WORKFLOW_STEPS.map((step, index) => (
@@ -75,7 +101,7 @@ function WorkflowSteps({ navigate }) {
           className={['operations-fees-step', step.active ? 'is-active' : ''].join(' ').trim()}
           aria-current={step.active ? 'step' : undefined}
           disabled={!step.route}
-          onClick={() => step.route && navigate(step.route)}
+          onClick={() => step.route && navigate(buildApplicationRoute(step.route, applicationId))}
         >
           <span className="operations-fees-step-number">{index + 1}</span>
           <span>{step.label}</span>
@@ -113,10 +139,49 @@ function FeeRow({ record, index, values, onChange }) {
   );
 }
 
-export default function Fees({ masterRecords = FEE_MASTER_RECORDS }) {
+export default function Fees() {
   const navigate = useNavigate();
+  const { applicationId, application } = useOperationsApplication();
+  const requestIdRef = useRef(0);
+  const [masterRecords, setMasterRecords] = useState([]);
+  const [isMasterLoading, setIsMasterLoading] = useState(true);
+  const [isMasterError, setIsMasterError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [financialValuesByMasterId, setFinancialValuesByMasterId] = useState({});
   const [notes, setNotes] = useState('');
+
+  useEffect(() => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    let isMounted = true;
+
+    const loadFeeMasterRecords = async () => {
+      setIsMasterLoading(true);
+      setIsMasterError(false);
+
+      try {
+        const response = await getFees();
+        if (!isMounted || requestId !== requestIdRef.current) return;
+
+        setMasterRecords(normalizeFeeMasterRecords(response));
+      } catch (error) {
+        if (!isMounted || requestId !== requestIdRef.current) return;
+
+        console.error('Failed to fetch Fee Master records:', error);
+        setIsMasterError(true);
+      } finally {
+        if (isMounted && requestId === requestIdRef.current) {
+          setIsMasterLoading(false);
+        }
+      }
+    };
+
+    loadFeeMasterRecords();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [reloadKey]);
 
   const updateFinancialValue = (masterId, field, value) => {
     setFinancialValuesByMasterId((current) => ({
@@ -128,6 +193,12 @@ export default function Fees({ masterRecords = FEE_MASTER_RECORDS }) {
     }));
   };
 
+  const loanInformation = LOAN_INFORMATION.map((item) => (
+    item.label === 'Customer Name'
+      ? { ...item, value: application?.fullName || '—' }
+      : item
+  ));
+
   return (
     <OperationsLayout title="Fees" subtitle="Operations Maker workflow">
       <div className="operations-fees-page">
@@ -137,7 +208,7 @@ export default function Fees({ masterRecords = FEE_MASTER_RECORDS }) {
           <span>Fees</span>
         </nav>
 
-        <WorkflowSteps navigate={navigate} />
+        <WorkflowSteps navigate={navigate} applicationId={applicationId} />
 
         <section className="operations-fees-section" aria-labelledby="operations-fees-loan-information">
           <div className="operations-fees-section-heading">
@@ -147,7 +218,7 @@ export default function Fees({ masterRecords = FEE_MASTER_RECORDS }) {
             </div>
           </div>
           <dl className="operations-fees-information-grid">
-            {LOAN_INFORMATION.map((item) => (
+            {loanInformation.map((item) => (
               <div className="operations-fees-information-item" key={item.label}>
                 <dt>{item.label}</dt>
                 <dd>{item.value}</dd>
@@ -182,10 +253,29 @@ export default function Fees({ masterRecords = FEE_MASTER_RECORDS }) {
                 </tr>
               </thead>
               <tbody>
-                {masterRecords.length === 0 ? (
+                {isMasterLoading ? (
                   <tr>
                     <td className="operations-fees-empty-state" colSpan={14}>
-                      No fee master records available.
+                      Loading fee master records...
+                    </td>
+                  </tr>
+                ) : isMasterError ? (
+                  <tr>
+                    <td className="operations-fees-empty-state" colSpan={14}>
+                      <div>Unable to load fee master records.</div>
+                      <button
+                        type="button"
+                        className="operations-fees-button operations-fees-button--secondary"
+                        onClick={() => setReloadKey((current) => current + 1)}
+                      >
+                        Retry
+                      </button>
+                    </td>
+                  </tr>
+                ) : masterRecords.length === 0 ? (
+                  <tr>
+                    <td className="operations-fees-empty-state" colSpan={14}>
+                      No active fee master records available.
                     </td>
                   </tr>
                 ) : (

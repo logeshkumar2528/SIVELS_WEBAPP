@@ -37,6 +37,26 @@
   padding-bottom: 2px;
 }
 
+.operations-loan-identity-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.operations-loan-identity-warning svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #d97706;
+}
+
 .operations-loan-step {
   display: flex;
   align-items: center;
