@@ -1,0 +1,116 @@
+.operations-document-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(15, 47, 29, 0.64);
+}
+
+.operations-document-viewer__window {
+  display: flex;
+  flex-direction: column;
+  width: min(1180px, 100%);
+  height: min(92vh, 920px);
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #cfe1d4;
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(15, 47, 29, 0.24);
+}
+
+.operations-document-viewer__header,
+.operations-document-viewer__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  background: #edf8ef;
+  border-bottom: 1px solid #d7e8da;
+}
+
+.operations-document-viewer__footer {
+  justify-content: flex-end;
+  border-top: 1px solid #d7e8da;
+  border-bottom: 0;
+}
+
+.operations-document-viewer__header h2,
+.operations-document-viewer__header p {
+  margin: 0;
+}
+
+.operations-document-viewer__header h2 {
+  color: #164b2d;
+  font-size: 17px;
+}
+
+.operations-document-viewer__header p {
+  margin-top: 3px;
+  color: #5f7566;
+  font-size: 12px;
+}
+
+.operations-document-viewer__close,
+.operations-document-viewer__footer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 7px 13px;
+  color: #164b2d;
+  background: #fff;
+  border: 1px solid #b9d4bf;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.operations-document-viewer__close {
+  width: 34px;
+  padding: 0;
+}
+
+.operations-document-viewer__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+  background: #f7fbf8;
+}
+
+.operations-document-viewer__legacy-frame {
+  min-height: 100%;
+  background: #fff;
+}
+
+.operations-document-viewer__state {
+  margin: 24px auto;
+  max-width: 560px;
+  color: #5f7566;
+  text-align: center;
+}
+
+/* Existing read-only report components expose print/download controls. */
+.operations-document-viewer__body button {
+  pointer-events: none;
+}
+
+.operations-document-viewer__body .pdf-controls,
+.operations-document-viewer__body .cam-btn,
+.operations-document-viewer__body .sl-download-btn,
+.operations-document-viewer__body .stc-modal-header button {
+  display: none !important;
+}
+
+@media (max-width: 700px) {
+  .operations-document-viewer {
+    padding: 8px;
+  }
+
+  .operations-document-viewer__body {
+    padding: 8px;
+  }
+}

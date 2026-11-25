@@ -10,7 +10,8 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ROUTES } from '../../../config/routeConfig';
+import { buildApplicationRoute, ROUTES } from '../../../config/routeConfig';
+import { useOperationsApplication } from '../../../context/OperationsApplicationContext';
 import OperationsLayout from '../../../layouts/OperationsLayout';
 import './Covenants.css';
 
@@ -68,7 +69,7 @@ function validateForm(form) {
   return nextErrors;
 }
 
-function WorkflowSteps({ navigate }) {
+function WorkflowSteps({ navigate, applicationId }) {
   return (
     <nav className="operations-covenants-steps" aria-label="Application workflow steps">
       {WORKFLOW_STEPS.map((step, index) => (
@@ -78,7 +79,7 @@ function WorkflowSteps({ navigate }) {
           className={['operations-covenants-step', step.active ? 'is-active' : ''].join(' ').trim()}
           aria-current={step.active ? 'step' : undefined}
           disabled={!step.route}
-          onClick={() => step.route && navigate(step.route)}
+          onClick={() => step.route && navigate(buildApplicationRoute(step.route, applicationId))}
         >
           <span className="operations-covenants-step-number">{index + 1}</span>
           <span>{step.label}</span>
@@ -106,6 +107,7 @@ function FieldError({ message }) {
 
 export default function Covenants() {
   const navigate = useNavigate();
+  const { applicationId } = useOperationsApplication();
   const [form, setForm] = useState(INITIAL_FORM);
   const [covenantRecords, setCovenantRecords] = useState([]);
   const [editingFrontendId, setEditingFrontendId] = useState(null);
@@ -229,7 +231,7 @@ export default function Covenants() {
           <span>Covenants</span>
         </nav>
 
-        <WorkflowSteps navigate={navigate} />
+        <WorkflowSteps navigate={navigate} applicationId={applicationId} />
 
         <div className="operations-covenants-workspace">
           <section className="operations-covenants-panel" aria-labelledby="operations-covenants-details-title">
