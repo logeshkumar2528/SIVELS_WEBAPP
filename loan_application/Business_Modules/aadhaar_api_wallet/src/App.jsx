@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getLoggedInUser, walletService } from './api/walletService';
-import { buildDailyUsageAxis } from './usage';
+import { filterDailyUsage, localDateKey } from './usage';
 
 const LOW_BALANCE_LIMIT = 500;
 const VERIFICATION_COST = 3.54;
@@ -69,18 +69,25 @@ function App() {
   const saveBaseline = async () => { const amount = Number(syncValue); if (!Number.isFinite(amount) || amount < 0 || !/^\d+(\.\d{1,2})?$/.test(String(syncValue))) return; setSaving(true); setError(''); try { await walletService.setBaseline(amount); setSyncOpen(false); setSuccess('Starting balance updated successfully.'); await load(true); } catch (e) { setError(e.message || 'Unable to update wallet baseline'); } finally { setSaving(false); } };
 
   const rawDailyUsage = Array.isArray(summary?.dailyUsage) ? summary.dailyUsage : [];
-  const daily = useMemo(() => buildDailyUsageAxis(rawDailyUsage), [summary]);
   const [dailyDateFilter, setDailyDateFilter] = useState('');
   const [dailyMonthFilter, setDailyMonthFilter] = useState('');
-  const filteredDaily = useMemo(() => daily.filter((item) => {
-    const matchesDate = !dailyDateFilter || item.key === dailyDateFilter;
-    const matchesMonth = !dailyMonthFilter || item.key.slice(0, 7) === dailyMonthFilter;
-    return matchesDate && matchesMonth;
-  }), [daily, dailyDateFilter, dailyMonthFilter]);
-  const totalCalls = filteredDaily.reduce((sum, item) => sum + item.calls, 0), totalCost = filteredDaily.reduce((sum, item) => sum + item.cost, 0);
+  const hasActiveFilter = Boolean(dailyDateFilter || dailyMonthFilter);
+  const filteredDaily = useMemo(
+    () =>
+      filterDailyUsage(rawDailyUsage, {
+        dateFilter: dailyDateFilter,
+        monthFilter: dailyMonthFilter,
+      }),
+    [rawDailyUsage, dailyDateFilter, dailyMonthFilter]
+  );
+  const totalCalls = filteredDaily.reduce((sum, item) => sum + item.calls, 0);
+  const totalCost = filteredDaily.reduce((sum, item) => sum + item.cost, 0);
   const hasUsageRows = rawDailyUsage.length > 0;
-  const hasRenderableUsage = daily.some((item) => item.calls > 0 || item.cost > 0);
-  if (import.meta.env.DEV && hasUsageRows && !hasRenderableUsage) console.warn('[AadhaarWallet] dailyUsage did not match the local 14-day axis:', rawDailyUsage);
+  const hasRenderableUsage = filteredDaily.some((item) => item.calls > 0 || item.cost > 0);
+  const hasMatchingFilterActivity = filteredDaily.some((item) => item.calls > 0 || item.cost > 0);
+  if (import.meta.env.DEV && hasUsageRows && !hasActiveFilter && !hasRenderableUsage) {
+    console.warn('[AadhaarWallet] dailyUsage did not match the local 14-day axis:', rawDailyUsage);
+  }
 
   if (loading) {
     return (
@@ -112,7 +119,7 @@ function App() {
     : needsBaseline
     ? { tone: 'neutral', label: 'Setup required' }
     : low ? { tone: 'warning', label: 'Low balance' } : { tone: 'success', label: 'Healthy' };
-  const todayKey = daily[daily.length - 1]?.key;
+  const todayKey = localDateKey(new Date());
 
   return (
     <main className="wl-page">
@@ -235,13 +242,27 @@ function App() {
           <div className="wl-usage-filters" aria-label="Daily breakdown filters">
             <label>
               <span>Date</span>
-              <input type="date" value={dailyDateFilter} onChange={(event) => setDailyDateFilter(event.target.value)} />
+              <input
+                type="date"
+                value={dailyDateFilter}
+                onChange={(event) => {
+                  setDailyDateFilter(event.target.value);
+                  setDailyMonthFilter('');
+                }}
+              />
             </label>
             <label>
               <span>Month</span>
-              <input type="month" value={dailyMonthFilter} onChange={(event) => setDailyMonthFilter(event.target.value)} />
+              <input
+                type="month"
+                value={dailyMonthFilter}
+                onChange={(event) => {
+                  setDailyMonthFilter(event.target.value);
+                  setDailyDateFilter('');
+                }}
+              />
             </label>
-            {(dailyDateFilter || dailyMonthFilter) && (
+            {hasActiveFilter && (
               <button
                 type="button"
                 className="wl-btn wl-btn-outline wl-filter-clear"
@@ -253,20 +274,24 @@ function App() {
           </div>
         </div>
 
-        {!hasUsageRows ? (
+        {!hasUsageRows && !hasActiveFilter ? (
           <div className="wl-empty">
             <span className="wl-empty-icon"><ActivityIcon size={24} /></span>
             <strong>No activity yet</strong>
             <p>No verification usage recorded in the last 14 days.</p>
           </div>
-        ) : !hasRenderableUsage ? (
-          <div className="wl-alert wl-alert-warning wl-inline-alert"><AlertIcon size={18} /><div className="wl-alert-body"><p>Daily usage was received, but no valid rows could be displayed.</p></div></div>
-        ) : filteredDaily.length === 0 ? (
+        ) : hasActiveFilter && !hasMatchingFilterActivity ? (
           <div className="wl-empty">
             <span className="wl-empty-icon"><ActivityIcon size={24} /></span>
             <strong>No matching activity</strong>
-            <p>No daily usage matches the selected date or month.</p>
+            <p>
+              {dailyDateFilter
+                ? 'No verification usage recorded for the selected date.'
+                : 'No verification usage recorded for the selected month.'}
+            </p>
           </div>
+        ) : hasUsageRows && !hasActiveFilter && !hasRenderableUsage ? (
+          <div className="wl-alert wl-alert-warning wl-inline-alert"><AlertIcon size={18} /><div className="wl-alert-body"><p>Daily usage was received, but no valid rows could be displayed.</p></div></div>
         ) : (
           <>
             <div className="wl-table-wrap">

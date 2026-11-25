@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, FileText, Landmark, LoaderCircle, MapPin, Save, UserRound } from 'lucide-react';
+import { FileText, Landmark, LoaderCircle, MapPin, Save, UserRound } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   createCreditHead,
@@ -567,11 +567,7 @@ export default function CreditHeadCreate({ onSuccessRedirect = '/credit-heads' }
 
   return (
     <div className="masters-page rm-create-page">
-      <button className="people-dir-back-btn" onClick={() => navigate(onSuccessRedirect)} type="button">
-        <ArrowLeft size={16} /> Back to Credit Heads
-      </button>
-
-      <header className="rm-hero" style={{ marginTop: '16px' }}>
+      <header className="rm-hero">
         <div className="rm-hero-icon" style={{ background: 'linear-gradient(145deg, #4f46e5, #4338ca)' }}>
           <Landmark size={26} />
         </div>
