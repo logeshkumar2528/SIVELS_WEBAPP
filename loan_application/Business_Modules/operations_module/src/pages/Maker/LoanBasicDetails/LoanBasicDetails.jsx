@@ -34,11 +34,9 @@ const INITIAL_FORM = {
   repaymentMode: '',
   salesExecutive: '',
   sourcingType: '',
-  employeeName: '',
   loanPurpose: '',
   dsaDma: '',
   salesManager: '',
-  salesDepartment: '',
   loanFlagId: '',
   loanAmount: '',
   installmentCount: '',
@@ -47,7 +45,6 @@ const INITIAL_FORM = {
   baseRate: '',
   scheduleMethod: '',
   interestFrequency: '',
-  interestReviewFrequency: '',
   capitalizationFrequency: '',
   repaymentFrequency: '',
   maturityDate: '',
@@ -55,7 +52,6 @@ const INITIAL_FORM = {
   interestRate: '',
   margin: '',
   nextInterestFrequencyDate: '',
-  nextInterestReviewFrequencyDate: '',
   nextCapitalizationFrequencyDate: '',
   nextPaymentFrequencyDate: '',
   penaltyApplicable: false,
@@ -164,8 +160,6 @@ const SECTIONS = [
       { name: 'dsaDma', label: 'DSA / DMA', type: 'select' },
       { name: 'sourcingType', label: 'Sourcing Type', type: 'select', required: true },
       { name: 'salesManager', label: 'Sales Manager', type: 'select' },
-      { name: 'employeeName', label: 'Employee Name', type: 'select' },
-      { name: 'salesDepartment', label: 'Sales Department', type: 'select' },
       { name: 'loanPurpose', label: 'Loan Purpose', type: 'select', required: true, readOnly: true },
       { name: 'applicationNumber', label: 'Application Number', type: 'text', required: true, readOnly: true },
       {
@@ -190,14 +184,6 @@ const SECTIONS = [
       { name: 'scheduleMethod', label: 'Schedule Method', type: 'select', required: true },
       { name: 'interestFrequency', label: 'Interest Frequency', type: 'select', required: true, optionsKey: 'frequencies' },
       { name: 'nextInterestFrequencyDate', label: 'Next Interest Frequency Date', type: 'date' },
-      {
-        name: 'interestReviewFrequency',
-        label: 'Interest Review Frequency',
-        type: 'select',
-        required: true,
-        optionsKey: 'frequencies',
-      },
-      { name: 'nextInterestReviewFrequencyDate', label: 'Next Interest Review Frequency Date', type: 'date' },
       {
         name: 'capitalizationFrequency',
         label: 'Capitalization Frequency',
@@ -641,7 +627,15 @@ export default function LoanBasicDetails() {
 
         <form className="operations-loan-form" onSubmit={(event) => event.preventDefault()} noValidate>
           {SECTIONS.map((section) => (
-            <section className="operations-loan-section" key={section.id}>
+              <section
+                className={[
+                  'operations-loan-section',
+                  section.id === 'payment-details' ? 'operations-loan-section--payment-details' : '',
+                ]
+                  .join(' ')
+                  .trim()}
+                key={section.id}
+              >
               <div className="operations-loan-section-heading">
                 <div>
                   <h2>{section.title}</h2>

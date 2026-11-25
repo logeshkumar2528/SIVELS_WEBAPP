@@ -120,6 +120,19 @@
   padding: 18px;
 }
 
+.operations-loan-section--payment-details .operations-loan-fields > :nth-child(9),
+.operations-loan-section--payment-details .operations-loan-fields > :nth-child(11),
+.operations-loan-section--payment-details .operations-loan-fields > :nth-child(13),
+.operations-loan-section--payment-details .operations-loan-fields > :nth-child(15) {
+  grid-column: 1;
+}
+
+.operations-loan-section--payment-details .operations-loan-fields > :nth-child(10),
+.operations-loan-section--payment-details .operations-loan-fields > :nth-child(12),
+.operations-loan-section--payment-details .operations-loan-fields > :nth-child(14) {
+  grid-column: 2;
+}
+
 .operations-loan-field,
 .operations-loan-radio-field,
 .operations-loan-checkbox-field,
@@ -347,6 +360,10 @@
     grid-template-columns: 1fr;
     gap: 13px;
     padding: 14px;
+  }
+
+  .operations-loan-section--payment-details .operations-loan-fields > :nth-child(n + 9) {
+    grid-column: 1;
   }
 
   .operations-loan-actions {
