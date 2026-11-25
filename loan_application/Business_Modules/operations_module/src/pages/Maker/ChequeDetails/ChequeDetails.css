@@ -183,7 +183,7 @@
 
 .operations-cheque-generation-form {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px 14px;
   padding: 14px;
 }
@@ -198,6 +198,8 @@
   color: #426252;
   font-size: 11px;
   font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .operations-cheque-required {
@@ -211,6 +213,7 @@
 .operations-cheque-save-submit-select {
   box-sizing: border-box;
   width: 100%;
+  min-width: 0;
   min-height: 34px;
   border: 1px solid #cddbd2;
   border-radius: 5px;
@@ -292,6 +295,7 @@
 .operations-cheque-generation-actions {
   display: flex;
   align-items: end;
+  grid-column: 1 / -1;
   justify-content: flex-end;
   gap: 8px;
 }
@@ -760,8 +764,7 @@
 
   .operations-cheque-summary-grid,
   .operations-cheque-total-grid,
-  .operations-cheque-summary-fields,
-  .operations-cheque-generation-form {
+  .operations-cheque-summary-fields {
     grid-template-columns: 1fr;
   }
 
@@ -790,5 +793,11 @@
 
   .operations-cheque-pagination-controls {
     flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 680px) {
+  .operations-cheque-generation-form {
+    grid-template-columns: 1fr;
   }
 }

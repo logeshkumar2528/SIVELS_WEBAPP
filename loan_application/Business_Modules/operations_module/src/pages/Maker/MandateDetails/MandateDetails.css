@@ -113,7 +113,7 @@
 
 .operations-mandate-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px 14px;
   padding: 14px;
 }
@@ -124,7 +124,7 @@
 }
 
 .operations-mandate-field--wide {
-  grid-column: span 2;
+  grid-column: span 1;
 }
 
 .operations-mandate-label {
@@ -133,6 +133,8 @@
   color: #426252;
   font-size: 11px;
   font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .operations-mandate-required {
@@ -144,6 +146,7 @@
 .operations-mandate-selection-control {
   box-sizing: border-box;
   width: 100%;
+  min-width: 0;
   min-height: 34px;
   border: 1px solid #cddbd2;
   border-radius: 5px;
@@ -592,7 +595,7 @@
   }
 
   .operations-mandate-field--wide {
-    grid-column: span 2;
+    grid-column: span 1;
   }
 }
 
@@ -605,14 +608,6 @@
     overflow-x: auto;
     grid-template-columns: repeat(5, minmax(145px, 1fr));
     padding-bottom: 3px;
-  }
-
-  .operations-mandate-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .operations-mandate-field--wide {
-    grid-column: auto;
   }
 
   .operations-mandate-document-row,
@@ -636,5 +631,15 @@
 
   .operations-mandate-pagination-controls {
     flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 680px) {
+  .operations-mandate-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .operations-mandate-field--wide {
+    grid-column: auto;
   }
 }

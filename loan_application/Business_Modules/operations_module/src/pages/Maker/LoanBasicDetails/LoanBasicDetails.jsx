@@ -1,8 +1,7 @@
-import { AlertTriangle, ArrowLeft, ChevronRight, FileText, Save, Send, X } from 'lucide-react';
+import { ArrowLeft, ChevronRight, FileText, Save, Send, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import backOfficeService from '../../../../../back_office/src/back-office/api/backOfficeService';
-import { mapApplicationFullDetails } from '../../../../../back_office/src/back-office/mappers/verificationMapper';
 import approvalDocumentService from '../../../../../../Core/src/features/approval-documents/services/approvalDocumentService';
 import { buildApplicationRoute, ROUTES } from '../../../config/routeConfig';
 import { useOperationsApplication } from '../../../context/OperationsApplicationContext';
@@ -77,6 +76,11 @@ const INITIAL_AUTO_FILL_IDS = {
   loanProductId: null,
   branchId: null,
   loanPurposeId: null,
+  applicationProductDetailsId: null,
+  loanAccountNumber: '',
+  operationsStatus: '',
+  assignedMakerStaffId: null,
+  profileImagePath: '',
 };
 
 const AUTO_FILL_FIELDS = [
@@ -92,7 +96,6 @@ const AUTO_FILL_FIELDS = [
 ];
 
 const PLACEHOLDER_VALUES = new Set(['', 'n/a', 'na', 'nil', 'not available', 'null', 'undefined', '—', '-']);
-const CUSTOMER_IDENTITY_WARNING = 'Customer details mismatch detected. Please contact the administrator for verification.';
 
 function readValue(record, ...keys) {
   if (!record || typeof record !== 'object') return null;
@@ -110,85 +113,9 @@ function firstRecord(value) {
   return Array.isArray(value) ? value[0] || null : value || null;
 }
 
-function productRecords(raw) {
-  const wrapper = firstRecord(
-    raw?.productDetails ||
-      raw?.ProductDetails ||
-      raw?.productDetailsList ||
-      raw?.ProductDetailsList ||
-      raw?.applicationProductDetails ||
-      raw?.ApplicationProductDetails
-  );
-  return { wrapper, record: firstRecord(wrapper?.product || wrapper?.Product) || wrapper };
-}
-
-function recordsFor(raw, ...keys) {
-  for (const key of keys) {
-    const value = raw?.[key];
-    if (value === undefined || value === null) continue;
-    return Array.isArray(value) ? value : [value];
-  }
-  return [];
-}
-
 function sameIdentifier(left, right) {
   if (left === undefined || left === null || right === undefined || right === null) return false;
   return String(left).trim() === String(right).trim();
-}
-
-function comparableName(value) {
-  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
-}
-
-function getVerifiedPrimaryApplicant(raw, expectedApplicationProductDetailsId) {
-  if (!expectedApplicationProductDetailsId) return null;
-
-  const personalRecords = recordsFor(raw, 'personalInformation', 'PersonalInformation');
-  const kycRecords = recordsFor(
-    raw,
-    'kycDocuments',
-    'KycDocuments',
-    'applicationKYCDocuments',
-    'ApplicationKYCDocuments'
-  );
-  const primaryKyc = kycRecords.find((kyc) => (
-    sameIdentifier(
-      readValue(kyc, 'applicationProductDetailsId', 'ApplicationProductDetailsId'),
-      expectedApplicationProductDetailsId
-    )
-    && String(readValue(kyc, 'applicantSequence', 'ApplicantSequence')) === '0'
-  ));
-
-  if (!primaryKyc) return null;
-
-  const primaryKycDocumentId = readValue(primaryKyc, 'applicationKYCDocumentId', 'ApplicationKYCDocumentId');
-  const primaryApplicant = personalRecords.find((personal) => {
-    const personalKycDocumentId = readValue(personal, 'applicationKYCDocumentId', 'ApplicationKYCDocumentId');
-    const personalApplicationProductDetailsId = readValue(
-      personal,
-      'applicationProductDetailsId',
-      'ApplicationProductDetailsId'
-    );
-    const personalApplicantSequence = readValue(personal, 'applicantSequence', 'ApplicantSequence');
-
-    return sameIdentifier(personalKycDocumentId, primaryKycDocumentId)
-      && (personalApplicationProductDetailsId == null
-        || sameIdentifier(personalApplicationProductDetailsId, expectedApplicationProductDetailsId))
-      && (personalApplicantSequence == null || String(personalApplicantSequence) === '0');
-  });
-
-  if (!primaryApplicant) return null;
-
-  const name = [
-    readValue(primaryApplicant, 'firstName', 'FirstName'),
-    readValue(primaryApplicant, 'middleName', 'MiddleName'),
-    readValue(primaryApplicant, 'lastName', 'LastName'),
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .trim();
-
-  return name ? { name, applicationKYCDocumentId: primaryKycDocumentId } : null;
 }
 
 function dateInputValue(value) {
@@ -214,18 +141,18 @@ const SECTIONS = [
     title: 'Key Details',
     fields: [
       { name: 'division', label: 'Division', type: 'select', required: true, optionsKey: 'divisions' },
-       { name: 'product', label: 'Loan Type', type: 'select', required: true, readOnly: true },
-      { name: 'currency', label: 'Currency', type: 'select', required: true, optionsKey: 'currencies' },
-       { name: 'customerName', label: 'Customer', type: 'select', required: true, readOnly: true },
-      { name: 'loanStartDate', label: 'Loan Start Date', type: 'date', required: true },
-      { name: 'disbursementAmount', label: 'First Disbursement Amount', type: 'number', required: true },
-       { name: 'loanAmount', label: 'Loan Amount', type: 'number', required: true, readOnly: true },
-       { name: 'loanReferenceNumber', label: 'Loan Reference No.', type: 'text', required: true, readOnly: true },
+      { name: 'loanReferenceNumber', label: 'Loan Reference No.', type: 'text', required: true, readOnly: true },
+      { name: 'product', label: 'Loan Type', type: 'select', required: true, readOnly: true },
       { name: 'interestCapsBasis', label: 'Interest Days Basis', type: 'select', required: true, optionsKey: 'dayBases' },
-       { name: 'branch', label: 'Loan Branch', type: 'select', required: true, readOnly: true },
-       { name: 'applicationRequestCode', label: 'Application Request Date', type: 'date', readOnly: true },
+      { name: 'currency', label: 'Currency', type: 'select', required: true, optionsKey: 'currencies' },
+      { name: 'branch', label: 'Loan Branch', type: 'select', required: true, readOnly: true },
+      { name: 'customerName', label: 'Customer', type: 'select', required: true, readOnly: true },
+      { name: 'applicationRequestCode', label: 'Application Request Date', type: 'date', readOnly: true },
+      { name: 'loanStartDate', label: 'Loan Start Date', type: 'date', required: true },
       { name: 'netLoanAmount', label: 'Net Loan Amount', type: 'number', required: true },
+      { name: 'disbursementAmount', label: 'First Disbursement Amount', type: 'number', required: true },
       { name: 'totalDisbursements', label: 'Total Disbursements', type: 'number' },
+      { name: 'loanAmount', label: 'Loan Amount', type: 'number', required: true, readOnly: true },
     ],
   },
   {
@@ -234,19 +161,18 @@ const SECTIONS = [
     fields: [
       { name: 'repaymentMode', label: 'Payment Method', type: 'select', required: true, optionsKey: 'paymentMethods' },
       { name: 'salesExecutive', label: 'Sales Executive', type: 'select' },
-      { name: 'sourcingType', label: 'Sourcing Type', type: 'select', required: true },
-      { name: 'employeeName', label: 'Employee Name', type: 'select' },
-       { name: 'loanPurpose', label: 'Loan Purpose', type: 'select', required: true, readOnly: true },
       { name: 'dsaDma', label: 'DSA / DMA', type: 'select' },
+      { name: 'sourcingType', label: 'Sourcing Type', type: 'select', required: true },
       { name: 'salesManager', label: 'Sales Manager', type: 'select' },
+      { name: 'employeeName', label: 'Employee Name', type: 'select' },
       { name: 'salesDepartment', label: 'Sales Department', type: 'select' },
-       { name: 'applicationNumber', label: 'Application Number', type: 'text', required: true, readOnly: true },
+      { name: 'loanPurpose', label: 'Loan Purpose', type: 'select', required: true, readOnly: true },
+      { name: 'applicationNumber', label: 'Application Number', type: 'text', required: true, readOnly: true },
       {
         name: 'loanFlagId',
         label: 'Loan Flag',
         type: 'radio-group',
         optionsKey: 'loanFlags',
-        fullWidth: true,
       },
     ],
   },
@@ -256,10 +182,14 @@ const SECTIONS = [
     fields: [
       { name: 'installmentCount', label: 'Number of Installments', type: 'number', required: true },
       { name: 'interestRateType', label: 'Interest Rate Type', type: 'select', required: true },
+      { name: 'bpiTreatment', label: 'BPI Treatment', type: 'select', required: true },
       { name: 'allowBpi', label: 'Allow BPI', type: 'checkbox' },
+      { name: 'interestRate', label: 'Actual Interest Rate (%)', type: 'number', required: true, readOnly: true },
       { name: 'baseRate', label: 'Base Rate (%)', type: 'number' },
+      { name: 'margin', label: 'Margin (%)', type: 'number' },
       { name: 'scheduleMethod', label: 'Schedule Method', type: 'select', required: true },
       { name: 'interestFrequency', label: 'Interest Frequency', type: 'select', required: true, optionsKey: 'frequencies' },
+      { name: 'nextInterestFrequencyDate', label: 'Next Interest Frequency Date', type: 'date' },
       {
         name: 'interestReviewFrequency',
         label: 'Interest Review Frequency',
@@ -267,6 +197,7 @@ const SECTIONS = [
         required: true,
         optionsKey: 'frequencies',
       },
+      { name: 'nextInterestReviewFrequencyDate', label: 'Next Interest Review Frequency Date', type: 'date' },
       {
         name: 'capitalizationFrequency',
         label: 'Capitalization Frequency',
@@ -274,6 +205,7 @@ const SECTIONS = [
         required: true,
         optionsKey: 'frequencies',
       },
+      { name: 'nextCapitalizationFrequencyDate', label: 'Next Capitalization Frequency Date', type: 'date' },
       {
         name: 'repaymentFrequency',
         label: 'Payment Frequency',
@@ -281,14 +213,8 @@ const SECTIONS = [
         required: true,
         optionsKey: 'frequencies',
       },
-      { name: 'maturityDate', label: 'Maturity Date', type: 'date', required: true },
-      { name: 'bpiTreatment', label: 'BPI Treatment', type: 'select', required: true },
-       { name: 'interestRate', label: 'Actual Interest Rate (%)', type: 'number', required: true, readOnly: true },
-      { name: 'margin', label: 'Margin (%)', type: 'number' },
-      { name: 'nextInterestFrequencyDate', label: 'Next Interest Frequency Date', type: 'date' },
-      { name: 'nextInterestReviewFrequencyDate', label: 'Next Interest Review Frequency Date', type: 'date' },
-      { name: 'nextCapitalizationFrequencyDate', label: 'Next Capitalization Frequency Date', type: 'date' },
       { name: 'nextPaymentFrequencyDate', label: 'Next Payment Frequency Date', type: 'date' },
+      { name: 'maturityDate', label: 'Maturity Date', type: 'date', required: true },
     ],
   },
   {
@@ -297,11 +223,11 @@ const SECTIONS = [
     fields: [
       { name: 'penaltyApplicable', label: 'Apply Overdue Penalty', type: 'checkbox' },
       { name: 'includeGraceDaysInPenaltyCalculation', label: 'Include Grace Days in Penalty Calculation', type: 'checkbox' },
-      { name: 'allowWaivers', label: 'Allow Waivers', type: 'checkbox' },
       { name: 'penaltyType', label: 'Charge Type', type: 'select', required: true },
       { name: 'gracePeriodDays', label: 'Grace Days', type: 'number', required: true },
       { name: 'chargeCalculatedOn', label: 'Charge Calculated On', type: 'select', required: true },
       { name: 'penaltyRate', label: 'Charge Amount / %', type: 'number', required: true },
+      { name: 'allowWaivers', label: 'Allow Waivers', type: 'checkbox' },
       { name: 'maximumWaiverPercentage', label: 'Max Waiver %', type: 'number' },
     ],
   },
@@ -440,7 +366,6 @@ export default function LoanBasicDetails() {
     loading: false,
     error: '',
     unavailable: [],
-    identityWarning: '',
   });
   const [autoFillRequest, setAutoFillRequest] = useState(0);
   const previousApplicationIdRef = useRef(null);
@@ -507,16 +432,29 @@ export default function LoanBasicDetails() {
       autoFillIdsRef.current = INITIAL_AUTO_FILL_IDS;
     }
 
-    const contextPatch = {};
-    const contextAgentCustomerId = readValue(application, 'agentCustomerId', 'AgentCustomerId');
-    const contextCustomerName = readValue(application, 'customerName', 'CustomerName', 'fullName', 'FullName');
+    const contextCustomerName = readValue(application, 'fullName', 'FullName');
     const contextApplicationNumber = readValue(application, 'appId', 'AppId');
-    const hasVerifiedContextName = sameIdentifier(contextAgentCustomerId, agentCustomerId) && contextCustomerName != null;
-    if (hasVerifiedContextName) contextPatch.customerName = String(contextCustomerName);
+    const loanType = readValue(application, 'loanProductName', 'LoanProductName');
+    const appliedDate = dateInputValue(readValue(application, 'createdAt', 'CreatedAt'));
+    const applicationDetails = {
+      applicationProductDetailsId: readValue(application, 'applicationProductDetailsId', 'ApplicationProductDetailsId'),
+      loanAccountNumber: readValue(application, 'loanAccountNumber', 'LoanAccountNumber') || '',
+      operationsStatus: readValue(application, 'operationsStatus', 'OperationsStatus') || '',
+      assignedMakerStaffId: readValue(application, 'assignedMakerStaffId', 'AssignedMakerStaffId'),
+      profileImagePath: readValue(application, 'profileImagePath', 'ProfileImagePath') || '',
+    };
+    const contextPatch = {};
+    if (contextCustomerName != null) contextPatch.customerName = String(contextCustomerName);
     if (contextApplicationNumber != null) contextPatch.applicationNumber = String(contextApplicationNumber);
+    if (loanType != null && !/^\d+$/.test(String(loanType).trim())) contextPatch.product = String(loanType);
+    if (appliedDate) contextPatch.applicationRequestCode = appliedDate;
 
     const emptyAutoFill = AUTO_FILL_FIELDS.reduce((values, field) => ({ ...values, [field]: '' }), {});
-    autoFillIdsRef.current = { ...INITIAL_AUTO_FILL_IDS, customerId: agentCustomerId || null };
+    autoFillIdsRef.current = {
+      ...INITIAL_AUTO_FILL_IDS,
+      customerId: agentCustomerId || null,
+      ...applicationDetails,
+    };
     setForm((current) => ({ ...current, ...emptyAutoFill, ...contextPatch }));
 
     if (!agentCustomerId) {
@@ -524,94 +462,58 @@ export default function LoanBasicDetails() {
         loading: false,
         error: 'The selected application is unavailable. No application data was populated.',
         unavailable: [],
-        identityWarning: '',
       });
       return () => {
         isActive = false;
       };
     }
 
-    setApplicationDataState({ loading: true, error: '', unavailable: [], identityWarning: '' });
+    setApplicationDataState({ loading: true, error: '', unavailable: [] });
 
     const loadApplicationData = async () => {
       const results = await Promise.allSettled([
-        backOfficeService.getApplicationFullDetails(agentCustomerId),
+        backOfficeService.getApplicationProductDetailsByCustomer(agentCustomerId),
         approvalDocumentService.getLatestCreditDecision(agentCustomerId),
         approvalDocumentService.getLoanIdentifierByCustomer(agentCustomerId),
       ]);
 
       if (!isActive || requestId !== requestSequenceRef.current) return;
 
-      const [fullDetailsResult, creditDecisionResult, loanIdentifierResult] = results;
+      const [productDetailsResult, creditDecisionResult, loanIdentifierResult] = results;
       const unavailable = [];
-      let hasIdentityConflict = false;
       const nextForm = {};
-      const nextIds = { ...INITIAL_AUTO_FILL_IDS };
+      const nextIds = {
+        ...INITIAL_AUTO_FILL_IDS,
+        customerId: agentCustomerId || null,
+        ...applicationDetails,
+      };
 
-      if (fullDetailsResult.status === 'fulfilled' && fullDetailsResult.value) {
-        const fullDetails = fullDetailsResult.value;
-        let mapped = null;
-        try {
-          mapped = mapApplicationFullDetails(fullDetails);
-        } catch {
-          unavailable.push('The verified application response could not be normalized; only independently available fields were retained.');
-        }
-        const raw = mapped?.raw || fullDetails;
-        const rawCustomer = firstRecord(raw?.customer || raw?.Customer);
-        const { wrapper: productWrapper, record: productRecord } = productRecords(raw);
-        const responseApplicationProductDetailsId =
-          readValue(productWrapper, 'applicationProductDetailsId', 'ApplicationProductDetailsId') ||
-          readValue(productRecord, 'applicationProductDetailsId', 'ApplicationProductDetailsId') ||
-          readValue(mapped, 'applicationProductDetailsId');
-        const expectedApplicationProductDetailsId =
-          readValue(application, 'applicationProductDetailsId', 'ApplicationProductDetailsId') ||
-          responseApplicationProductDetailsId;
-        const primaryApplicant = getVerifiedPrimaryApplicant(raw, expectedApplicationProductDetailsId);
-        const fullDetailsCustomerName = readValue(rawCustomer, 'fullName', 'FullName', 'customerName', 'CustomerName');
+      if (contextCustomerName == null) unavailable.push('Customer details are unavailable; Customer remains empty.');
 
-        if (hasVerifiedContextName) {
-          if (primaryApplicant?.name && comparableName(primaryApplicant.name) !== comparableName(contextCustomerName)) {
-            hasIdentityConflict = true;
-          }
-          if (fullDetailsCustomerName && comparableName(fullDetailsCustomerName) !== comparableName(contextCustomerName)) {
-            hasIdentityConflict = true;
-          }
-        } else if (primaryApplicant?.name) {
-          nextForm.customerName = primaryApplicant.name;
+      if (productDetailsResult.status === 'fulfilled') {
+        const productDetails = firstRecord(productDetailsResult.value);
+        const returnedAgentCustomerId = readValue(productDetails, 'agentCustomerId', 'AgentCustomerId');
+        const returnedApplicationProductDetailsId = readValue(
+          productDetails,
+          'applicationProductDetailsId',
+          'ApplicationProductDetailsId'
+        );
+        const contextAgentCustomerId = readValue(application, 'agentCustomerId', 'AgentCustomerId') || agentCustomerId;
+        const contextApplicationProductDetailsId = applicationDetails.applicationProductDetailsId;
+        const hasMatchingApplication =
+          sameIdentifier(returnedAgentCustomerId, contextAgentCustomerId) &&
+          sameIdentifier(returnedApplicationProductDetailsId, contextApplicationProductDetailsId);
+
+        if (hasMatchingApplication) {
+          const loanPurposeName = readValue(productDetails, 'loanPurposeName', 'LoanPurposeName');
+          nextIds.applicationProductDetailsId = returnedApplicationProductDetailsId;
+          nextIds.loanPurposeId = readValue(productDetails, 'loanPurposeId', 'LoanPurposeId');
+          if (loanPurposeName != null) nextForm.loanPurpose = String(loanPurposeName);
         } else {
-          unavailable.push('The verified primary applicant name is unavailable; Customer remains empty.');
+          unavailable.push('Application Product Details did not match the selected application.');
         }
-        const loanType =
-          readValue(productWrapper, 'loanProductName', 'LoanProductName', 'loanProduct', 'LoanProduct') ||
-          readValue(productRecord, 'loanProductName', 'LoanProductName', 'loanProduct', 'LoanProduct') ||
-          readValue(rawCustomer, 'loanType', 'LoanType');
-        const branch =
-          readValue(rawCustomer, 'branch', 'Branch') ||
-          readValue(productWrapper, 'sourcingBranch', 'SourcingBranch') ||
-          readValue(productRecord, 'sourcingBranch', 'SourcingBranch') ||
-          readValue(raw, 'sourcingBranch', 'SourcingBranch');
-        const applicationNumber =
-          readValue(rawCustomer, 'appId', 'AppId', 'App_Id') ||
-          readValue(mapped, 'appId');
-        const loanPurpose =
-          readValue(productWrapper, 'loanPurposeName', 'LoanPurposeName', 'loanPurpose', 'LoanPurpose') ||
-          readValue(productRecord, 'loanPurposeName', 'LoanPurposeName', 'loanPurpose', 'LoanPurpose') ||
-          readValue(rawCustomer, 'loanPurposeName', 'LoanPurposeName', 'loanPurpose', 'LoanPurpose');
-        const appliedDate = dateInputValue(mapped?.appliedDate || readValue(rawCustomer, 'createdAt', 'CreatedAt', 'createdDate', 'CreatedDate'));
-
-        if (loanType != null && !/^\d+$/.test(String(loanType).trim())) nextForm.product = String(loanType);
-        if (branch != null) nextForm.branch = String(branch);
-        if (applicationNumber != null) nextForm.applicationNumber = String(applicationNumber);
-        if (loanPurpose != null && !/^\d+$/.test(String(loanPurpose).trim())) nextForm.loanPurpose = String(loanPurpose);
-        if (appliedDate) nextForm.applicationRequestCode = appliedDate;
-
-        nextIds.customerId = readValue(rawCustomer, 'agentCustomerId', 'AgentCustomerId') || agentCustomerId;
-        nextIds.loanTypeId = readValue(productWrapper, 'loanTypeId', 'LoanTypeId') || readValue(productRecord, 'loanTypeId', 'LoanTypeId');
-        nextIds.loanProductId = readValue(productWrapper, 'loanProductId', 'LoanProductId') || readValue(productRecord, 'loanProductId', 'LoanProductId');
-        nextIds.branchId = readValue(rawCustomer, 'branchId', 'BranchId');
-        nextIds.loanPurposeId = readValue(productWrapper, 'loanPurposeId', 'LoanPurposeId') || readValue(productRecord, 'loanPurposeId', 'LoanPurposeId');
       } else {
-        unavailable.push('Verified application details are unavailable; related fields remain empty.');
+        unavailable.push('Unable to load Application Product Details.');
       }
 
       if (creditDecisionResult.status === 'fulfilled') {
@@ -657,7 +559,6 @@ export default function LoanBasicDetails() {
         loading: false,
         error: '',
         unavailable,
-        identityWarning: hasIdentityConflict ? CUSTOMER_IDENTITY_WARNING : '',
       });
     };
 
@@ -667,14 +568,13 @@ export default function LoanBasicDetails() {
         loading: false,
         error: error?.response?.data?.message || error?.message || 'Unable to load application data.',
         unavailable: [],
-        identityWarning: '',
       });
     });
 
     return () => {
       isActive = false;
     };
-  }, [applicationId, autoFillRequest]);
+  }, [applicationId, application, autoFillRequest]);
 
   const optionsByKey = useMemo(
     () => ({
@@ -728,12 +628,6 @@ export default function LoanBasicDetails() {
             <button type="button" className="operations-secondary-button" onClick={() => setAutoFillRequest((current) => current + 1)}>
               Retry
             </button>
-          </div>
-        )}
-        {!applicationDataState.loading && applicationDataState.identityWarning && (
-          <div className="operations-loan-identity-warning" role="status" aria-live="polite">
-            <AlertTriangle size={17} strokeWidth={2} aria-hidden="true" />
-            <span>{applicationDataState.identityWarning}</span>
           </div>
         )}
         {!applicationDataState.loading && !applicationDataState.error && applicationDataState.unavailable.length > 0 && (
