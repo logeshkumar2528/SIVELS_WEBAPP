@@ -1,26 +1,33 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import useAuthedObjectUrl from '../../../../../../Core/src/auth/useAuthedObjectUrl';
 import { resolveApiUrl } from '../../../../../../Core/src/api/apiConfig';
 import OperationsLayout from '../../../layouts/OperationsLayout';
 import OperationsDocumentViewer from '../../../components/OperationsDocumentViewer';
+import { useOperationsApplication } from '../../../context/OperationsApplicationContext';
 import { ROUTES } from '../../../config/routeConfig';
-import operationsApplicationService from '../../../services/operationsApplicationService';
 import './PendingApplications.css';
 
 const PAGE_SIZE = 10;
 
-function normalizeApplication(record) {
-  if (!record || record.agentCustomerId === undefined || record.agentCustomerId === null) return null;
-  return {
-    ...record,
-    agentCustomerId: String(record.agentCustomerId),
-    fullName: String(record.fullName || '').trim(),
-    loanAccountNumber: record.loanAccountNumber == null ? '' : String(record.loanAccountNumber),
-    operationsStatus: record.operationsStatus == null ? '' : String(record.operationsStatus),
-    profileImagePath: record.profileImagePath == null ? '' : String(record.profileImagePath),
-  };
+function getStatusChangedTime(application) {
+  const rawValue = application?.statusChangedAt;
+  if (typeof rawValue === 'number' && Number.isFinite(rawValue)) return rawValue < 1e12 ? rawValue * 1000 : rawValue;
+  const timestamp = Date.parse(String(rawValue || ''));
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function sortByLatestStatusChange(applications) {
+  return applications
+    .map((application, index) => ({ application, index, timestamp: getStatusChangedTime(application) }))
+    .sort((left, right) => {
+      if (left.timestamp === null && right.timestamp === null) return left.index - right.index;
+      if (left.timestamp === null) return 1;
+      if (right.timestamp === null) return -1;
+      return right.timestamp - left.timestamp || left.index - right.index;
+    })
+    .map(({ application }) => application);
 }
 
 function getErrorMessage(error, fallback) {
@@ -67,45 +74,27 @@ function DocumentAction({ label, onClick }) {
 
 export default function PendingApplications() {
   const navigate = useNavigate();
-  const requestIdRef = useRef(0);
-  const mountedRef = useRef(true);
-  const [applications, setApplications] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [document, setDocument] = useState(null);
-
-  const loadApplications = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    setLoading(true);
-    setError('');
-    try {
-      const records = await operationsApplicationService.getPendingApplications();
-      if (!mountedRef.current || requestId !== requestIdRef.current) return;
-      setApplications(records.map(normalizeApplication).filter(Boolean));
-    } catch (loadError) {
-      if (!mountedRef.current || requestId !== requestIdRef.current) return;
-      setApplications([]);
-      setError(getErrorMessage(loadError, 'Unable to load Pending Applications.'));
-    } finally {
-      if (mountedRef.current && requestId === requestIdRef.current) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    loadApplications();
-    return () => {
-      mountedRef.current = false;
-      requestIdRef.current += 1;
-    };
-  }, [loadApplications]);
+  const {
+    pendingApplications,
+    queueStatus,
+    queueError,
+    refreshQueue,
+  } = useOperationsApplication();
+  const applications = pendingApplications;
+  const loading = queueStatus === 'idle' || queueStatus === 'loading';
+  const error = queueStatus === 'error'
+    ? getErrorMessage(queueError, 'Unable to load Pending Applications.')
+    : '';
+  const loadApplications = refreshQueue;
 
   const filteredApplications = useMemo(() => {
+    const orderedApplications = sortByLatestStatusChange(applications);
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return applications;
-    return applications.filter((application) => (
+    if (!term) return orderedApplications;
+    return orderedApplications.filter((application) => (
       application.fullName.toLowerCase().includes(term) ||
       application.loanAccountNumber.toLowerCase().includes(term)
     ));
@@ -159,6 +148,7 @@ export default function PendingApplications() {
                 <table className="operations-new-applications-table">
                   <thead>
                     <tr>
+                      <th scope="col">S.NO</th>
                       <th scope="col">Loan Account Number</th>
                       <th scope="col">Customer</th>
                       <th scope="col">Status</th>
@@ -169,8 +159,9 @@ export default function PendingApplications() {
                     </tr>
                   </thead>
                   <tbody>
-                    {pageRows.map((application) => (
+                    {pageRows.map((application, rowIndex) => (
                       <tr key={application.agentCustomerId}>
+                        <td className="operations-new-applications-index">{(currentPage - 1) * PAGE_SIZE + rowIndex + 1}</td>
                         <td>{application.loanAccountNumber || '—'}</td>
                         <td><div className="operations-new-applications-customer"><ProfileImage application={application} /><span>{application.fullName || '—'}</span></div></td>
                         <td><span className="operations-new-applications-status-chip">{getOperationsStatusLabel(application.operationsStatus)}</span></td>
@@ -180,7 +171,7 @@ export default function PendingApplications() {
                         <td><button type="button" className="operations-new-applications-verify-button" onClick={() => navigate(`${ROUTES.MAKER_LOAN_BASIC_DETAILS}?applicationId=${encodeURIComponent(application.agentCustomerId)}`)}>Continue</button></td>
                       </tr>
                     ))}
-                    {pageRows.length === 0 && <tr><td colSpan={7} className="operations-new-applications-empty">{applications.length === 0 ? 'No pending applications are available.' : 'No applications match your search.'}</td></tr>}
+                    {pageRows.length === 0 && <tr><td colSpan={8} className="operations-new-applications-empty">{applications.length === 0 ? 'No pending applications are available.' : 'No applications match your search.'}</td></tr>}
                   </tbody>
                 </table>
               </div>

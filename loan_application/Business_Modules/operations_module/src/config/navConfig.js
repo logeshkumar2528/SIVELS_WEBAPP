@@ -15,6 +15,8 @@ export const NAV_ITEMS = [
     icon: 'FileText',
     section: 'OPERATIONS',
     makerOnly: true,
+    badgeKey: 'newApplications',
+    showZeroBadge: true,
   },
   {
     id: 'pending-applications',
@@ -23,6 +25,8 @@ export const NAV_ITEMS = [
     icon: 'FileText',
     section: 'OPERATIONS',
     makerOnly: true,
+    badgeKey: 'pendingApplications',
+    showZeroBadge: true,
   },
   {
     id: 'profile',

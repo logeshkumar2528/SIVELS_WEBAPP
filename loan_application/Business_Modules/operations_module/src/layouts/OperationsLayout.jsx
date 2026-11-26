@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../../../back_office/src/back-office/components/Header/Header';
-import Sidebar from '../../../back_office/src/back-office/components/Sidebar/Sidebar';
 import { API_BASE_URL } from '../../../../Core/src/api/apiConfig';
 import { getStoredRoleCode, getStoredUser, logout } from '../../../../Core/src/auth/session';
 import { usePermissions } from '../../../../Core/src/auth/permissions';
 import { NAV_ITEMS } from '../config/navConfig';
 import { ROUTES } from '../config/routeConfig';
+import OperationsSidebar from '../components/OperationsSidebar';
+import { useOperationsApplication } from '../context/OperationsApplicationContext';
 import './OperationsLayout.css';
 
 function displayName(user) {
@@ -14,17 +15,56 @@ function displayName(user) {
 }
 
 function displayRole(user, roleCode) {
-  return user?.roleName || (roleCode === 'MAKER' ? 'Operations Maker' : 'Operations Checker');
+  if (roleCode === 'MAKER') return 'Maker';
+  if (roleCode === 'CHECKER') return 'Checker';
+  return String(user?.roleName || user?.role || '').replace(/^Operations\s+/i, '') || 'Operations';
+}
+
+function getEmployeeCode(user, storedUser) {
+  return user?.employeeCode
+    || user?.EmployeeCode
+    || user?.staffCode
+    || user?.StaffCode
+    || storedUser?.employeeCode
+    || storedUser?.EmployeeCode
+    || storedUser?.staffCode
+    || storedUser?.StaffCode
+    || '';
+}
+
+function getOperationsUserId(profile, storedUser) {
+  return profile?.operationsUserId
+    || profile?.OperationsUserId
+    || profile?.id
+    || profile?.Id
+    || storedUser?.operationsUserId
+    || storedUser?.OperationsUserId
+    || storedUser?.legacyId
+    || storedUser?.LegacyId
+    || null;
 }
 
 export default function OperationsLayout({ title, subtitle, children, profile = null }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [imageVersion, setImageVersion] = useState(null);
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
   const { filterNav } = usePermissions();
+  const {
+    profile: sharedProfile,
+    newApplicationCount,
+    pendingApplicationCount,
+    queueStatus,
+  } = useOperationsApplication();
   const roleCode = getStoredRoleCode(['MAKER', 'CHECKER']);
   const storedUser = getStoredUser(['MAKER', 'CHECKER']);
-  const resolvedProfile = profile && Object.keys(profile).length > 0 ? profile : storedUser;
+  const resolvedProfile = sharedProfile && Object.keys(sharedProfile).length > 0
+    ? sharedProfile
+    : profile && Object.keys(profile).length > 0
+      ? profile
+      : storedUser;
+  const employeeCode = getEmployeeCode(resolvedProfile, storedUser);
+  const operationsUserId = getOperationsUserId(resolvedProfile, storedUser);
   const visibleNav = filterNav(NAV_ITEMS).filter((item) => !item.makerOnly || roleCode === 'MAKER');
 
   useEffect(() => {
@@ -35,6 +75,18 @@ export default function OperationsLayout({ title, subtitle, children, profile = 
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    const handleProfileImageUpdate = (event) => {
+      const updatedRole = String(event.detail?.role || '').toLowerCase();
+      if (!updatedRole || updatedRole.includes('operation') || updatedRole.includes('backoffice')) {
+        setImageVersion(event.detail?.timestamp || Date.now());
+      }
+    };
+
+    window.addEventListener('profile-image-updated', handleProfileImageUpdate);
+    return () => window.removeEventListener('profile-image-updated', handleProfileImageUpdate);
+  }, []);
 
   const handleNavigate = useCallback((route) => {
     const workflowRoutes = [
@@ -48,27 +100,19 @@ export default function OperationsLayout({ title, subtitle, children, profile = 
   }, [navigate, search]);
 
   const user = useMemo(() => ({
-    id: resolvedProfile?.operationsUserId || resolvedProfile?.id || storedUser?.userId || storedUser?.staffId || null,
+    id: operationsUserId,
     name: displayName(resolvedProfile),
-    role: [
-      displayRole(resolvedProfile, roleCode),
-      resolvedProfile?.employeeCode || resolvedProfile?.staffCode || storedUser?.employeeCode
-        ? `Employee Code : ${resolvedProfile?.employeeCode || resolvedProfile?.staffCode || storedUser?.employeeCode}`
-        : '',
-    ].filter(Boolean).join('\n'),
-    employeeCode: resolvedProfile?.employeeCode || resolvedProfile?.staffCode || storedUser?.employeeCode || '',
-    avatarUrl: (() => {
-      const operationsUserId = resolvedProfile?.operationsUserId || resolvedProfile?.OperationsUserId || resolvedProfile?.id || storedUser?.userId || storedUser?.staffId;
-      return API_BASE_URL && operationsUserId
-        ? `${API_BASE_URL}/OperationsUsers/${encodeURIComponent(String(operationsUserId))}/profile-image`
-        : null;
-    })(),
+    role: [displayRole(resolvedProfile, roleCode), employeeCode ? `Employee Code : ${employeeCode}` : ''].filter(Boolean).join('\n'),
+    employeeCode,
+    avatarUrl: API_BASE_URL && operationsUserId
+      ? `${API_BASE_URL}/OperationsUsers/${encodeURIComponent(String(operationsUserId))}/profile-image${imageVersion ? `?v=${encodeURIComponent(String(imageVersion))}` : ''}`
+      : null,
     imageRole: 'Operations',
-  }), [resolvedProfile, roleCode, storedUser]);
+  }), [employeeCode, imageVersion, operationsUserId, resolvedProfile, roleCode, storedUser]);
 
   return (
     <div className={['layout', 'operations-layout', sidebarOpen ? 'layout--sidebar-open' : ''].join(' ').trim()}>
-      <Sidebar
+      <OperationsSidebar
         menu={visibleNav}
         activeRoute={
           pathname === ROUTES.PROFILE
@@ -82,7 +126,9 @@ export default function OperationsLayout({ title, subtitle, children, profile = 
             ? pathname
             : ROUTES.ROOT
         }
-        badgeCounts={{}}
+        badgeCounts={queueStatus === 'ready' && roleCode === 'MAKER'
+          ? { newApplications: newApplicationCount, pendingApplications: pendingApplicationCount }
+          : {}}
         isOpen={sidebarOpen}
         onNavigate={handleNavigate}
         onClose={() => setSidebarOpen(false)}

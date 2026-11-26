@@ -26,6 +26,7 @@ import {
   getOperationsUserProfileImageBlob,
   normalizeOperationsUser,
 } from '../../api/operationsUserApi';
+import { masterService } from '../../../../Core/src/services/masterService';
 import { DocumentPreviewModal, isPdfUrl } from '../../components/DocumentUpload/DocumentUploadSection';
 import { MasterModal } from '../../components/masters/MasterModal/MasterModal';
 import { MasterStatusBadge } from '../../components/masters/MasterStatusBadge/MasterStatusBadge';
@@ -53,6 +54,75 @@ const read = (record, ...keys) => {
     if (record?.[key] !== undefined && record?.[key] !== null && String(record[key]).trim()) return record[key];
   }
   return '—';
+};
+
+const readValue = (record, ...keys) => {
+  for (const key of keys) {
+    if (record?.[key] !== undefined && record?.[key] !== null && String(record[key]).trim()) return record[key];
+  }
+  return null;
+};
+
+const readDisplayName = (record, ...keys) => {
+  for (const key of keys) {
+    const value = record?.[key];
+    if (typeof value !== 'string') continue;
+    const text = value.trim();
+    if (text && !/^\d+$/.test(text)) return text;
+  }
+  return null;
+};
+
+const unwrapLookup = (response) => {
+  const value = response?.value ?? response?.data ?? response?.result ?? response;
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.value)) return value.value;
+  if (Array.isArray(value?.data)) return value.data;
+  if (Array.isArray(value?.result)) return value.result;
+  return [];
+};
+
+const DETAIL_LOOKUPS = {
+  gender: {
+    outputKey: 'genderName',
+    load: () => masterService.getGenders(),
+    idKeys: ['genderId', 'GenderId'],
+    nameKeys: ['genderName', 'GenderName', 'gender', 'Gender'],
+    itemIdKeys: ['genderId', 'GenderId', 'id', 'Id'],
+    itemNameKeys: ['genderName', 'GenderName', 'name', 'Name', 'description', 'Description'],
+  },
+  country: {
+    outputKey: 'countryName',
+    load: () => masterService.getCountries(),
+    idKeys: ['countryId', 'CountryId'],
+    nameKeys: ['countryName', 'CountryName', 'country', 'Country'],
+    itemIdKeys: ['countryId', 'CountryId', 'id', 'Id'],
+    itemNameKeys: ['countryName', 'CountryName', 'name', 'Name'],
+  },
+  state: {
+    outputKey: 'stateName',
+    load: () => masterService.getStates(),
+    idKeys: ['stateId', 'StateId'],
+    nameKeys: ['stateName', 'StateName', 'state', 'State'],
+    itemIdKeys: ['stateId', 'StateId', 'id', 'Id'],
+    itemNameKeys: ['stateName', 'StateName', 'name', 'Name'],
+  },
+  district: {
+    outputKey: 'districtName',
+    load: () => masterService.getDistricts(),
+    idKeys: ['districtId', 'DistrictId'],
+    nameKeys: ['districtName', 'DistrictName', 'district', 'District'],
+    itemIdKeys: ['districtId', 'DistrictId', 'id', 'Id'],
+    itemNameKeys: ['districtName', 'DistrictName', 'name', 'Name'],
+  },
+  city: {
+    outputKey: 'cityName',
+    load: () => masterService.getCities(),
+    idKeys: ['cityId', 'CityId'],
+    nameKeys: ['cityName', 'CityName', 'city', 'City'],
+    itemIdKeys: ['cityId', 'CityId', 'id', 'Id'],
+    itemNameKeys: ['cityName', 'CityName', 'name', 'Name'],
+  },
 };
 
 const errorMessage = (error, fallback) => {
@@ -182,14 +252,14 @@ function OperationsDetailsModal({
               <div className="exec-grid-4col">
                 <div className="exec-field"><span className="exec-field-label">Full Name</span><span className="exec-field-value">{fullName}</span></div>
                 <div className="exec-field"><span className="exec-field-label">Date of Birth</span><span className="exec-field-value">{formatDate(read(user, 'dateOfBirth', 'dob'))}</span></div>
-                <div className="exec-field"><span className="exec-field-label">Gender</span><span className="exec-field-value">{read(user, 'genderName', 'gender')}</span></div>
+                <div className="exec-field"><span className="exec-field-label">Gender</span><span className="exec-field-value">{read(user, 'genderName')}</span></div>
                 <div className="exec-field"><span className="exec-field-label">Mobile Number</span><span className="exec-field-value">{read(user, 'mobileNumber')}</span></div>
                 <div className="exec-field exec-field-span-2"><span className="exec-field-label">Email Address</span><span className="exec-field-value">{read(user, 'emailAddress')}</span></div>
-                <div className="exec-field exec-field-span-2"><span className="exec-field-label">Residential Address</span><span className="exec-field-value">{read(user, 'address')}</span></div>
-                <div className="exec-field"><span className="exec-field-label">Country</span><span className="exec-field-value">{read(user, 'countryName', 'country')}</span></div>
-                <div className="exec-field"><span className="exec-field-label">State</span><span className="exec-field-value">{read(user, 'stateName', 'state')}</span></div>
-                <div className="exec-field"><span className="exec-field-label">District</span><span className="exec-field-value">{read(user, 'districtName', 'district')}</span></div>
-                <div className="exec-field"><span className="exec-field-label">City</span><span className="exec-field-value">{read(user, 'cityName', 'city')}</span></div>
+                <div className="exec-field exec-field-span-2"><span className="exec-field-label">Address</span><span className="exec-field-value">{read(user, 'address', 'Address')}</span></div>
+                <div className="exec-field"><span className="exec-field-label">Country</span><span className="exec-field-value">{read(user, 'countryName')}</span></div>
+                <div className="exec-field"><span className="exec-field-label">State</span><span className="exec-field-value">{read(user, 'stateName')}</span></div>
+                <div className="exec-field"><span className="exec-field-label">District</span><span className="exec-field-value">{read(user, 'districtName')}</span></div>
+                <div className="exec-field"><span className="exec-field-label">City</span><span className="exec-field-value">{read(user, 'cityName')}</span></div>
                 <div className="exec-field"><span className="exec-field-label">Pincode</span><span className="exec-field-value monospace">{read(user, 'pincode', 'pinCode')}</span></div>
               </div>
             </section>
@@ -250,6 +320,8 @@ export default function OperationsUsersPage() {
   const [deactivationTarget, setDeactivationTarget] = useState(null);
   const [deactivating, setDeactivating] = useState(false);
   const objectUrlsRef = useRef([]);
+  const lookupCacheRef = useRef(new Map());
+  const detailsRequestRef = useRef(0);
   const pageSize = 10;
 
   const load = async () => {
@@ -294,7 +366,48 @@ export default function OperationsUsersPage() {
   const safePage = Math.min(currentPage, totalPages);
   const visibleRecords = filteredRecords.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  const loadDocuments = async (operationsUserId) => {
+  const loadLookup = (lookupKey) => {
+    const cached = lookupCacheRef.current.get(lookupKey);
+    if (cached) return cached;
+
+    const request = DETAIL_LOOKUPS[lookupKey].load()
+      .then(unwrapLookup)
+      .catch(() => []);
+    lookupCacheRef.current.set(lookupKey, request);
+    return request;
+  };
+
+  const resolveDetailFields = async (detail) => {
+    const resolvedFields = {};
+    const unresolved = Object.entries(DETAIL_LOOKUPS).filter(([, config]) => (
+      !readDisplayName(detail, ...config.nameKeys)
+      && readValue(detail, ...config.idKeys) !== null
+    ));
+    const collections = await Promise.all(unresolved.map(async ([lookupKey]) => [
+      lookupKey,
+      await loadLookup(lookupKey),
+    ]));
+
+    Object.entries(DETAIL_LOOKUPS).forEach(([lookupKey, config]) => {
+      const directName = readDisplayName(detail, ...config.nameKeys);
+      if (directName) {
+        resolvedFields[config.outputKey] = directName;
+        return;
+      }
+
+      const persistedId = readValue(detail, ...config.idKeys);
+      const collection = collections.find(([key]) => key === lookupKey)?.[1] || [];
+      const match = persistedId === null ? null : collection.find((item) => {
+        const itemId = readValue(item, ...config.itemIdKeys);
+        return itemId !== null && String(itemId) === String(persistedId);
+      });
+      resolvedFields[config.outputKey] = readDisplayName(match, ...config.itemNameKeys);
+    });
+
+    return { ...detail, ...resolvedFields };
+  };
+
+  const loadDocuments = async (operationsUserId, requestId) => {
     setDocumentsLoading(true);
     setDocumentsError('');
     setDocumentPreviews({});
@@ -305,6 +418,10 @@ export default function OperationsUsersPage() {
         const blob = await loader(operationsUserId);
         if (!(blob instanceof Blob) || blob.size === 0) return [key, null];
         const url = URL.createObjectURL(blob);
+        if (requestId !== detailsRequestRef.current) {
+          URL.revokeObjectURL(url);
+          return [key, null];
+        }
         objectUrlsRef.current.push(url);
         return [key, { url, name: documentName(key), isPdf: blob.type === 'application/pdf' || isPdfUrl(blob.name || '') }];
       } catch (requestError) {
@@ -312,26 +429,36 @@ export default function OperationsUsersPage() {
         return [key, { error: errorMessage(requestError, `${documentName(key)} preview is unavailable.`) }];
       }
     }));
-    setDocumentPreviews(Object.fromEntries(results));
-    setDocumentsLoading(false);
+    if (requestId === detailsRequestRef.current) {
+      setDocumentPreviews(Object.fromEntries(results));
+      setDocumentsLoading(false);
+    }
   };
 
   const openDetails = async (record) => {
+    const requestId = ++detailsRequestRef.current;
     setDetailsLoading(true);
     setDocumentsError('');
     setSelectedUser(null);
     try {
       const detail = normalizeOperationsUser(await getOperationsUserById(record.operationsUserId));
-      setSelectedUser(detail);
+      if (requestId !== detailsRequestRef.current) return;
+      const resolvedDetail = await resolveDetailFields(detail);
+      if (requestId !== detailsRequestRef.current) return;
+      setSelectedUser(resolvedDetail);
       try {
-        await loadDocuments(detail.operationsUserId);
+        await loadDocuments(resolvedDetail.operationsUserId, requestId);
       } catch (requestError) {
-        setDocumentsError(errorMessage(requestError, 'Some document previews are unavailable.'));
+        if (requestId === detailsRequestRef.current) {
+          setDocumentsError(errorMessage(requestError, 'Some document previews are unavailable.'));
+        }
       }
     } catch (requestError) {
-      toast.error(errorMessage(requestError, 'Unable to load Operations user details.'));
+      if (requestId === detailsRequestRef.current) {
+        toast.error(errorMessage(requestError, 'Unable to load Operations user details.'));
+      }
     } finally {
-      setDetailsLoading(false);
+      if (requestId === detailsRequestRef.current) setDetailsLoading(false);
     }
   };
 
