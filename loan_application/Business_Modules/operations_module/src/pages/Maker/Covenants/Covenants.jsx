@@ -1,14 +1,12 @@
 import {
   Check,
-  ChevronLeft,
   ChevronRight,
   Edit3,
   Plus,
-  Search,
   Trash2,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { buildApplicationRoute, ROUTES } from '../../../config/routeConfig';
 import { useOperationsApplication } from '../../../context/OperationsApplicationContext';
@@ -23,6 +21,11 @@ const WORKFLOW_STEPS = [
   { id: 'cheque-details', label: 'Cheque Details', route: ROUTES.MAKER_CHEQUE_DETAILS },
 ];
 
+const OTC_STATUS = {
+  HOLD: 'hold',
+  RELEASE: 'release',
+};
+
 const INITIAL_FORM = {
   covenant: '',
   covenantCondition: '',
@@ -30,14 +33,17 @@ const INITIAL_FORM = {
   allowWaiver: false,
   postDisbursementDocument: false,
   otc: false,
-  recordType: null,
-  documentType: null,
+  otcStatus: '',
+  waiverFile: null,
+  pddFile: null,
+  pddExpectedDate: '',
 };
 
-// These normalized collections intentionally remain empty until backend contracts exist.
-const RECORD_TYPE_OPTIONS = [];
-const DOCUMENT_TYPE_MASTER_RECORDS = [];
-const DOCUMENT_TYPE_PAGE_SIZE = 5;
+function otcStatusLabel(status) {
+  if (status === OTC_STATUS.HOLD) return 'Hold OTC';
+  if (status === OTC_STATUS.RELEASE) return 'Release OTC';
+  return '—';
+}
 
 function createFrontendId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -60,10 +66,6 @@ function validateForm(form) {
 
   if (!form.creationDate) {
     nextErrors.creationDate = 'Creation Date is required.';
-  }
-
-  if (!form.recordType?.stableId) {
-    nextErrors.recordType = 'Record Type is required. Options are not available yet.';
   }
 
   return nextErrors;
@@ -112,32 +114,7 @@ export default function Covenants() {
   const [covenantRecords, setCovenantRecords] = useState([]);
   const [editingFrontendId, setEditingFrontendId] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
-  const [isDocumentTypeModalOpen, setIsDocumentTypeModalOpen] = useState(false);
-  const [documentTypeSearchTerm, setDocumentTypeSearchTerm] = useState('');
-  const [documentTypeSelectedId, setDocumentTypeSelectedId] = useState(null);
-  const [documentTypeCurrentPage, setDocumentTypeCurrentPage] = useState(1);
-  const [documentTypePageSize, setDocumentTypePageSize] = useState(DOCUMENT_TYPE_PAGE_SIZE);
   const [deleteFrontendId, setDeleteFrontendId] = useState(null);
-
-  const filteredDocumentTypes = useMemo(() => {
-    const query = documentTypeSearchTerm.trim().toLowerCase();
-
-    if (!query) return DOCUMENT_TYPE_MASTER_RECORDS;
-
-    return DOCUMENT_TYPE_MASTER_RECORDS.filter((record) => (
-      `${record.type || ''} ${record.description || ''}`.toLowerCase().includes(query)
-    ));
-  }, [documentTypeSearchTerm]);
-
-  const documentTypeTotalPages = Math.max(
-    1,
-    Math.ceil(filteredDocumentTypes.length / documentTypePageSize),
-  );
-  const documentTypePageStart = (documentTypeCurrentPage - 1) * documentTypePageSize;
-  const visibleDocumentTypes = filteredDocumentTypes.slice(
-    documentTypePageStart,
-    documentTypePageStart + documentTypePageSize,
-  );
 
   const resetForm = () => {
     setForm(INITIAL_FORM);
@@ -146,8 +123,46 @@ export default function Covenants() {
   };
 
   const updateFormField = (field, value) => {
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => {
+      const next = { ...current, [field]: value };
+      if (field === 'allowWaiver' && !value) {
+        next.waiverFile = null;
+      }
+      if (field === 'postDisbursementDocument' && !value) {
+        next.pddFile = null;
+        next.pddExpectedDate = '';
+      }
+      if (field === 'otc') {
+        next.otcStatus = value ? OTC_STATUS.HOLD : '';
+      }
+      return next;
+    });
     setValidationErrors((current) => ({ ...current, [field]: '' }));
+  };
+
+  const selectExclusiveOption = (option) => {
+    setForm((current) => ({
+      ...current,
+      allowWaiver: option === 'allowWaiver',
+      postDisbursementDocument: option === 'postDisbursementDocument',
+      otc: option === 'otc',
+      otcStatus: option === 'otc' ? OTC_STATUS.HOLD : '',
+      waiverFile: option === 'allowWaiver' ? current.waiverFile : null,
+      pddFile: option === 'postDisbursementDocument' ? current.pddFile : null,
+      pddExpectedDate: option === 'postDisbursementDocument' ? current.pddExpectedDate : '',
+    }));
+    setValidationErrors((current) => ({
+      ...current,
+      allowWaiver: '',
+      postDisbursementDocument: '',
+      otc: '',
+    }));
+  };
+
+  const handleFileChange = (field, event) => {
+    const file = event.target.files?.[0] || null;
+    updateFormField(field, file);
+    event.target.value = '';
   };
 
   const handleSubmit = (event) => {
@@ -174,7 +189,21 @@ export default function Covenants() {
   };
 
   const handleEdit = (record) => {
-    setForm({ ...record });
+    const otcEnabled = Boolean(record.otc);
+    setForm({
+      covenant: record.covenant || '',
+      covenantCondition: record.covenantCondition || '',
+      creationDate: record.creationDate || '',
+      allowWaiver: Boolean(record.allowWaiver),
+      postDisbursementDocument: Boolean(record.postDisbursementDocument),
+      otc: otcEnabled,
+      otcStatus: otcEnabled
+        ? (record.otcStatus === OTC_STATUS.RELEASE ? OTC_STATUS.RELEASE : OTC_STATUS.HOLD)
+        : '',
+      waiverFile: record.waiverFile || null,
+      pddFile: record.pddFile || null,
+      pddExpectedDate: record.pddExpectedDate || '',
+    });
     setEditingFrontendId(record.frontendId);
     setValidationErrors({});
   };
@@ -189,35 +218,6 @@ export default function Covenants() {
     }
 
     setDeleteFrontendId(null);
-  };
-
-  const handleOpenDocumentTypeModal = () => {
-    setDocumentTypeSelectedId(form.documentType?.stableId || null);
-    setDocumentTypeSearchTerm('');
-    setDocumentTypeCurrentPage(1);
-    setIsDocumentTypeModalOpen(true);
-  };
-
-  const handleClearDocumentTypeModal = () => {
-    setDocumentTypeSearchTerm('');
-    setDocumentTypeSelectedId(null);
-    setDocumentTypeCurrentPage(1);
-  };
-
-  const handleDocumentTypeSearch = (value) => {
-    setDocumentTypeSearchTerm(value);
-    setDocumentTypeCurrentPage(1);
-  };
-
-  const handleConfirmDocumentType = () => {
-    const selectedRecord = DOCUMENT_TYPE_MASTER_RECORDS.find(
-      (record) => record.stableId === documentTypeSelectedId,
-    );
-
-    if (!selectedRecord) return;
-
-    updateFormField('documentType', selectedRecord);
-    setIsDocumentTypeModalOpen(false);
   };
 
   const selectedDeleteRecord = covenantRecords.find((record) => record.frontendId === deleteFrontendId);
@@ -238,11 +238,18 @@ export default function Covenants() {
             <div className="operations-covenants-panel-heading">
               <div>
                 <h2 id="operations-covenants-details-title">Covenant Details</h2>
-                <p>Create and manage covenant details locally.</p>
               </div>
+              <button
+                type="submit"
+                form="operations-covenants-form"
+                className="operations-covenants-button operations-covenants-button--primary"
+              >
+                <Plus size={15} aria-hidden="true" />
+                {editingFrontendId ? 'Update Covenant' : 'Add Covenant'}
+              </button>
             </div>
 
-            <form className="operations-covenants-form" onSubmit={handleSubmit} noValidate>
+            <form id="operations-covenants-form" className="operations-covenants-form" onSubmit={handleSubmit} noValidate>
               <label className="operations-covenants-field">
                 <span className="operations-covenants-label">Covenant <span className="operations-covenants-required">*</span></span>
                 <input
@@ -276,83 +283,107 @@ export default function Covenants() {
                 <FieldError message={validationErrors.creationDate} />
               </label>
 
-              <div className="operations-covenants-checkbox-group">
+              <div className="operations-covenants-checkbox-group" role="radiogroup" aria-label="Covenant option">
                 <label className="operations-covenants-checkbox">
                   <input
-                    type="checkbox"
+                    type="radio"
+                    name="covenant-exclusive-option"
                     checked={form.allowWaiver}
-                    onChange={(event) => updateFormField('allowWaiver', event.target.checked)}
+                    onChange={() => selectExclusiveOption('allowWaiver')}
                   />
                   <span>Allow Waiver</span>
                 </label>
                 <label className="operations-covenants-checkbox">
                   <input
-                    type="checkbox"
+                    type="radio"
+                    name="covenant-exclusive-option"
                     checked={form.postDisbursementDocument}
-                    onChange={(event) => updateFormField('postDisbursementDocument', event.target.checked)}
+                    onChange={() => selectExclusiveOption('postDisbursementDocument')}
                   />
                   <span>Post Disbursement Document (PDD)</span>
                 </label>
                 <label className="operations-covenants-checkbox">
                   <input
-                    type="checkbox"
+                    type="radio"
+                    name="covenant-exclusive-option"
                     checked={form.otc}
-                    onChange={(event) => updateFormField('otc', event.target.checked)}
+                    onChange={() => selectExclusiveOption('otc')}
                   />
                   <span>OTC</span>
                 </label>
               </div>
 
-              <label className="operations-covenants-field">
-                <span className="operations-covenants-label">Record Type <span className="operations-covenants-required">*</span></span>
-                <select
-                  className="operations-covenants-control"
-                  value={form.recordType?.stableId || ''}
-                  onChange={(event) => {
-                    const selectedOption = RECORD_TYPE_OPTIONS.find(
-                      (option) => option.stableId === event.target.value,
-                    ) || null;
-                    updateFormField('recordType', selectedOption);
-                  }}
-                >
-                  <option value="">Select</option>
-                  {RECORD_TYPE_OPTIONS.map((option) => (
-                    <option value={option.stableId} key={option.stableId}>{option.label}</option>
-                  ))}
-                </select>
-                <FieldError message={validationErrors.recordType} />
-              </label>
-
-              <div className="operations-covenants-field">
-                <span className="operations-covenants-label">Document Type</span>
-                <div className="operations-covenants-selection-control">
-                  <span className={form.documentType ? 'has-value' : ''}>
-                    {form.documentType?.type || 'Select Document Type'}
-                  </span>
-                  <button
-                    type="button"
-                    className="operations-covenants-icon-button"
-                    onClick={handleOpenDocumentTypeModal}
-                    aria-label="Search document types"
-                    title="Search document types"
-                  >
-                    <Search size={16} aria-hidden="true" />
-                  </button>
+              {form.allowWaiver && (
+                <div className="operations-covenants-conditional-fields">
+                  <label className="operations-covenants-field">
+                    <span className="operations-covenants-label">Waiver Document</span>
+                    <input
+                      className="operations-covenants-control"
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                      onChange={(event) => handleFileChange('waiverFile', event)}
+                    />
+                    {form.waiverFile?.name && (
+                      <span className="operations-covenants-file-name">{form.waiverFile.name}</span>
+                    )}
+                  </label>
                 </div>
-              </div>
+              )}
+
+              {form.postDisbursementDocument && (
+                <div className="operations-covenants-conditional-fields">
+                  <label className="operations-covenants-field">
+                    <span className="operations-covenants-label">PDD Document</span>
+                    <input
+                      className="operations-covenants-control"
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                      onChange={(event) => handleFileChange('pddFile', event)}
+                    />
+                    {form.pddFile?.name && (
+                      <span className="operations-covenants-file-name">{form.pddFile.name}</span>
+                    )}
+                  </label>
+                  <label className="operations-covenants-field">
+                    <span className="operations-covenants-label">Expected Date</span>
+                    <input
+                      className="operations-covenants-control"
+                      type="date"
+                      value={form.pddExpectedDate}
+                      onChange={(event) => updateFormField('pddExpectedDate', event.target.value)}
+                    />
+                  </label>
+                </div>
+              )}
+
+              {form.otc && (
+                <div className="operations-covenants-conditional-fields operations-covenants-conditional-fields--otc">
+                  <label className="operations-covenants-field">
+                    <span className="operations-covenants-label">OTC Action</span>
+                    <select
+                      className="operations-covenants-control"
+                      value={form.otcStatus || OTC_STATUS.HOLD}
+                      onChange={(event) => updateFormField('otcStatus', event.target.value)}
+                    >
+                      <option value={OTC_STATUS.HOLD}>Hold OTC</option>
+                      <option value={OTC_STATUS.RELEASE}>Release OTC</option>
+                    </select>
+                  </label>
+                  <p className="operations-covenants-otc-note">
+                    {form.otcStatus === OTC_STATUS.RELEASE
+                      ? 'Release OTC: loan disbursement can proceed.'
+                      : 'Hold OTC: loan disbursement is blocked until Release OTC is selected.'}
+                  </p>
+                </div>
+              )}
 
               <div className="operations-covenants-form-actions">
-                <button type="button" className="operations-covenants-button operations-covenants-button--secondary" onClick={resetForm}>
-                  Clear
-                </button>
-                <button type="submit" className="operations-covenants-button operations-covenants-button--primary">
-                  <Plus size={15} aria-hidden="true" />
-                  {editingFrontendId ? 'Update Covenant' : 'Add Covenant'}
-                </button>
-                <button type="button" className="operations-covenants-button operations-covenants-button--secondary" disabled title="Permanent save is not connected yet.">
-                  Save as Draft
-                </button>
-                <button type="button" className="operations-covenants-button operations-covenants-button--primary" disabled title="Permanent save is not connected yet.">
+                <button
+                  type="button"
+                  className="operations-covenants-button operations-covenants-button--primary"
+                  disabled
+                  title="Permanent save is not connected yet."
+                >
                   Save Covenant
                 </button>
               </div>
@@ -373,7 +404,6 @@ export default function Covenants() {
                   <col className="operations-covenants-col--serial" />
                   <col className="operations-covenants-col--covenant" />
                   <col className="operations-covenants-col--condition" />
-                  <col className="operations-covenants-col--record-type" />
                   <col className="operations-covenants-col--boolean" />
                   <col className="operations-covenants-col--boolean" />
                   <col className="operations-covenants-col--boolean" />
@@ -382,10 +412,9 @@ export default function Covenants() {
                 </colgroup>
                 <thead>
                   <tr>
-                    <th scope="col">#</th>
+                    <th scope="col">S.NO</th>
                     <th scope="col">Covenant</th>
                     <th scope="col">Covenant Condition</th>
-                    <th scope="col">Record Type</th>
                     <th scope="col">Allow Waiver</th>
                     <th scope="col">PDD</th>
                     <th scope="col">OTC</th>
@@ -396,7 +425,7 @@ export default function Covenants() {
                 <tbody>
                   {covenantRecords.length === 0 ? (
                     <tr>
-                      <td className="operations-covenants-empty-state" colSpan={9}>
+                      <td className="operations-covenants-empty-state" colSpan={8}>
                         No covenant records available.
                       </td>
                     </tr>
@@ -406,7 +435,6 @@ export default function Covenants() {
                         <td className="operations-covenants-cell operations-covenants-cell--serial">{index + 1}</td>
                         <td className="operations-covenants-cell operations-covenants-cell--text">{record.covenant}</td>
                         <td className="operations-covenants-cell operations-covenants-cell--text">{record.covenantCondition}</td>
-                        <td className="operations-covenants-cell">{record.recordType?.label || '—'}</td>
                         <td className="operations-covenants-cell operations-covenants-cell--center">
                           <BooleanIndicator value={record.allowWaiver} label="Allow Waiver" />
                         </td>
@@ -414,7 +442,7 @@ export default function Covenants() {
                           <BooleanIndicator value={record.postDisbursementDocument} label="PDD" />
                         </td>
                         <td className="operations-covenants-cell operations-covenants-cell--center">
-                          <BooleanIndicator value={record.otc} label="OTC" />
+                          {record.otc ? otcStatusLabel(record.otcStatus) : '—'}
                         </td>
                         <td className="operations-covenants-cell">
                           <span className="operations-covenants-status">—</span>
@@ -447,149 +475,6 @@ export default function Covenants() {
             </div>
           </section>
         </div>
-
-        {isDocumentTypeModalOpen && (
-          <div className="operations-covenants-modal-overlay" role="presentation">
-            <div
-              className="operations-covenants-modal"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="operations-covenants-document-modal-title"
-            >
-              <div className="operations-covenants-modal-header">
-                <h2 id="operations-covenants-document-modal-title">Select Document Type</h2>
-                <button
-                  type="button"
-                  className="operations-covenants-modal-close"
-                  onClick={() => setIsDocumentTypeModalOpen(false)}
-                  aria-label="Close document type selection"
-                >
-                  <X size={18} aria-hidden="true" />
-                </button>
-              </div>
-
-              <div className="operations-covenants-modal-body">
-                <div className="operations-covenants-modal-search-row">
-                  <div className="operations-covenants-modal-search">
-                    <Search size={16} aria-hidden="true" />
-                    <input
-                      type="search"
-                      value={documentTypeSearchTerm}
-                      onChange={(event) => handleDocumentTypeSearch(event.target.value)}
-                      placeholder="Search by type or description"
-                      aria-label="Search document types"
-                    />
-                    {documentTypeSearchTerm && (
-                      <button type="button" onClick={() => handleDocumentTypeSearch('')} aria-label="Clear document type search">
-                        <X size={15} aria-hidden="true" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="operations-covenants-modal-table-wrap">
-                  <table className="operations-covenants-modal-table">
-                    <thead>
-                      <tr>
-                        <th scope="col">Select</th>
-                        <th scope="col">#</th>
-                        <th scope="col">Type</th>
-                        <th scope="col">Description</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleDocumentTypes.length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="operations-covenants-modal-empty-state">
-                            No document type records available.
-                          </td>
-                        </tr>
-                      ) : (
-                        visibleDocumentTypes.map((record, index) => (
-                          <tr className={documentTypeSelectedId === record.stableId ? 'is-selected' : ''} key={record.stableId}>
-                            <td>
-                              <input
-                                type="radio"
-                                name="document-type-selection"
-                                checked={documentTypeSelectedId === record.stableId}
-                                onChange={() => setDocumentTypeSelectedId(record.stableId)}
-                                aria-label={`Select ${record.type}`}
-                              />
-                            </td>
-                            <td>{documentTypePageStart + index + 1}</td>
-                            <td>{record.type}</td>
-                            <td>{record.description}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="operations-covenants-modal-pagination">
-                  <div className="operations-covenants-entry-count">
-                    {filteredDocumentTypes.length === 0
-                      ? 'Showing 0 entries.'
-                      : `Showing ${documentTypePageStart + 1} to ${Math.min(documentTypePageStart + documentTypePageSize, filteredDocumentTypes.length)} of ${filteredDocumentTypes.length} entries.`}
-                  </div>
-                  <div className="operations-covenants-pagination-controls">
-                    <label>
-                      <span>Rows</span>
-                      <select
-                        value={documentTypePageSize}
-                        onChange={(event) => {
-                          setDocumentTypePageSize(Number(event.target.value));
-                          setDocumentTypeCurrentPage(1);
-                        }}
-                        aria-label="Document type rows per page"
-                      >
-                        <option value="5">5</option>
-                        <option value="10">10</option>
-                        <option value="25">25</option>
-                      </select>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setDocumentTypeCurrentPage((current) => Math.max(1, current - 1))}
-                      disabled={documentTypeCurrentPage <= 1}
-                      aria-label="Previous document type page"
-                    >
-                      <ChevronLeft size={15} aria-hidden="true" />
-                    </button>
-                    <span>Page {documentTypeCurrentPage} of {documentTypeTotalPages}</span>
-                    <button
-                      type="button"
-                      onClick={() => setDocumentTypeCurrentPage((current) => Math.min(documentTypeTotalPages, current + 1))}
-                      disabled={documentTypeCurrentPage >= documentTypeTotalPages}
-                      aria-label="Next document type page"
-                    >
-                      <ChevronRight size={15} aria-hidden="true" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="operations-covenants-modal-footer">
-                <button type="button" className="operations-covenants-button operations-covenants-button--secondary" onClick={handleClearDocumentTypeModal}>
-                  Clear
-                </button>
-                <div>
-                  <button type="button" className="operations-covenants-button operations-covenants-button--secondary" onClick={() => setIsDocumentTypeModalOpen(false)}>
-                    Close
-                  </button>
-                  <button
-                    type="button"
-                    className="operations-covenants-button operations-covenants-button--primary"
-                    onClick={handleConfirmDocumentType}
-                    disabled={!DOCUMENT_TYPE_MASTER_RECORDS.some((record) => record.stableId === documentTypeSelectedId)}
-                  >
-                    OK
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {selectedDeleteRecord && (
           <div className="operations-covenants-modal-overlay" role="presentation">
