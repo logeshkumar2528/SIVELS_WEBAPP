@@ -12,6 +12,7 @@ import {
   getApiErrorMessage,
   operationsLoanBasicDetailsService,
 } from '../../../services/operationsLoanBasicDetailsService';
+import { operationsCovenantDetailsService } from '../../../services/operationsCovenantDetailsService';
 import {
   buildLoanBasicDetailsPayload,
   buildPenaltyPayload,
@@ -501,6 +502,7 @@ export default function LoanBasicDetails() {
   const [savedBasicId, setSavedBasicId] = useState(null);
   const [savedPenaltyId, setSavedPenaltyId] = useState(null);
   const [saveState, setSaveState] = useState({ saving: false, error: '', success: '' });
+  const [otcBlockStatus, setOtcBlockStatus] = useState({ isBlocked: false, reason: '', covenantId: null });
 
   useEffect(() => {
     let isMounted = true;
@@ -930,6 +932,36 @@ export default function LoanBasicDetails() {
     autoFillIdsRef.current.applicationProductDetailsId ||
     readValue(application, 'applicationProductDetailsId', 'ApplicationProductDetailsId');
 
+  useEffect(() => {
+    let isActive = true;
+    if (!agentCustomerId) {
+      setOtcBlockStatus({ isBlocked: false, reason: '', covenantId: null });
+      return undefined;
+    }
+
+    const loadBlockStatus = async () => {
+      try {
+        const block = await operationsCovenantDetailsService.getDisbursementBlockStatus(
+          agentCustomerId,
+          applicationProductDetailsId
+        );
+        if (!isActive) return;
+        setOtcBlockStatus({
+          isBlocked: Boolean(block?.isBlocked ?? block?.IsBlocked),
+          reason: String(block?.reason ?? block?.Reason ?? ''),
+          covenantId: block?.covenantId ?? block?.CovenantId ?? null,
+        });
+      } catch {
+        if (isActive) setOtcBlockStatus({ isBlocked: false, reason: '', covenantId: null });
+      }
+    };
+
+    loadBlockStatus();
+    return () => {
+      isActive = false;
+    };
+  }, [agentCustomerId, applicationProductDetailsId]);
+
   const loanAmountValue = finiteNumber(form.loanAmount);
   const totalDisbursementsValue = finiteNumber(form.totalDisbursements);
   const remainingDisbursementAmount =
@@ -960,6 +992,29 @@ export default function LoanBasicDetails() {
 
     setSaveState({ saving: true, error: '', success: '' });
     try {
+      try {
+        const block = await operationsCovenantDetailsService.getDisbursementBlockStatus(
+          agentCustomerId,
+          applicationProductDetailsId
+        );
+        const isBlocked = Boolean(block?.isBlocked ?? block?.IsBlocked);
+        setOtcBlockStatus({
+          isBlocked,
+          reason: String(block?.reason ?? block?.Reason ?? ''),
+          covenantId: block?.covenantId ?? block?.CovenantId ?? null,
+        });
+        if (isBlocked) {
+          setSaveState({
+            saving: false,
+            error:
+              'Disbursement is blocked because OTC is on Hold. Release OTC before disbursement.',
+            success: '',
+          });
+          return;
+        }
+      } catch {
+        // Proceed; backend will still reject disbursement create/update if OTC hold is active.
+      }
       const basicPayload = buildLoanBasicDetailsPayload({
         form,
         agentCustomerId,
@@ -1065,6 +1120,16 @@ export default function LoanBasicDetails() {
             <button type="button" className="operations-secondary-button" onClick={() => setAutoFillRequest((current) => current + 1)}>
               Retry
             </button>
+          </div>
+        )}
+        {otcBlockStatus.isBlocked && (
+          <div className="operations-state-card operations-state-card--error" role="alert">
+            <p>
+              Disbursement is blocked
+              {otcBlockStatus.reason ? `: ${otcBlockStatus.reason}` : ' because OTC is on Hold'}.
+              Release OTC before disbursement.
+              {otcBlockStatus.covenantId != null ? ` (Covenant #${otcBlockStatus.covenantId})` : ''}
+            </p>
           </div>
         )}
         {saveState.error && (

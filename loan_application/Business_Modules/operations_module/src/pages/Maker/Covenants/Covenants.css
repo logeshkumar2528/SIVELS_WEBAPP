@@ -79,6 +79,39 @@
   font-size: 10px;
 }
 
+.operations-covenants-toast {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.operations-covenants-toast.is-success {
+  color: #14532d;
+  background: #ecfdf3;
+  border: 1px solid #86efac;
+}
+
+.operations-covenants-toast.is-error {
+  color: #7f1d1d;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.operations-covenants-block-banner {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  color: #7c2d12;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 .operations-covenants-step.is-active .operations-covenants-step-number {
   color: #ffffff;
   background: #174a2f;
@@ -277,6 +310,69 @@
 .operations-covenants-icon-button:hover,
 .operations-covenants-row-action:hover {
   background: #eaf2eb;
+}
+
+.operations-covenants-row-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #f5f7f5;
+}
+
+.operations-covenants-file-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #174a2f;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  font: inherit;
+}
+
+.operations-covenants-preview-modal {
+  width: min(900px, 100%);
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 18px 48px rgba(23, 74, 47, 0.18);
+  overflow: hidden;
+}
+
+.operations-covenants-preview-area {
+  display: grid;
+  min-height: 300px;
+  max-height: calc(100vh - 220px);
+  place-items: center;
+  overflow: auto;
+  padding: 14px;
+  background: #f3f7f4;
+  color: #6c8175;
+  font-size: 12px;
+}
+
+.operations-covenants-preview-area iframe {
+  width: 100%;
+  min-height: 500px;
+  border: 0;
+  background: #fff;
+}
+
+.operations-covenants-preview-area img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 250px);
+  object-fit: contain;
+}
+
+.operations-covenants-preview-fallback {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  text-align: center;
+}
+
+.operations-covenants-preview-fallback a {
+  color: #174a2f;
+  font-weight: 700;
 }
 
 .operations-covenants-form-actions {
