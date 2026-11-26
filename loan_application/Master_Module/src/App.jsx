@@ -51,6 +51,9 @@ import { PaymentMethod } from './pages/masters/PaymentMethod/PaymentMethod';
 import { FeeMaster } from './pages/masters/FeeMaster/FeeMaster';
 import { Currency } from './pages/masters/Currency/Currency';
 import { DayBasis } from './pages/masters/DayBasis/DayBasis';
+import { ScheduleMethod } from './pages/masters/ScheduleMethod/ScheduleMethod';
+import { BPITreatment } from './pages/masters/BPITreatment/BPITreatment';
+import { LoanBranch } from './pages/masters/LoanBranch/LoanBranch';
 import { LoanFlag } from './pages/masters/LoanFlag/LoanFlag';
 import { Division } from './pages/masters/Division/Division';
 import { Frequency } from './pages/masters/Frequency/Frequency';
@@ -199,6 +202,9 @@ function App() {
                 <Route path="fee-master" element={<FeeMaster />} />
                 <Route path="currency" element={<Currency />} />
                 <Route path="day-basis" element={<DayBasis />} />
+                <Route path="schedule-method" element={<ScheduleMethod />} />
+                <Route path="bpi-treatment" element={<BPITreatment />} />
+                <Route path="loan-branch" element={<LoanBranch />} />
                 <Route path="loan-flag" element={<LoanFlag />} />
                 <Route path="division" element={<Division />} />
                 <Route path="frequency" element={<Frequency />} />

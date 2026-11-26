@@ -82,6 +82,45 @@ export const mastersLookupService = {
       (row) => row.dayBasisName ?? row.DayBasisName ?? row.dayBasisCode ?? row.DayBasisCode
     );
   },
+
+  async getScheduleMethods() {
+    const response = await axiosInstance.get('/ScheduleMethodMaster');
+    return toOptions(
+      unwrapList(response.data),
+      (row) => row.scheduleMethodId ?? row.ScheduleMethodId ?? row.id,
+      (row) =>
+        row.scheduleMethodName ?? row.ScheduleMethodName ?? row.scheduleMethodCode ?? row.ScheduleMethodCode
+    );
+  },
+
+  async getBPITreatments() {
+    const response = await axiosInstance.get('/BPITreatmentMaster');
+    return toOptions(
+      unwrapList(response.data),
+      (row) => row.bpiTreatmentId ?? row.BPITreatmentId ?? row.id,
+      (row) =>
+        row.bpiTreatmentName ?? row.BPITreatmentName ?? row.bpiTreatmentCode ?? row.BPITreatmentCode
+    );
+  },
+
+  async getLoanBranches() {
+    const response = await axiosInstance.get('/LoanBranchMaster');
+    return toOptions(
+      unwrapList(response.data),
+      (row) => row.loanBranchId ?? row.LoanBranchId ?? row.id,
+      (row) => row.loanBranchName ?? row.LoanBranchName ?? row.loanBranchCode ?? row.LoanBranchCode
+    );
+  },
+
+  async getInterestTypes() {
+    const response = await axiosInstance.get('/InterestTypeMaster');
+    return toOptions(
+      unwrapList(response.data),
+      (row) => row.interestTypeId ?? row.InterestTypeId ?? row.id,
+      (row) =>
+        row.interestTypeName ?? row.InterestTypeName ?? row.interestTypeCode ?? row.InterestTypeCode
+    );
+  },
 };
 
 export default mastersLookupService;

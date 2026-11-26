@@ -314,6 +314,79 @@
   border: 1px solid #174a2f;
 }
 
+.operations-disbursement-panel {
+  margin-top: 18px;
+  padding-top: 8px;
+  border-top: 1px solid #dfe9e1;
+}
+
+.operations-disbursement-help {
+  margin: 4px 0 0;
+  color: #718078;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.operations-disbursement-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 14px;
+  margin: 12px 0 14px;
+}
+
+.operations-disbursement-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.operations-disbursement-table-wrap {
+  overflow-x: auto;
+}
+
+.operations-disbursement-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.operations-disbursement-table th,
+.operations-disbursement-table td {
+  padding: 8px 10px;
+  border: 1px solid #dfe9e1;
+  text-align: left;
+}
+
+.operations-disbursement-table th {
+  background: #f4f8f4;
+  color: #174a2f;
+}
+
+.operations-disbursement-row-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.operations-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: #174a2f;
+  background: #ffffff;
+  border: 1px solid #c7d7cb;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.operations-icon-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 @media (max-width: 1050px) {
   .operations-loan-fields {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -321,6 +394,10 @@
 
   .operations-loan-steps {
     grid-template-columns: repeat(5, minmax(150px, 1fr));
+  }
+
+  .operations-disbursement-form {
+    grid-template-columns: 1fr 1fr;
   }
 }
 
@@ -338,6 +415,10 @@
     grid-template-columns: 1fr;
     gap: 13px;
     padding: 14px;
+  }
+
+  .operations-disbursement-form {
+    grid-template-columns: 1fr;
   }
 
   .operations-loan-section--payment-details .operations-loan-fields > :nth-child(n + 9) {
