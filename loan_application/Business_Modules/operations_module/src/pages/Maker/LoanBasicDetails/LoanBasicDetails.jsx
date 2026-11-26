@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import backOfficeService from '../../../../../back_office/src/back-office/api/backOfficeService';
@@ -13,14 +13,12 @@ import {
   operationsLoanBasicDetailsService,
 } from '../../../services/operationsLoanBasicDetailsService';
 import {
-  buildDisbursementPayload,
   buildLoanBasicDetailsPayload,
   buildPenaltyPayload,
   getCreatedByUserId,
   getRecordId,
   mapLoanBasicDetailsToForm,
   mapPenaltyToForm,
-  normalizeDisbursementRow,
   validateLoanBasicDetailsForm,
 } from './loanBasicDetailsPayload';
 import './LoanBasicDetails.css';
@@ -55,6 +53,7 @@ const INITIAL_FORM = {
   salesManager: '',
   loanFlagId: '',
   loanAmount: '',
+  remainingDisbursementAmount: '',
   installmentCount: '',
   interestRateType: '',
   allowBpi: false,
@@ -81,6 +80,47 @@ const INITIAL_FORM = {
 };
 
 const EMPTY_OPTIONS = [];
+const FORMATTED_AMOUNT_FIELDS = new Set([
+  'loanAmount',
+  'disbursementAmount',
+  'netLoanAmount',
+  'totalDisbursements',
+  'remainingDisbursementAmount',
+]);
+
+function normalizeAmountInput(value) {
+  const sanitized = String(value ?? '').replace(/,/g, '').replace(/[^\d.]/g, '');
+  const decimalIndex = sanitized.indexOf('.');
+  if (decimalIndex === -1) return sanitized;
+
+  return `${sanitized.slice(0, decimalIndex)}.${sanitized.slice(decimalIndex + 1).replace(/\./g, '')}`;
+}
+
+function formatIndianAmount(value) {
+  const rawValue = normalizeAmountInput(value);
+  if (!rawValue) return '';
+
+  const decimalIndex = rawValue.indexOf('.');
+  const integerPart = decimalIndex === -1 ? rawValue : rawValue.slice(0, decimalIndex);
+  const fractionPart = decimalIndex === -1 ? null : rawValue.slice(decimalIndex + 1);
+  const integerDigits = (integerPart || '0').replace(/^0+(?=\d)/, '');
+  const lastThree = integerDigits.slice(-3);
+  const prefix = integerDigits.slice(0, -3);
+  const prefixGroups = [];
+  for (let end = prefix.length; end > 0; end -= 2) {
+    prefixGroups.unshift(prefix.slice(Math.max(0, end - 2), end));
+  }
+  const groupedPrefix = prefixGroups.join(',');
+  const groupedInteger = groupedPrefix ? `${groupedPrefix},${lastThree}` : lastThree;
+
+  return fractionPart === null ? groupedInteger : `${groupedInteger}.${fractionPart}`;
+}
+
+function preventInvalidAmountKey(event) {
+  if (event.ctrlKey || event.metaKey) return;
+  if (['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  if (!/^[\d.]$/.test(event.key)) event.preventDefault();
+}
 
 const INITIAL_AUTO_FILL_IDS = {
   customerId: null,
@@ -232,6 +272,7 @@ const SECTIONS = [
       { name: 'disbursementAmount', label: 'First Disbursement Amount', type: 'number', required: true },
       { name: 'totalDisbursements', label: 'Total Disbursements', type: 'number', readOnly: true },
       { name: 'loanAmount', label: 'Loan Amount', type: 'number', required: true, readOnly: true },
+      { name: 'remainingDisbursementAmount', label: 'Remaining Disbursement Amount', type: 'number', readOnly: true },
     ],
   },
   {
@@ -302,6 +343,9 @@ const SECTIONS = [
 ];
 
 function Field({ field, value, onChange, options = EMPTY_OPTIONS }) {
+  const isFormattedAmount = FORMATTED_AMOUNT_FIELDS.has(field.name);
+  const displayValue = isFormattedAmount ? formatIndianAmount(value) : value;
+
   if (field.type === 'radio-group') {
     const selected = value == null ? '' : String(value);
 
@@ -395,8 +439,9 @@ function Field({ field, value, onChange, options = EMPTY_OPTIONS }) {
       {field.readOnly ? (
         <input
           className="operations-loan-control"
-          type={field.type === 'select' ? 'text' : field.type}
-          value={value == null ? '' : value}
+          type={isFormattedAmount || field.type === 'select' ? 'text' : field.type}
+          inputMode={isFormattedAmount ? 'decimal' : undefined}
+          value={displayValue == null ? '' : displayValue}
           readOnly
           aria-readonly="true"
         />
@@ -416,9 +461,11 @@ function Field({ field, value, onChange, options = EMPTY_OPTIONS }) {
       ) : (
         <input
           className="operations-loan-control"
-          type={field.type}
-          value={value}
-          onChange={(event) => onChange(field.name, event.target.value)}
+          type={isFormattedAmount ? 'text' : field.type}
+          inputMode={isFormattedAmount ? 'decimal' : undefined}
+          value={displayValue}
+          onChange={(event) => onChange(field.name, isFormattedAmount ? normalizeAmountInput(event.target.value) : event.target.value)}
+          onKeyDown={isFormattedAmount ? preventInvalidAmountKey : undefined}
         />
       )}
     </label>
@@ -453,15 +500,7 @@ export default function LoanBasicDetails() {
   });
   const [savedBasicId, setSavedBasicId] = useState(null);
   const [savedPenaltyId, setSavedPenaltyId] = useState(null);
-  const [disbursements, setDisbursements] = useState([]);
   const [saveState, setSaveState] = useState({ saving: false, error: '', success: '' });
-  const [disbursementDraft, setDisbursementDraft] = useState({
-    id: null,
-    amount: '',
-    date: '',
-    remarks: '',
-  });
-  const [disbursementBusy, setDisbursementBusy] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -556,8 +595,6 @@ export default function LoanBasicDetails() {
       autoFillIdsRef.current = INITIAL_AUTO_FILL_IDS;
       setSavedBasicId(null);
       setSavedPenaltyId(null);
-      setDisbursements([]);
-      setDisbursementDraft({ id: null, amount: '', date: '', remarks: '' });
       setSaveState({ saving: false, error: '', success: '' });
     }
 
@@ -643,7 +680,6 @@ export default function LoanBasicDetails() {
         approvalDocumentService.getLoanIdentifierByCustomer(agentCustomerId),
         operationsLoanBasicDetailsService.getByCustomer(agentCustomerId),
         operationsLoanBasicDetailsService.getPenaltyByCustomer(agentCustomerId),
-        operationsLoanBasicDetailsService.getDisbursementsByCustomer(agentCustomerId),
       ]);
 
       if (!isActive || requestId !== requestSequenceRef.current) return;
@@ -654,7 +690,6 @@ export default function LoanBasicDetails() {
         loanIdentifierResult,
         opsBasicResult,
         opsPenaltyResult,
-        opsDisbursementsResult,
       ] = results;
       const unavailable = [];
       const nextForm = {};
@@ -777,7 +812,6 @@ export default function LoanBasicDetails() {
 
       let nextSavedBasicId = null;
       let nextSavedPenaltyId = null;
-      let nextDisbursements = [];
 
       if (opsBasicResult.status === 'fulfilled' && opsBasicResult.value) {
         const opsBasic = opsBasicResult.value;
@@ -805,23 +839,11 @@ export default function LoanBasicDetails() {
         unavailable.push('Unable to load saved Overdue Penalty Details.');
       }
 
-      if (opsDisbursementsResult.status === 'fulfilled') {
-        nextDisbursements = (opsDisbursementsResult.value || [])
-          .map(normalizeDisbursementRow)
-          .filter((row) => row?.id);
-      } else if (
-        opsDisbursementsResult.status === 'rejected' &&
-        opsDisbursementsResult.reason?.response?.status !== 404
-      ) {
-        unavailable.push('Unable to load disbursement details.');
-      }
-
       if (!isActive || requestId !== requestSequenceRef.current) return;
       setForm((current) => ({ ...current, ...nextForm }));
       autoFillIdsRef.current = nextIds;
       setSavedBasicId(nextSavedBasicId);
       setSavedPenaltyId(nextSavedPenaltyId);
-      setDisbursements(nextDisbursements);
       setApplicationDataState({
         loading: false,
         error: '',
@@ -908,111 +930,12 @@ export default function LoanBasicDetails() {
     autoFillIdsRef.current.applicationProductDetailsId ||
     readValue(application, 'applicationProductDetailsId', 'ApplicationProductDetailsId');
 
-  const refreshDisbursementsAndTotal = async () => {
-    if (!agentCustomerId) return;
-    const [rows, basic] = await Promise.all([
-      operationsLoanBasicDetailsService.getDisbursementsByCustomer(agentCustomerId),
-      operationsLoanBasicDetailsService.getByCustomer(agentCustomerId),
-    ]);
-    setDisbursements((rows || []).map(normalizeDisbursementRow).filter((row) => row?.id));
-    if (basic) {
-      const mapped = mapLoanBasicDetailsToForm(basic);
-      setSavedBasicId(
-        getRecordId(basic, 'operationsLoanBasicDetailsId', 'OperationsLoanBasicDetailsId', 'id')
-      );
-      setForm((current) => ({
-        ...current,
-        totalDisbursements: mapped.totalDisbursements || current.totalDisbursements,
-        margin: mapped.margin || current.margin,
-        maturityDate: mapped.maturityDate || current.maturityDate,
-      }));
-    }
-  };
-
-  const handleSaveDisbursement = async () => {
-    const createdBy = getCreatedByUserId();
-    if (!agentCustomerId || !applicationProductDetailsId) {
-      setSaveState({ saving: false, error: 'Application identifiers are missing for disbursement save.', success: '' });
-      return;
-    }
-    if (!createdBy) {
-      setSaveState({ saving: false, error: 'Unable to resolve the logged-in user for createdBy.', success: '' });
-      return;
-    }
-    if (!disbursementDraft.amount || !disbursementDraft.date) {
-      setSaveState({ saving: false, error: 'Disbursement amount and date are required.', success: '' });
-      return;
-    }
-
-    setDisbursementBusy(true);
-    setSaveState({ saving: false, error: '', success: '' });
-    try {
-      const payload = buildDisbursementPayload({
-        agentCustomerId,
-        applicationProductDetailsId,
-        amount: disbursementDraft.amount,
-        date: disbursementDraft.date,
-        remarks: disbursementDraft.remarks,
-        createdBy,
-        existingId: disbursementDraft.id,
-      });
-      if (disbursementDraft.id) {
-        await operationsLoanBasicDetailsService.updateDisbursement(disbursementDraft.id, payload);
-      } else {
-        await operationsLoanBasicDetailsService.createDisbursement(payload);
-      }
-      setDisbursementDraft({ id: null, amount: '', date: '', remarks: '' });
-      await refreshDisbursementsAndTotal();
-      setSaveState({ saving: false, error: '', success: 'Disbursement saved successfully.' });
-    } catch (error) {
-      if (error?.response?.status === 401) {
-        window.location.assign(LOGIN_PATH);
-        return;
-      }
-      setSaveState({
-        saving: false,
-        error: getApiErrorMessage(error, 'Unable to save disbursement.'),
-        success: '',
-      });
-    } finally {
-      setDisbursementBusy(false);
-    }
-  };
-
-  const handleEditDisbursement = (row) => {
-    setDisbursementDraft({
-      id: row.id,
-      amount: row.amount != null ? String(row.amount) : '',
-      date: row.date || '',
-      remarks: row.remarks || '',
-    });
-  };
-
-  const handleDeleteDisbursement = async (row) => {
-    if (!row?.id) return;
-    setDisbursementBusy(true);
-    setSaveState({ saving: false, error: '', success: '' });
-    try {
-      await operationsLoanBasicDetailsService.deleteDisbursement(row.id);
-      if (disbursementDraft.id === row.id) {
-        setDisbursementDraft({ id: null, amount: '', date: '', remarks: '' });
-      }
-      await refreshDisbursementsAndTotal();
-      setSaveState({ saving: false, error: '', success: 'Disbursement removed successfully.' });
-    } catch (error) {
-      if (error?.response?.status === 401) {
-        window.location.assign(LOGIN_PATH);
-        return;
-      }
-      setSaveState({
-        saving: false,
-        error: getApiErrorMessage(error, 'Unable to delete disbursement.'),
-        success: '',
-      });
-    } finally {
-      setDisbursementBusy(false);
-    }
-  };
+  const loanAmountValue = finiteNumber(form.loanAmount);
+  const totalDisbursementsValue = finiteNumber(form.totalDisbursements);
+  const remainingDisbursementAmount =
+    loanAmountValue !== null && totalDisbursementsValue !== null
+      ? loanAmountValue - totalDisbursementsValue
+      : '';
 
   const handleSaveAndContinue = async () => {
     const validationError = validateLoanBasicDetailsForm(form);
@@ -1176,132 +1099,13 @@ export default function LoanBasicDetails() {
                   <Field
                     key={field.name}
                     field={field}
-                    value={form[field.name]}
+                    value={field.name === 'remainingDisbursementAmount' ? remainingDisbursementAmount : form[field.name]}
                     onChange={updateField}
                     options={field.optionsKey ? optionsByKey[field.optionsKey] || EMPTY_OPTIONS : EMPTY_OPTIONS}
                   />
                 ))}
               </div>
 
-              {section.id === 'key-details' && (
-                <div className="operations-disbursement-panel">
-                  <div className="operations-loan-section-heading">
-                    <div>
-                      <h3>Disbursements</h3>
-                      <p className="operations-disbursement-help">
-                        Each disbursement is saved as a separate record. Total Disbursements comes from the backend.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="operations-disbursement-form">
-                    <label className="operations-loan-field">
-                      <span className="operations-loan-field-label">Amount</span>
-                      <input
-                        className="operations-loan-control"
-                        type="number"
-                        value={disbursementDraft.amount}
-                        onChange={(event) =>
-                          setDisbursementDraft((current) => ({ ...current, amount: event.target.value }))
-                        }
-                      />
-                    </label>
-                    <label className="operations-loan-field">
-                      <span className="operations-loan-field-label">Date</span>
-                      <input
-                        className="operations-loan-control"
-                        type="date"
-                        value={disbursementDraft.date}
-                        onChange={(event) =>
-                          setDisbursementDraft((current) => ({ ...current, date: event.target.value }))
-                        }
-                      />
-                    </label>
-                    <label className="operations-loan-field">
-                      <span className="operations-loan-field-label">Remarks</span>
-                      <input
-                        className="operations-loan-control"
-                        type="text"
-                        value={disbursementDraft.remarks}
-                        onChange={(event) =>
-                          setDisbursementDraft((current) => ({ ...current, remarks: event.target.value }))
-                        }
-                      />
-                    </label>
-                    <div className="operations-disbursement-actions">
-                      <button
-                        type="button"
-                        className="operations-loan-button operations-loan-button--primary"
-                        onClick={handleSaveDisbursement}
-                        disabled={disbursementBusy || saveState.saving}
-                      >
-                        {disbursementDraft.id ? <Pencil size={14} /> : <Plus size={14} />}
-                        {disbursementDraft.id ? 'Update Disbursement' : 'Add Disbursement'}
-                      </button>
-                      {disbursementDraft.id && (
-                        <button
-                          type="button"
-                          className="operations-loan-button operations-loan-button--secondary"
-                          onClick={() => setDisbursementDraft({ id: null, amount: '', date: '', remarks: '' })}
-                          disabled={disbursementBusy}
-                        >
-                          Cancel Edit
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="operations-disbursement-table-wrap">
-                    <table className="operations-disbursement-table">
-                      <thead>
-                        <tr>
-                          <th>Date</th>
-                          <th>Amount</th>
-                          <th>Remarks</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {disbursements.length === 0 ? (
-                          <tr>
-                            <td colSpan={4}>No disbursements saved yet.</td>
-                          </tr>
-                        ) : (
-                          disbursements.map((row) => (
-                            <tr key={row.id}>
-                              <td>{row.date || '—'}</td>
-                              <td>{row.amount != null ? row.amount : '—'}</td>
-                              <td>{row.remarks || '—'}</td>
-                              <td>
-                                <div className="operations-disbursement-row-actions">
-                                  <button
-                                    type="button"
-                                    className="operations-icon-button"
-                                    onClick={() => handleEditDisbursement(row)}
-                                    disabled={disbursementBusy}
-                                    aria-label="Edit disbursement"
-                                  >
-                                    <Pencil size={14} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="operations-icon-button"
-                                    onClick={() => handleDeleteDisbursement(row)}
-                                    disabled={disbursementBusy}
-                                    aria-label="Delete disbursement"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
             </section>
           ))}
 
@@ -1315,7 +1119,7 @@ export default function LoanBasicDetails() {
                 type="button"
                 className="operations-loan-button operations-loan-button--primary"
                 onClick={handleSaveAndContinue}
-                disabled={saveState.saving || applicationDataState.loading || disbursementBusy}
+                disabled={saveState.saving || applicationDataState.loading}
               >
                 {saveState.saving ? 'Saving…' : 'Save & Continue'}
                 <ArrowRight size={16} />
