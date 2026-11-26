@@ -1,12 +1,28 @@
-import { ArrowLeft, ArrowRight, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import backOfficeService from '../../../../../back_office/src/back-office/api/backOfficeService';
 import approvalDocumentService from '../../../../../../Core/src/features/approval-documents/services/approvalDocumentService';
+import { LOGIN_PATH } from '../../../../../../Core/src/auth/authEvents';
 import { buildApplicationRoute, ROUTES } from '../../../config/routeConfig';
 import { useOperationsApplication } from '../../../context/OperationsApplicationContext';
 import OperationsLayout from '../../../layouts/OperationsLayout';
 import { mastersLookupService } from '../../../services/mastersLookupService';
+import {
+  getApiErrorMessage,
+  operationsLoanBasicDetailsService,
+} from '../../../services/operationsLoanBasicDetailsService';
+import {
+  buildDisbursementPayload,
+  buildLoanBasicDetailsPayload,
+  buildPenaltyPayload,
+  getCreatedByUserId,
+  getRecordId,
+  mapLoanBasicDetailsToForm,
+  mapPenaltyToForm,
+  normalizeDisbursementRow,
+  validateLoanBasicDetailsForm,
+} from './loanBasicDetailsPayload';
 import './LoanBasicDetails.css';
 
 const WORKFLOW_STEPS = [
@@ -26,7 +42,7 @@ const INITIAL_FORM = {
   loanReferenceNumber: '',
   interestCapsBasis: '',
   applicationRequestCode: '',
-  branch: '',
+  loanBranchId: '',
   product: '',
   disbursementAmount: '',
   netLoanAmount: '',
@@ -43,12 +59,12 @@ const INITIAL_FORM = {
   interestRateType: '',
   allowBpi: false,
   baseRate: '',
-  scheduleMethod: '',
+  scheduleMethodId: '',
   interestFrequency: '',
   capitalizationFrequency: '',
   repaymentFrequency: '',
   maturityDate: '',
-  bpiTreatment: '',
+  bpiTreatmentId: '',
   interestRate: '',
   margin: '',
   nextInterestFrequencyDate: '',
@@ -93,7 +109,6 @@ const AUTO_FILL_FIELDS = [
   'product',
   'loanAmount',
   'loanReferenceNumber',
-  'branch',
   'applicationRequestCode',
   'applicationNumber',
   'loanPurpose',
@@ -209,13 +224,13 @@ const SECTIONS = [
       { name: 'product', label: 'Loan Type', type: 'select', required: true, readOnly: true },
       { name: 'interestCapsBasis', label: 'Interest Days Basis', type: 'select', required: true, optionsKey: 'dayBases' },
       { name: 'currency', label: 'Currency', type: 'select', required: true, optionsKey: 'currencies' },
-      { name: 'branch', label: 'Loan Branch', type: 'select', required: true, readOnly: true },
+      { name: 'loanBranchId', label: 'Loan Branch', type: 'select', required: true, optionsKey: 'loanBranches' },
       { name: 'customerName', label: 'Customer', type: 'select', required: true, readOnly: true },
       { name: 'applicationRequestCode', label: 'Application Request Date', type: 'date', readOnly: true },
       { name: 'loanStartDate', label: 'Loan Start Date', type: 'date', required: true },
       { name: 'netLoanAmount', label: 'Net Loan Amount', type: 'number', required: true },
       { name: 'disbursementAmount', label: 'First Disbursement Amount', type: 'number', required: true },
-      { name: 'totalDisbursements', label: 'Total Disbursements', type: 'number' },
+      { name: 'totalDisbursements', label: 'Total Disbursements', type: 'number', readOnly: true },
       { name: 'loanAmount', label: 'Loan Amount', type: 'number', required: true, readOnly: true },
     ],
   },
@@ -243,13 +258,13 @@ const SECTIONS = [
     title: 'Payment Details',
     fields: [
       { name: 'installmentCount', label: 'Number of Installments', type: 'number', required: true, readOnly: true },
-      { name: 'interestRateType', label: 'Interest Rate Type', type: 'select', required: true },
-      { name: 'bpiTreatment', label: 'BPI Treatment', type: 'select', required: true },
+      { name: 'interestRateType', label: 'Interest Rate Type', type: 'select', required: true, optionsKey: 'interestTypes' },
+      { name: 'bpiTreatmentId', label: 'BPI Treatment', type: 'select', required: true, optionsKey: 'bpiTreatments' },
       { name: 'allowBpi', label: 'Allow BPI', type: 'checkbox' },
       { name: 'interestRate', label: 'Actual Interest Rate (%)', type: 'number', required: true, readOnly: true },
       { name: 'baseRate', label: 'Base Rate (%)', type: 'number' },
-      { name: 'margin', label: 'Margin (%)', type: 'number' },
-      { name: 'scheduleMethod', label: 'Schedule Method', type: 'select', required: true },
+      { name: 'margin', label: 'Margin (%)', type: 'number', readOnly: true },
+      { name: 'scheduleMethodId', label: 'Schedule Method', type: 'select', required: true, optionsKey: 'scheduleMethods' },
       { name: 'interestFrequency', label: 'Interest Frequency', type: 'select', required: true, optionsKey: 'frequencies' },
       { name: 'nextInterestFrequencyDate', label: 'Next Interest Frequency Date', type: 'date' },
       {
@@ -268,7 +283,7 @@ const SECTIONS = [
         optionsKey: 'frequencies',
       },
       { name: 'nextPaymentFrequencyDate', label: 'Next Payment Frequency Date', type: 'date' },
-      { name: 'maturityDate', label: 'Maturity Date', type: 'date', required: true },
+      { name: 'maturityDate', label: 'Maturity Date', type: 'date', readOnly: true },
     ],
   },
   {
@@ -277,10 +292,9 @@ const SECTIONS = [
     fields: [
       { name: 'penaltyApplicable', label: 'Apply Overdue Penalty', type: 'checkbox' },
       { name: 'includeGraceDaysInPenaltyCalculation', label: 'Include Grace Days in Penalty Calculation', type: 'checkbox' },
-      { name: 'penaltyType', label: 'Charge Type', type: 'select', required: true },
-      { name: 'gracePeriodDays', label: 'Grace Days', type: 'number', required: true },
-      { name: 'chargeCalculatedOn', label: 'Charge Calculated On', type: 'select', required: true },
-      { name: 'penaltyRate', label: 'Charge Amount / %', type: 'number', required: true },
+      { name: 'gracePeriodDays', label: 'Grace Days', type: 'number' },
+      { name: 'chargeCalculatedOn', label: 'Charge Calculated On', type: 'text' },
+      { name: 'penaltyRate', label: 'Charge Amount / %', type: 'number' },
       { name: 'allowWaivers', label: 'Allow Waivers', type: 'checkbox' },
       { name: 'maximumWaiverPercentage', label: 'Max Waiver %', type: 'number' },
     ],
@@ -432,13 +446,39 @@ export default function LoanBasicDetails() {
     loanFlags: [],
     currencies: [],
     dayBases: [],
+    scheduleMethods: [],
+    bpiTreatments: [],
+    loanBranches: [],
+    interestTypes: [],
   });
+  const [savedBasicId, setSavedBasicId] = useState(null);
+  const [savedPenaltyId, setSavedPenaltyId] = useState(null);
+  const [disbursements, setDisbursements] = useState([]);
+  const [saveState, setSaveState] = useState({ saving: false, error: '', success: '' });
+  const [disbursementDraft, setDisbursementDraft] = useState({
+    id: null,
+    amount: '',
+    date: '',
+    remarks: '',
+  });
+  const [disbursementBusy, setDisbursementBusy] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadMasters = async () => {
-      const [divisions, paymentMethods, frequencies, loanFlags, currencies, dayBases] = await Promise.all([
+      const [
+        divisions,
+        paymentMethods,
+        frequencies,
+        loanFlags,
+        currencies,
+        dayBases,
+        scheduleMethods,
+        bpiTreatments,
+        loanBranches,
+        interestTypes,
+      ] = await Promise.all([
         mastersLookupService.getDivisions().catch((error) => {
           console.error('Failed to load divisions:', error);
           return [];
@@ -463,10 +503,37 @@ export default function LoanBasicDetails() {
           console.error('Failed to load day bases:', error);
           return [];
         }),
+        mastersLookupService.getScheduleMethods().catch((error) => {
+          console.error('Failed to load schedule methods:', error);
+          return [];
+        }),
+        mastersLookupService.getBPITreatments().catch((error) => {
+          console.error('Failed to load BPI treatments:', error);
+          return [];
+        }),
+        mastersLookupService.getLoanBranches().catch((error) => {
+          console.error('Failed to load loan branches:', error);
+          return [];
+        }),
+        mastersLookupService.getInterestTypes().catch((error) => {
+          console.error('Failed to load interest types:', error);
+          return [];
+        }),
       ]);
 
       if (!isMounted) return;
-      setMasterOptions({ divisions, paymentMethods, frequencies, loanFlags, currencies, dayBases });
+      setMasterOptions({
+        divisions,
+        paymentMethods,
+        frequencies,
+        loanFlags,
+        currencies,
+        dayBases,
+        scheduleMethods,
+        bpiTreatments,
+        loanBranches,
+        interestTypes,
+      });
     };
 
     loadMasters();
@@ -487,6 +554,11 @@ export default function LoanBasicDetails() {
     if (isNewApplication) {
       setForm(INITIAL_FORM);
       autoFillIdsRef.current = INITIAL_AUTO_FILL_IDS;
+      setSavedBasicId(null);
+      setSavedPenaltyId(null);
+      setDisbursements([]);
+      setDisbursementDraft({ id: null, amount: '', date: '', remarks: '' });
+      setSaveState({ saving: false, error: '', success: '' });
     }
 
     const contextCustomerName = readValue(application, 'fullName', 'FullName');
@@ -569,11 +641,21 @@ export default function LoanBasicDetails() {
         backOfficeService.getApplicationProductDetailsByCustomer(agentCustomerId),
         approvalDocumentService.getLatestCreditDecision(agentCustomerId),
         approvalDocumentService.getLoanIdentifierByCustomer(agentCustomerId),
+        operationsLoanBasicDetailsService.getByCustomer(agentCustomerId),
+        operationsLoanBasicDetailsService.getPenaltyByCustomer(agentCustomerId),
+        operationsLoanBasicDetailsService.getDisbursementsByCustomer(agentCustomerId),
       ]);
 
       if (!isActive || requestId !== requestSequenceRef.current) return;
 
-      const [productDetailsResult, creditDecisionResult, loanIdentifierResult] = results;
+      const [
+        productDetailsResult,
+        creditDecisionResult,
+        loanIdentifierResult,
+        opsBasicResult,
+        opsPenaltyResult,
+        opsDisbursementsResult,
+      ] = results;
       const unavailable = [];
       const nextForm = {};
       const nextIds = {
@@ -693,9 +775,53 @@ export default function LoanBasicDetails() {
         unavailable.push('The official loan identifier could not be loaded; Loan Reference No. remains empty.');
       }
 
+      let nextSavedBasicId = null;
+      let nextSavedPenaltyId = null;
+      let nextDisbursements = [];
+
+      if (opsBasicResult.status === 'fulfilled' && opsBasicResult.value) {
+        const opsBasic = opsBasicResult.value;
+        nextSavedBasicId = getRecordId(
+          opsBasic,
+          'operationsLoanBasicDetailsId',
+          'OperationsLoanBasicDetailsId',
+          'id'
+        );
+        Object.assign(nextForm, mapLoanBasicDetailsToForm(opsBasic));
+      } else if (opsBasicResult.status === 'rejected' && opsBasicResult.reason?.response?.status !== 404) {
+        unavailable.push('Unable to load saved Operations Loan Basic Details.');
+      }
+
+      if (opsPenaltyResult.status === 'fulfilled' && opsPenaltyResult.value) {
+        const opsPenalty = opsPenaltyResult.value;
+        nextSavedPenaltyId = getRecordId(
+          opsPenalty,
+          'operationsOverduePenaltyDetailsId',
+          'OperationsOverduePenaltyDetailsId',
+          'id'
+        );
+        Object.assign(nextForm, mapPenaltyToForm(opsPenalty));
+      } else if (opsPenaltyResult.status === 'rejected' && opsPenaltyResult.reason?.response?.status !== 404) {
+        unavailable.push('Unable to load saved Overdue Penalty Details.');
+      }
+
+      if (opsDisbursementsResult.status === 'fulfilled') {
+        nextDisbursements = (opsDisbursementsResult.value || [])
+          .map(normalizeDisbursementRow)
+          .filter((row) => row?.id);
+      } else if (
+        opsDisbursementsResult.status === 'rejected' &&
+        opsDisbursementsResult.reason?.response?.status !== 404
+      ) {
+        unavailable.push('Unable to load disbursement details.');
+      }
+
       if (!isActive || requestId !== requestSequenceRef.current) return;
       setForm((current) => ({ ...current, ...nextForm }));
       autoFillIdsRef.current = nextIds;
+      setSavedBasicId(nextSavedBasicId);
+      setSavedPenaltyId(nextSavedPenaltyId);
+      setDisbursements(nextDisbursements);
       setApplicationDataState({
         loading: false,
         error: '',
@@ -764,12 +890,212 @@ export default function LoanBasicDetails() {
       loanFlags: masterOptions.loanFlags,
       currencies: masterOptions.currencies,
       dayBases: masterOptions.dayBases,
+      scheduleMethods: masterOptions.scheduleMethods,
+      bpiTreatments: masterOptions.bpiTreatments,
+      loanBranches: masterOptions.loanBranches,
+      interestTypes: masterOptions.interestTypes,
     }),
     [masterOptions]
   );
 
   const updateField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
+    setSaveState((current) => (current.error || current.success ? { ...current, error: '', success: '' } : current));
+  };
+
+  const agentCustomerId = application?.agentCustomerId || applicationId;
+  const applicationProductDetailsId =
+    autoFillIdsRef.current.applicationProductDetailsId ||
+    readValue(application, 'applicationProductDetailsId', 'ApplicationProductDetailsId');
+
+  const refreshDisbursementsAndTotal = async () => {
+    if (!agentCustomerId) return;
+    const [rows, basic] = await Promise.all([
+      operationsLoanBasicDetailsService.getDisbursementsByCustomer(agentCustomerId),
+      operationsLoanBasicDetailsService.getByCustomer(agentCustomerId),
+    ]);
+    setDisbursements((rows || []).map(normalizeDisbursementRow).filter((row) => row?.id));
+    if (basic) {
+      const mapped = mapLoanBasicDetailsToForm(basic);
+      setSavedBasicId(
+        getRecordId(basic, 'operationsLoanBasicDetailsId', 'OperationsLoanBasicDetailsId', 'id')
+      );
+      setForm((current) => ({
+        ...current,
+        totalDisbursements: mapped.totalDisbursements || current.totalDisbursements,
+        margin: mapped.margin || current.margin,
+        maturityDate: mapped.maturityDate || current.maturityDate,
+      }));
+    }
+  };
+
+  const handleSaveDisbursement = async () => {
+    const createdBy = getCreatedByUserId();
+    if (!agentCustomerId || !applicationProductDetailsId) {
+      setSaveState({ saving: false, error: 'Application identifiers are missing for disbursement save.', success: '' });
+      return;
+    }
+    if (!createdBy) {
+      setSaveState({ saving: false, error: 'Unable to resolve the logged-in user for createdBy.', success: '' });
+      return;
+    }
+    if (!disbursementDraft.amount || !disbursementDraft.date) {
+      setSaveState({ saving: false, error: 'Disbursement amount and date are required.', success: '' });
+      return;
+    }
+
+    setDisbursementBusy(true);
+    setSaveState({ saving: false, error: '', success: '' });
+    try {
+      const payload = buildDisbursementPayload({
+        agentCustomerId,
+        applicationProductDetailsId,
+        amount: disbursementDraft.amount,
+        date: disbursementDraft.date,
+        remarks: disbursementDraft.remarks,
+        createdBy,
+        existingId: disbursementDraft.id,
+      });
+      if (disbursementDraft.id) {
+        await operationsLoanBasicDetailsService.updateDisbursement(disbursementDraft.id, payload);
+      } else {
+        await operationsLoanBasicDetailsService.createDisbursement(payload);
+      }
+      setDisbursementDraft({ id: null, amount: '', date: '', remarks: '' });
+      await refreshDisbursementsAndTotal();
+      setSaveState({ saving: false, error: '', success: 'Disbursement saved successfully.' });
+    } catch (error) {
+      if (error?.response?.status === 401) {
+        window.location.assign(LOGIN_PATH);
+        return;
+      }
+      setSaveState({
+        saving: false,
+        error: getApiErrorMessage(error, 'Unable to save disbursement.'),
+        success: '',
+      });
+    } finally {
+      setDisbursementBusy(false);
+    }
+  };
+
+  const handleEditDisbursement = (row) => {
+    setDisbursementDraft({
+      id: row.id,
+      amount: row.amount != null ? String(row.amount) : '',
+      date: row.date || '',
+      remarks: row.remarks || '',
+    });
+  };
+
+  const handleDeleteDisbursement = async (row) => {
+    if (!row?.id) return;
+    setDisbursementBusy(true);
+    setSaveState({ saving: false, error: '', success: '' });
+    try {
+      await operationsLoanBasicDetailsService.deleteDisbursement(row.id);
+      if (disbursementDraft.id === row.id) {
+        setDisbursementDraft({ id: null, amount: '', date: '', remarks: '' });
+      }
+      await refreshDisbursementsAndTotal();
+      setSaveState({ saving: false, error: '', success: 'Disbursement removed successfully.' });
+    } catch (error) {
+      if (error?.response?.status === 401) {
+        window.location.assign(LOGIN_PATH);
+        return;
+      }
+      setSaveState({
+        saving: false,
+        error: getApiErrorMessage(error, 'Unable to delete disbursement.'),
+        success: '',
+      });
+    } finally {
+      setDisbursementBusy(false);
+    }
+  };
+
+  const handleSaveAndContinue = async () => {
+    const validationError = validateLoanBasicDetailsForm(form);
+    if (validationError) {
+      setSaveState({ saving: false, error: validationError, success: '' });
+      return;
+    }
+
+    const createdBy = getCreatedByUserId();
+    if (!agentCustomerId || !applicationProductDetailsId) {
+      setSaveState({
+        saving: false,
+        error: 'Application identifiers are missing. Re-open the application from the Maker listing.',
+        success: '',
+      });
+      return;
+    }
+    if (!createdBy) {
+      setSaveState({ saving: false, error: 'Unable to resolve the logged-in user for createdBy.', success: '' });
+      return;
+    }
+
+    setSaveState({ saving: true, error: '', success: '' });
+    try {
+      const basicPayload = buildLoanBasicDetailsPayload({
+        form,
+        agentCustomerId,
+        applicationProductDetailsId,
+        createdBy,
+        existingId: savedBasicId,
+      });
+      const basicResult = savedBasicId
+        ? await operationsLoanBasicDetailsService.update(savedBasicId, basicPayload)
+        : await operationsLoanBasicDetailsService.create(basicPayload);
+
+      const nextBasicId =
+        getRecordId(basicResult, 'operationsLoanBasicDetailsId', 'OperationsLoanBasicDetailsId', 'id') ||
+        savedBasicId;
+      if (nextBasicId) setSavedBasicId(nextBasicId);
+
+      if (basicResult && typeof basicResult === 'object') {
+        const mappedBasic = mapLoanBasicDetailsToForm(basicResult);
+        setForm((current) => ({
+          ...current,
+          margin: mappedBasic.margin || current.margin,
+          maturityDate: mappedBasic.maturityDate || current.maturityDate,
+          totalDisbursements: mappedBasic.totalDisbursements || current.totalDisbursements,
+        }));
+      }
+
+      const penaltyPayload = buildPenaltyPayload({
+        form,
+        agentCustomerId,
+        applicationProductDetailsId,
+        createdBy,
+        existingId: savedPenaltyId,
+      });
+      const penaltyResult = savedPenaltyId
+        ? await operationsLoanBasicDetailsService.updatePenalty(savedPenaltyId, penaltyPayload)
+        : await operationsLoanBasicDetailsService.createPenalty(penaltyPayload);
+
+      const nextPenaltyId =
+        getRecordId(
+          penaltyResult,
+          'operationsOverduePenaltyDetailsId',
+          'OperationsOverduePenaltyDetailsId',
+          'id'
+        ) || savedPenaltyId;
+      if (nextPenaltyId) setSavedPenaltyId(nextPenaltyId);
+
+      setSaveState({ saving: false, error: '', success: 'Loan basic details saved successfully.' });
+      navigate(buildApplicationRoute(ROUTES.MAKER_FEES, applicationId));
+    } catch (error) {
+      if (error?.response?.status === 401) {
+        window.location.assign(LOGIN_PATH);
+        return;
+      }
+      setSaveState({
+        saving: false,
+        error: getApiErrorMessage(error, 'Unable to save loan basic details.'),
+        success: '',
+      });
+    }
   };
 
   return (
@@ -818,6 +1144,16 @@ export default function LoanBasicDetails() {
             </button>
           </div>
         )}
+        {saveState.error && (
+          <div className="operations-state-card operations-state-card--error" role="alert">
+            <p>{saveState.error}</p>
+          </div>
+        )}
+        {saveState.success && (
+          <div className="operations-state-card" role="status">
+            <p>{saveState.success}</p>
+          </div>
+        )}
 
         <form className="operations-loan-form" onSubmit={(event) => event.preventDefault()} noValidate>
           {SECTIONS.map((section) => (
@@ -846,6 +1182,126 @@ export default function LoanBasicDetails() {
                   />
                 ))}
               </div>
+
+              {section.id === 'key-details' && (
+                <div className="operations-disbursement-panel">
+                  <div className="operations-loan-section-heading">
+                    <div>
+                      <h3>Disbursements</h3>
+                      <p className="operations-disbursement-help">
+                        Each disbursement is saved as a separate record. Total Disbursements comes from the backend.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="operations-disbursement-form">
+                    <label className="operations-loan-field">
+                      <span className="operations-loan-field-label">Amount</span>
+                      <input
+                        className="operations-loan-control"
+                        type="number"
+                        value={disbursementDraft.amount}
+                        onChange={(event) =>
+                          setDisbursementDraft((current) => ({ ...current, amount: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label className="operations-loan-field">
+                      <span className="operations-loan-field-label">Date</span>
+                      <input
+                        className="operations-loan-control"
+                        type="date"
+                        value={disbursementDraft.date}
+                        onChange={(event) =>
+                          setDisbursementDraft((current) => ({ ...current, date: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label className="operations-loan-field">
+                      <span className="operations-loan-field-label">Remarks</span>
+                      <input
+                        className="operations-loan-control"
+                        type="text"
+                        value={disbursementDraft.remarks}
+                        onChange={(event) =>
+                          setDisbursementDraft((current) => ({ ...current, remarks: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <div className="operations-disbursement-actions">
+                      <button
+                        type="button"
+                        className="operations-loan-button operations-loan-button--primary"
+                        onClick={handleSaveDisbursement}
+                        disabled={disbursementBusy || saveState.saving}
+                      >
+                        {disbursementDraft.id ? <Pencil size={14} /> : <Plus size={14} />}
+                        {disbursementDraft.id ? 'Update Disbursement' : 'Add Disbursement'}
+                      </button>
+                      {disbursementDraft.id && (
+                        <button
+                          type="button"
+                          className="operations-loan-button operations-loan-button--secondary"
+                          onClick={() => setDisbursementDraft({ id: null, amount: '', date: '', remarks: '' })}
+                          disabled={disbursementBusy}
+                        >
+                          Cancel Edit
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="operations-disbursement-table-wrap">
+                    <table className="operations-disbursement-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Amount</th>
+                          <th>Remarks</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {disbursements.length === 0 ? (
+                          <tr>
+                            <td colSpan={4}>No disbursements saved yet.</td>
+                          </tr>
+                        ) : (
+                          disbursements.map((row) => (
+                            <tr key={row.id}>
+                              <td>{row.date || '—'}</td>
+                              <td>{row.amount != null ? row.amount : '—'}</td>
+                              <td>{row.remarks || '—'}</td>
+                              <td>
+                                <div className="operations-disbursement-row-actions">
+                                  <button
+                                    type="button"
+                                    className="operations-icon-button"
+                                    onClick={() => handleEditDisbursement(row)}
+                                    disabled={disbursementBusy}
+                                    aria-label="Edit disbursement"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="operations-icon-button"
+                                    onClick={() => handleDeleteDisbursement(row)}
+                                    disabled={disbursementBusy}
+                                    aria-label="Delete disbursement"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </section>
           ))}
 
@@ -855,8 +1311,13 @@ export default function LoanBasicDetails() {
                 <ArrowLeft size={16} />
                 Back
               </button>
-              <button type="button" className="operations-loan-button operations-loan-button--primary" disabled title="Backend workflow is not connected yet.">
-                Save &amp; Continue
+              <button
+                type="button"
+                className="operations-loan-button operations-loan-button--primary"
+                onClick={handleSaveAndContinue}
+                disabled={saveState.saving || applicationDataState.loading || disbursementBusy}
+              >
+                {saveState.saving ? 'Saving…' : 'Save & Continue'}
                 <ArrowRight size={16} />
               </button>
             </div>
