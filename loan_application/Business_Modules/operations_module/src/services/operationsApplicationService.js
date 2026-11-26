@@ -20,8 +20,44 @@ function unwrapList(response) {
   const payload = response?.data ?? response;
   if (Array.isArray(payload)) return payload;
 
-  const value = payload?.value ?? payload?.data ?? payload?.result ?? payload?.items;
-  return Array.isArray(value) ? value : [];
+  const candidates = [
+    payload?.value,
+    payload?.data,
+    payload?.result,
+    payload?.items,
+    payload?.value?.items,
+    payload?.value?.data,
+    payload?.data?.items,
+    payload?.data?.value,
+    payload?.data?.result,
+  ];
+  return candidates.find((value) => Array.isArray(value)) || [];
+}
+
+function readTotal(payload) {
+  const candidates = [
+    payload?.totalCount,
+    payload?.total,
+    payload?.count,
+    payload?.data?.totalCount,
+    payload?.data?.total,
+    payload?.data?.count,
+    payload?.value?.totalCount,
+    payload?.value?.total,
+    payload?.value?.count,
+  ];
+  const total = candidates.find((value) => value !== undefined && value !== null && value !== '');
+  if (total === undefined) return null;
+  const numericTotal = Number(total);
+  return Number.isFinite(numericTotal) && numericTotal >= 0 ? numericTotal : null;
+}
+
+function unwrapListResponse(response) {
+  const payload = response?.data ?? response;
+  return {
+    items: unwrapList(response),
+    total: readTotal(payload),
+  };
 }
 
 function unwrapValue(response) {
@@ -30,18 +66,21 @@ function unwrapValue(response) {
 }
 
 export const operationsApplicationService = {
-  async getNewApplications() {
+  async getQueueApplications(operationsStatus) {
     const response = await axiosInstance.get(OPERATIONS_APPLICATION_ENDPOINTS.MY_APPLICATIONS, {
-      params: { operationsStatus: 'NEW' },
+      params: { operationsStatus },
     });
-    return unwrapList(response);
+    return unwrapListResponse(response);
+  },
+
+  async getNewApplications() {
+    const response = await this.getQueueApplications('NEW');
+    return response.items;
   },
 
   async getPendingApplications() {
-    const response = await axiosInstance.get(OPERATIONS_APPLICATION_ENDPOINTS.MY_APPLICATIONS, {
-      params: { operationsStatus: 'PENDING' },
-    });
-    return unwrapList(response);
+    const response = await this.getQueueApplications('PENDING');
+    return response.items;
   },
 
   async getApplicationById(agentCustomerId) {

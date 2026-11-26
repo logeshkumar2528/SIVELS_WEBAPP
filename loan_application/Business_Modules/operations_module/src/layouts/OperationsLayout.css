@@ -1,3 +1,84 @@
 .operations-content {
   min-height: 100%;
 }
+
+.operations-layout .header-user-name {
+  display: none;
+}
+
+.operations-logout-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.operations-logout-modal {
+  width: min(100%, 420px);
+  padding: 1.5rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+.operations-logout-modal-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 1rem;
+}
+
+.operations-logout-modal-heading h3,
+.operations-logout-modal p {
+  margin: 0;
+}
+
+.operations-logout-modal-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #dc2626;
+  background: #fef2f2;
+  border-radius: 10px;
+}
+
+.operations-logout-modal p {
+  margin-bottom: 1.5rem;
+  color: #64748b;
+  font-size: 0.925rem;
+  line-height: 1.5;
+}
+
+.operations-logout-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.operations-logout-modal-actions button {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.operations-logout-modal-actions button:first-child {
+  color: #334155;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+}
+
+.operations-logout-modal-actions button:last-child {
+  color: #ffffff;
+  background: #dc2626;
+  border: none;
+}

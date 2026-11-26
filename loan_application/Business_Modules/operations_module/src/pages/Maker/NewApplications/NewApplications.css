@@ -141,9 +141,16 @@
 
 .operations-new-applications-table {
   width: 100%;
-  min-width: 1080px;
+  min-width: 1120px;
   border-collapse: collapse;
   font-size: 0.78rem;
+}
+
+.operations-new-applications-index {
+  width: 58px;
+  color: var(--color-text-secondary) !important;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .operations-new-applications-table th {
