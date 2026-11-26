@@ -271,25 +271,9 @@
 .operations-loan-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
   padding: 16px 2px 0;
-}
-
-.operations-loan-footer-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: #6b7d71;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.operations-loan-status-dot {
-  width: 8px;
-  height: 8px;
-  background: #94a3b8;
-  border-radius: 50%;
 }
 
 .operations-loan-actions {
@@ -321,19 +305,13 @@
 .operations-loan-button--secondary {
   color: #174a2f;
   background: #ffffff;
-  border: 1px solid #9fbea8;
+  border: 1px solid #174a2f;
 }
 
 .operations-loan-button--primary {
   color: #ffffff;
   background: #174a2f;
   border: 1px solid #174a2f;
-}
-
-.operations-loan-button--danger {
-  color: #a52d27;
-  background: #fffafa;
-  border: 1px solid #efbcb6;
 }
 
 @media (max-width: 1050px) {
@@ -367,6 +345,7 @@
   }
 
   .operations-loan-actions {
-    justify-content: flex-start;
+    width: 100%;
+    justify-content: flex-end;
   }
 }

@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronRight, FileText, Save, Send, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import backOfficeService from '../../../../../back_office/src/back-office/api/backOfficeService';
@@ -77,6 +77,15 @@ const INITIAL_AUTO_FILL_IDS = {
   operationsStatus: '',
   assignedMakerStaffId: null,
   profileImagePath: '',
+  rmId: null,
+  salesExecutiveRmId: null,
+  salesManagerRmId: null,
+  agentId: null,
+  creatorRole: '',
+  creatorId: null,
+  sourceSourcingChannelId: null,
+  sourceSourcingChannelName: '',
+  resolvedSourcingChannelId: null,
 };
 
 const AUTO_FILL_FIELDS = [
@@ -89,6 +98,10 @@ const AUTO_FILL_FIELDS = [
   'applicationNumber',
   'loanPurpose',
   'interestRate',
+  'salesExecutive',
+  'salesManager',
+  'dsaDma',
+  'sourcingType',
 ];
 
 const PLACEHOLDER_VALUES = new Set(['', 'n/a', 'na', 'nil', 'not available', 'null', 'undefined', '—', '-']);
@@ -125,6 +138,61 @@ function dateInputValue(value) {
   return [parsed.getFullYear(), String(parsed.getMonth() + 1).padStart(2, '0'), String(parsed.getDate()).padStart(2, '0')].join('-');
 }
 
+function localDateInputValue() {
+  const today = new Date();
+  return [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
+}
+
+function normalizedRole(value) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function formatNameWithCode(name, code) {
+  const cleanName = String(name ?? '').trim();
+  const cleanCode = String(code ?? '').trim();
+  if (!cleanName) return '';
+  return cleanCode ? `${cleanName} (${cleanCode})` : cleanName;
+}
+
+function channelDescriptor(record) {
+  return [
+    readValue(record, 'sourcingChannelName', 'SourcingChannelName', 'sourcingChannel', 'SourcingChannel', 'channelName', 'ChannelName'),
+    readValue(record, 'sourcingChannelCode', 'SourcingChannelCode', 'channelCode', 'ChannelCode'),
+  ]
+    .filter((value) => value != null)
+    .join(' ')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]/g, '');
+}
+
+function isAgentChannel(record) {
+  const descriptor = channelDescriptor(record);
+  return descriptor.includes('agent') || descriptor.includes('fieldagent');
+}
+
+function isRmChannel(record) {
+  const descriptor = channelDescriptor(record);
+  return !isAgentChannel(record) && (
+    descriptor.includes('rm') ||
+    descriptor.includes('relationshipmanager') ||
+    descriptor.includes('direct')
+  );
+}
+
+function isMonthlyFrequency(option) {
+  const code = String(readValue(option, 'frequencyCode', 'FrequencyCode', 'code', 'Code') ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]/g, '');
+  const name = String(readValue(option, 'frequencyName', 'FrequencyName', 'label', 'name', 'Name') ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]/g, '');
+
+  return code === 'mnt' || name === 'monthly';
+}
+
 function finiteNumber(value) {
   if (value === undefined || value === null || String(value).trim() === '') return null;
   const number = Number(value);
@@ -156,10 +224,10 @@ const SECTIONS = [
     title: 'Quick Disbursement / Loan Information',
     fields: [
       { name: 'repaymentMode', label: 'Payment Method', type: 'select', required: true, optionsKey: 'paymentMethods' },
-      { name: 'salesExecutive', label: 'Sales Executive', type: 'select' },
-      { name: 'dsaDma', label: 'DSA / DMA', type: 'select' },
-      { name: 'sourcingType', label: 'Sourcing Type', type: 'select', required: true },
-      { name: 'salesManager', label: 'Sales Manager', type: 'select' },
+      { name: 'salesExecutive', label: 'Sales Executive', type: 'select', readOnly: true },
+      { name: 'dsaDma', label: 'DSA / DMA', type: 'select', readOnly: true },
+      { name: 'sourcingType', label: 'Sourcing Type', type: 'select', required: true, readOnly: true },
+      { name: 'salesManager', label: 'Sales Manager', type: 'select', readOnly: true },
       { name: 'loanPurpose', label: 'Loan Purpose', type: 'select', required: true, readOnly: true },
       { name: 'applicationNumber', label: 'Application Number', type: 'text', required: true, readOnly: true },
       {
@@ -174,7 +242,7 @@ const SECTIONS = [
     id: 'payment-details',
     title: 'Payment Details',
     fields: [
-      { name: 'installmentCount', label: 'Number of Installments', type: 'number', required: true },
+      { name: 'installmentCount', label: 'Number of Installments', type: 'number', required: true, readOnly: true },
       { name: 'interestRateType', label: 'Interest Rate Type', type: 'select', required: true },
       { name: 'bpiTreatment', label: 'BPI Treatment', type: 'select', required: true },
       { name: 'allowBpi', label: 'Allow BPI', type: 'checkbox' },
@@ -348,6 +416,7 @@ export default function LoanBasicDetails() {
   const { applicationId, application } = useOperationsApplication();
   const [form, setForm] = useState(INITIAL_FORM);
   const autoFillIdsRef = useRef(INITIAL_AUTO_FILL_IDS);
+  const [approvedTenureMonths, setApprovedTenureMonths] = useState(null);
   const [applicationDataState, setApplicationDataState] = useState({
     loading: false,
     error: '',
@@ -413,27 +482,60 @@ export default function LoanBasicDetails() {
     previousApplicationIdRef.current = applicationId;
     const agentCustomerId = application?.agentCustomerId || applicationId;
 
+    setApprovedTenureMonths(null);
+
     if (isNewApplication) {
       setForm(INITIAL_FORM);
       autoFillIdsRef.current = INITIAL_AUTO_FILL_IDS;
     }
 
     const contextCustomerName = readValue(application, 'fullName', 'FullName');
-    const contextApplicationNumber = readValue(application, 'appId', 'AppId');
+    const contextApplicationNumber = readValue(application, 'customerCode', 'CustomerCode');
     const loanType = readValue(application, 'loanProductName', 'LoanProductName');
+    const persistedLoanStartDate = dateInputValue(readValue(application, 'loanStartDate', 'LoanStartDate'));
     const appliedDate = dateInputValue(readValue(application, 'createdAt', 'CreatedAt'));
+    const rmId = readValue(application, 'rmId', 'RmId', 'RMId');
+    const rmName = readValue(application, 'rmName', 'RmName', 'RMName');
+    const rmCode = readValue(application, 'rmCode', 'RmCode', 'RMCode');
+    const agentId = readValue(application, 'agentId', 'AgentId');
+    const agentName = readValue(application, 'agentName', 'AgentName');
+    const agentCode = readValue(application, 'agentCode', 'AgentCode');
+    const creatorRole = normalizedRole(readValue(application, 'createdByRole', 'CreatedByRole'));
+    const creatorId = readValue(application, 'createdByUserId', 'CreatedByUserId');
+    const validAgentCreator = creatorRole === 'agent' && sameIdentifier(creatorId, agentId);
+    const rmDisplay = formatNameWithCode(rmName, rmCode);
+    const dsaDisplay = validAgentCreator
+      ? formatNameWithCode(agentName, agentCode)
+      : creatorRole === 'rm'
+        ? 'Direct RM'
+        : '';
+    const sourcingTypeDisplay = creatorRole === 'agent'
+      ? 'Agent'
+      : creatorRole === 'rm'
+        ? 'RM'
+        : '';
     const applicationDetails = {
       applicationProductDetailsId: readValue(application, 'applicationProductDetailsId', 'ApplicationProductDetailsId'),
       loanAccountNumber: readValue(application, 'loanAccountNumber', 'LoanAccountNumber') || '',
       operationsStatus: readValue(application, 'operationsStatus', 'OperationsStatus') || '',
       assignedMakerStaffId: readValue(application, 'assignedMakerStaffId', 'AssignedMakerStaffId'),
       profileImagePath: readValue(application, 'profileImagePath', 'ProfileImagePath') || '',
+      rmId,
+      salesExecutiveRmId: rmId,
+      salesManagerRmId: rmId,
+      agentId,
+      creatorRole,
+      creatorId,
     };
     const contextPatch = {};
     if (contextCustomerName != null) contextPatch.customerName = String(contextCustomerName);
     if (contextApplicationNumber != null) contextPatch.applicationNumber = String(contextApplicationNumber);
     if (loanType != null && !/^\d+$/.test(String(loanType).trim())) contextPatch.product = String(loanType);
     if (appliedDate) contextPatch.applicationRequestCode = appliedDate;
+    contextPatch.salesExecutive = rmDisplay;
+    contextPatch.salesManager = rmDisplay;
+    contextPatch.dsaDma = dsaDisplay;
+    contextPatch.sourcingType = sourcingTypeDisplay;
 
     const emptyAutoFill = AUTO_FILL_FIELDS.reduce((values, field) => ({ ...values, [field]: '' }), {});
     autoFillIdsRef.current = {
@@ -441,7 +543,13 @@ export default function LoanBasicDetails() {
       customerId: agentCustomerId || null,
       ...applicationDetails,
     };
-    setForm((current) => ({ ...current, ...emptyAutoFill, ...contextPatch }));
+    setForm((current) => {
+      const next = { ...current, ...emptyAutoFill, ...contextPatch };
+      if (isNewApplication || !current.loanStartDate) {
+        next.loanStartDate = persistedLoanStartDate || localDateInputValue();
+      }
+      return next;
+    });
 
     if (!agentCustomerId) {
       setApplicationDataState({
@@ -473,6 +581,8 @@ export default function LoanBasicDetails() {
         customerId: agentCustomerId || null,
         ...applicationDetails,
       };
+      const contextAgentCustomerId = readValue(application, 'agentCustomerId', 'AgentCustomerId') || agentCustomerId;
+      const contextApplicationProductDetailsId = applicationDetails.applicationProductDetailsId;
 
       if (contextCustomerName == null) unavailable.push('Customer details are unavailable; Customer remains empty.');
 
@@ -484,16 +594,40 @@ export default function LoanBasicDetails() {
           'applicationProductDetailsId',
           'ApplicationProductDetailsId'
         );
-        const contextAgentCustomerId = readValue(application, 'agentCustomerId', 'AgentCustomerId') || agentCustomerId;
-        const contextApplicationProductDetailsId = applicationDetails.applicationProductDetailsId;
         const hasMatchingApplication =
           sameIdentifier(returnedAgentCustomerId, contextAgentCustomerId) &&
           sameIdentifier(returnedApplicationProductDetailsId, contextApplicationProductDetailsId);
 
         if (hasMatchingApplication) {
           const loanPurposeName = readValue(productDetails, 'loanPurposeName', 'LoanPurposeName');
+          const sourceSourcingChannelId = readValue(
+            productDetails,
+            'sourcingChannelId',
+            'SourcingChannelId'
+          );
+          const sourceSourcingChannelName = readValue(
+            productDetails,
+            'sourcingChannelName',
+            'SourcingChannelName',
+            'sourcingChannel',
+            'SourcingChannel',
+            'channelName',
+            'ChannelName'
+          );
           nextIds.applicationProductDetailsId = returnedApplicationProductDetailsId;
           nextIds.loanPurposeId = readValue(productDetails, 'loanPurposeId', 'LoanPurposeId');
+          nextIds.sourceSourcingChannelId = sourceSourcingChannelId;
+          nextIds.sourceSourcingChannelName = sourceSourcingChannelName || '';
+
+          const channelMatchesCreator = creatorRole === 'agent'
+            ? isAgentChannel(productDetails)
+            : creatorRole === 'rm'
+              ? isRmChannel(productDetails)
+              : false;
+          if (sourceSourcingChannelId != null && channelMatchesCreator) {
+            nextIds.resolvedSourcingChannelId = sourceSourcingChannelId;
+          }
+
           if (loanPurposeName != null) nextForm.loanPurpose = String(loanPurposeName);
         } else {
           unavailable.push('Application Product Details did not match the selected application.');
@@ -505,22 +639,43 @@ export default function LoanBasicDetails() {
       if (creditDecisionResult.status === 'fulfilled') {
         const decision = firstRecord(creditDecisionResult.value);
         const decisionName = readValue(decision, 'decision', 'Decision');
+        const decisionAgentCustomerId = readValue(
+          decision,
+          'agentCustomerId',
+          'AgentCustomerId',
+          'customerId',
+          'CustomerId'
+        );
+        const decisionApplicationProductDetailsId = readValue(
+          decision,
+          'applicationProductDetailsId',
+          'ApplicationProductDetailsId'
+        );
         const sanctionedAmount = readValue(decision, 'sanctionedLoanAmount', 'SanctionedLoanAmount');
         const sanctionedRoi = readValue(decision, 'sanctionedROI', 'SanctionedROI', 'sanctionedRoi');
         const sanctionedTenure = readValue(decision, 'sanctionedTenureMonths', 'SanctionedTenureMonths');
         const isApproved = String(decisionName || '').trim().toLowerCase() === 'approved';
+        const parsedSanctionedTenure = finiteNumber(sanctionedTenure);
+        const decisionMatchesApplication =
+          sameIdentifier(decisionAgentCustomerId, contextAgentCustomerId) &&
+          sameIdentifier(decisionApplicationProductDetailsId, contextApplicationProductDetailsId);
+        const hasValidSanctionedTenure =
+          parsedSanctionedTenure !== null &&
+          Number.isInteger(parsedSanctionedTenure) &&
+          parsedSanctionedTenure > 0;
         const hasCompleteApprovedTerms =
           isApproved &&
+          decisionMatchesApplication &&
           finiteNumber(sanctionedAmount) !== null &&
           finiteNumber(sanctionedRoi) !== null &&
-          finiteNumber(sanctionedTenure) !== null &&
-          finiteNumber(sanctionedTenure) > 0;
+          hasValidSanctionedTenure;
 
         if (hasCompleteApprovedTerms) {
           nextForm.loanAmount = String(sanctionedAmount);
           nextForm.interestRate = String(sanctionedRoi);
+          setApprovedTenureMonths(parsedSanctionedTenure);
         } else {
-          unavailable.push('An approved Credit Decision with complete sanctioned terms is unavailable; sanctioned fields remain empty.');
+          unavailable.push('An approved Credit Decision with matching application identity and complete sanctioned terms is unavailable; sanctioned fields remain empty.');
         }
       } else {
         unavailable.push('The latest Credit Decision could not be loaded; sanctioned fields remain empty.');
@@ -561,6 +716,45 @@ export default function LoanBasicDetails() {
       isActive = false;
     };
   }, [applicationId, application, autoFillRequest]);
+
+  useEffect(() => {
+    const frequencies = masterOptions.frequencies;
+    if (frequencies.length !== 1) return;
+
+    const onlyFrequency = frequencies[0];
+    if (!isMonthlyFrequency(onlyFrequency)) return;
+
+    const hasValidSelection = frequencies.some((option) =>
+      sameIdentifier(option?.value, form.repaymentFrequency)
+    );
+    if (hasValidSelection) return;
+
+    setForm((current) => {
+      if (current.repaymentFrequency && current.repaymentFrequency !== form.repaymentFrequency) {
+        return current;
+      }
+      if (current.repaymentFrequency === String(onlyFrequency.value)) return current;
+      return { ...current, repaymentFrequency: String(onlyFrequency.value) };
+    });
+  }, [form.repaymentFrequency, masterOptions.frequencies]);
+
+  useEffect(() => {
+    const selectedFrequency = masterOptions.frequencies.find((option) =>
+      sameIdentifier(option?.value, form.repaymentFrequency)
+    );
+    const nextInstallmentCount =
+      approvedTenureMonths !== null &&
+      selectedFrequency &&
+      isMonthlyFrequency(selectedFrequency)
+        ? String(approvedTenureMonths)
+        : '';
+
+    setForm((current) => (
+      current.installmentCount === nextInstallmentCount
+        ? current
+        : { ...current, installmentCount: nextInstallmentCount }
+    ));
+  }, [approvedTenureMonths, form.repaymentFrequency, masterOptions.frequencies]);
 
   const optionsByKey = useMemo(
     () => ({
@@ -656,30 +850,14 @@ export default function LoanBasicDetails() {
           ))}
 
           <footer className="operations-loan-footer">
-            <div className="operations-loan-footer-status">
-              <span className="operations-loan-status-dot" />
-              <span>UI-only draft</span>
-            </div>
             <div className="operations-loan-actions">
               <button type="button" className="operations-loan-button operations-loan-button--secondary" onClick={() => navigate(ROUTES.MAKER_DASHBOARD)}>
                 <ArrowLeft size={16} />
                 Back
               </button>
-              <button type="button" className="operations-loan-button operations-loan-button--secondary" disabled title="Backend workflow is not connected yet.">
-                <Save size={16} />
-                Save
-              </button>
               <button type="button" className="operations-loan-button operations-loan-button--primary" disabled title="Backend workflow is not connected yet.">
-                <Send size={16} />
-                Submit
-              </button>
-              <button type="button" className="operations-loan-button operations-loan-button--secondary" disabled title="Backend workflow is not connected yet.">
-                <Save size={16} />
-                Resubmit
-              </button>
-              <button type="button" className="operations-loan-button operations-loan-button--danger" disabled title="Backend workflow is not connected yet.">
-                <X size={16} />
-                Reject
+                Save &amp; Continue
+                <ArrowRight size={16} />
               </button>
             </div>
           </footer>
