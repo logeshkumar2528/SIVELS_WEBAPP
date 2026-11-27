@@ -1,82 +1,15 @@
 .operations-covenants-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
   width: 100%;
   max-width: 1360px;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
   margin: 0 auto;
-  padding: 4px 0 24px;
+  padding: 4px 0 0;
   box-sizing: border-box;
-}
-
-.operations-covenants-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-bottom: 8px;
-  color: var(--color-text-muted);
-  font-size: 12px;
-}
-
-.operations-covenants-breadcrumb button {
-  padding: 0;
-  color: var(--color-primary);
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  font: inherit;
-}
-
-.operations-covenants-breadcrumb button:hover {
-  text-decoration: underline;
-}
-
-.operations-covenants-steps {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
-  gap: 8px;
-  margin: 8px 0 18px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-}
-
-.operations-covenants-step {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  min-height: 43px;
-  padding: 8px 10px;
-  color: #718078;
-  background: #f4f8f4;
-  border: 1px solid #dfe9e1;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.2;
-  text-align: center;
-}
-
-.operations-covenants-step:disabled {
-  cursor: not-allowed;
-}
-
-.operations-covenants-step.is-active {
-  color: #174a2f;
-  background: #d9e9de;
-  border-color: #8fbd9d;
-  cursor: default;
-}
-
-.operations-covenants-step-number {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  flex: 0 0 auto;
-  place-items: center;
-  color: #527964;
-  background: #e3eee5;
-  border-radius: 50%;
-  font-size: 10px;
 }
 
 .operations-covenants-toast {
@@ -112,24 +45,26 @@
   line-height: 1.4;
 }
 
-.operations-covenants-step.is-active .operations-covenants-step-number {
-  color: #ffffff;
-  background: #174a2f;
-}
-
 .operations-covenants-workspace {
   display: grid;
-  grid-template-columns: minmax(300px, 35%) minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
+  grid-template-columns: minmax(240px, 28%) minmax(0, 1fr);
+  gap: 14px;
+  flex: 1 1 auto;
+  align-items: stretch;
+  min-height: 0;
+  margin-bottom: 0;
 }
 
 .operations-covenants-panel {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
   background: #ffffff;
   border: 1px solid #dfe9e1;
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow: 0 5px 16px rgba(23, 74, 47, 0.04);
 }
 
@@ -137,8 +72,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 14px 18px;
+  gap: 10px;
+  min-height: 52px;
+  box-sizing: border-box;
+  padding: 10px 14px;
   background: #eaf2eb;
   border-bottom: 1px solid #d5e3d8;
 }
@@ -148,19 +85,21 @@
   color: #174a2f;
   font-size: 14px;
   font-weight: 800;
+  line-height: 1.2;
 }
 
 .operations-covenants-panel-heading p {
-  margin: 4px 0 0;
-  color: #6b7d71;
-  font-size: 11px;
+  display: none;
 }
 
 .operations-covenants-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 18px;
+  flex: 1 1 auto;
+  gap: 10px;
+  min-height: 0;
+  padding: 12px 14px 14px;
+  overflow: auto;
 }
 
 .operations-covenants-field {
@@ -185,16 +124,16 @@
 .operations-covenants-control,
 .operations-covenants-selection-control {
   width: 100%;
-  min-height: 38px;
+  min-height: 34px;
   box-sizing: border-box;
-  padding: 8px 10px;
+  padding: 6px 9px;
   color: #263c2e;
   background: #fbfdfb;
   border: 1px solid #cdded1;
   border-radius: 8px;
   outline: none;
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .operations-covenants-control:focus,
@@ -204,7 +143,7 @@
 }
 
 .operations-covenants-control--textarea {
-  min-height: 94px;
+  min-height: 72px;
   resize: vertical;
 }
 
@@ -382,6 +321,11 @@
   padding-top: 4px;
 }
 
+.operations-covenants-form > .operations-covenants-form-actions:last-child {
+  margin-top: auto;
+  padding-top: 8px;
+}
+
 .operations-covenants-button {
   display: inline-flex;
   align-items: center;
@@ -422,7 +366,8 @@
 .operations-covenants-table-wrap {
   width: 100%;
   max-width: 100%;
-  max-height: 620px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
 }
@@ -793,27 +738,35 @@
 
 @media (max-width: 1050px) {
   .operations-covenants-workspace {
-    grid-template-columns: minmax(280px, 35%) minmax(0, 1fr);
+    grid-template-columns: minmax(240px, 32%) minmax(0, 1fr);
   }
 }
 
 @media (max-width: 820px) {
+  .operations-covenants-page {
+    height: auto;
+    min-height: 100%;
+  }
+
   .operations-covenants-workspace {
     grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .operations-covenants-panel {
+    height: auto;
+    min-height: 280px;
   }
 }
 
 @media (max-width: 640px) {
   .operations-covenants-page {
+    height: auto;
     padding-bottom: 16px;
   }
 
   .operations-covenants-conditional-fields {
     grid-template-columns: 1fr;
-  }
-
-  .operations-covenants-steps {
-    grid-template-columns: repeat(5, minmax(150px, 1fr));
   }
 
   .operations-covenants-form-actions,

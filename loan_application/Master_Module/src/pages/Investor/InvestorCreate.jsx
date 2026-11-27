@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Building2, Landmark, LoaderCircle, MapPin, Save, UserRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -11,58 +11,171 @@ import { getCities } from '../../api/masters/cityApi';
 import { getBankBranches } from '../../api/masters/bankBranchApi';
 import './InvestorCreate.css';
 import '../RelationshipManager/RelationshipManagerCreate.css';
-import { getProfileImageUrl } from '../../../../Core/src/utils/profileImageHelper';
-import { DocumentPreviewModal, DocumentUploadCard } from '../../components/DocumentUpload/DocumentUploadSection';
+import { getDocumentUrl, getProfileImageUrl } from '../../../../Core/src/utils/profileImageHelper';
+import { DocumentPreviewModal, DocumentUploadCard, fetchDocumentBlobUrl, isPdfUrl } from '../../components/DocumentUpload/DocumentUploadSection';
+import { getAadhaarPath, getPanPath } from '../Dashboard/Dashboard';
 
 const initial = { investorCode: '', fullName: '', dateOfBirth: '', genderId: '', countryId: '', stateId: '', districtId: '', cityId: '', address: '', pincode: '', mobileNumber: '', emailAddress: '', branch: '', dateJoined: '', accountNumber: '', ifscCode: '' };
 const rows = (v) => Array.isArray(v) ? v : (v?.data || v?.value || []);
 const idOf = (x, key) => x?.[key] ?? x?.id ?? x?.[key[0].toUpperCase() + key.slice(1)];
 const nameOf = (x, key, fallback = 'name') => x?.[key] ?? x?.[fallback] ?? x?.name;
+const fileBaseName = (path, fallback) => {
+  if (!path) return fallback;
+  return String(path).split('/').pop().split('\\').pop() || fallback;
+};
 
 export default function InvestorCreate({ investorId = null, onSuccessRedirect = '/dashboard' }) {
   const navigate = useNavigate();
   const [form, setForm] = useState(initial);
   const [master, setMaster] = useState({ genders: [], countries: [], states: [], districts: [], cities: [], branches: [] });
   const [files, setFiles] = useState({ aadhar: null, pan: null, profile: null });
-  const [existingFiles, setExistingFiles] = useState({ aadhar: '', pan: '', profile: '' });
-  const [profilePreviewUrl, setProfilePreviewUrl] = useState(null);
+  const [existingFiles, setExistingFiles] = useState({ aadhar: '', pan: '', profile: '', aadharName: '', panName: '' });
+  const [previewUrls, setPreviewUrls] = useState({ aadhar: null, pan: null, profile: null });
   const [previewDoc, setPreviewDoc] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [isActive, setIsActive] = useState(true);
+  const blobUrlsRef = useRef([]);
 
   useEffect(() => {
-    Promise.all([getGenders(), getCountries(), getStates(), getDistricts(), getCities(), getBankBranches(), investorId ? getInvestor(investorId) : Promise.resolve(null), investorId ? Promise.resolve(null) : getInvestors()])
-      .then(([g, co, s, d, c, b, existing, allInvestors]) => {
+    let active = true;
+
+    Promise.all([
+      getGenders(),
+      getCountries(),
+      getStates(),
+      getDistricts(),
+      getCities(),
+      getBankBranches(),
+      investorId ? getInvestor(investorId) : Promise.resolve(null),
+      investorId ? Promise.resolve(null) : getInvestors(),
+    ])
+      .then(([g, co, s, d, c, b, existing]) => {
+        if (!active) return;
         setMaster({ genders: rows(g), countries: rows(co), states: rows(s), districts: rows(d), cities: rows(c), branches: rows(b) });
-        if (!investorId) {
-        }
-        if (existing) {
-          const r = existing?.data || existing?.value || existing;
-          setExistingFiles({
-            aadhar: r.aadharDocumentPath || r.aadhaarDocumentPath || r.aadharPath || r.aadhaarPath || '',
-            pan: r.panCardPath || r.panDocumentPath || r.panPath || '',
-            profile: investorId ? getProfileImageUrl('Investor', investorId) : '',
-          });
-          setForm((current) => ({ ...current, ...r, dateOfBirth: String(r.dateOfBirth || '').slice(0, 10), dateJoined: String(r.dateJoined || '').slice(0, 10), genderId: r.genderId ?? '', countryId: r.countryId ?? '', stateId: r.stateId ?? '', districtId: r.districtId ?? '', cityId: r.cityId ?? '' }));
-        }
+
+        if (!existing) return;
+
+        const raw = existing?.data || existing?.value || existing;
+        const r = Array.isArray(raw)
+          ? raw[0]
+          : (raw?.value?.[0] || raw?.data || raw);
+        if (!r || typeof r !== 'object') return;
+
+        // Same pattern as Agent + Investor profile:
+        // build document URLs from entity id (Investor API often omits stored path fields).
+        const realInvestorId = r.investorId || r.InvestorId || r.id || r.Id || investorId;
+        const aadhaarPath = getAadhaarPath(r)
+          || r.aadhaarDocumentPath
+          || r.aadharDocumentPath
+          || r.aadhaarPath
+          || r.aadharPath
+          || r.aadhaarCardPath
+          || '';
+        const panPath = getPanPath(r)
+          || r.panCardPath
+          || r.panDocumentPath
+          || r.panPath
+          || '';
+
+        setExistingFiles({
+          aadhar: realInvestorId
+            ? (getDocumentUrl('Investor', realInvestorId, 'aadhaar', aadhaarPath) || '')
+            : '',
+          pan: realInvestorId
+            ? (getDocumentUrl('Investor', realInvestorId, 'pan', panPath) || '')
+            : '',
+          profile: realInvestorId ? getProfileImageUrl('Investor', realInvestorId) : '',
+          aadharName: fileBaseName(aadhaarPath, 'Aadhaar Card'),
+          panName: fileBaseName(panPath, 'PAN Card'),
+        });
+        setIsActive(r.isActive !== false && r.IsActive !== false);
+        setForm((current) => ({
+          ...current,
+          ...r,
+          dateOfBirth: String(r.dateOfBirth || r.DateOfBirth || '').slice(0, 10),
+          dateJoined: String(r.dateJoined || r.DateJoined || '').slice(0, 10),
+          genderId: r.genderId ?? r.GenderId ?? '',
+          countryId: r.countryId ?? r.CountryId ?? '',
+          stateId: r.stateId ?? r.StateId ?? '',
+          districtId: r.districtId ?? r.DistrictId ?? '',
+          cityId: r.cityId ?? r.CityId ?? '',
+        }));
       })
-      .catch(() => { setError('Unable to load investor master data.'); toast.error('Unable to load investor master data.'); });
+      .catch(() => {
+        if (!active) return;
+        setError('Unable to load investor master data.');
+        toast.error('Unable to load investor master data.');
+      });
+
+    return () => {
+      active = false;
+    };
   }, [investorId]);
+
+  useEffect(() => () => {
+    blobUrlsRef.current.forEach((url) => {
+      try {
+        if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
+      } catch {
+        // ignore
+      }
+    });
+    blobUrlsRef.current = [];
+  }, []);
+
+  const openExistingDocument = async (title, url, isPdfInitial = false) => {
+    if (!url) return;
+    setPreviewDoc({ name: title, title, url, isPdf: isPdfInitial, loading: true });
+    try {
+      const blobResult = await fetchDocumentBlobUrl(url);
+      if (blobResult?.url) {
+        if (blobResult.isBlob) blobUrlsRef.current.push(blobResult.url);
+        setPreviewDoc({
+          name: title,
+          title,
+          url: blobResult.url,
+          isPdf: blobResult.isPdf,
+          loading: false,
+        });
+        return;
+      }
+    } catch {
+      // fall through to direct URL
+    }
+    setPreviewDoc({ name: title, title, url, isPdf: isPdfInitial, loading: false });
+  };
+
+  const closePreview = () => {
+    blobUrlsRef.current.forEach((url) => {
+      try {
+        if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
+      } catch {
+        // ignore
+      }
+    });
+    blobUrlsRef.current = [];
+    setPreviewDoc(null);
+  };
   const states = useMemo(() => master.states.filter(x => !form.countryId || String(idOf(x, 'countryId')) === String(form.countryId)), [master.states, form.countryId]);
   const districts = useMemo(() => master.districts.filter(x => !form.stateId || String(idOf(x, 'stateId')) === String(form.stateId)), [master.districts, form.stateId]);
   const cities = useMemo(() => master.cities.filter(x => (!form.stateId || String(idOf(x, 'stateId')) === String(form.stateId)) && (!form.districtId || String(idOf(x, 'districtId')) === String(form.districtId))), [master.cities, form.stateId, form.districtId]);
   const change = (key, value) => setForm(p => ({ ...p, [key]: value, ...(key === 'countryId' ? { stateId: '', districtId: '', cityId: '' } : {}), ...(key === 'stateId' ? { districtId: '', cityId: '' } : {}), ...(key === 'districtId' ? { cityId: '' } : {}) }));
-  const handleProfileUpload = (event) => {
+  const handleDocumentUpload = (key) => (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (profilePreviewUrl) URL.revokeObjectURL(profilePreviewUrl);
-    setFiles((current) => ({ ...current, profile: file }));
-    setProfilePreviewUrl(URL.createObjectURL(file));
+    setPreviewUrls((current) => {
+      if (current[key]) URL.revokeObjectURL(current[key]);
+      return { ...current, [key]: URL.createObjectURL(file) };
+    });
+    setFiles((current) => ({ ...current, [key]: file }));
   };
-  const handleRemoveProfile = () => {
-    if (profilePreviewUrl) URL.revokeObjectURL(profilePreviewUrl);
-    setFiles((current) => ({ ...current, profile: null }));
-    setProfilePreviewUrl(null);
+  const handleDocumentRemove = (key) => () => {
+    setPreviewUrls((current) => {
+      if (current[key]) URL.revokeObjectURL(current[key]);
+      return { ...current, [key]: null };
+    });
+    setFiles((current) => ({ ...current, [key]: null }));
   };
   const submit = async (e) => {
     e.preventDefault();
@@ -70,7 +183,7 @@ export default function InvestorCreate({ investorId = null, onSuccessRedirect = 
     if (required.some(k => !String(form[k] || '').trim())) return toast.error('Please complete all required investor fields.');
     setSaving(true);
     try {
-      const payload = { ...form, genderId: Number(form.genderId || 0), countryId: Number(form.countryId), stateId: Number(form.stateId), districtId: Number(form.districtId), cityId: Number(form.cityId), isActive: true };
+      const payload = { ...form, genderId: Number(form.genderId || 0), countryId: Number(form.countryId), stateId: Number(form.stateId), districtId: Number(form.districtId), cityId: Number(form.cityId), isActive };
       const saved = investorId ? await updateInvestor(investorId, payload) : await createInvestor(payload);
       const id = investorId || saved?.investorId || saved?.InvestorId || saved?.data?.investorId || saved?.id;
       if (!id) throw new Error('Investor was created but no investorId was returned.');
@@ -99,9 +212,97 @@ export default function InvestorCreate({ investorId = null, onSuccessRedirect = 
       <section className="rm-section"><div className="rm-section-heading"><Landmark size={19} /><div><h2>Banking & work details</h2><p>Branch and payment details for the investor.</p></div></div><div className="rm-form-grid">
         <label className="form-group"><span className="form-label">Branch <b className="text-danger">*</b></span><select className="form-input" value={form.branch} disabled={saving} onChange={e => change('branch', e.target.value)}><option value="">Select branch</option>{master.branches.map(x => <option key={idOf(x, 'branchId')} value={nameOf(x, 'branchName')}>{nameOf(x, 'branchName')}</option>)}</select></label><label className="form-group"><span className="form-label">Account Number</span><input className="form-input" value={form.accountNumber} onChange={e => change('accountNumber', e.target.value)} disabled={saving} /></label><label className="form-group"><span className="form-label">IFSC Code</span><input className="form-input" value={form.ifscCode} onChange={e => change('ifscCode', e.target.value)} disabled={saving} /></label><label className="form-group"><span className="form-label">Date Joined</span><input className="form-input" type="date" value={form.dateJoined} onChange={e => change('dateJoined', e.target.value)} disabled={saving} /></label>
       </div></section>
-      <section className="rm-section"><div className="rm-section-heading"><Building2 size={19} /><div><h2>Required documents</h2><p>Upload identification documents and investor photograph.</p></div></div><div className="doc-upload-grid">{[['aadhar','Aadhaar','.jpg,.jpeg,.png,.pdf'],['pan','PAN','.jpg,.jpeg,.png,.pdf']].map(([key, label, accept]) => <label className="document-upload-card" key={key}><span className="form-label">{label}</span>{existingFiles[key] && !files[key] ? <span className="investor-existing-file">Existing document saved</span> : null}<input type="file" accept={accept} disabled={saving} onChange={e => setFiles(p => ({ ...p, [key]: e.target.files?.[0] || null }))} />{files[key] ? <small className="investor-replacement-note">New file selected — it will replace the existing document.</small> : existingFiles[key] ? <small className="investor-replacement-note">Choose a file to replace this document.</small> : null}</label>)}<DocumentUploadCard title="Profile Image" subtitle="Upload investor photograph" note="JPG, PNG (Max. 10MB)" accept=".jpg,.jpeg,.png" icon="camera" file={files.profile} previewUrl={profilePreviewUrl} isProfile isExisting={Boolean(existingFiles.profile)} existingUrl={existingFiles.profile} existingFileName="Profile Photograph" onUpload={handleProfileUpload} onRemove={handleRemoveProfile} onView={() => setPreviewDoc({ name: files.profile?.name || 'Profile Image', url: profilePreviewUrl, isPdf: false })} onViewExisting={() => setPreviewDoc({ name: 'Profile Image', url: existingFiles.profile, isPdf: false })} /></div></section>
+      <section className="rm-section">
+        <div className="rm-section-heading">
+          <Building2 size={19} />
+          <div>
+            <h2>Required documents</h2>
+            <p>Upload identification documents and investor photograph.</p>
+          </div>
+        </div>
+        <div className="doc-upload-grid">
+          <DocumentUploadCard
+            title="Aadhaar Card"
+            subtitle={
+              investorId && existingFiles.aadhar && !files.aadhar
+                ? 'Existing document uploaded. Select new file to replace.'
+                : 'Upload clear image of Aadhaar Card'
+            }
+            note="JPG, PNG or PDF (Max. 10MB)"
+            accept=".pdf,.jpg,.jpeg,.png"
+            icon="document"
+            file={files.aadhar}
+            previewUrl={previewUrls.aadhar}
+            isPdf={files.aadhar ? isPdfUrl(files.aadhar.name) : isPdfUrl(existingFiles.aadharName || existingFiles.aadhar)}
+            isExisting={!files.aadhar && Boolean(existingFiles.aadhar)}
+            existingUrl={existingFiles.aadhar}
+            existingFileName={existingFiles.aadharName || 'Aadhaar Card'}
+            onUpload={handleDocumentUpload('aadhar')}
+            onRemove={handleDocumentRemove('aadhar')}
+            onView={() => setPreviewDoc({ name: files.aadhar?.name || 'Aadhaar Card', url: previewUrls.aadhar, isPdf: isPdfUrl(files.aadhar?.name) })}
+            onViewExisting={() => openExistingDocument(
+              existingFiles.aadharName || 'Aadhaar Card',
+              existingFiles.aadhar,
+              isPdfUrl(existingFiles.aadharName || existingFiles.aadhar),
+            )}
+          />
+          <DocumentUploadCard
+            title="PAN Card"
+            subtitle={
+              investorId && existingFiles.pan && !files.pan
+                ? 'Existing document uploaded. Select new file to replace.'
+                : 'Upload clear image of PAN Card'
+            }
+            note="JPG, PNG or PDF (Max. 10MB)"
+            accept=".pdf,.jpg,.jpeg,.png"
+            icon="document"
+            file={files.pan}
+            previewUrl={previewUrls.pan}
+            isPdf={files.pan ? isPdfUrl(files.pan.name) : isPdfUrl(existingFiles.panName || existingFiles.pan)}
+            isExisting={!files.pan && Boolean(existingFiles.pan)}
+            existingUrl={existingFiles.pan}
+            existingFileName={existingFiles.panName || 'PAN Card'}
+            onUpload={handleDocumentUpload('pan')}
+            onRemove={handleDocumentRemove('pan')}
+            onView={() => setPreviewDoc({ name: files.pan?.name || 'PAN Card', url: previewUrls.pan, isPdf: isPdfUrl(files.pan?.name) })}
+            onViewExisting={() => openExistingDocument(
+              existingFiles.panName || 'PAN Card',
+              existingFiles.pan,
+              isPdfUrl(existingFiles.panName || existingFiles.pan),
+            )}
+          />
+          <DocumentUploadCard
+            title="Profile Image"
+            subtitle={
+              investorId && existingFiles.profile && !files.profile
+                ? 'Existing photo uploaded. Select new image to replace.'
+                : 'Upload clear image of Profile Image'
+            }
+            note="JPG, PNG (Max. 5MB)"
+            accept=".jpg,.jpeg,.png"
+            icon="camera"
+            file={files.profile}
+            previewUrl={previewUrls.profile}
+            isProfile
+            isExisting={!files.profile && Boolean(existingFiles.profile)}
+            existingUrl={existingFiles.profile}
+            existingFileName="Profile Photo"
+            onUpload={handleDocumentUpload('profile')}
+            onRemove={handleDocumentRemove('profile')}
+            onView={() => setPreviewDoc({ name: files.profile?.name || 'Profile Image', url: previewUrls.profile, isPdf: false })}
+            onViewExisting={() => setPreviewDoc({ name: 'Profile Photo', url: existingFiles.profile, isPdf: false })}
+          />
+        </div>
+      </section>
+      <label className="rm-active">
+        <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} disabled={saving} />
+        <span>
+          <strong>Active investor</strong>
+          <small>Allow this investor to remain active in the directory.</small>
+        </span>
+      </label>
       {error && <p className="form-error-msg">{error}</p>}<div className="form-actions"><button type="button" className="masters-btn-secondary" onClick={() => navigate('/investors')} disabled={saving}><ArrowLeft size={17} /> Cancel</button><button className="masters-btn-primary" disabled={saving || !master.genders.length} type="submit">{saving ? <><LoaderCircle className="rm-spinner" size={17} /> {investorId ? 'Updating...' : 'Saving...'}</> : <><Save size={17} /> {investorId ? 'Update investor' : 'Create investor'}</>}</button></div>
     </form>
-    <DocumentPreviewModal isOpen={Boolean(previewDoc)} onClose={() => setPreviewDoc(null)} doc={previewDoc} />
+    <DocumentPreviewModal isOpen={Boolean(previewDoc)} onClose={closePreview} doc={previewDoc} />
   </div>;
 }

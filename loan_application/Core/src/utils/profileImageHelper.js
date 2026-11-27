@@ -405,6 +405,17 @@ export function getDocumentUrl(role, entityId, documentType = '', storedPath = '
     if (isPan) return `${API_BASE_URL}/CreditHeadMaster/${cleanId}/pan`;
   }
 
+  // 7. Investor: /api/InvestorsMaster/{investorId}/aadhar and /api/InvestorsMaster/{investorId}/pan
+  const isInvestor =
+    normalizedRole === 'investor' ||
+    normalizedRole === 'investors' ||
+    normalizedRole === 'investormaster';
+
+  if (isInvestor && cleanId) {
+    if (isAadhaar) return `${API_BASE_URL}/InvestorsMaster/${cleanId}/aadhar`;
+    if (isPan) return `${API_BASE_URL}/InvestorsMaster/${cleanId}/pan`;
+  }
+
   if (storedPath) {
     return buildFileUrl(storedPath);
   }

@@ -17,18 +17,21 @@ import {
   LoaderCircle,
   Pencil,
   Plus,
+  Power,
+  RefreshCw,
   Search,
   ShieldCheck,
   Users,
   X,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { formatDateTime, formatDateTimeFriendly } from '../../utils/dateHelper';
-import { getAllAgents, getAgentById } from '../../api/agentApi';
-import { getAllRelationshipManagers, getRelationshipManager } from '../../api/rmApi';
-import { getAllBackOffice, getBackOfficeById } from '../../api/backOfficeApi';
-import { getAllAMS, getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
-import { getAllCreditManagers, getCreditManagerById } from '../../api/creditManagerApi';
-import { getAllCreditHeads, getCreditHeadById } from '../../api/creditHeadApi';
+import { deactivateAgent, getAllAgents, getAgentById } from '../../api/agentApi';
+import { deactivateRelationshipManager, getAllRelationshipManagers, getRelationshipManager } from '../../api/rmApi';
+import { deactivateBackOffice, getAllBackOffice, getBackOfficeById } from '../../api/backOfficeApi';
+import { deactivateAMS, getAllAMS, getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi';
+import { deactivateCreditManager, getAllCreditManagers, getCreditManagerById } from '../../api/creditManagerApi';
+import { deactivateCreditHead, getAllCreditHeads, getCreditHeadById } from '../../api/creditHeadApi';
 import { agentCustomerService } from '../../../../Core/src/services/agentCustomerService';
 import { extractWorkflowStatus } from '../../../../Core/src/utils/applicationWorkflowStatus';
 import { selectLatestCustomerPhotoDoc } from '../../../../Core/src/utils/documentTypeHelper';
@@ -38,10 +41,21 @@ import { getCountries } from '../../api/masters/countryApi';
 import { getStates } from '../../api/masters/stateApi';
 import { getCities } from '../../api/masters/cityApi';
 import { getDistricts } from '../../api/masters/districtApi';
+import { MasterModal } from '../../components/masters/MasterModal/MasterModal';
 import './PeopleDirectory.css';
 import '../Dashboard/Dashboard.css';
+import '../masters/StatusRole/StatusRole.css';
 import AuthImage from '../../../../Core/src/auth/AuthImage';
 import { useAuthedObjectUrl } from '../../../../Core/src/auth/useAuthedObjectUrl';
+
+const DEACTIVATE_ENTITY_LABEL = {
+  agent: 'Agent',
+  rm: 'Relationship Manager',
+  backOffice: 'Back Office User',
+  ams: 'ASM',
+  creditManager: 'Credit Manager',
+  creditHead: 'Credit Head',
+};
 
 const API_BASE = API_BASE_URL;
 
@@ -87,6 +101,36 @@ const status = (value, fallback = 'Active') =>
       ? 'Active'
       : 'Inactive'
     : String(value || fallback).replace(/^./, (letter) => letter.toUpperCase());
+
+const resolveIsActive = (item) => {
+  const rawActive = item?.isActive ?? item?.IsActive;
+  if (typeof rawActive === 'boolean') return rawActive;
+  if (typeof rawActive === 'number') return rawActive !== 0;
+  if (typeof rawActive === 'string') {
+    const text = rawActive.trim().toLowerCase();
+    if (['inactive', 'false', '0', 'deactivated', 'disabled'].includes(text)) return false;
+    if (['active', 'true', '1', 'enabled'].includes(text)) return true;
+  }
+  const rawStatus = item?.status ?? item?.Status;
+  if (typeof rawStatus === 'boolean') return rawStatus;
+  if (typeof rawStatus === 'string') {
+    const text = rawStatus.trim().toLowerCase();
+    if (['inactive', 'false', '0', 'deactivated', 'disabled'].includes(text)) return false;
+  }
+  return true;
+};
+
+const isDirectoryRecordActive = (record) => {
+  if (!record) return false;
+  if (typeof record.isActive === 'boolean') return record.isActive;
+  return resolveIsActive(record);
+};
+
+const getDeactivationErrorMessage = (error, fallback = 'Unable to deactivate this user.') =>
+  error?.response?.data?.message
+  || error?.response?.data?.title
+  || error?.message
+  || fallback;
 
 const initials = (name = '') =>
   name
@@ -1366,6 +1410,8 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
   const [imageVersion, setImageVersion] = useState(() => Date.now());
   const [locations, setLocations] = useState(() => locationLookupCache || { states: [], cities: [], districts: [] });
   const [sublistModal, setSublistModal] = useState(null);
+  const [deactivationTarget, setDeactivationTarget] = useState(null);
+  const [deactivating, setDeactivating] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -1527,6 +1573,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               rm: read(agent, ['relationshipManager', 'RelationshipManager', 'rmName', 'RMName']) || rmNames.get(String(rmId)) || 'Unassigned',
               rmId,
               branch: read(agent, ['branch', 'Branch', 'branchName', 'BranchName']),
+              isActive: resolveIsActive(agent),
               status: status(read(agent, ['status', 'Status', 'isActive', 'IsActive'])),
               applications: appsByAgent.get(String(id)) || 0,
               customerList,
@@ -1645,6 +1692,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               email: read(rm, ['emailAddress', 'EmailAddress', 'email', 'Email']),
               phone: read(rm, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
               branch: read(rm, ['branch', 'Branch', 'branchName', 'BranchName']),
+              isActive: resolveIsActive(rm),
               status: status(read(rm, ['status', 'Status', 'isActive', 'IsActive'])),
               agents: assignedAgentsList.length,
               assignedAgentsList,
@@ -1676,6 +1724,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               email: read(item, ['emailAddress', 'EmailAddress', 'email', 'Email']),
               phone: read(item, ['mobileNumber', 'MobileNumber', 'phone', 'Phone']),
               branch: read(item, ['branch', 'Branch', 'branchName', 'BranchName']),
+              isActive: resolveIsActive(item),
               status: status(read(item, ['status', 'Status', 'isActive', 'IsActive'])),
               aadhaarDocumentPath: getAadhaarPath(item),
               panCardPath: getPanPath(item),
@@ -1712,7 +1761,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               emailAddress: read(item, ['emailAddress', 'EmailAddress', 'email', 'Email']),
               branch: read(item, ['branch', 'Branch', 'branchName', 'BranchName']),
               dateJoined: read(item, ['dateJoined', 'DateJoined']),
-              isActive: item.isActive ?? item.IsActive ?? true,
+              isActive: resolveIsActive(item),
               accountNumber: read(item, ['accountNumber', 'AccountNumber']),
               ifscCode: read(item, ['ifscCode', 'IfscCode']),
               aadhaarDocumentPath: getAadhaarPath(item),
@@ -1760,7 +1809,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               accountNumber: read(item, ['accountNumber', 'AccountNumber']),
               ifscCode: read(item, ['ifscCode', 'IfscCode', 'IFSCCode']),
               status: status(read(item, ['status', 'Status', 'isActive', 'IsActive'])),
-              isActive: item.isActive ?? item.IsActive ?? true,
+              isActive: resolveIsActive(item),
               aadhaarDocumentPath: getAadhaarPath(item),
               panCardPath: getPanPath(item),
               profileImagePath: getProfilePath(item),
@@ -1803,7 +1852,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               accountNumber: read(item, ['accountNumber', 'AccountNumber']),
               ifscCode: read(item, ['ifscCode', 'IfscCode', 'IFSCCode']),
               status: status(read(item, ['status', 'Status', 'isActive', 'IsActive'])),
-              isActive: item.isActive ?? item.IsActive ?? true,
+              isActive: resolveIsActive(item),
               aadhaarDocumentPath: getAadhaarPath(item),
               panCardPath: getPanPath(item),
               profileImagePath: getProfilePath(item),
@@ -1910,6 +1959,36 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
     setSearchQuery('');
     setCurrentPage(1);
   }, [loadData]);
+
+  const confirmDeactivation = async () => {
+    const targetId = deactivationTarget?.id
+      || deactivationTarget?.agentId
+      || deactivationTarget?.rmId
+      || deactivationTarget?.backOfficeId
+      || deactivationTarget?.amsId
+      || deactivationTarget?.creditManagerId
+      || deactivationTarget?.creditHeadId;
+    if (!targetId || deactivating) return;
+
+    setDeactivating(true);
+    try {
+      if (roleKey === 'agent') await deactivateAgent(targetId);
+      else if (roleKey === 'rm') await deactivateRelationshipManager(targetId);
+      else if (roleKey === 'backOffice') await deactivateBackOffice(targetId);
+      else if (roleKey === 'ams') await deactivateAMS(targetId);
+      else if (roleKey === 'creditManager') await deactivateCreditManager(targetId);
+      else if (roleKey === 'creditHead') await deactivateCreditHead(targetId);
+      else throw new Error('Deactivate is not available for this directory.');
+
+      toast.success(`${deactivationTarget?.fullName || deactivationTarget?.name || 'User'} deactivated successfully.`);
+      setDeactivationTarget(null);
+      await loadData();
+    } catch (requestError) {
+      toast.error(getDeactivationErrorMessage(requestError));
+    } finally {
+      setDeactivating(false);
+    }
+  };
 
   const filteredRecords = useMemo(() => {
     const search = searchQuery.trim().toLowerCase();
@@ -2454,8 +2533,8 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                         </div>
                       </td>
                       <td>
-                        <span className={`status ${String(agent.status || 'active').toLowerCase().replace(/\s+/g, '-')}`}>
-                          {agent.status || 'Active'}
+                        <span className={`status ${isDirectoryRecordActive(agent) ? 'active' : 'inactive'}`}>
+                          {isDirectoryRecordActive(agent) ? 'Active' : 'Inactive'}
                         </span>
                       </td>
                       <td>
@@ -2474,6 +2553,15 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                           >
                             <Pencil size={15} /> Edit
                           </button>
+                          {isDirectoryRecordActive(agent) && (
+                            <button
+                              type="button"
+                              className="details-button deactivate-button"
+                              onClick={() => setDeactivationTarget(agent)}
+                            >
+                              <Power size={15} /> Deactivate
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -2572,8 +2660,8 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                         </div>
                       </td>
                       <td>
-                        <span className={`status ${String(rm.status || 'active').toLowerCase().replace(/\s+/g, '-')}`}>
-                          {rm.status || 'Active'}
+                        <span className={`status ${isDirectoryRecordActive(rm) ? 'active' : 'inactive'}`}>
+                          {isDirectoryRecordActive(rm) ? 'Active' : 'Inactive'}
                         </span>
                       </td>
                       <td>
@@ -2592,6 +2680,15 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                           >
                             <Pencil size={15} /> Edit
                           </button>
+                          {isDirectoryRecordActive(rm) && (
+                            <button
+                              type="button"
+                              className="details-button deactivate-button"
+                              onClick={() => setDeactivationTarget(rm)}
+                            >
+                              <Power size={15} /> Deactivate
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -2643,8 +2740,8 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                         </td>
                         <td>{backOffice.branch || '—'}</td>
                         <td>
-                          <span className={`status ${String(backOffice.status || 'active').toLowerCase().replace(/\s+/g, '-')}`}>
-                            {backOffice.status || 'Active'}
+                          <span className={`status ${isDirectoryRecordActive(backOffice) ? 'active' : 'inactive'}`}>
+                            {isDirectoryRecordActive(backOffice) ? 'Active' : 'Inactive'}
                           </span>
                         </td>
                         <td>
@@ -2663,6 +2760,15 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                             >
                               <Pencil size={15} /> Edit
                             </button>
+                            {isDirectoryRecordActive(backOffice) && (
+                              <button
+                                type="button"
+                                className="details-button deactivate-button"
+                                onClick={() => setDeactivationTarget(backOffice)}
+                              >
+                                <Power size={15} /> Deactivate
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -2740,6 +2846,15 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                             >
                               <Pencil size={15} /> Edit
                             </button>
+                            {isDirectoryRecordActive(ams) && (
+                              <button
+                                type="button"
+                                className="details-button deactivate-button"
+                                onClick={() => setDeactivationTarget(ams)}
+                              >
+                                <Power size={15} /> Deactivate
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -2818,6 +2933,15 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                             >
                               <Pencil size={15} /> Edit
                             </button>
+                            {isDirectoryRecordActive(cm) && (
+                              <button
+                                type="button"
+                                className="details-button deactivate-button"
+                                onClick={() => setDeactivationTarget(cm)}
+                              >
+                                <Power size={15} /> Deactivate
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -2896,6 +3020,15 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                             >
                               <Pencil size={15} /> Edit
                             </button>
+                            {isDirectoryRecordActive(ch) && (
+                              <button
+                                type="button"
+                                className="details-button deactivate-button"
+                                onClick={() => setDeactivationTarget(ch)}
+                              >
+                                <Power size={15} /> Deactivate
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -3382,6 +3515,38 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
           onClose={() => setSublistModal(null)}
         />
       )}
+
+      <MasterModal
+        isOpen={Boolean(deactivationTarget)}
+        onClose={() => !deactivating && setDeactivationTarget(null)}
+        title={`Deactivate ${DEACTIVATE_ENTITY_LABEL[roleKey] || 'User'}`}
+        subtitle="This action changes the user's active status."
+        icon={<Power size={20} />}
+      >
+        <p style={{ color: '#475569', marginTop: 0 }}>
+          Are you sure you want to deactivate{' '}
+          <strong>{deactivationTarget?.fullName || deactivationTarget?.name || 'this user'}</strong>?
+        </p>
+        <div className="form-actions">
+          <button
+            type="button"
+            className="masters-btn-secondary"
+            onClick={() => setDeactivationTarget(null)}
+            disabled={deactivating}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="masters-btn-danger"
+            onClick={confirmDeactivation}
+            disabled={deactivating}
+          >
+            {deactivating ? <RefreshCw size={16} className="master-spin" /> : <Power size={16} />}
+            Deactivate
+          </button>
+        </div>
+      </MasterModal>
     </div>
   );
 }

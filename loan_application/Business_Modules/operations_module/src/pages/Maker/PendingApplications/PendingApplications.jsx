@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Search } from 'lucide-react';
+import { Eye, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import useAuthedObjectUrl from '../../../../../../Core/src/auth/useAuthedObjectUrl';
 import { resolveApiUrl } from '../../../../../../Core/src/api/apiConfig';
@@ -60,7 +60,13 @@ function ProfileImage({ application }) {
 
 function DocumentAction({ label, onClick }) {
   return (
-    <button type="button" className="operations-new-applications-document-button" onClick={onClick}>
+    <button
+      type="button"
+      className="operations-new-applications-document-button"
+      onClick={onClick}
+      aria-label={`${label} document`}
+    >
+      <Eye size={13} aria-hidden="true" />
       {label}
     </button>
   );
@@ -105,20 +111,8 @@ export default function PendingApplications() {
   const openDocument = (application, type) => setDocument({ application, type });
 
   return (
-    <OperationsLayout title="Pending Applications" subtitle="Applications assigned to Operations Maker">
+    <OperationsLayout title="Pending Applications">
       <div className="operations-new-applications-page">
-        <div className="operations-new-applications-heading">
-          <div>
-            <p className="operations-new-applications-eyebrow">OPERATIONS MAKER</p>
-            <h2>Pending Applications</h2>
-            <p>Continue verification for applications already assigned to you.</p>
-          </div>
-          <button type="button" className="operations-new-applications-refresh" onClick={loadApplications} disabled={loading}>
-            <RefreshCw size={15} aria-hidden="true" />
-            Refresh
-          </button>
-        </div>
-
         <section className="operations-new-applications-card" aria-label="Pending Applications list">
           <div className="operations-new-applications-toolbar">
             <label className="operations-new-applications-search">
@@ -149,7 +143,7 @@ export default function PendingApplications() {
                       <th scope="col">View Form</th>
                       <th scope="col">Recommendation Sheet</th>
                       <th scope="col">Sanction Letter</th>
-                      <th scope="col">Action — Continue</th>
+                      <th scope="col">Action</th>
                     </tr>
                   </thead>
                   <tbody>

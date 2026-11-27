@@ -11,6 +11,10 @@ export const getAllRelationshipManagers = async () => {
 
 export const updateRelationshipManager = (rmId, data) => axiosInstance.put(`/RMMaster/${rmId}`, data);
 
+export const deactivateRelationshipManager = async (rmId) => {
+  await axiosInstance.delete(`/RMMaster/${encodeURIComponent(rmId)}`);
+};
+
 export const uploadRMAadhaar = async (rmId, file) => {
   const formData = new FormData();
   formData.append('file', file);

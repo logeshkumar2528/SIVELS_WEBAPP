@@ -12,17 +12,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { buildApplicationRoute, ROUTES } from '../../../config/routeConfig';
 import { useOperationsApplication } from '../../../context/OperationsApplicationContext';
+import OperationsWorkflowSteps from '../../../components/OperationsWorkflowSteps';
 import OperationsLayout from '../../../layouts/OperationsLayout';
 import './ChequeDetails.css';
-
-const WORKFLOW_STEPS = [
-  { id: 'loan-basic-details', label: 'Loan Basic Details', route: ROUTES.MAKER_LOAN_BASIC_DETAILS },
-  { id: 'fees', label: 'Fees', route: ROUTES.MAKER_FEES },
-  { id: 'repayment-schedule', label: 'Repayment Schedule', route: ROUTES.MAKER_REPAYMENT_SCHEDULE },
-  { id: 'covenants', label: 'Covenants', route: ROUTES.MAKER_COVENANTS },
-  { id: 'mandate-details', label: 'Mandate Details', route: ROUTES.MAKER_MANDATE_DETAILS },
-  { id: 'cheque-details', label: 'Cheque Details', active: true, route: ROUTES.MAKER_CHEQUE_DETAILS },
-];
 
 const INITIAL_FORM = {
   chequeType: '',
@@ -189,26 +181,6 @@ function validateGenerationForm(form, existingCheques) {
 
 function FieldError({ message }) {
   return message ? <span className="operations-cheque-error">{message}</span> : null;
-}
-
-function WorkflowSteps({ navigate, applicationId }) {
-  return (
-    <nav className="operations-cheque-steps" aria-label="Application workflow steps">
-      {WORKFLOW_STEPS.map((step, index) => (
-        <button
-          key={step.id}
-          type="button"
-          className={['operations-cheque-step', step.active ? 'is-active' : ''].join(' ').trim()}
-          aria-current={step.active ? 'step' : undefined}
-          disabled={!step.route}
-          onClick={() => step.route && navigate(buildApplicationRoute(step.route, applicationId))}
-        >
-          <span className="operations-cheque-step-number">{index + 1}</span>
-          <span>{step.label}</span>
-        </button>
-      ))}
-    </nav>
-  );
 }
 
 function SummaryField({ label, value = '—' }) {
@@ -418,13 +390,10 @@ export default function ChequeDetails() {
   return (
     <OperationsLayout title="Cheque Details" subtitle="Operations Maker workflow">
       <div className="operations-cheque-page">
-        <nav className="operations-cheque-breadcrumb" aria-label="Breadcrumb">
-          <button type="button" onClick={() => navigate(ROUTES.MAKER_DASHBOARD)}>Operations Maker</button>
-          <span aria-hidden="true">/</span>
-          <span>Cheque Details</span>
-        </nav>
-
-        <WorkflowSteps navigate={navigate} applicationId={applicationId} />
+        <OperationsWorkflowSteps
+          activeStepId="cheque-details"
+          applicationId={applicationId}
+        />
 
         <div className="operations-cheque-summary-grid">
           <section className="operations-cheque-panel" aria-labelledby="operations-cheque-loan-summary-title">

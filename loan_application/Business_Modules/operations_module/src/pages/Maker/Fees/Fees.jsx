@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, ChevronRight, FileText, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -6,6 +6,7 @@ import backOfficeService from '../../../../../back_office/src/back-office/api/ba
 import { getFees } from '../../../../../../Master_Module/src/api/masters/feeMasterApi';
 import { buildApplicationRoute, ROUTES } from '../../../config/routeConfig';
 import { useOperationsApplication } from '../../../context/OperationsApplicationContext';
+import OperationsWorkflowSteps from '../../../components/OperationsWorkflowSteps';
 import OperationsLayout from '../../../layouts/OperationsLayout';
 import operationsFeesService, { getFeesApiErrorMessage } from '../../../services/operationsFeesService';
 import {
@@ -24,15 +25,6 @@ import {
   hasValidationErrors,
 } from './feesPayload';
 import './Fees.css';
-
-const WORKFLOW_STEPS = [
-  { id: 'loan-basic-details', label: 'Loan Basic Details', route: ROUTES.MAKER_LOAN_BASIC_DETAILS },
-  { id: 'fees', label: 'Fees', active: true, route: ROUTES.MAKER_FEES },
-  { id: 'repayment-schedule', label: 'Repayment Schedule', route: ROUTES.MAKER_REPAYMENT_SCHEDULE },
-  { id: 'covenants', label: 'Covenants', route: ROUTES.MAKER_COVENANTS },
-  { id: 'mandate-details', label: 'Mandate Details', route: ROUTES.MAKER_MANDATE_DETAILS },
-  { id: 'cheque-details', label: 'Cheque Details', route: ROUTES.MAKER_CHEQUE_DETAILS },
-];
 
 const HEADER_TOTAL_FIELDS = Object.freeze([
   'totalCalculatedFee', 'totalNetFee', 'totalNetGst', 'totalTotNet', 'totalPaidAmount',
@@ -115,25 +107,6 @@ function errorSummary(errors) {
   return Object.values(errors || {})
     .flatMap((rowErrors) => Object.values(rowErrors || {}))
     .filter(Boolean)[0] || '';
-}
-
-function WorkflowSteps({ navigate, applicationId, onNavigate }) {
-  return (
-    <nav className="operations-fees-steps" aria-label="Application workflow steps">
-      {WORKFLOW_STEPS.map((step, index) => (
-        <button
-          key={step.id}
-          type="button"
-          className={['operations-fees-step', step.active ? 'is-active' : ''].join(' ').trim()}
-          aria-current={step.active ? 'step' : undefined}
-          onClick={() => step.route && (onNavigate ? onNavigate(step.route) : navigate(buildApplicationRoute(step.route, applicationId)))}
-        >
-          <span className="operations-fees-step-number">{index + 1}</span>
-          <span>{step.label}</span>
-        </button>
-      ))}
-    </nav>
-  );
 }
 
 function FeeRow({ row, index, feeOptions, selectedFeeIds, errors, onChange, onRemove, disabled }) {
@@ -583,12 +556,11 @@ export default function Fees() {
   return (
     <OperationsLayout title="Fees" subtitle="Operations Maker workflow">
       <div className="operations-fees-page">
-        <nav className="operations-fees-breadcrumb" aria-label="Breadcrumb">
-          <button type="button" onClick={() => confirmNavigation() && navigate(buildContextRoute(ROUTES.MAKER_DASHBOARD))}>Operations Maker</button>
-          <ChevronRight size={15} aria-hidden="true" />
-          <span>Fees</span>
-        </nav>
-        <WorkflowSteps navigate={navigate} applicationId={applicationId} onNavigate={(route) => confirmNavigation() && navigate(buildContextRoute(route))} />
+        <OperationsWorkflowSteps
+          activeStepId="fees"
+          applicationId={applicationId}
+          onNavigate={(route) => confirmNavigation() && navigate(buildContextRoute(route))}
+        />
 
         <section className="operations-fees-section" aria-labelledby="operations-fees-loan-information">
           <div className="operations-fees-section-heading"><div><h2 id="operations-fees-loan-information">Loan Information</h2></div></div>
@@ -602,7 +574,7 @@ export default function Fees() {
 
         <section className="operations-fees-section" aria-labelledby="operations-fees-details">
           <div className="operations-fees-section-heading operations-fees-section-heading--actions">
-            <div><h2 id="operations-fees-details">Fee Details</h2><p>Fee Name is selected from Fee Master. Financial results are calculated by the backend preview API.</p></div>
+            <div><h2 id="operations-fees-details">Fee Details</h2></div>
              <div className="operations-fees-section-actions">
                <button type="button" className="operations-fees-button operations-fees-button--secondary" onClick={addFeeRow} disabled={addFeeLineDisabled}><Plus size={15} aria-hidden="true" /> Add Fee Line</button>
                {loadState.status === 'ready' && unusedActiveFeeOptions.length === 0 && <span className="operations-fees-helper">All available fee types have been added.</span>}
@@ -632,40 +604,75 @@ export default function Fees() {
           <datalist id="fee-schedule-method-suggestions"><option value="Deduct from Disbursement" /></datalist>
         </section>
 
-        <div className="operations-fees-preview-status" role={previewState.status === 'error' ? 'alert' : 'status'}>
-          {previewState.status === 'pending' && <span>Calculating latest Fees...</span>}
-          {previewState.status === 'invalid' && <span>{previewState.error || 'Correct the highlighted fields before preview.'}</span>}
-          {previewState.status === 'error' && <><span>{previewState.error || 'The latest fee preview is not current.'}</span><button type="button" className="operations-fees-button operations-fees-button--secondary" onClick={() => setPreviewRetryKey((value) => value + 1)}>Retry Preview</button></>}
-          {previewState.status === 'ready' && <span>Calculated values are current.</span>}
-        </div>
+        {(previewState.status === 'pending' || previewState.status === 'invalid' || previewState.status === 'error') && (
+          <div className="operations-fees-preview-status" role={previewState.status === 'error' ? 'alert' : 'status'}>
+            {previewState.status === 'pending' && <span>Calculating latest Fees...</span>}
+            {previewState.status === 'invalid' && <span>{previewState.error || 'Correct the highlighted fields before preview.'}</span>}
+            {previewState.status === 'error' && (
+              <>
+                <span>{previewState.error || 'The latest fee preview is not current.'}</span>
+                <button
+                  type="button"
+                  className="operations-fees-button operations-fees-button--secondary"
+                  onClick={() => setPreviewRetryKey((value) => value + 1)}
+                >
+                  Retry Preview
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
-        <div className="operations-fees-receipt-row"><button type="button" className="operations-fees-button operations-fees-button--secondary" disabled title="Receipt integration is outside the Fees API."><FileText size={16} aria-hidden="true" /> View Receipt(s)</button></div>
+        <section className="operations-fees-totals" aria-label="Fees and disbursement totals">
+          <div className="operations-fees-totals-panel">
+            <div className="operations-fees-totals-heading">
+              <h3>Disbursement</h3>
+            </div>
+            <div className="operations-fees-formula" role="group" aria-label="Disbursement Summary">
+              <div className="operations-fees-formula-item">
+                <span>Gross Disbursement Amount</span>
+                <strong>{formatCurrency(disbursement.grossDisbursementAmount)}</strong>
+              </div>
+              <span className="operations-fees-formula-op" aria-hidden="true">−</span>
+              <div className="operations-fees-formula-item">
+                <span>Applicable Fee Deduction</span>
+                <strong>{formatCurrency(disbursement.totalApplicableFeeDeduction)}</strong>
+              </div>
+              <span className="operations-fees-formula-op" aria-hidden="true">=</span>
+              <div className="operations-fees-formula-item operations-fees-formula-item--result">
+                <span>Final Net Disbursement Amount</span>
+                <strong>{formatCurrency(disbursement.finalNetDisbursementAmount)}</strong>
+              </div>
+            </div>
+          </div>
 
-        <section className="operations-fees-disbursement-summary" aria-label="Disbursement Summary">
-          <article className="operations-fees-summary-card"><span>Gross Disbursement Amount</span><strong>{formatCurrency(disbursement.grossDisbursementAmount)}</strong></article>
-          <article className="operations-fees-summary-card"><span>Applicable Fee Deduction</span><strong>{formatCurrency(disbursement.totalApplicableFeeDeduction)}</strong></article>
-          <article className="operations-fees-summary-card operations-fees-summary-card--highlight"><span>Final Net Disbursement Amount</span><strong>{formatCurrency(disbursement.finalNetDisbursementAmount)}</strong></article>
-        </section>
-
-        <section className="operations-fees-summary" aria-label="Financial summary">
-          {summaryCards.map(([label, value]) => <article className="operations-fees-summary-card" key={label}><span>{label}</span><strong>{formatCurrency(value)}</strong></article>)}
+          <div className="operations-fees-totals-panel" aria-label="Financial summary">
+            <div className="operations-fees-totals-heading">
+              <h3>Fee Totals</h3>
+            </div>
+            <div className="operations-fees-metrics">
+              {summaryCards.map(([label, value]) => (
+                <div className="operations-fees-metric" key={label}>
+                  <span>{label}</span>
+                  <strong>{formatCurrency(value)}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
         </section>
 
         <footer className="operations-fees-footer">
-           <div className="operations-fees-footer-meta">
-             <div className="operations-fees-footer-status"><span className="operations-fees-status-dot" /><span>{hasUnsavedChanges || !operationsFeeHeaderId ? 'Unsaved Fee changes' : `Saved Fee Header: ${operationsFeeHeaderId}`}</span></div>
-           </div>
           {saveState.error && <div className="operations-fees-save-error" role="alert">{saveState.error}</div>}
-           <div className="operations-fees-actions operations-fees-actions--navigation">
-             <button type="button" className="operations-fees-button operations-fees-button--secondary" onClick={() => confirmNavigation() && navigate(buildContextRoute(ROUTES.MAKER_LOAN_BASIC_DETAILS))}>
-               <ArrowLeft size={16} aria-hidden="true" /> Back
-             </button>
-             {recordMode === 'view' && <button type="button" className="operations-fees-button operations-fees-button--secondary" onClick={handleEdit}>Edit</button>}
-             {recordMode === 'edit' && <button type="button" className="operations-fees-button operations-fees-button--secondary" onClick={handleCancel} disabled={saveState.saving}>Cancel</button>}
-             <button type="button" className="operations-fees-button operations-fees-button--primary" onClick={handleSave} disabled={isSaveDisabled}>
-               {saveState.saving ? 'Saving…' : 'Save & Continue'} <ArrowRight size={16} aria-hidden="true" />
-             </button>
-             {recordMode === 'view' && <button type="button" className="operations-fees-button operations-fees-button--primary" onClick={handleContinue}>Continue <ArrowRight size={16} aria-hidden="true" /></button>}
+          <div className="operations-fees-actions operations-fees-actions--navigation">
+            <button type="button" className="operations-fees-button operations-fees-button--secondary" onClick={() => confirmNavigation() && navigate(buildContextRoute(ROUTES.MAKER_LOAN_BASIC_DETAILS))}>
+              <ArrowLeft size={16} aria-hidden="true" /> Back
+            </button>
+            {recordMode === 'view' && <button type="button" className="operations-fees-button operations-fees-button--secondary" onClick={handleEdit}>Edit</button>}
+            {recordMode === 'edit' && <button type="button" className="operations-fees-button operations-fees-button--secondary" onClick={handleCancel} disabled={saveState.saving}>Cancel</button>}
+            <button type="button" className="operations-fees-button operations-fees-button--primary" onClick={handleSave} disabled={isSaveDisabled}>
+              {saveState.saving ? 'Saving…' : 'Save & Continue'} <ArrowRight size={16} aria-hidden="true" />
+            </button>
+            {recordMode === 'view' && <button type="button" className="operations-fees-button operations-fees-button--primary" onClick={handleContinue}>Continue <ArrowRight size={16} aria-hidden="true" /></button>}
           </div>
         </footer>
       </div>

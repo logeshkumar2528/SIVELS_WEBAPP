@@ -11,17 +11,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { buildApplicationRoute, ROUTES } from '../../../config/routeConfig';
 import { useOperationsApplication } from '../../../context/OperationsApplicationContext';
+import OperationsWorkflowSteps from '../../../components/OperationsWorkflowSteps';
 import OperationsLayout from '../../../layouts/OperationsLayout';
 import './MandateDetails.css';
-
-const WORKFLOW_STEPS = [
-  { id: 'loan-basic-details', label: 'Loan Basic Details', route: ROUTES.MAKER_LOAN_BASIC_DETAILS },
-  { id: 'fees', label: 'Fees', route: ROUTES.MAKER_FEES },
-  { id: 'repayment-schedule', label: 'Repayment Schedule', route: ROUTES.MAKER_REPAYMENT_SCHEDULE },
-  { id: 'covenants', label: 'Covenants', route: ROUTES.MAKER_COVENANTS },
-  { id: 'mandate-details', label: 'Mandate Details', active: true, route: ROUTES.MAKER_MANDATE_DETAILS },
-  { id: 'cheque-details', label: 'Cheque Details', route: ROUTES.MAKER_CHEQUE_DETAILS },
-];
 
 const INITIAL_FORM = {
   mandateId: '',
@@ -115,25 +107,6 @@ function getRecordSearchText(record) {
 
 function FieldError({ message }) {
   return message ? <span className="operations-mandate-error">{message}</span> : null;
-}
-
-function WorkflowSteps({ navigate, applicationId }) {
-  return (
-    <nav className="operations-mandate-steps" aria-label="Application workflow steps">
-      {WORKFLOW_STEPS.map((step, index) => (
-        <button
-          key={step.id}
-          type="button"
-          className={['operations-mandate-step', step.active ? 'is-active' : ''].join(' ').trim()}
-          disabled={!step.route}
-          onClick={() => step.route && navigate(buildApplicationRoute(step.route, applicationId))}
-        >
-          <span className="operations-mandate-step-number">{index + 1}</span>
-          <span>{step.label}</span>
-        </button>
-      ))}
-    </nav>
-  );
 }
 
 function SectionHeading({ number, title, id }) {
@@ -324,13 +297,10 @@ export default function MandateDetails() {
   return (
     <OperationsLayout title="Mandate Details" subtitle="Operations Maker workflow">
       <div className="operations-mandate-page">
-        <nav className="operations-mandate-breadcrumb" aria-label="Breadcrumb">
-          <button type="button" onClick={() => navigate(ROUTES.MAKER_DASHBOARD)}>Operations Maker</button>
-          <span aria-hidden="true">/</span>
-          <span>Mandate Details</span>
-        </nav>
-
-        <WorkflowSteps navigate={navigate} applicationId={applicationId} />
+        <OperationsWorkflowSteps
+          activeStepId="mandate-details"
+          applicationId={applicationId}
+        />
 
         <form className="operations-mandate-form" onSubmit={handleSubmit} noValidate>
           <section className="operations-mandate-section" aria-labelledby="operations-mandate-information-title">

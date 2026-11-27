@@ -20,6 +20,10 @@ export const updateBackOffice = async (id, payload) => {
   return response.data;
 };
 
+export const deactivateBackOffice = async (id) => {
+  await axiosInstance.delete(`/BackOfficeMaster/${encodeURIComponent(id)}`);
+};
+
 export const uploadBackOfficeAadhaar = async (backOfficeId, file) => {
   const formData = new FormData();
   formData.append('file', file);

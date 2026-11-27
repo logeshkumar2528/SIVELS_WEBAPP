@@ -76,6 +76,7 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
   const [rmOptions, setRmOptions] = useState([]);
   const [selectedRmId, setSelectedRmId] = useState('');
   const [staffRoleId, setStaffRoleId] = useState('');
+  const [isActive, setIsActive] = useState(true);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -223,6 +224,7 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
         const rmIdValue = record.rmId || record.RMId || '';
         setExistingAgent(record);
         setSelectedRmId(rmIdValue ? String(rmIdValue) : '');
+        setIsActive(record.isActive !== false && record.IsActive !== false);
         setFormData({
           agentCode: record.agentCode || record.code || record.AgentCode || '',
           fullName: record.fullName || record.agentName || record.name || '',
@@ -540,7 +542,7 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
     dateJoined: formData.dateJoined,
     role: formData.role.trim(),
     branch: formData.branch.trim() || currentBranch || '',
-    isActive: existingAgent?.isActive ?? true,
+    isActive,
     roleId: toRoleId(staffRoleId),
     bankAccountNumber: formData.bankAccountNumber.trim(),
     ifscCode: formData.ifscCode.trim().toUpperCase(),
@@ -1144,6 +1146,19 @@ export default function AgentCreate({ onSuccessRedirect, agentId: agentIdProp } 
               />
             </div>
           </section>
+
+          <label className="rm-active">
+            <input
+              type="checkbox"
+              checked={isActive}
+              onChange={(event) => setIsActive(event.target.checked)}
+              disabled={isSaving || loadingAgent}
+            />
+            <span>
+              <strong>Active agent</strong>
+              <small>Allow this agent to be assigned to new applications.</small>
+            </span>
+          </label>
 
           {/* FOOTER ACTIONS */}
           <div className="agent-form-footer">

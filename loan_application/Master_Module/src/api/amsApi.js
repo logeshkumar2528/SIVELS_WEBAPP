@@ -35,6 +35,10 @@ export const updateAMS = async (id, data) => {
   return response.data;
 };
 
+export const deactivateAMS = async (id) => {
+  await axiosInstance.delete(`/AMSMaster/${encodeURIComponent(id)}`);
+};
+
 export const uploadAMSPAN = async (amsId, file) => {
   const formData = new FormData();
   formData.append('file', file);
