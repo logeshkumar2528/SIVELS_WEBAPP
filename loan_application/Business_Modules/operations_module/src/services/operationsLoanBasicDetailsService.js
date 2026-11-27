@@ -23,8 +23,9 @@ export function getApiErrorMessage(error, fallback = 'Request failed') {
   const data = error?.response?.data;
   const backendMessage =
     (typeof data === 'string' && data.trim()) ||
-    data?.title ||
     data?.message ||
+    data?.Message ||
+    data?.title ||
     data?.error ||
     (Array.isArray(data?.errors) ? data.errors.join(' ') : null) ||
     (data?.errors && typeof data.errors === 'object'
