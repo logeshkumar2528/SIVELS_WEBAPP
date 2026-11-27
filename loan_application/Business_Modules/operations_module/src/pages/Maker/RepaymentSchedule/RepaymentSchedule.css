@@ -1,0 +1,303 @@
+.operations-repayment-page {
+  width: 100%;
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 4px 0 24px;
+  box-sizing: border-box;
+}
+
+.operations-repayment-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.operations-repayment-breadcrumb button {
+  padding: 0;
+  color: var(--color-primary);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.operations-repayment-steps {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  gap: 8px;
+  margin: 8px 0 18px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.operations-repayment-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 43px;
+  padding: 8px 10px;
+  color: #718078;
+  background: #f4f8f4;
+  border: 1px solid #dfe9e1;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.operations-repayment-step.is-active {
+  color: #174a2f;
+  background: #d9e9de;
+  border-color: #8fbd9d;
+}
+
+.operations-repayment-step-number {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #527964;
+  background: #e3eee5;
+  border-radius: 50%;
+  font-size: 10px;
+}
+
+.operations-repayment-step.is-active .operations-repayment-step-number {
+  color: #ffffff;
+  background: #174a2f;
+}
+
+.operations-repayment-panel {
+  margin-bottom: 16px;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #dfe9e1;
+  border-radius: 14px;
+  box-shadow: 0 5px 16px rgba(23, 74, 47, 0.04);
+}
+
+.operations-repayment-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  background: #eaf2eb;
+  border-bottom: 1px solid #d5e3d8;
+}
+
+.operations-repayment-panel-heading h2 {
+  margin: 0;
+  color: #174a2f;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.operations-repayment-panel-heading p {
+  margin: 4px 0 0;
+  color: #6b7d71;
+  font-size: 11px;
+}
+
+.operations-repayment-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px;
+}
+
+.operations-repayment-summary-grid--bpi {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.operations-repayment-summary-field {
+  min-width: 0;
+  padding: 11px 12px;
+  background: #fbfdfb;
+  border: 1px solid #dfe9e1;
+  border-radius: 9px;
+}
+
+.operations-repayment-summary-field span {
+  display: block;
+  margin-bottom: 5px;
+  color: #527964;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  overflow-wrap: anywhere;
+}
+
+.operations-repayment-summary-field strong {
+  display: block;
+  color: #263c2e;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.operations-repayment-actions,
+.operations-repayment-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.operations-repayment-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.operations-repayment-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.operations-repayment-table th,
+.operations-repayment-table td {
+  padding: 7px 8px;
+  color: #263c2e;
+  border: 1px solid #cdded1;
+  font-size: 11px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.operations-repayment-table th:first-child,
+.operations-repayment-table td:first-child,
+.operations-repayment-table th:nth-child(2),
+.operations-repayment-table td:nth-child(2) {
+  text-align: center;
+}
+
+.operations-repayment-table thead th {
+  color: #174a2f;
+  background: #eaf2eb;
+  font-weight: 800;
+  text-align: center;
+}
+
+.operations-repayment-table tfoot th {
+  color: #174a2f;
+  background: #f0f6f1;
+  font-weight: 800;
+}
+
+.operations-repayment-empty-cell {
+  padding: 24px !important;
+  color: #6b7d71 !important;
+  text-align: center !important;
+}
+
+.operations-repayment-state,
+.operations-repayment-empty,
+.operations-repayment-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  color: #315b40;
+  background: #eef7f0;
+  border: 1px solid #cfe2d3;
+  border-radius: 9px;
+  font-size: 12px;
+}
+
+.operations-repayment-empty {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.operations-repayment-empty span {
+  color: #6b7d71;
+}
+
+.operations-repayment-state--error,
+.operations-repayment-status--error {
+  color: #8f342f;
+  background: #fff2f0;
+  border-color: #efc4bf;
+}
+
+.operations-repayment-state--error button,
+.operations-repayment-status--error button {
+  margin-left: auto;
+}
+
+.operations-repayment-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 8px 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.operations-repayment-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.operations-repayment-button--secondary {
+  color: #174a2f;
+  background: #ffffff;
+  border: 1px solid #174a2f;
+}
+
+.operations-repayment-button--primary {
+  color: #ffffff;
+  background: #174a2f;
+  border: 1px solid #174a2f;
+}
+
+.operations-repayment-footer {
+  justify-content: space-between;
+  padding: 2px 0 0;
+}
+
+@media (max-width: 1050px) {
+  .operations-repayment-summary-grid,
+  .operations-repayment-summary-grid--bpi {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .operations-repayment-panel-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .operations-repayment-summary-grid,
+  .operations-repayment-summary-grid--bpi {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 14px;
+  }
+
+  .operations-repayment-actions,
+  .operations-repayment-footer {
+    justify-content: space-between;
+    width: 100%;
+  }
+}
+
+@media (max-width: 440px) {
+  .operations-repayment-summary-grid,
+  .operations-repayment-summary-grid--bpi {
+    grid-template-columns: 1fr;
+  }
+}

@@ -27,6 +27,7 @@ import './LoanBasicDetails.css';
 const WORKFLOW_STEPS = [
   { id: 'loan-basic-details', label: 'Loan Basic Details', active: true, route: ROUTES.MAKER_LOAN_BASIC_DETAILS },
   { id: 'fees', label: 'Fees', route: ROUTES.MAKER_FEES },
+  { id: 'repayment-schedule', label: 'Repayment Schedule', route: ROUTES.MAKER_REPAYMENT_SCHEDULE },
   { id: 'covenants', label: 'Covenants', route: ROUTES.MAKER_COVENANTS },
   { id: 'mandate-details', label: 'Mandate Details', route: ROUTES.MAKER_MANDATE_DETAILS },
   { id: 'cheque-details', label: 'Cheque Details', route: ROUTES.MAKER_CHEQUE_DETAILS },
@@ -269,7 +270,7 @@ const SECTIONS = [
       { name: 'customerName', label: 'Customer', type: 'select', required: true, readOnly: true },
       { name: 'applicationRequestCode', label: 'Application Request Date', type: 'date', readOnly: true },
       { name: 'loanStartDate', label: 'Loan Start Date', type: 'date', required: true },
-      { name: 'netLoanAmount', label: 'Net Loan Amount', type: 'number', required: true },
+      { name: 'netLoanAmount', label: 'Net Loan Amount', type: 'number', readOnly: true },
       { name: 'disbursementAmount', label: 'First Disbursement Amount', type: 'number', required: true },
       { name: 'totalDisbursements', label: 'Total Disbursements', type: 'number', readOnly: true },
       { name: 'loanAmount', label: 'Loan Amount', type: 'number', required: true, readOnly: true },
@@ -680,7 +681,6 @@ export default function LoanBasicDetails() {
         backOfficeService.getApplicationProductDetailsByCustomer(agentCustomerId),
         approvalDocumentService.getLatestCreditDecision(agentCustomerId),
         approvalDocumentService.getLoanIdentifierByCustomer(agentCustomerId),
-        operationsLoanBasicDetailsService.getByCustomer(agentCustomerId),
         operationsLoanBasicDetailsService.getPenaltyByCustomer(agentCustomerId),
       ]);
 
@@ -690,7 +690,6 @@ export default function LoanBasicDetails() {
         productDetailsResult,
         creditDecisionResult,
         loanIdentifierResult,
-        opsBasicResult,
         opsPenaltyResult,
       ] = results;
       const unavailable = [];
@@ -715,7 +714,9 @@ export default function LoanBasicDetails() {
         );
         const hasMatchingApplication =
           sameIdentifier(returnedAgentCustomerId, contextAgentCustomerId) &&
-          sameIdentifier(returnedApplicationProductDetailsId, contextApplicationProductDetailsId);
+          returnedApplicationProductDetailsId != null &&
+          (contextApplicationProductDetailsId == null
+            || sameIdentifier(returnedApplicationProductDetailsId, contextApplicationProductDetailsId));
 
         if (hasMatchingApplication) {
           const loanPurposeName = readValue(productDetails, 'loanPurposeName', 'LoanPurposeName');
@@ -777,7 +778,10 @@ export default function LoanBasicDetails() {
         const parsedSanctionedTenure = finiteNumber(sanctionedTenure);
         const decisionMatchesApplication =
           sameIdentifier(decisionAgentCustomerId, contextAgentCustomerId) &&
-          sameIdentifier(decisionApplicationProductDetailsId, contextApplicationProductDetailsId);
+          sameIdentifier(
+            decisionApplicationProductDetailsId,
+            nextIds.applicationProductDetailsId || contextApplicationProductDetailsId
+          );
         const hasValidSanctionedTenure =
           parsedSanctionedTenure !== null &&
           Number.isInteger(parsedSanctionedTenure) &&
@@ -812,20 +816,53 @@ export default function LoanBasicDetails() {
         unavailable.push('The official loan identifier could not be loaded; Loan Reference No. remains empty.');
       }
 
+      let opsBasicResult = null;
+      let recordResolutionError = '';
+      const resolvedApplicationProductDetailsId =
+        nextIds.applicationProductDetailsId || contextApplicationProductDetailsId;
+
+      if (resolvedApplicationProductDetailsId != null) {
+        try {
+          opsBasicResult = {
+            status: 'fulfilled',
+            value: await operationsLoanBasicDetailsService.getByCustomer(
+              agentCustomerId,
+              resolvedApplicationProductDetailsId
+            ),
+          };
+        } catch (error) {
+          opsBasicResult = { status: 'rejected', reason: error };
+          recordResolutionError = 'Unable to load saved Operations Loan Basic Details.';
+        }
+      } else {
+        recordResolutionError = 'Unable to resolve the application product for saved Operations Loan Basic Details.';
+      }
+
       let nextSavedBasicId = null;
       let nextSavedPenaltyId = null;
 
-      if (opsBasicResult.status === 'fulfilled' && opsBasicResult.value) {
+      if (opsBasicResult?.status === 'fulfilled' && opsBasicResult.value) {
         const opsBasic = opsBasicResult.value;
-        nextSavedBasicId = getRecordId(
+        const recordAgentCustomerId = readValue(opsBasic, 'agentCustomerId', 'AgentCustomerId');
+        const recordApplicationProductDetailsId = readValue(
           opsBasic,
-          'operationsLoanBasicDetailsId',
-          'OperationsLoanBasicDetailsId',
-          'id'
+          'applicationProductDetailsId',
+          'ApplicationProductDetailsId'
         );
-        Object.assign(nextForm, mapLoanBasicDetailsToForm(opsBasic));
-      } else if (opsBasicResult.status === 'rejected' && opsBasicResult.reason?.response?.status !== 404) {
-        unavailable.push('Unable to load saved Operations Loan Basic Details.');
+        if (
+          sameIdentifier(recordAgentCustomerId, contextAgentCustomerId) &&
+          sameIdentifier(recordApplicationProductDetailsId, resolvedApplicationProductDetailsId)
+        ) {
+          nextSavedBasicId = getRecordId(
+            opsBasic,
+            'operationsLoanBasicDetailsId',
+            'OperationsLoanBasicDetailsId',
+            'id'
+          );
+          Object.assign(nextForm, mapLoanBasicDetailsToForm(opsBasic));
+        } else {
+          recordResolutionError = 'Saved Operations Loan Basic Details do not match the selected application product.';
+        }
       }
 
       if (opsPenaltyResult.status === 'fulfilled' && opsPenaltyResult.value) {
@@ -837,7 +874,7 @@ export default function LoanBasicDetails() {
           'id'
         );
         Object.assign(nextForm, mapPenaltyToForm(opsPenalty));
-      } else if (opsPenaltyResult.status === 'rejected' && opsPenaltyResult.reason?.response?.status !== 404) {
+      } else if (opsPenaltyResult.status === 'rejected') {
         unavailable.push('Unable to load saved Overdue Penalty Details.');
       }
 
@@ -848,7 +885,7 @@ export default function LoanBasicDetails() {
       setSavedPenaltyId(nextSavedPenaltyId);
       setApplicationDataState({
         loading: false,
-        error: '',
+        error: recordResolutionError,
         unavailable,
       });
     };
@@ -965,7 +1002,9 @@ export default function LoanBasicDetails() {
   const loanAmountValue = finiteNumber(form.loanAmount);
   const totalDisbursementsValue = finiteNumber(form.totalDisbursements);
   const remainingDisbursementAmount =
-    loanAmountValue !== null && totalDisbursementsValue !== null
+    form.remainingDisbursementAmount !== undefined && form.remainingDisbursementAmount !== ''
+      ? form.remainingDisbursementAmount
+      : loanAmountValue !== null && totalDisbursementsValue !== null
       ? loanAmountValue - totalDisbursementsValue
       : '';
 
@@ -977,6 +1016,7 @@ export default function LoanBasicDetails() {
     }
 
     const createdBy = getCreatedByUserId();
+    if (applicationDataState.error) return;
     if (!agentCustomerId || !applicationProductDetailsId) {
       setSaveState({
         saving: false,
@@ -1031,16 +1071,6 @@ export default function LoanBasicDetails() {
         savedBasicId;
       if (nextBasicId) setSavedBasicId(nextBasicId);
 
-      if (basicResult && typeof basicResult === 'object') {
-        const mappedBasic = mapLoanBasicDetailsToForm(basicResult);
-        setForm((current) => ({
-          ...current,
-          margin: mappedBasic.margin || current.margin,
-          maturityDate: mappedBasic.maturityDate || current.maturityDate,
-          totalDisbursements: mappedBasic.totalDisbursements || current.totalDisbursements,
-        }));
-      }
-
       const penaltyPayload = buildPenaltyPayload({
         form,
         agentCustomerId,
@@ -1080,7 +1110,7 @@ export default function LoanBasicDetails() {
     <OperationsLayout title="Loan Basic Details" subtitle="Operations Maker workflow">
       <div className="operations-loan-page">
         <nav className="operations-loan-breadcrumb" aria-label="Breadcrumb">
-          <button type="button" onClick={() => navigate(ROUTES.MAKER_DASHBOARD)}>Operations Maker</button>
+          <button type="button" onClick={() => navigate(buildApplicationRoute(ROUTES.MAKER_DASHBOARD, applicationId))}>Operations Maker</button>
           <ChevronRight size={15} aria-hidden="true" />
           <span>Loan Basic Details</span>
         </nav>
@@ -1176,7 +1206,7 @@ export default function LoanBasicDetails() {
 
           <footer className="operations-loan-footer">
             <div className="operations-loan-actions">
-              <button type="button" className="operations-loan-button operations-loan-button--secondary" onClick={() => navigate(ROUTES.MAKER_DASHBOARD)}>
+              <button type="button" className="operations-loan-button operations-loan-button--secondary" onClick={() => navigate(buildApplicationRoute(ROUTES.MAKER_DASHBOARD, applicationId))}>
                 <ArrowLeft size={16} />
                 Back
               </button>
@@ -1184,7 +1214,7 @@ export default function LoanBasicDetails() {
                 type="button"
                 className="operations-loan-button operations-loan-button--primary"
                 onClick={handleSaveAndContinue}
-                disabled={saveState.saving || applicationDataState.loading}
+                disabled={saveState.saving || applicationDataState.loading || Boolean(applicationDataState.error)}
               >
                 {saveState.saving ? 'Saving…' : 'Save & Continue'}
                 <ArrowRight size={16} />

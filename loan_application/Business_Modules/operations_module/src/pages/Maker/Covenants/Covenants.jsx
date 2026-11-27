@@ -25,6 +25,7 @@ import './Covenants.css';
 const WORKFLOW_STEPS = [
   { id: 'loan-basic-details', label: 'Loan Basic Details', route: ROUTES.MAKER_LOAN_BASIC_DETAILS },
   { id: 'fees', label: 'Fees', route: ROUTES.MAKER_FEES },
+  { id: 'repayment-schedule', label: 'Repayment Schedule', route: ROUTES.MAKER_REPAYMENT_SCHEDULE },
   { id: 'covenants', label: 'Covenants', active: true, route: ROUTES.MAKER_COVENANTS },
   { id: 'mandate-details', label: 'Mandate Details', route: ROUTES.MAKER_MANDATE_DETAILS },
   { id: 'cheque-details', label: 'Cheque Details', route: ROUTES.MAKER_CHEQUE_DETAILS },
@@ -850,14 +851,26 @@ export default function Covenants() {
                   >
                     Cancel Edit
                   </button>
-                )}
-                <button
-                  type="button"
-                  className="operations-covenants-button operations-covenants-button--primary"
-                  onClick={handleSaveCovenant}
-                  disabled={savingAll || saving || loading || (!formIsDirty && covenantRecords.length === 0)}
-                >
-                  {savingAll ? 'Saving…' : 'Save Covenant'}
+                </div>
+              </div>
+
+              <div className="operations-covenants-form-actions">
+                <button type="button" className="operations-covenants-button operations-covenants-button--secondary" onClick={() => navigate(buildApplicationRoute(ROUTES.MAKER_REPAYMENT_SCHEDULE, applicationId))}>
+                  <ChevronLeft size={15} aria-hidden="true" />
+                  Back
+                </button>
+                <button type="button" className="operations-covenants-button operations-covenants-button--secondary" onClick={resetForm}>
+                  Clear
+                </button>
+                <button type="submit" className="operations-covenants-button operations-covenants-button--primary">
+                  <Plus size={15} aria-hidden="true" />
+                  {editingFrontendId ? 'Update Covenant' : 'Add Covenant'}
+                </button>
+                <button type="button" className="operations-covenants-button operations-covenants-button--secondary" disabled title="Permanent save is not connected yet.">
+                  Save as Draft
+                </button>
+                <button type="button" className="operations-covenants-button operations-covenants-button--primary" disabled title="Permanent save is not connected yet.">
+                  Save Covenant
                 </button>
               </div>
             </form>

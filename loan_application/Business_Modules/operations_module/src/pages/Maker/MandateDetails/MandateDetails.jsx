@@ -17,6 +17,7 @@ import './MandateDetails.css';
 const WORKFLOW_STEPS = [
   { id: 'loan-basic-details', label: 'Loan Basic Details', route: ROUTES.MAKER_LOAN_BASIC_DETAILS },
   { id: 'fees', label: 'Fees', route: ROUTES.MAKER_FEES },
+  { id: 'repayment-schedule', label: 'Repayment Schedule', route: ROUTES.MAKER_REPAYMENT_SCHEDULE },
   { id: 'covenants', label: 'Covenants', route: ROUTES.MAKER_COVENANTS },
   { id: 'mandate-details', label: 'Mandate Details', active: true, route: ROUTES.MAKER_MANDATE_DETAILS },
   { id: 'cheque-details', label: 'Cheque Details', route: ROUTES.MAKER_CHEQUE_DETAILS },
